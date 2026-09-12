@@ -4,15 +4,23 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { upsertEphemeralVmRuntime } from '../../shared/ephemeral-vm-runtime-store'
 
-const handlers = new Map<string, (_event: unknown, args: { runtimeId: string }) => unknown>()
-const { getPathMock, handleMock, removeRuntimeOwnedSshTargetMock, removeHandlerMock } = vi.hoisted(
-  () => ({
-    getPathMock: vi.fn(),
-    handleMock: vi.fn(),
-    removeRuntimeOwnedSshTargetMock: vi.fn(),
-    removeHandlerMock: vi.fn()
-  })
-)
+const handlers = new Map<
+  string,
+  (_event: unknown, args: { runtimeId?: string; workspaceId?: string }) => unknown
+>()
+const {
+  getPathMock,
+  handleMock,
+  removeRuntimeOwnedSshTargetMock,
+  removeHandlerMock,
+  ensureRuntimeOwnedSshTargetAttachedMock
+} = vi.hoisted(() => ({
+  getPathMock: vi.fn(),
+  handleMock: vi.fn(),
+  removeRuntimeOwnedSshTargetMock: vi.fn(),
+  removeHandlerMock: vi.fn(),
+  ensureRuntimeOwnedSshTargetAttachedMock: vi.fn()
+}))
 
 vi.mock('electron', () => ({
   app: { getPath: getPathMock },
@@ -23,6 +31,9 @@ vi.mock('../ephemeral-vm-runtime-ssh', () => ({
   connectRuntimeOwnedSshTarget: vi.fn(),
   disconnectRuntimeOwnedSshTarget: vi.fn(),
   removeRuntimeOwnedSshTarget: removeRuntimeOwnedSshTargetMock
+}))
+vi.mock('../ephemeral-vm-runtime-ssh-reattach', () => ({
+  ensureRuntimeOwnedSshTargetAttached: ensureRuntimeOwnedSshTargetAttachedMock
 }))
 
 import { registerEphemeralVmRuntimeHandlers } from './ephemeral-vm-runtime-handlers'
@@ -37,9 +48,13 @@ beforeEach(() => {
   handlers.clear()
   handleMock.mockReset()
   removeRuntimeOwnedSshTargetMock.mockReset().mockResolvedValue(undefined)
+  ensureRuntimeOwnedSshTargetAttachedMock.mockReset().mockResolvedValue(undefined)
   removeHandlerMock.mockReset()
   handleMock.mockImplementation(
-    (channel: string, handler: (_event: unknown, args: { runtimeId: string }) => unknown) => {
+    (
+      channel: string,
+      handler: (_event: unknown, args: { runtimeId?: string; workspaceId?: string }) => unknown
+    ) => {
       handlers.set(channel, handler)
     }
   )
@@ -147,4 +162,70 @@ it('stops in-flight cleanup and retains the runtime for retry', async () => {
     cleanupLastError: 'Cleanup stopped by user.'
   })
   await expect(cleanup).resolves.toMatchObject({ status: 'cleanup_failed' })
+})
+
+function runningSshRuntime(userDataPath: string, id: string, workspaceId: string): void {
+  upsertEphemeralVmRuntime(userDataPath, {
+    id,
+    recipeId: 'cloud-sandbox',
+    repoId: 'repo-1',
+    workspaceId,
+    status: 'running',
+    cleanupStatus: 'not_started',
+    connectionMode: 'ssh',
+    sshTargetId: `runtime-ssh-${id}`,
+    createdAt: 1,
+    updatedAt: 1,
+    recipeResult: {
+      schemaVersion: 1,
+      connection: {
+        type: 'ssh',
+        projectRoot: '/workspace/repo',
+        target: { label: 'VM', host: '127.0.0.1', port: 2222, username: 'root' }
+      }
+    }
+  })
+}
+
+it('re-attaches the SSH relay when a running SSH runtime is activated', async () => {
+  // Why: after an app restart the record is still 'running' but no relay exists in this
+  // process; the resume gate used to return the record untouched and leave it stranded.
+  const userDataPath = mkdtempSync(join(tmpdir(), 'orca-vm-runtime-handler-'))
+  tempDirs.push(userDataPath)
+  getPathMock.mockReturnValue(userDataPath)
+  runningSshRuntime(userDataPath, 'runtime-restarted', 'workspace-restarted')
+  registerEphemeralVmRuntimeHandlers({ getRepo: vi.fn() } as never)
+
+  const resumed = await handlers.get('ephemeralVm:resumeWorkspace')?.(null, {
+    workspaceId: 'workspace-restarted'
+  })
+
+  expect(ensureRuntimeOwnedSshTargetAttachedMock).toHaveBeenCalledTimes(1)
+  expect(ensureRuntimeOwnedSshTargetAttachedMock).toHaveBeenCalledWith(
+    expect.objectContaining({
+      id: 'runtime-restarted',
+      sshTargetId: 'runtime-ssh-runtime-restarted'
+    })
+  )
+  expect(resumed).toEqual(expect.objectContaining({ status: 'running' }))
+})
+
+it('reports a failed re-attach on activation and leaves the record running', async () => {
+  // Why: a relay that will not attach is not evidence the VM is gone; the next activation
+  // or terminal spawn retries, so the status must not flip to a resume failure.
+  const userDataPath = mkdtempSync(join(tmpdir(), 'orca-vm-runtime-handler-'))
+  tempDirs.push(userDataPath)
+  getPathMock.mockReturnValue(userDataPath)
+  runningSshRuntime(userDataPath, 'runtime-unreachable', 'workspace-unreachable')
+  ensureRuntimeOwnedSshTargetAttachedMock.mockRejectedValue(new Error('connect ECONNREFUSED'))
+  registerEphemeralVmRuntimeHandlers({ getRepo: vi.fn() } as never)
+
+  await expect(
+    handlers.get('ephemeralVm:resumeWorkspace')?.(null, { workspaceId: 'workspace-unreachable' })
+  ).rejects.toThrow('ECONNREFUSED')
+
+  const runtimes = await handlers.get('ephemeralVm:listRuntimes')?.(null, {})
+  expect(runtimes).toEqual([
+    expect.objectContaining({ id: 'runtime-unreachable', status: 'running' })
+  ])
 })

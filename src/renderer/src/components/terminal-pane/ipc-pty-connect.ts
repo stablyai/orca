@@ -1,4 +1,9 @@
 import { isRuntimeOwnedSshTargetId } from '../../../../shared/execution-host'
+import {
+  SSH_PTY_PROVIDER_MISSING_PREFIX,
+  parseRuntimeOwnedSshRelayMiss
+} from '../../../../shared/ssh-pty-provider-missing'
+import { translate } from '@/i18n/i18n'
 import { extractIpcErrorMessage } from '@/lib/ipc-error'
 import { ensurePtyDispatcher } from './pty-dispatcher'
 import {
@@ -17,6 +22,34 @@ import { spawnIpcPty } from './ipc-pty-spawn-request'
 import type { IpcPtyTransportOptions, PtyConnectResult, PtyTransport } from './pty-transport-types'
 
 const SSH_PTY_CONNECTION_MISMATCH_MARKER = 'belongs to SSH connection'
+
+function describeRuntimeOwnedSshRelayMiss(message: string): string {
+  const miss = parseRuntimeOwnedSshRelayMiss(message)
+  const retry = translate(
+    'auto.components.terminalPane.ipcPtyConnect.runtimeOwnedSshRelayRetry',
+    'Open the workspace again or start a new terminal to retry.'
+  )
+  switch (miss.kind) {
+    case 'not-attached':
+      return translate(
+        'auto.components.terminalPane.ipcPtyConnect.runtimeOwnedSshRelayMiss',
+        'The SSH relay for this workspace is not attached. {{retry}}',
+        { retry }
+      )
+    case 'reattach-failed':
+      return translate(
+        'auto.components.terminalPane.ipcPtyConnect.runtimeOwnedSshRelayReattachFailed',
+        'Could not re-attach the SSH relay for this workspace: {{cause}}. {{retry}}',
+        { cause: miss.cause, retry }
+      )
+    case 'other':
+      return translate(
+        'auto.components.terminalPane.ipcPtyConnect.runtimeOwnedSshRelayMissWithDetail',
+        'The SSH relay for this workspace is not attached: {{detail}}. {{retry}}',
+        { detail: miss.detail, retry }
+      )
+  }
+}
 
 type PtyConnectOptions = Parameters<PtyTransport['connect']>[0]
 
@@ -197,12 +230,18 @@ function handleConnectError(
     // to the remount-and-reattach recovery instead of a fresh shell.
     return undefined
   }
-  if (connectionId && message.includes('No PTY provider for connection')) {
-    if (!isRuntimeOwnedSshTargetId(connectionId)) {
-      context
-        .getCallbacks()
-        .onError?.('SSH connection is not active. Use the reconnect dialog or Settings to connect.')
-    }
+  if (connectionId && message.includes(SSH_PTY_PROVIDER_MISSING_PREFIX)) {
+    // Why runtime-owned targets get their own copy: main re-attaches their relay on spawn, so a
+    // miss here is a failed re-attach. They have no reconnect dialog or Settings entry, so the
+    // canned line below would name a control that does not exist; the cause main reported is
+    // kept and the retry the user actually has is named (translated, without the internal id).
+    context
+      .getCallbacks()
+      .onError?.(
+        isRuntimeOwnedSshTargetId(connectionId)
+          ? describeRuntimeOwnedSshRelayMiss(message)
+          : 'SSH connection is not active. Use the reconnect dialog or Settings to connect.'
+      )
   } else {
     context.getCallbacks().onError?.(message)
   }
