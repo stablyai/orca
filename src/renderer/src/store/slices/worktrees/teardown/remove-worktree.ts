@@ -7,6 +7,7 @@ import { ensureHooksConfirmed } from '@/lib/ensure-hooks-confirmed'
 import { getActiveRuntimeTarget } from '../../../../runtime/runtime-rpc-client'
 import { forgetHugeRepoWarningDismissalsForWorktrees } from '@/lib/source-control-huge-repo-warning-dismissals'
 import { forgetWorktreeSleepIntent } from '@/lib/worktree-sleep-intent'
+import { readableIpcErrorMessage } from '@/lib/ipc-error-message'
 import { showPreservedBranchToast } from '@/components/sidebar/preserved-branch-toast'
 import {
   resolveWorktreeOperationRouteResult,
@@ -297,7 +298,9 @@ export function createRemoveWorktree(
     } catch (err) {
       // Why: git refusing a non-force delete for dirty/untracked files is a handled user decision, not an app error.
       console.warn('Failed to remove worktree:', err)
-      const error = err instanceof Error ? err.message : String(err)
+      // The raw message arrives wrapped in Electron's IPC channel and class names; this string is
+      // read by a user in a toast, and the refusal sentence has to lead it.
+      const error = readableIpcErrorMessage(err instanceof Error ? err.message : String(err))
       const forceDeleteReason = classifyWorktreeForceDeleteReason(
         error,
         force,
