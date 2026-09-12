@@ -225,8 +225,8 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
   bob: {
     detectCmd: 'bob',
     // Why: Bob Shell 2.x puts the TUI behind `chat` (bare `bob` only opens it on a TTY,
-    // and `--auto-approve` is a `chat` option). `--trust` skips the first-launch trust
-    // menu that would otherwise consume the injected prompt paste.
+    // and `--auto-approve` is a `chat` option). `--trust` skips the first-launch "Do you trust
+    // this folder?" select, which otherwise swallows the injected prompt paste (captured on 2.0.2).
     launchCmd: 'bob chat --trust',
     // Why: MordechaiHadad/bob is a Neovim version manager that also installs as `bob`,
     // and any stray script can hold the name too. Neovim in the help text excludes the

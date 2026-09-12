@@ -4,7 +4,7 @@ import { buildAgentStartupPlan } from './tui-agent-startup'
 describe('IBM Bob startup plans', () => {
   it('launches the IBM Bob chat UI and injects the prompt after startup', () => {
     // Why: Bob Shell 2.x has no interactive initial-prompt flag; `--trust` skips the
-    // first-launch trust menu that would otherwise swallow the injected paste.
+    // first-launch trust select that would otherwise swallow the injected paste.
     const plan = buildAgentStartupPlan({
       agent: 'bob',
       prompt: 'fix it',
