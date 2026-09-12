@@ -91,6 +91,7 @@ describe('orca cli worktree awareness', () => {
       displayNameKind: 'user',
       baseBranch: undefined,
       linkedIssue: undefined,
+      linkedPR: undefined,
       linkedLinearIssue: 'STA-335',
       linkedLinearIssueWorkspaceId: null,
       linkedLinearIssueOrganizationUrlKey: 'stably',
@@ -143,6 +144,7 @@ describe('orca cli worktree awareness', () => {
       displayNameKind: 'user',
       baseBranch: undefined,
       linkedIssue: undefined,
+      linkedPR: undefined,
       linkedLinearIssue: 'STA-335',
       linkedLinearIssueWorkspaceId: null,
       // Why: a bare identifier carries no org, and the two scoping fields
