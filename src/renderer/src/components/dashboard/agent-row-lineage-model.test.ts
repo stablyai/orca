@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { DashboardAgentRow } from './useDashboardData'
@@ -139,5 +139,50 @@ describe('buildAgentRowLineageTree', () => {
     expect(tree.rootRows.map((row) => row.paneKey)).toEqual(['root:1', 'cycle-a:1', 'cycle-b:1'])
     expect(tree.childrenByParentPaneKey.size).toBe(0)
     expect(tree.childPaneKeys.size).toBe(0)
+  })
+})
+
+describe('lineage reachability traversal', () => {
+  it('keeps set copying linear for deeply nested agents', () => {
+    const rows = Array.from({ length: 300 }, (_, index) =>
+      makeRow(`pane-${index}`, index ? { parentPaneKey: `pane-${index - 1}` } : {})
+    )
+    const NativeSet = Set
+    let copiedValues = 0
+    class MeasuredSet<T> extends NativeSet<T> {
+      constructor(values?: Iterable<T> | null) {
+        super(values)
+        if (values) {
+          copiedValues += this.size
+        }
+      }
+    }
+    let tree: ReturnType<typeof buildAgentRowLineageTree>
+    vi.stubGlobal('Set', MeasuredSet)
+    try {
+      tree = buildAgentRowLineageTree(rows)
+    } finally {
+      vi.unstubAllGlobals()
+    }
+    expect(tree.rootRows).toEqual([rows[0]])
+    expect(tree.childPaneKeys.size).toBe(rows.length - 1)
+    expect(tree.childrenByParentPaneKey.get('pane-298')).toEqual([rows[299]])
+    expect(copiedValues).toBeLessThanOrEqual(rows.length)
+  })
+
+  it('terminates reachable cycles introduced by duplicate pane keys without changing edges', () => {
+    const root = makeRow('root')
+    const first = makeRow('first', { parentPaneKey: 'root' })
+    const second = makeRow('second', { parentPaneKey: 'first' })
+    const duplicate = makeRow('first', { parentPaneKey: 'second' })
+    const tree = buildAgentRowLineageTree([root, first, second, duplicate])
+
+    expect(tree.rootRows).toEqual([root])
+    expect([...tree.childPaneKeys]).toEqual(['first', 'second'])
+    expect([...tree.childrenByParentPaneKey]).toEqual([
+      ['root', [first]],
+      ['first', [second]],
+      ['second', [duplicate]]
+    ])
   })
 })

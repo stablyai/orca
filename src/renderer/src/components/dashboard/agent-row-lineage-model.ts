@@ -90,15 +90,14 @@ export function buildAgentRowLineageTree<T extends AgentLineageSourceRow>(
   }
 
   const reachablePaneKeys = new Set<string>()
-  const markReachable = (row: T, ancestorPaneKeys: ReadonlySet<string> = new Set()): void => {
-    if (reachablePaneKeys.has(row.paneKey) || ancestorPaneKeys.has(row.paneKey)) {
+  const markReachable = (row: T): void => {
+    if (reachablePaneKeys.has(row.paneKey)) {
       return
     }
+    // Mark before descent so the same set also breaks cycles.
     reachablePaneKeys.add(row.paneKey)
-    const descendantAncestorPaneKeys = new Set(ancestorPaneKeys)
-    descendantAncestorPaneKeys.add(row.paneKey)
     for (const childRow of childrenByParentPaneKey.get(row.paneKey) ?? []) {
-      markReachable(childRow, descendantAncestorPaneKeys)
+      markReachable(childRow)
     }
   }
   for (const rootRow of rootRows) {
