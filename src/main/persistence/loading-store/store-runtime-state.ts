@@ -35,6 +35,7 @@ export class StoreRuntimeState {
   readonly terminalScrollbackSnapshotStorage: TerminalScrollbackSnapshotStorage
   writeTimer: ReturnType<typeof setTimeout> | null = null
   pendingWrite: Promise<void> | null = null
+  lastWriteError: unknown = null
   pendingSnapshotFileWork: Promise<void> | null = null
   readonly staleTempCleanup: Promise<void>
   writeGeneration = 0

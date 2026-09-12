@@ -10,6 +10,7 @@ type WriteSchedulingOperationsRuntime = Pick<
   | 'activeViewPreference'
   | 'automationListProjectionCache'
   | 'firstPendingSaveAt'
+  | 'lastWriteError'
   | 'pendingWrite'
   | 'quitFlushStarted'
   | 'writeGeneration'
@@ -34,32 +35,41 @@ export class WriteSchedulingOperations {
       this[writeSchedulingOperationsContext].runtime.pendingWrite,
       this[writeSchedulingOperationsContext].runtime.activeViewPreference.waitForPendingWrite()
     ])
+    const lastWriteError = this[writeSchedulingOperationsContext].runtime.lastWriteError
+    if (lastWriteError != null) {
+      throw lastWriteError
+    }
   }
 }
 
 export function scheduleSave(owner: WriteSchedulingOperations): void {
-  owner[writeSchedulingOperationsContext].runtime.automationListProjectionCache = null
-  // Why: once the quit flush has snapshotted, a newly debounced write would fire during
-  // teardown with nothing awaiting it, and the process can exit mid-rename. The quit
-  // flush is the last write by construction.
-  if (owner[writeSchedulingOperationsContext].runtime.quitFlushStarted) {
+  const runtime = owner[writeSchedulingOperationsContext].runtime
+  runtime.automationListProjectionCache = null
+  // Why: a successful quit snapshot is the last write; a failed one is not disk-consistent.
+  if (runtime.quitFlushStarted && runtime.lastWriteError == null) {
     return
   }
-  owner[writeSchedulingOperationsContext].runtime.writeGeneration += 1
-  const now = Date.now()
-  owner[writeSchedulingOperationsContext].runtime.firstPendingSaveAt ??= now
-  if (owner[writeSchedulingOperationsContext].runtime.writeTimer) {
-    clearTimeout(owner[writeSchedulingOperationsContext].runtime.writeTimer)
+  runtime.writeGeneration += 1
+  if (runtime.quitFlushStarted) {
+    if (runtime.writeTimer) {
+      clearTimeout(runtime.writeTimer)
+      runtime.writeTimer = null
+    }
+    runtime.firstPendingSaveAt = null
+    void enqueueWrite(owner[writeSchedulingOperationsContext].writes).catch(() => {})
+    return
   }
-  const untilMaxWait = Math.max(
-    0,
-    owner[writeSchedulingOperationsContext].runtime.firstPendingSaveAt + SAVE_MAX_WAIT_MS - now
-  )
+  const now = Date.now()
+  runtime.firstPendingSaveAt ??= now
+  if (runtime.writeTimer) {
+    clearTimeout(runtime.writeTimer)
+  }
+  const untilMaxWait = Math.max(0, runtime.firstPendingSaveAt + SAVE_MAX_WAIT_MS - now)
   const delay = Math.min(SAVE_DEBOUNCE_MS, untilMaxWait)
-  owner[writeSchedulingOperationsContext].runtime.writeTimer = setTimeout(() => {
-    owner[writeSchedulingOperationsContext].runtime.writeTimer = null
-    owner[writeSchedulingOperationsContext].runtime.firstPendingSaveAt = null
-    void enqueueWrite(owner[writeSchedulingOperationsContext].writes)
+  runtime.writeTimer = setTimeout(() => {
+    runtime.writeTimer = null
+    runtime.firstPendingSaveAt = null
+    void enqueueWrite(owner[writeSchedulingOperationsContext].writes).catch(() => {})
   }, delay)
 }
 
