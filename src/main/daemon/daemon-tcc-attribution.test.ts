@@ -164,6 +164,8 @@ describe('macOS daemon TCC attribution health', () => {
         { mode: 0o600 }
       )
 
+      expect(await getMacDaemonTccAttributionHealth(dir, socketPath, tokenPath)).toBe('intact')
+
       // Unlink the running daemon binary (simulating second ShipIt update removing the parked bundle)
       rmSync(daemonBin)
 

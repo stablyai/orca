@@ -96,13 +96,11 @@ export async function getMacDaemonTccAttributionHealth(
   if (cacheKey) {
     cachedMacDaemonTccAttributionHealth = { key: cacheKey, pending }
   }
-  const health = await pending
-  if (
-    health === 'unknown' &&
-    cachedMacDaemonTccAttributionHealth?.key === cacheKey &&
-    cachedMacDaemonTccAttributionHealth.pending === pending
-  ) {
-    cachedMacDaemonTccAttributionHealth = null
+  try {
+    return await pending
+  } finally {
+    if (cachedMacDaemonTccAttributionHealth?.pending === pending) {
+      cachedMacDaemonTccAttributionHealth = null
+    }
   }
-  return health
 }

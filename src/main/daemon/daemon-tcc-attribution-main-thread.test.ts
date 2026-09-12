@@ -145,9 +145,6 @@ describe('macOS daemon TCC attribution main-thread cost', () => {
         getMacDaemonTccAttributionHealth(dir, socketPath, tokenPath)
       ])
     ).resolves.toEqual(['intact', 'intact'])
-    await expect(getMacDaemonTccAttributionHealth(dir, socketPath, tokenPath)).resolves.toBe(
-      'intact'
-    )
 
     expect(execFileSyncMock).not.toHaveBeenCalled()
     expect(execFileMock).toHaveBeenCalledTimes(2)
