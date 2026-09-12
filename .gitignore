@@ -105,6 +105,7 @@ docs/**
 !docs/reference/
 !docs/reference/agent-pty-transcript-capture.md
 !docs/reference/agent-session-search-query-tuning.md
+!docs/reference/agent-session-search-contract.md
 !docs/reference/agent-status-store.md
 !docs/reference/antigravity-readiness-evidence.md
 !docs/reference/git-compatibility.md

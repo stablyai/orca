@@ -1,3 +1,7 @@
+import {
+  searchSessionService,
+  sessionSearchServiceStatus
+} from '../main/ai-vault-search/session-search-service-registry'
 import { homedir } from 'node:os'
 import { AI_VAULT_SCOPE_PATHS_MAX_COUNT, type AiVaultListResult } from '../shared/ai-vault-types'
 import { LOCAL_EXECUTION_HOST_ID } from '../shared/execution-host'
@@ -31,6 +35,10 @@ export class AiVaultHandler {
   private readonly scanCoordinator = new AiVaultScanCoordinator()
 
   constructor(dispatcher: RelayDispatcher, options: AiVaultHandlerOptions = {}) {
+    dispatcher.onRequest('aiVault.searchSessions', (params) =>
+      searchSessionService(params, 'relay')
+    )
+    dispatcher.onRequest('aiVault.searchStatus', (params) => sessionSearchServiceStatus(params))
     this.remoteHome = options.remoteHome ?? homedir()
     const hostPlatform = options.hostPlatform ?? currentRelayHostPlatform()
     // Why: an OS/arch this build has no path flavor for must not abort relay

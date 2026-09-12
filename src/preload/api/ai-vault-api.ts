@@ -1,4 +1,9 @@
 import type {
+  AiVaultSearchRequest,
+  AiVaultSearchResponse,
+  AiVaultSearchStatus
+} from '../../shared/ai-vault-search-types'
+import type {
   AiVaultDeleteSessionArgs,
   AiVaultDeleteSessionResult
 } from '../../shared/ai-vault-session-deletion'
@@ -20,6 +25,11 @@ import type {
 } from '../../shared/ai-vault-resume-preparation'
 
 export type AiVaultApi = {
+  searchSessions: (
+    request: AiVaultSearchRequest,
+    sshTargetId?: string
+  ) => Promise<AiVaultSearchResponse>
+  searchStatus: (sshTargetId?: string) => Promise<AiVaultSearchStatus>
   listSessions: (args?: AiVaultListArgs) => Promise<AiVaultListResult>
   resolveSessionTitles: (args: AiVaultSessionTitlesArgs) => Promise<AiVaultSessionTitlesResult>
   cancelListSessions: (args: { requestToken: string }) => Promise<void>

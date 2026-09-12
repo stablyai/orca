@@ -89,6 +89,10 @@ export class SessionSearchEngine {
     this.retrieval = new SessionSearchRetrieval(this.db)
   }
 
+  generation(): number {
+    return readIndexGeneration(this.db)
+  }
+
   search(request: SessionSearchRequest): SessionSearchResponse {
     const startedAt = performance.now()
     ensureSessionSearchQuerySchema(this.db)

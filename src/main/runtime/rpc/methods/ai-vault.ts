@@ -1,3 +1,11 @@
+import {
+  AiVaultSearchRequestSchema,
+  AiVaultSearchStatusRequestSchema
+} from '../../../../shared/ai-vault-search-contract'
+import {
+  searchSessionService,
+  sessionSearchServiceStatus
+} from '../../../ai-vault-search/session-search-service-registry'
 import { defineMethod } from '../core'
 import { restampAiVaultListResult } from '../../../ai-vault/session-list-results'
 import type { AiVaultPrepareSessionResumeArgs } from '../../../../shared/ai-vault-resume-preparation'
@@ -16,6 +24,17 @@ import {
 export { AiVaultListSessionsParams, AiVaultPrepareSessionResumeParams, AiVaultSessionTitlesParams }
 
 export const AI_VAULT_METHODS = [
+  defineMethod({
+    name: 'aiVault.searchSessions',
+    params: AiVaultSearchRequestSchema,
+    handler: (params, { clientKind }) =>
+      searchSessionService(params, clientKind ? 'relay' : 'runtime')
+  }),
+  defineMethod({
+    name: 'aiVault.searchStatus',
+    params: AiVaultSearchStatusRequestSchema,
+    handler: (params) => sessionSearchServiceStatus(params)
+  }),
   defineMethod({
     name: 'aiVault.resolveSessionTitles',
     params: AiVaultSessionTitlesParams,
