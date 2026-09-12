@@ -2759,6 +2759,14 @@ html.native-shell .app-layout {
   max-width: 420px;
 }
 
+/* Why: agent notes carry a summary plus a rationale paragraph. At 420px that
+   wraps to ~48 chars/line and a two-note hunk pushes the code apart by ~30
+   rows. Give them the code column's width so the same text costs ~3x fewer
+   rows; keep a ceiling so prose stays readable on ultrawide panes. */
+.orca-diff-comment-inline > .orca-diff-comment-card.is-agent {
+  max-width: min(100%, 920px);
+}
+
 /* Why: the saved note used to blend into the editor background because it
    reused the same muted/background mix the editor itself uses. Stay
    grayscale to match the rest of the UI, but lift the card off the editor
@@ -2919,6 +2927,40 @@ html.native-shell .app-layout {
   white-space: pre-wrap;
   word-break: break-word;
   margin-top: 2px;
+}
+
+/* Agent-authored note: accent left bar + tinted fill to stand apart from
+   human review notes, mirroring the `.is-active`/`.is-attention` modifier
+   convention used by the markdown annotation surfaces. */
+.orca-diff-comment-card.is-agent {
+  border-color: color-mix(in srgb, var(--primary) 28%, var(--border));
+  background: color-mix(in srgb, var(--primary) 4%, var(--background));
+  padding: 9px 12px;
+}
+
+.dark .orca-diff-comment-card.is-agent {
+  border-color: color-mix(in srgb, var(--primary) 32%, var(--border));
+  background: color-mix(in srgb, var(--primary) 8%, var(--editor-surface));
+}
+
+.orca-diff-comment-agent-icon {
+  color: var(--primary);
+  flex-shrink: 0;
+}
+
+/* Deliberately unboxed: a padded, bordered, labelled rationale block cost more
+   vertical space than the text it framed. The muted color already separates it
+   from the summary. */
+.orca-diff-comment-rationale {
+  margin-top: 3px;
+}
+
+.orca-diff-comment-rationale-text {
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--muted-foreground);
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 /* Popover for adding new comment */

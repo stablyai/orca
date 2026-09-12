@@ -83,6 +83,11 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
     load: async () => (await import('./handlers/file.js')).FILE_HANDLERS
   },
   {
+    name: 'diff-notes',
+    keys: ['diff-note create', 'diff-note list', 'diff-note rm'],
+    load: async () => (await import('./handlers/diff-notes.js')).DIFF_NOTE_HANDLERS
+  },
+  {
     name: 'terminal',
     keys: [
       'terminal list',

@@ -1,6 +1,6 @@
 import type { RefObject } from 'react'
 import type { Root } from 'react-dom/client'
-import { getDiffCommentLineLabel } from '@/lib/diff-comment-compat'
+import { getDiffCommentLineLabel, isAgentComment } from '@/lib/diff-comment-compat'
 import { formatDiffComments } from '@/lib/diff-comments-format'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import type { DiffCommentDeliverySnapshot } from '@/store/slices/diffComments'
@@ -22,6 +22,9 @@ export function getRenderSignature(
     url: comment.url ?? null,
     canDelete: comment.canDelete ?? null,
     canEdit: comment.canEdit ?? null,
+    authoredBy: comment.authoredBy ?? null,
+    authorName: comment.authorName ?? null,
+    rationale: comment.rationale ?? null,
     sendPrompt: formatCommentPrompt ? formatCommentPrompt(comment) : null
   })
 }
@@ -84,6 +87,9 @@ export function renderDiffCommentZoneCard(
         author={comment.author}
         createdAtLabel={comment.createdAtLabel}
         url={comment.url}
+        authoredBy={comment.authoredBy}
+        authorName={comment.authorName}
+        rationale={comment.rationale}
         onDelete={
           comment.canDelete === false ? undefined : () => onDeleteCommentRef.current(comment.id)
         }
@@ -101,7 +107,7 @@ export function renderDiffCommentZoneCard(
         onContentResize={() => resizeZone(comment.id)}
         observeRenderedSize
         headerActions={
-          worktreeId && comment.author === undefined ? (
+          worktreeId && comment.author === undefined && !isAgentComment(comment) ? (
             <NotesSendMenu
               worktreeId={worktreeId}
               groupId={activeGroupId}

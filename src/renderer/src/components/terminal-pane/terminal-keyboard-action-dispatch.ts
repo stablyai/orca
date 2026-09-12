@@ -2,6 +2,7 @@ import type { ManagedPane, PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { PaneCwdMap } from './resolve-split-cwd'
 import type { PtyTransport } from './pty-transport'
 import { copyTerminalSelection } from './terminal-selection-copy'
+import { notifyTerminalCopyFlash } from './terminal-copy-flash-store'
 import { splitTerminalPaneWithInheritedCwd } from './terminal-pane-split-with-inherited-cwd'
 import {
   markTerminalFollowOutput,
@@ -89,7 +90,13 @@ export function dispatchTerminalShortcutAction(
     void copyTerminalSelection({
       terminal: pane.terminal,
       writeClipboardText: window.api.ui.writeTerminalClipboardText
-    }).catch(() => {})
+    })
+      .then((copied) => {
+        if (copied) {
+          notifyTerminalCopyFlash(pane.id)
+        }
+      })
+      .catch(() => {})
     return
   }
   if (action.type === 'toggleSearch') {

@@ -20,6 +20,11 @@ describe('detectLanguage', () => {
     expect(detectLanguage('packages/app.nimble')).toBe('nim')
   })
 
+  it('maps Typst files to the typst language id', () => {
+    expect(detectLanguage('documents/report.typ')).toBe('typst')
+    expect(detectLanguage('C:\\documents\\REPORT.TYP')).toBe('typst')
+  })
+
   it('maps exact filenames from Windows paths', () => {
     expect(detectLanguage('C:\\Users\\alice\\repo\\Dockerfile')).toBe('dockerfile')
     expect(detectLanguage('C:\\Users\\alice\\repo\\CMakeLists.txt')).toBe('cmake')

@@ -3128,6 +3128,9 @@
             "cff67afad1": "Copy Context",
             "15dd899676": "Add to {{value0}}…"
           },
+          "TerminalCopyFeedbackPopup": {
+            "ab2ac75664": "copied to clipboard"
+          },
           "TerminalErrorToast": {
             "e4aa243f8c": "Restart daemon",
             "retry": "Retry",
@@ -12368,7 +12371,8 @@
             "a4e93c21d7": "Current branch: {{value0}}",
             "c7d4e2f801": "Change base ref: {{value0}}",
             "f3a1b8c204": "upstream",
-            "createPrIntentGenerateDetailsFailed": "Could not generate review details. Retry Create PR."
+            "createPrIntentGenerateDetailsFailed": "Could not generate review details. Retry Create PR.",
+            "agentNote": "Agent"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "Could not start the selected agent.",

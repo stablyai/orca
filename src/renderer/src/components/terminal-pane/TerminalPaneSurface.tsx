@@ -17,6 +17,7 @@ import { TerminalQuickCommandEditorDialog } from './TerminalQuickCommandEditorDi
 import { TerminalPaneNativeChatPortal } from './TerminalPaneNativeChatPortal'
 import {
   TerminalPaneCodexRestartPortals,
+  TerminalPaneCopyFeedbackPortals,
   TerminalPaneMobileDriverPortals,
   TerminalPaneProcessExitPortals,
   TerminalPaneRecoveryPortals,
@@ -196,6 +197,7 @@ export function TerminalPaneSurface({
         : null}
       <TerminalPaneProcessExitPortals controller={controller} />
       <TerminalPaneSshReconnectPortals controller={controller} />
+      <TerminalPaneCopyFeedbackPortals controller={controller} />
       <DaemonActionDialog api={daemonActions} />
       {isActive && (
         <TerminalSessionStateSaveFailureDialog

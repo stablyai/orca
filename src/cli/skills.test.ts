@@ -339,7 +339,7 @@ describe('orca skills CLI', () => {
     await main(['skills', 'install', '--skill', 'alpha', '--dry-run'], '/tmp/repo')
 
     expect(stdoutText(stdoutSpy)).toBe(
-      'npx --yes skills add https://github.com/stablyai/orca --skill alpha --global --agent claude-code --agent universal -y\n\n' +
+      'npx --yes skills add https://github.com/QuanDev2/orca --skill alpha --global --agent claude-code --agent universal -y\n\n' +
         'Rerun without --dry-run to install now.\n'
     )
     expect(spawnMock).not.toHaveBeenCalled()
@@ -354,7 +354,7 @@ describe('orca skills CLI', () => {
       `${JSON.stringify(
         {
           command:
-            'npx --yes skills add https://github.com/stablyai/orca --skill alpha --global --agent claude-code --agent universal -y',
+            'npx --yes skills add https://github.com/QuanDev2/orca --skill alpha --global --agent claude-code --agent universal -y',
           skills: ['alpha'],
           global: true,
           executed: false
@@ -371,7 +371,7 @@ describe('orca skills CLI', () => {
     await main(['skills', 'install', '--skill', 'alpha', '--local', '--dry-run'], '/tmp/repo')
 
     expect(stdoutText(stdoutSpy)).toBe(
-      'npx --yes skills add https://github.com/stablyai/orca --skill alpha --agent claude-code --agent universal -y\n\n' +
+      'npx --yes skills add https://github.com/QuanDev2/orca --skill alpha --agent claude-code --agent universal -y\n\n' +
         'Rerun without --dry-run to install now.\n'
     )
 
@@ -385,7 +385,7 @@ describe('orca skills CLI', () => {
       `${JSON.stringify(
         {
           command:
-            'npx --yes skills add https://github.com/stablyai/orca --skill alpha --agent claude-code --agent universal -y',
+            'npx --yes skills add https://github.com/QuanDev2/orca --skill alpha --agent claude-code --agent universal -y',
           skills: ['alpha'],
           global: false,
           executed: false
@@ -412,7 +412,7 @@ describe('orca skills CLI', () => {
         '--yes',
         'skills',
         'add',
-        'https://github.com/stablyai/orca',
+        'https://github.com/QuanDev2/orca',
         '--skill',
         'alpha',
         '--agent',
@@ -447,7 +447,7 @@ describe('orca skills CLI', () => {
         '--yes',
         'skills',
         'add',
-        'https://github.com/stablyai/orca',
+        'https://github.com/QuanDev2/orca',
         '--skill',
         'alpha',
         '--global',
@@ -495,7 +495,7 @@ describe('orca skills CLI', () => {
         '--yes',
         'skills',
         'add',
-        'https://github.com/stablyai/orca',
+        'https://github.com/QuanDev2/orca',
         '--skill',
         'alpha',
         '--global',
@@ -525,7 +525,7 @@ describe('orca skills CLI', () => {
         '--yes',
         'skills',
         'add',
-        'https://github.com/stablyai/orca',
+        'https://github.com/QuanDev2/orca',
         '--skill',
         'alpha',
         '--skill',
@@ -897,7 +897,7 @@ describe('orca skills CLI', () => {
         '--yes',
         'skills',
         'add',
-        'https://github.com/stablyai/orca',
+        'https://github.com/QuanDev2/orca',
         '--skill',
         'alpha',
         '--skill',
@@ -922,7 +922,7 @@ describe('orca skills CLI', () => {
     )
 
     expect(stdoutText(stdoutSpy)).toBe(
-      'npx --yes skills add https://github.com/stablyai/orca --skill alpha --global --agent claude-code --agent universal -y\n\n' +
+      'npx --yes skills add https://github.com/QuanDev2/orca --skill alpha --global --agent claude-code --agent universal -y\n\n' +
         'Rerun without --dry-run to install now.\n'
     )
     expect(spawnMock).not.toHaveBeenCalled()
@@ -940,7 +940,7 @@ describe('orca skills CLI', () => {
 
     // Why: stdout belongs to the child, so this record has to go to stderr.
     expect(stderrSpy).toHaveBeenCalledWith(
-      'Running: npx --yes skills add https://github.com/stablyai/orca --skill alpha --global --agent claude-code --agent universal -y\n'
+      'Running: npx --yes skills add https://github.com/QuanDev2/orca --skill alpha --global --agent claude-code --agent universal -y\n'
     )
   })
 

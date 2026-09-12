@@ -138,6 +138,21 @@ Update after a repro, fix, validation, handoff, or blocker. Keep it short and cu
 
 Card status uses `--workspace-status <id>`; defaults are `todo`, `in-progress`, `in-review`, `completed`.
 
+## Agent Diff Notes
+
+An agent diff note pins agent-authored rationale to a specific diff line in a worktree. Orca renders it inline beside the diff hunk with distinct agent styling (a sparkles badge, optional `Rationale` block), separate from human review notes.
+
+```text
+ORCA diff-note create <path> --line <n> --body "<summary>" [--rationale "<text>"] [--author <name>] [--worktree <selector>] --json
+ORCA diff-note list [--path <file>] [--worktree <selector>] --json
+ORCA diff-note rm --id <noteId> [--worktree <selector>] --json
+```
+
+- `<path>` is the first positional (or `--path`), relative to the worktree or absolute inside it.
+- `--line` is the 1-based modified-side line number; `--body` is the summary, `--rationale` the optional longer explanation, `--author` the optional agent/model label.
+- `--worktree` defaults to the current Orca-managed worktree inferred from cwd.
+- `rm` uses the note id from `diff-note list --json` (`result.comments[].id`).
+
 ## Terminals
 
 Common commands:

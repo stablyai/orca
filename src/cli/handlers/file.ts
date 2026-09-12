@@ -29,7 +29,11 @@ type FileOpenChangedResult = {
   totalChanged: number
 }
 
-async function getFileWorktreeSelector({ flags, cwd, client }: HandlerContext): Promise<string> {
+export async function getFileWorktreeSelector({
+  flags,
+  cwd,
+  client
+}: HandlerContext): Promise<string> {
   const worktree = flags.get('worktree')
   if (flags.has('worktree') && (typeof worktree !== 'string' || worktree.length === 0)) {
     throw new RuntimeClientError('invalid_argument', 'Missing value for --worktree.')
@@ -74,7 +78,7 @@ function toWorktreeRootPathFlavor(rootPath: string, cwd: string, path: string): 
   return toWindowsWslPath(path, distro)
 }
 
-async function resolveFilePath(
+export async function resolveFilePath(
   ctx: HandlerContext,
   worktree: string,
   path: string

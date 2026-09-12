@@ -1,4 +1,7 @@
+import { useEffect, useMemo } from 'react'
 import { createPortal } from 'react-dom'
+import { TerminalCopyFeedbackPopup } from './TerminalCopyFeedbackPopup'
+import { pruneTerminalCopyFlashPaneIds } from './terminal-copy-flash-store'
 import CodexRestartChip from '../CodexRestartChip'
 import { TerminalSshReconnectOverlay } from './TerminalSshReconnectOverlay'
 import { TerminalRemoteRuntimeReconnectBanner } from './TerminalRemoteRuntimeReconnectBanner'
@@ -192,6 +195,30 @@ export function TerminalPaneMobileDriverPortals({
           `mobile-driver-banner-${pane.id}`
         )
       })}
+    </>
+  )
+}
+
+export function TerminalPaneCopyFeedbackPortals({
+  controller
+}: {
+  controller: TerminalPaneController
+}): React.JSX.Element {
+  const { managedPanes } = controller
+  const paneIds = useMemo(() => new Set(managedPanes.map((pane) => pane.id)), [managedPanes])
+  // Closed panes would otherwise keep pending flash timers alive.
+  useEffect(() => {
+    pruneTerminalCopyFlashPaneIds(paneIds)
+  }, [paneIds])
+  return (
+    <>
+      {managedPanes.map((pane) =>
+        createPortal(
+          <TerminalCopyFeedbackPopup paneId={pane.id} terminal={pane.terminal} />,
+          pane.container,
+          `copy-feedback-${pane.id}`
+        )
+      )}
     </>
   )
 }

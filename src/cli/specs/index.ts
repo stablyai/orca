@@ -17,6 +17,7 @@ import { LINEAR_COMMAND_SPECS } from './linear'
 import { VM_COMMAND_SPECS } from './vm'
 import { SKILL_COMMAND_SPECS } from './skills'
 import { ARTIFACT_COMMAND_SPECS } from './artifacts'
+import { DIFF_NOTE_COMMAND_SPECS } from './diff-notes'
 
 export const COMMAND_SPECS: CommandSpec[] = [
   ...CORE_COMMAND_SPECS,
@@ -36,5 +37,6 @@ export const COMMAND_SPECS: CommandSpec[] = [
   ...LINEAR_COMMAND_SPECS,
   ...VM_COMMAND_SPECS,
   ...EMULATOR_COMMAND_SPECS,
-  ...SKILL_COMMAND_SPECS
+  ...SKILL_COMMAND_SPECS,
+  ...DIFF_NOTE_COMMAND_SPECS
 ]

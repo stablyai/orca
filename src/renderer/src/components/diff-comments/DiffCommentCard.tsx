@@ -1,9 +1,10 @@
-import { CornerDownLeft, Pencil, Trash } from 'lucide-react'
+import { CornerDownLeft, Pencil, Sparkles, Trash } from 'lucide-react'
 import { useLayoutEffect, useRef, useState, type ReactNode } from 'react'
 import { Button } from '@/components/ui/button'
 import { getDiffCommentLineLabel } from '@/lib/diff-comment-compat'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { translate } from '@/i18n/i18n'
+import type { DiffCommentAuthor } from '../../../../shared/diff-comment-types'
 
 // Why: the saved-note card lives inside a Monaco view zone's DOM node.
 // useDiffCommentDecorator creates a React root per zone and renders this
@@ -25,6 +26,9 @@ type Props = {
   author?: string
   createdAtLabel?: string
   url?: string
+  authoredBy?: DiffCommentAuthor
+  authorName?: string
+  rationale?: string
   onDelete?: () => void
   // Why: Monaco view zones have a fixed `heightInPx` set at insertion time
   // and aren't auto-measured. The parent decorator re-syncs that height when
@@ -52,6 +56,9 @@ export function DiffCommentCard({
   author,
   createdAtLabel,
   url,
+  authoredBy,
+  authorName,
+  rationale,
   onDelete,
   onContentResize,
   observeRenderedSize,
@@ -149,9 +156,12 @@ export function DiffCommentCard({
 
   const trimmedDraft = draft.trim()
   const canSubmit = !submitting && trimmedDraft.length > 0 && trimmedDraft !== body
+  const isAgent = authoredBy === 'agent'
   const lineLabel =
     label === undefined ? getDiffCommentLineLabel({ lineNumber, startLine }).toLowerCase() : label
-  const metaText = [author || 'Note', lineLabel, createdAtLabel || (sentAt ? 'sent' : null)]
+  const authorLabel =
+    author || (isAgent ? (authorName ? `Agent · ${authorName}` : 'Agent') : 'Note')
+  const metaText = [authorLabel, lineLabel, createdAtLabel || (sentAt ? 'sent' : null)]
     .filter(Boolean)
     .join(' ')
 
@@ -180,11 +190,20 @@ export function DiffCommentCard({
   }
 
   return (
-    <div ref={cardRef} className="orca-diff-comment-card">
+    <div
+      ref={cardRef}
+      className={`orca-diff-comment-card${isAgent ? ' is-agent' : ''}`}
+      data-agent-authored={isAgent ? 'true' : undefined}
+    >
       <div className="orca-diff-comment-content-col">
         {/* Header Row */}
         <div className="orca-diff-comment-header">
-          <div className="orca-diff-comment-meta-group">{metaText}</div>
+          <div className="orca-diff-comment-meta-group">
+            {isAgent ? (
+              <Sparkles className="orca-diff-comment-agent-icon size-3" aria-hidden="true" />
+            ) : null}
+            {metaText}
+          </div>
 
           {/* Action buttons pill (only shown if not editing) */}
           {!editing && (
@@ -333,6 +352,11 @@ export function DiffCommentCard({
         ) : (
           <div className="orca-diff-comment-body">{body}</div>
         )}
+        {!editing && rationale ? (
+          <div className="orca-diff-comment-rationale">
+            <div className="orca-diff-comment-rationale-text">{rationale}</div>
+          </div>
+        ) : null}
       </div>
     </div>
   )

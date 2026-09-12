@@ -12,6 +12,10 @@ export function isMarkdownComment(comment: Pick<DiffComment, 'source'>): boolean
   return getDiffCommentSource(comment) === 'markdown'
 }
 
+export function isAgentComment(comment: Pick<DiffComment, 'authoredBy'>): boolean {
+  return comment.authoredBy === 'agent'
+}
+
 export function getDiffCommentLineLabel(
   comment: Pick<DiffComment, 'lineNumber' | 'startLine'>,
   compact = false

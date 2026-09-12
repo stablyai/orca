@@ -2,6 +2,7 @@ import React, { useCallback, useMemo } from 'react'
 import type { DiffComment } from '../../../../shared/diff-comment-types'
 import { useAppStore } from '@/store'
 import { formatDiffComments } from '@/lib/diff-comments-format'
+import { isAgentComment } from '@/lib/diff-comment-compat'
 import { NotesSendMenu, type NotesSendMenuScope } from './NotesSendMenu'
 import { translate } from '@/i18n/i18n'
 
@@ -53,13 +54,19 @@ export function DiffNotesSendMenu({
     () => consumeOpenRequest(worktreeId),
     [consumeOpenRequest, worktreeId]
   )
-  const unsentNotes = useMemo(() => comments.filter((comment) => !comment.sentAt), [comments])
+  const unsentNotes = useMemo(
+    () => comments.filter((comment) => !comment.sentAt && !isAgentComment(comment)),
+    [comments]
+  )
   const unsentPrompt = useMemo(() => formatDiffComments(unsentNotes), [unsentNotes])
   const fileNotes = useMemo(
     () => (filePath ? comments.filter((comment) => comment.filePath === filePath) : []),
     [comments, filePath]
   )
-  const unsentFileNotes = useMemo(() => fileNotes.filter((comment) => !comment.sentAt), [fileNotes])
+  const unsentFileNotes = useMemo(
+    () => fileNotes.filter((comment) => !comment.sentAt && !isAgentComment(comment)),
+    [fileNotes]
+  )
   const unsentFilePrompt = useMemo(() => formatDiffComments(unsentFileNotes), [unsentFileNotes])
   const canSendFileScope = showFileScope && Boolean(filePath)
   const scopes = useMemo<NotesSendMenuScope<DiffComment>[]>(() => {

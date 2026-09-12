@@ -15,5 +15,8 @@ export const DiffCommentSchema = z.object({
   scope: z.enum(['unstaged', 'staged', 'branch']).optional(),
   oldPath: z.string().optional(),
   diffIdentity: z.string().optional(),
+  authoredBy: z.enum(['user', 'agent']).optional(),
+  rationale: z.string().optional(),
+  authorName: z.string().optional(),
   side: z.literal('modified')
 })
