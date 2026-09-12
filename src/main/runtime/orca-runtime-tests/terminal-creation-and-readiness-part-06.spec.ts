@@ -3,7 +3,6 @@ import { OrcaRuntimeService } from '../orca-runtime-test-mocks.spec'
 import {
   TEST_WORKTREE_ID,
   TEST_WORKTREE_PATH,
-  antigravityPromptBeforeModelReadyScreen,
   antigravityReadyScreen,
   store,
   syncSinglePty
@@ -530,11 +529,10 @@ describe('OrcaRuntimeService', () => {
     runtime.onPtyData(
       'pty-bg',
       [
-        'Antigravity CLI 1.0.3\n',
-        'user@example.com (Antigravity Business)\n',
+        'Antigravity CLI 1.2.0\n',
         pastedTail,
-        'Gemini 4 Experimental (High)\n',
-        '~/orca/workspaces/orca/agy-dispatch-issue\n',
+        // The composer redrawn under the paste, as the real capture prints it.
+        `${'\u2500'.repeat(120)}\n`,
         '>'
       ].join(''),
       Date.now()
@@ -555,7 +553,10 @@ describe('OrcaRuntimeService', () => {
     expect(splitReadyTail).toBe(false)
   })
 
-  it('resolves tui-idle from an Antigravity prompt before the model line', async () => {
+  // Was 'prompt before the model line'. Real captures show the caret is the composer and always
+  // ends the tail, so that shape never occurs; what this case really proves is that an answered
+  // trust dialog stops blocking once the ready screen is printed under it.
+  it('resolves tui-idle from an Antigravity ready screen printed under an answered trust dialog', async () => {
     const runtime = new OrcaRuntimeService(store)
     runtime.setPtyController({
       spawn: vi.fn().mockResolvedValue({ id: 'pty-bg' }),
@@ -569,7 +570,7 @@ describe('OrcaRuntimeService', () => {
       [
         'Do you trust this workspace directory?\n',
         'Press t to trust\n',
-        antigravityPromptBeforeModelReadyScreen('Gemini 3.5 Flash (High)')
+        antigravityReadyScreen('Gemini 3.5 Flash (High)')
       ].join(''),
       Date.now()
     )

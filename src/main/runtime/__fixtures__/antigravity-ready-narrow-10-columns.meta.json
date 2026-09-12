@@ -1,0 +1,9 @@
+{
+  "capturedAt": "2026-09-11T07:52:09.963Z",
+  "platform": "darwin",
+  "command": ["agy"],
+  "cols": 10,
+  "rows": 10,
+  "note": "agy TUI 1.2.1 idle on a 10-column PTY, where the banner row truncates to 'Antigrav'. Ground truth: ready.",
+  "exitCode": 0
+}
