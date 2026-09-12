@@ -23,7 +23,8 @@ const connectedPreflight: PreflightStatus = {
     authenticated: true,
     account: 'gitea-user',
     baseUrl: 'https://gitea.example/api/v1',
-    tokenConfigured: true
+    tokenConfigured: true,
+    authError: null
   }
 }
 
@@ -82,7 +83,30 @@ describe('getPreflightIntegrationStatuses', () => {
       azureDevOpsStatus: 'configured',
       azureDevOpsAccount: 'ado-user',
       giteaStatus: 'configured',
-      giteaAccount: 'gitea-user'
+      giteaAccount: 'gitea-user',
+      giteaAuthError: null
+    })
+  })
+
+  it('forwards Gitea authError from preflight for the integration card', () => {
+    expect(
+      getPreflightIntegrationStatuses(
+        {
+          ...connectedPreflight,
+          gitea: {
+            configured: true,
+            authenticated: false,
+            account: null,
+            baseUrl: 'https://gitea.example/api/v1',
+            tokenConfigured: true,
+            authError: 'token does not have required scope(s)'
+          }
+        },
+        new Set()
+      )
+    ).toMatchObject({
+      giteaStatus: 'not-authenticated',
+      giteaAuthError: 'token does not have required scope(s)'
     })
   })
 

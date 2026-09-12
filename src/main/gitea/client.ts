@@ -14,6 +14,7 @@ import {
   type HostedReviewExecutionOptions
 } from '../source-control/hosted-review-git-options'
 import { cancelUnreadResponseBody } from '../lib/unread-response-body'
+import { probeGiteaAuthenticatedUser } from './auth-error-message'
 
 const REQUEST_TIMEOUT_MS = 5000
 // Why: self-hosted Forgejo can take ~5s to serve one /pulls page (it loads
@@ -34,6 +35,8 @@ export type GiteaAuthStatus = {
   account: string | null
   baseUrl: string | null
   tokenConfigured: boolean
+  // Server reason when token auth fails; null when unused/unknown.
+  authError: string | null
 }
 
 type RequestOptions = {
@@ -174,7 +177,8 @@ export async function getGiteaAuthStatus(): Promise<GiteaAuthStatus> {
       authenticated: false,
       account: null,
       baseUrl: null,
-      tokenConfigured: false
+      tokenConfigured: false,
+      authError: null
     }
   }
   if (!config.apiBaseUrl) {
@@ -183,11 +187,12 @@ export async function getGiteaAuthStatus(): Promise<GiteaAuthStatus> {
       authenticated: true,
       account: null,
       baseUrl: null,
-      tokenConfigured
+      tokenConfigured,
+      authError: null
     }
   }
 
-  if (!tokenConfigured) {
+  if (!tokenConfigured || !config.token) {
     const version = await requestJsonAtBase<{ version?: string }>(config.apiBaseUrl, '/version', {
       timeoutMs: 4000
     })
@@ -196,21 +201,20 @@ export async function getGiteaAuthStatus(): Promise<GiteaAuthStatus> {
       authenticated: false,
       account: null,
       baseUrl: config.apiBaseUrl,
-      tokenConfigured
+      tokenConfigured,
+      authError: null
     }
   }
 
-  const user = await requestJsonAtBase<{
-    login?: string | null
-    username?: string | null
-    full_name?: string | null
-  }>(config.apiBaseUrl, '/user', { timeoutMs: 4000 })
+  // Why: requestJsonAtBase discards non-2xx bodies; probe /user to keep the cause.
+  const { user, authError } = await probeGiteaAuthenticatedUser(config.apiBaseUrl, config.token)
   return {
     configured: true,
     authenticated: user !== null,
     account: user?.login ?? user?.username ?? user?.full_name ?? null,
     baseUrl: config.apiBaseUrl,
-    tokenConfigured
+    tokenConfigured,
+    authError: user !== null ? null : authError
   }
 }
 
