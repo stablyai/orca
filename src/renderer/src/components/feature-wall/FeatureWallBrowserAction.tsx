@@ -135,9 +135,9 @@ function BrowserSkillInstallButton(): React.JSX.Element {
           }
         )
       }
-      if (result.skillInstallCommand) {
+      if (result.skillTerminalCommand) {
         setRuntimeContext(activeSkillRuntime)
-        setCommand(result.skillInstallCommand)
+        setCommand(result.skillTerminalCommand)
       }
     } catch (error) {
       console.error('Browser setup failed', error)

@@ -114,10 +114,10 @@ export function AgentCapabilitiesSetupAction(props: {
           )
         )
       }
-      if (result.skillInstallCommand) {
+      if (result.skillTerminalCommand) {
         setFeatureSetupCommandSelection(featureSetup)
         setFeatureSetupRuntime(activeSkillRuntime)
-        setFeatureSetupCommand(result.skillInstallCommand)
+        setFeatureSetupCommand(result.skillTerminalCommand)
       }
     } finally {
       setSetupBusyLabel(null)

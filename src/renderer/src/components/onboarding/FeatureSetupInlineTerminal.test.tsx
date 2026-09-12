@@ -99,6 +99,21 @@ describe('FeatureSetupInlineTerminal', () => {
     ).toBe('host-wsl.exe:host:npx skills add orchestration')
   })
 
+  it('inserts an unattended onboarding command into the shared setup terminal', () => {
+    const unattended =
+      'npx skills add https://github.com/stablyai/orca --skill orchestration --global --agent universal -y'
+    render(<FeatureSetupInlineTerminal command={unattended} selection={SELECTION} />)
+
+    expect(mocks.buildCommand).toHaveBeenCalledWith(unattended, {
+      runtime: 'wsl',
+      wslDistro: 'Ubuntu',
+      label: 'WSL Ubuntu'
+    })
+    expect(mocks.terminalProps).toMatchObject({
+      command: `wsl:${unattended}`
+    })
+  })
+
   it('keeps the runtime captured when setup started', () => {
     render(
       <FeatureSetupInlineTerminal

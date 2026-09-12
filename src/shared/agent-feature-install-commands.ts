@@ -1,4 +1,5 @@
-import { isSkillsCliAgentKeyShaped } from './skills-cli-agent-keys'
+import type { TuiAgent } from './tui-agent'
+import { isSkillsCliAgentKeyShaped, toSkillsCliAgentKeys } from './skills-cli-agent-keys'
 
 export const ORCA_SKILLS_REPOSITORY_URL = 'https://github.com/stablyai/orca'
 
@@ -10,9 +11,9 @@ export const ORCA_LINEAR_SKILL_NAME = 'orca-linear'
 export const LINEAR_TICKETS_SKILL_NAME = 'linear-tickets'
 export const LINEAR_AGENT_SKILL_NAMES = [ORCA_LINEAR_SKILL_NAME, LINEAR_TICKETS_SKILL_NAME] as const
 
-// Why: `yes` and `agents` default off so every Settings/onboarding string a human
-// pastes keeps its interactive prompts and the CLI's own agent detection. Only an
-// unattended spawn, which nothing can answer, opts in.
+// Why: the raw builder defaults interactive so copyable commands keep the
+// skills CLI's detection prompt. Callers that spawn a terminal opt in to the
+// unattended builders because nobody can answer the picker there (#13542).
 export type AgentFeatureSkillCommandOptions = {
   global?: boolean
   yes?: boolean
@@ -64,6 +65,25 @@ export function buildAgentFeatureSkillInstallCommand(
   return `npx ${buildAgentFeatureSkillInstallArgs(skillNames, options).join(' ')}`
 }
 
+/**
+ * Install command for paths nothing can answer (Settings inline terminal, CLI,
+ * SSH paste). Always pairs `-y` with mapped `--agent` keys (at least `universal`)
+ * so the skills CLI never opens the agent picker or the all-agents install.
+ */
+export function buildUnattendedAgentFeatureSkillInstallCommand(
+  skillNames: readonly string[],
+  options: {
+    global?: boolean
+    detectedAgents?: readonly TuiAgent[]
+  } = {}
+): string {
+  return buildAgentFeatureSkillInstallCommand(skillNames, {
+    global: options.global,
+    yes: true,
+    agents: toSkillsCliAgentKeys(options.detectedAgents ?? [])
+  })
+}
+
 export function buildAgentFeatureSkillUpdateArgs(
   skillNames: string | readonly string[],
   options: AgentFeatureSkillCommandOptions = {}
@@ -88,6 +108,14 @@ export function buildAgentFeatureSkillUpdateCommand(
   options: AgentFeatureSkillCommandOptions = {}
 ): string {
   return `npx ${buildAgentFeatureSkillUpdateArgs(skillNames, options).join(' ')}`
+}
+
+/** Update command for unattended UI/CLI paths — skip the skills confirmation prompt. */
+export function buildUnattendedAgentFeatureSkillUpdateCommand(
+  skillNames: string | readonly string[],
+  options: { global?: boolean } = {}
+): string {
+  return buildAgentFeatureSkillUpdateCommand(skillNames, { ...options, yes: true })
 }
 
 export const ORCA_CLI_SKILL_INSTALL_COMMAND = buildAgentFeatureSkillInstallCommand([
