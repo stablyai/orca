@@ -1,11 +1,7 @@
-import { Editor } from '@tiptap/core'
+import { Editor, type JSONContent } from '@tiptap/core'
 import { describe, expect, it } from 'vitest'
 import { encodeRawMarkdownHtmlForRichEditor } from './raw-markdown-html'
 import { createRichMarkdownExtensions } from './rich-markdown-extensions'
-import {
-  normalizeOrderedContinuationIndent,
-  orderedContentColumn
-} from './rich-markdown-list-continuation-indent'
 import { createRichMarkdownEditorCodec } from './rich-markdown-source-transport'
 
 function roundTrip(source: string): string {
@@ -34,31 +30,6 @@ const SHAPES = [
   ['1. Item with a block\n\n   A second paragraph inside.'],
   ['100. Three digit\n     cont three.']
 ]
-
-describe('orderedContentColumn', () => {
-  it.each([
-    ['9. item', 3],
-    ['10. item', 4],
-    ['100. item', 5],
-    ['   1. nested', 6]
-  ])('measures %j as %i', (line, expected) => {
-    expect(orderedContentColumn(line)).toBe(expected)
-  })
-
-  it('returns null for a line that is not an ordered item', () => {
-    expect(orderedContentColumn('- bullet')).toBeNull()
-  })
-})
-
-describe('normalizeOrderedContinuationIndent', () => {
-  it('rewrites a two-digit continuation to the width the tokenizer assumes', () => {
-    expect(normalizeOrderedContinuationIndent('10. item\n    cont.')).toBe('10. item\n  cont.')
-  })
-
-  it('leaves a single-digit continuation alone', () => {
-    expect(normalizeOrderedContinuationIndent('9. item\n   cont.')).toBe('9. item\n  cont.')
-  })
-})
 
 describe('list continuation round trip', () => {
   it.each(SHAPES)('preserves %j', (source) => {
@@ -107,5 +78,67 @@ describe('hard break inside a list item', () => {
 
   it('gives every hard-break line the same column', () => {
     expect(roundTrip('1. line1  \n   line2  \n   line3')).toBe('1. line1  \n   line2  \n   line3')
+  })
+})
+
+describe('nested ordered list continuation', () => {
+  it.each([
+    ['1. outer\n   1. nested\n\n   outer continuation'],
+    ['10. outer\n    1. nested\n\n    outer continuation'],
+    ['1. a\n   1. b\n\n   a cont'],
+    ['1. outer\n   1. nested\n      nested continuation'],
+    ['1. outer\n   10. nested\n       nested cont'],
+    ['1. a\n   1. b\n      1. c\n         c cont'],
+    ['10. outer\n    10. nested\n\n    outer continuation']
+  ])('keeps the continuation at its own indent in %j', (source) => {
+    expect(roundTrip(source)).toBe(source)
+  })
+
+  it.each([
+    ['1. outer\n   1. nested\n\n   outer continuation'],
+    ['10. outer\n    1. nested\n\n    outer continuation'],
+    ['1. a\n   1. b\n\n   a cont']
+  ])('keeps %j stable across three cycles', (source) => {
+    let current = source
+    for (let cycle = 0; cycle < 3; cycle += 1) {
+      current = roundTrip(current)
+    }
+    expect(current).toBe(source)
+  })
+
+  it('keeps an outer continuation in the outer item rather than the nested one', () => {
+    const source = '1. outer\n   1. nested\n\n   outer continuation'
+    const codec = createRichMarkdownEditorCodec()
+    const editor = new Editor({
+      element: null,
+      extensions: createRichMarkdownExtensions({ codec }),
+      content: encodeRawMarkdownHtmlForRichEditor(source, codec),
+      contentType: 'markdown'
+    })
+    try {
+      const outerList = editor.getJSON().content?.[0] as JSONContent
+      const outerItem = outerList.content?.[0]
+      expect(outerItem?.content?.map((child: JSONContent) => child.type)).toEqual([
+        'paragraph',
+        'orderedList',
+        'paragraph'
+      ])
+    } finally {
+      editor.destroy()
+    }
+  })
+
+  it.each([
+    [
+      '1. outer\n   1. nested\n   outer continuation',
+      '1. outer\n   1. nested\n      outer continuation'
+    ],
+    [
+      '10. outer\n    1. nested\n    outer continuation',
+      '10. outer\n    1. nested\n       outer continuation'
+    ]
+  ])('re-indents the lazy continuation in %j to its item content column', (source, expected) => {
+    expect(roundTrip(source)).toBe(expected)
+    expect(roundTrip(expected)).toBe(expected)
   })
 })
