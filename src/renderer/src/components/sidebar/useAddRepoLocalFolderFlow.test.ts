@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as ReactModule from 'react'
 import type { NestedRepoScanResult } from '../../../../shared/project-group-types'
 import type { Repo } from '../../../../shared/repo-types'
+import type { AddProjectTarget } from '@/lib/added-project-group-assignment'
 
 vi.mock('react', async (importOriginal) => {
   const actual = await importOriginal<typeof ReactModule>()
@@ -238,5 +239,46 @@ describe('useAddRepoLocalFolderFlow', () => {
 
     expect(addRepoPath).not.toHaveBeenCalled()
     expect(onGitRepoReady).not.toHaveBeenCalled()
+  })
+
+  // Why: the first add consumes the store target, so a multi-select pick would otherwise group
+  // only its first folder — the target rides along with every add in the batch instead.
+  it('carries the Add Project target to every folder picked in one batch', async () => {
+    const addProjectTarget: AddProjectTarget = { groupId: 'group-1', hostId: 'local' }
+    pickFolders.mockResolvedValue(['/projects/alpha', '/projects/beta'])
+    const { useAddRepoLocalFolderFlow } = await import('./useAddRepoLocalFolderFlow')
+
+    const { handleBrowse } = useAddRepoLocalFolderFlow({
+      isOpen: true,
+      droppedLocalPath: '',
+      activeRuntimeEnvironmentId: null,
+      addProjectTarget,
+      addRepoPath,
+      closeModal,
+      fetchWorktrees,
+      scanNestedRepos,
+      setActiveNestedScanId,
+      setNestedScanInProgress,
+      showNestedRepoReview,
+      onGitRepoReady,
+      setIsAdding,
+      setAddProjectBusyLabel
+    })
+
+    await handleBrowse()
+
+    expect(addRepoPath).toHaveBeenCalledTimes(2)
+    expect(addRepoPath).toHaveBeenNthCalledWith(
+      1,
+      '/projects/alpha',
+      undefined,
+      expect.objectContaining({ addProjectTarget })
+    )
+    expect(addRepoPath).toHaveBeenNthCalledWith(
+      2,
+      '/projects/beta',
+      undefined,
+      expect.objectContaining({ addProjectTarget })
+    )
   })
 })

@@ -4,11 +4,9 @@ import { track } from '@/lib/telemetry'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 import {
   buildNestedRepoScanTelemetry,
-  createNestedRepoTelemetryAttemptId,
-  type NestedRepoTelemetryRuntimeKind
+  createNestedRepoTelemetryAttemptId
 } from '../../../../shared/nested-repo-telemetry'
 import type { AddRepoExistingWorkspaceSource } from '../../../../shared/telemetry-events'
-import type { NestedRepoScanResult } from '../../../../shared/project-group-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { WorktreeFetchOptions } from '@/store/slices/worktree-helpers'
 import type { RepoSlice } from '@/store/repos/repo-state'
@@ -16,17 +14,8 @@ import { createNestedRepoScanId } from './add-repo-dialog-types'
 import { translate } from '@/i18n/i18n'
 import { worktreeRefreshOptions } from './add-repo-runtime-owner'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
-
-type ShowNestedRepoReview = (args: {
-  scan: NestedRepoScanResult
-  selectedPath: string
-  connectionId: string | null
-  attemptId: string
-  runtimeKind: NestedRepoTelemetryRuntimeKind
-  inProgress: boolean
-  scanId: string | null
-  runtimeEnvironmentId?: string | null
-}) => void
+import type { AddProjectTarget } from '@/lib/added-project-group-assignment'
+import type { ShowNestedRepoReviewArgs } from './useAddRepoNestedReviewState'
 
 type LocalPathAddResult =
   | { status: 'completed'; repo: Repo }
@@ -38,6 +27,7 @@ export function useAddRepoLocalFolderFlow({
   isOpen,
   droppedLocalPath,
   activeRuntimeEnvironmentId,
+  addProjectTarget,
   addRepoPath,
   closeModal,
   fetchWorktrees,
@@ -52,13 +42,15 @@ export function useAddRepoLocalFolderFlow({
   isOpen: boolean
   droppedLocalPath: string
   activeRuntimeEnvironmentId: string | null | undefined
+  /** Why: the first add consumes the store target; passing it keeps a multi-folder pick grouped. */
+  addProjectTarget?: AddProjectTarget | null
   addRepoPath: RepoSlice['addRepoPath']
   closeModal: () => void
   fetchWorktrees: (repoId: string, options?: WorktreeFetchOptions) => Promise<unknown>
   scanNestedRepos: RepoSlice['scanNestedRepos']
   setActiveNestedScanId: (scanId: string | null, runtimeEnvironmentId?: string | null) => void
   setNestedScanInProgress: (inProgress: boolean) => void
-  showNestedRepoReview: ShowNestedRepoReview
+  showNestedRepoReview: (args: ShowNestedRepoReviewArgs) => void
   onGitRepoReady: (
     repoId: string,
     source: AddRepoExistingWorkspaceSource,
@@ -162,7 +154,8 @@ export function useAddRepoLocalFolderFlow({
         }
         setAddProjectBusyLabel('Opening project...')
         const repo = await addRepoPath(path, undefined, {
-          runtimeEnvironmentId: activeRuntimeEnvironmentId ?? null
+          runtimeEnvironmentId: activeRuntimeEnvironmentId ?? null,
+          ...(addProjectTarget ? { addProjectTarget } : {})
         })
         if (gen !== localAddGenRef.current) {
           return { status: 'cancelled' }
@@ -195,6 +188,7 @@ export function useAddRepoLocalFolderFlow({
     },
     [
       activeRuntimeEnvironmentId,
+      addProjectTarget,
       addRepoPath,
       clearNestedScanState,
       closeModal,

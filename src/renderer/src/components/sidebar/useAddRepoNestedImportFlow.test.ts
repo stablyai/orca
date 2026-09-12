@@ -27,6 +27,7 @@ const folderRepo: Repo = {
 const mocks = vi.hoisted(() => ({
   state: {
     repos: [] as Repo[],
+    addProjectTarget: null as AddProjectTarget | null,
     addNonGitFolder: vi.fn(),
     closeModal: vi.fn(),
     openModal: vi.fn()
@@ -56,6 +57,7 @@ vi.mock('@/lib/telemetry', () => ({
 
 import { track } from '@/lib/telemetry'
 import { useAddRepoNestedImportFlow } from './useAddRepoNestedImportFlow'
+import type { AddProjectTarget } from '@/lib/added-project-group-assignment'
 
 const scan: NestedRepoScanResult = {
   selectedPath: '/workspace/platform',
@@ -96,6 +98,7 @@ describe('useAddRepoNestedImportFlow open folder fallback', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mocks.state.repos = []
+    mocks.state.addProjectTarget = null
     mocks.state.addNonGitFolder.mockResolvedValue(folderRepo)
   })
 
@@ -197,6 +200,23 @@ describe('useAddRepoNestedImportFlow open folder fallback', () => {
       folderPath: '/workspace/platform',
       connectionId: 'ssh-builder'
     })
+  })
+
+  // Why: closing add-repo drops the Add Project target, so the confirm step re-declares it.
+  it('carries the Add Project target into the SSH non-git folder confirmation', async () => {
+    const addProjectTarget: AddProjectTarget = { groupId: 'group-1', hostId: 'ssh:ssh-builder' }
+    mocks.state.addProjectTarget = addProjectTarget
+    const { handleOpenNestedRootFolder } = useTestAddRepoNestedImportFlow({
+      nestedConnectionId: 'ssh-builder',
+      nestedRuntimeKind: 'ssh'
+    })
+
+    await handleOpenNestedRootFolder()
+
+    expect(mocks.state.openModal).toHaveBeenCalledWith(
+      'confirm-non-git-folder',
+      expect.objectContaining({ folderPath: '/workspace/platform', addProjectTarget })
+    )
   })
 
   it('keeps SSH import and completion pinned when repo hydration is missing', async () => {

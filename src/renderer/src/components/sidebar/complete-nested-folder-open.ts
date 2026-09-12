@@ -24,11 +24,14 @@ export async function completeNestedFolderOpen(args: {
   try {
     const state = useAppStore.getState()
     if (args.connectionId) {
+      // Why: closeModal drops the Add Project target, so re-declare it for the confirm step.
+      const { addProjectTarget } = state
       args.closeModal()
       state.openModal('confirm-non-git-folder', {
         folderPath: args.scan.selectedPath,
         connectionId: args.connectionId,
         runtimeEnvironmentId: args.owner,
+        ...(addProjectTarget ? { addProjectTarget } : {}),
         ...(args.displayName ? { displayName: args.displayName } : {})
       })
       return

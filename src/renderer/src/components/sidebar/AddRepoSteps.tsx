@@ -218,10 +218,13 @@ export function useRemoteRepo(
         // Why: match the local add-project flow — show confirmation dialog so
         // users understand git features will be unavailable, rather than
         // silently adding as a folder.
+        // Why: closeModal drops the Add Project target, so re-declare it for the confirm step.
+        const { addProjectTarget } = useAppStore.getState()
         closeModal()
         useAppStore.getState().openModal('confirm-non-git-folder', {
           folderPath: trimmedRemotePath,
-          connectionId: selectedTargetId
+          connectionId: selectedTargetId,
+          ...(addProjectTarget ? { addProjectTarget } : {})
         })
         return
       }

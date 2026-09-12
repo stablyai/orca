@@ -32,6 +32,7 @@ export default React.memo(function AddRepoDialog({
     !hosted && typeof s.modalData.droppedLocalPath === 'string' ? s.modalData.droppedLocalPath : ''
   )
   const addRepoPath = useAppStore((s) => s.addRepoPath)
+  const addProjectTarget = useAppStore((s) => s.addProjectTarget)
   const scanNestedRepos = useAppStore((s) => s.scanNestedRepos)
   const cancelNestedRepoScan = useAppStore((s) => s.cancelNestedRepoScan)
   const importNestedRepos = useAppStore((s) => s.importNestedRepos)
@@ -171,6 +172,7 @@ export default React.memo(function AddRepoDialog({
   const isRuntimeEnvironmentActive = Boolean(selectedRuntimeEnvironmentId)
   const selectedHostKind = hostSelection.selectedParsedHost?.kind
   const { handleBrowse, resetLocalFolderFlow } = useAddRepoLocalFolderFlow({
+    addProjectTarget,
     isOpen,
     droppedLocalPath,
     activeRuntimeEnvironmentId: selectedRuntimeEnvironmentId,
