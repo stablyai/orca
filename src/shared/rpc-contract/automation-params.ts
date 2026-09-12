@@ -57,13 +57,21 @@ export const OptionalNullablePlainString = z
   .pipe(z.union([z.string(), z.null(), z.undefined()]))
   .optional()
 
+// A GitHub identity is only usable with both fields present and non-blank.
+const GithubIdentityField = z.string().refine((value) => value.trim().length > 0, {
+  message: 'Required'
+})
+
 export const TaskProviderIdentity = z
   .discriminatedUnion('provider', [
     z
       .object({
         provider: z.literal('github'),
-        owner: z.string(),
-        repo: z.string(),
+        // Why refine, not .trim(): normalizeTaskProviderIdentity treats a blank owner or repo as
+        // no identity at all, so blank must be rejected here — but trimming would rewrite the
+        // parsed value and change what the handler receives.
+        owner: GithubIdentityField,
+        repo: GithubIdentityField,
         host: z.string().optional()
       })
       .passthrough(),

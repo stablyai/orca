@@ -108,3 +108,34 @@ describe('task provider identity RPC validation', () => {
     ).toBe(false)
   })
 })
+
+describe('github identity blank fields', () => {
+  // The normalizer treats a blank owner or repo as no identity, so the schema must agree.
+  it.each(['', '   ', '\t'])('rejects a blank owner %j', (owner) => {
+    expect(
+      TaskProviderIdentity.safeParse({ provider: 'github', owner, repo: 'orca' }).success
+    ).toBe(false)
+  })
+
+  it.each(['', '  '])('rejects a blank repo %j', (repo) => {
+    expect(
+      TaskProviderIdentity.safeParse({ provider: 'github', owner: 'stablyai', repo }).success
+    ).toBe(false)
+  })
+
+  it('still accepts a populated identity', () => {
+    expect(
+      TaskProviderIdentity.safeParse({ provider: 'github', owner: 'stablyai', repo: 'orca' })
+        .success
+    ).toBe(true)
+  })
+
+  it('leaves the parsed value untrimmed, so no wire bytes change', () => {
+    const parsed = TaskProviderIdentity.safeParse({
+      provider: 'github',
+      owner: ' stablyai ',
+      repo: 'orca'
+    })
+    expect(parsed.success && parsed.data?.owner).toBe(' stablyai ')
+  })
+})
