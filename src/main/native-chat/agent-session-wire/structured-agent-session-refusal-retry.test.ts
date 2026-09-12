@@ -171,7 +171,7 @@ async function assertHostAgreement(
   harness: Harness,
   spec: CallSpec,
   code: AgentSessionWireRefusalCode,
-  retryOnFreshHost = false
+  retry?: () => Promise<{ harness: Harness; spec: CallSpec }>
 ): Promise<Pair> {
   try {
     const result = await invoke(harness, spec)
@@ -187,12 +187,15 @@ async function assertHostAgreement(
     oracle = 'unknown'
   } else if (outcome?.status === 'pending') {
     oracle = 'pending-admission'
+  } else if (retry) {
+    const next = await retry()
+    await expect(invoke(next.harness, next.spec)).resolves.toMatchObject({
+      ok: true,
+      replayed: false
+    })
+    oracle = 'pending-admission'
   } else {
-    const retryHarness = retryOnFreshHost ? await createHarness() : harness
-    await invoke(retryHarness, spec)
-    oracle = operationState(retryHarness, spec.operationId)
-      ? 'pending-admission'
-      : 'settled-rejected'
+    oracle = 'settled-rejected'
   }
   expect(agentSessionRefusalOperationState(spec.method, code), `${spec.method}:${code}`).toBe(
     oracle
@@ -241,51 +244,56 @@ const UNREACHABLE = new Set<Pair>([
 ])
 
 describe('agentSessionRefusalOperationState host oracle', () => {
-  // 25 real host round trips, each committing the store — and every commit now also rotates a
-  // durable backup, so this does substantially more fsync work than the budget was set for.
+  // Full host retries touch the durable store and successful cases rotate its backup.
   it('agrees with every refusal the real host path can produce', { timeout: 90_000 }, async () => {
     const produced = new Set<Pair>()
     const record = (pair: Pair) => produced.add(pair)
 
     const stale = await createHarness()
     for (const method of METHODS) {
+      const spec = {
+        method,
+        operationId: operationId(),
+        expectedRuntimeFence: 99
+      }
       record(
-        await assertHostAgreement(
-          stale,
-          {
-            method,
-            operationId: operationId(),
-            expectedRuntimeFence: 99
-          },
-          'agent_session_checkpoint_stale'
-        )
+        await assertHostAgreement(stale, spec, 'agent_session_checkpoint_stale', async () => ({
+          harness: stale,
+          spec: {
+            ...spec,
+            expectedRuntimeFence: stale.store.getRecord(SESSION)?.lease.runtimeFence ?? 1
+          }
+        }))
       )
     }
+    expect(stale.setOption).toHaveBeenCalledTimes(1)
 
     const conflict = await createHarness({ transport: true })
-    await setLease(conflict, (current) => ({
-      ...current,
-      lease: { ...current.lease, runtimeKind: 'tui' }
-    }))
     for (const method of ['agentSession.setOption', 'agentSession.send'] as const) {
+      await setLease(conflict, (current) => ({
+        ...current,
+        lease: { ...current.lease, runtimeKind: 'tui' }
+      }))
+      const spec = { method, operationId: operationId() }
       record(
-        await assertHostAgreement(
-          conflict,
-          { method, operationId: operationId() },
-          'agent_session_conflict'
-        )
+        await assertHostAgreement(conflict, spec, 'agent_session_conflict', async () => {
+          await setLease(conflict, (current) => ({
+            ...current,
+            lease: { ...current.lease, runtimeKind: 'native' }
+          }))
+          return { harness: conflict, spec }
+        })
       )
     }
 
     const absent = await createHarness({ attached: false })
     for (const method of METHODS) {
+      const spec = { method, operationId: operationId() }
       record(
-        await assertHostAgreement(
-          absent,
-          { method, operationId: operationId() },
-          'agent_session_ownership_unknown',
-          true
-        )
+        await assertHostAgreement(absent, spec, 'agent_session_ownership_unknown', async () => ({
+          harness: await createHarness(),
+          spec
+        }))
       )
     }
 
@@ -325,13 +333,12 @@ describe('agentSessionRefusalOperationState host oracle', () => {
     const capacity = await createHarness()
     await fillOperationLedger(capacity)
     for (const method of METHODS) {
+      const spec = { method, operationId: operationId() }
       record(
-        await assertHostAgreement(
-          capacity,
-          { method, operationId: operationId() },
-          'agent_session_operation_capacity',
-          true
-        )
+        await assertHostAgreement(capacity, spec, 'agent_session_operation_capacity', async () => ({
+          harness: await createHarness(),
+          spec
+        }))
       )
     }
 
@@ -342,17 +349,20 @@ describe('agentSessionRefusalOperationState host oracle', () => {
     record(await assertHostAgreement(unknown, optionUnknown, 'agent_session_operation_unknown'))
 
     const reconciling = await createHarness()
-    await setLease(reconciling, (current) => ({
-      ...current,
-      lease: { ...current.lease, unreconciled: true }
-    }))
     for (const method of ['agentSession.setOption', 'agentSession.send'] as const) {
+      await setLease(reconciling, (current) => ({
+        ...current,
+        lease: { ...current.lease, unreconciled: true }
+      }))
+      const spec = { method, operationId: operationId() }
       record(
-        await assertHostAgreement(
-          reconciling,
-          { method, operationId: operationId() },
-          'execution_owner_reconciling'
-        )
+        await assertHostAgreement(reconciling, spec, 'execution_owner_reconciling', async () => {
+          await setLease(reconciling, (current) => ({
+            ...current,
+            lease: { ...current.lease, unreconciled: false }
+          }))
+          return { harness: reconciling, spec }
+        })
       )
     }
 

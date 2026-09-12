@@ -458,7 +458,7 @@ describe('send', () => {
     })
   })
 
-  it('settles a refused send so its admission row cannot replay past the fence', async () => {
+  it('reuses a pending send admission after the client refreshes its fence', async () => {
     const record = await attach()
     const body = hostTestMessage('add a retry')
     const params = {
@@ -469,15 +469,29 @@ describe('send', () => {
       ),
       body
     }
-    await host.send(CALLER, params)
     expect(await host.send(CALLER, params)).toMatchObject({
       ok: false,
       refusal: { code: 'agent_session_checkpoint_stale' }
     })
-    expect(dispatch).not.toHaveBeenCalled()
     expect(
-      store.listOperationRows().find((row) => row.operationId === params.envelope.clientOperationId)
-    ).toMatchObject({ outcome: { status: 'failed', code: 'agent_session_checkpoint_stale' } })
+      store
+        .listOperationRows()
+        .filter((row) => row.operationId === params.envelope.clientOperationId)
+    ).toEqual([])
+    const retry = {
+      ...params,
+      envelope: {
+        ...params.envelope,
+        expectedRuntimeFence: record?.lease.runtimeFence ?? 1
+      }
+    }
+    expect(await host.send(CALLER, retry)).toMatchObject({
+      ok: true,
+      replayed: false,
+      value: { submission: { dispatchState: 'accepted' } }
+    })
+    expect(await host.send(CALLER, retry)).toMatchObject({ ok: true, replayed: true })
+    expect(dispatch).toHaveBeenCalledTimes(1)
   })
 
   it('refuses any mutation against a session this host has not attached', async () => {

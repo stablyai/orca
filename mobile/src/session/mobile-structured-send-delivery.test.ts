@@ -86,7 +86,7 @@ describe('mobileStructuredSendDelivery', () => {
         code: 'agent_session_checkpoint_stale',
         message: 'Fence moved'
       })
-    ).toEqual({ outcome: 'rejected', operationIdSpent: true, error: 'Fence moved' })
+    ).toEqual({ outcome: 'rejected', operationIdSpent: false, error: 'Fence moved' })
     expect(
       mobileStructuredSendDelivery({
         status: 'refused',

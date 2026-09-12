@@ -294,7 +294,7 @@ describe('useStructuredAgentSession options', () => {
     ).toEqual(['operation-1', 'operation-2'])
   })
 
-  it('rotates an option operation after a settled stale-fence rejection', async () => {
+  it('reuses an option operation after a pending admission refusal', async () => {
     let attempts = 0
     mocks.call.mockImplementation((_target, method) => {
       if (method !== 'agentSession.setOption') {
@@ -351,15 +351,14 @@ describe('useStructuredAgentSession options', () => {
         ([, , params]) =>
           (params as { envelope: { clientOperationId: string } }).envelope.clientOperationId
       )
-    ).toEqual(['operation-1', 'operation-2'])
+    ).toEqual(['operation-1', 'operation-1'])
     expect(
       mutations.map(
         ([, , params]) =>
           (params as { envelope: { expectedRuntimeFence: number } }).envelope.expectedRuntimeFence
       )
     ).toEqual([3, 4])
-    // The host settled the first id before returning, so reusing it can only replay rejection.
-    expect(mocks.operationId).toHaveBeenCalledTimes(2)
+    expect(mocks.operationId).toHaveBeenCalledTimes(1)
   })
 
   it('ignores an option failure from a superseded fence', async () => {

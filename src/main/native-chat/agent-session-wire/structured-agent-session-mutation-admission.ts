@@ -52,8 +52,7 @@ export async function admitAndRunAgentSessionMutation<TValue>(
   request: AgentSessionMutationRequest<TValue>
 ): Promise<AgentSessionMutationResult<TValue>> {
   const { envelope, plan, journal } = request
-  const record = request.store.getRecord(envelope.sessionId)
-  if (!journal || !record) {
+  if (!journal) {
     return refuseAgentSessionMutation(AGENT_SESSION_NOT_ATTACHED)
   }
   const hostFingerprint = computeAgentSessionPayloadFingerprint({
@@ -65,34 +64,18 @@ export async function admitAndRunAgentSessionMutation<TValue>(
   if (conflict) {
     return refuseAgentSessionMutation(conflict)
   }
-  const ledger = await request.store[
-    plan.operationIdScope === 'global' ? 'admitGlobalOperation' : 'admitOperation'
-  ]({
+  const admitted = await request.store.admitMutationOperation({
     callerKey: request.callerKey,
-    operationId: envelope.clientOperationId,
-    fingerprint: hostFingerprint,
-    now: request.now()
-  })
-  const admission = admitAgentSessionMutation({
     envelope,
     hostFingerprint,
-    ledger,
-    lease: record.lease
+    now: request.now(),
+    ...(plan.operationIdScope ? { operationIdScope: plan.operationIdScope } : {})
   })
+  if (!admitted) {
+    return refuseAgentSessionMutation(AGENT_SESSION_NOT_ATTACHED)
+  }
+  const { admission, record } = admitted
   if (admission.decision === 'refused') {
-    // A fresh row plus a pre-effect refusal proves the mutation did not run.
-    // Settle it so a same-id retry replays that fact instead of inventing doubt.
-    if (ledger.decision === 'admit') {
-      await request.store.recordOperationOutcome({
-        callerKey: ledger.row.callerKey,
-        operationId: envelope.clientOperationId,
-        outcome: {
-          status: 'failed',
-          code: admission.refusal.code,
-          message: admission.refusal.message
-        }
-      })
-    }
     return refuseAgentSessionMutation(admission.refusal)
   }
 

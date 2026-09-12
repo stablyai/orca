@@ -329,6 +329,35 @@ describe('mobile structured send retries', () => {
     }
   )
 
+  it('keeps the send id after a pending-admission refusal', async () => {
+    let attempts = 0
+    sendRequest.mockImplementation(async (method) => {
+      if (method !== 'agentSession.send') {
+        return method === 'agentSession.options' ? ok({ models: [], current: {} }) : ok({})
+      }
+      attempts += 1
+      return attempts === 1
+        ? ok({
+            ok: false,
+            refusal: {
+              code: 'agent_session_checkpoint_stale',
+              message: 'Fence moved',
+              currentFence: 3
+            }
+          })
+        : sendResult('accepted')
+    })
+    await mountSession()
+
+    await act(async () => {
+      expect(await hook!.sendWithOutcome('retry at the current fence')).toBe('rejected')
+      expect(await hook!.sendWithOutcome('retry at the current fence')).toBe('unknown')
+    })
+
+    expect(sentIds()).toHaveLength(2)
+    expect(new Set(sentIds()).size).toBe(1)
+  })
+
   it('keeps the id when an older host refuses an unknown replay', async () => {
     let attempts = 0
     sendRequest.mockImplementation(async (method) => {

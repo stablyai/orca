@@ -76,7 +76,7 @@ export function requeueStructuredAgentSessionSendRefusal(
 ): StructuredAgentSessionOutboxEntry {
   const refusalState = agentSessionRefusalOperationState('agentSession.send', code)
   if (
-    refusalState === 'unknown' ||
+    refusalState !== 'settled-rejected' ||
     retainOperationId ||
     entry.state === 'unconfirmed' ||
     entry.retryAfterUnknownSubmittedAt !== null

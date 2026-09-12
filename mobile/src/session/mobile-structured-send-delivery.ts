@@ -13,9 +13,9 @@
 //
 //   accepted/pending — the send happened. The id is spent; a later identical
 //     message is a new message and must carry a new id.
-//   rejected — provably did not happen, and terminal in the reducer. Reusing the
-//     id could only replay that rejection forever, so it is spent too; the next
-//     attempt is a first delivery under a fresh id and cannot duplicate.
+//   rejected — a terminal refusal or rejected submission spends a fresh id. A
+//     pending-admission refusal, or any refusal after earlier transport doubt,
+//     keeps it because neither proves a retained delivery did not happen.
 //   unknown — the one answer that KEEPS its id, whether it came from the host or
 //     from an ack-loss on the way back. The message may be with the provider, so
 //     the retry has to stay a replay. Rotating here is what sent one message to a
@@ -49,7 +49,7 @@ export function mobileStructuredSendDelivery(
     }
     return {
       outcome: 'rejected',
-      operationIdSpent: !retained,
+      operationIdSpent: refusalState === 'settled-rejected' && !retained,
       error: result.message
     }
   }

@@ -179,7 +179,7 @@
       "invariant": "One structured-send operation id causes at most one provider dispatch. A recorded or transport-ambiguous send reuses that id across retry, caller reconnect, client remount, and journal recovery; only a terminal rejection may rotate to a first delivery.",
       "oracle": "Inject adapter acknowledgement loss, RPC response loss, caller replacement, logical-client close after response, auth recovery with a written request, missing journal submissions, legacy pending rows, stale fences, operation expiry, mobile remount, and durable-journal capacity. Assert one provider dispatch or one operation id for every ambiguous retry, fresh identity only after rejection, and no eviction of ambiguous mobile ids.",
       "commands": [
-        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/shared/agent-session-operation-ledger.test.ts src/shared/structured-agent-session-send-disposition.test.ts src/main/runtime/agent-session-operation-admission.test.ts src/main/native-chat/agent-session-wire/structured-agent-session-refusal-retry.test.ts src/main/native-chat/agent-session-wire/structured-agent-session-send.test.ts src/main/runtime/orchestration/structured-mailbox-pointer-delivery.test.ts src/main/runtime/orchestration/structured-mailbox-pointer-host.test.ts src/main/runtime/orchestration/structured-pointer-operation-id.test.ts src/renderer/src/components/native-chat/use-structured-agent-session-outbox.test.tsx src/renderer/src/components/native-chat/NativeChatStructuredSession.transport-probe.test.tsx src/renderer/src/components/native-chat/NativeChatStructuredSessionDelivery.test.tsx src/renderer/src/lib/launch-structured-agent-session.test.ts",
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/shared/agent-session-operation-ledger.test.ts src/shared/structured-agent-session-send-disposition.test.ts src/main/runtime/agent-session-operation-admission.test.ts src/main/native-chat/agent-session-wire/structured-agent-session-refusal-retry.test.ts src/main/native-chat/agent-session-wire/structured-agent-session-send.test.ts src/main/runtime/orchestration/structured-mailbox-pointer-delivery.test.ts src/main/runtime/orchestration/structured-mailbox-pointer-host.test.ts src/main/runtime/orchestration/structured-pointer-operation-id.test.ts src/renderer/src/components/native-chat/use-structured-agent-session-outbox.test.tsx src/renderer/src/components/native-chat/use-structured-agent-session.test.tsx src/renderer/src/components/native-chat/NativeChatStructuredSession.transport-probe.test.tsx src/renderer/src/components/native-chat/NativeChatStructuredSessionDelivery.test.tsx src/renderer/src/lib/launch-structured-agent-session.test.ts",
         "ORCA_BACKGROUND_LAUNCH=1 pnpm --dir mobile test ../mobile/src/session/mobile-native-chat-image-attachment.test.ts ../mobile/src/session/use-mobile-native-chat-image-attachments.test.ts ../mobile/src/session/mobile-structured-send-operation-journal.test.ts ../mobile/src/session/mobile-structured-session-operation-retention.test.ts ../mobile/src/session/mobile-structured-send-delivery.test.ts ../mobile/src/session/use-mobile-structured-agent-session-send.test.tsx ../mobile/src/session/use-mobile-structured-agent-session.test.tsx ../mobile/src/transport/mobile-relay-rpc-session.test.ts ../mobile/src/transport/rpc-client-delivery-ambiguity.test.ts ../mobile/src/transport/stable-logical-rpc-client.test.ts"
       ],
       "testFiles": [
@@ -192,6 +192,7 @@
         "src/main/runtime/orchestration/structured-mailbox-pointer-host.test.ts",
         "src/main/runtime/orchestration/structured-pointer-operation-id.test.ts",
         "src/renderer/src/components/native-chat/use-structured-agent-session-outbox.test.tsx",
+        "src/renderer/src/components/native-chat/use-structured-agent-session.test.tsx",
         "src/renderer/src/components/native-chat/NativeChatStructuredSession.transport-probe.test.tsx",
         "src/renderer/src/components/native-chat/NativeChatStructuredSessionDelivery.test.tsx",
         "src/renderer/src/lib/launch-structured-agent-session.test.ts",
@@ -213,6 +214,7 @@
             "never redelivers after admission survives without its journal submission",
             "fails closed when a legacy pending row survives without its submission",
             "never reruns an admission-only send after the caller changes",
+            "reuses a pending send admission after the client refreshes its fence",
             "settles a submission write failure as rejected before provider dispatch"
           ]
         },
@@ -227,8 +229,13 @@
             "reuses an ambiguous id after the session hook remounts",
             "keeps an ambiguous id after the host replay window expires",
             "reuses the original uploaded attachment identity after acknowledgement loss",
+            "keeps the send id after a pending-admission refusal",
             "rotates after a %s pre-handler RPC refusal that proves the send did not run"
           ]
+        },
+        {
+          "file": "src/renderer/src/components/native-chat/use-structured-agent-session.test.tsx",
+          "assertions": ["reuses an option operation after a pending admission refusal"]
         },
         {
           "file": "src/main/runtime/orchestration/structured-mailbox-pointer-delivery.test.ts",
@@ -259,22 +266,22 @@
       ],
       "evidenceRuns": [
         {
-          "date": "2026-09-11",
+          "date": "2026-09-12",
           "runner": "local",
           "platform": "macos",
-          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/shared/agent-session-operation-ledger.test.ts src/shared/structured-agent-session-send-disposition.test.ts src/main/runtime/agent-session-operation-admission.test.ts src/main/native-chat/agent-session-wire/structured-agent-session-refusal-retry.test.ts src/main/native-chat/agent-session-wire/structured-agent-session-send.test.ts src/main/runtime/orchestration/structured-mailbox-pointer-delivery.test.ts src/main/runtime/orchestration/structured-mailbox-pointer-host.test.ts src/main/runtime/orchestration/structured-pointer-operation-id.test.ts src/renderer/src/components/native-chat/use-structured-agent-session-outbox.test.tsx src/renderer/src/components/native-chat/NativeChatStructuredSession.transport-probe.test.tsx src/renderer/src/components/native-chat/NativeChatStructuredSessionDelivery.test.tsx src/renderer/src/lib/launch-structured-agent-session.test.ts",
+          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/shared/agent-session-operation-ledger.test.ts src/shared/structured-agent-session-send-disposition.test.ts src/main/runtime/agent-session-operation-admission.test.ts src/main/native-chat/agent-session-wire/structured-agent-session-refusal-retry.test.ts src/main/native-chat/agent-session-wire/structured-agent-session-send.test.ts src/main/runtime/orchestration/structured-mailbox-pointer-delivery.test.ts src/main/runtime/orchestration/structured-mailbox-pointer-host.test.ts src/main/runtime/orchestration/structured-pointer-operation-id.test.ts src/renderer/src/components/native-chat/use-structured-agent-session-outbox.test.tsx src/renderer/src/components/native-chat/use-structured-agent-session.test.tsx src/renderer/src/components/native-chat/NativeChatStructuredSession.transport-probe.test.tsx src/renderer/src/components/native-chat/NativeChatStructuredSessionDelivery.test.tsx src/renderer/src/lib/launch-structured-agent-session.test.ts",
           "result": "passed",
-          "durationSeconds": 25.61,
-          "summary": "Twelve focused host, shared, renderer, and orchestration files passed 133 tests."
+          "durationSeconds": 22.1,
+          "summary": "Thirteen focused host, shared, renderer, and orchestration files passed 148 tests."
         },
         {
-          "date": "2026-09-11",
+          "date": "2026-09-12",
           "runner": "local",
           "platform": "macos",
           "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm --dir mobile test ../mobile/src/session/mobile-native-chat-image-attachment.test.ts ../mobile/src/session/use-mobile-native-chat-image-attachments.test.ts ../mobile/src/session/mobile-structured-send-operation-journal.test.ts ../mobile/src/session/mobile-structured-session-operation-retention.test.ts ../mobile/src/session/mobile-structured-send-delivery.test.ts ../mobile/src/session/use-mobile-structured-agent-session-send.test.tsx ../mobile/src/session/use-mobile-structured-agent-session.test.tsx ../mobile/src/transport/mobile-relay-rpc-session.test.ts ../mobile/src/transport/rpc-client-delivery-ambiguity.test.ts ../mobile/src/transport/stable-logical-rpc-client.test.ts",
           "result": "passed",
-          "durationSeconds": 2.62,
-          "summary": "Ten focused mobile session, attachment, and transport files passed 112 tests."
+          "durationSeconds": 2.37,
+          "summary": "Ten focused mobile session, attachment, and transport files passed 113 tests."
         }
       ],
       "runtimeBudget": {
@@ -287,11 +294,11 @@
       },
       "redGreenEvidence": {
         "status": "partial",
-        "evidence": "Three targeted ablations were run: spending the mobile id after acknowledgement loss made three retries use two ids; settling cross-caller recovery under the new caller left the original ledger row pending; and returning no synthetic result for an admission-only replay dispatched it as a new accepted send. The focused tests pass again with the production fixes restored; a byte-identical old-production run is not recorded."
+        "evidence": "Four targeted failures were observed: spending the mobile id after acknowledgement loss made three retries use two ids; settling cross-caller recovery under the new caller left the original ledger row pending; returning no synthetic result for a legacy or crash-left pending row dispatched it as a new accepted send; and a8d3de8d20's blanket settlement rotated a stale-fence option id and failed the renderer invariant. The focused tests pass with the production fixes restored; a byte-identical old-production run is not recorded."
       },
       "performanceBudget": {
         "required": true,
-        "evidence": "No polling, timers, subprocesses, or provider fanout were added. Each mobile journal mutation parses the bounded journal and performs at most one full AsyncStorage rewrite; entries retain hashes, ids, and original attachment paths, cap at 4,096, and fail closed at capacity. A first host send performs three serialized whole-store durable transactions: admission, the pre-effect unknown tombstone, and final settlement. No capacity-scale host fsync or mobile AsyncStorage latency benchmark is recorded."
+        "evidence": "No polling, timers, subprocesses, or provider fanout were added. Each mobile journal mutation parses the bounded journal and performs at most one full AsyncStorage rewrite; entries retain hashes, ids, and original attachment paths, cap at 4,096, and fail closed at capacity. A first host send performs three serialized whole-store durable transactions: admission, the pre-effect unknown tombstone, and final settlement. Lease and fence admission now share one transaction with the operation row, so a transient pre-effect refusal leaves no row and, absent pruning, performs no store write. No capacity-scale host fsync or mobile AsyncStorage latency benchmark is recorded."
       },
       "promotionCriteria": [
         "Soak both commands in CI with zero unexplained flakes.",

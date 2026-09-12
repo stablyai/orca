@@ -437,9 +437,8 @@ describe('useStructuredAgentSessionOutbox', () => {
     )
   })
 
-  it('rotates a send operation after a settled stale-fence rejection', async () => {
+  it('retains a send operation after a pending-admission refusal', async () => {
     mocks.call
-      .mockResolvedValueOnce(refusedResult('agent_session_checkpoint_stale'))
       .mockResolvedValueOnce(refusedResult('agent_session_checkpoint_stale'))
       .mockResolvedValueOnce(acceptedResult(1))
     const { result } = renderHook(() =>
@@ -455,25 +454,14 @@ describe('useStructuredAgentSessionOutbox', () => {
     await waitFor(() => expect(result.current.outbox[0]?.state).toBe('queued'))
     const firstId = (mocks.call.mock.calls[0]![2] as { envelope: { clientOperationId: string } })
       .envelope.clientOperationId
-    const retryId = result.current.outbox[0]!.clientMessageId
-    expect(retryId).not.toBe(firstId)
+    expect(result.current.outbox[0]?.clientMessageId).toBe(firstId)
 
-    act(() => result.current.retry(retryId))
+    act(() => result.current.retry(firstId))
     await waitFor(() => expect(mocks.call).toHaveBeenCalledTimes(2))
-    await waitFor(() => expect(result.current.outbox[0]?.state).toBe('queued'))
-    const secondRetryId = result.current.outbox[0]!.clientMessageId
-    expect(secondRetryId).not.toBe(retryId)
     expect(
       (mocks.call.mock.calls[1]![2] as { envelope: { clientOperationId: string } }).envelope
         .clientOperationId
-    ).toBe(retryId)
-
-    act(() => result.current.retry(secondRetryId))
-    await waitFor(() => expect(mocks.call).toHaveBeenCalledTimes(3))
-    expect(
-      (mocks.call.mock.calls[2]![2] as { envelope: { clientOperationId: string } }).envelope
-        .clientOperationId
-    ).toBe(secondRetryId)
+    ).toBe(firstId)
   })
 
   it('persists and dispatches an attachment-only structured send', async () => {
