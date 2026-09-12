@@ -524,6 +524,16 @@ describe('add_repo_default_checkout_handoff schema', () => {
     expect(parsed.success).toBe(true)
   })
 
+  it('accepts the hidden-default-checkout reveal reason', () => {
+    const parsed = eventSchemas.add_repo_default_checkout_handoff.safeParse({
+      source: 'clone_url',
+      result: 'revealed_project',
+      reason: 'default_checkout_hidden',
+      nth_repo_added: 2
+    })
+    expect(parsed.success).toBe(true)
+  })
+
   it('rejects raw repo/path context via .strict()', () => {
     const parsed = eventSchemas.add_repo_default_checkout_handoff.safeParse({
       source: 'local_folder_picker',

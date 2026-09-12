@@ -28,7 +28,6 @@ const AddProjectFromFolderDialog = React.memo(function AddProjectFromFolderDialo
   const openModal = useAppStore((s) => s.openModal)
   const addRepoPath = useAppStore((s) => s.addRepoPath)
   const fetchWorktrees = useAppStore((s) => s.fetchWorktrees)
-  const setHideDefaultBranchWorkspace = useAppStore((s) => s.setHideDefaultBranchWorkspace)
 
   const [isAdding, setIsAdding] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -128,8 +127,7 @@ const AddProjectFromFolderDialog = React.memo(function AddProjectFromFolderDialo
             : 'local_folder_picker',
         selectedPath: folderPath,
         executionHostId: ownerOptions.executionHostId,
-        closeModal,
-        setHideDefaultBranchWorkspace
+        closeModal
       })
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err)
@@ -156,8 +154,7 @@ const AddProjectFromFolderDialog = React.memo(function AddProjectFromFolderDialo
     isAdding,
     mountedRef,
     openNonGitConfirmation,
-    runtimeEnvironmentId,
-    setHideDefaultBranchWorkspace
+    runtimeEnvironmentId
   ])
 
   const handleOpenChange = useCallback(

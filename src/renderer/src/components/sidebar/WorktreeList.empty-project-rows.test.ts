@@ -18,7 +18,8 @@ import {
 import {
   makeFolderWorkspacePathStatusMockState,
   makeFolderWorkspacePathStatusState,
-  makeRepo
+  makeRepo,
+  makeWorktree
 } from './worktree-list-lineage-card-test-fixtures'
 
 vi.mock('@/store', () => createAppStoreModuleMock())
@@ -94,6 +95,25 @@ function setEmptyUngroupedProjectState(filterRepoIds: string[] = []): void {
   }
 }
 
+function setHiddenDefaultCheckoutProjectState(): void {
+  setEmptyUngroupedProjectState()
+  mockStore.state.hideDefaultBranchWorkspace = true
+  mockStore.state.worktreesByRepo = {
+    'repo-1': [
+      {
+        ...makeWorktree({
+          id: 'repo-1::/tmp/lineage-order',
+          displayName: 'main',
+          branch: 'refs/heads/main',
+          sortOrder: 1,
+          instanceId: 'main'
+        }),
+        isMainWorktree: true
+      }
+    ]
+  }
+}
+
 // Why: describe title is shared across the split files so test full names stay stable.
 describe('WorktreeList lineage child card renderer', () => {
   beforeAll(async () => {
@@ -122,5 +142,14 @@ describe('WorktreeList lineage child card renderer', () => {
     expect(markup).toContain('No workspaces found')
     expect(markup).toContain('Clear Filters')
     expect(markup).not.toContain('empty-project')
+  })
+
+  it('keeps a default-checkout-only ungrouped project header under Hide default branch', async () => {
+    setHiddenDefaultCheckoutProjectState()
+    const markup = await renderWorktreeListMarkup()
+
+    expect(markup).toContain('empty-project')
+    expect(markup).not.toContain('data-worktree-card-id')
+    expect(markup).not.toContain('No workspaces found')
   })
 })

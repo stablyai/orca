@@ -16,7 +16,6 @@ export default function ProjectAddedDialog(): null {
   const repos = useAppStore((s) => s.repos)
   const fetchRepos = useAppStore((s) => s.fetchRepos)
   const fetchWorktrees = useAppStore((s) => s.fetchWorktrees)
-  const setHideDefaultBranchWorkspace = useAppStore((s) => s.setHideDefaultBranchWorkspace)
   const handoffRunRef = useRef(0)
   const pendingRepoHydrationRef = useRef<string | null>(null)
 
@@ -101,23 +100,14 @@ export default function ProjectAddedDialog(): null {
         await finishProjectAddWithDefaultCheckout({
           repoId,
           source: 'project_added_compat',
-          closeModal,
-          setHideDefaultBranchWorkspace
+          closeModal
         })
       }
     })()
     return () => {
       cancelled = true
     }
-  }, [
-    activeModal,
-    closeModal,
-    fetchRepos,
-    fetchWorktrees,
-    repo,
-    repoId,
-    setHideDefaultBranchWorkspace
-  ])
+  }, [activeModal, closeModal, fetchRepos, fetchWorktrees, repo, repoId])
 
   return null
 }
