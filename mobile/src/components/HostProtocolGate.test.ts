@@ -26,6 +26,13 @@ vi.mock('expo-router', () => ({
   router: { replace: vi.fn() }
 }))
 
+// Why: the Android block screen resolves the latest APK over the network; keep tests offline.
+const androidRelease = vi.hoisted(() => ({ fetchLatest: vi.fn() }))
+vi.mock('../mobile-release/android-update-check', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../mobile-release/android-update-check')>()),
+  fetchLatestAndroidRelease: androidRelease.fetchLatest
+}))
+
 // Why: mock only client acquisition; the gate must exercise the real
 // useHostStatusGates → evaluateCompat → ProtocolBlockScreen wiring.
 const hostClient = vi.hoisted(() => ({
@@ -103,23 +110,46 @@ describe('HostProtocolGate', () => {
     expect(output).not.toContain('HostContent')
   })
 
-  it('routes Android mobile updates to GitHub Releases', async () => {
+  it('routes Android mobile updates to the latest APK once it resolves', async () => {
     vi.spyOn(console, 'warn').mockImplementation(() => {})
     nativeTestState.platform.OS = 'android'
+    const apkUrl =
+      'https://github.com/stablyai/orca/releases/download/mobile-android-v0.0.48/app-release.apk'
+    androidRelease.fetchLatest.mockResolvedValue({ version: '0.0.48', apkUrl })
     hostClient.current = {
       client: clientWithStatus({ protocolVersion: 5, minCompatibleMobileVersion: 999 }),
       state: 'connected'
     }
     renderer = await renderGate()
+    await act(async () => {
+      await Promise.resolve()
+    })
     const output = renderedText(renderer)
     expect(output).toContain('Update Orca Mobile')
     expect(output).toContain('Update Orca Mobile from GitHub Releases')
-    expect(output).toContain('Open GitHub Releases')
+    expect(output).toContain('Download APK')
     expect(output).not.toContain('mobile app store')
     expect(output).not.toContain('HostContent')
     act(() => renderer?.root.findAllByType('Pressable')[0]?.props.onPress())
+    expect(nativeTestState.openUrl).toHaveBeenCalledWith(apkUrl)
+  })
+
+  it('falls back to the Android releases list when the APK lookup fails', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
+    nativeTestState.platform.OS = 'android'
+    androidRelease.fetchLatest.mockRejectedValue(new Error('offline'))
+    hostClient.current = {
+      client: clientWithStatus({ protocolVersion: 5, minCompatibleMobileVersion: 999 }),
+      state: 'connected'
+    }
+    renderer = await renderGate()
+    await act(async () => {
+      await Promise.resolve()
+    })
+    expect(renderedText(renderer)).toContain('Open GitHub Releases')
+    act(() => renderer?.root.findAllByType('Pressable')[0]?.props.onPress())
     expect(nativeTestState.openUrl).toHaveBeenCalledWith(
-      'https://github.com/stablyai/orca/releases'
+      'https://github.com/stablyai/orca/releases?q=mobile-android-v'
     )
   })
 
