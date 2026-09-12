@@ -123,6 +123,58 @@ async function settleCreatedWorkspace(
 }
 
 /**
+ * Best-effort surface repair for the one branch that has no other way back: activation owns
+ * both revealing the workspace and naming its primary tab, so when it throws the created
+ * workspace can be left with nothing to deliver agent startup to. Never throws — settlement
+ * must not depend on recovery succeeding either.
+ */
+function recoverRevealedWorkspaceSurface(
+  args: WorktreePostCreateStepsArgs,
+  progress: PostCreateProgress
+): void {
+  // Only the activating branch loses its surface to a throw; the others established theirs
+  // before the failing step, and a structured launch owns its own.
+  if (!args.shouldActivateOnCompletion || args.structuredLaunch || progress.primaryTabId !== null) {
+    return
+  }
+  const { request, result } = args
+  try {
+    const state = useAppStore.getState()
+    const existingTabs = state.tabsByWorktree[args.worktreeId] ?? []
+    const launchAgent = args.startupOpt?.launchAgent ?? request.agent
+    // Activation can publish the worktree before it throws. Do not infer a primary tab from
+    // default-tab ordering; only the backend startup terminal or an agent-stamped tab is safe.
+    const verifiedLaunchTabId =
+      result.startupTerminal?.tabId ??
+      (launchAgent ? existingTabs.find((tab) => tab.launchAgent === launchAgent)?.id : undefined)
+    if (verifiedLaunchTabId) {
+      progress.primaryTabId = verifiedLaunchTabId
+    } else if (existingTabs.length === 0) {
+      progress.primaryTabId = ensureWorktreeHasInitialTerminal(
+        state,
+        args.worktreeId,
+        args.startupOpt,
+        result.setup,
+        request.issueCommand,
+        result.defaultTabs,
+        {
+          ...(request.agent !== null ? { callerProvidesSurface: true } : {}),
+          ...(args.backendSpawned ? { backendStartupTerminalSpawned: true } : {})
+        }
+      )
+    }
+    if (!args.backendSpawned) {
+      ensureWebRuntimeWorktreeTerminalAfterWake(args.worktreeId, {
+        startup: args.startupOpt,
+        agent: request.agent
+      })
+    }
+  } catch (error) {
+    console.error('worktree create: post-create recovery failed', args.worktreeId, error)
+  }
+}
+
+/**
  * Runs every step that follows a resolved `createWorktree` and reports how the workspace
  * settled. Never throws: the worktree already exists on disk and its row is already in the
  * store, so a failed follow-up step still has to settle the creation and show the workspace
@@ -140,6 +192,7 @@ export async function runWorktreePostCreateSteps(
     return await settleCreatedWorkspace(args, progress)
   } catch (error) {
     console.error('worktree create: post-create step failed', args.worktreeId, error)
+    recoverRevealedWorkspaceSurface(args, progress)
     return { kind: 'complete', ...progress }
   }
 }

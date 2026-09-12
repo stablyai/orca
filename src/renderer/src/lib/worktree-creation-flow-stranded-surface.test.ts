@@ -116,6 +116,7 @@ import { ensureWebRuntimeWorktreeTerminalAfterWake } from '@/lib/web-runtime-wor
 import { launchStructuredWorktreeSession } from '@/lib/worktree-creation-structured-session'
 import { queueWorkspaceActivationTerminalFocus } from '@/lib/workspace-activation-terminal-focus'
 import { seedAgentTabStateAfterWorktreeCreate } from '@/lib/worktree-creation-agent-seeds'
+import { ensureAgentStartupInTerminal } from '@/lib/new-workspace'
 import { prepareRequestForCreate } from '@/lib/ephemeral-vm-worktree-creation'
 import { executeWorktreeCreation } from './worktree-creation-flow-execute'
 import { runBackgroundWorktreeCreation } from './worktree-creation-flow'
@@ -264,6 +265,105 @@ describe('a throw in the post-create tail still completes the creation', () => {
     expect(seedAgentTabStateAfterWorktreeCreate).toHaveBeenCalledWith(
       expect.objectContaining({ primaryTabId: 'tab-1' })
     )
+  })
+
+  it('activating branch: routes draft and follow-up delivery to the stamped agent tab', async () => {
+    const request = makeRequest({
+      agent: 'codex',
+      startupPlan: {
+        agent: 'codex',
+        launchCommand: 'codex',
+        expectedProcess: 'codex',
+        draftPrompt: 'draft context',
+        followupPrompt: 'follow-up context',
+        launchConfig: { agentArgs: '', agentEnv: {} }
+      }
+    })
+    seedPendingCreation(request)
+    store.tabsByWorktree = {
+      'wt-1': [{ id: 'default-tab' }, { id: 'agent-tab', launchAgent: 'codex' }]
+    }
+    vi.mocked(activateAndRevealWorktree).mockImplementation(() => {
+      throw new Error('reveal exploded after default tabs were created')
+    })
+
+    await executeWorktreeCreation('creation-1', request)
+
+    expect(ensureWorktreeHasInitialTerminal).not.toHaveBeenCalled()
+    expect(ensureAgentStartupInTerminal).toHaveBeenCalledWith(
+      expect.objectContaining({ primaryTabId: 'agent-tab' })
+    )
+  })
+
+  it('activating branch: a throw in activateAndRevealWorktree seeds a terminal for the workspace', async () => {
+    const request = makeRequest()
+    seedPendingCreation(request)
+    vi.mocked(ensureWorktreeHasInitialTerminal).mockReturnValue('recovered-tab')
+    vi.mocked(activateAndRevealWorktree).mockImplementation(() => {
+      throw new Error('activation exploded')
+    })
+
+    await executeWorktreeCreation('creation-1', request)
+
+    // Activation owns both the reveal and the primary tab, so recovery seeds the surface it
+    // never got to create; note the absence of activateCreatedTabs: false.
+    expect(ensureWorktreeHasInitialTerminal).toHaveBeenCalledWith(
+      store,
+      'wt-1',
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      {}
+    )
+    expectSettledAndRevealed()
+  })
+
+  it('activating branch: leaves existing default tabs untouched after a partial failure', async () => {
+    const request = makeRequest({ issueCommand: { command: 'echo setup' } })
+    seedPendingCreation(request)
+    store.tabsByWorktree = { 'wt-1': [{ id: 'existing-tab' }] }
+    vi.mocked(activateAndRevealWorktree).mockImplementation(() => {
+      throw new Error('reveal exploded after tab creation')
+    })
+
+    await executeWorktreeCreation('creation-1', request)
+
+    expect(ensureWorktreeHasInitialTerminal).not.toHaveBeenCalled()
+    expectSettledAndRevealed()
+  })
+
+  it('concurrent create: a throw completing a backgrounded creation still tears its entry down', async () => {
+    // A second submitted create repointed activePendingCreationId, so this creation's
+    // completion takes the non-activating branch on the terminal view.
+    const request = makeRequest()
+    seedPendingCreation(request)
+    store.activePendingCreationId = 'creation-2'
+    store.createWorktree.mockResolvedValue({
+      worktree: { id: 'wt-1', repoId: 'repo-1' },
+      setup: { runnerScriptPath: '/tmp/setup.sh' }
+    })
+    vi.mocked(ensureWorktreeHasInitialTerminal).mockReturnValue('tab-1')
+    vi.mocked(ensureWebRuntimeWorktreeTerminalAfterWake).mockImplementation(() => {
+      throw new Error('after-wake exploded')
+    })
+
+    await executeWorktreeCreation('creation-1', request)
+
+    expect(activateAndRevealWorktree).not.toHaveBeenCalled()
+    // Blank terminal + Setup tab are seeded by this one synchronous call.
+    expect(ensureWorktreeHasInitialTerminal).toHaveBeenCalledWith(
+      store,
+      'wt-1',
+      undefined,
+      { runnerScriptPath: '/tmp/setup.sh' },
+      undefined,
+      undefined,
+      expect.objectContaining({ activateCreatedTabs: false })
+    )
+    // The entry is gone; the pointer stays on the other in-flight creation.
+    expect(store.pendingWorktreeCreations['creation-1']).toBeUndefined()
+    expect(store.activePendingCreationId).toBe('creation-2')
   })
 
   it('control: with no throw the same flow completes and reveals the workspace', async () => {
