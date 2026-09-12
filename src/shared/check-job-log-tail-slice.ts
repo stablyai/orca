@@ -34,6 +34,7 @@ function joinLogExcerptWithByteCap(prefixLines: string[], recentLines: string[])
 
 function collectEarlierErrorLineIndexes(lines: string[], recentStart: number): number[] {
   const indexes = new Set<number>()
+  // Newest-first errors and descending windows add the newest unique indexes first.
   for (let index = recentStart - 1; index >= 0; index -= 1) {
     if (!ERROR_LINE_PATTERN.test(lines[index] ?? '')) {
       continue
