@@ -90,6 +90,26 @@ describe('buildTitleDerivedAgentRows', () => {
     ])
   })
 
+  it('rows an idle OMP session from an owner-rewritten separator title before the first turn', () => {
+    const rows = buildWorktreeAgentRows({
+      tabs: [makeTab('tab-1', { launchAgent: 'omp' })],
+      entries: [],
+      retained: [],
+      runtimePaneTitlesByTabId: {
+        'tab-1': {
+          1: 'OMP > New OMP session'
+        }
+      },
+      ptyIdsByTabId: { 'tab-1': ['pty-omp'] },
+      terminalLayoutsByTabId: { 'tab-1': makeSingleLayout(LEAF_ID_1) },
+      now: 2000
+    })
+
+    expect(rows.map((row) => [row.agentType, row.state, row.entry.terminalTitle])).toEqual([
+      ['omp', 'idle', 'OMP > New OMP session']
+    ])
+  })
+
   it('keeps Pi-compatible title-derived rows as Pi for launched Pi sessions', () => {
     const rows = buildWorktreeAgentRows({
       tabs: [makeTab('tab-1', { launchAgent: 'pi' })],

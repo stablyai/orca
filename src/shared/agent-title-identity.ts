@@ -11,7 +11,10 @@ import {
   titleHasAgentName
 } from './agent-title-core'
 import { isOpenCodeNativeTitle } from './opencode-terminal-title'
-import { getPiCompatibleSyntheticAgentLabel } from './pi-compatible-synthetic-title'
+import {
+  getPiCompatibleSyntheticAgentLabel,
+  getPiCompatibleTitleSeparatorBrand
+} from './pi-compatible-synthetic-title'
 import { memoizeTitleClassification } from './terminal-title-classification-memo'
 
 /**
@@ -75,6 +78,10 @@ function computeAgentLabel(title: string): string | null {
   const piCompatibleSyntheticAgentLabel = getPiCompatibleSyntheticAgentLabel(title)
   if (piCompatibleSyntheticAgentLabel) {
     return piCompatibleSyntheticAgentLabel
+  }
+  const piCompatibleSeparatorBrand = getPiCompatibleTitleSeparatorBrand(title)
+  if (piCompatibleSeparatorBrand) {
+    return piCompatibleSeparatorBrand
   }
   if (isPiAgentTitle(title)) {
     return 'Pi'
