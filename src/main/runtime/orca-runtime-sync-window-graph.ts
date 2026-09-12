@@ -34,36 +34,41 @@ export class OrcaRuntimeWithSyncWindowGraph extends OrcaRuntimeWithAttachWindow 
     // malformed persisted/mirrored graphs before authority or graph state is
     // changed; choosing a winner would route PTYs to the wrong worktree.
     assertUniqueRuntimeGraphTabIds(graph.tabs)
-    if (
-      windowId !== HEADLESS_RUNTIME_WINDOW_ID &&
-      this.authoritativeWindowId === HEADLESS_RUNTIME_WINDOW_ID &&
-      this.headlessGraphFallbackAvailable
-    ) {
-      if (windowId !== this.pendingHeadlessPromotionWindowId) {
-        throw new Error('Runtime graph publisher does not match the pending desktop promotion')
-      }
-      // Why: a renderer may publish after a failed promotion was restored to
-      // headless authority; accepting that late healthy graph is self-healing.
-      this.attachWindow(windowId)
-    }
-    if (this.authoritativeWindowId === null) {
-      this.authoritativeWindowId = windowId
-    }
-    if (windowId !== this.authoritativeWindowId) {
-      throw new Error('Runtime graph publisher does not match the authoritative window')
-    }
     const rendererGeneration =
       windowId === HEADLESS_RUNTIME_WINDOW_ID
         ? null
         : 'rendererGeneration' in graph && typeof graph.rendererGeneration === 'string'
           ? graph.rendererGeneration
           : undefined
+    if (this.retiredGraphWindowIds.has(windowId)) {
+      throw new Error('Runtime graph publisher belongs to a retired window')
+    }
     if (
       typeof rendererGeneration === 'string' &&
-      rendererGeneration === this.rendererGeneration &&
-      this.graphStatus !== 'ready'
+      this.retiredRendererGenerations.has(rendererGeneration)
     ) {
       throw new Error('Runtime graph publisher belongs to a superseded renderer generation')
+    }
+    const promotesHeadless =
+      windowId !== HEADLESS_RUNTIME_WINDOW_ID &&
+      this.authoritativeWindowId === HEADLESS_RUNTIME_WINDOW_ID &&
+      this.headlessGraphFallbackAvailable
+    if (promotesHeadless && windowId !== this.pendingHeadlessPromotionWindowId) {
+      throw new Error('Runtime graph publisher does not match the pending desktop promotion')
+    }
+    if (
+      !promotesHeadless &&
+      this.authoritativeWindowId !== null &&
+      windowId !== this.authoritativeWindowId
+    ) {
+      throw new Error('Runtime graph publisher does not match the authoritative window')
+    }
+    // Admission precedes promotion persistence, reload settlement, and authority adoption.
+    if (promotesHeadless) {
+      this.attachWindow(windowId)
+    }
+    if (this.authoritativeWindowId === null) {
+      this.authoritativeWindowId = windowId
     }
     if (windowId === HEADLESS_RUNTIME_WINDOW_ID) {
       this.headlessGraphFallbackAvailable = true
@@ -87,7 +92,7 @@ export class OrcaRuntimeWithSyncWindowGraph extends OrcaRuntimeWithAttachWindow 
 
     // Why: renderer reloads can briefly republish the same leaf with no ptyId;
     // keep live CLI handles usable while the UI graph rebuilds.
-    const preserveLivePtysDuringReload = this.graphStatus === 'reloading'
+    const preserveLivePtysDuringReload = this.graphStatus !== 'ready'
     for (const leaf of lifecycleLeaves) {
       if (leaf.ptyId) {
         if (leaf.parked) {
@@ -262,6 +267,7 @@ export class OrcaRuntimeWithSyncWindowGraph extends OrcaRuntimeWithAttachWindow 
       }
     }
     const isAuthoritativeGraphPublisher = windowId === this.authoritativeWindowId
+    this.notifier?.graphPublicationAccepted?.(windowId)
     this.markGraphReady(windowId)
     if (
       isAuthoritativeGraphPublisher &&
@@ -274,6 +280,9 @@ export class OrcaRuntimeWithSyncWindowGraph extends OrcaRuntimeWithAttachWindow 
       }
     }
     if (rendererGeneration !== undefined) {
+      if (this.rendererGeneration !== null && this.rendererGeneration !== rendererGeneration) {
+        this.retiredRendererGenerations.add(this.rendererGeneration)
+      }
       this.rendererGeneration = rendererGeneration
     }
     for (const leaf of this.leaves.values()) {
