@@ -7,7 +7,10 @@ import type {
   RichMarkdownSourceKind,
   RichMarkdownSourceTransport
 } from './rich-markdown-source-transport'
-import { isReservedRichMarkdownTransportBody } from './rich-markdown-source-transport'
+import {
+  isReservedRichMarkdownTransportBody,
+  skipInlineTransportStartScan
+} from './rich-markdown-source-transport'
 import { matchHtmlSuperscriptLinkSource } from './rich-markdown-html-superscript-link-source'
 
 const INLINE_HTML_PATTERN = /^<!--[\s\S]*?-->|^<\/?[A-Za-z][\w.:-]*(?:\s[^<>]*?)?\/?>/
@@ -273,7 +276,7 @@ function createRawSourceNode({
     markdownTokenizer: {
       name,
       level: inline ? 'inline' : 'block',
-      start: transport.startFor(kind),
+      start: inline ? skipInlineTransportStartScan : transport.startFor(kind),
       tokenize(src) {
         const matched = transport.match(src, kind)
         if (!matched) {
