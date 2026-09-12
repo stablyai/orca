@@ -27,9 +27,14 @@ let registeredWorktreeRootsRevisionSequence = 0
 let registeredWorktreeRootsBaseRevision = 0
 let registeredWorktreeRootsDirty = true
 let registeredWorktreeRootsRefresh: Promise<void> | null = null
+// Why: a rebuild snapshots repos, then awaits `git worktree list`. A mutation landing during that
+// await outdates the snapshot; the generation lets the rebuild detect it and discard its result
+// instead of overwriting the fresher state and clearing the dirty flag it did not earn.
+let registeredWorktreeRootsGeneration = 0
 const AUTHORIZED_ROOTS_REBUILD_CONCURRENCY = 8
 
 export function invalidateAuthorizedRootsCache(): void {
+  registeredWorktreeRootsGeneration += 1
   registeredWorktreeRootsDirty = true
   // Why: dirty roots can't be trusted for auth short-circuits; fresh worktrees:list seeds safe per-repo roots before a full rebuild.
   registeredWorktreeRoots.clear()
@@ -45,6 +50,7 @@ export function invalidateAuthorizedRootsCache(): void {
 export async function rebuildAuthorizedRootsCache(store: Store): Promise<void> {
   // Why: bounded parallelism keeps the Windows speedup without one git process per repo.
   // Why no realpath here: canonicalizing every root on invalidation would trigger macOS TCC prompts; handlers still canonicalize the target before any operation.
+  const generation = registeredWorktreeRootsGeneration
   const repos = getLocalRepos(store)
   const perProjectResults = await mapWithConcurrency(
     repos,
@@ -66,6 +72,13 @@ export async function rebuildAuthorizedRootsCache(store: Store): Promise<void> {
     }
   )
   await pruneCreatedWorktreeRoots(perProjectResults, new Set(repos.map((repo) => repo.id)))
+
+  // Why: an invalidation or per-repo seed landed while git was listing, so this snapshot predates
+  // the current state. Writing it would resurrect removed roots (or drop a just-created worktree)
+  // and mark the cache clean; leave the fresher state and dirty flag alone instead.
+  if (generation !== registeredWorktreeRootsGeneration) {
+    return
+  }
 
   registeredWorktreeRoots.clear()
   registeredWorktreeRootsByRepo.clear()
@@ -171,6 +184,9 @@ export function registerWorktreeRootsForRepo(
   repoId: string,
   worktreeRoots: string[]
 ): void {
+  // Why: this seed rewrites per-repo roots from a fresh worktrees:list; an in-flight rebuild's
+  // older git listing must not clobber it.
+  registeredWorktreeRootsGeneration += 1
   const localRepoIds = new Set(getLocalRepos(store).map((repo) => repo.id))
   for (const registeredRepoId of registeredWorktreeRootsByRepo.keys()) {
     if (!localRepoIds.has(registeredRepoId)) {
@@ -240,15 +256,16 @@ export function getRegisteredWorktreeRootsRevision(repoId: string): number {
 }
 
 export async function ensureAuthorizedRootsCache(store: Store): Promise<void> {
-  if (!registeredWorktreeRootsDirty) {
-    return
+  // Why a loop: the joined refresh may have started before this caller's invalidation, in which
+  // case it discards its stale result and leaves the cache dirty — rebuild again until clean.
+  while (registeredWorktreeRootsDirty) {
+    if (!registeredWorktreeRootsRefresh) {
+      registeredWorktreeRootsRefresh = rebuildAuthorizedRootsCache(store).finally(() => {
+        registeredWorktreeRootsRefresh = null
+      })
+    }
+    await registeredWorktreeRootsRefresh
   }
-  if (!registeredWorktreeRootsRefresh) {
-    registeredWorktreeRootsRefresh = rebuildAuthorizedRootsCache(store).finally(() => {
-      registeredWorktreeRootsRefresh = null
-    })
-  }
-  await registeredWorktreeRootsRefresh
 }
 
 /**
