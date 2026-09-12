@@ -165,18 +165,28 @@ describe('useComposerState host-context boundaries', () => {
   })
 
   it('auto-owns linked-item generated prefilled names', () => {
+    const item = {
+      type: 'issue' as const,
+      provider: 'github' as const,
+      number: 1234,
+      title: 'Fix workspace name',
+      url: 'https://github.com/stablyai/orca/issues/1234'
+    }
+
+    // The generated seed leads with the issue number, matching Jira's key prefix.
+    expect(
+      getInitialAutoManagedWorkspaceName({
+        initialName: '1234-fix-workspace-name',
+        initialLinkedWorkItem: item
+      })
+    ).toBe('1234-fix-workspace-name')
+    // A name that is not what Orca would generate is the user's, so it stays theirs.
     expect(
       getInitialAutoManagedWorkspaceName({
         initialName: 'fix-workspace-name',
-        initialLinkedWorkItem: {
-          type: 'issue',
-          provider: 'github',
-          number: 1234,
-          title: 'Fix workspace name',
-          url: 'https://github.com/stablyai/orca/issues/1234'
-        }
+        initialLinkedWorkItem: item
       })
-    ).toBe('fix-workspace-name')
+    ).toBe('')
   })
 
   it('resolves GitHub PR bases against the selected run repo, not the source item repo', () => {

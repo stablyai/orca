@@ -210,7 +210,8 @@ export function buildWorkspaceSourceSelection(args: {
     label:
       provider === 'linear' || provider === 'jira' || linkedWorkItem.number === 0
         ? linkedWorkItem.title
-        : `#${linkedWorkItem.number} ${linkedWorkItem.title}`,
+        : // Why: GitLab cites merge requests as !n, matching the workspace name.
+          `${kind === 'gitlab-mr' ? '!' : '#'}${linkedWorkItem.number} ${linkedWorkItem.title}`,
     url: linkedWorkItem.url
   }
 }
