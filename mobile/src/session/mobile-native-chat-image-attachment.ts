@@ -1,6 +1,6 @@
 import type { RpcClient } from '../transport/rpc-client'
 import { saveMobileClipboardImageAsTempFile } from './mobile-clipboard-image'
-import { structuredAgentSessionPayloadFingerprint } from '../../../src/shared/structured-agent-session-mutation'
+import { structuredAgentSessionDomainFingerprint } from '../../../src/shared/structured-agent-session-mutation'
 // Type-only import so this module (and its unit test) stays free of the expo/
 // react-native picker chain; the concrete `pickImage` is injected by the hook.
 import type { MobileImageSource, PickedMobileImage } from './mobile-image-source-picker'
@@ -17,8 +17,8 @@ export type PendingNativeChatImage = {
 }
 
 export function mobileNativeChatImageContentFingerprint(base64: string): string {
-  return structuredAgentSessionPayloadFingerprint({
-    method: 'mobile.nativeChat.image',
+  return structuredAgentSessionDomainFingerprint({
+    domain: 'mobile.nativeChat.image',
     sessionId: '',
     fields: { base64 }
   })

@@ -3,7 +3,10 @@ import {
   structuredAgentSessionSendBody,
   type StructuredAgentSessionAttachment
 } from '../../../src/shared/structured-agent-session-outbox'
-import { structuredAgentSessionPayloadFingerprint } from '../../../src/shared/structured-agent-session-mutation'
+import {
+  structuredAgentSessionDomainFingerprint,
+  structuredAgentSessionPayloadFingerprint
+} from '../../../src/shared/structured-agent-session-mutation'
 import type { RpcClient } from '../transport/rpc-client'
 import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
 import {
@@ -40,16 +43,16 @@ export async function sendMobileStructuredAgentSessionMessage(input: {
     sessionId: input.sessionId,
     fields: { body: requestedBody }
   })
-  const intentFingerprint = structuredAgentSessionPayloadFingerprint({
-    method: 'mobile.agentSession.send.intent',
+  const intentFingerprint = structuredAgentSessionDomainFingerprint({
+    domain: 'mobile.agentSession.send.intent',
     sessionId: input.sessionKey,
     fields: {
       text: input.text.trimEnd(),
       attachments: input.attachments.map(
         (attachment) =>
           attachment.contentFingerprint ??
-          structuredAgentSessionPayloadFingerprint({
-            method: 'mobile.nativeChat.image.preview',
+          structuredAgentSessionDomainFingerprint({
+            domain: 'mobile.nativeChat.image.preview',
             sessionId: '',
             fields: { previewUri: attachment.previewUri }
           })

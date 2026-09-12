@@ -7,7 +7,7 @@ import {
   parseAgentSessionOperationTimestamp
 } from '../../../src/shared/agent-session-host-authority'
 import { AGENT_SESSION_DURABLE_OPERATION_GLOBAL_LIMIT } from '../../../src/shared/agent-session-operation-ledger'
-import { structuredAgentSessionPayloadFingerprint } from '../../../src/shared/structured-agent-session-mutation'
+import { structuredAgentSessionDomainFingerprint } from '../../../src/shared/structured-agent-session-mutation'
 
 const STORAGE_KEY = 'orca:mobileStructuredSendOperations:v1'
 const OperationEntrySchema = z
@@ -35,16 +35,16 @@ export function mobileStructuredSendOperationKey(input: {
   sessionKey: string
   intentFingerprint: string
 }): string {
-  return structuredAgentSessionPayloadFingerprint({
-    method: 'mobile.agentSession.send.operation',
+  return structuredAgentSessionDomainFingerprint({
+    domain: 'mobile.agentSession.send.operation',
     sessionId: input.sessionKey,
     fields: { intentFingerprint: input.intentFingerprint }
   })
 }
 
 export function mobileStructuredSendCallerFingerprint(callerIdentity: string): string {
-  return structuredAgentSessionPayloadFingerprint({
-    method: 'mobile.agentSession.send.caller',
+  return structuredAgentSessionDomainFingerprint({
+    domain: 'mobile.agentSession.send.caller',
     sessionId: callerIdentity,
     fields: {}
   })

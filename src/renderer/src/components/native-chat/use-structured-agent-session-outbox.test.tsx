@@ -122,12 +122,16 @@ function refusedResult(code: AgentSessionWireRefusalCode) {
 }
 
 describe('useStructuredAgentSessionOutbox', () => {
+  let randomUuidSequence = 0
+
   beforeEach(() => {
     vi.clearAllMocks()
     localStorage.clear()
-    vi.spyOn(globalThis.crypto, 'randomUUID').mockReturnValue(
-      '11111111-1111-4111-8111-111111111111'
-    )
+    randomUuidSequence = 0
+    vi.spyOn(globalThis.crypto, 'randomUUID').mockImplementation(() => {
+      randomUuidSequence += 1
+      return `11111111-1111-4111-8111-${randomUuidSequence.toString(16).padStart(12, '0')}`
+    })
   })
 
   it('requeues across a fence change and ignores the stale settlement', async () => {
@@ -433,7 +437,7 @@ describe('useStructuredAgentSessionOutbox', () => {
     )
   })
 
-  it('rotates a send operation after a pending-admission refusal', async () => {
+  it('rotates a send operation after a settled stale-fence rejection', async () => {
     mocks.call
       .mockResolvedValueOnce(refusedResult('agent_session_checkpoint_stale'))
       .mockResolvedValueOnce(refusedResult('agent_session_checkpoint_stale'))
