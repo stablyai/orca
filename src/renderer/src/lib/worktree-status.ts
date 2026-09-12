@@ -11,15 +11,13 @@ import type {
 } from '../../../shared/terminal-tab-types'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import type { LiveAgentWorktreeStatus } from './worktree-activity-state'
+import {
+  rollUpWorktreeStatus,
+  type WorktreeRollupStatus
+} from '../../../shared/worktree-status-rollup'
 
-export type WorktreeStatus =
-  | 'active'
-  | 'working'
-  | 'monitoring'
-  | 'permission'
-  | 'interrupted'
-  | 'done'
-  | 'inactive'
+/** Every member of the shared rollup ladder; the sidebar card is the reader that uses all of them. */
+export type WorktreeStatus = WorktreeRollupStatus
 
 type WorktreeStatusHeuristicOptions = {
   liveAgentStatus?: LiveAgentWorktreeStatus
@@ -197,26 +195,14 @@ export function resolveWorktreeStatus(args: {
       terminalLayoutRootsByTabId: args.terminalLayoutRootsByTabId
     }
   )
-  if (args.hasPermission) {
-    return 'permission'
-  }
-  // Why: heuristic 'permission' outranks heuristic 'working' — the user-actionable signal wins when panes in one tab disagree.
-  if (heuristic === 'permission') {
-    return 'permission'
-  }
-  // Why: restored cards get the hook snapshot before panes mount; trust the explicit working row so they stay yellow on restart.
-  if (args.hasLiveWorking || heuristic === 'working') {
-    return 'working'
-  }
-  if (args.hasLiveMonitoring || heuristic === 'monitoring') {
-    return 'monitoring'
-  }
-  // Terminal outcomes follow live states, but an interrupted outcome must not collapse into success.
-  if (args.hasInterrupted) {
-    return 'interrupted'
-  }
-  if (args.hasLiveDone || args.hasRetainedDone) {
-    return 'done'
-  }
-  return heuristic
+  // Why: restored cards get the hook snapshot before panes mount, so an explicit row must be
+  // able to outrank the title heuristic — the shared ladder adjudicates both in one place
+  // (permission over working over monitoring over interrupted over done).
+  return rollUpWorktreeStatus<WorktreeStatus>(heuristic, [
+    args.hasPermission && 'permission',
+    args.hasLiveWorking && 'working',
+    args.hasLiveMonitoring && 'monitoring',
+    args.hasInterrupted && 'interrupted',
+    (args.hasLiveDone || args.hasRetainedDone) && 'done'
+  ])
 }
