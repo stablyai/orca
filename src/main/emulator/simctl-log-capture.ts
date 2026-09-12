@@ -3,7 +3,10 @@ import { mapSimctlError } from './simctl-simulator-devices'
 import { parseSimulatorLogLine, simctlLogShowArgs, type SimulatorLogEntry } from './simctl-log'
 
 const SIMULATOR_LOG_TIMEOUT_MS = 20_000
+const SIMULATOR_LOG_EXIT_GRACE_MS = 2_000
 const SIMULATOR_LOG_STDERR_LIMIT = 64 * 1024
+
+const ignoreLateError = (): void => {}
 
 /**
  * Streams simulator logs while retaining only the newest requested entries.
@@ -27,7 +30,10 @@ export function captureSimulatorLog(
     let pending = ''
     let stderr = ''
     let settled = false
-    let timedOut = false
+    let failure: Parameters<typeof mapSimctlError>[0] | undefined
+    let exited = false
+    let timeout: ReturnType<typeof setTimeout> | undefined
+    let graceTimer: ReturnType<typeof setTimeout> | undefined
 
     const appendEntry = (line: string): void => {
       const entry = parseSimulatorLogLine(line)
@@ -45,52 +51,103 @@ export function captureSimulatorLog(
       nextEntryIndex = (nextEntryIndex + 1) % lineLimit
     }
 
-    child.stdout.setEncoding('utf8')
-    child.stdout.on('data', (chunk: string) => {
+    const onStdout = (chunk: string): void => {
       pending += chunk
       const lines = pending.split('\n')
       pending = lines.pop() ?? ''
       for (const line of lines) {
         appendEntry(line)
       }
-    })
-    child.stderr.setEncoding('utf8')
-    child.stderr.on('data', (chunk: string) => {
+    }
+    const onStderr = (chunk: string): void => {
       stderr = `${stderr}${chunk}`.slice(-SIMULATOR_LOG_STDERR_LIMIT)
-    })
-
-    const timeout = setTimeout(() => {
-      timedOut = true
-      child.kill()
-    }, SIMULATOR_LOG_TIMEOUT_MS)
-
-    child.once('error', (error) => {
+    }
+    const settle = (): void => {
       if (settled) {
         return
       }
       settled = true
       clearTimeout(timeout)
-      reject(mapSimctlError(error as Parameters<typeof mapSimctlError>[0], stderr))
-    })
-    child.once('close', (code, signal) => {
-      if (settled) {
+      clearTimeout(graceTimer)
+      child.stdout.removeListener('data', onStdout)
+      child.stderr.removeListener('data', onStderr)
+      child.removeListener('exit', onExit)
+      child.removeListener('close', onClose)
+      // Late pipe/process errors must remain handled without retaining capture buffers.
+      for (const emitter of [child, child.stdout, child.stderr]) {
+        emitter.on('error', ignoreLateError)
+        emitter.removeListener('error', onError)
+      }
+      if (failure) {
+        child.stdout.destroy()
+        child.stderr.destroy()
+        reject(mapSimctlError(failure, stderr))
         return
       }
-      settled = true
-      clearTimeout(timeout)
       appendEntry(pending)
-      if (timedOut || code !== 0) {
-        const detail = timedOut
-          ? `xcrun simctl log show timed out after ${SIMULATOR_LOG_TIMEOUT_MS}ms`
-          : `xcrun simctl log show exited with code ${code ?? 'unknown'}${signal ? ` (${signal})` : ''}`
-        reject(mapSimctlError(Object.assign(new Error(detail), { code }), stderr))
-        return
-      }
       resolve(
         nextEntryIndex === 0
           ? entries
           : [...entries.slice(nextEntryIndex), ...entries.slice(0, nextEntryIndex)]
       )
-    })
+    }
+    const signalChild = (signal: NodeJS.Signals): void => {
+      if (settled || exited || child.exitCode != null || child.signalCode != null) {
+        return
+      }
+      try {
+        child.kill(signal)
+      } catch {
+        // Failed signalling cannot extend the settlement deadline or replace the cause.
+      }
+    }
+    const onError = (error: Parameters<typeof mapSimctlError>[0]): void => {
+      if (settled || failure) {
+        return
+      }
+      failure = error
+      clearTimeout(timeout)
+      child.stdout.removeListener('data', onStdout)
+      pending = ''
+      entries.length = 0
+      if (child.pid == null && error.code === 'ENOENT') {
+        settle()
+        return
+      }
+      // Arm before signalling: kill can synchronously emit error or close.
+      graceTimer = setTimeout(() => {
+        signalChild('SIGKILL')
+        settle()
+      }, SIMULATOR_LOG_EXIT_GRACE_MS)
+      signalChild('SIGTERM')
+    }
+    const onExit = (): void => {
+      exited = true
+    }
+    const onClose = (code: number | null, signal: NodeJS.Signals | null): void => {
+      exited = true
+      if (!failure && code !== 0) {
+        failure = Object.assign(
+          new Error(
+            `xcrun simctl log show exited with code ${code ?? 'unknown'}${signal ? ` (${signal})` : ''}`
+          ),
+          { code }
+        )
+      }
+      settle()
+    }
+
+    child.on('error', onError)
+    child.stdout.on('error', onError)
+    child.stderr.on('error', onError)
+    child.on('exit', onExit)
+    child.on('close', onClose)
+    timeout = setTimeout(() => {
+      onError(new Error(`xcrun simctl log show timed out after ${SIMULATOR_LOG_TIMEOUT_MS}ms`))
+    }, SIMULATOR_LOG_TIMEOUT_MS)
+    child.stdout.setEncoding('utf8')
+    child.stderr.setEncoding('utf8')
+    child.stdout.on('data', onStdout)
+    child.stderr.on('data', onStderr)
   })
 }

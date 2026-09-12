@@ -68,4 +68,19 @@ describe('captureSimulatorLog', () => {
       code: 'emulator_simctl_unavailable'
     })
   })
+
+  it('preserves split UTF-8 and final lines through repeated ring wraparound', async () => {
+    const child = mockChild()
+    spawnMock.mockReturnValue(child)
+    const capture = captureSimulatorLog('device-1', { lines: 2 })
+    for (const message of ['one', 'two', 'three', 'four']) {
+      child.stdout.write(`${JSON.stringify({ eventMessage: message })}\n`)
+    }
+    const final = Buffer.from(JSON.stringify({ eventMessage: '끝🙂' }))
+    for (const byte of final) {
+      child.stdout.write(Buffer.from([byte]))
+    }
+    child.emit('close', 0, null)
+    await expect(capture).resolves.toEqual([{ message: 'four' }, { message: '끝🙂' }])
+  })
 })
