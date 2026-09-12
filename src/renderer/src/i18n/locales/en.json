@@ -10502,6 +10502,17 @@
               "statusline": "statusline",
               "dim": "dim",
               "colors": "colors"
+            },
+            "screenReader": {
+              "title": "Screen Reader Support",
+              "description": "Keep a text copy of the visible rows so screen readers can read terminal output. Panes are drawn to a canvas, which exposes no text on its own.",
+              "accessibility": "accessibility",
+              "a11y": "a11y",
+              "screenReader": "screen reader",
+              "voiceover": "voiceover",
+              "narrator": "narrator",
+              "nvda": "nvda",
+              "assistive": "assistive"
             }
           },
           "windows": {
@@ -11841,6 +11852,17 @@
           "targetDescription": "Higher values increase contrast where possible. Background colors stay unchanged.",
           "subtle": "Subtle",
           "strong": "Strong"
+        },
+        "screenReader": {
+          "title": "Screen Reader Support",
+          "description": "Keep a text copy of the visible rows so screen readers can read terminal output. Panes are drawn to a canvas, which exposes no text on its own.",
+          "on": "Always on. Rows stay readable even when the system reports no assistive client.",
+          "off": "Always off. No row text is kept, even while a screen reader is running.",
+          "autoDetected": "Auto - on while the system reports an assistive client, off otherwise.",
+          "autoUndetected": "Auto - this platform does not report assistive clients, so Auto stays off. Choose On to keep rows readable.",
+          "auto": "Auto",
+          "modeOn": "On",
+          "modeOff": "Off"
         }
       },
       "right": {

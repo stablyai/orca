@@ -6,6 +6,7 @@ import {
 } from './SettingsFormControls'
 import { SearchableSetting } from './SearchableSetting'
 import { TerminalContrastSetting } from './TerminalContrastSetting'
+import { TerminalScreenReaderSetting } from './TerminalScreenReaderSetting'
 import { translate } from '@/i18n/i18n'
 
 type TerminalRenderingSectionProps = {
@@ -94,6 +95,8 @@ export function TerminalRenderingSection({
         </SearchableSetting>
 
         <TerminalContrastSetting settings={settings} updateSettings={updateSettings} />
+
+        <TerminalScreenReaderSetting settings={settings} updateSettings={updateSettings} />
       </div>
     </section>
   )

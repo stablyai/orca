@@ -175,6 +175,15 @@ export const uiClipboardAndWindowControlsApi = {
     ipcRenderer.on('window:maximize-changed', listener)
     return () => ipcRenderer.removeListener('window:maximize-changed', listener)
   },
+  // Why: xterm's accessibility DOM is gated on screenReaderMode, so panes need to know whether an
+  // assistive client is attached. Seeded by the getter because panes mount after the app event fired.
+  isAccessibilitySupportEnabled: (): Promise<boolean> =>
+    ipcRenderer.invoke('window:isAccessibilitySupportEnabled'),
+  onAccessibilitySupportChanged: (callback: (enabled: boolean) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, enabled: boolean) => callback(enabled)
+    ipcRenderer.on('window:accessibility-support-changed', listener)
+    return () => ipcRenderer.removeListener('window:accessibility-support-changed', listener)
+  },
   requestClose: (): void => {
     ipcRenderer.send('window:request-close')
   },

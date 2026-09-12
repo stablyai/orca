@@ -129,6 +129,15 @@ export type GlobalSettings = {
    *  - `'on'` / `'off'`: explicit override. Never changes when the user
    *    switches fonts, so "off" always stays off. */
   terminalLigatures: 'auto' | 'on' | 'off'
+  /** Whether xterm keeps the DOM an assistive client reads — one node per visible row, rebuilt on
+   *  scroll. Off, panes are a canvas and expose no text at all.
+   *  - `'auto'` (default): follows Chromium's own accessibility-support flag, so panes become
+   *    readable when a screen reader or other assistive client attaches and stop when it detaches.
+   *    Electron only reports that flag on macOS and Windows; on Linux `'auto'` resolves off.
+   *  - `'on'` / `'off'`: explicit override. `'on'` is how Linux users, and anyone whose assistive
+   *    tool Chromium does not detect, turn it on; `'off'` opts out of the per-row DOM for people
+   *    running an unrelated accessibility utility. */
+  terminalScreenReaderMode: 'auto' | 'on' | 'off'
   terminalCursorStyle: 'bar' | 'block' | 'underline'
   /** One-shot migration guard for moving inherited cursor defaults to block. */
   terminalCursorStyleDefaultedToBlock?: boolean

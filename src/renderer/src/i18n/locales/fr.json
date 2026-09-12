@@ -10048,6 +10048,17 @@
               "title": "Mode de thème",
               "keyword_target": "cible",
               "keyword_editing": "édition"
+            },
+            "screenReader": {
+              "title": "Prise en charge des lecteurs d'écran",
+              "description": "Conserve une copie texte des lignes visibles afin que les lecteurs d'écran puissent lire la sortie du terminal. Les volets sont dessinés sur un canevas, qui n'expose aucun texte par lui-même.",
+              "accessibility": "accessibilité",
+              "a11y": "a11y",
+              "screenReader": "lecteur d'écran",
+              "voiceover": "voiceover",
+              "narrator": "narrateur",
+              "nvda": "nvda",
+              "assistive": "accessibilité"
             }
           },
           "windows": {
@@ -11332,6 +11343,17 @@
         },
         "shortcutDefinitionCatalog": {
           "missionControlConflict": "Bloqué par Mission Control. Remappez ici ou changez-le dans Réglages Système."
+        },
+        "screenReader": {
+          "title": "Prise en charge des lecteurs d'écran",
+          "description": "Conserve une copie texte des lignes visibles afin que les lecteurs d'écran puissent lire la sortie du terminal. Les volets sont dessinés sur un canevas, qui n'expose aucun texte par lui-même.",
+          "on": "Toujours activé. Les lignes restent lisibles même lorsque le système ne signale aucun client d'accessibilité.",
+          "off": "Toujours désactivé. Aucun texte de ligne n'est conservé, même lorsqu'un lecteur d'écran fonctionne.",
+          "autoDetected": "Auto : activé tant que le système signale un client d'accessibilité, désactivé sinon.",
+          "autoUndetected": "Auto : cette plateforme ne signale pas les clients d'accessibilité, Auto reste donc désactivé. Choisissez Activé pour garder les lignes lisibles.",
+          "auto": "Auto",
+          "modeOn": "Activé",
+          "modeOff": "Désactivé"
         }
       },
       "right": {

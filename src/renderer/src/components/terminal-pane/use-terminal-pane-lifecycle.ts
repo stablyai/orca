@@ -1,6 +1,10 @@
 import { useEffect } from 'react'
 import type { IDisposable } from '@xterm/xterm'
 import { normalizeDesktopTerminalScrollbackRows } from '../../../../shared/terminal-scrollback-policy'
+import {
+  setScreenReaderModePreference,
+  watchScreenReaderMode
+} from '../../lib/pane-manager/pane-screen-reader-mode'
 import { applyTerminalAppearance } from './terminal-appearance'
 import { installMouseHideWhileTyping } from './mouse-hide-while-typing'
 import {
@@ -128,6 +132,24 @@ export function useTerminalPaneLifecycle(deps: UseTerminalPaneLifecycleDeps): vo
     window.addEventListener('focus', onWindowFocus)
     return () => window.removeEventListener('focus', onWindowFocus)
   }, [deps.isActive, deps.isVisible, deps.managerRef, deps.panePtyBindingsRef])
+
+  useEffect(() => {
+    return watchScreenReaderMode(
+      () => deps.managerRef.current?.getPanes().map((pane) => pane.terminal) ?? [],
+      window.api?.ui
+    )
+  }, [deps.managerRef])
+
+  useEffect(() => {
+    // Why the guard: settings are null before hydration and again while a runtime change is in
+    // flight, and `undefined` here would be taken for `auto` and published to every pane. On a
+    // platform that reports no assistive client that resolves to off, so a user who had chosen
+    // `on` would watch their rows disappear until settings came back.
+    if (!deps.settings) {
+      return
+    }
+    setScreenReaderModePreference(deps.settings.terminalScreenReaderMode)
+  }, [deps.settings])
 
   useEffect(() => {
     const manager = deps.managerRef.current

@@ -9200,6 +9200,17 @@
               "title": "Modo del tema",
               "keyword_target": "destino",
               "keyword_editing": "edición"
+            },
+            "screenReader": {
+              "title": "Compatibilidad con lectores de pantalla",
+              "description": "Mantiene una copia de texto de las filas visibles para que los lectores de pantalla puedan leer la salida del terminal. Los paneles se dibujan en un lienzo, que por sí solo no expone texto.",
+              "accessibility": "accesibilidad",
+              "a11y": "a11y",
+              "screenReader": "lector de pantalla",
+              "voiceover": "voiceover",
+              "narrator": "narrador",
+              "nvda": "nvda",
+              "assistive": "accesibilidad"
             }
           },
           "windows": {
@@ -10283,6 +10294,17 @@
           "saveFailed": "No se pudieron guardar los valores predeterminados de visibilidad.",
           "updateServer": "Actualiza este servidor para configurar los valores predeterminados de las fuentes.",
           "updateServerDefaults": "Actualiza este servidor para configurar los valores predeterminados de visibilidad."
+        },
+        "screenReader": {
+          "title": "Compatibilidad con lectores de pantalla",
+          "description": "Mantiene una copia de texto de las filas visibles para que los lectores de pantalla puedan leer la salida del terminal. Los paneles se dibujan en un lienzo, que por sí solo no expone texto.",
+          "on": "Siempre activado. Las filas siguen siendo legibles aunque el sistema no informe de ningún cliente de accesibilidad.",
+          "off": "Siempre desactivado. No se conserva el texto de las filas, ni siquiera con un lector de pantalla en ejecución.",
+          "autoDetected": "Auto: activado mientras el sistema informa de un cliente de accesibilidad, desactivado en caso contrario.",
+          "autoUndetected": "Auto: esta plataforma no informa de clientes de accesibilidad, por lo que Auto permanece desactivado. Elija Activado para que las filas sigan siendo legibles.",
+          "auto": "Auto",
+          "modeOn": "Activado",
+          "modeOff": "Desactivado"
         }
       },
       "right": {

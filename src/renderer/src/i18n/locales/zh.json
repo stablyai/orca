@@ -9255,6 +9255,17 @@
               "title": "主题模式",
               "keyword_target": "目标",
               "keyword_editing": "编辑"
+            },
+            "screenReader": {
+              "title": "屏幕阅读器支持",
+              "description": "保留可见行的文本副本，以便屏幕阅读器可以读取终端输出。窗格绘制在画布上，本身不公开任何文本。",
+              "accessibility": "辅助功能",
+              "a11y": "a11y",
+              "screenReader": "屏幕阅读器",
+              "voiceover": "voiceover",
+              "narrator": "讲述人",
+              "nvda": "nvda",
+              "assistive": "辅助技术"
             }
           },
           "windows": {
@@ -10361,6 +10372,17 @@
           "saveFailed": "无法保存可见性默认设置。",
           "updateServer": "请更新此服务器以配置来源默认设置。",
           "updateServerDefaults": "请更新此服务器以配置可见性默认设置。"
+        },
+        "screenReader": {
+          "title": "屏幕阅读器支持",
+          "description": "保留可见行的文本副本，以便屏幕阅读器可以读取终端输出。窗格绘制在画布上，本身不公开任何文本。",
+          "on": "始终开启。即使系统未报告任何辅助功能客户端，各行仍可读取。",
+          "off": "始终关闭。即使屏幕阅读器正在运行，也不保留行文本。",
+          "autoDetected": "自动 - 系统报告辅助功能客户端时开启，否则关闭。",
+          "autoUndetected": "自动 - 此平台不报告辅助功能客户端，因此自动保持关闭。选择“开”以保持各行可读取。",
+          "auto": "自动",
+          "modeOn": "开",
+          "modeOff": "关"
         }
       },
       "right": {
