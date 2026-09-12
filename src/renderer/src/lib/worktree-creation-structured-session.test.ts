@@ -56,7 +56,7 @@ describe('launchStructuredWorktreeSession', () => {
     vi.clearAllMocks()
     mocks.state = { pendingWorktreeCreations: { 'creation-1': {} } }
     mocks.listener = null
-    mocks.launchAgentSession.mockImplementation(async (_store, launchRequest) => {
+    mocks.launchAgentSession.mockImplementation(async (launchRequest) => {
       const activation = mocks.activateAndRevealWorktree(launchRequest.workspaceId, {
         providesInitialSurface: true
       })
@@ -83,7 +83,7 @@ describe('launchStructuredWorktreeSession', () => {
       activation: { primaryTabId: null },
       primaryTabId: null
     })
-    expect(mocks.launchAgentSession).toHaveBeenCalledWith(expect.anything(), {
+    expect(mocks.launchAgentSession).toHaveBeenCalledWith({
       agent: 'codex',
       workspaceId: 'worktree-1',
       prompt: 'Fix the route',
@@ -100,7 +100,6 @@ describe('launchStructuredWorktreeSession', () => {
     mocks.launchAgentSession.mockResolvedValue({ kind: 'structured', sessionId: 's', tabId: 't' })
     await launchStructuredWorktreeSession(args({ shouldActivateOnCompletion: false }))
     expect(mocks.launchAgentSession).toHaveBeenCalledWith(
-      expect.anything(),
       expect.objectContaining({ visibility: 'background' })
     )
   })
@@ -108,7 +107,7 @@ describe('launchStructuredWorktreeSession', () => {
   it('reconciles an unknown launch without re-staging its prompt', async () => {
     mocks.launchAgentSession.mockResolvedValue({ kind: 'structured', sessionId: 's', tabId: 't' })
     await launchStructuredWorktreeSession(args({ recoverUnknownLaunch: true }))
-    const requestArg = mocks.launchAgentSession.mock.calls[0]?.[1]
+    const requestArg = mocks.launchAgentSession.mock.calls[0]?.[0]
     expect(requestArg).not.toHaveProperty('prompt')
     expect(requestArg.reconcileUnknownLaunch).toBe(true)
   })
@@ -148,7 +147,7 @@ describe('launchStructuredWorktreeSession', () => {
 
   it('aborts the shared launch when the pending creation disappears', async () => {
     let signal: AbortSignal | undefined
-    mocks.launchAgentSession.mockImplementation((_store, launchRequest) => {
+    mocks.launchAgentSession.mockImplementation((launchRequest) => {
       signal = launchRequest.signal
       return new Promise((resolve) =>
         signal?.addEventListener('abort', () => resolve({ kind: 'cancelled' }), { once: true })

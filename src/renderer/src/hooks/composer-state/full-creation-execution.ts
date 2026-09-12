@@ -231,7 +231,7 @@ export function useFullCreationExecution(input: FullCreationExecutionInput) {
       })
 
       const settlement = structuredLaunch
-        ? await launchAgentSession(useAppStore.getState(), {
+        ? await launchAgentSession({
             agent: tuiAgent,
             workspaceId: worktree.id,
             prompt: startupPlan?.draftPrompt ?? submitStartupPrompt,

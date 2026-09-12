@@ -143,7 +143,7 @@ function launchAgentInNewTabInternal(args: LaunchAgentInNewTabArgs): LaunchAgent
     onPromptDelivered
   })
   if (plan?.route === 'structured-native-chat') {
-    const structuredSettlement = launchAgentSession(store, {
+    const structuredSettlement = launchAgentSession({
       agent,
       workspaceId: worktreeId,
       ...(groupId ? { groupId } : {}),

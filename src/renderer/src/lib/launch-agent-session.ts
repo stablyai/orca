@@ -2,7 +2,7 @@ import type { StructuredAgentSessionResumeSource } from '../../../shared/structu
 import type { LaunchSource } from '../../../shared/telemetry-events'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import type { SessionOptionValue } from '../../../shared/native-chat-session-options'
-import { workspaceKindForWorktreeId, type AgentLaunchRouteStore } from './agent-launch-route-input'
+import { workspaceKindForWorktreeId } from './agent-launch-route-input'
 import { planAgentSessionLaunch, type AgentSessionLaunchPlan } from './agent-session-launch-plan'
 import type { NativeChatLaunchPromptDelivery } from './native-chat-initial-view-mode'
 import { activateStructuredAgentSessionById } from './structured-agent-session-tab-activation'
@@ -18,6 +18,8 @@ import type { WorktreeStartupPayload } from './worktree-startup-payload'
 export type AgentSessionLaunchRequest = {
   agent: TuiAgent
   workspaceId: string
+  /** Require structured native chat instead of applying the user's default route. */
+  routeIntent?: 'structured-native-chat'
   /** Existing tab group for a quick-launch fallback; terminal creation must stay in that pane. */
   groupId?: string
   prompt?: string
@@ -76,17 +78,17 @@ async function retireCancelledStructuredSession(
 }
 
 export async function launchAgentSession(
-  store: AgentLaunchRouteStore,
   request: AgentSessionLaunchRequest
 ): Promise<AgentSessionLaunchOutcome> {
   const plan =
     request.launchPlan ??
-    planAgentSessionLaunch(store, {
+    planAgentSessionLaunch(useAppStore.getState(), {
       agent: request.agent,
       workspace: {
         kind: workspaceKindForWorktreeId(request.workspaceId),
         worktreeId: request.workspaceId
       },
+      ...(request.routeIntent ? { routeIntent: request.routeIntent } : {}),
       ...(request.prompt !== undefined ? { prompt: request.prompt } : {}),
       ...(request.promptDelivery ? { promptDelivery: request.promptDelivery } : {}),
       ...(request.tuiCustomization ? { tuiCustomization: request.tuiCustomization } : {}),

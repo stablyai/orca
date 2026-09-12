@@ -21,6 +21,8 @@ import {
 import type { StructuredAgentLaunchOptions } from '@/lib/structured-agent-session-launch'
 
 export type AgentSessionLaunchRequest = AgentLaunchRouteArgs & {
+  /** Require structured native chat instead of applying the user's default route. */
+  routeIntent?: 'structured-native-chat'
   resumeFrom?: StructuredAgentSessionResumeSource
   onPromptDelivered?: () => void
   notifyFailure?: boolean
@@ -126,7 +128,8 @@ export function planAgentSessionLaunch(
   request: AgentSessionLaunchRequest
 ): AgentSessionLaunchPlan {
   return adoptAgentSessionLaunchVerdict({
-    route: resolveAgentLaunchRoute(buildAgentLaunchRouteInput(store, request)),
+    route:
+      request.routeIntent ?? resolveAgentLaunchRoute(buildAgentLaunchRouteInput(store, request)),
     agent: request.agent,
     ...(request.workspace.worktreeId ? { worktreeId: request.workspace.worktreeId } : {}),
     ...(request.prompt !== undefined ? { prompt: request.prompt } : {}),

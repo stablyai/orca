@@ -208,7 +208,13 @@ export async function submitFolderWorkspaceCreate({
   onOpenChange(false)
   try {
     if (structuredLaunch && quickAgent) {
-      const outcome = await launchAgentSession(useAppStore.getState(), {
+      // Why: folder creation has no pending surface, so reveal before the launch can fail or cancel.
+      activateAndRevealFolderWorkspace(workspace.id, {
+        agent: quickAgent,
+        providesInitialSurface: true,
+        runtimeEnvironmentId
+      })
+      const outcome = await launchAgentSession({
         agent: quickAgent,
         workspaceId: folderWorkspaceKey(workspace.id),
         prompt: launchDraftPrompt ?? note,

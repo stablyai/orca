@@ -10,7 +10,6 @@ import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcrip
 import { resolveSourceControlLaunchPlatform } from '@/lib/source-control-launch-platform'
 import { preflightAgentTrust } from '@/lib/agent-trust-preflight'
 import { launchAgentSession } from '@/lib/launch-agent-session'
-import { useAppStore } from '@/store'
 
 export function buildDirectWorkItemStartup(args: {
   agent: TuiAgent | null
@@ -141,7 +140,7 @@ export async function settleDirectWorkItemStructuredLaunch(args: {
   }
   let settlement: Awaited<ReturnType<typeof launchAgentSession>>
   try {
-    settlement = await launchAgentSession(useAppStore.getState(), {
+    settlement = await launchAgentSession({
       agent,
       workspaceId: args.worktreeId,
       prompt: plan.prompt,

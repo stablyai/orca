@@ -9,8 +9,6 @@ vi.mock('@/lib/launch-agent-session', () => ({ launchAgentSession: mocks.launchA
 vi.mock('@/lib/agent-trust-preflight', () => ({
   preflightAgentTrust: mocks.preflightAgentTrust
 }))
-vi.mock('@/store', () => ({ useAppStore: { getState: () => ({}) } }))
-
 import { adoptAgentSessionLaunchVerdict } from './agent-session-launch-plan'
 import {
   markDirectWorkItemAgentTrusted,
@@ -48,7 +46,7 @@ describe('settleDirectWorkItemStructuredLaunch', () => {
       structuredLaunch: true,
       failed: false
     })
-    expect(mocks.launchAgentSession).toHaveBeenCalledWith(expect.anything(), {
+    expect(mocks.launchAgentSession).toHaveBeenCalledWith({
       agent: 'codex',
       workspaceId: 'worktree-1',
       prompt: 'Fix the route',

@@ -12,7 +12,6 @@ import {
 } from '@/lib/onboarding-folder-agent-startup'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { launchAgentSession } from '@/lib/launch-agent-session'
-import { useAppStore } from '@/store'
 
 export type OnboardingFolderAgentLaunch = {
   agent: TuiAgent | null
@@ -75,7 +74,13 @@ export async function revealOnboardingFolderWithAgentLaunch(args: {
   if (!args.launch.agent) {
     return
   }
-  await launchAgentSession(useAppStore.getState(), {
+  // Why: folder creation has no pending surface, so reveal before the launch can fail or cancel.
+  activateAndRevealWorktree(args.worktreeId, {
+    sidebarRevealBehavior: 'auto',
+    ...(args.executionHostId ? { executionHostId: args.executionHostId } : {}),
+    providesInitialSurface: true
+  })
+  await launchAgentSession({
     agent: args.launch.agent,
     workspaceId: args.worktreeId,
     ...(plan ? { launchPlan: plan } : {}),

@@ -54,7 +54,7 @@ describe('launchAgentSession', () => {
     mocks.planAgentSessionLaunch.mockReturnValue({ route: 'terminal-tui' })
     mocks.launchTerminalSession.mockResolvedValue({ tabId: 'terminal-1' })
 
-    await expect(launchAgentSession({} as never, request)).resolves.toEqual({
+    await expect(launchAgentSession(request)).resolves.toEqual({
       kind: 'terminal',
       tabId: 'terminal-1',
       viaRefusal: false
@@ -66,7 +66,7 @@ describe('launchAgentSession', () => {
     mocks.planAgentSessionLaunch.mockReturnValue({ route: 'terminal-tui' })
     mocks.launchTerminalSession.mockResolvedValue({ tabId: 'terminal-1' })
 
-    await launchAgentSession({} as never, { ...request, groupId: 'group-1' })
+    await launchAgentSession({ ...request, groupId: 'group-1' })
 
     expect(mocks.launchTerminalSession).toHaveBeenCalledWith(
       expect.objectContaining({ groupId: 'group-1' })
@@ -77,7 +77,7 @@ describe('launchAgentSession', () => {
     mocks.planAgentSessionLaunch.mockReturnValue({ route: 'terminal-tui' })
 
     await expect(
-      launchAgentSession({} as never, {
+      launchAgentSession({
         ...request,
         resumeFrom: { providerSessionId: 'provider-1' }
       })
@@ -92,7 +92,7 @@ describe('launchAgentSession', () => {
     mocks.planAgentSessionLaunch.mockReturnValue({ route: 'terminal-tui' })
 
     await expect(
-      launchAgentSession({} as never, { ...request, terminalFallback: false })
+      launchAgentSession({ ...request, terminalFallback: false })
     ).resolves.toMatchObject({ kind: 'failed', error: expect.any(Error) })
     expect(mocks.launchTerminalSession).not.toHaveBeenCalled()
   })
@@ -101,9 +101,10 @@ describe('launchAgentSession', () => {
     const launch = vi.fn().mockResolvedValue({ kind: 'structured', sessionId: 'session-1' })
     const launchPlan = { route: 'structured-native-chat', launch } as never
 
-    await expect(
-      launchAgentSession({} as never, { ...request, launchPlan })
-    ).resolves.toMatchObject({ kind: 'structured', sessionId: 'session-1' })
+    await expect(launchAgentSession({ ...request, launchPlan })).resolves.toMatchObject({
+      kind: 'structured',
+      sessionId: 'session-1'
+    })
 
     expect(mocks.planAgentSessionLaunch).not.toHaveBeenCalled()
     expect(launch).toHaveBeenCalledWith(expect.anything(), { worktreeId: request.workspaceId })
@@ -125,7 +126,7 @@ describe('launchAgentSession', () => {
     })
 
     await expect(
-      launchAgentSession({} as never, { ...request, workspaceId: 'folder:folder-1' })
+      launchAgentSession({ ...request, workspaceId: 'folder:folder-1' })
     ).resolves.toEqual({
       kind: 'structured',
       sessionId: 'session-1',
@@ -147,7 +148,7 @@ describe('launchAgentSession', () => {
       }))
     })
 
-    await expect(launchAgentSession({} as never, request)).resolves.toEqual({
+    await expect(launchAgentSession(request)).resolves.toEqual({
       kind: 'terminal',
       tabId: 'fallback-1',
       viaRefusal: true
@@ -168,7 +169,7 @@ describe('launchAgentSession', () => {
       error: new Error('terminal failed')
     })
 
-    await expect(launchAgentSession({} as never, request)).resolves.toMatchObject({
+    await expect(launchAgentSession(request)).resolves.toMatchObject({
       kind: 'failed',
       error: expect.any(Error)
     })
@@ -178,7 +179,7 @@ describe('launchAgentSession', () => {
     const launch = vi.fn().mockResolvedValue({ kind: 'failed', error: new Error('refused') })
     mocks.planAgentSessionLaunch.mockReturnValue({ route: 'structured-native-chat', launch })
 
-    await launchAgentSession({} as never, { ...request, terminalFallback: false })
+    await launchAgentSession({ ...request, terminalFallback: false })
 
     expect(mocks.planAgentSessionLaunch).toHaveBeenCalledWith(
       expect.anything(),
@@ -194,7 +195,7 @@ describe('launchAgentSession', () => {
       launch: vi.fn().mockResolvedValue({ kind: 'cancelled', sessionId: 'session-1' })
     })
 
-    const outcome = await launchAgentSession({} as never, request)
+    const outcome = await launchAgentSession(request)
 
     expect(outcome).toEqual({ kind: 'cancelled' })
     expect(outcome).not.toHaveProperty('sessionId')
@@ -212,7 +213,7 @@ describe('launchAgentSession', () => {
       launch: vi.fn().mockResolvedValue({ kind: 'structured', sessionId: 'session-1' })
     })
 
-    await launchAgentSession({} as never, { ...request, visibility: 'background' })
+    await launchAgentSession({ ...request, visibility: 'background' })
 
     expect(mocks.activateAndRevealWorkspace).not.toHaveBeenCalled()
     expect(mocks.activateStructuredAgentSessionById).not.toHaveBeenCalled()

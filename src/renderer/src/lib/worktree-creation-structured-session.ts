@@ -63,7 +63,7 @@ export async function launchStructuredWorktreeSession(
   })
   let outcome: Awaited<ReturnType<typeof launchAgentSession>>
   try {
-    outcome = await launchAgentSession(useAppStore.getState(), {
+    outcome = await launchAgentSession({
       agent,
       workspaceId: args.worktreeId,
       ...(args.recoverUnknownLaunch
