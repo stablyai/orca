@@ -1,4 +1,4 @@
-import { BrowserWindow, Menu, app } from 'electron'
+import { BrowserWindow, Menu, app, webContents } from 'electron'
 import {
   formatKeybindingList,
   getEffectiveKeybindingsForAction,
@@ -191,6 +191,11 @@ function buildAndApplyMenu(options: RegisterAppMenuOptions): void {
           // control, so raw Electron paste cannot know which Orca surface owns it.
           const focusedWindow = BrowserWindow.getFocusedWindow()
           if (focusedWindow) {
+            const focusedContents = webContents.getFocusedWebContents()
+            if (focusedContents && focusedContents !== focusedWindow.webContents) {
+              focusedContents.paste()
+              return
+            }
             focusedWindow.webContents.send('ui:appMenuPaste')
             return
           }

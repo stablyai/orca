@@ -29,6 +29,7 @@ import {
   useRemoteBrowserPageInputQueue
 } from './use-remote-browser-page-input'
 import { useRemoteBrowserPageChromeChords } from './use-remote-browser-page-chrome-chords'
+import { useRemoteBrowserPageClipboardPaste } from './use-remote-browser-page-clipboard-paste'
 import { useRemoteBrowserPageWheel } from './use-remote-browser-page-wheel'
 import {
   RemoteBrowserPageContextMenu,
@@ -217,10 +218,23 @@ export function RemoteBrowserPagePane({
     }
   }, [browserTab.id, navigateToUrl, stagedPage])
 
+  const pasteRemoteClipboard = useRemoteBrowserPageClipboardPaste({
+    busy,
+    imageRef,
+    runtimeTarget,
+    lifecycle,
+    runtimeWorktree,
+    enqueueRemoteInput,
+    createRemoteOperationToken,
+    isCurrentRemoteOperationToken,
+    setPaneNotice
+  })
+
   useRemoteBrowserPageChromeChords({
     chromeShortcutScope,
     workspaceId,
     runRemoteNavigation,
+    pasteRemoteClipboard,
     setPaneNotice
   })
 
