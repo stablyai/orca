@@ -11,6 +11,7 @@ export abstract class DaemonPtyEventSubscriptions extends DaemonPtySessionInvent
       sequenceChars?: number
       transformed?: boolean
       seq?: number
+      incarnationId?: PtyIncarnationId
     }) => void
   ): () => void {
     this.dataListeners.push(callback)

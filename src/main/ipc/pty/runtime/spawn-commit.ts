@@ -32,6 +32,8 @@ import {
 import { toSshExecutionHostId } from '../../../../shared/execution-host'
 import { createTerminalSessionStateSaveFailureMessage } from '../../../../shared/terminal-session-state-save-failure'
 import { clearProviderPtyState } from '../provider/state-cleanup'
+import { commitAdoptedAgentSessionOwner } from './spawn-commit-adopted-owner'
+import { prepareSpawnObservationAdmission } from '../pane/spawn-observation-admission'
 import { resolvePaneSpawnReservation } from '../pane/spawn-reservation'
 import { admitProviderReattachLaunchIdentity } from '../pane/launch-authority'
 import type { RuntimePtySpawnState } from './spawn-state'
@@ -39,6 +41,7 @@ import type { RuntimePtySpawnState } from './spawn-state'
 export async function commitRuntimePtySpawn(ctx: RuntimePtySpawnState) {
   const args = ctx.args
   const providerReattachLaunchIdentity = admitProviderReattachLaunchIdentity(ctx.result)
+  const observationAdmission = prepareSpawnObservationAdmission(ctx)
   try {
     ctx.stablePaneBindingPersisted = persistAdmittedStablePaneBinding({
       store: ctx.hostSessionBinding?.store,
@@ -58,54 +61,12 @@ export async function commitRuntimePtySpawn(ctx: RuntimePtySpawnState) {
     })
   }
   if (ctx.result.agentSessionEnsure?.disposition === 'adopted') {
-    // Why: an adoption is an attach to a live owner by definition, but the SSH relay's adopted
-    // reply omits isReattach; derive it once so the size commit and the reservation agree.
-    const adoptedResult = { ...ctx.result, isReattach: true }
-    const owner = ctx.result.agentSessionEnsure.owner
-    ptyOwnership.set(ctx.result.id, args.connectionId ?? ptyOwnership.get(ctx.result.id) ?? null)
-    ctx.deps.runtime?.registerPreAllocatedHandleForPty(ctx.result.id, owner.surface.terminalHandle)
-    if (ctx.result.incarnationId) {
-      ptyIncarnationById.set(ctx.result.id, ctx.result.incarnationId)
-    }
-    ctx.deps.runtime?.registerPty(
-      ctx.result.id,
-      owner.surface.worktreeId,
-      args.connectionId ?? null,
-      {
-        tabId: owner.surface.tabId,
-        leafId: owner.surface.leafId,
-        terminalHandle: owner.surface.terminalHandle,
-        ...(ctx.result.incarnationId ? { incarnationId: ctx.result.incarnationId } : {}),
-        ...(providerReattachLaunchIdentity ? { providerReattachLaunchIdentity } : {})
-      }
+    return commitAdoptedAgentSessionOwner(
+      ctx,
+      ctx.result.agentSessionEnsure,
+      providerReattachLaunchIdentity,
+      observationAdmission
     )
-    if (!args.connectionId) {
-      ctx.deps.options?.onCodexHomePtySpawned?.({
-        id: ctx.result.id,
-        codexHomePath: ctx.selectedCodexHomePath,
-        reattached: true,
-        startedAt: ctx.codexHomeLaunchStartedAt,
-        startedSequence: ctx.codexHomeLaunchStartedSequence,
-        ...codexReattachedHomeRouteField(ctx.reattachedCodexHomeRoutes, ctx.result.id, true),
-        ...(ctx.env ? { launchEnv: ctx.env } : {})
-      })
-    }
-    // Why: this branch returns before the normal commit site; without this the cache keeps
-    // whatever the caller requested.
-    commitRuntimePtySize(ctx, adoptedResult)
-    // Why: the adopted branch returns before the normal settle site, so the
-    // reservation must be resolved here or every later spawn for this pane
-    // awaits a promise that never settles.
-    resolvePaneSpawnReservation(
-      ctx.paneSpawnReservationKey,
-      ctx.paneSpawnReservation,
-      adoptedResult
-    )
-    return {
-      id: ctx.result.id,
-      ...(ctx.result.incarnationId ? { incarnationId: ctx.result.incarnationId } : {}),
-      agentSessionEnsure: ctx.result.agentSessionEnsure
-    }
   }
   ptyOwnership.set(ctx.result.id, args.connectionId ?? null)
   if (ctx.result.incarnationId) {
@@ -213,12 +174,19 @@ export async function commitRuntimePtySpawn(ctx: RuntimePtySpawnState) {
         : undefined,
       !args.connectionId
         ? shouldSkipCodexHomeEnvForWindowsShell(ctx.daemonShellOverride, ctx.cwd)
-        : undefined
+        : undefined,
+      observationAdmission
     )
   } else {
     // Why: non-worktree PTYs have no later surface-registration phase to clear admission intent.
     ctx.deps.runtime?.cancelPendingPtyRegistration?.(ctx.result.id, ctx.result.incarnationId)
+    // Why settle before cancelling: the spawn SUCCEEDED, so its held-back
+    // generation reset must still run — cancelling alone would leak the
+    // predecessor's tracker/parser state into the new incarnation.
+    ctx.deps.runtime?.acceptPtyObservationAdmission?.(observationAdmission)
+    ctx.deps.runtime?.cancelPtyObservationAdmission?.(ctx.observationAdmissionToken)
   }
+  ctx.observationAdmissionToken = null
   // Why: runtime-controller creates (headless serve, CLI, splits) adopt surviving daemon sessions too; without this seed their records stay blank.
   seedTerminalRestoreRecordsFromSpawnResult(ctx.deps.runtime, ctx.result)
   // Why: arms main's per-PTY Command Code output detector from the launch command (renderer startupCommand parity).

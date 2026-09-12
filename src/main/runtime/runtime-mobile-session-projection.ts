@@ -16,6 +16,7 @@ import {
   renewRuntimeMobileAgentStatusFromPtyTitle,
   selectRuntimeHookAgentRowForPane
 } from './runtime-mobile-agent-status-projection'
+import { excludeRetiredPaneEvidenceRows } from './runtime-retired-pane-evidence'
 import { finalizeRuntimeMobileSessionTabsResult } from './runtime-mobile-session-result-finalization'
 import type { RuntimeMobileSessionProjectionHost } from './runtime-mobile-session-projection-contract'
 import {
@@ -38,13 +39,17 @@ export function projectRuntimeMobileSessionTabs(
     if (cached) {
       return cached
     }
+    // Why: the pane's pre-replacement row is identity-only evidence of the process the host
+    // itself retired; it may address resume, but it is never this pane's agent.
+    const evidence = host.getRetiredPaneEvidence(paneKey)
     const direct = host.getProviderSessionRows(paneKey)
     if (direct) {
-      hookRowsForPane.set(paneKey, direct)
-      return direct
+      const rows = excludeRetiredPaneEvidenceRows(direct, evidence)
+      hookRowsForPane.set(paneKey, rows)
+      return rows
     }
     hookRowsByPaneKey ??= indexAgentStatusRowsByPaneKey(host.getProviderSessionSnapshot())
-    const rows = hookRowsByPaneKey.get(paneKey) ?? []
+    const rows = excludeRetiredPaneEvidenceRows(hookRowsByPaneKey.get(paneKey) ?? [], evidence)
     hookRowsForPane.set(paneKey, rows)
     return rows
   }

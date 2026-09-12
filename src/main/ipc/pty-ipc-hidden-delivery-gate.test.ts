@@ -143,6 +143,10 @@ describe('registerPtyHandlers', () => {
           'hidden output',
           expect.any(Number),
           'hidden output'.length,
+          undefined,
+          undefined,
+          undefined,
+          // No emitting incarnation on this payload, so the runtime keeps the live path.
           undefined
         )
         expect(mainWindow.webContents.send).toHaveBeenCalledTimes(1)

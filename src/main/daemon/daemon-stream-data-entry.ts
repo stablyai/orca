@@ -6,6 +6,7 @@ export type DaemonStreamEnqueueOptions = {
   rawLength?: number
   transformed?: boolean
   seq?: number
+  incarnationId?: string
 }
 
 export function appendDaemonStreamData(
@@ -15,12 +16,14 @@ export function appendDaemonStreamData(
   options: DaemonStreamEnqueueOptions
 ): number {
   const last = batch.queue.at(-1)
-  // Why: control and transformed spans mark indivisible source-stream positions.
+  // Control/transformed spans and zero-weight query copies keep separate source accounting.
   if (
     last?.sessionId === sessionId &&
+    last.incarnationId === options.incarnationId &&
     !last.control &&
     !last.transformed &&
-    options.transformed !== true
+    options.transformed !== true &&
+    ((last.sequenceChars ?? last.data.length) === 0) === ((options.rawLength ?? data.length) === 0)
   ) {
     last.data += data
     const rawLengthBefore = last.sequenceChars ?? last.data.length - data.length
@@ -31,6 +34,7 @@ export function appendDaemonStreamData(
     batch.queue.push({
       sessionId,
       data,
+      ...(options.incarnationId === undefined ? {} : { incarnationId: options.incarnationId }),
       ...(options.rawLength === undefined || options.rawLength === data.length
         ? {}
         : { sequenceChars: options.rawLength }),

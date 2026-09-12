@@ -56,6 +56,32 @@ describe('createPaneForegroundAgentTracker', () => {
     vi.useRealTimers()
   })
 
+  it('retires a pending predecessor read when an incarnation reuses its PTY ID', async () => {
+    let resolveRead!: (value: string | null) => void
+    readForegroundProcess.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveRead = resolve
+        })
+    )
+    const tracker = makeTracker()
+    tracker.onVisiblePtyBound(true)
+    await flushSettleRead(VISIBLE_PTY_SETTLE_MS)
+    tracker.resetForPtyReplacement()
+    expect(tracker.hasReadInFlight()).toBe(false)
+    resolveRead('pi')
+    await flushSettleRead(SECOND_WRAPPER_RETRY_MS)
+    expect(publish).not.toHaveBeenCalled()
+    expect(onConfirmedShellForeground).not.toHaveBeenCalled()
+    expect(onVisibleForegroundSettled).not.toHaveBeenCalled()
+    expect(readForegroundProcess).toHaveBeenCalledOnce()
+    readForegroundProcess.mockResolvedValue('codex')
+    tracker.onCommandStarted()
+    await flushSettleRead(COMMAND_SETTLE_MS)
+    expect(publish).toHaveBeenCalledWith({ agent: 'codex', shellForeground: false })
+    tracker.dispose()
+  })
+
   // Why: detach/remount emits no PTY exit, so the store entry outlives this tracker.
   // A capability retained pending the disposed read would latch there forever.
   it('releases a retained capability when disposed mid-read', async () => {

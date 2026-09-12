@@ -115,6 +115,46 @@ describe('registerPtyHandlers', () => {
     expect(internals.pendingPtyRegistrationIncarnations.size).toBe(0)
     clearProviderPtyState(ptyId)
   })
+  it('applies a held-back generation reset when a successful spawn registers no worktree PTY', async () => {
+    const ptyId = 'pty-no-worktree-generation-reset'
+    const runtime = new OrcaRuntimeService()
+    const provider = createAgentClaimProvider({
+      spawn: vi.fn(async () => ({
+        id: ptyId,
+        incarnationId: 'incarnation-reset-successor',
+        providerSequence: { value: 0, generation: 'reset' as const }
+      })),
+      authoritativeOwnerListings: false
+    })
+    setLocalPtyProvider(provider as never)
+    registerPtyHandlers(mainWindow as never, runtime)
+    const trackers = runtime['ptyTitleTrackersByPtyId'] as Map<string, unknown>
+    // Predecessor automatic state: a live title parsed into this PTY id's tracker.
+    runtime.onPtyData(
+      ptyId,
+      '\x1b]0;Codex working\x07',
+      1,
+      19,
+      false,
+      undefined,
+      undefined,
+      'incarnation-reset-predecessor'
+    )
+    expect(trackers.has(ptyId)).toBe(true)
+
+    await runtime['ptyController']!.spawn!({
+      cols: 80,
+      rows: 24,
+      cwd: '/tmp/no-worktree-generation-reset',
+      sessionId: ptyId,
+      isNewSession: true
+    })
+
+    // The spawn succeeded, so its held-back reset must still retire the
+    // predecessor's tracker instead of being dropped with the admission.
+    expect(trackers.has(ptyId)).toBe(false)
+    clearProviderPtyState(ptyId)
+  })
   it('adopts a live controller-owned local fallback when listings cannot serialize claims', async () => {
     const sessions: {
       id: string

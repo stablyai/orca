@@ -21,6 +21,9 @@ export class DaemonPtyAdapter extends DaemonPtyDaemonRecovery implements IPtyPro
           listener({
             id: event.sessionId,
             data: event.payload.data,
+            ...(event.payload.incarnationId === undefined
+              ? {}
+              : { incarnationId: event.payload.incarnationId }),
             ...((event.payload.rawLength ?? event.payload.sequenceChars) === undefined
               ? {}
               : { sequenceChars: event.payload.rawLength ?? event.payload.sequenceChars }),
@@ -31,6 +34,9 @@ export class DaemonPtyAdapter extends DaemonPtyDaemonRecovery implements IPtyPro
       } else if (event.event === 'sessionBackgroundMarker') {
         this.emitBackgroundStreamEvent({
           id: event.sessionId,
+          ...(event.payload.incarnationId === undefined
+            ? {}
+            : { incarnationId: event.payload.incarnationId }),
           kind: 'backgroundMarker',
           background: event.payload.background,
           ...(event.payload.scanSeedAnsi !== undefined
@@ -43,6 +49,9 @@ export class DaemonPtyAdapter extends DaemonPtyDaemonRecovery implements IPtyPro
       } else if (event.event === 'dataGap') {
         this.emitBackgroundStreamEvent({
           id: event.sessionId,
+          ...(event.payload.incarnationId === undefined
+            ? {}
+            : { incarnationId: event.payload.incarnationId }),
           kind: 'dataGap',
           droppedChars: event.payload.droppedChars,
           ...(event.payload.sequenceChars === undefined
@@ -58,10 +67,12 @@ export class DaemonPtyAdapter extends DaemonPtyDaemonRecovery implements IPtyPro
         ) {
           return
         }
+        const { incarnationId, ...fact } = event.payload
         this.emitBackgroundStreamEvent({
           id: event.sessionId,
+          ...(incarnationId === undefined ? {} : { incarnationId }),
           kind: 'transientFact',
-          fact: event.payload
+          fact
         })
       } else if (event.event === 'exit') {
         const currentIncarnationId = this.sessionIncarnations.get(event.sessionId)

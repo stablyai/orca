@@ -73,6 +73,7 @@ export type RuntimePtySpawnState = {
   stablePaneBindingPersisted: boolean
   rejectedRegistrationCandidate: PtySpawnResult | null
   pendingRegistrationPtyId: string | null
+  observationAdmissionToken: string | null
   reconciledSnapshotSeq: number | null
   snapshotKittyFlagsCoverReconciledSeq: boolean
   preparedProvisionalExecutionContext: boolean
@@ -176,6 +177,7 @@ export function createRuntimePtySpawnState(
     stablePaneBindingPersisted: false,
     rejectedRegistrationCandidate: null,
     pendingRegistrationPtyId: null,
+    observationAdmissionToken: null,
     reconciledSnapshotSeq: null,
     snapshotKittyFlagsCoverReconciledSeq: true,
     preparedProvisionalExecutionContext: false,

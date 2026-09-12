@@ -103,6 +103,7 @@ export abstract class DaemonPtyRuntimeState {
     sequenceChars?: number
     transformed?: boolean
     seq?: number
+    incarnationId?: PtyIncarnationId
   }) => void)[] = []
   protected exitListeners: ((payload: {
     id: string

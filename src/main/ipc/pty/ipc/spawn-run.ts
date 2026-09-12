@@ -66,6 +66,10 @@ export async function runPtyIpcSpawn(deps: PtySpawnIpcDeps, args: PtySpawnIpcArg
       )
       ctx.pendingRegistrationPtyId = null
     }
+    // Why: an overflowed or failed admission must leave the accepted source's
+    // automatic state exactly as it was; only the candidates are discarded.
+    deps.runtime?.cancelPtyObservationAdmission?.(ctx.observationAdmissionToken)
+    ctx.observationAdmissionToken = null
     // Why: once the reservation is created, any later throw —
     // spawn failure, persist failure, or a post-spawn helper such as
     // seedHeadlessTerminal/registerPty/track — must settle it. Otherwise

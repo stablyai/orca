@@ -69,7 +69,11 @@ export class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCommands {
         terminalProvenance: 'current_runtime' | 'restored'
       }) => AgentHookAuthorityAttestation | null
       retireAgentHookCompatibilityAuthority?: (paneKey: string) => void
-      reconcileAgentStatusForEndedProcess?: (paneKeys: Iterable<string>) => void
+      reconcileAgentStatusForEndedProcess?: (
+        paneKeys: Iterable<string>,
+        /** A replaced (not certifiably exited) pane keeps its resume remnant. */
+        options?: { preserveResumeIdentity?: boolean }
+      ) => void
       canRecoverPersistentLocalPtys?: () => boolean
       // Why: the device registry lives on the RPC server, which is constructed with this runtime;
       // a closure defers the lookup past that ordering instead of inverting ownership.

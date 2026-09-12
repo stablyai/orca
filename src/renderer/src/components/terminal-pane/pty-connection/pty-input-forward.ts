@@ -283,8 +283,10 @@ export function installPtyInputForward(session: ConnectPanePtySession): void {
     attemptGeneration: number,
     reattachPtyId: string
   ): { shouldContinue: () => boolean; continuation: () => void } => {
+    const incarnationId = session.remotePtyIncarnationId
     const isCurrent = (): boolean =>
       !session.disposed &&
+      session.remotePtyIncarnationId === incarnationId &&
       attemptGeneration === session.transportStreamGeneration &&
       session.transport.getPtyId() === reattachPtyId
     return {

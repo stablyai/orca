@@ -16,6 +16,7 @@ import {
   codexReattachedHomeRouteField
 } from '../host-env/codex-home'
 import { rememberPaneKeyForPty } from '../pane/key-state'
+import { prepareSpawnObservationAdmission } from '../pane/spawn-observation-admission'
 import { resolvePaneSpawnReservation } from '../pane/spawn-reservation'
 import { seedTerminalRestoreRecordsFromSpawnResult } from '../pane/agent-session-owners'
 import {
@@ -28,6 +29,7 @@ import { reflowHeadlessTerminalToCommittedGrid } from '../delivery/attached-pty-
 
 export async function commitPtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<PtySpawnResult> {
   const args = ctx.args
+  const observationAdmission = prepareSpawnObservationAdmission(ctx)
   const { rendererPreSignaled, rendererAlreadyRegistered, committedSize } =
     await persistPtyIpcSpawnCommit(ctx)
 
@@ -121,16 +123,25 @@ export async function commitPtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<PtySpawn
         : undefined,
       !args.connectionId
         ? shouldSkipCodexHomeEnvForWindowsShell(ctx.effectiveShellOverride, ctx.cwd)
-        : undefined
+        : undefined,
+      observationAdmission
     )
     ctx.pendingRegistrationPtyId = null
-  } else if (ctx.pendingRegistrationPtyId) {
-    ctx.deps.runtime?.cancelPendingPtyRegistration?.(
-      ctx.pendingRegistrationPtyId,
-      ctx.result.incarnationId
-    )
-    ctx.pendingRegistrationPtyId = null
+  } else {
+    if (ctx.pendingRegistrationPtyId) {
+      ctx.deps.runtime?.cancelPendingPtyRegistration?.(
+        ctx.pendingRegistrationPtyId,
+        ctx.result.incarnationId
+      )
+      ctx.pendingRegistrationPtyId = null
+    }
+    // Why settle before cancelling: the spawn SUCCEEDED, so its held-back
+    // generation reset must still run — cancelling alone would leak the
+    // predecessor's tracker/parser state into the new incarnation.
+    ctx.deps.runtime?.acceptPtyObservationAdmission?.(observationAdmission)
+    ctx.deps.runtime?.cancelPtyObservationAdmission?.(ctx.observationAdmissionToken)
   }
+  ctx.observationAdmissionToken = null
   // Why: seed after registerPty binds the worktree — including on
   // desktop, where the renderer-authority gate above skips the emulator
   // seed but the list/read records still live main-side.

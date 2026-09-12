@@ -4,6 +4,7 @@ import { getDecorativeAgentTitleSignature } from '../../shared/agent-decorative-
 import { shouldEmitTitleFactForFrame } from './decorative-title-fact-emission'
 import type { RuntimePtyTitleTrackerEntry } from './runtime-terminal-state-records'
 import { createTerminalTitleTracker } from '../../shared/terminal-output-side-effects'
+import type { TerminalTitleTrackerCallbacks } from '../../shared/terminal-output-side-effects'
 import { detectAgentStatusFromTitle } from '../../shared/agent-detection'
 import type { TerminalGitHubPRLink } from '../../shared/terminal-github-pr-link-detector'
 
@@ -62,110 +63,8 @@ export class OrcaRuntimeWithGetUnpersistedTrackedTitleForPty extends OrcaRuntime
         }
       }
     }
-    const tracker = createTerminalTitleTracker(
-      {
-        onTitle: (normalizedTitle, rawTitle, meta) => {
-          const live = this.ptyTitleTrackersByPtyId.get(ptyId)
-          const gateKey = this.makeDecorativeTitleGateKey(rawTitle, normalizedTitle)
-          const decorativeOnly = live?.lastMobileTitleGateKey === gateKey
-          if (live) {
-            live.lastMobileTitleGateKey = gateKey
-          }
-          // Why: the same gate the mobile fan-out below already uses, applied one hop earlier —
-          // a spinner frame the renderer store discards should not cost a pty:sideEffect message
-          // at all. See decorative-title-fact-emission.ts for why repeats still heartbeat.
-          const nowMs = Date.now()
-          if (
-            shouldEmitTitleFactForFrame({
-              decorativeOnly,
-              staleWorkingTitleClear: meta?.staleWorkingTitleClear === true,
-              lastEmittedAtMs: live?.lastTitleFactAtMs ?? null,
-              nowMs
-            })
-          ) {
-            if (live) {
-              live.lastTitleFactAtMs = nowMs
-            }
-            this.recordTerminalSideEffectFact(ptyId, {
-              kind: 'title',
-              normalizedTitle,
-              rawTitle,
-              ...(meta?.staleWorkingTitleClear ? { staleWorkingTitleClear: true } : {})
-            })
-          }
-          const changed = this.applyTrackedPtyTitle(ptyId, rawTitle, normalizedTitle, meta)
-          const identityOnlyTitle = this.isLiveCursorNativeTitle(rawTitle, meta)
-          const tracksReplicatedStatus =
-            live?.applyingChunk === true && this.mobileSessionTabListeners.size > 0
-          const titleStatus = tracksReplicatedStatus ? detectAgentStatusFromTitle(rawTitle) : null
-          if (
-            tracksReplicatedStatus &&
-            decorativeOnly &&
-            !this.ptyForegroundAgent.hasDelayedSnapshot(ptyId) &&
-            (titleStatus === 'working' || titleStatus === 'permission')
-          ) {
-            // Normalized Pi/Gemini/Grok frames still renew the replicated status lease.
-            this.mobileSessionTabsAgentStatusHeartbeat.scheduleDecorativeHeartbeat(ptyId)
-          }
-          // Why: an identity-only cursor title records nothing, but the tracker
-          // title is that pane's only Cursor identity and must still fan out (#10258).
-          if (!changed && !identityOnlyTitle) {
-            return
-          }
-          if (live?.applyingChunk) {
-            // Why: synthetic spinner ticks change only the braille glyph
-            // ~12.5x/sec; fanning out full mobile session snapshots per frame
-            // is pure churn. Raw lastOscTitle updates above stay cheap.
-            if (!decorativeOnly) {
-              this.mobileSessionTabsAgentStatusHeartbeat.observeSemanticTitle(ptyId)
-              live.chunkTouchedSessionTabs = true
-            }
-          } else {
-            // Stale-working-title timer path — fires between chunks, so the
-            // per-chunk batching in onPtyData cannot pick it up.
-            this.mobileSessionTabsAgentStatusHeartbeat.observeSemanticTitle(ptyId)
-            this.touchMobileSessionSnapshotsForPty(ptyId)
-          }
-        },
-        // Why: agent transitions and bells become pty:sideEffect facts —
-        // main is the single byte parser for local/SSH PTYs; the renderer
-        // store handler decides what the facts mean (notification policy).
-        onAgentBecameWorking: () => {
-          this.recordTerminalSideEffectFact(ptyId, { kind: 'agent-working' })
-        },
-        onAgentBecameIdle: (title, meta) => {
-          this.recordTerminalSideEffectFact(ptyId, {
-            kind: 'agent-idle',
-            title,
-            ...(meta?.staleWorkingTitleClear ? { staleWorkingTitleClear: true } : {})
-          })
-        },
-        onAgentExited: () => {
-          this.confirmPtyAgentExit(ptyId)
-        },
-        onCommandFinished: (exitCode: number | null) => {
-          this.retirePtyAgentLaunchAuthority(ptyId)
-          this.recordTerminalSideEffectFact(ptyId, { kind: 'command-finished', exitCode })
-        },
-        onBell: () => {
-          this.recordTerminalSideEffectFact(ptyId, { kind: 'bell' })
-        },
-        onPrLink: (link: TerminalGitHubPRLink) => {
-          this.recordTerminalSideEffectFact(ptyId, { kind: 'pr-link', link })
-        },
-        // Why: hidden-delivery-gated views never see 2031 bytes; facts keep their theme registry truthful.
-        onMode2031Subscribe: () => {
-          this.recordTerminalSideEffectFact(ptyId, { kind: '2031-subscribe' })
-        },
-        onMode2031Unsubscribe: () => {
-          this.recordTerminalSideEffectFact(ptyId, { kind: '2031-unsubscribe' })
-        }
-      },
-      initialTitle !== null ? { initialTitle } : {}
-    )
-    tracker.setTransientSideEffectScanningEnabled(this.terminalSideEffectConsumerAvailable)
     const entry: RuntimePtyTitleTrackerEntry = {
-      tracker,
+      tracker: null as unknown as RuntimePtyTitleTrackerEntry['tracker'],
       applyingChunk: false,
       lastMobileTitleGateKey: null,
       lastTitleFactAtMs: null,
@@ -179,7 +78,152 @@ export class OrcaRuntimeWithGetUnpersistedTrackedTitleForPty extends OrcaRuntime
         ? this.createTerminalSideEffectCommandCodeDetector(ptyId)
         : null
     }
+    const tracker = createTerminalTitleTracker(
+      this.createLivePtyTitleTrackerCallbacks(ptyId, entry),
+      initialTitle !== null ? { initialTitle } : {}
+    )
+    tracker.setTransientSideEffectScanningEnabled(this.terminalSideEffectConsumerAvailable)
+    entry.tracker = tracker
     this.ptyTitleTrackersByPtyId.set(ptyId, entry)
     return entry
+  }
+
+  /**
+   * Live automatic-state callbacks for one tracker entry. Why: every callback
+   * is fenced on its OWN entry, not on a fresh ptyId lookup — a retired
+   * tracker's deferred stale-title timer must not act through a successor's
+   * map entry. A promoted observation capsule delegates here once its own
+   * entry becomes the PTY's accepted tracker.
+   */
+  protected createLivePtyTitleTrackerCallbacks(
+    ptyId: string,
+    entry: RuntimePtyTitleTrackerEntry
+  ): TerminalTitleTrackerCallbacks {
+    const ownsAutomaticState = (): boolean => this.ptyTitleTrackersByPtyId.get(ptyId) === entry
+    return {
+      onTitle: (normalizedTitle, rawTitle, meta) => {
+        if (!ownsAutomaticState()) {
+          return
+        }
+        const live = this.ptyTitleTrackersByPtyId.get(ptyId)
+        const gateKey = this.makeDecorativeTitleGateKey(rawTitle, normalizedTitle)
+        const decorativeOnly = live?.lastMobileTitleGateKey === gateKey
+        if (live) {
+          live.lastMobileTitleGateKey = gateKey
+        }
+        // Why: the same gate the mobile fan-out below already uses, applied one hop earlier —
+        // a spinner frame the renderer store discards should not cost a pty:sideEffect message
+        // at all. See decorative-title-fact-emission.ts for why repeats still heartbeat.
+        const nowMs = Date.now()
+        if (
+          shouldEmitTitleFactForFrame({
+            decorativeOnly,
+            staleWorkingTitleClear: meta?.staleWorkingTitleClear === true,
+            lastEmittedAtMs: live?.lastTitleFactAtMs ?? null,
+            nowMs
+          })
+        ) {
+          if (live) {
+            live.lastTitleFactAtMs = nowMs
+          }
+          this.recordTerminalSideEffectFact(ptyId, {
+            kind: 'title',
+            normalizedTitle,
+            rawTitle,
+            ...(meta?.staleWorkingTitleClear ? { staleWorkingTitleClear: true } : {})
+          })
+        }
+        const changed = this.applyTrackedPtyTitle(ptyId, rawTitle, normalizedTitle, meta)
+        const identityOnlyTitle = this.isLiveCursorNativeTitle(rawTitle, meta)
+        const tracksReplicatedStatus =
+          live?.applyingChunk === true && this.mobileSessionTabListeners.size > 0
+        const titleStatus = tracksReplicatedStatus ? detectAgentStatusFromTitle(rawTitle) : null
+        if (
+          tracksReplicatedStatus &&
+          decorativeOnly &&
+          !this.ptyForegroundAgent.hasDelayedSnapshot(ptyId) &&
+          (titleStatus === 'working' || titleStatus === 'permission')
+        ) {
+          // Normalized Pi/Gemini/Grok frames still renew the replicated status lease.
+          this.mobileSessionTabsAgentStatusHeartbeat.scheduleDecorativeHeartbeat(ptyId)
+        }
+        // Why: an identity-only cursor title records nothing, but the tracker
+        // title is that pane's only Cursor identity and must still fan out (#10258).
+        if (!changed && !identityOnlyTitle) {
+          return
+        }
+        if (live?.applyingChunk) {
+          // Why: synthetic spinner ticks change only the braille glyph
+          // ~12.5x/sec; fanning out full mobile session snapshots per frame
+          // is pure churn. Raw lastOscTitle updates above stay cheap.
+          if (!decorativeOnly) {
+            this.mobileSessionTabsAgentStatusHeartbeat.observeSemanticTitle(ptyId)
+            live.chunkTouchedSessionTabs = true
+          }
+        } else {
+          // Stale-working-title timer path — fires between chunks, so the
+          // per-chunk batching in onPtyData cannot pick it up.
+          this.mobileSessionTabsAgentStatusHeartbeat.observeSemanticTitle(ptyId)
+          this.touchMobileSessionSnapshotsForPty(ptyId)
+        }
+      },
+      // Why: agent transitions and bells become pty:sideEffect facts —
+      // main is the single byte parser for local/SSH PTYs; the renderer
+      // store handler decides what the facts mean (notification policy).
+      onAgentBecameWorking: () => {
+        if (!ownsAutomaticState()) {
+          return
+        }
+        this.recordTerminalSideEffectFact(ptyId, { kind: 'agent-working' })
+      },
+      onAgentBecameIdle: (title, meta) => {
+        if (!ownsAutomaticState()) {
+          return
+        }
+        this.recordTerminalSideEffectFact(ptyId, {
+          kind: 'agent-idle',
+          title,
+          ...(meta?.staleWorkingTitleClear ? { staleWorkingTitleClear: true } : {})
+        })
+      },
+      onAgentExited: () => {
+        if (!ownsAutomaticState()) {
+          return
+        }
+        this.confirmPtyAgentExit(ptyId)
+      },
+      onCommandFinished: (exitCode: number | null) => {
+        if (!ownsAutomaticState()) {
+          return
+        }
+        this.retirePtyAgentLaunchAuthority(ptyId)
+        this.recordTerminalSideEffectFact(ptyId, { kind: 'command-finished', exitCode })
+      },
+      onBell: () => {
+        if (!ownsAutomaticState()) {
+          return
+        }
+        this.recordTerminalSideEffectFact(ptyId, { kind: 'bell' })
+      },
+      onPrLink: (link: TerminalGitHubPRLink) => {
+        if (!ownsAutomaticState()) {
+          return
+        }
+        this.recordTerminalSideEffectFact(ptyId, { kind: 'pr-link', link })
+      },
+      // Why: hidden-delivery-gated views never see 2031 bytes; facts keep their theme registry truthful.
+      onMode2031Subscribe: () => {
+        if (!ownsAutomaticState()) {
+          return
+        }
+        this.recordTerminalSideEffectFact(ptyId, { kind: '2031-subscribe' })
+      },
+      onMode2031Unsubscribe: () => {
+        if (!ownsAutomaticState()) {
+          return
+        }
+        this.recordTerminalSideEffectFact(ptyId, { kind: '2031-unsubscribe' })
+      }
+    }
   }
 }

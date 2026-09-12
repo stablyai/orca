@@ -288,7 +288,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
 
   describe('attach', () => {
     it('reattaches to existing session and receives events', async () => {
-      const { id } = await adapter.spawn({ cols: 80, rows: 24 })
+      const { id, incarnationId } = await adapter.spawn({ cols: 80, rows: 24 })
 
       // Create a second adapter simulating app restart
       const adapter2 = new DaemonPtyAdapter({ socketPath, tokenPath })
@@ -299,7 +299,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
 
       lastSubprocess._simulateData('after-reattach')
       await waitFor(() => dataPayloads.length > 0)
-      expect(dataPayloads[0]).toEqual({ id, data: 'after-reattach' })
+      expect(dataPayloads[0]).toEqual({ id, data: 'after-reattach', incarnationId })
 
       adapter2.dispose()
     })

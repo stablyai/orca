@@ -34,9 +34,15 @@ export class BackgroundTransientFactRelay {
   private trackersBySessionId = new Map<string, TerminalTitleTracker>()
   // Why: shadow foreground bytes so a provisional subscribe survives either scan-authority handoff.
   private mode2031ReplyScanStateBySessionId = new Map<string, Mode2031ReplyScanState>()
-  private emitFact: (sessionId: string, fact: DaemonTransientFact) => void
+  // Absence means "never observed"; a present `undefined` value means "observed source that
+  // publishes no incarnation". Conflating the two let a delayed predecessor exit dispose this
+  // source's tracker.
+  private sourceIncarnations = new Map<string, string | undefined>()
+  private emitFact: (sessionId: string, fact: DaemonTransientFact, incarnationId?: string) => void
 
-  constructor(emitFact: (sessionId: string, fact: DaemonTransientFact) => void) {
+  constructor(
+    emitFact: (sessionId: string, fact: DaemonTransientFact, incarnationId?: string) => void
+  ) {
     this.emitFact = emitFact
   }
 
@@ -56,18 +62,20 @@ export class BackgroundTransientFactRelay {
       return false
     }
     if (background) {
+      const incarnationId = this.sourceIncarnations.get(sessionId)
+      const emit = (fact: DaemonTransientFact): void =>
+        this.emitFact(sessionId, fact, incarnationId)
       this.trackersBySessionId.set(
         sessionId,
         createTerminalTitleTracker({
-          onBell: () => this.emitFact(sessionId, { kind: 'bell' }),
-          onCommandFinished: (exitCode) =>
-            this.emitFact(sessionId, { kind: 'command-finished', exitCode }),
+          onBell: () => emit({ kind: 'bell' }),
+          onCommandFinished: (exitCode) => emit({ kind: 'command-finished', exitCode }),
           // Note: recreating the tracker on each background toggle resets the
           // PR-link dedup memory, so a link re-printed across toggles can
           // re-fire — consumers treat pr-link as a latest-association update.
-          onPrLink: (link) => this.emitFact(sessionId, { kind: 'pr-link', link }),
-          onMode2031Subscribe: () => this.emitFact(sessionId, { kind: '2031-subscribe' }),
-          onMode2031Unsubscribe: () => this.emitFact(sessionId, { kind: '2031-unsubscribe' })
+          onPrLink: (link) => emit({ kind: 'pr-link', link }),
+          onMode2031Subscribe: () => emit({ kind: '2031-subscribe' }),
+          onMode2031Unsubscribe: () => emit({ kind: '2031-unsubscribe' })
         })
       )
     } else {
@@ -80,7 +88,12 @@ export class BackgroundTransientFactRelay {
    *  incomplete escape at handoff time, so a sequence split across the
    *  background toggle neither mints a phantom bell nor loses its fact. A
    *  partial tail contains no complete sequence, so this can never fire. */
-  seedSessionScanState(sessionId: string, partialEscapeTailAnsi: string): void {
+  seedSessionScanState(
+    sessionId: string,
+    partialEscapeTailAnsi: string,
+    incarnationId?: string
+  ): void {
+    this.observeSource(sessionId, incarnationId)
     let mode2031State = this.mode2031ReplyScanStateBySessionId.get(sessionId)
     if (!mode2031State && partialEscapeTailAnsi.length > 0) {
       mode2031State = scanMode2031ReplyDecision(
@@ -103,7 +116,8 @@ export class BackgroundTransientFactRelay {
 
   /** Feed one raw chunk, in byte order, BEFORE it is enqueued for delivery —
    *  facts must be captured even when the chunk is later keep-tail dropped. */
-  onSessionData(sessionId: string, data: string): void {
+  onSessionData(sessionId: string, data: string, incarnationId?: string): void {
+    this.observeSource(sessionId, incarnationId)
     const previousMode2031State = this.mode2031ReplyScanStateBySessionId.get(sessionId)
     if (previousMode2031State || data.includes('\x1b') || data.includes('\x9b')) {
       const mode2031Result = scanMode2031ReplyDecision(
@@ -128,9 +142,33 @@ export class BackgroundTransientFactRelay {
     )
   }
 
-  onSessionExit(sessionId: string): void {
+  onSessionExit(sessionId: string, incarnationId?: string): void {
+    if (
+      incarnationId !== undefined &&
+      this.sourceIncarnations.has(sessionId) &&
+      this.sourceIncarnations.get(sessionId) !== incarnationId
+    ) {
+      return
+    }
     this.disposeTracker(sessionId)
     this.mode2031ReplyScanStateBySessionId.delete(sessionId)
+    this.sourceIncarnations.delete(sessionId)
+  }
+
+  private observeSource(sessionId: string, incarnationId?: string): void {
+    if (
+      this.sourceIncarnations.has(sessionId) &&
+      this.sourceIncarnations.get(sessionId) === incarnationId
+    ) {
+      return
+    }
+    const background = this.isBackgrounded(sessionId)
+    this.disposeTracker(sessionId)
+    this.mode2031ReplyScanStateBySessionId.delete(sessionId)
+    this.sourceIncarnations.set(sessionId, incarnationId)
+    if (background) {
+      this.setSessionBackground(sessionId, true)
+    }
   }
 
   dispose(): void {
@@ -138,6 +176,7 @@ export class BackgroundTransientFactRelay {
       this.disposeTracker(sessionId)
     }
     this.mode2031ReplyScanStateBySessionId.clear()
+    this.sourceIncarnations.clear()
   }
 
   private disposeTracker(sessionId: string): void {

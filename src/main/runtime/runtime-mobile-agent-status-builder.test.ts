@@ -27,7 +27,8 @@ describe('mobile agent status builder', () => {
     const result = buildRuntimeMobileAgentStatus(null, TAB, 'term-1', retained, () => [], {
       getPaneKey: () => 'new-tab:new-leaf',
       getLeaf: () => null,
-      getTrackedTitle: () => null
+      getTrackedTitle: () => null,
+      getRetiredPaneEvidence: () => null
     })
 
     expect(result).toEqual(
