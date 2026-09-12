@@ -80,6 +80,8 @@ export function WorktreeCardHeader({
   } = card
   const {
     showPinnedRepoIcon,
+    showPinnedProjectName,
+    pinnedProjectName,
     showInlineRepoBadge,
     showHeaderActions,
     showTitleRowPrimary,
@@ -102,6 +104,15 @@ export function WorktreeCardHeader({
             />
           </RepoIdentityChip>
         )}
+        {showPinnedProjectName ? (
+          <span
+            data-worktree-card-pinned-project-name=""
+            className="max-w-[7rem] shrink-0 truncate text-[12px] font-medium leading-5 text-muted-foreground"
+            title={pinnedProjectName}
+          >
+            {pinnedProjectName}
+          </span>
+        ) : null}
 
         {repo?.connectionId && (
           <WorktreeCardSshHostControl
