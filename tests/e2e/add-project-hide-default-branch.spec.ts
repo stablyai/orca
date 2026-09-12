@@ -5,8 +5,8 @@
  */
 
 import { execFileSync } from 'node:child_process'
-import { mkdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
-import { mkdtemp } from 'node:fs/promises'
+import { mkdirSync, realpathSync, writeFileSync } from 'node:fs'
+import { mkdtemp, rm } from 'node:fs/promises'
 import os from 'node:os'
 import path from 'node:path'
 import { test, expect } from './helpers/orca-app'
@@ -35,16 +35,18 @@ async function createMainOnlyRepoFixture(): Promise<string> {
   return repoPath
 }
 
-test.afterEach(() => {
-  for (const root of tempRoots.splice(0)) {
-    rmSync(root, { recursive: true, force: true })
-  }
-})
-
 test.describe('Add project with Hide default branch on', () => {
   test('keeps the filter on and shows the project header without opening the checkout', async ({
-    orcaPage
+    orcaPage,
+    registerPostElectronShutdownCleanup
   }) => {
+    // Why: afterEach runs before the electronApp fixture tears down, so the repo
+    // could still be watched; on Windows that surfaces as EPERM and masks the result.
+    registerPostElectronShutdownCleanup(async () => {
+      for (const root of tempRoots.splice(0)) {
+        await rm(root, { recursive: true, force: true, maxRetries: 5 })
+      }
+    })
     await waitForSessionReady(orcaPage)
     // Why: the dialog locators below assert English copy; pin the UI language so
     // the spec also passes on machines whose OS locale picks another catalog.
