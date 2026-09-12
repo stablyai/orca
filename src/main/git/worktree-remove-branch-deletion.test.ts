@@ -31,9 +31,41 @@ import { registerWorktreeSuiteHooks } from './worktree-test-harness'
 
 registerWorktreeSuiteHooks()
 
-describe('removeWorktree', () => {
+describe('removeWorktree branch retention', () => {
   const beforeRemoval =
     'worktree /repo\nHEAD abc123\nbranch refs/heads/main\n\nworktree /repo-feature\nHEAD def456\nbranch refs/heads/feature/test\n'
+  const afterRemoval = 'worktree /repo\nHEAD abc123\nbranch refs/heads/main\n'
+  const preserved = { preservedBranch: { branchName: 'feature/test', head: 'def456' } }
+
+  function mockRepo(
+    options: { merged?: boolean; checkedOut?: boolean; prunable?: boolean; moved?: boolean } = {}
+  ) {
+    let pruned = false
+    gitExecFileAsyncMock.mockImplementation(async (args: string[]) => {
+      const command = args.join(' ')
+      if (command === 'worktree list --porcelain -z') {
+        return { stdout: beforeRemoval }
+      }
+      if (command === 'worktree list --porcelain') {
+        return {
+          stdout: options.checkedOut && !(options.prunable && pruned) ? beforeRemoval : afterRemoval
+        }
+      }
+      if (command === 'worktree prune') {
+        pruned = true
+      }
+      if (command === 'rev-parse --verify --quiet HEAD^{commit}') {
+        return { stdout: 'abc123' }
+      }
+      if (command === 'merge-base abc123 def456') {
+        return { stdout: options.merged ? 'def456' : 'abc123' }
+      }
+      if (command === 'update-ref -d refs/heads/feature/test def456' && options.moved) {
+        throw new Error('reference changed')
+      }
+      return { stdout: '', stderr: '' }
+    })
+  }
 
   beforeEach(() => {
     gitExecFileAsyncMock.mockReset()
@@ -41,77 +73,55 @@ describe('removeWorktree', () => {
     translateWslOutputPathsMock.mockClear()
   })
 
-  it('uses safe `branch -d` and preserves a branch with unmerged commits', async () => {
-    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: beforeRemoval }) // list before
-    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // clean probe before the rename attempt
-    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // worktree remove
-    // Git refuses to delete an unmerged branch with `-d`.
-    gitExecFileAsyncMock.mockRejectedValueOnce(new Error('not fully merged')) // branch -d
-
-    // Should not throw — the unmerged branch is preserved, not force-deleted.
-    await expect(removeWorktree('/repo', '/repo-feature', false)).resolves.toEqual({
-      preservedBranch: { branchName: 'feature/test', head: 'def456' }
-    })
-
-    const calls = gitExecFileAsyncMock.mock.calls.map((call) => call[0])
-    expect(calls).toContainEqual(['branch', '-d', '--', 'feature/test'])
-    expect(calls).not.toContainEqual(['branch', '-D', '--', 'feature/test'])
+  it('preserves an unmerged branch without asking Git to delete against its upstream', async () => {
+    mockRepo()
+    await expect(removeWorktree('/repo', '/repo-feature')).resolves.toEqual(preserved)
+    expect(
+      gitExecFileAsyncMock.mock.calls.some(
+        ([args]) => args[0] === 'branch' || args[0] === 'update-ref'
+      )
+    ).toBe(false)
   })
 
-  it('deletes the branch when `branch -d` succeeds (fully merged)', async () => {
-    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: beforeRemoval }) // list before
-    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // clean probe before the rename attempt
-    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // worktree remove
-    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // branch -d succeeds
-
-    await removeWorktree('/repo', '/repo-feature', false)
-
-    expect(gitExecFileAsyncMock.mock.calls.map((call) => call[0])).toContainEqual([
-      'branch',
-      '-d',
-      '--',
-      'feature/test'
-    ])
+  it('deletes only the captured commit after proving it merged', async () => {
+    mockRepo({ merged: true })
+    await expect(removeWorktree('/repo', '/repo-feature')).resolves.toEqual({})
+    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
+      ['update-ref', '-d', 'refs/heads/feature/test', 'def456'],
+      expect.anything()
+    )
   })
 
-  it('reuses known removed worktree metadata instead of relisting before removal', async () => {
-    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // clean probe before the rename attempt
-    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // worktree remove
-    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // branch -d succeeds
+  it('preserves a branch moved after the merge proof', async () => {
+    mockRepo({ merged: true, moved: true })
+    await expect(removeWorktree('/repo', '/repo-feature')).resolves.toEqual(preserved)
+  })
 
+  it('reuses known removed worktree metadata', async () => {
+    mockRepo({ merged: true })
     await removeWorktree('/repo', '/repo-feature', false, {
-      knownRemovedWorktree: {
-        branch: 'refs/heads/feature/test',
-        head: 'def456'
-      }
+      knownRemovedWorktree: { branch: 'refs/heads/feature/test', head: 'def456' }
     })
-
-    expect(gitExecFileAsyncMock.mock.calls.map((call) => call[0])).toEqual([
-      ['status', '--porcelain', '--untracked-files=all'],
-      ['worktree', 'remove', '/repo-feature'],
-      ['branch', '-d', '--', 'feature/test']
+    expect(gitExecFileAsyncMock.mock.calls.map(([args]) => args)).not.toContainEqual([
+      'worktree',
+      'list',
+      '--porcelain',
+      '-z'
     ])
   })
 
-  it('prunes and retries branch deletion only when Git reports a checked-out branch', async () => {
-    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: beforeRemoval }) // list before
-    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // clean probe before the rename attempt
-    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // worktree remove
-    gitExecFileAsyncMock.mockRejectedValueOnce(
-      new Error("error: cannot delete branch 'feature/test' used by worktree at '/repo-stale'")
-    ) // branch -d hits stale worktree metadata
-    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // worktree prune
-    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '' }) // branch -d retry succeeds
-
-    await expect(removeWorktree('/repo', '/repo-feature', false)).resolves.toEqual({})
-
-    expect(gitExecFileAsyncMock.mock.calls.map((call) => call[0])).toEqual([
-      ['worktree', 'list', '--porcelain', '-z'],
-      ['status', '--porcelain', '--untracked-files=all'],
-      ['worktree', 'remove', '/repo-feature'],
-      ['branch', '-d', '--', 'feature/test'],
-      ['worktree', 'prune'],
-      ['branch', '-d', '--', 'feature/test']
+  it('prunes a stale checkout registration before deleting the merged branch', async () => {
+    mockRepo({ merged: true, checkedOut: true, prunable: true })
+    await expect(removeWorktree('/repo', '/repo-feature')).resolves.toEqual({})
+    expect(gitExecFileAsyncMock.mock.calls.map(([args]) => args)).toContainEqual([
+      'worktree',
+      'prune'
     ])
+  })
+
+  it('preserves a merged branch another live checkout still holds', async () => {
+    mockRepo({ merged: true, checkedOut: true })
+    await expect(removeWorktree('/repo', '/repo-feature')).resolves.toEqual(preserved)
+    expect(gitExecFileAsyncMock.mock.calls.some(([args]) => args[0] === 'update-ref')).toBe(false)
   })
 })

@@ -84,7 +84,9 @@ describe('removeWorktree', () => {
 
   it('removes the worktree and deletes its local branch', async () => {
     mockGitCommands({
-      'git worktree list --porcelain': {
+      'git rev-parse --verify --quiet HEAD^{commit}': { stdout: 'abc123\n' },
+      'git merge-base abc123 def456': { stdout: 'def456\n' },
+      'git worktree list --porcelain -z': {
         stdout: `worktree /repo
 HEAD abc123
 branch refs/heads/main
@@ -94,7 +96,7 @@ HEAD def456
 branch refs/heads/feature/test
 `
       },
-      'git worktree list --porcelain#2': {
+      'git worktree list --porcelain': {
         stdout: `worktree /repo
 HEAD abc123
 branch refs/heads/main
@@ -102,14 +104,27 @@ branch refs/heads/main
       }
     })
 
-    await removeWorktree('/repo', '/repo-feature')
+    await expect(removeWorktree('/repo', '/repo-feature')).resolves.toEqual({})
 
     const calls = getGitCalls()
     expect(calls).toEqual(
-      expect.arrayContaining(['git worktree remove /repo-feature', 'git branch -d -- feature/test'])
+      expect.arrayContaining([
+        'git worktree remove /repo-feature',
+        'git update-ref -d refs/heads/feature/test def456'
+      ])
     )
     expect(calls).not.toContain('git worktree prune')
-    expectGitCallOrder(calls, 'git worktree remove /repo-feature', 'git branch -d -- feature/test')
+    expect(calls).not.toContain('git branch -d -- feature/test')
+    expectGitCallOrder(
+      calls,
+      'git merge-base abc123 def456',
+      'git update-ref -d refs/heads/feature/test def456'
+    )
+    expectGitCallOrder(
+      calls,
+      'git worktree remove /repo-feature',
+      'git update-ref -d refs/heads/feature/test def456'
+    )
   })
 
   it('preserves the branch when requested for a pre-existing local branch checkout', async () => {
@@ -133,11 +148,14 @@ branch refs/heads/feature/test
     expect(calls).not.toContain('git worktree prune')
     expect(calls).not.toContain('git branch -d -- feature/test')
     expect(calls).not.toContain('git branch -D -- feature/test')
+    expect(calls).not.toContain('git update-ref -d refs/heads/feature/test def456')
   })
 
   it('skips branch deletion when another worktree still points at the branch', async () => {
     mockGitCommands({
-      'git worktree list --porcelain': {
+      'git rev-parse --verify --quiet HEAD^{commit}': { stdout: 'abc123\n' },
+      'git merge-base abc123 def456': { stdout: 'def456\n' },
+      'git worktree list --porcelain -z': {
         stdout: `worktree /repo
 HEAD abc123
 branch refs/heads/main
@@ -151,7 +169,7 @@ HEAD def456
 branch refs/heads/feature/test
 `
       },
-      'git worktree list --porcelain#2': {
+      'git worktree list --porcelain': {
         stdout: `worktree /repo
 HEAD abc123
 branch refs/heads/main
@@ -160,36 +178,31 @@ worktree /repo-feature-copy
 HEAD def456
 branch refs/heads/feature/test
 `
-      },
-      'git branch -d -- feature/test': {
-        error: new Error(
-          "cannot delete branch 'feature/test' used by worktree at '/repo-feature-copy'"
-        )
-      },
-      'git branch -d -- feature/test#2': {
-        error: new Error(
-          "cannot delete branch 'feature/test' used by worktree at '/repo-feature-copy'"
-        )
       }
     })
 
-    await removeWorktree('/repo', '/repo-feature')
+    await expect(removeWorktree('/repo', '/repo-feature')).resolves.toEqual({
+      preservedBranch: { branchName: 'feature/test', head: 'def456' }
+    })
 
     const calls = getGitCalls()
     expect(calls).toEqual(
       expect.arrayContaining([
         'git worktree remove /repo-feature',
-        'git branch -d -- feature/test',
+        'git merge-base abc123 def456',
         'git worktree prune'
       ])
     )
-    expect(calls.filter((call) => call === 'git branch -d -- feature/test')).toHaveLength(2)
+    expect(calls.filter((call) => call === 'git worktree list --porcelain')).toHaveLength(2)
+    expect(calls).not.toContain('git update-ref -d refs/heads/feature/test def456')
     expect(calls).not.toContain('git branch -D -- feature/test')
   })
 
   it('deletes the branch after prune removes stale sibling worktree entries', async () => {
     mockGitCommands({
-      'git worktree list --porcelain': {
+      'git rev-parse --verify --quiet HEAD^{commit}': { stdout: 'abc123\n' },
+      'git merge-base abc123 def456': { stdout: 'def456\n' },
+      'git worktree list --porcelain -z': {
         stdout: `worktree /repo
 HEAD abc123
 branch refs/heads/main
@@ -204,37 +217,54 @@ branch refs/heads/feature/test
 prunable gitdir file points to non-existent location
 `
       },
-      'git worktree list --porcelain#2': {
+      'git worktree list --porcelain': {
         stdout: `worktree /repo
 HEAD abc123
 branch refs/heads/main
 `
       },
-      'git branch -d -- feature/test': {
-        error: new Error("cannot delete branch 'feature/test' used by worktree at '/repo-stale'")
-      },
-      'git branch -d -- feature/test#2': {
-        stdout: ''
+      'git worktree list --porcelain#1': {
+        stdout: `worktree /repo
+HEAD abc123
+branch refs/heads/main
+
+worktree /repo-stale
+HEAD 0000000
+branch refs/heads/feature/test
+prunable gitdir file points to non-existent location
+`
       }
     })
 
-    await removeWorktree('/repo', '/repo-feature')
+    await expect(removeWorktree('/repo', '/repo-feature')).resolves.toEqual({})
 
     const calls = getGitCalls()
-    expect(calls).toEqual([
-      'git worktree list --porcelain -z',
-      // The cleanliness probe that decides whether the checkout may be renamed aside.
-      'git status --porcelain --untracked-files=all',
+    expectGitCallOrder(
+      calls,
       'git worktree remove /repo-feature',
-      'git branch -d -- feature/test',
+      'git update-ref -d refs/heads/feature/test def456'
+    )
+    expect(
+      calls.filter(
+        (call) =>
+          call === 'git worktree list --porcelain' ||
+          call === 'git worktree prune' ||
+          call.startsWith('git update-ref')
+      )
+    ).toEqual([
+      'git worktree list --porcelain',
       'git worktree prune',
-      'git branch -d -- feature/test'
+      'git worktree list --porcelain',
+      'git update-ref -d refs/heads/feature/test def456',
+      'git worktree list --porcelain'
     ])
   })
 
   it('renames the checkout aside and deregisters the missing path', async () => {
     mockGitCommands({
-      'git worktree list --porcelain': {
+      'git rev-parse --verify --quiet HEAD^{commit}': { stdout: 'abc123\n' },
+      'git merge-base abc123 def456': { stdout: 'def456\n' },
+      'git worktree list --porcelain -z': {
         stdout: `worktree /repo
 HEAD abc123
 branch refs/heads/main
@@ -244,7 +274,7 @@ HEAD def456
 branch refs/heads/feature/test
 `
       },
-      'git worktree list --porcelain#2': {
+      'git worktree list --porcelain': {
         stdout: `worktree /repo
 HEAD abc123
 branch refs/heads/main
@@ -265,7 +295,7 @@ branch refs/heads/main
     )
     expect(calls).not.toContain('git worktree remove /repo-feature')
     expect(calls).not.toContain('git worktree prune')
-    expect(calls).toContain('git branch -d -- feature/test')
+    expect(calls).toContain('git update-ref -d refs/heads/feature/test def456')
   })
 
   it('prunes the registration when deregistering the moved checkout fails', async () => {
@@ -462,7 +492,9 @@ branch refs/heads/main
 
   it('force-retries removal when git refuses a clean worktree containing an initialised submodule', async () => {
     mockGitCommands({
-      'git worktree list --porcelain': {
+      'git rev-parse --verify --quiet HEAD^{commit}': { stdout: 'abc123\n' },
+      'git merge-base abc123 def456': { stdout: 'def456\n' },
+      'git worktree list --porcelain -z': {
         stdout: `worktree /repo
 HEAD abc123
 branch refs/heads/main
@@ -472,7 +504,7 @@ HEAD def456
 branch refs/heads/feature/test
 `
       },
-      'git worktree list --porcelain#2': {
+      'git worktree list --porcelain': {
         stdout: `worktree /repo
 HEAD abc123
 branch refs/heads/main
@@ -500,7 +532,7 @@ branch refs/heads/main
     expect(calls.lastIndexOf('git status --porcelain --untracked-files=all')).toBeLessThan(
       calls.indexOf('git worktree remove --force /repo-feature')
     )
-    expect(calls).toContain('git branch -d -- feature/test')
+    expect(calls).toContain('git update-ref -d refs/heads/feature/test def456')
   })
 
   it('surfaces uncommitted changes instead of force-removing a dirty submodule worktree', async () => {
@@ -624,7 +656,9 @@ locked active agent session
 
   it('matches Windows worktree paths before deleting the branch', async () => {
     mockGitCommands({
-      'git worktree list --porcelain': {
+      'git rev-parse --verify --quiet HEAD^{commit}': { stdout: 'abc123\n' },
+      'git merge-base abc123 def456': { stdout: 'def456\n' },
+      'git worktree list --porcelain -z': {
         stdout: `worktree C:/repo
 HEAD abc123
 branch refs/heads/main
@@ -634,7 +668,7 @@ HEAD def456
 branch refs/heads/feature/test
 `
       },
-      'git worktree list --porcelain#2': {
+      'git worktree list --porcelain': {
         stdout: `worktree C:/repo
 HEAD abc123
 branch refs/heads/main
@@ -648,7 +682,7 @@ branch refs/heads/main
     expect(calls).toEqual(
       expect.arrayContaining([
         'git worktree remove c:\\workspaces\\delete-branch-ui-test',
-        'git branch -d -- feature/test'
+        'git update-ref -d refs/heads/feature/test def456'
       ])
     )
     expect(calls).not.toContain('git worktree prune')
