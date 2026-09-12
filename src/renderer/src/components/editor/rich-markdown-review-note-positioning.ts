@@ -1,6 +1,9 @@
 import type { Editor } from '@tiptap/react'
 import type { DiffComment } from '../../../../shared/diff-comment-types'
-import { getRichMarkdownCommentAnchorTop } from './rich-markdown-review-annotations'
+import {
+  getRichMarkdownCommentAnchorTop,
+  type RichMarkdownCommentBlock
+} from './rich-markdown-review-annotations'
 import { getRichMarkdownReviewRailBlocks } from './rich-markdown-review-rail-blocks'
 import {
   stackRichMarkdownReviewNotePositions,
@@ -14,6 +17,17 @@ type MeasureRichMarkdownReviewNotePositionsOptions = {
   markdownSourceLineOffset: number
 }
 
+// Why: separator lines between blocks belong to no block and an edit can leave a note past
+// the last one; the badge and the source view still show such a note, so anchor it to the
+// nearest preceding block instead of dropping the card. Blocks are ascending, so the last
+// block starting at or before the line is also the containing one when there is one.
+function findReviewNoteBlock(
+  blocks: readonly RichMarkdownCommentBlock[],
+  bodyLineNumber: number
+): RichMarkdownCommentBlock | null {
+  return blocks.findLast((candidate) => candidate.startLine <= bodyLineNumber) ?? null
+}
+
 export function measureRichMarkdownReviewNotePositions({
   container,
   editor,
@@ -25,9 +39,7 @@ export function measureRichMarkdownReviewNotePositions({
   const nextPositions = markdownComments
     .map((comment): RichMarkdownReviewNotePosition | null => {
       const bodyLineNumber = Math.max(1, comment.lineNumber - markdownSourceLineOffset)
-      const block = blocks.find(
-        (candidate) => candidate.startLine <= bodyLineNumber && bodyLineNumber <= candidate.endLine
-      )
+      const block = findReviewNoteBlock(blocks, bodyLineNumber)
       if (!block) {
         return null
       }
