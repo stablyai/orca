@@ -31,6 +31,7 @@ export type PrepareCodexResumeHomeArgs = {
   target: CodexAccountSelectionTarget
   launchEnv?: NodeJS.ProcessEnv
   workspacePath?: string
+  accountSwitchRestart?: boolean
 }
 
 export function prepareCodexResumeHome(
@@ -50,7 +51,8 @@ export function prepareCodexResumeHome(
       providerSession,
       target: args.target,
       launchEnv: args.launchEnv,
-      workspacePath: args.workspacePath
+      workspacePath: args.workspacePath,
+      accountSwitchRestart: args.accountSwitchRestart === true
     })
   }
 }

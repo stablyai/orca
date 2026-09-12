@@ -11,13 +11,54 @@ import { isAgentStatusHooksEnabled } from '../agent-hooks/managed-agent-hook-con
 import { markCodexProjectTrusted } from '../agent-trust-presets'
 import { getOrcaManagedCodexHomePath, getSystemCodexHomePath } from '../codex/codex-home-paths'
 import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
+import { resolveCodexAccountSwitchResumeHome } from '../codex/codex-account-switch-resume-repin'
+import { transferCodexThreadGoalBetweenHomes } from '../codex/codex-thread-goal-transfer'
 import { mainProcessState as state } from './main-process-state'
+
+/** Repins explicit account switches; unsafe moves fail without starting a fresh thread. */
+async function moveCodexResumeToSelectedAccount(args: {
+  originHome: string
+  transcriptPath: string
+  threadId: string
+}): Promise<string> {
+  const selectedHome =
+    state.codexRuntimeHome?.resolveSelectedHostAccountCodexHomePathForResume() ??
+    (state.codexRuntimeHome?.isHostSystemDefaultRealHome() ? getSystemCodexHomePath() : null)
+  const move = resolveCodexAccountSwitchResumeHome({
+    originCodexHomePath: args.originHome,
+    selectedCodexHomePath: selectedHome,
+    transcriptPath: args.transcriptPath
+  })
+  if (move.outcome === 'already-there') {
+    return args.originHome
+  }
+  if (move.outcome === 'unmovable') {
+    throw new Error(
+      'Cannot safely resume this conversation in the selected Codex account. The original transcript has been preserved.'
+    )
+  }
+  const goalTransfer = await transferCodexThreadGoalBetweenHomes({
+    threadId: args.threadId,
+    originCodexHomePath: args.originHome,
+    targetCodexHomePath: move.codexHomePath
+  })
+  if (goalTransfer === 'failed') {
+    throw new Error(
+      'Could not transfer the Codex goal. Retry the account switch before continuing this conversation.'
+    )
+  }
+  if (goalTransfer === 'unsupported') {
+    console.warn('[codex-account-switch] This Codex CLI does not support goal transfer.')
+  }
+  return move.codexHomePath
+}
 
 export async function prepareCodexSessionResumeForLaunch(args: {
   providerSession: AgentProviderSessionMetadata
   target: CodexAccountSelectionTarget
   launchEnv?: NodeJS.ProcessEnv
   workspacePath?: string
+  accountSwitchRestart?: boolean
 }): Promise<CodexSessionResumePreparation | null> {
   const runtimeHome = state.codexRuntimeHome
   const store = state.store
@@ -79,7 +120,15 @@ export async function prepareCodexSessionResumeForLaunch(args: {
           error
         )
       }
-      const resumeHome = migrated.useRealCodexHome ? systemHomePath : sessionSource.homePath
+      const originHome = migrated.useRealCodexHome ? systemHomePath : sessionSource.homePath
+      const movedHome = args.accountSwitchRestart
+        ? await moveCodexResumeToSelectedAccount({
+            originHome,
+            transcriptPath: sessionSource.transcriptPath,
+            threadId: args.providerSession.id
+          })
+        : originHome
+      const resumeHome = movedHome
       if (args.workspacePath) {
         try {
           await markCodexProjectTrusted(args.workspacePath)
