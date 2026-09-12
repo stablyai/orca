@@ -1,5 +1,9 @@
+import { realpath } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
+import { runProcess } from '../shared/child-process/run-process'
+import { GitCapabilityCache } from '../shared/git-capability-cache'
+import { splitWorktreeIdForFilesystem } from '../shared/worktree/id'
 import {
   SKILL_BUNDLE_INSTALL_CAPABILITY,
   SKILL_BUNDLE_PREVIEW_CAPABILITY,
@@ -61,8 +65,12 @@ import {
 } from '../main/skills/skill-install-operation-error'
 import { recoverPendingSkillTransactions } from '../main/skills/skill-transaction-startup-recovery'
 import { resolveEnvironmentSkillProviderRoots } from '../main/skills/skill-provider-runtime-roots'
+import { readRelayWorktreeList } from './git-handler-worktree-list'
+import { areRelayWorktreePathsEqual } from './git-handler-worktree-ops'
+import { buildRelayGitEnv } from './relay-command-env'
 
 const SSH_SKILL_ENVIRONMENT_ID = 'ssh-host'
+const skillRelayGitCapabilities = new GitCapabilityCache()
 
 export const SKILL_RELAY_CAPABILITIES = [
   SKILL_INSTALL_CAPABILITY,
@@ -198,14 +206,22 @@ export class SkillInstallHandler {
     })
   }
 
+  // Worktree ids: host git-worktree list. Folder ids are UUIDs — use the host folder path, not git.
   private authority(workspace?: SkillSshWorkspaceAuthority): SkillInstallDestinationAuthority {
     return {
       environmentId: SSH_SKILL_ENVIRONMENT_ID,
       homeDirectory: this.homeDirectory,
-      resolveWorktree: async (id) =>
-        workspace?.kind === 'worktree' && workspace.id === id ? workspace : null,
+      mustContainInHome: true,
+      resolveWorktree: async (id) => {
+        if (workspace?.kind !== 'worktree' || workspace.id !== id) {
+          return null
+        }
+        const candidate = splitWorktreeIdForFilesystem(id)?.worktreePath
+        const path = candidate ? await listedWorktreePath(candidate) : null
+        return path ? { id, path } : null
+      },
       resolveFolderWorkspace: async (id) =>
-        workspace?.kind === 'folder' && workspace.id === id ? workspace : null
+        workspace?.kind === 'folder' && workspace.id === id ? { id, path: workspace.path } : null
     }
   }
 
@@ -253,6 +269,34 @@ export class SkillInstallHandler {
       ]
     })
   }
+}
+
+async function execRelayGit(args: string[], cwd: string) {
+  const result = await runProcess({ program: 'git', args, cwd, env: buildRelayGitEnv() })
+  if (result.code === 0) {
+    return { stdout: result.stdout, stderr: result.stderr }
+  }
+  throw Object.assign(new Error(result.stderr.trim() || `git ${args[0] ?? 'command'} failed.`), {
+    code: result.code,
+    stdout: result.stdout,
+    stderr: result.stderr
+  })
+}
+
+async function listedWorktreePath(candidate: string) {
+  try {
+    const listed = await readRelayWorktreeList(execRelayGit, candidate, skillRelayGitCapabilities)
+    const resolvedCandidate = await realpath(candidate)
+    for (const worktree of listed) {
+      const resolved = await realpath(worktree.path).catch(() => null)
+      if (resolved && areRelayWorktreePathsEqual(resolved, resolvedCandidate)) {
+        return resolved
+      }
+    }
+  } catch {
+    return null
+  }
+  return null
 }
 
 export async function detectRelaySkillProviders(): Promise<string[]> {
