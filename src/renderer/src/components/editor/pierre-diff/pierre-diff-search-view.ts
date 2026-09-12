@@ -146,8 +146,8 @@ export function pierreSearchRevealLine(
   if (side === 'additions') {
     return lineNumber
   }
-  // revealLine is new-file only; never pass a pure-deletion old-file number.
-  let modifiedLine = 0
+  // revealLine is new-file only; +0,0 (fully deleted) is range [1, 1), not 0.
+  let modifiedLine = 1
   let found = false
   iterateOverDiff({
     diff,

@@ -33,3 +33,17 @@ it('does not feed a pure-deletion line number to revealLine', () => {
   expect(revealed).toBeGreaterThanOrEqual(hunk.additionStart)
   expect(revealed).toBeLessThanOrEqual(additionEnd)
 })
+
+it('maps a fully deleted file onto the empty new-file hunk start', () => {
+  const diff = buildPierreFileDiff({
+    ...input,
+    status: 'deleted',
+    originalContent: `${'keep\n'.repeat(40)}${'drop\n'.repeat(10)}GONE\n${'keep\n'.repeat(40)}old\n`,
+    modifiedContent: ''
+  })
+  expect(diff.additionLines).toHaveLength(0)
+  expect(diff.hunks[0]?.additionStart).toBe(0)
+  expect(diff.hunks[0]?.additionCount).toBe(0)
+  // FileDiff.revealLine uses 1-based new-file ranges; +0,0 becomes [1, 1).
+  expect(pierreSearchRevealLine(diff, 51, 'deletions')).toBe(1)
+})
