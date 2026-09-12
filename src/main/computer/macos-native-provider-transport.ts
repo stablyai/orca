@@ -45,6 +45,27 @@ export function attachMacOSNativeProviderSocketListeners(
   }
 }
 
+export class NativeProviderLineBuffer {
+  private pending = ''
+  private hasCompleteLine = false
+
+  push(chunk: string, handleLine: (line: string) => void): void {
+    this.pending += chunk
+    this.hasCompleteLine ||= chunk.endsWith('\n') || chunk.includes('\n')
+    if (!this.hasCompleteLine) {
+      return
+    }
+    // Keep complete lines retryable if a callback throws.
+    this.pending = consumeNativeProviderLines(this.pending, handleLine)
+    this.hasCompleteLine = false
+  }
+
+  clear(): void {
+    this.pending = ''
+    this.hasCompleteLine = false
+  }
+}
+
 export function consumeNativeProviderLines(
   buffer: string,
   handleLine: (line: string) => void
