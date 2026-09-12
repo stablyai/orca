@@ -101,7 +101,7 @@ export class RelayOriginPool {
     }
     this.closed = true
     this.rotation.cancel()
-    this.drainRetry.reset()
+    this.drainRetry.cancel()
     this.retirement.clear()
     for (const origin of this.origins) {
       origin.closeNow(hostCloseReason)
