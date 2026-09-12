@@ -38,6 +38,10 @@ export function isNewTurnEvent(source: AgentHookSource, eventName: unknown): boo
     case 'zcode':
       // Why: matches Codex/Claude — SessionStart lands an idle boundary row and drops stale
       // tool/prompt caches, while UserPromptSubmit is the actual turn boundary.
+    // falls through
+    case 'bob':
+      // Why: Bob reuses the pane across sessions, so SessionStart must drop the previous
+      // session's tool/prompt caches the same way Claude's does.
       return eventName === 'SessionStart' || eventName === 'UserPromptSubmit'
     case 'codex':
       return eventName === 'SessionStart' || eventName === 'UserPromptSubmit'
@@ -135,7 +139,7 @@ export function extractToolFields(
   // Why: exhaustive switch so a new AgentHookSource fails typecheck here instead of silently routing through OpenCode's extractor.
   switch (source) {
     case 'claude':
-    // Why: Kimi Code uses Claude's tool_name/tool_input payload fields verbatim.
+    // Why: Kimi Code and Bob Shell use Claude's tool_name/tool_input payload fields verbatim.
     // falls through
     case 'kimi':
     // Muse uses Claude-compatible tool fields.
@@ -144,6 +148,8 @@ export function extractToolFields(
     // Why: ZCode's hook runner writes Claude's `tool_name`/`tool_input`/`tool_response` aliases.
     // falls through
     case 'zcode':
+    // falls through
+    case 'bob':
       return extractClaudeToolFields(eventName, hookPayload)
     case 'codex':
       return extractCodexToolFields(eventName, hookPayload)

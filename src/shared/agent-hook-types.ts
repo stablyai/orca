@@ -19,7 +19,8 @@ export const AGENT_HOOK_TARGETS = [
   'devin',
   'kimi',
   'muse',
-  'zcode'
+  'zcode',
+  'bob'
 ] as const
 export type AgentHookTarget = (typeof AGENT_HOOK_TARGETS)[number]
 
