@@ -19,6 +19,7 @@ import { attachWebgl, cancelPendingWebglRefresh, disposeWebgl } from './pane-web
 import { rebuildAttachedWebgl } from './pane-webgl-reattach'
 import { configureLazyArabicShapingJoiner } from './terminal-arabic-shaping-joiner'
 import { TerminalLigaturesAddon } from './terminal-ligatures-addon'
+import { attachInlineImages, disposeInlineImages } from './terminal-inline-image-addon'
 import { installTerminalImeCandidateAnchor } from './terminal-ime-candidate-anchor'
 
 // ---------------------------------------------------------------------------
@@ -54,6 +55,10 @@ export function openTerminal(pane: ManagedPaneInternal, ligaturesEnabled = false
   terminal.loadAddon(serializeAddon)
   terminal.loadAddon(unicode11Addon)
   terminal.loadAddon(webLinksAddon)
+  // Why after open(): the addon draws onto its own overlay canvas inside
+  // terminal.element, so it needs the DOM to exist. It is renderer-agnostic
+  // (DOM and WebGL), so it does not participate in the WebGL ordering below.
+  attachInlineImages(pane)
   attachTerminalMouseWheelMultiplier(terminal, {
     getTuiMouseWheelMultiplier: terminalTuiScrollSensitivity
   })
@@ -230,6 +235,7 @@ export function disposePane(
     /* ignore */
   }
   disposeWebgl(pane)
+  disposeInlineImages(pane)
   try {
     pane.searchAddon.dispose()
   } catch {

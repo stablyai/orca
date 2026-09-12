@@ -102,3 +102,11 @@ ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
 void import('../lib/pane-manager/pane-webgl-renderer').then((module) =>
   module.primeTerminalWebglAddon()
 )
+void import('../lib/pane-manager/terminal-inline-image-addon').then(
+  (module) => module.primeTerminalInlineImageAddon(),
+  (error) => {
+    // Why: a missing loader chunk must degrade to "no inline images", not an
+    // unhandled rejection; the first pane's attach will retry the load itself.
+    console.warn('[terminal] inline image loader failed to load — images disabled:', error)
+  }
+)
