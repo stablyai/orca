@@ -95,6 +95,12 @@ function computeAgentLabel(title: string): string | null {
   if (titleHasAgentName(title, 'devin')) {
     return 'Devin'
   }
+  // Why: Kiro CLI's native OSC title is "kiro: <session title>" (emitted when
+  // its `chat.terminalTitle` setting is on). Token-match before the generic
+  // braille heuristic so Kiro panes are attributed to Kiro, not Claude.
+  if (titleHasAgentName(title, 'kiro')) {
+    return 'Kiro'
+  }
   if (titleHasAgentName(title, 'antigravity') || AGY_AGENT_NAME_RE.test(title)) {
     return 'Antigravity'
   }
