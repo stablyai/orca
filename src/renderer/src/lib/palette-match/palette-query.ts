@@ -103,13 +103,13 @@ export function preparePaletteQuery(query: string): PreparedPaletteQuery {
     }
     seen.add(raw)
     tokens.push(createPaletteQueryToken(raw, tokens.length))
+    if (tokens.length > PALETTE_QUERY_MAX_TOKENS) {
+      return { state: 'invalid', reason: 'too-many-tokens' }
+    }
   }
 
   if (!tokens.length) {
     return { state: 'empty' }
-  }
-  if (tokens.length > PALETTE_QUERY_MAX_TOKENS) {
-    return { state: 'invalid', reason: 'too-many-tokens' }
   }
   return {
     state: 'ready',
