@@ -6,6 +6,7 @@ import type { ProjectGroup } from '../../../../../../shared/project-group-types'
 import type { ProjectOrderBy } from '../../../../../../shared/ui-chrome-types'
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
+import { getCatalogEntryExecutionHostId } from '@/lib/catalog-entry-execution-host'
 import type { HostHeaderRow, HostSectionRow } from '../../host-section-rows'
 import type { Row, WorktreeGroupBy } from '../grouping/row-types'
 import type { RenderRow } from '../listing/render-row'
@@ -158,9 +159,12 @@ export function useWorktreeSidebarHeaderDrag(args: {
   )
   const commitProjectGroupOrder = useCallback(
     (repoId: string, projectGroupId: string | null, order: number) => {
-      void moveProjectToGroup(repoId, projectGroupId, order)
+      const executionHostId = projectGroupId
+        ? getCatalogEntryExecutionHostId(projectGroupByIdForHeaderDrag.get(projectGroupId))
+        : getCatalogEntryExecutionHostId(repoMap.get(repoId))
+      void moveProjectToGroup(repoId, projectGroupId, order, { executionHostId })
     },
-    [moveProjectToGroup]
+    [moveProjectToGroup, projectGroupByIdForHeaderDrag, repoMap]
   )
   const commitProjectGroupHeaderOrder = useCallback(
     (groupId: string, tabOrder: number) => {

@@ -9,6 +9,7 @@ import {
 import { runSleepWorktrees } from './sleep-worktree-flow'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { VIRTUALIZED_SCROLL_ANCHOR_RECORD_EVENT } from '@/hooks/useVirtualizedScrollAnchor'
+import { getCatalogEntryExecutionHostId } from '@/lib/catalog-entry-execution-host'
 import {
   planWorkspaceStatusAssignment,
   preserveDeleteSiblingPosition
@@ -22,6 +23,7 @@ export function useWorktreeContextMenuCommands(args: {
   folderWorkspaceId: string | null
   isMultiContext: boolean
   moveProjectToGroup: ReturnType<typeof useAppStore.getState>['moveProjectToGroup']
+  projectGroups: ReturnType<typeof useAppStore.getState>['projectGroups']
   onAssignWorkspaceStatus?: (worktreeIds: readonly string[], status: string) => void
   openModal: ReturnType<typeof useAppStore.getState>['openModal']
   repo: Repo | null | undefined
@@ -72,7 +74,8 @@ export function useWorktreeContextMenuCommands(args: {
       }
       const group = await args.createProjectGroup(name)
       if (group) {
-        await args.moveProjectToGroup(args.repo.id, group.id)
+        const executionHostId = getCatalogEntryExecutionHostId(group)
+        await args.moveProjectToGroup(args.repo.id, group.id, undefined, { executionHostId })
       }
     },
     [args]
@@ -82,13 +85,17 @@ export function useWorktreeContextMenuCommands(args: {
       if (!args.repo || args.repo.projectGroupId === groupId) {
         return
       }
-      void args.moveProjectToGroup(args.repo.id, groupId)
+      const executionHostId = getCatalogEntryExecutionHostId(
+        args.projectGroups.find((group) => group.id === groupId)
+      )
+      void args.moveProjectToGroup(args.repo.id, groupId, undefined, { executionHostId })
     },
     [args]
   )
   const handleRemoveProjectFromGroup = useCallback(() => {
     if (args.repo) {
-      void args.moveProjectToGroup(args.repo.id, null)
+      const executionHostId = getCatalogEntryExecutionHostId(args.repo)
+      void args.moveProjectToGroup(args.repo.id, null, undefined, { executionHostId })
     }
   }, [args])
   const handleAssignWorkspaceStatus = useCallback(

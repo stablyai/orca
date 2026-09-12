@@ -307,6 +307,7 @@ export function useWorktreeContextMenuModel({
     moveProjectToGroup,
     onAssignWorkspaceStatus,
     openModal,
+    projectGroups,
     repo,
     scopeRef,
     setCreateGroupDialogOpen,
