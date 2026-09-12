@@ -23,6 +23,14 @@ const stripNsisCommentLines = (source) =>
 
 const readInstallerHooks = () => readFile(electronBuilderConfig.nsis.include, 'utf8')
 
+const extractNsisMacro = (source, name) => {
+  const match = stripNsisCommentLines(source).match(
+    new RegExp(`^[\\t ]*!macro[\\t ]+${name}\\b[\\s\\S]*?^[\\t ]*!macroend\\b`, 'm')
+  )
+  expect(match, `${name} macro`).not.toBeNull()
+  return match[0]
+}
+
 describe('electron-builder markdown file associations', () => {
   // Why: any top-level (or `win.`) fileAssociations entry makes app-builder-lib's NSIS
   // packager emit `!insertmacro APP_ASSOCIATE`, whose first line writes that DEFAULT value
@@ -122,5 +130,48 @@ describe('electron-builder markdown file associations', () => {
     // Without this guard, uninstallOldVersion would kill the daemon on every update —
     // defeating the relocation that keeps terminals alive across updates.
     expect(script).toMatch(/\$\{ifNot\}\s+\$\{isUpdated\}/)
+  })
+})
+
+describe('electron-builder app-running check', () => {
+  it.each([';', '#'])('rejects a macro disabled with %s comments', async (prefix) => {
+    const macro = extractNsisMacro(await readInstallerHooks(), 'customCheckAppRunning')
+    const disabled = macro
+      .split('\n')
+      .map((line) => `${prefix} ${line}`)
+      .join('\n')
+    expect(() => extractNsisMacro(disabled, 'customCheckAppRunning')).toThrow()
+  })
+
+  it('ignores commented calls and macro terminators', () => {
+    const source = [
+      '!macro example',
+      '; !macroend',
+      '# ${nsProcess::FindProcess}',
+      '  DetailPrint "still inside"',
+      '!macroend'
+    ].join('\n')
+    const macro = extractNsisMacro(source, 'example')
+    expect(macro).toContain('DetailPrint "still inside"')
+    expect(macro).not.toContain('nsProcess::FindProcess')
+    expect(() => extractNsisMacro('DetailPrint "!macro example"\n!macroend', 'example')).toThrow()
+  })
+
+  it('uses the bundled native process plugin instead of a child shell', async () => {
+    const macro = extractNsisMacro(await readInstallerHooks(), 'customCheckAppRunning')
+
+    expect(macro).toContain('${nsProcess::FindProcess}')
+    expect(macro).toContain('${nsProcess::CloseProcess}')
+    expect(macro).toContain('${nsProcess::KillProcess}')
+    expect(macro).not.toMatch(/powershell|nsExec::Exec|!insertmacro\s+(?:FIND|KILL)_PROCESS/i)
+  })
+
+  it('only treats code 603 as absence and reports process enumeration errors', async () => {
+    const macro = extractNsisMacro(await readInstallerHooks(), 'customCheckAppRunning')
+    expect(macro.match(/Goto orca_check_failed/g)).toHaveLength(3)
+    expect(macro.match(/\$\{if\} \$R0 == 603/g)).toHaveLength(2)
+    expect(macro).toContain('${andIf} $R0 != 603')
+    expect(macro).toContain('process query error $R0')
+    expect(macro).toContain('SetErrorLevel 2')
   })
 })
