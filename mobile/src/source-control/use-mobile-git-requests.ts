@@ -1,6 +1,7 @@
 import { useCallback } from 'react'
 import type { ConnectionState, RpcSuccess } from '../transport/types'
 import type { RpcClient } from '../transport/rpc-client'
+import { mobileFolderWorkspaceGitRpcGuard } from './mobile-folder-workspace-selector'
 import {
   isMobileGitUnavailable,
   type MobileGitStatusResult,
@@ -21,6 +22,12 @@ export function useMobileGitRequests({ client, connState, worktreeId }: Params) 
     async <T>(method: string, params?: Record<string, unknown>): Promise<T> => {
       if (!client || connState !== 'connected') {
         throw new Error('Waiting for desktop...')
+      }
+      // Why: folder-workspace selectors never resolve unrouted git methods; fail
+      // fast with a clear message instead of a selector_not_found retry loop.
+      const folderGuard = mobileFolderWorkspaceGitRpcGuard(worktreeId, method)
+      if (!folderGuard.allowed) {
+        throw new Error(folderGuard.message)
       }
       const response = await client.sendRequest(method, {
         worktree: `id:${worktreeId}`,
