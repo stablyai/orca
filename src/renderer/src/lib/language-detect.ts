@@ -87,6 +87,11 @@ const EXT_TO_LANGUAGE: Record<string, string> = {
   '.erl': 'erlang',
   '.hrl': 'erlang',
   '.hs': 'haskell',
+  '.ml': 'ocaml',
+  '.mli': 'ocaml',
+  // Why: MLX is OCaml with JSX expressions and has its own grammar, so it maps
+  // to a separate language id rather than onto 'ocaml'.
+  '.mlx': 'ocaml.mlx',
   '.clj': 'clojure',
   '.vue': 'vue',
   '.svelte': 'svelte',
@@ -112,6 +117,8 @@ const FILENAME_TO_LANGUAGE: Record<string, string> = {
   '.gitignore': 'ini',
   '.gitattributes': 'ini',
   '.editorconfig': 'ini',
+  // Why: exact name only — a suffix match would claim 'foo.ocamlinit' too.
+  '.ocamlinit': 'ocaml',
   '.env': 'ini',
   '.env.local': 'ini',
   '.env.development': 'ini',
