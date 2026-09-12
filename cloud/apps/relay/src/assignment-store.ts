@@ -3351,6 +3351,10 @@ export class RelayAssignmentStore {
   ): Promise<Array<IdleRegionalRehomeRequest & { sourceCellUrl: string }>> {
     const now = this.now()
     if (!processSafety || this.regionalRehomeCohortPercent === 0) return []
+    const control = (await this.database.query(
+      "SELECT enabled, not_before FROM relay_region_rehome_control WHERE control_id = 'global'"
+    ))[0]
+    if (!control || Number(control.enabled) !== 1 || Number(control.not_before) > now) return []
     const fleetSafety = await this.readRegionalRehomeFleetSafety(this.database, now)
     if (regionalRehomeFleetSafetyFailure(processSafety, fleetSafety, now)) return []
     const candidates = await selectIdleRegionalRehomes({

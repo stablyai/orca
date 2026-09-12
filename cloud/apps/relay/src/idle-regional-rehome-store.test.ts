@@ -111,6 +111,52 @@ async function setup() {
 }
 
 describe('constrained idle regional assignment transaction', () => {
+  it.each(['missing', 'disabled', 'future'] as const)(
+    'does only one read per tick with %s durable control and sees later enablement',
+    async (state) => {
+      const { store, database, safety } = await setup()
+      const control = (await database.query(
+        "SELECT * FROM relay_region_rehome_control WHERE control_id = 'global'"
+      ))[0]!
+      if (state === 'missing') {
+        await database.query('DELETE FROM relay_region_rehome_control')
+      } else {
+        await database.query(
+          "UPDATE relay_region_rehome_control SET enabled = ?, not_before = ? WHERE control_id = 'global'",
+          [state === 'disabled' ? 0 : 1, safety.observedAt + (state === 'future' ? 1 : 0)]
+        )
+      }
+      const query = vi.spyOn(database, 'query')
+      const transaction = vi.spyOn(database, 'transaction')
+      for (let tick = 0; tick < 3; tick++) {
+        query.mockClear()
+        expect(await store.selectIdleRegionalRehomeCandidates(safety)).toEqual([])
+        expect(query).toHaveBeenCalledTimes(1)
+        expect(query.mock.calls[0]![0]).toMatch(/^SELECT .*FROM relay_region_rehome_control/s)
+        expect(transaction).not.toHaveBeenCalled()
+      }
+      if (state === 'missing') {
+        const columns = Object.keys(control)
+        await database.query(
+          `INSERT INTO relay_region_rehome_control (${columns.join(',')}) VALUES (${columns.map(() => '?').join(',')})`,
+          Object.values(control)
+        )
+      } else {
+        await database.query(
+          "UPDATE relay_region_rehome_control SET enabled = 1, not_before = ? WHERE control_id = 'global'",
+          [safety.observedAt]
+        )
+      }
+      query.mockClear()
+      expect(await store.selectIdleRegionalRehomeCandidates(safety)).toHaveLength(1)
+      expect(query.mock.calls.length).toBeGreaterThan(1)
+      await database.query("UPDATE relay_region_rehome_control SET enabled = 0 WHERE control_id = 'global'")
+      query.mockClear()
+      expect(await store.selectIdleRegionalRehomeCandidates(safety)).toEqual([])
+      expect(query).toHaveBeenCalledTimes(1)
+    }
+  )
+
   it.each([10, 11])('reserves source activity plus assignment at target capacity %i', async (capacity) => {
     const { store, database, safety, request } = await setup()
     // Model three source activity units and seven units already reserved at the target.

@@ -11,6 +11,31 @@ import { startRegionalRehomeWorker } from './regional-rehome-worker.js'
 describe('regional rehome worker', () => {
   afterEach(() => vi.restoreAllMocks())
 
+  it('bounds empty polling to the six-second cadence and stops its timer', async () => {
+    vi.useFakeTimers()
+    const selectIdleRegionalRehomeCandidates = vi.fn().mockResolvedValue([])
+    const worker = startRegionalRehomeWorker(config(), {
+      selectIdleRegionalRehomeCandidates
+    } as unknown as RelayAssignmentStore, {
+      safetySnapshot: () => safety(Date.now()),
+      random: () => 0
+    })!
+    try {
+      await vi.advanceTimersByTimeAsync(0)
+      expect(selectIdleRegionalRehomeCandidates).toHaveBeenCalledTimes(1)
+      await vi.advanceTimersByTimeAsync(5_999)
+      expect(selectIdleRegionalRehomeCandidates).toHaveBeenCalledTimes(1)
+      await vi.advanceTimersByTimeAsync(1)
+      expect(selectIdleRegionalRehomeCandidates).toHaveBeenCalledTimes(2)
+      worker.stop()
+      await vi.advanceTimersByTimeAsync(60_000)
+      expect(selectIdleRegionalRehomeCandidates).toHaveBeenCalledTimes(2)
+    } finally {
+      worker.stop()
+      vi.useRealTimers()
+    }
+  })
+
   it('passes unsafe process telemetry to the durable claim gate', async () => {
     let now = 0
     let sqlFailures = 0

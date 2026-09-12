@@ -97,7 +97,8 @@ export function startRegionalRehomeWorker(
   }
   const timer = setInterval(
     () => void run(),
-    options.intervalMs ?? jitteredSweepIntervalMs(1_000, options.random)
+    // Match the initial ten-moves/minute budget without replanning the join every second.
+    options.intervalMs ?? jitteredSweepIntervalMs(6_000, options.random)
   )
   timer.unref()
   void run()
