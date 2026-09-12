@@ -55,6 +55,8 @@ export function useComposerSourceState(
     connectionId: target.workspaceIdentityState.connectionId,
     promptCaretFrameRef: target.asyncComposerState.promptCaretFrameRef,
     promptTextareaRef: target.asyncComposerState.promptTextareaRef,
+    selectedRepo: target.runtimeTargetSelection.selectedRepo,
+    selectedRepoExecutionHostId: target.runtimeTargetSelection.selectedRepoExecutionHostId,
     selectedRepoPath: target.asyncComposerState.selectedRepoPath,
     selectedRepoSettings: target.runtimeTargetSelection.selectedRepoSettings,
     setAgentPrompt: target.sourceContextState.setAgentPrompt,

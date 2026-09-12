@@ -7,6 +7,8 @@ type AttachmentDropStateInput = Pick<
   | 'connectionId'
   | 'promptCaretFrameRef'
   | 'promptTextareaRef'
+  | 'selectedRepo'
+  | 'selectedRepoExecutionHostId'
   | 'selectedRepoPath'
   | 'selectedRepoSettings'
   | 'setAgentPrompt'
@@ -24,6 +26,10 @@ import {
   collectComposerDropUploadResult,
   shouldReportComposerDropUploadFailure
 } from '../composer-drop-upload-result'
+import {
+  resolveComposerDropUploadSettings,
+  shouldUploadComposerDropPaths
+} from '../composer-drop-upload-route'
 import { applyComposerNativeFileDrop } from '../composer-native-file-drop'
 import { useComposerDropListener } from './composer-drop-listener'
 
@@ -34,6 +40,8 @@ export function useAttachmentDropState(input: AttachmentDropStateInput) {
     connectionId,
     promptCaretFrameRef,
     promptTextareaRef,
+    selectedRepo,
+    selectedRepoExecutionHostId,
     selectedRepoPath,
     selectedRepoSettings,
     setAgentPrompt,
@@ -110,9 +118,16 @@ export function useAttachmentDropState(input: AttachmentDropStateInput) {
       targetRepoPath: string | null | undefined = selectedRepoPath,
       canReportFailure: () => boolean = () => true
     ): Promise<{ filePaths: string[]; folderPaths: string[] } | null> => {
-      if (!targetSettings?.activeRuntimeEnvironmentId?.trim() && !targetConnectionId) {
+      const uploadTarget = {
+        settings: targetSettings,
+        connectionId: targetConnectionId,
+        repo: selectedRepo,
+        executionHostId: selectedRepoExecutionHostId
+      }
+      if (!shouldUploadComposerDropPaths(uploadTarget)) {
         return null
       }
+      const uploadSettings = resolveComposerDropUploadSettings(uploadTarget)
       if (!targetRepoPath) {
         if (canReportFailure()) {
           toast.error(
@@ -129,7 +144,7 @@ export function useAttachmentDropState(input: AttachmentDropStateInput) {
         ? captureDirectSshMutationExpectation(
             useAppStore.getState(),
             targetConnectionId,
-            targetSettings?.activeRuntimeEnvironmentId
+            uploadSettings?.activeRuntimeEnvironmentId
           )
         : {
             expectedExecutionHostId: 'local' as const,
@@ -141,7 +156,7 @@ export function useAttachmentDropState(input: AttachmentDropStateInput) {
             const current = captureDirectSshMutationExpectation(
               useAppStore.getState(),
               targetConnectionId,
-              targetSettings?.activeRuntimeEnvironmentId
+              uploadSettings?.activeRuntimeEnvironmentId
             )
             if (
               current.expectedSshTargetId !== sshExpectation.expectedSshTargetId ||
@@ -154,7 +169,7 @@ export function useAttachmentDropState(input: AttachmentDropStateInput) {
         : undefined
       const { results } = await importExternalPathsToRuntime(
         {
-          settings: targetSettings,
+          settings: uploadSettings,
           worktreeId: targetRepoPath,
           worktreePath: targetRepoPath,
           connectionId: targetConnectionId ?? undefined,
@@ -175,7 +190,13 @@ export function useAttachmentDropState(input: AttachmentDropStateInput) {
       }
       return { filePaths: uploadResult.filePaths, folderPaths: uploadResult.folderPaths }
     },
-    [connectionId, selectedRepoPath, selectedRepoSettings]
+    [
+      connectionId,
+      selectedRepo,
+      selectedRepoExecutionHostId,
+      selectedRepoPath,
+      selectedRepoSettings
+    ]
   )
 
   const handleAddAttachment = useCallback(async (): Promise<void> => {
