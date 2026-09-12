@@ -84,6 +84,9 @@ export async function sendPromptWithGuardedPasteAndEnter(
       if (send.refusedReason === 'permission') {
         return { status: 'permission', code: 'terminal-send-permission' }
       }
+      if (send.refusedReason === 'status-unavailable') {
+        return { status: 'status-unavailable', code: 'status-unavailable' }
+      }
       if (send.refusedReason === 'no-agent') {
         return { status: 'no-agent', code: 'no-agent' }
       }

@@ -11,6 +11,7 @@ import {
   deferred,
   store
 } from '../orca-runtime-test-fixtures.spec'
+import { clientOnlyUnverifiableInspection } from '../../../shared/terminal-process-inspection'
 
 describe('OrcaRuntimeService', () => {
   it('prefers newer explicit working state over older explicit permission state', async () => {
@@ -353,6 +354,40 @@ describe('OrcaRuntimeService', () => {
     await expect(runtime.inspectTerminalProcess(handle)).resolves.toEqual(inspection)
     expect(inspectProcess).toHaveBeenCalledExactlyOnceWith('pty-1')
     expect(getForegroundProcess).not.toHaveBeenCalled()
+    await expect(runtime.isTerminalForegroundStatusUnavailable(handle)).resolves.toBe(true)
+  })
+
+  it('treats pre-v11 unverifiable inspect as unread foreground membership', async () => {
+    const inspectProcess = vi.fn(async () => clientOnlyUnverifiableInspection('old_host'))
+    const { runtime, handle } = await createExplicitAgentStatusHarness({
+      getForegroundProcess: vi.fn(async () => null),
+      inspectProcess
+    })
+
+    await expect(runtime.isTerminalForegroundStatusUnavailable(handle)).resolves.toBe(true)
+  })
+
+  it('does not claim unread membership after a confirmed empty inspect', async () => {
+    const inspectProcess = vi.fn(async () => ({
+      foregroundProcess: null,
+      hasChildProcesses: false
+    }))
+    const { runtime, handle } = await createExplicitAgentStatusHarness({
+      getForegroundProcess: vi.fn(async () => null),
+      inspectProcess
+    })
+
+    await expect(runtime.isTerminalForegroundStatusUnavailable(handle)).resolves.toBe(false)
+  })
+
+  it('does not claim unread membership when inspect throws', async () => {
+    const inspectProcess = vi.fn().mockRejectedValue(new Error('daemon unavailable'))
+    const { runtime, handle } = await createExplicitAgentStatusHarness({
+      getForegroundProcess: vi.fn(async () => null),
+      inspectProcess
+    })
+
+    await expect(runtime.isTerminalForegroundStatusUnavailable(handle)).resolves.toBe(false)
   })
 
   it('calls foreground confirmation with its controller receiver', async () => {
