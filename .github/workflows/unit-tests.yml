@@ -72,6 +72,8 @@ jobs:
 
       - name: Upload unit shard assignment
         if: always()
+        # Diagnostic upload outages must not change the test verdict.
+        continue-on-error: true
         uses: actions/upload-artifact@v7
         with:
           name: unit-shard-node-${{ matrix.node }}-${{ matrix.shard }}-attempt-${{ github.run_attempt }}

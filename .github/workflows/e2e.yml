@@ -190,6 +190,8 @@ jobs:
 
       - name: Upload E2E shard assignment
         if: always()
+        # Diagnostic upload outages must not change the test verdict.
+        continue-on-error: true
         uses: actions/upload-artifact@v7
         with:
           name: e2e-shard-${{ matrix.shard_name }}-attempt-${{ github.run_attempt }}
