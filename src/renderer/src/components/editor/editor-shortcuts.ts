@@ -1,4 +1,5 @@
 import type { KeyboardEvent as ReactKeyboardEvent } from 'react'
+import { getLayoutBaseCharacterForCode } from '@/lib/keyboard-layout/layout-base-character'
 import { getShortcutPlatform } from '@/lib/shortcut-platform'
 import { useAppStore } from '@/store'
 import { keybindingMatchesAction, type KeybindingActionId } from '../../../../shared/keybindings'
@@ -11,7 +12,8 @@ export function editorShortcutMatches(
     actionId,
     event,
     getShortcutPlatform(),
-    useAppStore.getState().keybindings
+    useAppStore.getState().keybindings,
+    { layoutCharacterForCode: getLayoutBaseCharacterForCode }
   )
 }
 

@@ -3,6 +3,7 @@ import {
   type KeybindingInput,
   type KeybindingMatchOptions,
   type KeybindingOverrides,
+  type LayoutCharacterLookup,
   type TerminalShortcutPolicy
 } from '../../../../shared/keybindings'
 import type { WindowsShiftEnterEncoding } from './terminal-windows-shift-enter'
@@ -94,71 +95,86 @@ export function resolveTerminalShortcutAction(
   hasCtrlEnterCsiUAuthority?: () => boolean
 ): TerminalShortcutAction | null {
   const platform: NodeJS.Platform = isMac ? 'darwin' : isWindows ? 'win32' : 'linux'
+  // Why: an Option chord composes from the unshifted layer, so shortcut matching asks for the base character.
+  const baseLayoutCharacterForCode: LayoutCharacterLookup | undefined = layoutCharacterForCode
+    ? (code) => layoutCharacterForCode(code, false)
+    : undefined
+  const matchesAction = (actionId: Parameters<typeof keybindingMatchesAction>[0]): boolean =>
+    keybindingMatchesAction(actionId, event, platform, keybindings, {
+      layoutCharacterForCode: baseLayoutCharacterForCode
+    })
 
   // Why: capture this chord even on repeat without blocking the OS default input-source switch.
-  if (keybindingMatchesAction('terminal.switchInputSource', event, platform, keybindings)) {
+  if (matchesAction('terminal.switchInputSource')) {
     return { type: 'switchInputSource' }
   }
 
   // Why: held select-all keydowns must remain claimed until keyup so Kitty
   // event reporting cannot encode their repeat or release into the PTY.
-  if (keybindingMatchesAction('terminal.selectAll', event, platform, keybindings)) {
+  if (matchesAction('terminal.selectAll')) {
     return { type: 'selectAll' }
   }
 
   if (!event.repeat) {
-    if (keybindingMatchesAction('terminal.copySelection', event, platform, keybindings)) {
+    if (matchesAction('terminal.copySelection')) {
       return { type: 'copySelection' }
     }
 
-    if (keybindingMatchesAction('terminal.search', event, platform, keybindings)) {
+    if (matchesAction('terminal.search')) {
       return { type: 'toggleSearch' }
     }
 
-    if (keybindingMatchesAction('terminal.clear', event, platform, keybindings)) {
+    if (matchesAction('terminal.clear')) {
       return { type: 'clearActivePane' }
     }
 
-    if (keybindingMatchesAction('terminal.focusPreviousPane', event, platform, keybindings)) {
+    if (matchesAction('terminal.focusPreviousPane')) {
       return { type: 'focusPane', direction: 'previous' }
     }
 
-    if (keybindingMatchesAction('terminal.focusNextPane', event, platform, keybindings)) {
+    if (matchesAction('terminal.focusNextPane')) {
       return { type: 'focusPane', direction: 'next' }
     }
 
-    if (keybindingMatchesAction('terminal.equalizePaneSizes', event, platform, keybindings)) {
+    if (matchesAction('terminal.equalizePaneSizes')) {
       return { type: 'equalizePaneSizes' }
     }
 
-    if (keybindingMatchesAction('terminal.expandPane', event, platform, keybindings)) {
+    if (matchesAction('terminal.expandPane')) {
       return { type: 'toggleExpandActivePane' }
     }
 
-    if (keybindingMatchesAction('terminal.setTitle', event, platform, keybindings)) {
+    if (matchesAction('terminal.setTitle')) {
       return { type: 'setTitle' }
     }
 
-    if (keybindingMatchesAction('terminal.clearPaneTitle', event, platform, keybindings)) {
+    if (matchesAction('terminal.clearPaneTitle')) {
       return { type: 'clearPaneTitle' }
     }
 
     // Why: recognize the active tab.close binding as a pane-close alias too, so a user who remaps
     // tab.close alone still closes the focused split pane (never the whole tab); L2 always defers to us.
     if (
-      isTerminalPaneCloseChord(event, platform, keybindings, undefined, {
-        context: 'terminal',
-        terminalShortcutPolicy
-      })
+      isTerminalPaneCloseChord(
+        event,
+        platform,
+        keybindings,
+        { layoutCharacterForCode: baseLayoutCharacterForCode },
+        {
+          context: 'terminal',
+          terminalShortcutPolicy,
+          layoutCharacterForCode: baseLayoutCharacterForCode
+        }
+      )
     ) {
       return { type: 'closeActivePane' }
     }
 
-    if (keybindingMatchesAction('terminal.splitRight', event, platform, keybindings)) {
+    if (matchesAction('terminal.splitRight')) {
       return { type: 'splitActivePane', direction: 'vertical' }
     }
 
-    if (keybindingMatchesAction('terminal.splitDown', event, platform, keybindings)) {
+    if (matchesAction('terminal.splitDown')) {
       return { type: 'splitActivePane', direction: 'horizontal' }
     }
   }
