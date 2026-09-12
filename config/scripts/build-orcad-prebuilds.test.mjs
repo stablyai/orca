@@ -13,7 +13,13 @@ import {
 
 const PATCHED_BINDING_GYP =
   "'ldflags': ['-Wl,--no-as-needed,-l:libutil.so.1,-l:libpthread.so.0,--as-needed']"
-const PATCHED_PTY_CC = '__asm__(".symver openpty,openpty@" ORCA_GLIBC_COMPAT_VERSION);'
+const PATCHED_PTY_CC = [
+  '__asm__(".symver openpty,openpty@" ORCA_GLIBC_COMPAT_VERSION);',
+  '__asm__(".symver cfsetispeed,cfsetispeed@" ORCA_GLIBC_COMPAT_VERSION);',
+  '__asm__(".symver cfsetospeed,cfsetospeed@" ORCA_GLIBC_COMPAT_VERSION);'
+].join('\n')
+// The pre-2.42 shape of the patch: relocation pins present, baud-rate pins absent.
+const PTY_CC_WITHOUT_BAUD_PINS = '__asm__(".symver openpty,openpty@" ORCA_GLIBC_COMPAT_VERSION);'
 
 const dirs = []
 const stage = (bindingGyp, ptyCc) => {
@@ -50,6 +56,12 @@ describe('assertNodePtyPatchApplied', () => {
     expect(() => assertNodePtyPatchApplied(stage(PATCHED_BINDING_GYP, '// upstream'))).toThrow(
       /\.symver glibc pins/
     )
+  })
+
+  it('refuses to build when only the glibc 2.42 baud-rate pins are missing', () => {
+    expect(() =>
+      assertNodePtyPatchApplied(stage(PATCHED_BINDING_GYP, PTY_CC_WITHOUT_BAUD_PINS))
+    ).toThrow(/cfsetispeed pin \(glibc 2\.42\)[\s\S]*cfsetospeed pin \(glibc 2\.42\)/)
   })
 
   it('names the patch and the doc so the fix is findable', () => {

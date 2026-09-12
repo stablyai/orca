@@ -265,7 +265,7 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..2ae787c5bd4f3eba470584dc658a01a5
  #include <thread>
  
  #include <sys/types.h>
-@@ -47,6 +49,25 @@
+@@ -47,6 +49,30 @@
  #include <termios.h>
  #endif
  
@@ -285,6 +285,11 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..2ae787c5bd4f3eba470584dc658a01a5
 +__asm__(".symver openpty,openpty@" ORCA_GLIBC_COMPAT_VERSION);
 +__asm__(".symver forkpty,forkpty@" ORCA_GLIBC_COMPAT_VERSION);
 +__asm__(".symver pthread_sigmask,pthread_sigmask@" ORCA_GLIBC_COMPAT_VERSION);
++/* Orca: glibc 2.42 re-versioned cfsetispeed/cfsetospeed (arbitrary baud
++ * rates), so a build on 2.42+ would require GLIBC_2.42 for two calls that
++ * only ever pass B38400. The pre-2.42 entry points remain as compat aliases. */
++__asm__(".symver cfsetispeed,cfsetispeed@" ORCA_GLIBC_COMPAT_VERSION);
++__asm__(".symver cfsetospeed,cfsetospeed@" ORCA_GLIBC_COMPAT_VERSION);
 +#  endif
 +#endif
 +

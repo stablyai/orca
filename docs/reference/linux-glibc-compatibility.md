@@ -49,7 +49,10 @@ the floor, so node-pty was the sole blocker.
 [`config/patches/node-pty@1.1.0.patch`](../../config/patches/node-pty@1.1.0.patch)
 adds a `.symver` shim in `src/unix/pty.cc` that binds `openpty`, `forkpty`, and
 `pthread_sigmask` to their pre-merge version node — `GLIBC_2.2.5` on x64,
-`GLIBC_2.17` on arm64 (each architecture's baseline glibc). glibc still ships
+`GLIBC_2.17` on arm64 (each architecture's baseline glibc). The same shim pins
+`cfsetispeed` and `cfsetospeed`, which glibc 2.42 re-versioned on its own
+(arbitrary baud rates) — node-pty only ever passes `B38400`, which the compat
+aliases handle. glibc still ships
 those as compatibility aliases, so the reference resolves on both new build hosts
 and old targets.
 
