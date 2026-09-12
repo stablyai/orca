@@ -1,9 +1,8 @@
-import { existsSync, mkdtempSync } from 'node:fs'
+import { existsSync, mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { IPty } from 'node-pty'
-import { removeTreeSync } from '../../shared/windows-transient-lock-removal'
 import {
   isPtyJobOwnershipAvailable,
   listPtyJobProcessIds,
@@ -153,8 +152,7 @@ describeOnWindows('ConPTY job ownership', () => {
     // regardless of its other limits) and is not covered by a test here.
     // Covering it needs a helper that passes the flag to CreateProcess.
     const nodePty = await import('node-pty')
-    const markerDir = mkdtempSync(join(tmpdir(), 'orca-breakaway-'))
-    const marker = join(markerDir, 'marker.txt')
+    const marker = join(mkdtempSync(join(tmpdir(), 'orca-breakaway-')), 'marker.txt')
     const proc = nodePty.spawn('cmd.exe', [], {
       name: 'xterm-256color',
       cols: 100,
@@ -170,12 +168,9 @@ describeOnWindows('ConPTY job ownership', () => {
     })
     proc.write(`start /b cmd /c "echo ORCA_BREAKAWAY> ${marker}"\r`)
 
-    try {
-      await vi.waitFor(() => expect(existsSync(marker)).toBe(true), { timeout: 15_000 })
-      expect(output).not.toMatch(/Access is denied/i)
-    } finally {
-      removeTreeSync(markerDir)
-    }
+    await vi.waitFor(() => expect(existsSync(marker)).toBe(true), { timeout: 15_000 })
+    expect(output).not.toMatch(/Access is denied/i)
+    rmSync(marker, { force: true })
   }, 60_000)
 
   it('stops answering once the tree is gone, rather than claiming it is empty', async () => {
