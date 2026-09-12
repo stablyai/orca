@@ -196,8 +196,11 @@ export function applyMentionSuggestion(
     return { draft, caret }
   }
   const tokenStart = before.length - match[2].length - 1
-  const nextBefore = `${before.slice(0, tokenStart)}@${path} `
-  return { draft: nextBefore + after, caret: nextBefore.length }
+  // Why: reuse an existing separator instead of inserting a duplicate space when
+  // the caret sits mid-text before whitespace.
+  const needsSpace = !/^\s/.test(after)
+  const nextBefore = `${before.slice(0, tokenStart)}@${path}${needsSpace ? ' ' : ''}`
+  return { draft: nextBefore + after, caret: nextBefore.length + (needsSpace ? 0 : 1) }
 }
 
 export type HistoryState = { entries: readonly string[]; index: number | null }
