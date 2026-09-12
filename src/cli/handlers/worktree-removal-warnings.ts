@@ -1,5 +1,5 @@
 import {
-  formatArchiveHookFailure,
+  formatArchiveHookOverride,
   type ArchiveHookOverride
 } from '../../shared/worktree/archive-hook-removal-gate'
 
@@ -24,7 +24,7 @@ export function printHookWarning(result: HookWarningResult, json: boolean): void
   // Why (#19334): a waived archive-hook failure is the one case where Orca deleted a checkout
   // whose archive step did not succeed. It has to stay visible in human output.
   if (result.archiveHookOverride) {
-    console.error(`warning: ${formatArchiveHookFailure(result.archiveHookOverride)}`)
+    console.error(`warning: ${formatArchiveHookOverride(result.archiveHookOverride)}`)
   }
 }
 

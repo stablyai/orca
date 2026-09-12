@@ -20,7 +20,11 @@ const REPO = { id: 'r', path: '/repo', displayName: 'r', badgeColor: '#000', add
 async function runArchiveWith(error: unknown): Promise<{ success: boolean; exitCode?: number }> {
   const { runHook } = await import('./hooks')
   execMock.mockImplementationOnce((_script, _opts, cb) => cb(error, '', ''))
-  return runHook('archive', '/repo/wt', REPO)
+  const result = await runHook('archive', '/repo/wt', REPO)
+  // Guard against a vacuous pass: if the mock ever stops intercepting, the real shell would run
+  // and this assertion, not the subtle ones below, is what fails.
+  expect(execMock).toHaveBeenCalled()
+  return result
 }
 
 // Why (#19334): the gate reads an ABSENT exitCode as `unverifiable`. That hinges on a

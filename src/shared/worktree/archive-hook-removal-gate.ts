@@ -7,10 +7,11 @@ export const ARCHIVE_HOOK_FAILED_REMOVAL_CODE = 'worktree_archive_hook_failed'
 
 export const ARCHIVE_HOOK_FAILED_REMOVAL_PREFIX = 'Archive hook failed for worktree:'
 
-// Names the flag rather than an in-app control: this message reaches the CLI, the RPC callers and
-// the desktop toast, and only the CLI currently offers a way to act on it (#19334 follow-up).
+// One string, three surfaces: the CLI, RPC callers, and the desktop toast that now carries its own
+// Delete Anyway button. Naming only the CLI flag sent desktop users to a terminal for a button that
+// was six inches away, so both affordances are named and neither is presented as the only one.
 export const ARCHIVE_HOOK_OVERRIDE_HINT =
-  'Nothing was stopped, deleted or deregistered. Fix the hook and retry, or delete anyway with `orca worktree rm --allow-failed-archive-hook`.'
+  'Nothing was stopped, deleted or deregistered. Fix the hook and retry, or delete anyway with an explicit waiver — "Delete Anyway" in the app, or --allow-failed-archive-hook on the CLI.'
 
 /**
  * `exited` means the host reported a non-zero exit for this hook run. `unverifiable` covers every
@@ -42,15 +43,31 @@ export class WorktreeArchiveHookFailedError extends Error {
   }
 }
 
+function describeArchiveHookVerdict(failure: ArchiveHookFailure): string {
+  return failure.outcome === 'exited'
+    ? `exited ${failure.exitCode}`
+    : 'outcome unverifiable (the hook never reported an exit)'
+}
+
 export function formatArchiveHookFailure(failure: ArchiveHookFailure): string {
-  const verdict =
-    failure.outcome === 'exited'
-      ? `exited ${failure.exitCode}`
-      : 'outcome unverifiable (the hook never reported an exit)'
   const output = failure.output.trim()
   return [
-    `${ARCHIVE_HOOK_FAILED_REMOVAL_PREFIX} ${failure.worktreePath} — ${verdict}.`,
+    `${ARCHIVE_HOOK_FAILED_REMOVAL_PREFIX} ${failure.worktreePath} — ${describeArchiveHookVerdict(failure)}.`,
     ARCHIVE_HOOK_OVERRIDE_HINT,
+    ...(output ? [output] : [])
+  ].join(' ')
+}
+
+/**
+ * The waived case says the opposite of the refusal: the removal DID go ahead. Reusing
+ * `formatArchiveHookFailure` here printed "Nothing was stopped, deleted or deregistered" directly
+ * after deleting the checkout.
+ */
+export function formatArchiveHookOverride(override: ArchiveHookOverride): string {
+  const output = override.output.trim()
+  return [
+    `Archive hook failed for worktree: ${override.worktreePath} — ${describeArchiveHookVerdict(override)}.`,
+    'Deleted anyway because the failure was explicitly waived; nothing was archived.',
     ...(output ? [output] : [])
   ].join(' ')
 }

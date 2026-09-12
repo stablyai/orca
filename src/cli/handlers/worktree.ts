@@ -282,6 +282,14 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
         'Orca cannot tell which host owns this workspace. Refresh projects and try again.'
       )
     }
+    // Why (#19334): the waiver only ever applies to a hook that ran, so without --run-hooks it
+    // silently does nothing. Rejecting it beats letting someone believe they waived something.
+    if (flags.get('allow-failed-archive-hook') === true && flags.get('run-hooks') !== true) {
+      throw new RuntimeClientError(
+        'invalid_argument',
+        '--allow-failed-archive-hook waives a FAILED archive hook, but without --run-hooks no hook runs at all. Pass --run-hooks too, or drop the waiver.'
+      )
+    }
     const result = await client.call<RuntimeWorktreeRemoveResult>('worktree.rm', {
       worktree,
       hostId,

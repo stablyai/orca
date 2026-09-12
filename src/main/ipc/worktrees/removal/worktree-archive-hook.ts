@@ -11,22 +11,42 @@ import type { ArchiveHookRunResult } from '../../../../shared/worktree/archive-h
 
 const WORKTREE_ARCHIVE_HOOK_TIMEOUT_MS = 120_000
 
-export async function getArchiveHooksForRemoval(repo: Repo): Promise<OrcaHooks | null> {
+export type ArchiveHooksForRemoval = {
+  hooks: OrcaHooks | null
+  /**
+   * The host's `orca.yaml` could not be read, so "no archive hook" is an assumption rather than an
+   * observation (#19334). Per docs/reference/ssh-execution-boundary.md, loss of contact is not
+   * evidence of absence — a repo whose hook we simply could not see must not be deleted as though
+   * it had none.
+   */
+  hookConfigUnreadable: boolean
+}
+
+export async function getArchiveHooksForRemoval(repo: Repo): Promise<ArchiveHooksForRemoval> {
   if (!repo.connectionId) {
-    return getEffectiveHooks(repo)
+    return { hooks: getEffectiveHooks(repo), hookConfigUnreadable: false }
   }
 
   const fsProvider = getSshFilesystemProvider(repo.connectionId)
   if (!fsProvider) {
-    return getEffectiveHooksFromConfig(repo, null)
+    // Deliberately NOT flagged unreadable: an absent provider is a pre-existing condition with its
+    // own downstream handling, and failing the removal closed here would break every SSH delete
+    // that legitimately runs without one. The narrow case this flag exists for is a read that was
+    // attempted and failed.
+    return { hooks: getEffectiveHooksFromConfig(repo, null), hookConfigUnreadable: false }
   }
 
   try {
     const result = await fsProvider.readFile(joinWorktreeRelativePath(repo.path, 'orca.yaml'))
     const yamlHooks = result.isBinary ? null : parseOrcaYaml(result.content)
-    return getEffectiveHooksFromConfig(repo, yamlHooks)
-  } catch {
-    return getEffectiveHooksFromConfig(repo, null)
+    return { hooks: getEffectiveHooksFromConfig(repo, yamlHooks), hookConfigUnreadable: false }
+  } catch (error) {
+    // A missing orca.yaml is a normal, observed answer; anything else means we never got to look.
+    const missing = (error as { code?: unknown } | null)?.code === 'ENOENT'
+    return {
+      hooks: getEffectiveHooksFromConfig(repo, null),
+      hookConfigUnreadable: !missing
+    }
   }
 }
 
