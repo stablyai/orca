@@ -429,7 +429,11 @@ describe('listCodexSessionFiles', () => {
     const forkBody = [
       `${JSON.stringify({
         type: 'session_meta',
-        payload: { id: 'session-fork', cwd: join(fakeHomeDir, 'repo') }
+        payload: {
+          id: 'session-fork',
+          forked_from_id: 'session-original',
+          cwd: join(fakeHomeDir, 'repo')
+        }
       })}\n`,
       usageRecord('2026-05-26T12:00:00.000Z', 10),
       usageRecord('2026-05-26T12:01:00.000Z', 5, 15),
@@ -513,6 +517,109 @@ describe('listCodexSessionFiles', () => {
     expect(
       third.dailyAggregates.reduce((total, aggregate) => total + aggregate.totalTokens, 0)
     ).toBe(22)
+  })
+
+  it('dedupes fork-copied token events when Codex rewrites timestamps to fork creation time', async () => {
+    const sessionsDir = join(userDataDir, 'codex-runtime-home', 'home', 'sessions')
+    mkdirSync(sessionsDir, { recursive: true })
+    const originalPath = join(sessionsDir, 'aaaa-original.jsonl')
+    const forkPath = join(sessionsDir, 'bbbb-fork.jsonl')
+    const originalContent = [
+      `${JSON.stringify({
+        type: 'session_meta',
+        payload: { session_id: 'root-thread', id: 'session-1', cwd: join(fakeHomeDir, 'repo') }
+      })}\n`,
+      usageRecord('2026-05-26T12:00:00.000Z', 10),
+      usageRecord('2026-05-26T12:01:00.000Z', 5, 15)
+    ].join('')
+    // Codex rewrites copied records to the fork timestamp (12:02:00) instead of preserving 12:00/12:01
+    const forkContent = [
+      `${JSON.stringify({
+        type: 'session_meta',
+        payload: {
+          session_id: 'root-thread',
+          id: 'session-2',
+          forked_from_id: 'session-1',
+          cwd: join(fakeHomeDir, 'repo')
+        }
+      })}\n`,
+      usageRecord('2026-05-26T12:02:00.000Z', 10),
+      usageRecord('2026-05-26T12:02:00.000Z', 5, 15),
+      usageRecord('2026-05-26T12:02:05.000Z', 7, 22)
+    ].join('')
+    writeFileSync(originalPath, originalContent, 'utf-8')
+    writeFileSync(forkPath, forkContent, 'utf-8')
+
+    const result = await scanCodexUsageFiles([], [])
+    expect(
+      result.dailyAggregates.reduce((total, aggregate) => total + aggregate.totalTokens, 0)
+    ).toBe(22)
+    expect(result.processedFiles[0]?.ownedEventKeys).toHaveLength(2)
+    expect(result.processedFiles[1]?.ownedEventKeys).toHaveLength(1)
+  })
+
+  it('does not collide identical usage events from unrelated root sessions', async () => {
+    const sessionsDir = join(userDataDir, 'codex-runtime-home', 'home', 'sessions')
+    mkdirSync(sessionsDir, { recursive: true })
+    const session1Path = join(sessionsDir, 'aaaa-session-1.jsonl')
+    const session2Path = join(sessionsDir, 'bbbb-session-2.jsonl')
+    const session1Content = [
+      `${JSON.stringify({
+        type: 'session_meta',
+        payload: { session_id: 'thread-1', id: 'session-1', cwd: join(fakeHomeDir, 'repo') }
+      })}\n`,
+      usageRecord('2026-05-26T12:00:00.000Z', 10)
+    ].join('')
+    // Completely unrelated session with identical token usage (e.g. standard system prompt)
+    const session2Content = [
+      `${JSON.stringify({
+        type: 'session_meta',
+        payload: { session_id: 'thread-2', id: 'session-2', cwd: join(fakeHomeDir, 'repo') }
+      })}\n`,
+      usageRecord('2026-05-26T12:00:00.000Z', 10)
+    ].join('')
+    writeFileSync(session1Path, session1Content, 'utf-8')
+    writeFileSync(session2Path, session2Content, 'utf-8')
+
+    const result = await scanCodexUsageFiles([], [])
+    expect(
+      result.dailyAggregates.reduce((total, aggregate) => total + aggregate.totalTokens, 0)
+    ).toBe(20)
+    expect(result.processedFiles[0]?.ownedEventKeys).toHaveLength(1)
+    expect(result.processedFiles[1]?.ownedEventKeys).toHaveLength(1)
+    expect(result.processedFiles[1]?.hasDeferredClaims).toBe(false)
+  })
+
+  it('does not collide identical usage events from unrelated legacy sessions without a root id', async () => {
+    const sessionsDir = join(userDataDir, 'codex-runtime-home', 'home', 'sessions')
+    mkdirSync(sessionsDir, { recursive: true })
+    const session1Path = join(sessionsDir, 'aaaa-session-1.jsonl')
+    const session2Path = join(sessionsDir, 'bbbb-session-2.jsonl')
+    const session1Content = [
+      `${JSON.stringify({
+        type: 'session_meta',
+        payload: { id: 'session-1', cwd: join(fakeHomeDir, 'repo') }
+      })}\n`,
+      usageRecord('2026-05-26T12:00:00.000Z', 10)
+    ].join('')
+    // Completely unrelated session with identical token usage (e.g. standard system prompt)
+    const session2Content = [
+      `${JSON.stringify({
+        type: 'session_meta',
+        payload: { id: 'session-2', cwd: join(fakeHomeDir, 'repo') }
+      })}\n`,
+      usageRecord('2026-05-26T12:00:00.000Z', 10)
+    ].join('')
+    writeFileSync(session1Path, session1Content, 'utf-8')
+    writeFileSync(session2Path, session2Content, 'utf-8')
+
+    const result = await scanCodexUsageFiles([], [])
+    expect(
+      result.dailyAggregates.reduce((total, aggregate) => total + aggregate.totalTokens, 0)
+    ).toBe(20)
+    expect(result.processedFiles[0]?.ownedEventKeys).toHaveLength(1)
+    expect(result.processedFiles[1]?.ownedEventKeys).toHaveLength(1)
+    expect(result.processedFiles[1]?.hasDeferredClaims).toBe(false)
   })
 
   it('reclaims copied token events when the owning original file is deleted', async () => {
