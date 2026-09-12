@@ -382,3 +382,114 @@ describe('buildTitleDerivedAgentRows', () => {
     expect(rows).toHaveLength(0)
   })
 })
+
+// Why: `runtimePaneTitlesByTabId` mixes two disjoint id spaces — live PaneManager
+// ids (>= 1) and the `-(leafIndex + 1)` slots a parked tab mints — so attributing a
+// title by its position in the numerically sorted slot list puts one split pane's
+// lifecycle on its sibling's row (STA-3264).
+describe('split-pane runtime title attribution', () => {
+  const LEAF_ID_3 = '99999999-9999-4999-8999-999999999999'
+
+  function makeNestedSplitLayout(): TerminalLayoutSnapshot {
+    // Split once (leaf 1 | leaf 2), then split the FIRST pane again (leaf 3).
+    // Layout traversal order is [1, 3, 2]; pane-creation order is [1, 2, 3].
+    return {
+      root: {
+        type: 'split',
+        direction: 'vertical',
+        first: {
+          type: 'split',
+          direction: 'vertical',
+          first: { type: 'leaf', leafId: LEAF_ID_1 },
+          second: { type: 'leaf', leafId: LEAF_ID_3 }
+        },
+        second: { type: 'leaf', leafId: LEAF_ID_2 }
+      },
+      activeLeafId: LEAF_ID_1,
+      expandedLeafId: null
+    }
+  }
+
+  function rowsFor(
+    paneTitles: Record<string, string>,
+    layout: TerminalLayoutSnapshot,
+    ptyIds: string[]
+  ) {
+    return buildWorktreeAgentRows({
+      tabs: [makeTab('tab-1', { title: '⠋ Codex' })],
+      entries: [],
+      retained: [],
+      runtimePaneTitlesByTabId: { 'tab-1': paneTitles },
+      ptyIdsByTabId: { 'tab-1': ptyIds },
+      terminalLayoutsByTabId: { 'tab-1': layout },
+      now: 2000
+    })
+  }
+
+  it('keeps a finished split pane out of Running while its sibling keeps working', () => {
+    // A parked split tab reports its panes through synthetic slots numbered off the
+    // in-order leaf list: -1 is the first leaf, -2 the second.
+    const rows = rowsFor({ '-1': 'Codex', '-2': '⠋ Codex' }, makeSplitLayout(), ['pty-a', 'pty-b'])
+
+    expect(rows.map((row) => [row.paneKey, row.state, row.entry.lastAssistantMessage])).toEqual([
+      [makePaneKey('tab-1', LEAF_ID_1), 'idle', 'Idle'],
+      [makePaneKey('tab-1', LEAF_ID_2), 'working', 'Running']
+    ])
+  })
+
+  it('lets a revealed tab’s live slots outrank the parked slots it left behind', () => {
+    // Revealing a parked tab mounts live slots without clearing the parked ones, so
+    // both id spaces describe the same two leaves at once. The live pair is current:
+    // leaf 1 has finished, leaf 2 is still working.
+    const rows = rowsFor(
+      { '-1': '⠋ Codex', '-2': '⠋ Codex', 1: 'Codex', 2: '⠋ Codex' },
+      makeSplitLayout(),
+      ['pty-a', 'pty-b']
+    )
+
+    expect(rows.map((row) => [row.paneKey, row.state])).toEqual([
+      [makePaneKey('tab-1', LEAF_ID_1), 'idle'],
+      [makePaneKey('tab-1', LEAF_ID_2), 'working']
+    ])
+  })
+
+  it('does not let sibling panes inherit each other’s agent or state', () => {
+    const rows = rowsFor(
+      { 1: 'Antigravity', 2: '⠋ Codex', 3: '⠋ Gemini CLI' },
+      makeNestedSplitLayout(),
+      ['pty-a', 'pty-b', 'pty-c']
+    )
+
+    expect(
+      rows
+        .map((row) => [row.paneKey, row.agentType, row.state])
+        .sort((a, b) => (a[0] < b[0] ? -1 : 1))
+    ).toEqual([
+      [makePaneKey('tab-1', LEAF_ID_1), 'antigravity', 'idle'],
+      [makePaneKey('tab-1', LEAF_ID_2), 'codex', 'working'],
+      [makePaneKey('tab-1', LEAF_ID_3), 'gemini', 'working']
+    ])
+  })
+
+  it('does not recycle a closed split pane’s row onto a surviving sibling', () => {
+    // Panes 1|2|3 were open; closing pane 1 promotes the surviving pair and clears
+    // only that pane's slot, leaving the survivors' live ids sparse (2, 3).
+    const survivingLayout: TerminalLayoutSnapshot = {
+      root: {
+        type: 'split',
+        direction: 'vertical',
+        first: { type: 'leaf', leafId: LEAF_ID_2 },
+        second: { type: 'leaf', leafId: LEAF_ID_3 }
+      },
+      activeLeafId: LEAF_ID_2,
+      expandedLeafId: null
+    }
+    const rows = rowsFor({ 2: '⠋ Codex', 3: 'Gemini CLI' }, survivingLayout, ['pty-b', 'pty-c'])
+
+    expect(rows.map((row) => [row.paneKey, row.agentType, row.state])).toEqual([
+      [makePaneKey('tab-1', LEAF_ID_2), 'codex', 'working'],
+      [makePaneKey('tab-1', LEAF_ID_3), 'gemini', 'idle']
+    ])
+    expect(rows.some((row) => row.paneKey === makePaneKey('tab-1', LEAF_ID_1))).toBe(false)
+  })
+})
