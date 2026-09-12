@@ -1,12 +1,9 @@
-import { execFile } from 'node:child_process'
 import { readFile, writeFile, rename } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import path from 'node:path'
-import { promisify } from 'node:util'
 import { net } from 'electron'
+import { runProcess } from '../../shared/child-process/run-process'
 import { extractOAuthClientCredentials } from './gemini-cli-oauth-extractor'
-
-const execFileAsync = promisify(execFile)
 
 const API_TIMEOUT_MS = 10_000
 const PRIMARY_OAUTH_CREDS_PATH = path.join(homedir(), '.gemini', 'oauth_creds.json')
@@ -115,12 +112,16 @@ export async function readAntigravityKeychainCredentials(): Promise<AntigravityC
     return null
   }
   try {
-    const { stdout } = await execFileAsync(
-      '/usr/bin/security',
-      ['find-generic-password', '-s', 'gemini', '-a', 'antigravity', '-w'],
-      { encoding: 'utf-8', timeout: API_TIMEOUT_MS, windowsHide: true }
-    )
-    const raw = stdout.trim()
+    const result = await runProcess({
+      program: '/usr/bin/security',
+      args: ['find-generic-password', '-s', 'gemini', '-a', 'antigravity', '-w'],
+      timeoutMs: API_TIMEOUT_MS,
+      maxOutputBytes: 64 * 1024
+    })
+    if (result.code !== 0) {
+      return null
+    }
+    const raw = result.stdout.trim()
     if (!raw.startsWith('go-keyring-base64:')) {
       return null
     }

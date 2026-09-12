@@ -149,7 +149,10 @@ export function registerCoreHandlers(
   registerClaudeAccountHandlers(claudeAccounts)
   registerMiniMaxCredentialsHandlers(rateLimits)
   registerGrokAccountHandlers()
-  registerAntigravityAccountHandlers()
+  registerAntigravityAccountHandlers({
+    getSettings: () => store.getSettings(),
+    updateSettings: (patch) => store.updateSettings(patch)
+  })
   registerRateLimitHandlers(rateLimits, codexAccounts)
   registerGitHubHandlers(store, stats)
   registerGitLabHandlers(store)

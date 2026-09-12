@@ -11,6 +11,10 @@ import { Button } from '../ui/button'
 import { Label } from '../ui/label'
 import { Switch } from '../ui/switch'
 import type { AntigravityAccountStatus } from '../../../../shared/rate-limit-types'
+import {
+  AntigravityManagedAccountsList,
+  type ManagedUsageEntry
+} from './AntigravityManagedAccountsList'
 import { SearchableSetting } from './SearchableSetting'
 import type { AccountsPaneSectionModel } from './accounts-pane-types'
 
@@ -74,6 +78,64 @@ export function AntigravityAccountsSection({
   const hasBuckets = buckets.length > 0
   const sessionWindow = antigravityUsage?.session ?? null
 
+  const managedAccounts = settings.antigravityManagedAccounts ?? []
+  const [managedUsage, setManagedUsage] = useState<ManagedUsageEntry[]>([])
+  const [addingAccount, setAddingAccount] = useState(false)
+  const [addAccountError, setAddAccountError] = useState<string | null>(null)
+  const [removingAccountId, setRemovingAccountId] = useState<string | null>(null)
+
+  const loadManagedUsage = useCallback(async (): Promise<void> => {
+    try {
+      if (window.api.antigravityAccounts?.getManagedUsage) {
+        setManagedUsage(await window.api.antigravityAccounts.getManagedUsage())
+      }
+    } catch {
+      // Usage preview is best-effort; the status row still renders.
+    }
+  }, [])
+
+  useEffect(() => {
+    if (settings.antigravityCliOAuthEnabled && managedAccounts.length > 0) {
+      void loadManagedUsage()
+    }
+  }, [
+    settings.antigravityCliOAuthEnabled,
+    managedAccounts.length,
+    loadManagedUsage,
+    antigravityUsage?.updatedAt
+  ])
+
+  const handleAddAccount = async (): Promise<void> => {
+    setAddingAccount(true)
+    setAddAccountError(null)
+    try {
+      recordFeatureInteraction('usage-tracking')
+      const result = await window.api.antigravityAccounts.addAccount()
+      if (!result.ok) {
+        setAddAccountError(result.error ?? 'Sign-in failed')
+      }
+      await loadStatus()
+      await refreshRateLimits()
+      await loadManagedUsage()
+    } catch (error) {
+      setAddAccountError(error instanceof Error ? error.message : 'Sign-in failed')
+    } finally {
+      setAddingAccount(false)
+    }
+  }
+
+  const handleRemoveAccount = async (accountId: string): Promise<void> => {
+    setRemovingAccountId(accountId)
+    try {
+      await window.api.antigravityAccounts.removeAccount(accountId)
+      await loadStatus()
+      await refreshRateLimits()
+      await loadManagedUsage()
+    } finally {
+      setRemovingAccountId(null)
+    }
+  }
+
   const resetTimes = useMemo(() => {
     const times: number[] = []
     const session = antigravityUsage?.session
@@ -85,8 +147,13 @@ export function AntigravityAccountsSection({
         times.push(bucket.resetsAt)
       }
     }
+    for (const entry of managedUsage) {
+      if (entry.usage?.session?.resetsAt) {
+        times.push(entry.usage.session.resetsAt)
+      }
+    }
     return times
-  }, [antigravityUsage])
+  }, [antigravityUsage, managedUsage])
 
   const now = useResetCountdownClock(resetTimes)
 
@@ -232,6 +299,19 @@ export function AntigravityAccountsSection({
           }}
         />
       </SearchableSetting>
+
+      {settings.antigravityCliOAuthEnabled ? (
+        <AntigravityManagedAccountsList
+          accounts={managedAccounts}
+          usage={managedUsage}
+          now={now}
+          adding={addingAccount}
+          addError={addAccountError}
+          removingAccountId={removingAccountId}
+          onAdd={() => void handleAddAccount()}
+          onRemove={(accountId) => void handleRemoveAccount(accountId)}
+        />
+      ) : null}
 
       {settings.antigravityCliOAuthEnabled && hasBuckets ? (
         <div className="space-y-2 pt-1">

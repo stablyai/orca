@@ -1,9 +1,14 @@
 import type {
+  AntigravityManagedAccount,
   ClaudeRateLimitAccountsState,
   CodexRateLimitAccountsState
 } from '../../shared/managed-account-types'
 import type { CodexConfigSyncStatus } from '../../shared/codex-config-sync-types'
-import type { AntigravityAccountStatus, GrokAccountStatus } from '../../shared/rate-limit-types'
+import type {
+  AntigravityAccountStatus,
+  GrokAccountStatus,
+  ProviderRateLimits
+} from '../../shared/rate-limit-types'
 
 export type CodexAccountsApi = {
   list: () => Promise<CodexRateLimitAccountsState>
@@ -60,6 +65,11 @@ export type GrokAccountsApi = {
 
 export type AntigravityAccountsApi = {
   getStatus: () => Promise<AntigravityAccountStatus>
+  addAccount: () => Promise<{ ok: boolean; email?: string; error?: string }>
+  removeAccount: (accountId: string) => Promise<{ ok: boolean; error?: string }>
+  getManagedUsage: () => Promise<
+    { account: AntigravityManagedAccount; usage: ProviderRateLimits | null }[]
+  >
 }
 
 export type MinimaxCredentialsApi = {

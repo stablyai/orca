@@ -23,7 +23,7 @@ vi.mock('electron', () => ({ net: { fetch: netFetchMock } }))
 // Why: the real keychain reader shells out to /usr/bin/security; unit tests
 // must not touch the host keychain (or pick up the developer's live token).
 vi.mock('./antigravity-oauth-sources', async (importOriginal) => {
-  const actual = await importOriginal<AntigravityOauthSourcesModule>()
+  const actual = await importOriginal<typeof AntigravityOauthSourcesModule>()
   return {
     ...actual,
     readAntigravityKeychainCredentials: keychainMock

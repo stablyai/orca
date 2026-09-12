@@ -15,6 +15,7 @@ import type { ComputerAwakeMode } from './computer-awake-mode'
 import type { CommitMessageAiSettings } from './commit-message-ai-types'
 import type { HostSettingOverrides } from './host-setting-overrides'
 import type {
+  AntigravityManagedAccount,
   ClaudeManagedAccount,
   ClaudeManagedAccountRuntimeSelection,
   CodexManagedAccount,
@@ -371,6 +372,8 @@ export type GlobalSettings = {
   minimaxEndpoint: MiniMaxEndpoint
   /** Extract credentials from the local Antigravity CLI for rate-limit fetching. Off by default (explicit opt-in). */
   antigravityCliOAuthEnabled: boolean
+  /** Google accounts added through Orca's Antigravity OAuth flow (metadata only; tokens in the safeStorage vault). */
+  antigravityManagedAccounts: AntigravityManagedAccount[]
   /** Legacy Gemini CLI OAuth toggle, kept optional for migration. */
   geminiCliOAuthEnabled?: boolean
   /** Per-agent CLI command overrides. A missing key means use the catalog default binary name. */

@@ -1,5 +1,6 @@
 import { app } from 'electron'
 import { RateLimitService } from '../rate-limits/service'
+import { setAntigravityManagedAccountsProvider } from '../rate-limits/antigravity-managed-account-fetch'
 import { CodexRuntimeHomeService } from '../codex-accounts/runtime-home-service'
 import { CodexAccountService } from '../codex-accounts/service'
 import { ClaudeRuntimeAuthService } from '../claude-accounts/runtime-auth-service'
@@ -132,6 +133,7 @@ export function initializeMainProcessAccountServices(): void {
       store.getSettings().antigravityCliOAuthEnabled ||
       store.getSettings().geminiCliOAuthEnabled === true
   )
+  setAntigravityManagedAccountsProvider(() => store.getSettings().antigravityManagedAccounts ?? [])
   state.rateLimits.setNetworkProxySettingsResolver(() => store.getSettings())
   state.keybindings = new KeybindingService({
     homePath: app.getPath('home'),

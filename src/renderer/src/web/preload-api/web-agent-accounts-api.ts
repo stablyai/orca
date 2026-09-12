@@ -1,3 +1,4 @@
+import { translate } from '@/i18n/i18n'
 import type { PreloadApi } from '../../../../preload/api-types'
 
 export function createMiniMaxCredentialsApi(): NonNullable<
@@ -37,7 +38,24 @@ export function createAntigravityAccountsApi(): NonNullable<
     error: null
   }
   return {
-    getStatus: () => Promise.resolve(unsigned)
+    getStatus: () => Promise.resolve(unsigned),
+    addAccount: () =>
+      Promise.resolve({
+        ok: false,
+        error: translate(
+          'auto.web.web.preload.api.webAgentAccounts.antigravityUnsupported',
+          'Not available in web client'
+        )
+      }),
+    removeAccount: () =>
+      Promise.resolve({
+        ok: false,
+        error: translate(
+          'auto.web.web.preload.api.webAgentAccounts.antigravityUnsupported',
+          'Not available in web client'
+        )
+      }),
+    getManagedUsage: () => Promise.resolve([])
   }
 }
 

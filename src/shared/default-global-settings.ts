@@ -201,6 +201,7 @@ export function buildDefaultSettings(args: {
     minimaxUsageModels: 'general',
     minimaxEndpoint: 'overseas',
     antigravityCliOAuthEnabled: false,
+    antigravityManagedAccounts: [],
     agentCmdOverrides: {},
     agentDefaultArgs: { ...DEFAULT_TUI_AGENT_ARGS },
     agentDefaultEnv: { ...DEFAULT_TUI_AGENT_ENV },

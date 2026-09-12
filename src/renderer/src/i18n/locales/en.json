@@ -363,7 +363,10 @@
             "36761d9604": "Unknown keybinding action \"{{value0}}\" was ignored.",
             "d2e43e426a": "{{value0}} must be an object.",
             "fb290366b2": "Unavailable on web.",
-            "76122208ca": "Shortcut for \"{{value0}}\" was ignored: {{value1}}"
+            "76122208ca": "Shortcut for \"{{value0}}\" was ignored: {{value1}}",
+            "webAgentAccounts": {
+              "antigravityUnsupported": "Not available in web client"
+            }
           }
         },
         "runtime": {
@@ -11864,7 +11867,12 @@
           "sessionQuota": "Session Quota",
           "sessionWindow": "5-Hour Window",
           "resetsAt": "Resets {{when}}",
-          "usedPercent": "{{value0}}% used"
+          "usedPercent": "{{value0}}% used",
+          "managedAccounts": "Google Accounts",
+          "addAccount": "Add Google account",
+          "managedAccountsEmpty": "No Orca-managed accounts. Add one to track quota per Google account (sub2api-style), or keep using the local Antigravity CLI credentials below.",
+          "managedAccountNoData": "No quota data yet",
+          "removeAccount": "Remove account {{email}}"
         }
       },
       "right": {
