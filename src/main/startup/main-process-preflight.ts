@@ -3,6 +3,7 @@ import { is } from '@electron-toolkit/utils'
 import os from 'node:os'
 import { join } from 'node:path'
 import { maybeRedirectCliLaunch } from './cli-launch-redirect'
+import { maybeRedirectExtractedLinuxCliLaunch } from './extracted-linux-cli-redirect'
 import { argvRequestsServeMode, normalizeServeModeArgv } from './serve-mode-argv'
 import {
   configureDevUserDataPath,
@@ -94,6 +95,16 @@ export type MainProcessPreflightOptions = {
 
 /** Performs all module-scope work that must happen before Electron's ready event. */
 export function runMainProcessPreflight(options: MainProcessPreflightOptions): boolean {
+  // Why: the extracted per-version runtime binary (versions/<ver>/orca-ide <cmd>) has no
+  // ELECTRON_RUN_AS_NODE and no $APPIMAGE; reroute to node mode before the lock gate.
+  const extractedLinuxCliRedirect = maybeRedirectExtractedLinuxCliLaunch({
+    isPackaged: app.isPackaged,
+    resourcesPath: process.resourcesPath,
+    execPath: process.execPath
+  })
+  if (extractedLinuxCliRedirect.redirected) {
+    app.exit(extractedLinuxCliRedirect.status)
+  }
   // Why: on Windows a CLI launch that lost ELECTRON_RUN_AS_NODE would boot the GUI and exit silently; redirect to node mode before the lock gate below.
   // The redirect runs before the serve-argv rewrite so it still matches on the launch argv verbatim.
   // Direct serve stays in-process so its signal handlers own all children.
