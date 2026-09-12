@@ -113,14 +113,18 @@ export async function listRepoWorktreeGraph(
     return [createFolderWorktree(repo)]
   }
   const route = resolveGitRouteForHost(getRepoExecutionHostId(repo))
-  // An unreachable remote host answers `[]` here, unlike listRepoWorktrees above, which throws.
-  // Preserved as-is: this call site's callers treat the graph as best-effort. The inconsistency is
-  // real but is a separate behavior decision from resolving the host correctly.
   if (route.kind === 'runtime') {
-    return []
+    throw new WorktreeCatalogUnavailableError(
+      `Worktree catalog unavailable for ${repo.path}: host ${route.hostId} is not reachable from this process.`
+    )
   }
   if (route.kind === 'ssh') {
-    return route.provider ? await route.provider.listWorktrees(repo.path) : []
+    if (!route.provider) {
+      throw new WorktreeCatalogUnavailableError(
+        `Worktree catalog unavailable for ${repo.path}: SSH connection "${route.connectionId}" is not connected.`
+      )
+    }
+    return await route.provider.listWorktrees(repo.path)
   }
   return hasLocalRepoWorktreeListOptions(options)
     ? await listWorktreeGraph(repo.path, options)
