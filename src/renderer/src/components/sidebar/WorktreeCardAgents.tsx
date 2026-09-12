@@ -235,7 +235,7 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
     e.stopPropagation()
   }, [])
 
-  // Why: root leaf siblings reserve a leading spacer when any root has a chevron, keeping the state-dot column aligned (descendants already indent).
+  // Why: root leaf siblings reserve a leading spacer when any root has a chevron, keeping the state-dot column aligned.
   const anyRootHasChildren = rootAgents.some(
     (agent) => (childrenByParentPaneKey.get(agent.paneKey) ?? []).length > 0
   )
@@ -338,7 +338,8 @@ const WorktreeCardAgentsBody = React.memo(function WorktreeCardAgentsBody({
           onToggleChildAgents={
             hasChildAgents ? () => toggleLineageParent(agent.paneKey) : undefined
           }
-          reserveDisclosureGutter={isRootAgent && anyRootHasChildren && !hasChildAgents}
+          // Why: a descendant leaf that skips the chevron gutter lands left of its parent's dot.
+          reserveDisclosureGutter={hasChildAgents ? false : isRootAgent ? anyRootHasChildren : true}
           isFocusedPane={agent.paneKey === focusedAgentPaneKey}
           cacheTimerActive={cacheTimerActive}
         />
