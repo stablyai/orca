@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
 import type { RpcClient } from './rpc-client'
-import type { ConnectionState, RpcSuccess } from './types'
+import type { ConnectionState } from './types'
 import { evaluateCompat, type CompatVerdict } from './protocol-compat'
 import type { DesktopStatus } from '../worktree/host-worktree-rpc-types'
 import { normalizeHostAppVersion, recordHostAppVersion } from './host-app-version-store'
+import { startRuntimeStatusProbe } from './runtime-capability-probe'
 
 export type HostStatusGates = {
   hostCapabilities: string[]
@@ -39,68 +40,39 @@ export function useHostStatusGates(args: {
       setUnverified(true)
       return
     }
-    let cancelled = false
     const requestClient = client
     const settle = (gates: Omit<HostStatusGates, 'statusPending'>) => {
       setLoaded({ hostId, client: requestClient, ...gates })
       setUnverified(false)
     }
-    void (async () => {
-      try {
-        const response = await requestClient.sendRequest('status.get')
-        if (cancelled) {
-          return
-        }
-        if (!response.ok) {
-          settle({
-            hostCapabilities: [],
-            floatingWorkspaceEnabled: false,
-            desktopAppVersion: null,
-            compatVerdict: { kind: 'ok' }
-          })
-          return
-        }
-        const status = (response as RpcSuccess).result as DesktopStatus & {
-          capabilities?: string[]
-        }
-        const verdict = evaluateCompat({
-          desktopProtocolVersion: status.protocolVersion,
-          desktopMinCompatibleMobileVersion: status.minCompatibleMobileVersion
-        })
-        const desktopAppVersion = normalizeHostAppVersion(status.appVersion)
-        if (hostId && desktopAppVersion) {
-          void recordHostAppVersion(hostId, desktopAppVersion)
-        }
-        settle({
-          hostCapabilities: status.capabilities ?? [],
-          floatingWorkspaceEnabled: status.floatingWorkspaceEnabled === true,
-          desktopAppVersion,
-          compatVerdict: verdict
-        })
-        if (verdict.kind === 'blocked') {
-          // Why: support breadcrumb to confirm a block fired vs a render bug; no PII, just version ints.
-          console.warn('[protocol-compat] blocked', {
-            reason: verdict.reason,
-            desktopVersion: verdict.desktopVersion,
-            requiredMobileVersion: verdict.requiredMobileVersion,
-            requiredDesktopVersion: verdict.requiredDesktopVersion
-          })
-        }
-      } catch {
-        // Why: a transient status failure must not trap navigation; conservative feature gates remain disabled.
-        if (!cancelled) {
-          settle({
-            hostCapabilities: [],
-            floatingWorkspaceEnabled: false,
-            desktopAppVersion: null,
-            compatVerdict: { kind: 'ok' }
-          })
-        }
+    return startRuntimeStatusProbe(requestClient, (result) => {
+      const status = result as DesktopStatus & {
+        capabilities?: string[]
       }
-    })()
-    return () => {
-      cancelled = true
-    }
+      const verdict = evaluateCompat({
+        desktopProtocolVersion: status.protocolVersion,
+        desktopMinCompatibleMobileVersion: status.minCompatibleMobileVersion
+      })
+      const desktopAppVersion = normalizeHostAppVersion(status.appVersion)
+      if (hostId && desktopAppVersion) {
+        void recordHostAppVersion(hostId, desktopAppVersion)
+      }
+      settle({
+        hostCapabilities: status.capabilities ?? [],
+        floatingWorkspaceEnabled: status.floatingWorkspaceEnabled === true,
+        desktopAppVersion,
+        compatVerdict: verdict
+      })
+      if (verdict.kind === 'blocked') {
+        // Why: support breadcrumb to confirm a block fired vs a render bug; no PII, just version ints.
+        console.warn('[protocol-compat] blocked', {
+          reason: verdict.reason,
+          desktopVersion: verdict.desktopVersion,
+          requiredMobileVersion: verdict.requiredMobileVersion,
+          requiredDesktopVersion: verdict.requiredDesktopVersion
+        })
+      }
+    })
   }, [client, connState, hostId])
 
   // Why: effects run after render, so key loaded gates by host and client to fail closed during route reuse.

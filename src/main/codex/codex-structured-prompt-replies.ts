@@ -1,4 +1,5 @@
 import type { CodexAppServerConnection } from './codex-app-server-connection'
+import { readCodexTurnId } from './codex-structured-thread-facts'
 import {
   CODEX_PROMPT_MAX_ANSWER_BYTES,
   MAX_CODEX_PROMPT_JOURNAL_BINDINGS,
@@ -186,7 +187,7 @@ export class CodexPromptRegistry {
       requestId: request.id,
       method: request.method,
       threadId,
-      turnId: readString(request.params, 'turnId'),
+      turnId: readCodexTurnId(request.params),
       codexItemId,
       promptKey: readString(request.params, 'approvalId') ?? codexItemId,
       questionIds,
@@ -222,7 +223,12 @@ export class CodexPromptRegistry {
   }
 
   /** Called by the translation module once the prompt has a journal id. */
-  bindJournalItemId(journalItemId: string, threadId: string, promptKey: string): void {
+  bindJournalItemId(
+    journalItemId: string,
+    threadId: string,
+    promptKey: string,
+    turnId?: string | null
+  ): void {
     const existing = this.journalItemIds.get(journalItemId)
     if (existing) {
       this.boundPrompts.delete(journalItemId)
@@ -232,6 +238,9 @@ export class CodexPromptRegistry {
     const prompt = this.byAddress.get(address)
     if (!prompt) {
       return
+    }
+    if (prompt.turnId === null && turnId && prompt.threadId === threadId) {
+      prompt.turnId = turnId
     }
     this.journalItemIds.set(journalItemId, address)
     this.boundPrompts.set(journalItemId, prompt)
@@ -249,6 +258,19 @@ export class CodexPromptRegistry {
       (prompt) => prompt.promptKey === journalItemId
     )
     return matches.length === 1 ? matches[0]! : null
+  }
+
+  cancellation(journalItemId: string): { turnId: string; itemIds: readonly string[] } | null {
+    const prompt = this.find(journalItemId)
+    if (!prompt?.turnId || this.boundPrompts.get(journalItemId) !== prompt) {
+      return null
+    }
+    return {
+      turnId: prompt.turnId,
+      itemIds: [...this.boundPrompts]
+        .filter(([, candidate]) => candidate === prompt)
+        .map(([itemId]) => itemId)
+    }
   }
 
   forget(prompt: CodexPendingPrompt): void {

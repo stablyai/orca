@@ -25,6 +25,7 @@ import type {
   AgentSessionDispatchOutcome,
   StructuredAgentSessionAdapter
 } from './structured-agent-session-adapter'
+import { preparePromptCancellation } from './structured-agent-session-prompt-cancellation'
 export { performSetOption } from './structured-agent-session-turns-options'
 export { performPrompt } from './structured-agent-session-turns-prompt'
 
@@ -207,11 +208,21 @@ export async function performCancel(
   ctx: AgentSessionTurnContext,
   input: {
     clientOperationId: string
-    turnId: string
+    turnId?: string
     scope?: 'background-tasks'
     taskId?: string
+    prompt?: { itemId: string; expectedRevision: number }
   }
 ): Promise<TurnOutcome<AgentSessionCancelResult>> {
+  const promptCancellation =
+    input.prompt && !input.scope ? await preparePromptCancellation(ctx, input.prompt) : null
+  if (promptCancellation && !promptCancellation.ok) {
+    return promptCancellation
+  }
+  const turnId = promptCancellation?.ok ? promptCancellation.turnId : input.turnId
+  if (!turnId) {
+    return invalid('Cancellation requires a turn or pending prompt.')
+  }
   let cancelled = false
   let note = 'Cancellation requested.'
   try {
@@ -226,8 +237,9 @@ export async function performCancel(
       : (
           await ctx.adapter.cancelTurn({
             sessionId: ctx.sessionId,
-            turnId: input.turnId,
-            fence: ctx.fence
+            turnId,
+            fence: ctx.fence,
+            ...(input.prompt ? { promptItemId: input.prompt.itemId } : {})
           })
         ).cancelled
     if (!cancelled) {
@@ -239,9 +251,21 @@ export async function performCancel(
     }`
   }
   if (input.scope) {
-    return { ok: true, value: { turnId: input.turnId, cancelled } }
+    return { ok: true, value: { turnId, cancelled } }
+  }
+  if (cancelled && promptCancellation?.ok) {
+    const settled = await ctx.journal.cancelPromptsAtRevisions({
+      prompts: promptCancellation.prompts,
+      settlementId: `prompt-cancel:${input.clientOperationId}`,
+      resolvedBy: ctx.resolvedBy,
+      resolvedAt: ctx.now(),
+      fence: ctx.fence
+    })
+    if (settled > 0) {
+      ctx.publish()
+    }
   }
   // Keyed by the operation id so a replayed cancel upserts one item, not two.
   await appendStatus(ctx, input.clientOperationId, note)
-  return { ok: true, value: { turnId: input.turnId, cancelled } }
+  return { ok: true, value: { turnId, cancelled } }
 }

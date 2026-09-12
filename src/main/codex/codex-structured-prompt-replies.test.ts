@@ -107,6 +107,39 @@ describe('CodexPromptRegistry', () => {
     expect(registry.find('codex-item-1')).toBeNull()
   })
 
+  it('returns every journal row for one prompt only when it belongs to the cancelled turn', () => {
+    const registry = new CodexPromptRegistry()
+    registry.register(userInputRequest(['q1', 'q2']))
+    registry.bindJournalItemId('journal-q1', 'thread-1', 'codex-item-1')
+    registry.bindJournalItemId('journal-q2', 'thread-1', 'codex-item-1')
+
+    expect(registry.cancellation('journal-q1')).toEqual({
+      turnId: 'turn-1',
+      itemIds: ['journal-q1', 'journal-q2']
+    })
+    expect(registry.cancellation('unbound')).toBeNull()
+  })
+
+  it('reads nested turn identity and adopts the translator fallback when absent', () => {
+    const nested = new CodexPromptRegistry()
+    nested.register({
+      id: 6,
+      method: 'item/commandExecution/requestApproval',
+      params: { itemId: 'item-nested', threadId: 'thread-1', turn: { id: 'turn-nested' } }
+    })
+    nested.bindJournalItemId('journal-nested', 'thread-1', 'item-nested')
+    expect(nested.cancellation('journal-nested')?.turnId).toBe('turn-nested')
+
+    const fallback = new CodexPromptRegistry()
+    fallback.register({
+      id: 7,
+      method: 'item/commandExecution/requestApproval',
+      params: { itemId: 'item-fallback', threadId: 'thread-1' }
+    })
+    fallback.bindJournalItemId('journal-fallback', 'thread-1', 'item-fallback', 'turn-active')
+    expect(fallback.cancellation('journal-fallback')?.turnId).toBe('turn-active')
+  })
+
   it('keeps identical item ids on different threads independently answerable', () => {
     const registry = new CodexPromptRegistry()
     const register = (id: number, threadId: string) =>

@@ -246,11 +246,7 @@ export function NativeChatStructuredSession(
             }))
           }}
           onChoose={(optionId) => void controller.respond(prompt, optionId)}
-          onCancel={() => {
-            if (controller.turnId) {
-              void controller.cancel(controller.turnId)
-            }
-          }}
+          onCancel={() => void controller.cancel(controller.turnId, prompt)}
         />
       ) : null}
       {prompt && questionBody ? (
@@ -301,9 +297,7 @@ export function NativeChatStructuredSession(
             }
           }}
           onCancel={() => {
-            if (controller.turnId) {
-              void controller.cancel(controller.turnId)
-            }
+            void controller.cancel(controller.turnId, prompt)
           }}
         />
       ) : null}

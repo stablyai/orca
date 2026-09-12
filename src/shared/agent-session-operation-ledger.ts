@@ -31,6 +31,9 @@ export type AgentSessionOperationOutcome =
   | {
       status: 'succeeded'
       sessionId: string
+      /** Result of a turn-cancel mutation, absent on older rows and other operations. */
+      cancelled?: boolean
+      cancelledTurnId?: string
       conversationCommand?: AgentSessionConversationCommandResult
       rewind?: AgentSessionRewindResult
     }
@@ -192,6 +195,8 @@ export function isAgentSessionOperationRow(value: unknown): value is AgentSessio
     ((outcome.status === 'pending' && true) ||
       (outcome.status === 'succeeded' &&
         typeof outcome.sessionId === 'string' &&
+        (outcome.cancelled === undefined || typeof outcome.cancelled === 'boolean') &&
+        (outcome.cancelledTurnId === undefined || typeof outcome.cancelledTurnId === 'string') &&
         (outcome.rewind === undefined || isAgentSessionRewindResult(outcome.rewind)) &&
         (outcome.conversationCommand === undefined ||
           isAgentSessionConversationCommandResult(outcome.conversationCommand))) ||

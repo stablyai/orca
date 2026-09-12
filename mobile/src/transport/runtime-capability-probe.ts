@@ -13,6 +13,23 @@ export function startRuntimeCapabilityProbe(
   client: Pick<RpcClient, 'sendRequest'>,
   onCapabilities: (capabilities: readonly string[]) => void
 ): () => void {
+  return startRuntimeStatusProbe(client, (result) => {
+    const rawCapabilities =
+      result && typeof result === 'object'
+        ? (result as { capabilities?: unknown }).capabilities
+        : null
+    const capabilities =
+      Array.isArray(rawCapabilities) && rawCapabilities.every((value) => typeof value === 'string')
+        ? rawCapabilities
+        : []
+    onCapabilities(capabilities)
+  })
+}
+
+export function startRuntimeStatusProbe(
+  client: Pick<RpcClient, 'sendRequest'>,
+  onStatus: (status: unknown) => void
+): () => void {
   let cancelled = false
   let retryTimer: ReturnType<typeof setTimeout> | null = null
   let failureRetries = 0
@@ -27,17 +44,7 @@ export function startRuntimeCapabilityProbe(
           scheduleRetry(false)
           return
         }
-        const result = (response as RpcSuccess).result
-        const rawCapabilities =
-          result && typeof result === 'object'
-            ? (result as { capabilities?: unknown }).capabilities
-            : null
-        const capabilities =
-          Array.isArray(rawCapabilities) &&
-          rawCapabilities.every((value) => typeof value === 'string')
-            ? rawCapabilities
-            : []
-        onCapabilities(capabilities)
+        onStatus((response as RpcSuccess).result)
       },
       (error: unknown) => {
         if (cancelled) {

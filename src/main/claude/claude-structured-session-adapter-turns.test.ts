@@ -7,11 +7,116 @@ import { claudeUnwrittenUserMessageError } from './claude-agent-sdk-user-message
 import {
   acquired,
   fakeClaude,
+  invokeCanUseTool,
   PROVIDER_SESSION_ID,
   USER_MESSAGE
 } from './claude-structured-session-test-support'
 
 describe('ClaudeStructuredSessionAdapter turns and controls', () => {
+  it('binds a prompt cancellation to the provider turn that created it', async () => {
+    const claude = fakeClaude({ replayUuid: 'turn-1' })
+    const adapter = await acquired(claude)
+    await adapter.dispatch({
+      sessionId: 'session-1',
+      clientMessageId: 'client-1',
+      body: USER_MESSAGE,
+      fence: 7
+    })
+    invokeCanUseTool(claude.connections[0], 'Bash', 'permission-1', 'tool-1')
+    adapter.bindPromptItemId('session-1', 'journal-approval', 'permission-1')
+
+    expect(
+      adapter.promptCancellation?.({
+        sessionId: 'session-1',
+        itemId: 'journal-approval',
+        fence: 7
+      })
+    ).toEqual({ turnId: 'turn-1', itemIds: ['journal-approval'] })
+    await expect(
+      adapter.cancelTurn({
+        sessionId: 'session-1',
+        turnId: 'turn-1',
+        fence: 7,
+        promptItemId: 'unrelated-prompt'
+      })
+    ).resolves.toEqual({ cancelled: false })
+    expect(claude.connections[0].calls.some((call) => call.subtype === 'interrupt')).toBe(false)
+  })
+
+  it('keeps the cancelled receipt when the matching SDK prompt aborts during interrupt', async () => {
+    const controller = new AbortController()
+    const events: Parameters<typeof acquired>[2] = []
+    const claude = fakeClaude({
+      replayUuid: 'turn-1',
+      routes: { interrupt: () => controller.abort() }
+    })
+    const adapter = await acquired(claude, {}, events)
+    await adapter.dispatch({
+      sessionId: 'session-1',
+      clientMessageId: 'client-1',
+      body: USER_MESSAGE,
+      fence: 7
+    })
+    const pending = invokeCanUseTool(claude.connections[0], 'Bash', 'permission-1', 'tool-1', {
+      signal: controller.signal
+    })
+    adapter.bindPromptItemId('session-1', 'journal-approval', 'permission-1')
+
+    await expect(
+      adapter.cancelTurn({
+        sessionId: 'session-1',
+        turnId: 'turn-1',
+        fence: 7,
+        promptItemId: 'journal-approval'
+      })
+    ).resolves.toEqual({ cancelled: true })
+    await expect(pending.promise).resolves.toBeNull()
+    expect(events.some((event) => event.type === 'prompt-cancelled')).toBe(false)
+    expect(
+      adapter.promptCancellation?.({
+        sessionId: 'session-1',
+        itemId: 'journal-approval',
+        fence: 7
+      })
+    ).toBeNull()
+  })
+
+  it('publishes an SDK prompt abort when provider interruption is refused', async () => {
+    const controller = new AbortController()
+    const events: Parameters<typeof acquired>[2] = []
+    const claude = fakeClaude({
+      replayUuid: 'turn-1',
+      routes: {
+        interrupt: () => {
+          controller.abort()
+          throw new ClaudeControlRequestError('interrupt', 'not running')
+        }
+      }
+    })
+    const adapter = await acquired(claude, {}, events)
+    await adapter.dispatch({
+      sessionId: 'session-1',
+      clientMessageId: 'client-1',
+      body: USER_MESSAGE,
+      fence: 7
+    })
+    const pending = invokeCanUseTool(claude.connections[0], 'Bash', 'permission-1', 'tool-1', {
+      signal: controller.signal
+    })
+    adapter.bindPromptItemId('session-1', 'journal-approval', 'permission-1')
+
+    await expect(
+      adapter.cancelTurn({
+        sessionId: 'session-1',
+        turnId: 'turn-1',
+        fence: 7,
+        promptItemId: 'journal-approval'
+      })
+    ).resolves.toEqual({ cancelled: false })
+    await expect(pending.promise).resolves.toBeNull()
+    expect(events.at(-1)).toMatchObject({ type: 'prompt-cancelled', promptKey: 'permission-1' })
+  })
+
   it("admits a dispatch on the write and names it from Claude's replay", async () => {
     const claude = fakeClaude({ replayUuid: 'user-provider-uuid' })
     const settled = vi.fn()

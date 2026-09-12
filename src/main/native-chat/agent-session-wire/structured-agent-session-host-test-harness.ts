@@ -7,6 +7,7 @@ import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import type { AgentSessionMutationEnvelope } from '../../../shared/agent-session-wire'
 import { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import { journalDirectoryFor } from '../agent-session-journal/journal-paths'
+import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { createTrackedJournalOpener } from '../agent-session-journal/journal-store-test-open'
 import type {
   AgentSessionDispatchOutcome,
@@ -58,6 +59,7 @@ let acquire: Mock<StructuredAgentSessionAdapter['acquire']>
 let releaseAcquisition: Mock<NonNullable<StructuredAgentSessionAdapter['releaseAcquisition']>>
 let dispatch: Mock<StructuredAgentSessionAdapter['dispatch']>
 let cancelTurn: Mock<StructuredAgentSessionAdapter['cancelTurn']>
+let promptCancellation: Mock<NonNullable<StructuredAgentSessionAdapter['promptCancellation']>>
 let answerPrompt: Mock<StructuredAgentSessionAdapter['answerPrompt']>
 let setOption: Mock<StructuredAgentSessionAdapter['setOption']>
 let ordinal = 0
@@ -75,6 +77,7 @@ function adapter(): StructuredAgentSessionAdapter {
     acquire,
     releaseAcquisition,
     dispatch,
+    promptCancellation,
     cancelTurn,
     answerPrompt,
     setOption
@@ -87,12 +90,15 @@ async function attach(): Promise<AgentSessionRecord | null> {
   return store.getRecord(SESSION)
 }
 
-/** Puts a pending approval in the journal BEFORE attach, which is the only way
- *  1d can stage one: the adapter that would emit it is phase 2's. */
-async function seedApproval(optionId = 'allow'): Promise<{ itemId: string; revision: number }> {
-  const identity = { provider: 'codex' as const, threadId: THREAD, turnId: 'turn-1', ordinal: 99 }
+async function promptJournal(): Promise<AgentSessionJournal> {
+  const live = (
+    host as unknown as { sessions: Map<string, { journal: AgentSessionJournal }> }
+  ).sessions.get(SESSION)?.journal
+  if (live) {
+    return live
+  }
   const journalDir = journalDirectoryFor(root, { workspaceId: 'workspace-1', sessionId: SESSION })
-  const journal = await journals.open({
+  return journals.open({
     identity: {
       sessionId: SESSION,
       workspaceId: 'workspace-1',
@@ -102,6 +108,14 @@ async function seedApproval(optionId = 'allow'): Promise<{ itemId: string; revis
     },
     journalDir
   })
+}
+
+async function seedApproval(optionId = 'allow'): Promise<{ itemId: string; revision: number }> {
+  const identity = {
+    provider: 'orca' as const,
+    clientMessageId: `codex-prompt:${THREAD}:approval-1`
+  }
+  const journal = await promptJournal()
   const appended = await journal.appendItem(
     identity,
     {
@@ -111,9 +125,31 @@ async function seedApproval(optionId = 'allow'): Promise<{ itemId: string; revis
       options: [{ id: optionId, label: 'Allow' }],
       resolution: { state: 'pending', selectedOptionId: null, resolvedBy: null, resolvedAt: null }
     },
-    { fence: 1 }
+    { fence: store.getRecord(SESSION)?.lease.runtimeFence ?? 1 }
   )
   return { itemId: appended.itemId, revision: appended.revision }
+}
+
+async function seedQuestionGroup(): Promise<{ itemId: string; revision: number }[]> {
+  const journal = await promptJournal()
+  const prompts: { itemId: string; revision: number }[] = []
+  for (const questionId of ['q1', 'q2']) {
+    const appended = await journal.appendItem(
+      {
+        provider: 'orca',
+        clientMessageId: `codex-prompt:${THREAD}:questions-1:${questionId}`
+      },
+      {
+        kind: 'question',
+        question: `Question ${questionId}`,
+        options: [{ id: `${questionId}:yes`, label: 'Yes' }],
+        resolution: { state: 'pending', selectedOptionId: null, resolvedBy: null, resolvedAt: null }
+      },
+      { fence: store.getRecord(SESSION)?.lease.runtimeFence ?? 1 }
+    )
+    prompts.push({ itemId: appended.itemId, revision: appended.revision })
+  }
+  return prompts
 }
 
 beforeEach(async () => {
@@ -138,6 +174,7 @@ beforeEach(async () => {
   releaseAcquisition = vi.fn(async () => true)
   dispatch = vi.fn(async () => accepted())
   cancelTurn = vi.fn(async () => ({ cancelled: true }))
+  promptCancellation = vi.fn(({ itemId }) => ({ turnId: 'turn-1', itemIds: [itemId] }))
   answerPrompt = vi.fn(async () => undefined)
   setOption = vi.fn(async () => undefined)
   store = await AgentSessionRecordStore.open({ directory: join(root, 'store'), hostId: 'local' })
@@ -178,6 +215,7 @@ export function hostTestState() {
     acquire,
     releaseAcquisition,
     dispatch,
+    promptCancellation,
     cancelTurn,
     answerPrompt,
     setOption
@@ -193,5 +231,6 @@ export {
   ensureParams,
   envelope,
   journals,
-  seedApproval
+  seedApproval,
+  seedQuestionGroup
 }

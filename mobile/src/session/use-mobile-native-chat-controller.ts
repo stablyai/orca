@@ -35,6 +35,7 @@ export function useMobileNativeChatController(args: {
   nativeChatInputLeaseReady: boolean
   /** Live socket state; the lease collapses on disconnect but one render later. */
   connState: ConnectionState
+  promptCancelSupported?: boolean
   onSendError: (message: string) => void
   /** Retires a held failure banner. Any accepted chat write clears it — a delivered
    *  answer or permission reply must not sit under a stale "not sent". */
@@ -51,6 +52,7 @@ export function useMobileNativeChatController(args: {
     nativeChatTranscriptIsLocalReadable,
     nativeChatInputLeaseReady,
     connState,
+    promptCancelSupported,
     onSendError,
     onSendResolved
   } = args
@@ -89,7 +91,9 @@ export function useMobileNativeChatController(args: {
       sourceIdentity,
       enabled: showNativeChat,
       connState,
-      onSendError
+      promptCancelSupported,
+      onSendError,
+      onCancelResolved: onSendResolved
     })
   const {
     composerText: chatComposerText,

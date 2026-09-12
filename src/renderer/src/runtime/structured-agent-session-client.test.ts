@@ -1,7 +1,10 @@
 // @vitest-environment happy-dom
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { AGENT_SESSION_REWIND_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
+import {
+  AGENT_SESSION_PROMPT_CANCEL_RUNTIME_CAPABILITY,
+  AGENT_SESSION_REWIND_RUNTIME_CAPABILITY
+} from '../../../shared/protocol-version'
 
 const mocks = vi.hoisted(() => ({
   subscribe: vi.fn(),
@@ -10,7 +13,9 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock('./runtime-environment-revision', () => ({
-  getRuntimeEnvironmentRevision: () => 7
+  getRuntimeEnvironmentRevision: () => 7,
+  captureRuntimeEnvironmentRequestRevision: (_environmentId: string, expected?: number) =>
+    expected ?? 7
 }))
 
 vi.mock('./runtime-rpc-client', () => ({
@@ -20,8 +25,58 @@ vi.mock('./runtime-rpc-client', () => ({
 
 import {
   callStructuredAgentSession,
+  structuredAgentSessionSupportsPromptCancel,
   subscribeStructuredAgentSession
 } from './structured-agent-session-client'
+
+describe('structuredAgentSessionSupportsPromptCancel', () => {
+  beforeEach(() => vi.resetAllMocks())
+
+  it('uses the bundled host locally and capability-gates remote hosts', async () => {
+    mocks.call.mockResolvedValue({ capabilities: [] })
+
+    await expect(structuredAgentSessionSupportsPromptCancel({ kind: 'local' })).resolves.toBe(true)
+    await expect(
+      structuredAgentSessionSupportsPromptCancel({
+        kind: 'environment',
+        environmentId: 'env-1'
+      })
+    ).resolves.toBe(false)
+    expect(mocks.call).toHaveBeenCalledExactlyOnceWith(
+      { kind: 'environment', environmentId: 'env-1' },
+      'status.get',
+      undefined,
+      { timeoutMs: 15_000, expectedEnvironmentPairingRevision: 7 }
+    )
+  })
+
+  it('recognizes prompt cancellation on the captured pairing revision', async () => {
+    mocks.call.mockResolvedValue({
+      capabilities: [AGENT_SESSION_PROMPT_CANCEL_RUNTIME_CAPABILITY]
+    })
+
+    await expect(
+      structuredAgentSessionSupportsPromptCancel({ kind: 'environment', environmentId: 'env-1' }, 7)
+    ).resolves.toBe(true)
+    expect(mocks.call).toHaveBeenCalledWith(
+      expect.anything(),
+      'status.get',
+      undefined,
+      expect.objectContaining({ expectedEnvironmentPairingRevision: 7 })
+    )
+  })
+
+  it('fails closed when remote capability status is unavailable', async () => {
+    mocks.call.mockRejectedValue(new Error('Host unreachable'))
+
+    await expect(
+      structuredAgentSessionSupportsPromptCancel({
+        kind: 'environment',
+        environmentId: 'env-1'
+      })
+    ).rejects.toThrow('Host unreachable')
+  })
+})
 
 describe('callStructuredAgentSession rewind capability', () => {
   const target = { kind: 'environment', environmentId: 'env-1' } as const

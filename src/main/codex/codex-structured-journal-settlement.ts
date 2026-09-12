@@ -26,17 +26,16 @@ import {
   codexTurnLifecycleBody,
   codexTurnLifecycleIdentity
 } from './codex-structured-journal-translation-turns'
+import { collectCodexTurnPromptCancellations } from './codex-structured-prompt-turn-settlement'
+import type { CodexPendingJournalPrompt } from './codex-structured-prompt-turn-settlement'
+
+export type { CodexPendingJournalPrompt } from './codex-structured-prompt-turn-settlement'
 
 export type CodexActiveJournalItem = {
   threadId: string
   turnId: string | null
   identity: AgentJournalItemIdentity
   item: CodexThreadItem
-}
-
-export type CodexPendingJournalPrompt = {
-  identity: AgentJournalItemIdentity
-  body: AgentJournalItemBody
 }
 
 const ADMITTED: StructuredAgentSessionSinkAdmission = { accepted: true }
@@ -50,7 +49,6 @@ export function settleCodexJournalSession(input: {
   currentTurnIds: ReadonlyMap<string, ReadonlySet<string>>
   primaryThreadId: string | null
   ordinals: CodexTurnOrdinals
-  /** Terminal lifecycle for a turn the provider left running when it ended. */
   settledTurnLifecycle: (threadId: string, turnId: string) => AgentJournalTurnLifecycle
 }): StructuredAgentSessionSinkAdmission {
   const mutations: JournalLifecycleMutationInput[] = []
@@ -112,11 +110,11 @@ export function settleCodexJournalTurn(input: {
   sessionId: string
   threadId: string
   turnId: string
-  /** Null off the primary thread: only the primary turn owns a lifecycle row. */
   turnLifecycle: AgentJournalTurnLifecycle | null
   sink: StructuredAgentSessionEventSink
   streams: CodexStructuredItemStreams
   activeItems: Map<string, CodexActiveJournalItem>
+  pendingPrompts: Map<string, CodexPendingJournalPrompt>
 }): StructuredAgentSessionSinkAdmission {
   const mutations: JournalLifecycleMutationInput[] = []
   const activeItemsToForget: { key: string; threadId: string; itemId: string }[] = []
@@ -137,7 +135,8 @@ export function settleCodexJournalTurn(input: {
     }
     activeItemsToForget.push({ key, threadId: active.threadId, itemId: active.item.id })
   }
-  // Revised, never tombstoned: the terminal row keeps the turn's duration durable.
+  const promptCancellations = collectCodexTurnPromptCancellations(input)
+  mutations.push(...promptCancellations.mutations)
   if (input.turnLifecycle) {
     mutations.push({
       kind: 'item',
@@ -159,6 +158,9 @@ export function settleCodexJournalTurn(input: {
   for (const active of activeItemsToForget) {
     input.streams.forget(active.threadId, active.itemId)
     input.activeItems.delete(active.key)
+  }
+  for (const itemId of promptCancellations.itemIds) {
+    input.pendingPrompts.delete(itemId)
   }
   return ADMITTED
 }

@@ -57,7 +57,7 @@ export function publishCodexLifecycle(
 export function admitCodexLifecycleItems(
   sink: StructuredAgentSessionEventSink,
   settlementId: string,
-  items: readonly CodexPendingJournalPrompt[]
+  items: readonly Pick<CodexPendingJournalPrompt, 'identity' | 'body'>[]
 ): CodexJournalTranslationAdmission {
   if (items.length === 0) {
     return { accepted: false, reason: 'untranslated' }

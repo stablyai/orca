@@ -1,8 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
 import type {
+  AgentJournalItemBody,
   AgentJournalMessageItem,
   AgentSessionJournalIdentity
 } from '../../shared/agent-session-journal-types'
+import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import {
   CodexAppServerRequestError,
   type CodexAppServerConnection,
@@ -84,7 +86,8 @@ async function acquired(
       CodexStructuredSessionAdapterDeps,
       'captureTurnProcesses' | 'terminateTurnProcesses' | 'now'
     >
-  > = {}
+  > = {},
+  eventSink?: StructuredAgentSessionEventSink
 ): Promise<CodexStructuredSessionAdapter> {
   const adapter = new CodexStructuredSessionAdapter({
     resolveLaunch: async () => ({
@@ -101,7 +104,12 @@ async function acquired(
     terminateTurnProcesses: async () => true,
     ...processControl
   })
-  await adapter.acquire({ identity: identity(), fence: 7, spawnToken: 'spawn-9' })
+  await adapter.acquire({
+    identity: identity(),
+    fence: 7,
+    spawnToken: 'spawn-9',
+    ...(eventSink ? { events: eventSink } : {})
+  })
   return adapter
 }
 
@@ -113,6 +121,40 @@ function completeTurn(codex: ReturnType<typeof fakeCodex>, turnId = 'turn-1'): v
 }
 
 describe('CodexStructuredSessionAdapter.cancelTurn', () => {
+  it('binds prompt cancellation to the live logical request and owning turn', async () => {
+    const codex = fakeCodex()
+    const adapter = await acquired(codex)
+    codex.connections[0].handlers.onServerRequest?.({
+      id: 1,
+      method: 'item/tool/requestUserInput',
+      params: {
+        itemId: 'questions-1',
+        threadId: THREAD_ID,
+        turnId: 'turn-1',
+        questions: [{ id: 'q1' }, { id: 'q2' }]
+      }
+    })
+    adapter.bindPromptItemId('session-1', 'journal-q1', 'questions-1')
+    adapter.bindPromptItemId('session-1', 'journal-q2', 'questions-1')
+
+    expect(
+      adapter.promptCancellation?.({
+        sessionId: 'session-1',
+        itemId: 'journal-q1',
+        fence: 7
+      })
+    ).toEqual({ turnId: 'turn-1', itemIds: ['journal-q1', 'journal-q2'] })
+    await expect(
+      adapter.cancelTurn({
+        sessionId: 'session-1',
+        turnId: 'turn-1',
+        fence: 7,
+        promptItemId: 'unrelated-prompt'
+      })
+    ).resolves.toEqual({ cancelled: false })
+    expect(codex.connections[0].calls.some((call) => call.method === 'turn/interrupt')).toBe(false)
+  })
+
   it('confirms an interrupt Codex acknowledged', async () => {
     const codex = fakeCodex()
     const adapter = await acquired(codex)
@@ -291,18 +333,50 @@ describe('CodexStructuredSessionAdapter.cancelTurn', () => {
 
   it('does not strand a deferred completion when the interrupt receipt fails', async () => {
     const events: CodexStructuredSessionEvent[] = []
+    const bodies: AgentJournalItemBody[] = []
+    const sink: StructuredAgentSessionEventSink = {
+      appendItem: (_identity, body) => bodies.push(body),
+      appendTombstone: vi.fn(),
+      publish: vi.fn()
+    }
     const codex = fakeCodex()
     codex.routes['turn/interrupt'] = () => {
       completeTurn(codex)
       throw new Error('interrupt receipt lost')
     }
-    const adapter = await acquired(codex, events, {
-      terminateTurnProcesses: async () => true
+    const adapter = await acquired(
+      codex,
+      events,
+      {
+        terminateTurnProcesses: async () => true
+      },
+      sink
+    )
+    codex.connections[0].handlers.onNotification?.('turn/started', {
+      threadId: THREAD_ID,
+      turn: { id: 'turn-1' }
+    })
+    codex.connections[0].handlers.onServerRequest?.({
+      id: 1,
+      method: 'item/commandExecution/requestApproval',
+      params: {
+        itemId: 'command-1',
+        approvalId: 'approval-1',
+        threadId: THREAD_ID,
+        turnId: 'turn-1',
+        availableDecisions: ['accept', 'decline']
+      }
     })
 
     await expect(
       adapter.cancelTurn({ sessionId: 'session-1', turnId: 'turn-1', fence: 7 })
     ).rejects.toThrow('interrupt receipt lost')
     expect(events).toContainEqual(expect.objectContaining({ method: 'turn/completed' }))
+    expect(bodies).toContainEqual(
+      expect.objectContaining({
+        kind: 'approval',
+        resolution: expect.objectContaining({ state: 'cancelled' })
+      })
+    )
   })
 })

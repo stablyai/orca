@@ -204,11 +204,23 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
     sessionId: string
     turnId: string
     fence: number
+    promptItemId?: string
   }): Promise<{ cancelled: boolean }> {
     const session = this.session(input.sessionId)
     const turnId = this.compactions.providerTurnId(input.sessionId, input.turnId)
-    return turnId ? this.turnCancellation.cancel(session, turnId) : { cancelled: false }
+    const prompt = input.promptItemId ? session.prompts.find(input.promptItemId) : null
+    if (!turnId || (input.promptItemId && prompt?.turnId !== turnId)) {
+      return { cancelled: false }
+    }
+    const result = await this.turnCancellation.cancel(session, turnId)
+    if (result.cancelled && prompt) {
+      session.prompts.forget(prompt)
+    }
+    return result
   }
+
+  promptCancellation: NonNullable<StructuredAgentSessionAdapter['promptCancellation']> = (input) =>
+    this.session(input.sessionId).prompts.cancellation(input.itemId)
 
   rewindSupport: NonNullable<StructuredAgentSessionAdapter['rewindSupport']> = (sessionId) =>
     this.sessions.get(sessionId)?.historyMode === 'legacy'

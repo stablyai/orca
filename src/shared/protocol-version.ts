@@ -167,6 +167,12 @@ export const STRUCTURED_AGENT_SESSION_RESUME_HISTORY_RUNTIME_CAPABILITY =
 export const AGENT_SESSION_STATUS_FEED_RUNTIME_CAPABILITY = 'agent-session.status-feed.v1' as const
 // The RPC is registered unconditionally; per-session rewind support is a separate check.
 export const AGENT_SESSION_REWIND_RUNTIME_CAPABILITY = 'agent-session.rewind.v1' as const
+// Why: agentSession.cancel uses a strict schema, so clients must not send the optional prompt CAS
+// target until the host can terminalize that exact durable prompt after a confirmed interruption.
+export const AGENT_SESSION_PROMPT_CANCEL_RUNTIME_CAPABILITY =
+  'agent-session.prompt-cancel.v1' as const
+export const AGENT_SESSION_PROMPT_CANCEL_UPDATE_REQUIRED_MESSAGE =
+  'Cancelling a pending prompt requires a newer Orca server. Update the server and try again.'
 // Readers must understand a monitoring roster with no available stop control.
 // Why: a `turn` journal item replaced the status row that used to carry a turn's lifecycle. A
 // client that predates it would render the unknown kind as text, so the host publishes the legacy
@@ -292,6 +298,7 @@ export const RUNTIME_CAPABILITIES = [
   STRUCTURED_AGENT_SESSION_RESUME_HISTORY_RUNTIME_CAPABILITY,
   AGENT_SESSION_STATUS_FEED_RUNTIME_CAPABILITY,
   AGENT_SESSION_REWIND_RUNTIME_CAPABILITY,
+  AGENT_SESSION_PROMPT_CANCEL_RUNTIME_CAPABILITY,
   AGENT_SESSION_BACKGROUND_TASK_STOP_CAPABILITY,
   AGENT_SESSION_TURN_ITEM_CAPABILITY,
   AGENT_SESSION_BACKGROUND_TASK_ROW_STOP_CAPABILITY,

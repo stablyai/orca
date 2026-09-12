@@ -17,6 +17,7 @@ import type { AgentSessionDeathEvidence } from '../../../shared/agent-session-re
 import { partitionJournalLifecycleMutations } from '../agent-session-journal/journal-lifecycle-batch-partition'
 import type { JournalLifecycleMutationInput } from '../agent-session-journal/journal-row-builders'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
+import { cancelledJournalPromptBody } from '../agent-session-journal/journal-prompt-body-bounds'
 
 export type StructuredAgentSessionTurnVerdict =
   | { state: 'interrupted'; completedAt: number }
@@ -58,6 +59,27 @@ export function runningTurnLifecycleRevisions(
   return revisions
 }
 
+/** Pending prompts cannot belong to the replacement provider child. */
+export function stalePromptCancellationRevisions(
+  items: readonly AgentJournalRenderItem[]
+): JournalLifecycleMutationInput[] {
+  const revisions: JournalLifecycleMutationInput[] = []
+  for (const item of items) {
+    if (
+      (item.body.kind !== 'approval' && item.body.kind !== 'question') ||
+      item.body.resolution.state !== 'pending'
+    ) {
+      continue
+    }
+    const identity = parseAgentJournalItemKey(item.itemId)
+    const body = cancelledJournalPromptBody(item.body)
+    if (identity && body) {
+      revisions.push({ kind: 'item', identity, body })
+    }
+  }
+  return revisions
+}
+
 function settledLifecycle(
   lifecycle: AgentJournalTurnLifecycle,
   verdict: StructuredAgentSessionTurnVerdict
@@ -75,8 +97,7 @@ function settledLifecycle(
   return settled
 }
 
-/** A running row found when a NEW child is acquired belongs to a generation whose exit nobody
- *  observed. Must run before that child's buffered events land, or a live turn would be judged. */
+/** Rows owned by the prior child must settle before the replacement's buffered events land. */
 export async function settleStaleRunningTurnsOnAcquire(input: {
   journal: AgentSessionJournal
   sessionId: string
@@ -84,10 +105,11 @@ export async function settleStaleRunningTurnsOnAcquire(input: {
   acquisitionGeneration: string | null
 }): Promise<number> {
   const { journal } = input
-  const revisions = runningTurnLifecycleRevisions(
-    journal.snapshot().items,
-    UNVERIFIABLE_TURN_VERDICT
-  )
+  const items = journal.snapshot().items
+  const revisions = [
+    ...runningTurnLifecycleRevisions(items, UNVERIFIABLE_TURN_VERDICT),
+    ...stalePromptCancellationRevisions(items)
+  ]
   const generation = input.acquisitionGeneration ?? `seq-${journal.cursor().sequence}`
   const settlementId = `stale-turn:${input.sessionId}:${input.fence}:${generation}`
   for (const chunk of partitionJournalLifecycleMutations(settlementId, revisions)) {

@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
   call: vi.fn(),
+  supportsPromptCancel: vi.fn(),
   operationId: vi.fn(),
   enqueueSettingsWrite: vi.fn()
 }))
@@ -14,7 +15,12 @@ let items: AgentJournalRenderItem[] = []
 let submissions: AgentJournalSubmission[] = []
 
 vi.mock('@/runtime/structured-agent-session-client', () => ({
-  callStructuredAgentSession: mocks.call
+  callStructuredAgentSession: mocks.call,
+  structuredAgentSessionSupportsPromptCancel: mocks.supportsPromptCancel
+}))
+
+vi.mock('@/runtime/runtime-environment-revision', () => ({
+  captureRuntimeEnvironmentRequestRevision: () => 31
 }))
 
 vi.mock('./native-chat-session-option-settings-write', () => ({
@@ -108,6 +114,7 @@ describe('useStructuredAgentSession working state', () => {
     items = []
     submissions = []
     mocks.call.mockResolvedValue(null)
+    mocks.supportsPromptCancel.mockResolvedValue(true)
   })
 
   it('reports work from an unanswered dispatch, and keeps the turn id provider-minted', () => {

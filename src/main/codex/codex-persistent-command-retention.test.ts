@@ -116,7 +116,8 @@ describe('persistent command retention', () => {
           turnLifecycle: null,
           sink,
           streams: items.streams,
-          activeItems: items.activeItems
+          activeItems: items.activeItems,
+          pendingPrompts: new Map()
         })
       ).toEqual({ accepted: true })
     }
@@ -211,7 +212,8 @@ describe('persistent command retention', () => {
         turnLifecycle: null,
         sink,
         streams: items.streams,
-        activeItems: items.activeItems
+        activeItems: items.activeItems,
+        pendingPrompts: new Map()
       })
     ).toEqual({ accepted: true })
     expect(items.activeItems.size).toBe(1)

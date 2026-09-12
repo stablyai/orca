@@ -184,7 +184,7 @@ describe('NativeChatStructuredSession', () => {
     expect(screen.queryByTestId('structured-composer')).toBeNull()
 
     act(() => mocks.questionCardProps?.onCancel())
-    expect(mocks.cancel).toHaveBeenCalledWith('turn-question')
+    expect(mocks.cancel).toHaveBeenCalledWith('turn-question', legacySingleQuestionPromptItems[0])
     expect(mocks.messageListProps?.showLiveTurnActivity).toBe(false)
 
     mocks.promptItems = []
@@ -226,7 +226,7 @@ describe('NativeChatStructuredSession', () => {
     mocks.promptItems = approvalItems
     mocks.monitoringBackgroundTasks = true
 
-    render(
+    const view = () => (
       <NativeChatStructuredSession
         isVisible
         isFocusedGroup
@@ -236,6 +236,7 @@ describe('NativeChatStructuredSession', () => {
         agent="claude"
       />
     )
+    const { rerender } = render(view())
 
     expect(mocks.messageListProps).toMatchObject({
       isWorking: true,
@@ -250,7 +251,13 @@ describe('NativeChatStructuredSession', () => {
     expect(mocks.messageListProps?.showLiveTurnActivity).toBe(false)
 
     act(() => mocks.approvalCardProps?.onCancel?.())
-    expect(mocks.cancel).toHaveBeenCalledWith('turn-approval')
+    expect(mocks.cancel).toHaveBeenCalledWith('turn-approval', approvalItems[0])
+
+    mocks.cancel.mockClear()
+    mocks.turnId = null
+    rerender(view())
+    act(() => mocks.approvalCardProps?.onCancel?.())
+    expect(mocks.cancel).toHaveBeenCalledWith(null, approvalItems[0])
   })
 
   // Every background-task test mounts the same local Claude session; only the ids

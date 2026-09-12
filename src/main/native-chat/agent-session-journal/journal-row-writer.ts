@@ -18,9 +18,21 @@ export class JournalRowWriter {
   constructor(private readonly deps: JournalRowWriterDeps) {}
 
   enqueue(build: (seq: number, ts: number) => JournalRow): Promise<JournalRow> {
+    return this.enqueueIf(build).then((row) => {
+      if (!row) {
+        throw new Error('journal_row_builder_skipped_unconditionally')
+      }
+      return row
+    })
+  }
+
+  enqueueIf(build: (seq: number, ts: number) => JournalRow | null): Promise<JournalRow | null> {
     return this.deps.serialize(async () => {
       assertJournalWritable(this.deps.readOnly(), this.deps.sessionId)
       const row = build(this.deps.nextSequence(), this.deps.now())
+      if (!row) {
+        return null
+      }
       assertJournalFence(row.fence, this.deps.highestFence())
       const { db } = this.deps.database()
       db.exec('BEGIN IMMEDIATE')

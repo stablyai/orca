@@ -1,5 +1,7 @@
 import { useEffect, useCallback } from 'react'
 import { useFocusEffect } from 'expo-router'
+import { AGENT_SESSION_PROMPT_CANCEL_RUNTIME_CAPABILITY } from '../../../src/shared/protocol-version'
+import { useHostProtocolGates } from '../components/HostProtocolGate'
 import { useMobileDictation } from '../hooks/use-mobile-dictation'
 import { triggerError } from '../platform/haptics'
 import {
@@ -22,6 +24,7 @@ export function useMobileSessionNativeChatDictation(
   scope: MobileSessionFeedbackCapabilitiesModel,
   sendLiveTerminalInput: (handle: string, bytes: string) => Promise<boolean>
 ) {
+  const { hostCapabilities, statusPending } = useHostProtocolGates()
   const {
     hostId,
     worktreeId,
@@ -72,6 +75,9 @@ export function useMobileSessionNativeChatDictation(
     nativeChatTranscriptIsLocalReadable,
     nativeChatInputLeaseReady,
     connState,
+    promptCancelSupported: statusPending
+      ? undefined
+      : hostCapabilities.includes(AGENT_SESSION_PROMPT_CANCEL_RUNTIME_CAPABILITY),
     onSendError: nativeChatSendError.show,
     onSendResolved: nativeChatSendError.clear
   })

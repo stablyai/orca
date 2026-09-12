@@ -1,32 +1,17 @@
 import { decodeAgentSessionQuestionAnswers } from '../../shared/agent-session-question-answer'
+import { ClaudeHostPromptCancellation } from './claude-host-prompt-cancellation'
+import type {
+  ClaudePendingPrompt,
+  ClaudePromptRegistration
+} from './claude-structured-prompt-types'
 
 export const CLAUDE_APPROVAL_DECISIONS = ['allow', 'allowForSession', 'deny', 'cancel'] as const
 export type ClaudeApprovalDecision = (typeof CLAUDE_APPROVAL_DECISIONS)[number]
-
-/** Settles the SDK's `canUseTool` promise; `null` is the SDK's "no response written" sentinel. */
-export type ClaudePromptSettle = (response: Record<string, unknown> | null) => void
-
-export type ClaudePendingPrompt = {
-  requestId: string
-  promptKey: string
-  toolUseId: string
-  toolName: string
-  kind: 'approval' | 'question'
-  input: Record<string, unknown>
-  suggestions: unknown[]
-  questionIds: readonly string[]
-  answers: Map<string, string | readonly string[]>
-  settle: ClaudePromptSettle
-}
-
-export type ClaudePromptRegistration = {
-  requestId: string
-  toolName: string
-  toolUseId: string
-  input: Record<string, unknown>
-  suggestions: unknown[]
-  settle: ClaudePromptSettle
-}
+export type {
+  ClaudePendingPrompt,
+  ClaudePromptRegistration,
+  ClaudePromptSettle
+} from './claude-structured-prompt-types'
 
 type PromptBinding = {
   address: string
@@ -108,6 +93,7 @@ export function decodeClaudeQuestionOptionId(
 export class ClaudePromptRegistry {
   private readonly prompts = new Map<string, ClaudePendingPrompt>()
   private readonly journalBindings = new Map<string, PromptBinding>()
+  private readonly hostCancellation = new ClaudeHostPromptCancellation()
 
   register(registration: ClaudePromptRegistration): ClaudePendingPrompt | null {
     const toolUseId = readString(registration.toolUseId)
@@ -120,6 +106,7 @@ export class ClaudePromptRegistry {
     const prompt: ClaudePendingPrompt = {
       requestId: registration.requestId,
       promptKey: registration.requestId,
+      turnId: registration.turnId ?? null,
       toolUseId,
       toolName,
       kind: questions.length > 0 ? 'question' : 'approval',
@@ -133,13 +120,29 @@ export class ClaudePromptRegistry {
     return prompt
   }
 
-  /** True only if the prompt was still pending; lets an abort and an answer race settle once. */
   forgetIfPending(prompt: ClaudePendingPrompt): boolean {
     if (!this.prompts.has(prompt.promptKey)) {
       return false
     }
     this.forget(prompt)
     return true
+  }
+
+  beginHostCancellation(itemId: string, turnId: string): ClaudePendingPrompt | null {
+    return this.hostCancellation.begin(this.find(itemId)?.prompt ?? null, turnId)
+  }
+
+  finishHostCancellation(prompt: ClaudePendingPrompt, confirmed: boolean): boolean {
+    return this.hostCancellation.finish(
+      prompt,
+      confirmed,
+      () => this.prompts.get(prompt.promptKey) === prompt,
+      () => this.forget(prompt)
+    )
+  }
+
+  consumeHostCancellation(prompt: ClaudePendingPrompt): boolean {
+    return this.hostCancellation.consume(prompt)
   }
 
   bindJournalItemId(journalItemId: string, promptKey: string, questionIdForItem?: string): void {
@@ -157,6 +160,20 @@ export class ClaudePromptRegistry {
       : null
   }
 
+  cancellation(itemId: string): { turnId: string; itemIds: readonly string[] } | null {
+    const binding = this.journalBindings.get(itemId)
+    const prompt = binding ? this.prompts.get(binding.address) : undefined
+    if (!binding || !prompt?.turnId) {
+      return null
+    }
+    return {
+      turnId: prompt.turnId,
+      itemIds: [...this.journalBindings]
+        .filter(([, candidate]) => candidate.address === binding.address)
+        .map(([journalItemId]) => journalItemId)
+    }
+  }
+
   cancel(requestId: string): ClaudePendingPrompt | null {
     const prompt = this.prompts.get(requestId) ?? null
     if (prompt) {
@@ -167,6 +184,7 @@ export class ClaudePromptRegistry {
 
   forget(prompt: ClaudePendingPrompt): void {
     this.prompts.delete(prompt.promptKey)
+    this.hostCancellation.forget(prompt)
     for (const [itemId, binding] of this.journalBindings) {
       if (binding.address === prompt.promptKey) {
         this.journalBindings.delete(itemId)
@@ -178,6 +196,7 @@ export class ClaudePromptRegistry {
     const pending = [...this.prompts.values()]
     this.prompts.clear()
     this.journalBindings.clear()
+    this.hostCancellation.clear()
     return pending
   }
 }

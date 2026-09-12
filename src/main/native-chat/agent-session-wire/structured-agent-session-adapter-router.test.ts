@@ -32,6 +32,33 @@ describe('StructuredAgentSessionAdapterRouter.releaseAcquisition', () => {
   })
 })
 
+describe('StructuredAgentSessionAdapterRouter prompt cancellation', () => {
+  it('reads the logical prompt group from the session owner', async () => {
+    const claude = adapterOf(vi.fn(async () => true))
+    const promptCancellation = vi.fn(() => ({
+      turnId: 'turn-1',
+      itemIds: ['prompt-1', 'prompt-2']
+    }))
+    claude.promptCancellation = promptCancellation
+    const router = new StructuredAgentSessionAdapterRouter(
+      { claude, codex: adapterOf(vi.fn(async () => false)) },
+      async () => {}
+    )
+    await router.acquire({
+      identity: { sessionId: 'session-1', agent: 'claude' } as never,
+      fence: 1,
+      spawnToken: 'spawn-1'
+    })
+    const input = { sessionId: 'session-1', turnId: 'turn-1', itemId: 'prompt-1', fence: 1 }
+
+    expect(router.promptCancellation(input)).toEqual({
+      turnId: 'turn-1',
+      itemIds: ['prompt-1', 'prompt-2']
+    })
+    expect(promptCancellation).toHaveBeenCalledExactlyOnceWith(input)
+  })
+})
+
 describe('StructuredAgentSessionAdapterRouter.closeSession', () => {
   it('retains the owner after an unproven close so a later retry reaches the same adapter', async () => {
     const claude = adapterOf(vi.fn(async () => true))

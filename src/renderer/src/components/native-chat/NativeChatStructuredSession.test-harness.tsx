@@ -55,7 +55,8 @@ export function createStructuredSessionMocks() {
 
   const moduleFactories = {
     structuredAgentSessionClient: () => ({
-      callStructuredAgentSession: mocks.call
+      callStructuredAgentSession: mocks.call,
+      structuredAgentSessionSupportsPromptCancel: () => Promise.resolve(true)
     }),
     useStructuredAgentSession: async () => {
       const { useStructuredAgentSessionOutbox } =

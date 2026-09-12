@@ -1,141 +1,22 @@
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type {
-  AgentJournalRenderItem,
-  AgentJournalResolution
-} from '../../../src/shared/agent-session-journal-types'
-import type { AgentSessionSubscribeEvent } from '../../../src/shared/agent-session-wire'
 import type { RpcClient } from '../transport/rpc-client'
 import { markRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 import { formatQuestionFreeTextAnswer } from './mobile-native-chat-question'
 import { useMobileStructuredAgentSession } from './use-mobile-structured-agent-session'
+import {
+  approvalItem,
+  approvalItemWithIdentity,
+  questionItem,
+  questionItemWithIdentity,
+  runningStatusItem,
+  snapshotEvent,
+  snapshotWithMessage
+} from './mobile-structured-agent-session-test-fixtures'
 
 function ok(result: unknown) {
   return { ok: true, result, _meta: { runtimeId: 'runtime-1' } }
-}
-
-function snapshotEvent(fence = 3): AgentSessionSubscribeEvent {
-  return {
-    type: 'snapshot',
-    sessionId: 'session-1',
-    fence,
-    page: {
-      sessionId: 'session-1',
-      epoch: 'epoch-1',
-      fence,
-      direction: 'tail',
-      items: [],
-      removedItemIds: [],
-      submissions: [],
-      window: {
-        oldest: null,
-        newest: null,
-        nextCursor: { epoch: 'epoch-1', sequence: 0 }
-      },
-      liveCursor: { epoch: 'epoch-1', sequence: 0 },
-      hasOlder: false,
-      hasNewer: false
-    }
-  }
-}
-
-function snapshotWithMessage(): AgentSessionSubscribeEvent {
-  const event = snapshotEvent()
-  return {
-    ...event,
-    page: {
-      ...event.page,
-      items: [
-        {
-          itemId: 'msg-1',
-          revision: 1,
-          sequence: 1,
-          observedAt: 10,
-          body: {
-            kind: 'message',
-            role: 'user',
-            blocks: [{ type: 'text', text: 'sent before the blip' }]
-          }
-        }
-      ],
-      window: {
-        oldest: { epoch: 'epoch-1', sequence: 1 },
-        newest: { epoch: 'epoch-1', sequence: 1 },
-        nextCursor: { epoch: 'epoch-1', sequence: 2 }
-      },
-      liveCursor: { epoch: 'epoch-1', sequence: 1 }
-    }
-  } as AgentSessionSubscribeEvent
-}
-
-function pendingResolution(): AgentJournalResolution {
-  return {
-    state: 'pending',
-    selectedOptionId: null,
-    resolvedBy: null,
-    resolvedAt: null
-  }
-}
-
-function approvalItem(): AgentJournalRenderItem {
-  return {
-    itemId: 'approval-1',
-    revision: 2,
-    sequence: 1,
-    observedAt: 10,
-    body: {
-      kind: 'approval',
-      title: 'Allow Bash?',
-      detail: 'rm -rf build',
-      options: [
-        { id: 'allow-once', label: 'Allow once' },
-        { id: 'deny', label: 'Deny' }
-      ],
-      resolution: pendingResolution()
-    }
-  }
-}
-
-function approvalItemWithIdentity(itemId: string, revision: number): AgentJournalRenderItem {
-  return { ...approvalItem(), itemId, revision }
-}
-
-function questionItem(): AgentJournalRenderItem {
-  return {
-    itemId: 'question-1',
-    revision: 7,
-    sequence: 2,
-    observedAt: 12,
-    body: {
-      kind: 'question',
-      question: 'Pick destination',
-      freeTextQuestionId: 'free-q',
-      options: [
-        { id: 'choice-a', label: 'Choice A' },
-        { id: 'choice-b', label: 'Choice B' }
-      ],
-      resolution: pendingResolution()
-    }
-  }
-}
-
-function questionItemWithIdentity(itemId: string, revision: number): AgentJournalRenderItem {
-  return { ...questionItem(), itemId, revision }
-}
-
-function runningStatusItem(): AgentJournalRenderItem {
-  return {
-    itemId: 'status-1',
-    revision: 1,
-    sequence: 3,
-    observedAt: 14,
-    body: {
-      kind: 'status',
-      text: 'Working',
-      turnLifecycle: { turnId: 'turn-1', state: 'running' }
-    }
-  }
 }
 
 async function defaultSendRequest(method: string, params?: Record<string, unknown>) {
@@ -217,6 +98,7 @@ describe('useMobileStructuredAgentSession', () => {
   let hook: ReturnType<typeof useMobileStructuredAgentSession> | null = null
   let listener: ((value: unknown) => void) | null = null
   const onSendError = vi.fn()
+  const onCancelResolved = vi.fn()
   const unsubscribe = vi.fn()
   const sendRequest = vi.fn(defaultSendRequest)
   const subscribe = vi.fn((_method: string, _params: unknown, onData: (value: unknown) => void) => {
@@ -232,11 +114,13 @@ describe('useMobileStructuredAgentSession', () => {
     sessionId = 'session-1',
     agent = 'codex',
     connected = true,
+    promptCancelSupported = false,
     sourceIdentity = 'host-a\0workspace-a'
   }: {
     sessionId?: string | null
     agent?: string | null
     connected?: boolean
+    promptCancelSupported?: boolean
     sourceIdentity?: string
   }): null {
     hook = useMobileStructuredAgentSession({
@@ -246,7 +130,9 @@ describe('useMobileStructuredAgentSession', () => {
       enabled: true,
       connected,
       agent,
-      onSendError
+      promptCancelSupported,
+      onSendError,
+      onCancelResolved
     } as never)
     return null
   }
@@ -758,6 +644,92 @@ describe('useMobileStructuredAgentSession', () => {
     })
 
     expect(onSendError).toHaveBeenCalledWith('Stop unconfirmed — check chat before retrying')
+  })
+
+  it('targets the displayed prompt revision when the host supports prompt cancellation', async () => {
+    act(() => {
+      renderer = create(createElement(Harness, { promptCancelSupported: true }))
+    })
+    await vi.waitFor(() => expect(listener).toEqual(expect.any(Function)))
+    act(() =>
+      listener?.({
+        ...snapshotEvent(3),
+        page: {
+          ...snapshotEvent(3).page,
+          items: [approvalItem()]
+        }
+      })
+    )
+
+    act(() => hook!.cancel())
+
+    await vi.waitFor(() =>
+      expect(sendRequest).toHaveBeenCalledWith(
+        'agentSession.cancel',
+        expect.objectContaining({
+          prompt: { itemId: 'approval-1', expectedRevision: 2 }
+        }),
+        expect.any(Object)
+      )
+    )
+    const cancelParams = sendRequest.mock.calls.find(
+      ([method]) => method === 'agentSession.cancel'
+    )?.[1]
+    expect(cancelParams).not.toHaveProperty('turnId')
+  })
+
+  it('retires a held error after the host accepts structured Stop', async () => {
+    act(() => {
+      renderer = create(createElement(Harness))
+    })
+    await vi.waitFor(() => expect(listener).toEqual(expect.any(Function)))
+    act(() =>
+      listener?.({
+        ...snapshotEvent(3),
+        page: { ...snapshotEvent(3).page, items: [runningStatusItem()] }
+      })
+    )
+    sendRequest.mockImplementation(async (method, params) =>
+      method === 'agentSession.cancel'
+        ? ok({
+            ok: true,
+            replayed: false,
+            fence: 3,
+            cursor: { epoch: 'epoch-1', sequence: 4 },
+            value: { turnId: 'turn-1', cancelled: true }
+          })
+        : defaultSendRequest(method, params)
+    )
+
+    await act(async () => {
+      hook!.cancel()
+      await Promise.resolve()
+    })
+
+    expect(onCancelResolved).toHaveBeenCalledOnce()
+  })
+
+  it('refuses prompt cancellation for a host without prompt cancellation', async () => {
+    act(() => {
+      renderer = create(createElement(Harness))
+    })
+    await vi.waitFor(() => expect(listener).toEqual(expect.any(Function)))
+    act(() =>
+      listener?.({
+        ...snapshotEvent(3),
+        page: {
+          ...snapshotEvent(3).page,
+          items: [runningStatusItem(), approvalItem()]
+        }
+      })
+    )
+
+    act(() => hook!.cancel())
+
+    expect(sendRequest.mock.calls.some(([method]) => method === 'agentSession.cancel')).toBe(false)
+    expect(onSendError).toHaveBeenCalledWith(
+      'Cancelling a pending prompt requires a newer Orca server. Update the server and try again.'
+    )
   })
 
   it('releases a landed hold when the structured tab unmounts', async () => {

@@ -16,7 +16,9 @@ export function useMobileNativeChatSessionLane({
   sourceIdentity,
   enabled,
   connState,
-  onSendError
+  promptCancelSupported,
+  onSendError,
+  onCancelResolved
 }: {
   client: RpcClient | null
   structured: boolean
@@ -29,7 +31,9 @@ export function useMobileNativeChatSessionLane({
   sourceIdentity: Parameters<typeof useMobileNativeChatSession>[0]['sourceIdentity']
   enabled: boolean
   connState: ConnectionState
+  promptCancelSupported?: boolean
   onSendError: (message: string) => void
+  onCancelResolved: () => void
 }): {
   structuredSession: ReturnType<typeof useMobileStructuredAgentSession>
   session: ReturnType<typeof useMobileNativeChatSession>
@@ -50,7 +54,9 @@ export function useMobileNativeChatSessionLane({
     // reacquire the provider without clearing the cached transcript.
     connected: connState === 'connected',
     agent: structured ? agent : null,
-    onSendError
+    promptCancelSupported,
+    onSendError,
+    onCancelResolved
   })
   return {
     structuredSession,
