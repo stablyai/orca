@@ -1,7 +1,8 @@
 import { execFile } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { realpathSync } from 'node:fs'
+import { lstatSync, realpathSync } from 'node:fs'
 import { userInfo } from 'node:os'
+import { basename, dirname, join } from 'node:path'
 
 const ACTIVE_CLAUDE_SERVICE = 'Claude Code-credentials'
 const ORCA_CLAUDE_SERVICE = 'Orca Claude Code Managed Credentials'
@@ -131,13 +132,46 @@ function getActiveClaudeService(configDir?: string): string {
 
 export function claudeConfigDirKeychainAliases(configDir: string): string[] {
   const aliases = [configDir]
-  try {
-    const canonical = realpathSync(configDir)
-    if (canonical !== configDir) {
-      aliases.push(canonical)
+  const missingSegments: string[] = []
+  let existingPath = configDir
+  while (true) {
+    try {
+      const canonical = join(realpathSync(existingPath), ...missingSegments)
+      if (canonical !== configDir) {
+        aliases.push(canonical)
+      }
+      break
+    } catch (error) {
+      // Missing paths with parent traversal cannot prove an alias across symlinks.
+      if (
+        !(error instanceof Error) ||
+        !('code' in error) ||
+        error.code !== 'ENOENT' ||
+        configDir.split(/[\\/]/).includes('..')
+      ) {
+        break
+      }
+      try {
+        // A broken symlink has no known canonical target; do not guess its alias.
+        lstatSync(existingPath)
+        break
+      } catch (missingError) {
+        if (
+          !(missingError instanceof Error) ||
+          !('code' in missingError) ||
+          missingError.code !== 'ENOENT'
+        ) {
+          break
+        }
+      }
+      const parent = dirname(existingPath)
+      if (parent === existingPath) {
+        break
+      }
+      // Preserve canonical Keychain lookup without recreating a removed config directory.
+      missingSegments.unshift(basename(existingPath))
+      existingPath = parent
     }
-  } catch {
-    // Login temp dirs can vanish before capture; keep the raw path.
   }
   return aliases
 }
