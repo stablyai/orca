@@ -89,6 +89,14 @@ async function imageContent(
   }
 }
 
+/** The text a user typed into one dispatch. Several text blocks join into one rather than
+ *  appending each: Claude reads only the trailing text block, so the rest would be discarded. */
+export function claudeDispatchTypedText(body: AgentJournalMessageItem): string {
+  return (body.blocks as NativeChatBlock[])
+    .flatMap((block) => (block.type === 'text' && block.text.length > 0 ? [block.text] : []))
+    .join('\n')
+}
+
 /**
  * Claude encodes a user turn as attachment blocks followed by the typed text, and recovers the
  * typed prompt by reading only the trailing text block. Verified against the real CLI over
@@ -102,18 +110,14 @@ export async function claudeDispatchMessageContent(
     throw new Error('Claude dispatch accepts only user messages')
   }
   const images: unknown[] = []
-  const texts: string[] = []
   const imageBudget: ImageBudget = { count: 0, localBytes: 0 }
   for (const block of body.blocks as NativeChatBlock[]) {
-    if (block.type === 'text' && block.text.length > 0) {
-      texts.push(block.text)
-    } else if (block.type === 'image-ref') {
+    if (block.type === 'image-ref') {
       images.push(await imageContent(block, imageBudget))
     }
   }
-  // Join rather than append each block: only the trailing text is read as the prompt, so several
-  // text blocks would silently discard every one but the last.
-  const content = texts.length > 0 ? [...images, { type: 'text', text: texts.join('\n') }] : images
+  const text = claudeDispatchTypedText(body)
+  const content = text.length > 0 ? [...images, { type: 'text', text }] : images
   if (content.length === 0) {
     throw new Error('Claude dispatch requires text or an image')
   }

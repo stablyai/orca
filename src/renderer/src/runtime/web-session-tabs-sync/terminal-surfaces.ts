@@ -105,6 +105,13 @@ export function buildMirroredAgentTabs(
     }
     occupiedIds.add(localId)
     assignedIds.add(localId)
+    const providerSessionId = tab.providerSessionId?.trim() || null
+    // A name resolved for a different conversation is not this one's name.
+    const preservesExistingTitle =
+      providerSessionId !== null &&
+      existing?.agentSessionProviderSessionId === providerSessionId &&
+      existing.aiVaultTitle?.agent === tab.agent &&
+      existing.aiVaultTitle.sessionId === providerSessionId
     return {
       hostTabId: tab.id,
       unifiedTab: {
@@ -114,6 +121,10 @@ export function buildMirroredAgentTabs(
         worktreeId: snapshot.worktree,
         contentType: 'agent-session',
         agentSessionAgent: tab.agent,
+        // Why: the host owns the conversation identity, the client owns the name it resolved from
+        // it. Dropping either on a republish renamed the tab back to the generic label.
+        ...(providerSessionId ? { agentSessionProviderSessionId: providerSessionId } : {}),
+        ...(preservesExistingTitle ? { aiVaultTitle: existing.aiVaultTitle } : {}),
         // Why: `title` is wire data typed `string`; a host that violates that must
         // degrade to the placeholder, not throw inside the snapshot patch.
         label: tab.title?.trim() || defaultAgentChatLabel(tab.agent),

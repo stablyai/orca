@@ -81,6 +81,10 @@ export type ClaudeStructuredSessionAdapterDeps = {
   now?: () => number
   requestTimeoutMs?: number
   initTimeoutMs?: number
+  /** Orca's memory that this conversation was already named, never a display source: the CLI's
+   *  own `ai-title` transcript record is what surfaces the name. */
+  readConversationName?: (sessionId: string) => string | null
+  storeConversationName?: (sessionId: string, name: string) => Promise<void>
   persistHandle?: (input: {
     sessionId: string
     providerSessionId: string

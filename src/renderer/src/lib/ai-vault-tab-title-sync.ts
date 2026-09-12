@@ -4,6 +4,7 @@ import type {
 } from '../../../shared/ai-vault-session-title'
 import type { AppState } from '@/store/types'
 import {
+  aiVaultTitleByTabId,
   collectAiVaultTitleRequests,
   type AiVaultTitleRequest
 } from './ai-vault-tab-title-requests'
@@ -43,13 +44,9 @@ function nextLiveRefreshDelay(state: AppState, requests: AiVaultTitleRequest[]):
   if (liveRequests.length === 0) {
     return null
   }
-  const tabsById = new Map(
-    Object.values(state.tabsByWorktree)
-      .flat()
-      .map((tab) => [tab.id, tab] as const)
-  )
+  const storedTitleByTabId = aiVaultTitleByTabId(state)
   const hasMissingTitle = liveRequests.some((request) => {
-    const stored = tabsById.get(request.tabId)?.aiVaultTitle
+    const stored = storedTitleByTabId.get(request.tabId)
     return (
       stored?.agent !== request.agent ||
       stored.sessionId !== request.providerSession.id ||
@@ -141,14 +138,10 @@ export function startAiVaultTabTitleSync(dependencies: SyncDependencies): () => 
     }
 
     const state = dependencies.getState()
-    const tabsById = new Map(
-      Object.values(state.tabsByWorktree)
-        .flat()
-        .map((tab) => [tab.id, tab] as const)
-    )
+    const storedTitleByTabId = aiVaultTitleByTabId(state)
     const requests = collectAiVaultTitleRequests(state)
     const requestsToScan = requests.filter((request) => {
-      const stored = tabsById.get(request.tabId)?.aiVaultTitle
+      const stored = storedTitleByTabId.get(request.tabId)
       const identityMatches =
         stored?.agent === request.agent && stored.sessionId === request.providerSession.id
       if (stored && !identityMatches) {

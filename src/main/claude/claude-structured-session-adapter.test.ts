@@ -148,7 +148,7 @@ describe('ClaudeStructuredSessionAdapter.acquire', () => {
     const claude = fakeClaude({ replayUuid: null })
     const events: ClaudeStructuredSessionEvent[] = []
     const settled = vi.fn()
-    const adapter = await acquired(claude, {}, events, settled)
+    const adapter = await acquired(claude, {}, events, { onDispatchSettledLate: settled })
 
     await expect(
       adapter.dispatch({
@@ -189,7 +189,7 @@ describe('ClaudeStructuredSessionAdapter.acquire', () => {
     const claude = fakeClaude({ replayUuid: null })
     const events: ClaudeStructuredSessionEvent[] = []
     const settled = vi.fn()
-    const adapter = await acquired(claude, {}, events, settled)
+    const adapter = await acquired(claude, {}, events, { onDispatchSettledLate: settled })
     const connection = claude.connections[0]!
 
     connection.handlers.onMessage?.({

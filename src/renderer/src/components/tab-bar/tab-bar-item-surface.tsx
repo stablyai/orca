@@ -1,5 +1,8 @@
 import React from 'react'
-import { resolveTerminalTabTitle } from '../../../../shared/tab-title-resolution'
+import {
+  resolveTerminalTabTitle,
+  resolveUnifiedTabLabel
+} from '../../../../shared/tab-title-resolution'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import { isAgentSessionHandleProvider } from '../../../../shared/agent-session-provider-handle'
@@ -232,7 +235,9 @@ export function renderTabBarItems({
         id: item.id,
         ptyId: null,
         worktreeId,
-        title: item.data.label,
+        // Why: SortableTab renders `title` as given, so the chat's provider name has to be resolved
+        // here — the same place the terminal branch resolves its own.
+        title: resolveUnifiedTabLabel(item.data, generatedTabTitlesEnabled, item.data.label),
         customTitle: item.data.customLabel,
         color: item.data.color,
         sortOrder: item.data.sortOrder,
