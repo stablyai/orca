@@ -200,7 +200,8 @@ function statusEntryToQueueItem(
 
 function branchEntryToQueueItem(
   entry: MobileGitBranchChangeEntry,
-  input: BuildMobileDiffReviewQueueInput
+  input: BuildMobileDiffReviewQueueInput,
+  comments: readonly DiffComment[]
 ): MobileDiffReviewQueueItem {
   const scope: DiffReviewScope = 'branch'
   const key = createMobileDiffReviewFileKey(scope, 'branch', entry.path, entry.oldPath)
@@ -208,7 +209,7 @@ function branchEntryToQueueItem(
   const reviewFileState = input.reviewState.files[key]
   const counts = queueNoteCounts(
     { filePath: entry.path, oldPath: entry.oldPath, scope, diffIdentity },
-    input.comments
+    comments
   )
   return {
     key,
@@ -247,11 +248,28 @@ function compareQueueItems(
 export function buildMobileDiffReviewQueue(
   input: BuildMobileDiffReviewQueueInput
 ): MobileDiffReviewQueueItem[] {
+  let commentsForPath = (_path: string): readonly DiffComment[] => input.comments
+  if (input.comments.length > 0 && input.statusEntries.length + input.branchEntries.length > 1) {
+    const commentsByPath = new Map<string, DiffComment[]>()
+    const emptyComments: readonly DiffComment[] = []
+    for (const comment of input.comments) {
+      const path = comment.filePath
+      const comments = commentsByPath.get(path)
+      if (comments) {
+        comments.push(comment)
+      } else {
+        commentsByPath.set(path, [comment])
+      }
+    }
+    commentsForPath = (path) => commentsByPath.get(path) ?? emptyComments
+  }
   return [
     ...input.statusEntries.map((entry) =>
-      statusEntryToQueueItem(entry, input.comments, input.reviewState)
+      statusEntryToQueueItem(entry, commentsForPath(entry.path), input.reviewState)
     ),
-    ...input.branchEntries.map((entry) => branchEntryToQueueItem(entry, input))
+    ...input.branchEntries.map((entry) =>
+      branchEntryToQueueItem(entry, input, commentsForPath(entry.path))
+    )
   ].sort(compareQueueItems)
 }
 
