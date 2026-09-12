@@ -67,13 +67,15 @@ function flushPaneRevealRepaints(): void {
 /**
  * Repaints a revealed tab's panes from their xterm buffers.
  *
- * Why: while a pane is hidden, parsed output can update the WebGL renderer's
- * per-cell model without ever presenting a frame. At reveal the model diff
- * reports those cells unchanged, so plain refreshes skip them and the canvas
- * keeps compositing pre-hide pixels until a selection or resize rebuilds the
- * model. Once layout settles, reattach every revealed renderer before one
- * registry-wide atlas reset so no delayed pane-local clear can invalidate a
- * sibling terminal's rebuilt model.
+ * Why: the heavy reveal recreates renderers, so once layout settles, reattach
+ * every revealed renderer before one registry-wide atlas reset — a delayed
+ * pane-local clear would otherwise invalidate a sibling's rebuilt model.
+ *
+ * NOT why: an ordinary display:none tab does not strand a stale cell model.
+ * With no box the render service is paused, so refreshRows returns before
+ * _updateModel and only latches _needsFullRefresh, which the observer pays back
+ * with a full refresh on reveal. Staleness needs that latch cleared while the
+ * pane is still hidden — see the display guard in pane-viewport-present.ts.
  */
 export function schedulePaneRevealRepaint(getPanes: () => Iterable<ManagedPaneInternal>): void {
   pendingRevealRepaints.add(getPanes)
