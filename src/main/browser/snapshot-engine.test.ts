@@ -46,6 +46,25 @@ function node(
 }
 
 describe('buildSnapshot', () => {
+  it('keeps references routed to their own iframe session', async () => {
+    const tree = [
+      node('1', 'WebArea', 'page', { childIds: ['2'] }),
+      node('2', 'button', 'Submit', { backendDOMNodeId: 10 })
+    ]
+    const sessions = new Map([
+      ['frame-a', 'session-a'],
+      ['frame-b', 'session-b']
+    ])
+    const result = await buildSnapshot(makeSender(tree), sessions, () => makeSender(tree))
+    expect(result.refs.map((ref) => ref.ref)).toEqual(['@e1', '@e2', '@e3'])
+    expect([...result.refMap.values()].map((entry) => entry.sessionId)).toEqual([
+      undefined,
+      'session-a',
+      'session-b'
+    ])
+    expect([...result.refMap.values()].map((entry) => entry.backendDOMNodeId)).toEqual([10, 10, 10])
+  })
+
   it('returns empty snapshot for empty tree', async () => {
     const result = await buildSnapshot(makeSender([]))
     expect(result.snapshot).toBe('')
