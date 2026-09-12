@@ -44,7 +44,14 @@ const SUMMARY = /<summary\b[^>]*>([\s\S]*?)<\/summary>/i
 // show literally. Conservative: only matches `<tag ...>` / `</tag>` shapes, so a bare
 // "a < b" in prose is left alone.
 export function stripHtmlTags(text: string): string {
-  return text.replace(/<\/?[a-zA-Z][a-zA-Z0-9-]*(?:\s[^>]*)?\/?>/g, '')
+  const end = text.lastIndexOf('>') + 1
+  if (end === 0) {
+    return text
+  }
+  // No tag can close in this suffix; keep it literal without retrying every opener.
+  return (
+    text.slice(0, end).replace(/<\/?[a-zA-Z][a-zA-Z0-9-]*(?:\s[^>]*)?\/?>/g, '') + text.slice(end)
+  )
 }
 
 export function parseMarkdownBlocks(content: string): MarkdownBlock[] {
