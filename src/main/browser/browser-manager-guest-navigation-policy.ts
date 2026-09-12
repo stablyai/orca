@@ -121,6 +121,7 @@ export abstract class BrowserManagerGuestNavigationPolicy extends BrowserManager
       // Why: a committed nav makes the did-start-navigation stash obsolete; drop it so a later ERR_ABORTED can't restore an error over it.
       this.clearedLoadErrorsByGuestId.delete(guest.id)
       this.certificateTrustController?.onMainFrameNavigationCommitted(guest.id, url)
+      this.notifyBrowserGuestStateChanged(guest.id)
     }
 
     guest.on('will-navigate', navigationGuard)

@@ -66,6 +66,32 @@ describe('browserManager', () => {
     vi.useRealTimers()
   })
 
+  it('publishes successful offscreen navigation to the owning worktree', () => {
+    const stateChanged = vi.fn()
+    const guest = {
+      id: 606,
+      isDestroyed: vi.fn(() => false),
+      getType: vi.fn(() => 'window'),
+      setBackgroundThrottling: vi.fn(),
+      setWindowOpenHandler: vi.fn(),
+      on: vi.fn(),
+      off: vi.fn(),
+      getURL: vi.fn(() => 'https://remote.test/link')
+    }
+    webContentsFromIdMock.mockReturnValue(guest)
+    browserManager.setBrowserGuestStateChangedListener(stateChanged)
+    browserManager.registerOffscreenGuest({
+      browserPageId: 'background-page',
+      worktreeId: 'remote-worktree',
+      webContentsId: guest.id
+    })
+    stateChanged.mockClear()
+    const committed = guest.on.mock.calls.find(([event]) => event === 'did-navigate')?.[1]
+    expect(committed).toBeTypeOf('function')
+    committed!(null, guest.getURL())
+    expect(stateChanged).toHaveBeenCalledWith('remote-worktree')
+  })
+
   it('tracks offscreen load failures for the owning worktree snapshot', () => {
     const stateChanged = vi.fn()
     const offscreenGuest = {

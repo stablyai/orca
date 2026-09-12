@@ -37,8 +37,8 @@ export function createBrowserPageCreateActions(
         undefined,
         options?.docLocation
       )
-      // Runtime-backed pages are streamed, not locally driven, but they still need the pane
-      // mounted to start that stream — #19633 admitted only local pages and left them deferred.
+      // Runtime-backed pages need their pane mounted to exist as a background tab at all;
+      // the stream itself still opens only on activation. #19633 admitted local pages only.
       if (!options?.docLocation) {
         admitBrowserPageMount(page.id)
       }
