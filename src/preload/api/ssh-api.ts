@@ -71,6 +71,7 @@ export type SshApi = {
       targetId: string
       kind: 'passphrase' | 'password' | 'keyboard-interactive'
       detail: string
+      echo?: boolean
     }) => void
   ) => () => void
   onCredentialResolved: (callback: (data: { requestId: string }) => void) => () => void
