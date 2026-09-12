@@ -1,4 +1,5 @@
 import type { SshPtyOutputIntake } from './ssh-pty-output-intake'
+import type { SshPtyOwnershipTransferSourceRange } from './ssh-pty-output-source-obligations'
 import type {
   SshPtyOutputDataEvent,
   SshPtyOutputExitEvent,
@@ -62,6 +63,13 @@ export function getSshPtyAcceptedSourceCheckpoints(
   return installedIntake?.getAcceptedSourceCheckpoints(providerGeneration) ?? []
 }
 
+export function requireSshPtyLiveSourceSettlement(checkpoint: SshPtyAcceptedSourceCheckpoint) {
+  if (!installedIntake) {
+    throw outputIntakeUnavailableError()
+  }
+  return installedIntake.requireLiveSourceSettlement(checkpoint)
+}
+
 export function beginSshPtyOutputGenerationMigration(
   providerGeneration: number
 ): SshPtyOutputGenerationMigration {
@@ -99,6 +107,24 @@ export function publishSshPtySourceAck(
     return
   }
   publisher(batch, onSettled)
+}
+
+export function settleSshPtyOwnershipTransferOutput(
+  range: SshPtyOwnershipTransferSourceRange
+): boolean {
+  if (!installedIntake) {
+    return false
+  }
+  installedIntake.settleOwnershipTransferOutput(range)
+  return true
+}
+
+export function waitForSshPtyOwnershipTransferModelCheckpoints(
+  ranges: readonly SshPtyOwnershipTransferSourceRange[]
+): Promise<void> {
+  return installedIntake
+    ? installedIntake.waitForOwnershipTransferModelCheckpoints(ranges)
+    : Promise.reject(outputIntakeUnavailableError())
 }
 
 export function installSshPtySourceCancellationPublisher(

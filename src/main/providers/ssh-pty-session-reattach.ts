@@ -299,6 +299,9 @@ export async function reattachSshPtySessionForSpawn(
   // fresh one with full replay. One immediate retry keeps the ordinary reconnect off the renderer's
   // 15s-cooldown pane-recovery ladder.
   for (let attempt = 0; attempt < RESTORE_REQUIRED_ATTACH_ATTEMPTS; attempt++) {
+    if (args.mux.isPtyPreparationFenced?.(toRelaySshPtyId(args.connectionId, args.sessionId))) {
+      throw new Error(`${SSH_PTY_SOURCE_RESTORE_REQUIRED_ERROR}: ownership preparation pending`)
+    }
     let result: SshPtyReattachResult | undefined
     try {
       result = await reattachSshPtySessionWithExitFence(args)

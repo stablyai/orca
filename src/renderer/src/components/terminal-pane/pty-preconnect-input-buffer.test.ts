@@ -7,6 +7,32 @@ import {
 } from './pty-preconnect-input-buffer'
 
 describe('createPtyPreconnectInputBuffer', () => {
+  it('retains operation identities across deferred input and seeded handoff', async () => {
+    const buffer = createPtyPreconnectInputBuffer([
+      { data: 'seed', kind: 'ordinary', options: { operationId: 'seed-op' } }
+    ])
+    const retained = vi.fn()
+    const options = { operationId: 'accepted-op' }
+    const accepted = buffer.enqueueAccepted('accepted', retained, options)
+    options.operationId = 'mutated'
+    const sendInput = vi.fn(() => true)
+    const sendInputAccepted = vi.fn(async () => true)
+    await buffer.flush({
+      isCurrent: () => true,
+      sendInput,
+      sendInputImmediate: () => true,
+      sendInputAccepted
+    })
+    await expect(accepted).resolves.toBe(true)
+    expect(sendInput).toHaveBeenCalledWith('seed', { operationId: 'seed-op' })
+    expect(sendInputAccepted).toHaveBeenCalledWith('accepted', { operationId: 'accepted-op' })
+    expect(retained).toHaveBeenCalledWith({
+      data: 'accepted',
+      kind: 'accepted',
+      options: { operationId: 'accepted-op' }
+    })
+  })
+
   it('shares one flush worker and preserves mixed input order', async () => {
     const acceptedWrite = createDeferred<boolean>()
     const buffer = createPtyPreconnectInputBuffer()

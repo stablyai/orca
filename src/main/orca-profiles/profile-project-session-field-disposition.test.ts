@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
+import type { BrowserWorkspace } from '../../shared/browser-workspace-types'
 import { CLIENT_HOSTED_BROWSER_PAGE_RECORD_VERSION } from '../../shared/client-hosted-browser-page-record'
 import type { PersistedClientHostedBrowserPage } from '../../shared/client-hosted-browser-page-record'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
@@ -16,16 +17,36 @@ const TRANSFER_TARGET_REPO_ID = 'repo-3'
 const REMOVED_WORKTREE_ID = 'repo-1::/tmp/worktree-a'
 const RETAINED_WORKTREE_ID = 'repo-2::/tmp/worktree-b'
 
-function clientHostedRow(worktreeId: string): PersistedClientHostedBrowserPage {
+function clientHostedRow(
+  worktreeId: string,
+  workspaceId = worktreeId
+): PersistedClientHostedBrowserPage {
   return {
     v: CLIENT_HOSTED_BROWSER_PAGE_RECORD_VERSION,
     browserPageId: `page-${worktreeId}`,
-    workspaceId: worktreeId,
+    workspaceId,
     browserProfileId: 'profile-1',
     url: 'https://example.test/',
     title: 'Example',
     pairedDeviceId: 'device-1',
     savedAt: 1
+  }
+}
+
+function browserWorkspace(worktreeId: string, id: string): BrowserWorkspace {
+  return {
+    id,
+    worktreeId,
+    activePageId: null,
+    pageIds: [],
+    url: 'about:blank',
+    title: 'Browser',
+    loading: false,
+    faviconUrl: null,
+    canGoBack: false,
+    canGoForward: false,
+    loadError: null,
+    createdAt: 1
   }
 }
 
@@ -36,9 +57,13 @@ function sessionWithClientHostedRows(): WorkspaceSessionState {
       [REMOVED_WORKTREE_ID]: 'browser',
       [RETAINED_WORKTREE_ID]: 'browser'
     },
+    browserTabsByWorktree: {
+      [REMOVED_WORKTREE_ID]: [browserWorkspace(REMOVED_WORKTREE_ID, 'browser-a')],
+      [RETAINED_WORKTREE_ID]: [browserWorkspace(RETAINED_WORKTREE_ID, 'browser-b')]
+    },
     clientHostedBrowserPagesByWorktree: {
-      [REMOVED_WORKTREE_ID]: [clientHostedRow(REMOVED_WORKTREE_ID)],
-      [RETAINED_WORKTREE_ID]: [clientHostedRow(RETAINED_WORKTREE_ID)]
+      [REMOVED_WORKTREE_ID]: [clientHostedRow(REMOVED_WORKTREE_ID, 'browser-a')],
+      [RETAINED_WORKTREE_ID]: [clientHostedRow(RETAINED_WORKTREE_ID, 'browser-b')]
     }
   }
 }
@@ -48,13 +73,13 @@ describe('client-hosted rows in the repo-removal and transfer paths', () => {
     const result = removeRepoFromWorkspaceSession(sessionWithClientHostedRows(), REMOVED_REPO_ID)
 
     expect(result.clientHostedBrowserPagesByWorktree).toEqual({
-      [RETAINED_WORKTREE_ID]: [clientHostedRow(RETAINED_WORKTREE_ID)]
+      [RETAINED_WORKTREE_ID]: [clientHostedRow(RETAINED_WORKTREE_ID, 'browser-b')]
     })
     // The sibling map is the control: whatever removal does to it, it must do here too.
     expect(result.activeTabTypeByWorktree).toEqual({ [RETAINED_WORKTREE_ID]: 'browser' })
   })
 
-  it('leaves client-hosted rows behind on transfer while a sibling map is rekeyed', () => {
+  it('rekeys client-hosted rows while a sibling map is rekeyed', () => {
     const result = extractSessionForTransfer(
       sessionWithClientHostedRows(),
       REMOVED_REPO_ID,
@@ -62,8 +87,123 @@ describe('client-hosted rows in the repo-removal and transfer paths', () => {
     )
 
     expect(result.activeTabTypeByWorktree).toEqual({ 'repo-3::/tmp/worktree-a': 'browser' })
-    // Not an omission: the rows name a paired device and browser profile the payload cannot carry.
-    expect(result.clientHostedBrowserPagesByWorktree).toBeUndefined()
+    expect(result.clientHostedBrowserPagesByWorktree).toEqual({
+      'repo-3::/tmp/worktree-a': [clientHostedRow(REMOVED_WORKTREE_ID, 'browser-a')]
+    })
+  })
+
+  it('rekeys markdown frontmatter visibility with the open file identity', () => {
+    const session: WorkspaceSessionState = {
+      ...getDefaultWorkspaceSession(),
+      openFilesByWorktree: {
+        [REMOVED_WORKTREE_ID]: [
+          {
+            filePath: '/tmp/worktree-a/README.md',
+            relativePath: 'README.md',
+            worktreeId: REMOVED_WORKTREE_ID,
+            language: 'markdown'
+          }
+        ]
+      },
+      markdownFrontmatterVisible: {
+        '/tmp/worktree-a/README.md': false
+      }
+    }
+
+    const result = extractSessionForTransfer(session, REMOVED_REPO_ID, TRANSFER_TARGET_REPO_ID)
+
+    expect(result.markdownFrontmatterVisible).toEqual({ '/tmp/worktree-a/README.md': false })
+  })
+
+  it('omits stale markdown visibility entries that no longer name an open file', () => {
+    const session: WorkspaceSessionState = {
+      ...getDefaultWorkspaceSession(),
+      openFilesByWorktree: {
+        [REMOVED_WORKTREE_ID]: [
+          {
+            filePath: '/tmp/worktree-a/README.md',
+            relativePath: 'README.md',
+            worktreeId: REMOVED_WORKTREE_ID,
+            language: 'markdown'
+          }
+        ]
+      },
+      markdownFrontmatterVisible: {
+        '/tmp/worktree-a/README.md': false,
+        '/tmp/worktree-a/closed.md': false
+      }
+    }
+
+    const result = extractSessionForTransfer(session, REMOVED_REPO_ID, TRANSFER_TARGET_REPO_ID)
+
+    expect(result.markdownFrontmatterVisible).toEqual({ '/tmp/worktree-a/README.md': false })
+  })
+
+  it('prunes markdown visibility for files in a removed repo', () => {
+    const session = {
+      ...getDefaultWorkspaceSession(),
+      openFilesByWorktree: {
+        [REMOVED_WORKTREE_ID]: [
+          {
+            filePath: '/tmp/worktree-a/README.md',
+            relativePath: 'README.md',
+            worktreeId: REMOVED_WORKTREE_ID,
+            language: 'markdown'
+          }
+        ],
+        [RETAINED_WORKTREE_ID]: [
+          {
+            filePath: '/tmp/worktree-b/README.md',
+            relativePath: 'README.md',
+            worktreeId: RETAINED_WORKTREE_ID,
+            language: 'markdown'
+          }
+        ]
+      },
+      markdownFrontmatterVisible: {
+        '/tmp/worktree-a/README.md': false,
+        '/tmp/worktree-b/README.md': false
+      }
+    }
+
+    const result = removeRepoFromWorkspaceSession(session, REMOVED_REPO_ID)
+
+    expect(result.markdownFrontmatterVisible).toEqual({ '/tmp/worktree-b/README.md': false })
+  })
+
+  it('keeps a unified-only terminal layout attached during transfer', () => {
+    const session = {
+      ...getDefaultWorkspaceSession(),
+      tabsByWorktree: {},
+      unifiedTabs: {
+        [REMOVED_WORKTREE_ID]: [
+          {
+            id: 'terminal-tab-1',
+            entityId: 'terminal-tab-1',
+            groupId: 'group-1',
+            worktreeId: REMOVED_WORKTREE_ID,
+            contentType: 'terminal' as const,
+            label: 'Terminal',
+            customLabel: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1
+          }
+        ]
+      },
+      terminalLayoutsByTabId: {
+        'terminal-tab-1': {
+          root: { type: 'leaf' as const, leafId: 'leaf-1' },
+          activeLeafId: 'leaf-1',
+          expandedLeafId: null,
+          titlesByLeafId: { 'leaf-1': 'shell' }
+        }
+      }
+    }
+
+    const result = extractSessionForTransfer(session, REMOVED_REPO_ID, TRANSFER_TARGET_REPO_ID)
+
+    expect(result.terminalLayoutsByTabId).toEqual(session.terminalLayoutsByTabId)
   })
 
   it('removes the transferred repo rows from the source it left', () => {

@@ -359,7 +359,7 @@ describe('PtyHandler', () => {
   })
 
   describe('history isolation for a Windows relay launching WSL', () => {
-    const wslWorktreeId = 'r::/remote/wsl-worktree'
+    const wslWorktreeId = 'r::/remote/wsl-spawn-environment-worktree'
     const wslHistoryFile = join(
       homedir(),
       '.orca-remote',

@@ -121,7 +121,7 @@ export function flushPendingData(session: PtyIpcSession): void {
             session,
             id,
             'hidden-drop',
-            session.runtime?.getPtyOutputSequence(id)
+            session.runtime?.getPtyOutputSequence?.(id)
           )
         }
         continue

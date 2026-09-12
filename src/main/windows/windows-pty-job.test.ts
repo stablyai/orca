@@ -27,6 +27,14 @@ afterEach(() => {
 })
 
 describe('terminatePtyJob', () => {
+  it('uses a Bun PTY self-owned job without consulting node-pty native state', () => {
+    const terminateOwnedTree = vi.fn(() => 'terminated' as const)
+    const proc = { pid: 4242, terminateOwnedTree } as unknown as IPty
+
+    expect(terminatePtyJob(proc)).toBe('terminated')
+    expect(terminateOwnedTree).toHaveBeenCalledOnce()
+  })
+
   it('terminates the job for a pty that has one', () => {
     const terminateJob = vi.fn().mockReturnValue(true)
     __setConptyJobNativeForTests(() => ({
@@ -110,6 +118,15 @@ describe('terminatePtyJob', () => {
 })
 
 describe('listPtyJobProcessIds', () => {
+  it('reads Bun PTY self-owned job membership', () => {
+    const proc = {
+      pid: 4242,
+      listOwnedProcessIds: vi.fn(() => [4242, 4243])
+    } as unknown as IPty
+
+    expect(listPtyJobProcessIds(proc)).toEqual([4242, 4243])
+  })
+
   it('returns the live pids, including a detached grandchild', () => {
     // Measured on Windows 11: a grandchild spawned detached leaves the console
     // and reparents, so neither GetConsoleProcessList nor a parent-pid walk

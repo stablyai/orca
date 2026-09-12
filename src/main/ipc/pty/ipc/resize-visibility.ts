@@ -273,7 +273,7 @@ export function installPtyResizeVisibilityIpc(session: PtyIpcSession): void {
             session,
             args.id,
             'hidden-drop',
-            runtime?.getPtyOutputSequence(args.id)
+            runtime?.getPtyOutputSequence?.(args.id)
           )
         }
       }
@@ -293,7 +293,7 @@ export function installPtyResizeVisibilityIpc(session: PtyIpcSession): void {
         session,
         args.id,
         'unhide',
-        runtime?.getPtyOutputSequence(args.id)
+        runtime?.getPtyOutputSequence?.(args.id)
       )
     }
   })

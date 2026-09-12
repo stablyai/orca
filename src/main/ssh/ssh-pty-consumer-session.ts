@@ -1,5 +1,6 @@
 import {
   PTY_CONSUMER_SESSION_PROTOCOL_VERSION,
+  PTY_CONSUMER_RESUME_CLIENT_METHOD,
   type PtyConsumerSessionGrant
 } from '../../shared/pty-consumer-session'
 import type { SshChannelMultiplexer } from './ssh-channel-multiplexer'
@@ -101,10 +102,75 @@ export async function openSshPtyConsumerSession(
   mux: SshChannelMultiplexer,
   options: OpenSshPtyConsumerSessionOptions
 ): Promise<SshPtyConsumerAdmission> {
+  return requestPtyConsumerSession(mux, options, SSH_PTY_OPEN_CLIENT_METHOD)
+}
+
+/** Dedicated RPC: old hosts refuse without minting a replacement claim. */
+export async function resumeSshPtyConsumerSession(
+  mux: SshChannelMultiplexer,
+  options: Omit<OpenSshPtyConsumerSessionOptions, 'resume' | 'allowSameBuildLegacyFallback'> & {
+    resume: NonNullable<OpenSshPtyConsumerSessionOptions['resume']>
+    signal: AbortSignal
+    assertAuthority: () => void
+  }
+): Promise<SshPtyConsumerAdmission> {
+  const resume = { ...options.resume }
+  const signal = options.signal
+  const assertAuthority = options.assertAuthority
+  const isDisposed = mux.isDisposed.bind(mux)
+  const assertCurrent = () => {
+    signal.throwIfAborted()
+    assertAuthority()
+    if (isDisposed()) {
+      throw new Error('pty_consumer_resume_transport_closed')
+    }
+  }
+  assertCurrent()
+  if (
+    !Number.isSafeInteger(resume.ownerGeneration) ||
+    resume.ownerGeneration <= 0 ||
+    typeof resume.ownerLease !== 'string' ||
+    !resume.ownerLease ||
+    resume.ownerLease.length > 512 ||
+    !options.clientInstanceId ||
+    !options.expectedServerBuildId
+  ) {
+    throw new Error('pty_consumer_resume_required')
+  }
+  const admission = await requestPtyConsumerSession(
+    mux,
+    {
+      clientInstanceId: options.clientInstanceId,
+      expectedServerBuildId: options.expectedServerBuildId,
+      resume,
+      ...(options.outputFlowControl ? { outputFlowControl: { ...options.outputFlowControl } } : {}),
+      allowSameBuildLegacyFallback: false
+    },
+    PTY_CONSUMER_RESUME_CLIENT_METHOD,
+    signal
+  )
+  assertCurrent()
+  if (
+    !admission.resumed ||
+    admission.state.mode !== 'negotiated' ||
+    admission.state.ownerLease !== resume.ownerLease ||
+    admission.state.ownerGeneration <= resume.ownerGeneration
+  ) {
+    throw new Error('pty_consumer_resume_grant_mismatch')
+  }
+  return admission
+}
+
+async function requestPtyConsumerSession(
+  mux: SshChannelMultiplexer,
+  options: OpenSshPtyConsumerSessionOptions,
+  method: string,
+  signal?: AbortSignal
+): Promise<SshPtyConsumerAdmission> {
   let result: unknown
   try {
     result = await mux.request(
-      SSH_PTY_OPEN_CLIENT_METHOD,
+      method,
       {
         protocolVersion: PTY_CONSUMER_SESSION_PROTOCOL_VERSION,
         clientInstanceId: options.clientInstanceId,
@@ -121,7 +187,7 @@ export async function openSshPtyConsumerSession(
             }
           : {})
       },
-      { timeoutMs: SSH_PTY_OPEN_CLIENT_TIMEOUT_MS }
+      { timeoutMs: SSH_PTY_OPEN_CLIENT_TIMEOUT_MS, ...(signal ? { signal } : {}) }
     )
   } catch (error) {
     const code = (error as { code?: unknown })?.code

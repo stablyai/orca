@@ -23,8 +23,7 @@ import {
   credentialRequestedForTarget,
   invalidateConnectAttempt,
   resetRelayInFlight,
-  testConnectionProbes,
-  testingTargets
+  runSshTestConnectionProbe
 } from './ssh-connect-attempt-registry'
 import { connectTarget } from './ssh-connect-flow'
 import { connectionManager, persistedStore } from './ssh-ipc-context'
@@ -35,8 +34,11 @@ import {
   teardownSshTargetTransport
 } from './ssh-session-teardown'
 import { runTargetLifecycle } from './ssh-target-lifecycle-queue'
+import { assertManualSshTargetDestructionAllowed } from './ssh-target-destruction-admission'
+import { assertSshResetAdmissionAllowed } from './ssh-reset-production-state'
 
 async function doResetRelay(targetId: string, target: SshTarget): Promise<void> {
+  assertManualSshTargetDestructionAllowed(targetId)
   const inFlightConnect = connectInFlight.get(targetId)
   if (inFlightConnect) {
     try {
@@ -47,6 +49,7 @@ async function doResetRelay(targetId: string, target: SshTarget): Promise<void> 
     }
   }
 
+  assertManualSshTargetDestructionAllowed(targetId)
   rotateSshProviderAuthority(targetId)
   const session = activeSessions.get(targetId)
   if (session) {
@@ -117,11 +120,13 @@ export function registerSshConnectionHandlers(): void {
   })
 
   ipcMain.handle('ssh:terminateSessions', async (_event, args: { targetId: string }) => {
+    assertManualSshTargetDestructionAllowed(args.targetId)
     invalidateConnectAttempt(args.targetId)
     // Why (#12661): an offline sweep tears down local transport only. The caller must be able to tell
     // "the host stopped these" from "nobody asked the host", so carry the verdict out of the lifecycle queue.
     let outcome: SshTerminateSessionsResult = { terminated: 0, unverifiable: 0 }
     await runTargetLifecycle(args.targetId, async () => {
+      assertManualSshTargetDestructionAllowed(args.targetId)
       const provider = getSshPtyProvider(args.targetId)
       const leases = persistedStore!.getSshRemotePtyLeases(args.targetId)
       const ptyIdsByRelayId = new Map<string, string>()
@@ -207,6 +212,7 @@ export function registerSshConnectionHandlers(): void {
       throw new Error(`SSH target "${args.targetId}" not found`)
     }
     // Why: reset opens its own transport, so it must be fenced by shutdown the same way connect is.
+    assertManualSshTargetDestructionAllowed(args.targetId)
     assertSshConnectsNotFenced()
 
     let resetPromise: Promise<void>
@@ -236,6 +242,7 @@ export function registerSshConnectionHandlers(): void {
   })
 
   ipcMain.handle('ssh:testConnection', async (_event, args: { targetId: string }) => {
+    assertSshResetAdmissionAllowed(args.targetId)
     const target = getSshTargetRegistryStore()!.getTarget(args.targetId)
     if (!target) {
       throw new Error(`SSH target "${args.targetId}" not found`)
@@ -266,18 +273,16 @@ export function registerSshConnectionHandlers(): void {
       }
     }
 
-    testingTargets.add(args.targetId)
     // Why a tracked promise and not just the id: a probe holds a real transport that no session owns,
     // so shutdown has to be able to join it before the final drain disconnects what is left.
-    const probe = (async () => {
+    const probe = runSshTestConnectionProbe(args.targetId, async () => {
       // Why: a probe transport opened after the shutdown drain would outlive orderly teardown.
       assertSshConnectsNotFenced()
       const conn = await connectionManager!.connect(target)
       const state = conn.getState()
       await connectionManager!.disconnect(args.targetId)
       return state
-    })()
-    testConnectionProbes.add(probe)
+    })
     try {
       return { success: true, state: await probe }
     } catch (err) {
@@ -285,11 +290,6 @@ export function registerSshConnectionHandlers(): void {
         success: false,
         error: err instanceof Error ? err.message : String(err)
       }
-    } finally {
-      testConnectionProbes.delete(probe)
-      testingTargets.delete(args.targetId)
-      // Why: clear so a test's credential prompt doesn't leave lastRequiredPassphrase=true and defer this target at startup.
-      credentialRequestedForTarget.delete(args.targetId)
     }
   })
 }

@@ -246,4 +246,26 @@ describe('SSH remote Orca CLI launcher', () => {
       })
     ])
   })
+
+  it('accepts a strict Bun runtime without requiring a Node path', () => {
+    const plan = createRemoteCliInstallPlan({
+      binDir: '/home/me/.orca-relay/bin',
+      relayDir: '/home/me/.orca-remote/relay-v1',
+      runtimePath: '/home/me/.orca-remote/relay-v1/bun-runtime',
+      runtimeKind: 'bun',
+      sockPath: '/home/me/.orca-remote/relay-v1/relay.sock',
+      hostPlatform: getRemoteHostPlatform('linux-x64')
+    })
+    const source = plan.files[0]?.contents ?? ''
+    const syntax = spawnSync('sh', ['-n'], { input: source, encoding: 'utf8' })
+    expect(syntax.status, syntax.stderr).toBe(0)
+    expect(source).toContain('ORCA_RELAY_RUNTIME_PATH')
+    expect(source).toContain("'/home/me/.orca-remote/relay-v1/bun-runtime'")
+    expect(source).toContain("ORCA_RELAY_RUNTIME_KIND:-'bun'")
+    expect(source).toContain(`if [ "$ORCA_RELAY_RUNTIME_KIND" = 'bun' ]`)
+    expect(source).toContain(
+      'ORCA_RELAY_NODE_PATH=${ORCA_RELAY_NODE_PATH:-$ORCA_RELAY_RUNTIME_PATH}'
+    )
+    expect(source).toContain('exec "$ORCA_RELAY_RUNTIME_PATH"')
+  })
 })

@@ -1,7 +1,9 @@
+import type * as pty from 'node-pty'
 import type { TerminalExitCause } from '../../shared/terminal-exit-cause'
 import type { PtySpawnOptions } from './types'
 
 export type LocalPtyProviderOptions = {
+  ptySpawn?: typeof pty.spawn
   /** Why: `ctx.command` (pi/omp/claude) must drive overlay source-dir selection — a disk-presence fallback shadows the other agent's extensions. */
   buildSpawnEnv?: (
     id: string,

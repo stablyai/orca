@@ -28,10 +28,16 @@ import type { ProfilePreferences } from './profile-preferences'
 import type { SessionHostPartitionOperations } from './session-host-partitions'
 import type { SessionSnapshotOperations } from './session-snapshot-operations'
 import type { PtyBindingPersistenceOperations } from './pty-binding-persistence'
+import type { PtyOwnershipTransferSurfacePersistence } from './pty-ownership-transfer-surface-persistence'
 import type { SshProfileOperations } from './ssh-profile-operations'
 import type { RetiredWorktreeNamePersistence } from './retired-worktree-name-persistence'
 import type { SshLeaseRecoveryOperations } from './ssh-lease-recovery-operations'
 import type { WriteFlushBarrierOperations } from './write-flush-barriers'
+import type { OrcadCatalogImportPersistence } from '../migrating-orcad-catalog/orcad-catalog-import'
+import type { OrcadSourceCutoverPersistence } from '../migrating-orcad-catalog/orcad-source-cutover'
+import type { OrcadSourceRetirementPersistence } from '../migrating-orcad-catalog/orcad-source-retirement-persistence'
+import type { PtyOwnershipTransferJournalPersistence } from '../pty-ownership-transfer/pty-ownership-transfer-journal'
+import { requireOrcadRetirementRendererEvidence } from './orcad-retirement-renderer-evidence'
 
 export type StoreOptions = StoreRuntimeOptions
 export type PtyBindingSourceExpectation = {
@@ -95,6 +101,15 @@ export class Store {
     return dirname(this.runtime.dataFile)
   }
 
+  /** Durability only; callers must separately validate current profile and retirement evidence. */
+  isOrcadLiveCompletionDurable(candidate: { manifest: { migrationId: string } }): boolean {
+    return this.runtime.orcadLiveCompletionDurability.matches(candidate)
+  }
+
+  getOrcadLiveMigrationRendererEvidence(migrationId: string) {
+    return requireOrcadRetirementRendererEvidence(this.runtime, migrationId)
+  }
+
   freezeWrites(): void {
     this.runtime.writesFrozen = true
     if (this.runtime.writeTimer) {
@@ -119,9 +134,14 @@ export interface Store
     SessionHostPartitionOperations,
     SessionSnapshotOperations,
     PtyBindingPersistenceOperations,
+    PtyOwnershipTransferSurfacePersistence,
     SshProfileOperations,
     RetiredWorktreeNamePersistence,
     SshLeaseRecoveryOperations,
+    OrcadCatalogImportPersistence,
+    OrcadSourceCutoverPersistence,
+    OrcadSourceRetirementPersistence,
+    PtyOwnershipTransferJournalPersistence,
     WriteFlushBarrierOperations {}
 
 for (const OperationClass of STORE_DOMAIN_OPERATION_CLASSES) {

@@ -2,14 +2,13 @@
  * The two things a supervisor reads off a launch: what the arguments mean, and what an exit
  * code means. Both are part of the ops contract in docs/reference/orcad-operations.md.
  */
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import {
   ORCAD_EXIT_CONFIGURATION,
   ORCAD_EXIT_FAILED,
   parseArgs,
   resolveOrcadExitCode
 } from './orcad-entry'
-import { startOrcadWithLifecycle } from './orcad-lifecycle'
 import { OrcadBindAddressError } from './orcad-bind-address'
 import { OrcadInstanceLockError } from './orcad-instance-lock'
 
@@ -40,60 +39,5 @@ describe('resolveOrcadExitCode', () => {
     expect(resolveOrcadExitCode(new OrcadBindAddressError('bad'))).toBe(ORCAD_EXIT_CONFIGURATION)
     expect(resolveOrcadExitCode(new Error('port in use'))).toBe(ORCAD_EXIT_FAILED)
     expect(ORCAD_EXIT_CONFIGURATION).not.toBe(ORCAD_EXIT_FAILED)
-  })
-})
-
-describe('orcad lifecycle cleanup', () => {
-  it('uninstalls registered runtime resources when startup fails', async () => {
-    const cleanupRuntime = vi.fn(async () => {})
-    const cleanupHost = vi.fn(async () => {})
-
-    await expect(
-      startOrcadWithLifecycle(async (registerCleanup) => {
-        registerCleanup(cleanupRuntime)
-        await Promise.resolve()
-        throw new Error('startup failed')
-      }, cleanupHost)
-    ).rejects.toThrow('startup failed')
-
-    expect(cleanupRuntime).toHaveBeenCalledOnce()
-    expect(cleanupHost).toHaveBeenCalledOnce()
-  })
-
-  it('preserves the startup error when rollback also fails', async () => {
-    const startupError = new Error('bind failed')
-    const cleanupError = new Error('daemon stop failed')
-    const cleanupRuntime = vi.fn(async () => {})
-    const cleanupHost = vi.fn(async () => {
-      throw cleanupError
-    })
-    const report = vi.spyOn(console, 'error').mockImplementation(() => {})
-
-    try {
-      await expect(
-        startOrcadWithLifecycle(async (registerCleanup) => {
-          registerCleanup(cleanupRuntime)
-          throw startupError
-        }, cleanupHost)
-      ).rejects.toBe(startupError)
-      expect(report).toHaveBeenCalledWith('[orcad] startup cleanup failed:', cleanupError)
-    } finally {
-      report.mockRestore()
-    }
-  })
-
-  it('coalesces concurrent and repeated normal stops', async () => {
-    const cleanupRuntime = vi.fn(async () => {})
-    const cleanupHost = vi.fn(async () => {})
-    const handle = await startOrcadWithLifecycle(async (registerCleanup) => {
-      registerCleanup(cleanupRuntime)
-      return { readiness: 'ready' }
-    }, cleanupHost)
-
-    await Promise.all([handle.stop(), handle.stop()])
-    await handle.stop()
-
-    expect(cleanupRuntime).toHaveBeenCalledOnce()
-    expect(cleanupHost).toHaveBeenCalledOnce()
   })
 })

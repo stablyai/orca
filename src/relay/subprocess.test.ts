@@ -2,7 +2,6 @@ import { afterAll, beforeAll, describe, expect, it, afterEach } from 'vitest'
 import {
   copyFileSync,
   existsSync,
-  mkdirSync,
   mkdtempSync,
   readFileSync,
   statSync,
@@ -12,41 +11,20 @@ import {
 import { rm } from 'node:fs/promises'
 import * as path from 'node:path'
 import { tmpdir } from 'node:os'
-import { execFileSync, spawn as spawnChild } from 'node:child_process'
-import { build } from 'esbuild'
-import { spawnRelay, type RelayProcess } from './subprocess-test-utils'
+import { execFileSync, spawn as spawnChild, spawnSync } from 'node:child_process'
+import { buildRelaySubprocessBundle } from './subprocess-relay-bundle'
+import { spawnRelay, waitForChildExit, type RelayProcess } from './subprocess-test-utils'
+import * as ptyModules from './subprocess-pty-module-fixture'
 import { getEndpointFileName } from '../shared/agent-hook-listener/endpoint-publication'
 import { relayTestSocketPath } from './relay-test-socket-path'
 
-const RELAY_TS_ENTRY = path.resolve(__dirname, 'relay.ts')
-const WATCHER_TS_ENTRY = path.resolve(__dirname, '../main/ipc/parcel-watcher-process-entry.ts')
 let bundleDir: string
 let relayEntry: string
 const spawnedSocketDirs: string[] = []
 
 beforeAll(async () => {
   bundleDir = mkdtempSync(path.join(tmpdir(), 'relay-bundle-'))
-  relayEntry = path.join(bundleDir, 'relay.js')
-  await build({
-    entryPoints: [RELAY_TS_ENTRY],
-    bundle: true,
-    platform: 'node',
-    target: 'node18',
-    format: 'cjs',
-    outfile: relayEntry,
-    external: ['node-pty', '@parcel/watcher', 'electron'],
-    sourcemap: false
-  })
-  await build({
-    entryPoints: [WATCHER_TS_ENTRY],
-    bundle: true,
-    platform: 'node',
-    target: 'node18',
-    format: 'cjs',
-    outfile: path.join(bundleDir, 'relay-watcher.js'),
-    external: ['@parcel/watcher'],
-    sourcemap: false
-  })
+  relayEntry = await buildRelaySubprocessBundle(bundleDir)
 }, 30_000)
 
 afterAll(async () => {
@@ -80,85 +58,9 @@ function spawn(args: string[] = [], env?: NodeJS.ProcessEnv): RelayProcess {
   return spawnRelayEntry(relayEntry, args, env)
 }
 
-function waitForChildExit(
-  proc: ReturnType<typeof spawnChild>,
-  timeoutMs = 5000
-): Promise<{ code: number | null; signal: NodeJS.Signals | null }> {
-  return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error('Timed out waiting for child exit')), timeoutMs)
-    proc.once('exit', (code, signal) => {
-      clearTimeout(timer)
-      resolve({ code, signal })
-    })
-  })
-}
-
-function writeMockNodePty(root: string, source: string, withPackageEntry = false): void {
-  const nodePtyDir = path.join(root, 'node_modules', 'node-pty')
-  const libDir = path.join(nodePtyDir, 'lib')
-  mkdirSync(libDir, { recursive: true })
-  if (withPackageEntry) {
-    writeFileSync(path.join(nodePtyDir, 'package.json'), '{"main":"lib/index.js"}\n')
-  }
-  writeFileSync(path.join(libDir, 'index.js'), source)
-}
-
-const WORKING_NODE_PTY_MODULE = `module.exports = { spawn() { return {
-  pid: process.pid,
-  process: 'mock-shell',
-  onData() {}, onExit() {}, write() {}, resize() {}, kill() {}, clear() {}
-} } }\n`
-
-// A shell that reports its own exit after a delay, so the relay sees the pool drain on its own.
-function selfExitingNodePtyModule(exitAfterMs: number): string {
-  return `module.exports = { spawn() {
-  const exitHandlers = []
-  setTimeout(() => { for (const cb of exitHandlers) { cb({ exitCode: 0, signal: 0 }) } }, ${exitAfterMs})
-  return {
-    pid: process.pid,
-    process: 'mock-shell',
-    onData() {}, onExit(cb) { exitHandlers.push(cb) }, write() {}, resize() {}, kill() {}, clear() {}
-  }
-} }\n`
-}
-
-// A shell whose first dispose is refused, so ptyHandler.dispose() rejects once before a retry can succeed.
-const KILL_REJECTS_FIRST_DISPOSE_MODULE = `let killAttempts = 0
-module.exports = { spawn() {
-  const exitHandlers = []
-  return {
-    pid: 2147483646,
-    process: 'mock-shell',
-    onData() {}, onExit(cb) { exitHandlers.push(cb) }, write() {}, resize() {}, clear() {},
-    kill() {
-      killAttempts++
-      if (killAttempts <= 2) { throw new Error('kill refused') }
-      setTimeout(() => { for (const cb of exitHandlers) { cb({ exitCode: 0, signal: 0 }) } }, 0)
-    }
-  }
-} }\n`
-
-// Why: an ESM mock with top-level await parks loadPty() in the window where a spawn is admitted but not yet pooled.
-function writeSlowLoadingNodePty(root: string, loadDelayMs: number): void {
-  const nodePtyDir = path.join(root, 'node_modules', 'node-pty')
-  mkdirSync(path.join(nodePtyDir, 'lib'), { recursive: true })
-  writeFileSync(path.join(nodePtyDir, 'package.json'), '{"type":"module","main":"lib/index.js"}\n')
-  writeFileSync(
-    path.join(nodePtyDir, 'lib', 'index.js'),
-    `await new Promise((resolve) => setTimeout(resolve, ${loadDelayMs}))
-export function spawn() {
-  const exitHandlers = []
-  return {
-    pid: process.pid,
-    process: 'mock-shell',
-    onData() {}, onExit(cb) { exitHandlers.push(cb) }, write() {}, resize() {}, clear() {},
-    // Report the exit so relay shutdown can complete instead of parking on waitForPhysicalExit.
-    kill() { setTimeout(() => { for (const cb of exitHandlers) { cb({ exitCode: 0, signal: 0 }) } }, 0) }
-  }
-}
-`
-  )
-}
+const bunAvailable =
+  process.platform !== 'win32' &&
+  spawnSync(process.env.BUN_EXECUTABLE ?? 'bun', ['--version']).status === 0
 
 describe('Subprocess: Relay entry point', () => {
   let relay: RelayProcess | null = null
@@ -184,6 +86,83 @@ describe('Subprocess: Relay entry point', () => {
     await relay.sentinelReceived
   }, 10_000)
 
+  it.skipIf(!bunAvailable)(
+    'runs a PTY through Bun.Terminal when launched by Bun',
+    async () => {
+      const socketDir = mkdtempSync(path.join(tmpdir(), 'relay-bun-sock-'))
+      tmpDir = socketDir
+      const sockPath = relayTestSocketPath(socketDir)
+      const endpointDir = path.join(socketDir, 'agent-hooks')
+      const credentialFile = path.join(socketDir, 'credential')
+      writeFileSync(credentialFile, 'bun-relay-test-credential-0123456789abcdef')
+      relay = spawnRelay(
+        relayEntry,
+        [
+          '--detached',
+          '--grace-time',
+          '30',
+          '--sock-path',
+          sockPath,
+          '--endpoint-dir',
+          endpointDir,
+          '--credential-file',
+          credentialFile
+        ],
+        { runtime: process.env.BUN_EXECUTABLE ?? 'bun' }
+      )
+      let bridge: RelayProcess | null = null
+      try {
+        await relay.sentinelReceived
+        bridge = spawnRelay(relayEntry, [
+          '--connect',
+          '--sock-path',
+          sockPath,
+          '--credential-file',
+          credentialFile
+        ])
+        await bridge.sentinelReceived
+
+        const openClient = bridge.send('pty.openClient', {
+          protocolVersion: 1,
+          clientInstanceId: 'bun-relay-test-client',
+          requestedRole: 'session-owner',
+          capabilities: { outputFlowControl: { versions: [1], requestedWindowSu: 65_536 } }
+        })
+        const grant = await bridge.waitForResponse(openClient)
+        expect(grant.error).toBeUndefined()
+
+        const response = await bridge.waitForResponse(
+          bridge.send('pty.spawn', { cols: 80, rows: 24 })
+        )
+        expect(response.error).toBeUndefined()
+        const id = (response.result as { id: string }).id
+        const marker = `ORCA_BUN_RELAY_${Date.now()}`
+        // Submit a complete command; a PTY in canonical mode otherwise buffers it forever.
+        bridge.sendNotification('pty.data', { id, data: `printf '${marker}\\n'\n` })
+        const deadline = Date.now() + 10_000
+        let markerSeen = false
+        while (Date.now() < deadline) {
+          const output = await bridge.waitForNotification(
+            'pty.data',
+            Math.max(100, deadline - Date.now())
+          )
+          if (JSON.stringify(output.params).includes(marker)) {
+            markerSeen = true
+            break
+          }
+        }
+        expect(markerSeen).toBe(true)
+
+        const status = await bridge.waitForResponse(bridge.send('relay.status'))
+        expect(status.result).toMatchObject({ runtimeKind: 'bun', ptyBackend: 'bun-terminal' })
+      } finally {
+        bridge?.kill('SIGTERM')
+        await bridge?.waitForExit().catch(() => {})
+      }
+    },
+    20_000
+  )
+
   it('keeps the Node-18 relay bundle free of unsupported array copy methods', () => {
     expect(readFileSync(relayEntry, 'utf8')).not.toContain('.toReversed(')
   })
@@ -200,7 +179,7 @@ describe('Subprocess: Relay entry point', () => {
     const failed = await relay.waitForResponse(failedId)
     expect(failed.error?.message).toContain('Remote terminals are unavailable')
 
-    writeMockNodePty(tmpDir, WORKING_NODE_PTY_MODULE)
+    ptyModules.writeMockNodePty(tmpDir, ptyModules.WORKING_NODE_PTY_MODULE)
 
     const repairedId = relay.send('pty.spawn', { cols: 80, rows: 24 })
     const repaired = await relay.waitForResponse(repairedId)
@@ -213,7 +192,7 @@ describe('Subprocess: Relay entry point', () => {
     tmpDir = mkdtempSync(path.join(tmpdir(), 'relay-native-late-repair-'))
     const repairedRelayEntry = path.join(tmpDir, 'relay.js')
     copyFileSync(relayEntry, repairedRelayEntry)
-    writeMockNodePty(
+    ptyModules.writeMockNodePty(
       tmpDir,
       `module.exports = { spawn() { throw new Error('Failed to load native module: conpty.node, checked: prebuilds/win32-x64') } }\n`,
       true
@@ -226,7 +205,7 @@ describe('Subprocess: Relay entry point', () => {
     const failed = await relay.waitForResponse(failedId)
     expect(failed.error?.message).toContain('Remote terminals are unavailable')
 
-    writeMockNodePty(tmpDir, WORKING_NODE_PTY_MODULE, true)
+    ptyModules.writeMockNodePty(tmpDir, ptyModules.WORKING_NODE_PTY_MODULE, true)
     const repairedId = relay.send('pty.spawn', { cols: 80, rows: 24 })
     const repaired = await relay.waitForResponse(repairedId)
     expect(repaired.error).toBeUndefined()
@@ -646,7 +625,7 @@ describe('Subprocess: Relay entry point', () => {
   ): { daemon: RelayProcess; sockPath: string } {
     const daemonEntry = path.join(tmpDir, 'relay.js')
     copyFileSync(relayEntry, daemonEntry)
-    writeMockNodePty(tmpDir, nodePtyModule)
+    ptyModules.writeMockNodePty(tmpDir, nodePtyModule)
     const sockPath = path.join(tmpDir, 'relay.sock')
     const daemon = spawnRelayEntry(
       daemonEntry,
@@ -694,7 +673,11 @@ describe('Subprocess: Relay entry point', () => {
     'keeps a relay with a live PTY alive past the idle grace',
     async () => {
       tmpDir = mkdtempSync(path.join(tmpdir(), 'relay-idle-live-pty-'))
-      const { daemon, sockPath } = spawnIdleGraceDaemon(WORKING_NODE_PTY_MODULE, '0', '200')
+      const { daemon, sockPath } = spawnIdleGraceDaemon(
+        ptyModules.WORKING_NODE_PTY_MODULE,
+        '0',
+        '200'
+      )
       relay = daemon
       await relay.sentinelReceived
 
@@ -713,7 +696,11 @@ describe('Subprocess: Relay entry point', () => {
     're-arms the idle grace when the last PTY exits during grace',
     async () => {
       tmpDir = mkdtempSync(path.join(tmpdir(), 'relay-idle-rearm-'))
-      const { daemon, sockPath } = spawnIdleGraceDaemon(selfExitingNodePtyModule(1500), '0', '200')
+      const { daemon, sockPath } = spawnIdleGraceDaemon(
+        ptyModules.selfExitingNodePtyModule(1500),
+        '0',
+        '200'
+      )
       relay = daemon
       await relay.sentinelReceived
 
@@ -757,7 +744,7 @@ describe('Subprocess: Relay entry point', () => {
       tmpDir = mkdtempSync(path.join(tmpdir(), 'relay-idle-inflight-'))
       const daemonEntry = path.join(tmpDir, 'relay.js')
       copyFileSync(relayEntry, daemonEntry)
-      writeSlowLoadingNodePty(tmpDir, 1500)
+      ptyModules.writeSlowLoadingNodePty(tmpDir, 1500)
       const sockPath = path.join(tmpDir, 'relay.sock')
       relay = spawnRelayEntry(
         daemonEntry,
@@ -801,7 +788,11 @@ describe('Subprocess: Relay entry point', () => {
     'does not extend an explicitly configured grace when the last PTY exits mid-window',
     async () => {
       tmpDir = mkdtempSync(path.join(tmpdir(), 'relay-configured-rearm-'))
-      const { daemon, sockPath } = spawnIdleGraceDaemon(selfExitingNodePtyModule(2500), '3', '200')
+      const { daemon, sockPath } = spawnIdleGraceDaemon(
+        ptyModules.selfExitingNodePtyModule(2500),
+        '3',
+        '200'
+      )
       relay = daemon
       await relay.sentinelReceived
 
@@ -822,7 +813,7 @@ describe('Subprocess: Relay entry point', () => {
     async () => {
       tmpDir = mkdtempSync(path.join(tmpdir(), 'relay-shutdown-deferred-'))
       const { daemon, sockPath } = spawnIdleGraceDaemon(
-        KILL_REJECTS_FIRST_DISPOSE_MODULE,
+        ptyModules.KILL_REJECTS_FIRST_DISPOSE_MODULE,
         '2',
         '200'
       )
@@ -849,11 +840,15 @@ describe('Subprocess: Relay entry point', () => {
     const resp = await relay.waitForResponse(id)
     expect(resp.error).toBeUndefined()
     const status = resp.result as {
+      runtimeKind: string
+      ptyBackend: string
       pid: number
       memory: { rss: number }
       ptys: { active: number }
       socket: { owned: boolean; listening: boolean; clients: number }
     }
+    expect(status.runtimeKind).toBe('node')
+    expect(status.ptyBackend).toBe('node-pty')
     expect(status.pid).toBeGreaterThan(0)
     expect(status.memory.rss).toBeGreaterThan(0)
     expect(status.ptys.active).toBe(0)

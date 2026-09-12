@@ -16,6 +16,7 @@ import { readAllWorktreeMetaForHost } from '../persistence/host-qualified-worktr
 import { getLocalProjectWorktreeGitOptions } from '../project-runtime-git-options'
 import { listLocalRepoWorktreesStrict } from '../repo-worktrees'
 import { listRegisteredPtys, registerPty } from './pty-registry'
+import { getVerifiedLocalFolderWorkspaceKeys } from './verified-local-folder-workspaces'
 
 type HydrationStore = Store
 
@@ -164,6 +165,11 @@ async function hydrateLocalPtyRegistry(
   }
 
   throwIfSignalAborted(signal)
+  const verifiedLocalFolderKeys = getVerifiedLocalFolderWorkspaceKeys({
+    folderWorkspaces: store.getFolderWorkspaces(),
+    projectGroups: store.getProjectGroups(),
+    repos: store.getRepos()
+  })
   for (const info of inventory.sessions) {
     throwIfSignalAborted(signal)
     if (alreadyRegistered.has(info.sessionId)) {
@@ -185,7 +191,7 @@ async function hydrateLocalPtyRegistry(
   return complete
 
   function isVerifiedLocalWorktree(worktreeId: string): boolean {
-    if (verifiedFolderWorktreeIds.has(worktreeId)) {
+    if (verifiedLocalFolderKeys.has(worktreeId) || verifiedFolderWorktreeIds.has(worktreeId)) {
       return true
     }
     const key = worktreeIdComparisonKey(worktreeId)

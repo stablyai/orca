@@ -11,12 +11,16 @@ import {
   getMacDaemonTccAttributionHealth,
   type MacDaemonTccAttributionHealth
 } from './daemon-tcc-attribution'
-import { PROTOCOL_VERSION } from './types'
+import { PROTOCOL_VERSION, type SessionInfo } from './types'
+import type { DaemonIdleRetirementResult } from './daemon-pty-runtime-state'
 
 let spawner: DaemonSpawner | null = null
 let adapter: DaemonProvider | null = null
 
-export function installDaemonProvider(newSpawner: DaemonSpawner, newAdapter: DaemonProvider): void {
+export function installDaemonProvider(
+  newSpawner: DaemonSpawner | null,
+  newAdapter: DaemonProvider
+): void {
   spawner = newSpawner
   replaceDaemonProvider(newAdapter)
 }
@@ -35,7 +39,12 @@ export function getDaemonSpawner(): DaemonSpawner | null {
  * from that state would be advertising recovery for terminals that cannot be recovered.
  */
 export function daemonOwnsFreshPersistentPtys(): boolean {
-  return adapter !== null && !(adapter instanceof DegradedDaemonPtyProvider)
+  if (!adapter || adapter instanceof DegradedDaemonPtyProvider) {
+    return false
+  }
+  return adapter instanceof DaemonPtyRouter
+    ? !adapter.getAllAdapters().some((entry) => entry.recoveryOnly)
+    : !adapter.recoveryOnly
 }
 
 /** Endpoint coordinates of the daemon this process installed, for out-of-band health probes. */
@@ -95,6 +104,27 @@ export async function getCurrentDaemonMacTccAttributionHealth(): Promise<MacDaem
   )
 }
 
+// Why: keep the module-level adapter and ipc/pty.ts's localProvider in sync so app-quit can't dispose a stale reference.
+export function replaceDaemonProvider(newAdapter: DaemonProvider): void {
+  adapter = newAdapter
+  setLocalPtyProvider(newAdapter)
+}
+
+// Disconnect without killing: the daemon survives app quit so sessions stay warm for reattach.
+// Leave history sessions marked "unclean" so a daemon crash while Orca is closed stays recoverable.
+export async function disconnectDaemon(): Promise<void> {
+  await adapter?.disconnectOnly()
+  adapter = null
+}
+
+/** Kill the daemon and all its sessions. Use for full cleanup only. */
+export async function shutdownDaemon(): Promise<void> {
+  adapter?.dispose()
+  adapter = null
+  await spawner?.shutdown()
+  spawner = null
+}
+
 /** Returns null unless every daemon generation supplied an authoritative inventory. */
 export async function listLiveDaemonPtyIds(): Promise<string[] | null> {
   if (!adapter) {
@@ -115,23 +145,36 @@ export async function listLiveDaemonPtyIds(): Promise<string[] | null> {
   )
 }
 
-// Why: keep the module-level adapter and ipc/pty.ts's localProvider in sync so app-quit can't dispose a stale reference.
-export function replaceDaemonProvider(newAdapter: DaemonProvider): void {
-  adapter = newAdapter
-  setLocalPtyProvider(newAdapter)
+/** Returns null unless every daemon generation supplied an authoritative session inventory. */
+export async function listLiveDaemonSessions(): Promise<SessionInfo[] | null> {
+  if (!adapter) {
+    return null
+  }
+  const adapters =
+    adapter instanceof DaemonPtyRouter || adapter instanceof DegradedDaemonPtyProvider
+      ? adapter.getAllAdapters()
+      : [adapter]
+  const inventories = await Promise.allSettled(
+    adapters.map((daemonAdapter) => daemonAdapter.listSessions())
+  )
+  if (inventories.some((inventory) => inventory.status === 'rejected')) {
+    return null
+  }
+  return inventories.flatMap((inventory) =>
+    inventory.status === 'fulfilled' ? inventory.value : []
+  )
 }
 
-// Disconnect without killing: the daemon survives app quit so sessions stay warm for reattach.
-// Leave history sessions marked "unclean" so a daemon crash while Orca is closed stays recoverable.
-export async function disconnectDaemon(): Promise<void> {
-  await adapter?.disconnectOnly()
-  adapter = null
-}
-
-/** Kill the daemon and all its sessions. Use for full cleanup only. */
-export async function shutdownDaemon(): Promise<void> {
-  adapter?.dispose()
-  adapter = null
-  await spawner?.shutdown()
-  spawner = null
+/** Atomically fence new daemon terminals and retire only an idle, single-generation daemon. */
+export async function requestIdleDaemonRetirement(): Promise<DaemonIdleRetirementResult> {
+  if (!adapter) {
+    return { state: 'unverifiable' }
+  }
+  if (adapter instanceof DegradedDaemonPtyProvider) {
+    return { state: 'unverifiable' }
+  }
+  if (adapter instanceof DaemonPtyRouter) {
+    return adapter.requestIdleRetirement()
+  }
+  return adapter.requestIdleRetirement()
 }

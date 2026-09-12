@@ -13,6 +13,7 @@ export function installPtyWriteIpcHandlers(deps: {
   const {
     writePtyInput,
     writePtyInputAccepted,
+    retirePtyWriteOperation,
     isPtyWritePayload,
     isPtyViewportClaimPayload,
     isPtyWriteEventFromMainWindow
@@ -39,6 +40,18 @@ export function installPtyWriteIpcHandlers(deps: {
     return claimTail
       ? claimTail.then((claimed) => (claimed ? writePtyInputAccepted(args) : false))
       : writePtyInputAccepted(args)
+  })
+  ipcMain.handle('pty:retireWriteOperation', (event, args: unknown): boolean | Promise<boolean> => {
+    if (
+      !isPtyWriteEventFromMainWindow(event, mainWindow.webContents) ||
+      typeof args !== 'object' ||
+      args === null ||
+      typeof (args as { id?: unknown }).id !== 'string' ||
+      typeof (args as { operationId?: unknown }).operationId !== 'string'
+    ) {
+      return false
+    }
+    return retirePtyWriteOperation(args as { id: string; operationId: string })
   })
 
   ipcMain.removeAllListeners('pty:claimViewport')

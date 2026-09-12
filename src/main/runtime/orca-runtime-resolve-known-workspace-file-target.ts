@@ -10,6 +10,7 @@ import { resolveWorktreeHostRouting } from './worktree-launch-host-repo'
 import { findRuntimeWorkspaceFileOwner } from '../../shared/runtime-workspace-file-owner'
 import type { RuntimeMobileSessionTabsResult } from '../../shared/runtime-types'
 import { randomUUID } from 'node:crypto'
+import { assertOutgoingPtyRegistrationAllowed } from './outgoing-pty-registration-fence'
 import type { PtyIncarnationId } from '../../shared/pty-incarnation'
 
 export class OrcaRuntimeWithResolveKnownWorkspaceFileTarget extends OrcaRuntimeWithPersistHeadlessTerminalTitle {
@@ -114,6 +115,7 @@ export class OrcaRuntimeWithResolveKnownWorkspaceFileTarget extends OrcaRuntimeW
   // env var) so they can self-identify in orchestration messages without an
   // extra RPC round-trip. Pre-allocating by ptyId lets issueHandle reuse it.
   preAllocateHandleForPty(ptyId: string): string {
+    assertOutgoingPtyRegistrationAllowed(this, ptyId)
     const existing = this.handleByPtyId.get(ptyId)
     if (existing) {
       return existing
@@ -155,6 +157,7 @@ export class OrcaRuntimeWithResolveKnownWorkspaceFileTarget extends OrcaRuntimeW
   }
 
   registerPreAllocatedHandleForPty(ptyId: string, handle: string): void {
+    assertOutgoingPtyRegistrationAllowed(this, ptyId)
     if (this.pendingPtyHandleReplacementFences.get(ptyId)?.staleHandles.has(handle)) {
       // The provider can replay the old env handle after announcing a new
       // incarnation. Never let that predecessor alias be reintroduced.
@@ -178,6 +181,7 @@ export class OrcaRuntimeWithResolveKnownWorkspaceFileTarget extends OrcaRuntimeW
     incarnationId?: string,
     options: { exactRestoredSurface?: boolean } = {}
   ): void {
+    assertOutgoingPtyRegistrationAllowed(this, ptyId)
     const trimmed = handle?.trim()
     if (!trimmed || !trimmed.startsWith('term_')) {
       return

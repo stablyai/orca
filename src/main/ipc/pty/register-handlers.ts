@@ -128,6 +128,7 @@ export function registerPtyHandlers(
   ipcMain.removeHandler('pty:resetRendererDeliveryDebug')
   ipcMain.removeHandler('pty:reportRendererDeliveryState')
   ipcMain.removeHandler('pty:writeAccepted')
+  ipcMain.removeHandler('pty:retireWriteOperation')
   ipcMain.removeAllListeners('pty:write')
   ipcMain.removeAllListeners('pty:ackColdRestore')
   ipcMain.removeAllListeners('pty:ackData')
@@ -142,6 +143,9 @@ export function registerPtyHandlers(
     options
   })
   wirePtyIpcSession(session)
+  // The destination bridge needs the runtime's PTY registry, which is only complete after
+  // this session is created; install it before SSH intake starts advertising ownership output.
+  runtime?.installPtyOwnershipTransferDestinationOutputBridge?.()
   configureLocalPtyProvider({
     runtime,
     getSettings,

@@ -3,6 +3,7 @@ import type { ExecutionHostId } from '../../shared/execution-host'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 import { parseWorkspaceKey } from '../../shared/workspace-scope'
 import { SESSION_FIELDS_PRUNED_BY_OWNER_KEY } from './profile-project-session-field-disposition'
+import { markdownFileIdCandidates } from './profile-session-owner-transfer'
 import {
   isRepoWorktreeId,
   ownerKeyBelongsToRepo,
@@ -44,12 +45,19 @@ export function mergeWorkspaceSessions(
   const base = existing ?? getDefaultWorkspaceSession()
   return {
     ...base,
+    activeRepoId: base.activeRepoId ?? incoming.activeRepoId,
+    activeWorkspaceExecutionHostId:
+      base.activeWorkspaceExecutionHostId ?? incoming.activeWorkspaceExecutionHostId,
     tabsByWorktree: { ...base.tabsByWorktree, ...incoming.tabsByWorktree },
     terminalLayoutsByTabId: {
       ...base.terminalLayoutsByTabId,
       ...incoming.terminalLayoutsByTabId
     },
     openFilesByWorktree: { ...base.openFilesByWorktree, ...incoming.openFilesByWorktree },
+    markdownFrontmatterVisible: {
+      ...base.markdownFrontmatterVisible,
+      ...incoming.markdownFrontmatterVisible
+    },
     browserTabsByWorktree: {
       ...base.browserTabsByWorktree,
       ...incoming.browserTabsByWorktree
@@ -57,6 +65,10 @@ export function mergeWorkspaceSessions(
     browserPagesByWorkspace: {
       ...base.browserPagesByWorkspace,
       ...incoming.browserPagesByWorkspace
+    },
+    clientHostedBrowserPagesByWorktree: {
+      ...base.clientHostedBrowserPagesByWorktree,
+      ...incoming.clientHostedBrowserPagesByWorktree
     },
     activeBrowserTabIdByWorktree: {
       ...base.activeBrowserTabIdByWorktree,
@@ -98,6 +110,14 @@ export function mergeWorkspaceSessions(
       ...base.terminalSurfaceTombstonesByPaneKey,
       ...incoming.terminalSurfaceTombstonesByPaneKey
     },
+    ...(base.sleepingAgentSessionsByPaneKey || incoming.sleepingAgentSessionsByPaneKey
+      ? {
+          sleepingAgentSessionsByPaneKey: {
+            ...base.sleepingAgentSessionsByPaneKey,
+            ...incoming.sleepingAgentSessionsByPaneKey
+          }
+        }
+      : {}),
     activeWorktreeIdsOnShutdown: [
       ...(base.activeWorktreeIdsOnShutdown ?? []),
       ...(incoming.activeWorktreeIdsOnShutdown ?? [])
@@ -125,6 +145,17 @@ export function removeRepoFromWorkspaceSession(
 ): WorkspaceSessionState {
   const next = structuredClone(session ?? getDefaultWorkspaceSession())
   const removedTerminalTabIds = new Set<string>()
+  const removedMarkdownFileIds = new Set<string>()
+  for (const [ownerKey, files] of Object.entries(next.openFilesByWorktree ?? {})) {
+    if (!ownerKeyBelongsToRepo(ownerKey, repoId)) {
+      continue
+    }
+    for (const file of files) {
+      markdownFileIdCandidates(file.filePath, ownerKey, file.runtimeEnvironmentId).forEach((id) =>
+        removedMarkdownFileIds.add(id)
+      )
+    }
+  }
   for (const [ownerKey, tabs] of Object.entries(next.tabsByWorktree)) {
     if (!ownerKeyBelongsToRepo(ownerKey, repoId)) {
       continue
@@ -152,6 +183,13 @@ export function removeRepoFromWorkspaceSession(
   for (const field of SESSION_FIELDS_PRUNED_BY_OWNER_KEY) {
     const record = next[field] as Record<string, unknown> | undefined
     ;(next as Record<string, unknown>)[field] = removeRepoWorktreeRecord(record, repoId)
+  }
+  if (next.markdownFrontmatterVisible) {
+    next.markdownFrontmatterVisible = Object.fromEntries(
+      Object.entries(next.markdownFrontmatterVisible).filter(
+        ([fileId]) => !removedMarkdownFileIds.has(fileId)
+      )
+    )
   }
   if (next.terminalSurfaceTombstonesByPaneKey) {
     next.terminalSurfaceTombstonesByPaneKey = Object.fromEntries(

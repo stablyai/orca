@@ -1,5 +1,14 @@
 import type { Store } from '../persistence'
 import type { SshRepoReadoption, SshTarget } from '../../shared/ssh-types'
+import {
+  createManagedOrcadSshOwner,
+  getManagedOrcadOwnerEnvironmentId
+} from '../../shared/managed-orcad-ssh-owner'
+import type { OrcadMigrationPreflight } from '../../shared/orcad-migration-preflight'
+import {
+  orcadMigrationBlockerMessage,
+  preflightOrcadRuntimeTarget
+} from './ssh-target-orcad-preflight'
 import { RUNTIME_OWNED_SSH_TARGET_ID_PREFIX } from '../../shared/execution-host'
 import { normalizeSshConfigAlias } from '../../shared/ssh-config-alias'
 import { loadUserSshConfig, sshConfigHostsToTargets } from './ssh-config-parser'
@@ -7,6 +16,7 @@ import {
   buildRemovedSshTargetTombstone,
   readoptOrphanedWorkspacesForTarget
 } from './ssh-target-readoption'
+import type { SourceCutoverStore } from './orcad-migration-cutover-coordinator'
 
 export class SshConnectionStore {
   constructor(private store: Store) {}
@@ -82,6 +92,89 @@ export class SshConnectionStore {
     }
     this.store.addSshTarget(next)
     return next
+  }
+
+  claimOrcadRuntimeTarget(targetId: string, environmentId: string): SshTarget {
+    const preflight = this.preflightOrcadRuntimeTarget(targetId, environmentId)
+    const blocker = preflight.blockers[0]
+    if (blocker) {
+      throw new Error(orcadMigrationBlockerMessage(targetId, blocker))
+    }
+    const target = this.store.getSshTarget(targetId)
+    if (!target) {
+      throw new Error(`SSH target "${targetId}" disappeared during migration preflight`)
+    }
+    if (getManagedOrcadOwnerEnvironmentId(target.owner) !== null) {
+      return target
+    }
+    const claimed = this.store.updateSshTarget(targetId, {
+      owner: createManagedOrcadSshOwner(environmentId),
+      generation: target.generation ?? this.store.allocateSshTargetGeneration()
+    })
+    if (!claimed) {
+      throw new Error(`SSH target "${targetId}" disappeared while it was being reserved`)
+    }
+    return claimed
+  }
+
+  preflightOrcadRuntimeTarget(targetId: string, environmentId?: string): OrcadMigrationPreflight {
+    return preflightOrcadRuntimeTarget(this.store, targetId, environmentId)
+  }
+
+  assertOrcadRuntimeTargetClaimable(targetId: string, environmentId: string): SshTarget {
+    const preflight = this.preflightOrcadRuntimeTarget(targetId, environmentId)
+    const blocker = preflight.blockers.find(
+      (entry) =>
+        entry.category !== 'drainable-static-state' &&
+        entry.code !== 'orcad_migration_saved_port_forwards'
+    )
+    if (blocker) {
+      throw new Error(orcadMigrationBlockerMessage(targetId, blocker))
+    }
+    const target = this.store.getSshTarget(targetId)
+    if (!target) {
+      throw new Error(`SSH target "${targetId}" disappeared during migration preflight`)
+    }
+    return target
+  }
+
+  ensureOrcadRuntimeTargetGeneration(targetId: string, environmentId: string): SshTarget {
+    const target = this.store.getSshTarget(targetId)
+    if (!target || getManagedOrcadOwnerEnvironmentId(target.owner) !== environmentId) {
+      throw new Error('The managed Orca migration source fence was lost before deployment.')
+    }
+    if (target.generation !== undefined) {
+      return target
+    }
+    const updated = this.store.updateSshTarget(targetId, {
+      generation: this.store.allocateSshTargetGeneration()
+    })
+    if (!updated) {
+      throw new Error(`SSH target "${targetId}" disappeared while assigning its generation`)
+    }
+    return updated
+  }
+
+  getOrcadMigrationStore(): SourceCutoverStore &
+    Pick<
+      Store,
+      | 'collectOrcadMigrationSourceDormantState'
+      | 'getFolderWorkspaces'
+      | 'getProjectGroups'
+      | 'getRepos'
+      | 'getSshTargets'
+      | 'inspectOrcadMigrationSourceDependencies'
+      | 'listOrcadMigrationSourceCutovers'
+    > {
+    return this.store
+  }
+
+  releaseOrcadRuntimeTarget(targetId: string, environmentId: string): SshTarget | null {
+    const target = this.store.getSshTarget(targetId)
+    if (!target || getManagedOrcadOwnerEnvironmentId(target.owner) !== environmentId) {
+      return null
+    }
+    return this.store.updateSshTarget(targetId, { owner: undefined, orcadProvisioning: undefined })
   }
 
   updateTarget(id: string, updates: Partial<Omit<SshTarget, 'id'>>): SshTarget | null {
@@ -244,7 +337,7 @@ export function getRuntimeOwnedSshTargetId(runtimeId: string): string {
 }
 
 export function isRuntimeOwnedSshTarget(target: SshTarget): boolean {
-  return target.owner?.type === 'on-demand-runtime'
+  return target.owner !== undefined || target.orcadProvisioning !== undefined
 }
 
 function isLegacyConfigImportTarget(target: SshTarget): boolean {

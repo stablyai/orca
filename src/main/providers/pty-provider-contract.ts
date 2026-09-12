@@ -12,6 +12,11 @@ import type {
 import type { PtyProcessInfo } from './pty-process-info'
 import type { TerminalExitCause } from '../../shared/terminal-exit-cause'
 import type { TerminalOwner } from '../../shared/terminal-owner'
+import type { PtyOwnershipBridgeCapabilities } from '../../shared/pty-ownership-bridge-contract'
+import type {
+  PtyOwnershipTransferStatusRequest,
+  PtyOwnershipTransferStatusResult
+} from '../../shared/pty-ownership-transfer-wire'
 import type { WriteSettlement } from '../../shared/pty-write-settlement'
 
 export type {
@@ -42,6 +47,8 @@ export type PtyProviderBufferSnapshot = {
   /** Ordered ownership evidence proven at this snapshot's `seq`. */
   terminalOwner?: TerminalOwner
 }
+
+export type PtyProviderOperationRetry = Readonly<{ operationId: string }>
 
 export type PtySpawnOptions = {
   cols: number
@@ -136,16 +143,49 @@ export type IPtyProvider = {
   providesAgentSessionOwnerListings?: (ptyId: string) => boolean
   /** Whether fresh structured creates can replay one spawn across a lost relay response. */
   supportsAgentSessionCreateOperations?: (options?: PtyProbeOptions) => boolean | Promise<boolean>
+  /** Capability probe for live PTY ownership transfer; absent means this provider cannot bridge. */
+  getOwnershipBridgeCapabilities?: (
+    options?: PtyProbeOptions
+  ) => Promise<PtyOwnershipBridgeCapabilities | null>
+  /** Read-only recovery probe; absent means this provider has no durable transfer journal. */
+  getOwnershipTransferStatus?: (
+    request: PtyOwnershipTransferStatusRequest,
+    options?: { signal?: AbortSignal; timeoutMs?: number }
+  ) => Promise<PtyOwnershipTransferStatusResult>
+  /** Host-derived source authority for a direct-SSH PTY transfer. */
+  getOwnershipTransferSourceIdentity?: (id: string) => Readonly<{
+    terminalId: string
+    incarnationId: string
+    ownerLease: string
+    sourceOwnerGeneration: number
+  }> | null
   attach(id: string): Promise<Pick<PtySpawnResult, 'providerSequence'> | void>
+  /** Client-route fence only; says nothing about host process liveness. */
+  isOutgoingSourceControlReleased?: (id: string, expectedIdentity?: unknown) => boolean
+  releaseOutgoingSourceControl?: (value: { identity: unknown; providerGeneration: number }) => void
+  fenceOutgoingCatalogCreation?: (signal: AbortSignal) => Promise<void>
+  drainOutgoingSourceControls?: (value: {
+    identity: unknown
+    surfaceBinding?: unknown
+    providerGeneration: number
+    signal: AbortSignal
+  }) => Promise<void>
   hasPty?: (id: string) => boolean
   /** Exact provider readback: false only when the provider answered that the PTY is absent. */
   probePtyLiveness?: (id: string) => Promise<boolean | null>
-  write(id: string, data: string): boolean | void
-  /** Three-valued settlement for writes whose delivery a durable claim depends on.
-   *  Required: a provider that answers this from its own fire-and-forget `write` is
-   *  fabricating a handoff, so every provider must settle or say it cannot. */
-  writeWithSettlement: (id: string, data: string) => WriteSettlement | Promise<WriteSettlement>
-  resize(id: string, cols: number, rows: number): void
+  /** Fences incumbent input while a durable ownership transfer is in progress. */
+  setInputFenced?: (id: string, fenced: boolean) => void
+  /** Writes only through an active ownership-transfer fence; ordinary callers stay blocked. */
+  writeOwnershipTransferInput?: (id: string, data: string) => boolean
+  write(id: string, data: string, retry?: PtyProviderOperationRetry): boolean | void
+  writeWithSettlement: (
+    id: string,
+    data: string,
+    retry?: PtyProviderOperationRetry
+  ) => WriteSettlement | Promise<WriteSettlement>
+  /** Retires a retry-aware input only after its caller has durably observed settlement. */
+  retireWriteOperation?: (id: string, operationId: string) => Promise<boolean>
+  resize(id: string, cols: number, rows: number, retry?: PtyProviderOperationRetry): void
   /**
    * Producer-side flow control: stop/restart reading the underlying PTY so a
    * flooding child blocks on write (kernel backpressure) instead of growing
@@ -209,6 +249,7 @@ export type IPtyProvider = {
       immediate?: boolean
       keepHistory?: boolean
       deadlineMs?: number
+      operationId?: string
       expectedIncarnationId?: PtyIncarnationId
       /** Ask the execution host to refuse this stop unless it recorded this exact client identity
        *  as the PTY's creator AND this connection still authenticates as it. Optional because a
@@ -218,10 +259,10 @@ export type IPtyProvider = {
       expectedOwnerClientInstanceId?: string
     }
   ): Promise<void>
-  sendSignal(id: string, signal: string): Promise<void>
+  sendSignal(id: string, signal: string, retry?: PtyProviderOperationRetry): Promise<void>
   getCwd(id: string): Promise<string>
   getInitialCwd(id: string): Promise<string>
-  clearBuffer(id: string): Promise<void>
+  clearBuffer(id: string, retry?: PtyProviderOperationRetry): Promise<void>
   /** Ordered handoff from startup source authority to the live/hidden view authority. */
   closeStartupQueryAuthority?: (id: string) => Promise<number> | number
   acknowledgeDataEvent(id: string, charCount: number): void

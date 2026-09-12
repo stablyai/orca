@@ -5,7 +5,11 @@ import { powerShellCommand, powerShellLiteral, powerShellNativeArg } from './ssh
 type RemoteCliInstallEnv = {
   binDir: string
   relayDir: string
-  nodePath: string
+  /** Runtime executable used to launch relay.js. */
+  runtimePath?: string
+  runtimeKind?: 'node' | 'bun'
+  /** @deprecated Legacy Node-only field retained for mixed-version clients. */
+  nodePath?: string
   sockPath: string
   credentialFile?: string
   hostPlatform: RemoteHostPlatform
@@ -33,9 +37,15 @@ internal static class OrcaRemoteCliLauncher
     {
         try
         {
-            string nodePath = RequireEnvironmentVariable("ORCA_RELAY_NODE_PATH");
-            string relayDirectory = RequireEnvironmentVariable("ORCA_RELAY_DIR");
-            string socketPath = RequireEnvironmentVariable("ORCA_RELAY_SOCKET_PATH");
+            string runtimePath = Environment.GetEnvironmentVariable("ORCA_RELAY_RUNTIME_PATH");
+            if (String.IsNullOrEmpty(runtimePath))
+            {
+                runtimePath = "__ORCA_DEFAULT_RUNTIME_PATH__";
+            }
+            string relayDirectory = Environment.GetEnvironmentVariable("ORCA_RELAY_DIR");
+            if (String.IsNullOrEmpty(relayDirectory)) relayDirectory = "__ORCA_DEFAULT_RELAY_DIR__";
+            string socketPath = Environment.GetEnvironmentVariable("ORCA_RELAY_SOCKET_PATH");
+            if (String.IsNullOrEmpty(socketPath)) socketPath = "__ORCA_DEFAULT_SOCKET_PATH__";
             string credentialFile = Environment.GetEnvironmentVariable("ORCA_RELAY_CREDENTIAL_FILE");
             if (String.IsNullOrEmpty(credentialFile))
             {
@@ -43,9 +53,9 @@ internal static class OrcaRemoteCliLauncher
             }
             string relayPath = Path.Combine(relayDirectory, "relay.js");
 
-            if (!File.Exists(nodePath))
+            if (!File.Exists(runtimePath))
             {
-                Console.Error.WriteLine("Orca SSH CLI bridge cannot find Node.js at \"{0}\"", nodePath);
+                Console.Error.WriteLine("Orca SSH CLI bridge cannot find its runtime at \"{0}\"", runtimePath);
                 return 1;
             }
             if (!File.Exists(relayPath))
@@ -56,7 +66,7 @@ internal static class OrcaRemoteCliLauncher
 
             ProcessStartInfo startInfo = new ProcessStartInfo
             {
-                FileName = nodePath,
+                FileName = runtimePath,
                 Arguments = BuildArguments(relayPath, socketPath, credentialFile, args),
                 UseShellExecute = false
             };
@@ -154,6 +164,10 @@ function quoteSh(value: string): string {
   return `'${value.replaceAll("'", `'\\''`)}'`
 }
 
+function quoteCSharp(value: string): string {
+  return JSON.stringify(value)
+}
+
 function createWindowsLauncherCompileCommand(
   binDir: string,
   sourceFileName: string,
@@ -194,6 +208,10 @@ function createWindowsLauncherCompileCommand(
 }
 
 export function createRemoteCliInstallPlan(env: RemoteCliInstallEnv): RemoteCliInstallPlan {
+  const runtimePath = env.runtimePath ?? env.nodePath
+  if (!runtimePath) {
+    throw new Error('Remote CLI launcher runtime path is missing')
+  }
   if (isWindowsRemoteHost(env.hostPlatform)) {
     const launcherFileName = 'orca.exe'
     const sourceFileName = 'orca-launcher.cs'
@@ -203,7 +221,17 @@ export function createRemoteCliInstallPlan(env: RemoteCliInstallEnv): RemoteCliI
     const binDir = joinRemotePath(env.hostPlatform, env.binDir)
     return {
       launcherPath,
-      files: [{ path: sourcePath, contents: WINDOWS_REMOTE_CLI_LAUNCHER_SOURCE }],
+      files: [
+        {
+          path: sourcePath,
+          contents: WINDOWS_REMOTE_CLI_LAUNCHER_SOURCE.replace(
+            '"__ORCA_DEFAULT_RUNTIME_PATH__"',
+            quoteCSharp(runtimePath)
+          )
+            .replace('"__ORCA_DEFAULT_RELAY_DIR__"', quoteCSharp(env.relayDir))
+            .replace('"__ORCA_DEFAULT_SOCKET_PATH__"', quoteCSharp(env.sockPath))
+        }
+      ],
       // Why: compiling on the Windows target avoids shipping an unsigned
       // cross-host binary while ensuring argv never crosses cmd.exe's parser.
       postWriteCommands: [
@@ -228,7 +256,8 @@ export function createRemoteCliInstallPlan(env: RemoteCliInstallEnv): RemoteCliI
         contents: [
           '#!/usr/bin/env sh',
           'set -eu',
-          `ORCA_RELAY_NODE_PATH=\${ORCA_RELAY_NODE_PATH:-${quoteSh(env.nodePath)}}`,
+          `ORCA_RELAY_RUNTIME_KIND=\${ORCA_RELAY_RUNTIME_KIND:-${quoteSh(env.runtimeKind ?? (env.runtimePath && !env.nodePath ? 'bun' : 'node'))}}`,
+          `if [ "$ORCA_RELAY_RUNTIME_KIND" = 'bun' ]; then ORCA_RELAY_RUNTIME_PATH=\${ORCA_RELAY_RUNTIME_PATH:-${quoteSh(runtimePath)}}; else ORCA_RELAY_RUNTIME_PATH=\${ORCA_RELAY_RUNTIME_PATH:-\${ORCA_RELAY_NODE_PATH:-${quoteSh(runtimePath)}}}; ORCA_RELAY_NODE_PATH=\${ORCA_RELAY_NODE_PATH:-$ORCA_RELAY_RUNTIME_PATH}; fi`,
           `ORCA_RELAY_DIR=\${ORCA_RELAY_DIR:-${quoteSh(env.relayDir)}}`,
           `ORCA_RELAY_SOCKET_PATH=\${ORCA_RELAY_SOCKET_PATH:-${quoteSh(env.sockPath)}}`,
           `ORCA_RELAY_CREDENTIAL_FILE=\${ORCA_RELAY_CREDENTIAL_FILE:-${quoteSh(env.credentialFile ?? `${env.sockPath}.credential`)}}`,
@@ -236,7 +265,7 @@ export function createRemoteCliInstallPlan(env: RemoteCliInstallEnv): RemoteCliI
           '  echo "Orca SSH CLI bridge cannot find the relay socket: $ORCA_RELAY_SOCKET_PATH" >&2',
           '  exit 1',
           'fi',
-          'exec "$ORCA_RELAY_NODE_PATH" "$ORCA_RELAY_DIR/relay.js" --sock-path "$ORCA_RELAY_SOCKET_PATH" --credential-file "$ORCA_RELAY_CREDENTIAL_FILE" --orca-cli "$@"',
+          'exec "$ORCA_RELAY_RUNTIME_PATH" "$ORCA_RELAY_DIR/relay.js" --sock-path "$ORCA_RELAY_SOCKET_PATH" --credential-file "$ORCA_RELAY_CREDENTIAL_FILE" --orca-cli "$@"',
           ''
         ].join('\n')
       }

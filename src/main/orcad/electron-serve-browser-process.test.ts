@@ -131,6 +131,42 @@ afterEach(async () => {
 })
 
 describe('ElectronServeBrowserProcess start-up', () => {
+  it('does not launch when startup is already cancelled', async () => {
+    const processHandle = new ElectronServeBrowserProcess(INSTALLED_EXECUTABLE)
+    started.push(processHandle)
+    await expect(processHandle.start(AbortSignal.abort())).rejects.toThrow()
+    expect(spawnProcessMock).not.toHaveBeenCalled()
+  })
+
+  it('cancels readiness polling and cleans up the unready sidecar', async () => {
+    await setControl({ capabilities: [['runtime.v1']] })
+    const controller = new AbortController()
+    const processHandle = new ElectronServeBrowserProcess(INSTALLED_EXECUTABLE)
+    started.push(processHandle)
+    const starting = processHandle.start(controller.signal)
+    const outcome = starting.then(
+      () => ({ rejected: false }),
+      () => ({ rejected: true })
+    )
+    try {
+      await vi.waitFor(async () => expect(await sidecarRequests()).not.toHaveLength(0), {
+        timeout: 10_000
+      })
+    } finally {
+      controller.abort()
+      await outcome
+    }
+    expect(await outcome).toEqual({ rejected: true })
+    expect(processHandle.isAvailable()).toBe(false)
+    const userDataPath = (spawnSpec().args ?? [])
+      .find((arg) => arg.startsWith('--user-data-dir='))!
+      .slice('--user-data-dir='.length)
+    const metadata = JSON.parse(await readFile(join(userDataPath, 'orca-runtime.json'), 'utf8'))
+    await processHandle.stop()
+    expect(existsSync(userDataPath)).toBe(false)
+    expect(() => process.kill(metadata.pid, 0)).toThrow()
+  })
+
   it('launches the installed app in headless serve mode without orcad browser env', async () => {
     for (const key of AGENT_BROWSER_ENVIRONMENT_KEYS) {
       vi.stubEnv(key, `leaked-${key}`)
@@ -155,6 +191,18 @@ describe('ElectronServeBrowserProcess start-up', () => {
     expect(spec.env?.ORCA_HARNESS_UNRELATED).toBe('preserved')
     expect(processHandle.isAvailable()).toBe(true)
   })
+
+  it.each([undefined, '0', 'true', '1'])(
+    'isolates macOS Keychain only with explicit test opt-in %s',
+    async (value) => {
+      vi.stubEnv('ORCA_TEST_MOCK_KEYCHAIN', value)
+      await startProvider()
+      const args = spawnSpec().args ?? []
+      const isolated = process.platform === 'darwin' && value === '1'
+      expect(args.includes('--use-mock-keychain')).toBe(isolated)
+      expect(args.includes('--password-store=basic')).toBe(isolated)
+    }
+  )
 
   it('keeps polling until the sidecar advertises browser.headless.v1', async () => {
     await setControl({

@@ -1,3 +1,5 @@
+import type { PtyOwnershipTransferOutputEnvelope } from './pty-ownership-transfer-output-envelope'
+
 export const DEFAULT_PTY_SOURCE_WINDOW_SU = 256 * 1024
 export const MAX_PTY_ACK_ENTRIES = 64
 
@@ -24,6 +26,7 @@ export type PtySourceSpan = PtySourceDeliveryIdentity &
     displayStart: number
     displayEnd: number
     data: string
+    ownershipTransfer?: PtyOwnershipTransferOutputEnvelope
     splittable?: boolean
     indivisible?: boolean
     transform: PtySourceTransform

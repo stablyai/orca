@@ -156,7 +156,7 @@ describe('LocalPtyProvider', () => {
     })
     spawnMock.mockReturnValue(mockProc)
 
-    provider = new LocalPtyProvider()
+    provider = new LocalPtyProvider({ ptySpawn: spawnMock })
   })
 
   describe('spawn', () => {

@@ -38,11 +38,40 @@ const harness = (given: NodePtyPreconditionVerdict) => {
   return { warn, fail, exit, continued }
 }
 
+const bunDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'Bun')
+
 afterEach(() => {
   setRuntimeTerminalUnavailableCause(null)
+  if (bunDescriptor) {
+    Object.defineProperty(globalThis, 'Bun', bunDescriptor)
+  } else {
+    Reflect.deleteProperty(globalThis, 'Bun')
+  }
 })
 
 describe('runOrcadNativePreflight', () => {
+  it('skips node-pty preflight only when Bun.Terminal is available', () => {
+    const check = vi.fn(() => verdict({ status: 'blocked' }))
+    Object.defineProperty(globalThis, 'Bun', {
+      configurable: true,
+      value: { Terminal: class {}, spawn: vi.fn() }
+    })
+
+    expect(runOrcadNativePreflight({ check })).toBe(true)
+    expect(check).not.toHaveBeenCalled()
+  })
+
+  it('does not mistake a Bun runtime without Bun.Terminal for a PTY backend', () => {
+    const check = vi.fn(() => verdict({ status: 'ok' }))
+    Object.defineProperty(globalThis, 'Bun', {
+      configurable: true,
+      value: { spawn: vi.fn() }
+    })
+
+    expect(runOrcadNativePreflight({ check })).toBe(true)
+    expect(check).toHaveBeenCalledOnce()
+  })
+
   it('stops the boot on a proven-unloadable binary instead of reaching the require', () => {
     // Continuing here would hit the very dlopen the probe just proved fatal, and the
     // operator would get the loader's stack trace instead of the sentence below.

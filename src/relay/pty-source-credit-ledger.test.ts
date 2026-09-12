@@ -4,6 +4,7 @@ import {
   type PtySourceDeliveryIdentity
 } from '../shared/pty-source-credit-contract'
 import { RelayPtySourceCreditLedger } from './pty-source-credit-ledger'
+import type { PtyOwnershipTransferOutputEnvelope } from '../shared/pty-ownership-transfer-output-envelope'
 import { CLOSED_DELIVERY_TOMBSTONE_LIMIT, type DeliveryRecord } from './pty-source-credit-record'
 
 function getDeliveryRecord(
@@ -37,12 +38,14 @@ function append(
   ledger: RelayPtySourceCreditLedger,
   owner: PtySourceDeliveryIdentity,
   data: string,
-  spanId = `span-${data}`
+  spanId = `span-${data}`,
+  ownershipTransfer?: PtyOwnershipTransferOutputEnvelope
 ): void {
   const start = ledger.snapshot(owner).receivedEndSu
   ledger.append(owner, {
     spanId,
     data,
+    ...(ownershipTransfer ? { ownershipTransfer } : {}),
     displayStart: start,
     displayEnd: start + data.length,
     splittable: true,
@@ -80,6 +83,49 @@ function expectRetentionMatchesRecords(ledger: RelayPtySourceCreditLedger): void
 }
 
 describe('RelayPtySourceCreditLedger', () => {
+  it('preserves transfer identity and adjusts fragment offsets while slicing', () => {
+    const ledger = new RelayPtySourceCreditLedger()
+    const owner = identity()
+    const transfer = {
+      bridgeId: 'bridge-1',
+      terminalId: owner.id,
+      incarnationId: owner.ptyIncarnation,
+      ownerLease: 'lease-1',
+      sourceOwnerGeneration: owner.ownerGeneration,
+      destinationRuntimeId: 'runtime-1',
+      version: 1 as const,
+      frameSeq: 9,
+      fragmentStartSu: 0,
+      fragmentEndSu: 4,
+      frameLengthSu: 4
+    }
+    ledger.open(owner, 8)
+    append(ledger, owner, 'a😀b', 'transfer-span', transfer)
+
+    const first = ledger.reserveNextSend(owner, 2)!
+    expect(first.span.data).toBe('a')
+    expect(first.span.ownershipTransfer).toMatchObject({
+      bridgeId: 'bridge-1',
+      frameSeq: 9,
+      fragmentStartSu: 0,
+      fragmentEndSu: 1
+    })
+    ledger.commitSend(first)
+    ledger.acknowledge(owner, {
+      id: owner.id,
+      clientGeneration: owner.clientGeneration,
+      ownerGeneration: owner.ownerGeneration,
+      deliveryToken: owner.deliveryToken,
+      creditedEndSu: 1
+    })
+    const second = ledger.reserveNextSend(owner, 2)!
+    expect(second.span.data).toBe('😀')
+    expect(second.span.ownershipTransfer).toMatchObject({
+      fragmentStartSu: 1,
+      fragmentEndSu: 3,
+      frameLengthSu: 4
+    })
+  })
   it('keeps send-span lookup near-linear across a retained-frame burst', () => {
     const spanCount = 1_024
     const ledger = new RelayPtySourceCreditLedger({
@@ -297,7 +343,6 @@ describe('RelayPtySourceCreditLedger', () => {
     ).toBe('advanced')
     expect([...record.sentBoundaries]).toEqual([8])
   })
-
   it('never exceeds a token source window across generated send/ACK sequences', () => {
     for (let seed = 1; seed <= 40; seed++) {
       const ledger = new RelayPtySourceCreditLedger()

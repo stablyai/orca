@@ -16,9 +16,17 @@ if (process.argv.includes('--orcad-smoke-load-check')) {
 // evaluated before this statement, so the guarantee is that no module in the graph
 // requires node-pty at import time — which the bundle's lazy `require("node-pty")` in
 // local-pty-provider satisfies. See ./node-pty-precondition.ts for why a child process.
-runOrcadNativePreflight()
+const run = async (): Promise<void> => {
+  if (process.argv[2] === '--complete-managed-stop') {
+    const { runOrcadManagedStopCommand } = await import('./orcad-managed-stop-command')
+    await runOrcadManagedStopCommand(process.argv.slice(2))
+    return
+  }
+  runOrcadNativePreflight()
+  await main()
+}
 
-main().catch((error: unknown) => {
+run().catch((error: unknown) => {
   console.error('orcad: failed to start:', error)
   // Why a resolved code and not a bare 1: a data-root or bind-address refusal is a
   // configuration fault that restarting cannot fix, and a supervisor needs to tell the two

@@ -47,6 +47,95 @@ function transportHarness(writeResults: (boolean | void)[]): WriterHarness {
 }
 
 describe('SshMultiplexerTransportWriter', () => {
+  it('rejects producer overflow without closing the shared writer', () => {
+    const harness = transportHarness([true])
+    const failure = vi.fn()
+    const writer = new SshMultiplexerTransportWriter(harness.transport, failure)
+    const settled = vi.fn()
+    expect(
+      writer.enqueue(
+        Buffer.alloc(MULTIPLEXER_ORDINARY_QUEUE_MAX_BYTES + 1),
+        'ordinary',
+        settled,
+        undefined,
+        true
+      )
+    ).toBe(false)
+    expect(settled).toHaveBeenCalledWith(expect.objectContaining({ outcome: 'refused' }))
+    expect(failure).not.toHaveBeenCalled()
+    expect(writer.enqueue(Buffer.from('control still works'), 'control')).toBe(true)
+    expect(harness.writes.map(String)).toEqual(['control still works'])
+    writer.dispose()
+  })
+
+  it('revalidates queued authority before handing bytes to the transport', () => {
+    const harness = transportHarness([false, true])
+    const failure = vi.fn()
+    const writer = new SshMultiplexerTransportWriter(harness.transport, failure)
+    const current = vi.fn(() => true)
+    const settled = vi.fn()
+    writer.enqueue(Buffer.from('first'), 'ordinary')
+    writer.enqueue(Buffer.from('stale'), 'ordinary', settled, current)
+    current.mockReturnValue(false)
+    harness.drain()
+    expect(harness.writes.map(String)).toEqual(['first'])
+    expect(settled).toHaveBeenCalledWith(
+      expect.objectContaining({ outcome: 'refused', reason: 'write_gate_denied' })
+    )
+    expect(failure).not.toHaveBeenCalled()
+    writer.dispose()
+  })
+  it('waits for queued and in-flight input settlements before enqueueing a priority prepare frame', async () => {
+    const harness = transportHarness([false, true, true])
+    const writer = new SshMultiplexerTransportWriter(harness.transport, vi.fn())
+    writer.enqueue(Buffer.from('input-1'), 'ordinary')
+    writer.enqueue(Buffer.from('input-2'), 'ordinary')
+    const prepare = writer.waitForPendingWrites(new AbortController().signal).then(() => {
+      writer.enqueue(Buffer.from('prepare'), 'control')
+    })
+    harness.drain()
+    expect(harness.writes.map(String)).toEqual(['input-1', 'input-2'])
+    harness.callbacks[1]({ ok: true })
+    await Promise.resolve()
+    expect(harness.writes.map(String)).toEqual(['input-1', 'input-2'])
+    harness.callbacks[0]({ ok: true })
+    await prepare
+    expect(harness.writes.map(String)).toEqual(['input-1', 'input-2', 'prepare'])
+    writer.dispose()
+  })
+
+  it('captures only previously admitted writes, leaving later traffic for a subsequent barrier', async () => {
+    const harness = transportHarness([true, true])
+    const writer = new SshMultiplexerTransportWriter(harness.transport, vi.fn())
+    writer.enqueue(Buffer.from('first'), 'ordinary')
+    const first = writer.waitForPendingWrites(new AbortController().signal)
+    writer.enqueue(Buffer.from('later'), 'control')
+    const later = writer.waitForPendingWrites(new AbortController().signal)
+    harness.callbacks[0]({ ok: true })
+    await first
+    const observed = later.catch((error) => error)
+    writer.dispose(new Error('transport lost'))
+    expect(await observed).toBeInstanceOf(Error)
+    await expect(writer.waitForPendingWrites(new AbortController().signal)).rejects.toThrow(
+      'closed'
+    )
+  })
+
+  it('cancels one drain observer without dropping writes or canceling other observers', async () => {
+    const harness = transportHarness([true])
+    const writer = new SshMultiplexerTransportWriter(harness.transport, vi.fn())
+    writer.enqueue(Buffer.from('input'), 'ordinary')
+    const controller = new AbortController()
+    const canceled = writer.waitForPendingWrites(controller.signal).catch((error) => error)
+    const retained = writer.waitForPendingWrites(new AbortController().signal)
+    controller.abort(new Error('canceled'))
+    expect(await canceled).toBeInstanceOf(Error)
+    harness.callbacks[0]({ ok: true })
+    await retained
+    expect(harness.removeDrain).not.toHaveBeenCalled()
+    writer.dispose()
+  })
+
   it('selects queued control before ordinary backlog at the drain boundary', () => {
     const harness = transportHarness([false, true, true, true])
     const writer = new SshMultiplexerTransportWriter(harness.transport, vi.fn())

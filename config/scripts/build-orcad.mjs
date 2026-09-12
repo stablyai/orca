@@ -1,15 +1,16 @@
 #!/usr/bin/env node
 /**
- * Bundle `orcad` — the Orca runtime served from plain Node, no Electron.
+ * Bundle `orcad` — the self-contained Bun runtime, with Node rollback compatibility.
  *
  * Variant B (see docs/design/node-only-runtime-backend.html): the browser-pane and
  * speech clusters are excluded. That is not a size optimisation — those modules are
  * the only ones that statically import `node:sqlite`, so dropping them is what keeps
- * the host Node floor at 18 instead of 22.5+.
+ * the rollback Node floor at 18 instead of 22.5+.
  */
 import { fork, spawnSync } from 'node:child_process'
 import { build } from 'esbuild'
 import { createHash } from 'node:crypto'
+import { createRequire } from 'node:module'
 import {
   chmodSync,
   copyFileSync,
@@ -20,17 +21,27 @@ import {
   rmSync,
   writeFileSync
 } from 'node:fs'
-import { arch, platform, tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { tmpdir } from 'node:os'
+import { dirname, join, resolve } from 'node:path'
 import process from 'node:process'
 import {
+  ORCAD_BUILD_TARGET_FILENAME,
+  ORCAD_EMOJI_SHORTCODE_DATASET,
+  orcadBunRuntimeFilename,
+  orcadArtifactHashPrefix,
+  ORCAD_PARCEL_WATCHER_ENTRY,
+  ORCAD_PARCEL_WATCHER_NATIVE,
   ORCAD_VERSION,
   ORCAD_VERSION_FILENAME,
   orcadArtifactFilenames
 } from '../../src/shared/orcad-artifacts.ts'
+import { ORCAD_BUN_VERSION } from '../../src/shared/orcad-bun-runtime.ts'
+import { orcadAgentBrowserNativeName } from '../../src/shared/orcad-agent-browser-name.ts'
 
 const ROOT = join(import.meta.dirname, '..', '..')
-const OUT_DIR = join(ROOT, 'out', 'orcad')
+const OUT_DIR = process.env.ORCAD_OUT_DIR
+  ? resolve(process.env.ORCAD_OUT_DIR)
+  : join(ROOT, 'out', 'orcad')
 const ENTRY = join(ROOT, 'src/main/orcad/main.ts')
 // Why beside orcad.js: the watcher runs in a forked child so a native @parcel/watcher
 // fault crashes that child instead of the server, and `resolveWatcherProcessEntryPath`
@@ -42,22 +53,65 @@ const WATCHER_OUT_FILE = join(OUT_DIR, 'parcel-watcher-process-entry.js')
 // orcad restart would SIGKILL every running terminal.
 const DAEMON_ENTRY = join(ROOT, 'src/main/daemon/daemon-entry.ts')
 const DAEMON_OUT_FILE = join(OUT_DIR, 'daemon-entry.js')
-const AGENT_BROWSER_NAME = `agent-browser-${platform()}-${arch()}${process.platform === 'win32' ? '.exe' : ''}`
+const PTY_GATE_ENTRY = join(ROOT, 'src/main/daemon/pty-subprocess/windows-bun-pty-gate-entry.ts')
+const PTY_GATE_OUT_FILE = join(OUT_DIR, 'windows-bun-pty-gate-entry.js')
 const OUT_FILE = join(OUT_DIR, 'orcad.js')
+const BUILD_TARGET = process.env.ORCAD_BUILD_TARGET
+if (!BUILD_TARGET) {
+  throw new Error('ORCAD_BUILD_TARGET is required; run `pnpm build:orcad`')
+}
+const [targetPlatform, targetArch] = BUILD_TARGET.split('-')
+const targetIsWindows = targetPlatform === 'win32'
+const targetIsCurrent = process.env.ORCAD_BUILD_TARGET_IS_CURRENT === '1'
+const AGENT_BROWSER_NAME = orcadAgentBrowserNativeName(
+  targetPlatform,
+  targetArch,
+  BUILD_TARGET.endsWith('-musl') ? 'musl' : 'glibc'
+)
 const AGENT_BROWSER_SOURCE = join(ROOT, 'node_modules', 'agent-browser', 'bin', AGENT_BROWSER_NAME)
 const AGENT_BROWSER_OUTPUT = join(OUT_DIR, AGENT_BROWSER_NAME)
+const WATCHER_MODULE_DIR = join(OUT_DIR, 'node_modules', '@parcel', 'watcher')
+
+function parcelWatcherPackage(target) {
+  return `@parcel/watcher-${target}`
+}
+
+async function stageParcelWatcher(target) {
+  const requireFromWatcher = createRequire(
+    join(ROOT, 'node_modules', '@parcel', 'watcher', 'index.js')
+  )
+  const nativeSource = requireFromWatcher.resolve(`${parcelWatcherPackage(target)}/watcher.node`)
+  const wrapperSource = requireFromWatcher.resolve('@parcel/watcher/wrapper.js')
+  mkdirSync(WATCHER_MODULE_DIR, { recursive: true })
+  await build({
+    stdin: {
+      contents:
+        `const {createWrapper}=require(${JSON.stringify(wrapperSource)});` +
+        `module.exports=createWrapper(require('./watcher.node'));`,
+      resolveDir: ROOT,
+      sourcefile: 'orcad-parcel-watcher-entry.js'
+    },
+    bundle: true,
+    platform: 'node',
+    target: 'node18',
+    format: 'cjs',
+    outfile: join(OUT_DIR, ORCAD_PARCEL_WATCHER_ENTRY),
+    external: ['./watcher.node'],
+    minify: true,
+    sourcemap: false,
+    logLevel: 'error'
+  })
+  copyFileSync(nativeSource, join(OUT_DIR, ORCAD_PARCEL_WATCHER_NATIVE))
+}
 
 // Native addons must exist on the host; they cannot be bundled.
 // `electron` is external so a residual import fails loudly at require() time rather
 // than silently bundling the npm package's installer shim, which is what happened the
 // first time and made the bundle look clean while it was not.
-// Why only these: measured, not guessed. `node-pty` is a hard `require.resolve` — orcad
-// exits at startup without it. `@parcel/watcher` is a guarded dynamic import, so the
-// server boots without it but every watch install fails. `fsevents` is macOS-only and
-// optional upstream. better-sqlite3 / keytar / cpu-features were externalized here
-// defensively and appear nowhere in the graph; listing them implied a shipping burden
-// that does not exist.
-const EXTERNAL = ['electron', 'node-pty', '@parcel/watcher', 'fsevents']
+// Why only these: measured, not guessed. `node-pty` remains external solely so a pre-Bun
+// rollback can run this bundle under Node. Bun.Terminal handles production PTYs. The staged
+// watcher resolves `@parcel/watcher`; `fsevents` is macOS-only and optional upstream.
+const EXTERNAL = ['electron', 'node-pty', '@parcel/watcher', 'fsevents', 'bun:ffi']
 
 /** Why: the UMD build's relative dynamic requires do not bundle. Same fix build-relay.mjs uses. */
 const jsoncParserEsm = {
@@ -79,9 +133,36 @@ const externalNativeAddons = {
 
 rmSync(OUT_DIR, { recursive: true, force: true })
 mkdirSync(OUT_DIR, { recursive: true })
-copyFileSync(AGENT_BROWSER_SOURCE, AGENT_BROWSER_OUTPUT)
-if (process.platform !== 'win32') {
-  chmodSync(AGENT_BROWSER_OUTPUT, 0o755)
+const bunRuntimeSource = process.env.ORCAD_BUN_RUNTIME_PATH
+if (!bunRuntimeSource) {
+  throw new Error('ORCAD_BUN_RUNTIME_PATH is required; run `pnpm build:orcad`')
+}
+if (targetIsCurrent) {
+  const version = spawnSync(bunRuntimeSource, ['--version'], { encoding: 'utf8' })
+  if (version.status !== 0 || version.stdout.trim() !== ORCAD_BUN_VERSION) {
+    throw new Error(
+      `ORCAD_BUN_RUNTIME_PATH must be Bun ${ORCAD_BUN_VERSION}; got ${version.stdout.trim() || version.stderr.trim()}`
+    )
+  }
+}
+const bunRuntimeOutput = join(OUT_DIR, orcadBunRuntimeFilename(BUILD_TARGET))
+copyFileSync(bunRuntimeSource, bunRuntimeOutput)
+writeFileSync(join(OUT_DIR, ORCAD_BUILD_TARGET_FILENAME), `${BUILD_TARGET}\n`)
+if (!targetIsWindows) {
+  chmodSync(bunRuntimeOutput, 0o755)
+}
+await stageParcelWatcher(BUILD_TARGET)
+const emojiDatasetOutput = join(OUT_DIR, ORCAD_EMOJI_SHORTCODE_DATASET)
+mkdirSync(dirname(emojiDatasetOutput), { recursive: true })
+copyFileSync(
+  createRequire(import.meta.url).resolve('emojibase-data/en/shortcodes/emojibase.json'),
+  emojiDatasetOutput
+)
+if (existsSync(AGENT_BROWSER_SOURCE)) {
+  copyFileSync(AGENT_BROWSER_SOURCE, AGENT_BROWSER_OUTPUT)
+  if (!targetIsWindows) {
+    chmodSync(AGENT_BROWSER_OUTPUT, 0o755)
+  }
 }
 
 /** Why one call per child and not one `outdir` build: esbuild mirrors each entry's source
@@ -100,14 +181,18 @@ function buildForkedChild(entryPoint, outfile) {
     metafile: true,
     minify: true,
     sourcemap: false,
-    define: { 'process.env.NODE_ENV': '"production"' },
+    define: {
+      'process.env.NODE_ENV': '"production"',
+      __ORCAD_BUILD_TARGET__: JSON.stringify(BUILD_TARGET)
+    },
     logLevel: 'error'
   })
 }
 
 const childResults = await Promise.all([
   buildForkedChild(WATCHER_ENTRY, WATCHER_OUT_FILE),
-  buildForkedChild(DAEMON_ENTRY, DAEMON_OUT_FILE)
+  buildForkedChild(DAEMON_ENTRY, DAEMON_OUT_FILE),
+  buildForkedChild(PTY_GATE_ENTRY, PTY_GATE_OUT_FILE)
 ])
 
 const result = await build({
@@ -122,7 +207,10 @@ const result = await build({
   metafile: true,
   minify: true,
   sourcemap: false,
-  define: { 'process.env.NODE_ENV': '"production"' },
+  define: {
+    'process.env.NODE_ENV': '"production"',
+    __ORCAD_BUILD_TARGET__: JSON.stringify(BUILD_TARGET)
+  },
   logLevel: 'error'
 })
 
@@ -132,8 +220,8 @@ const output = Object.values(result.metafile.outputs).find(
 // Why check `original` and not just `path`: when electron is bundleable, esbuild
 // rewrites `path` to the resolved file under node_modules and the naive check passes
 // while the package is very much in the bundle.
-// Why both metafiles: the forked children ship in the same deployment and run under the
-// same plain Node. A daemon-entry that reached electron would fail at fork time, on the
+// Why both metafiles: the forked children ship in the same deployment and runtime. A
+// daemon-entry that reached electron would fail at fork time, on the
 // path whose whole point is that terminals survive.
 function collectImporters(metafiles, matches) {
   const importers = new Set()
@@ -181,7 +269,7 @@ if (graphErrors.length > 0) {
   process.exitCode = 1
 } else {
   // Why smoke-load and not just read the metafile: the import scan proves no module
-  // *names* electron, but a graph can still fail to resolve under plain Node — a
+  // *names* electron, but the rollback graph can still fail to resolve under plain Node — a
   // dynamic require, a missing native, a top-level throw. The plain-node-entry-guard
   // smoke-loads its entries for exactly this reason, and orcad cannot join that guard
   // because it is an esbuild artifact rather than a rollup input.
@@ -196,7 +284,7 @@ if (graphErrors.length > 0) {
   const smokeOutput = `${smoke.stdout ?? ''}${smoke.stderr ?? ''}`
   if (smoke.error || smoke.signal || smoke.status !== 0) {
     console.error(
-      `[build-orcad] the bundle did not load under plain Node.\n` +
+      `[build-orcad] the bundle lost Node rollback compatibility.\n` +
         `Expected a clean load-check exit, got status=${smoke.status ?? 'none'} ` +
         `signal=${smoke.signal ?? 'none'} ` +
         `error=${smoke.error?.message ?? 'none'}\n${smokeOutput.slice(0, 2000)}`
@@ -225,17 +313,17 @@ if (graphErrors.length > 0) {
   const daemonSmokeOutput = `${daemonSmoke.stdout ?? ''}${daemonSmoke.stderr ?? ''}`
   if (daemonSmoke.error || daemonSmoke.signal || daemonSmoke.status !== 0) {
     console.error(
-      `[build-orcad] the daemon child did not load under plain Node.\n` +
+      `[build-orcad] the daemon child lost Node rollback compatibility.\n` +
         `Expected a clean load check, got status=${daemonSmoke.status ?? 'none'} ` +
         `signal=${daemonSmoke.signal ?? 'none'} ` +
         `error=${daemonSmoke.error?.message ?? 'none'}\n${daemonSmokeOutput.slice(0, 2000)}`
     )
     process.exitCode = 1
   }
-  const watcherFailure = await smokeLoadWatcherChild()
+  const watcherFailure = targetIsCurrent ? await smokeLoadWatcherChild() : null
   if (watcherFailure) {
     console.error(
-      `[build-orcad] the watcher child did not run under plain Node.\n${watcherFailure}`
+      `[build-orcad] the watcher child lost Node rollback compatibility.\n${watcherFailure}`
     )
     process.exitCode = 1
   }
@@ -246,8 +334,8 @@ if (graphErrors.length > 0) {
 // already-`.install-complete` dir is never re-uploaded. The deploy would silently run stale
 // bytes while reporting the new version.
 if (process.exitCode !== 1) {
-  const hash = createHash('sha256')
-  for (const filename of orcadArtifactFilenames()) {
+  const hash = createHash('sha256').update(orcadArtifactHashPrefix(BUILD_TARGET))
+  for (const filename of orcadArtifactFilenames(BUILD_TARGET)) {
     const artifactPath = join(OUT_DIR, filename)
     if (!existsSync(artifactPath)) {
       throw new Error(
@@ -257,10 +345,13 @@ if (process.exitCode !== 1) {
     }
     hash.update(readFileSync(artifactPath))
   }
+  if (existsSync(AGENT_BROWSER_OUTPUT)) {
+    hash.update(readFileSync(AGENT_BROWSER_OUTPUT))
+  }
   const fullVersion = `${ORCAD_VERSION}+${hash.digest('hex').slice(0, 12)}`
   writeFileSync(join(OUT_DIR, ORCAD_VERSION_FILENAME), fullVersion)
   console.log(
-    `[build-orcad] ok — ${fullVersion}, ${(output.bytes / 1024 / 1024).toFixed(2)} MB, ${Object.keys(output.inputs).length} modules, zero electron and node:sqlite imports.`
+    `[build-orcad] ok — ${fullVersion}, ${(output.bytes / 1024 / 1024).toFixed(2)} MB, ${Object.keys(output.inputs).length} modules, zero electron and node:sqlite imports, Bun ${ORCAD_BUN_VERSION} included.`
   )
 }
 
@@ -268,7 +359,7 @@ if (process.exitCode !== 1) {
  * Fork the shipped watcher child and drive one message through it.
  *
  * Why a real fork and not existsSync: the file being present says nothing about whether
- * its graph resolves under plain Node, and this child is only ever reached through
+ * its graph resolves under the rollback Node runtime, and this child is only ever reached through
  * `fork()` at runtime — a broken one degrades silently to in-process watching.
  * `subscribe-started` is acked before the native module is touched, so this passes on a
  * build machine with no compiled @parcel/watcher.

@@ -122,6 +122,15 @@ describe('parsePtySessionId', () => {
     expect(parsePtySessionId(mintPtySessionId())).toEqual({ worktreeId: null })
   })
 
+  it('round-trips a minted folder-workspace id', () => {
+    const workspace = 'folder:folder-abc'
+    expect(parsePtySessionId(mintPtySessionId(workspace))).toEqual({ worktreeId: workspace })
+  })
+
+  it('rejects a folder-workspace prefix without a catalog identity', () => {
+    expect(parsePtySessionId('folder:@@deadbeef')).toEqual({ worktreeId: null })
+  })
+
   it('rejects ids with @@ but no `::` worktree shape', () => {
     // Why: callers use the returned worktreeId as a memory-attribution key.
     // A non-minted id like `wt-only@@abcd1234` would synthesize a bogus

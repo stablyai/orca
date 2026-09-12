@@ -151,6 +151,20 @@ describe('mobile RPC allowlist', () => {
     ).toEqual([])
   })
 
+  it('does not grant mobile credentials access to catalog migration', () => {
+    const allowed = mobileRpcAllowlist()
+    expect(
+      [
+        'orcad.migration.importCatalog',
+        'orcad.migration.stageCatalog',
+        'orcad.migration.stageSnapshotChunk',
+        'orcad.migration.commitCatalog',
+        'orcad.migration.abortCatalog',
+        'orcad.migration.catalogState'
+      ].filter((method) => allowed.has(method))
+    ).toEqual([])
+  })
+
   it('exposes only the mobile structured agent-session surface', () => {
     expect(
       [...mobileRpcAllowlist()].filter((method) => method.startsWith('agentSession.'))

@@ -5,6 +5,7 @@ import { cn } from '@/lib/utils'
 import { Button } from '../ui/button'
 import { Label } from '../ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
+import { runtimeEnvironmentSelectionOptions } from './runtime-environment-selection'
 import {
   getActiveServerModeDescription,
   getHostModelCapabilitySummary,
@@ -43,6 +44,7 @@ export function RuntimeActiveServerSection({
   onValueChange,
   onRefresh
 }: RuntimeActiveServerSectionProps): React.JSX.Element {
+  const selectionOptions = runtimeEnvironmentSelectionOptions(environments, activeValue)
   return (
     <div data-settings-section="default-runtime" className={!visible ? 'hidden' : undefined}>
       <Button
@@ -120,7 +122,7 @@ export function RuntimeActiveServerSection({
                       )}
                     </SelectItem>
                   ) : null}
-                  {environments.map((environment) => (
+                  {selectionOptions.map((environment) => (
                     <SelectItem key={environment.id} value={environment.id}>
                       {environment.name}
                     </SelectItem>

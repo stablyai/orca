@@ -206,6 +206,11 @@ jobs:
       - name: Verify the generated RPC params catalog
         run: pnpm run verify:rpc-params-catalog
 
+      # Why: the shipped slot cold-starts under its checksum-pinned Bun, not host Node. The Node
+      # smoke above builds the artifact; run the same complete built-artifact suite used locally.
+      - name: Verify the complete bundled Bun orcad runtime
+        run: pnpm run smoke:orcad-bun:built
+
       - name: Verify bundled skill guides
         run: pnpm run verify:bundled-skill-guides
 

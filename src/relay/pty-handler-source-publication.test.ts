@@ -176,6 +176,36 @@ describe('PtyHandler negotiated source publication', () => {
       .filter((frame): frame is Notification => frame?.method === 'pty.exit')
   }
 
+  it('resolves and authorizes the exact active source owner for transfer', async () => {
+    await spawn({})
+    const grant = writes.map((buffer) => responseResult(buffer, 1)).find(Boolean)!
+    const spawned = writes.map((buffer) => responseResult(buffer, 2)).find(Boolean)!
+    const source = publication.ownershipTransfer.resolve(String(spawned.id))
+
+    expect(source).toEqual({
+      terminalId: spawned.id,
+      incarnationId: spawned.incarnationId,
+      ownerLease: grant.ownerLease,
+      sourceOwnerGeneration: grant.ownerGeneration
+    })
+    expect(
+      publication.ownershipTransfer.authorizes(
+        String(spawned.id),
+        String(grant.ownerLease),
+        Number(grant.ownerGeneration),
+        1
+      )
+    ).toBe(true)
+    expect(
+      publication.ownershipTransfer.authorizes(
+        String(spawned.id),
+        String(grant.ownerLease),
+        Number(grant.ownerGeneration),
+        2
+      )
+    ).toBe(false)
+  })
+
   async function cancelSourceDelivery(spawnResult: Record<string, unknown>): Promise<void> {
     const activation = spawnResult.sourceActivation as Record<string, unknown>
     dispatcher.feed(

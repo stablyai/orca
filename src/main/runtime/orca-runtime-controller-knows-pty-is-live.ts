@@ -7,7 +7,10 @@ import {
   assertTerminalInputWithinLimitWithYield,
   buildTerminalSendPayload
 } from './terminal-send-payload'
-import { buildAgentPromptPasteBytes } from '../../shared/agent-prompt-injection'
+import {
+  AGENT_PROMPT_SUBMIT,
+  buildAgentPromptPasteBytes
+} from '../../shared/agent-prompt-injection'
 
 export class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntimeWithResolveTerminalPane {
   protected controllerKnowsPtyIsLive(ptyId: string): boolean {
@@ -71,6 +74,7 @@ export class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntimeWithReso
       interrupt?: boolean
     },
     options: {
+      operationId?: string
       signal?: AbortSignal
       beforeWrite?: (ptyId: string) => void | Promise<void>
       reserveWrite?: (ptyId: string) => void
@@ -88,12 +92,16 @@ export class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntimeWithReso
         throw new Error('invalid_terminal_send')
       }
       await assertTerminalInputWithinLimitWithYield(action.text)
-      await this.writeTerminalAction(pty.pty.ptyId, action, payload, options)
-      return {
-        handle,
-        accepted: true,
-        bytesWritten: Buffer.byteLength(payload, 'utf8')
-      }
+      const ptyIncarnationId =
+        pty.pty.incarnationId ?? `runtime:${this.getPtyLifecycleGeneration(pty.pty.ptyId)}`
+      const delivery = await this.writeTerminalSendWithReceipt({
+        ptyId: pty.pty.ptyId,
+        incarnationId: ptyIncarnationId,
+        operationId: options.operationId,
+        payload,
+        write: () => this.writeTerminalAction(pty.pty.ptyId, action, payload, options)
+      })
+      return { handle, accepted: true, ...delivery }
     }
 
     const { leaf } = this.getLiveLeafForHandle(handle)
@@ -113,13 +121,17 @@ export class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntimeWithReso
       throw new Error('terminal_not_writable')
     }
 
-    await this.writeTerminalAction(leaf.ptyId, action, payload, options)
-
-    return {
-      handle,
-      accepted: true,
-      bytesWritten: Buffer.byteLength(payload, 'utf8')
-    }
+    const leafIncarnationId =
+      this.ptysById.get(leaf.ptyId)?.incarnationId ??
+      `runtime:${this.getPtyLifecycleGeneration(leaf.ptyId)}`
+    const delivery = await this.writeTerminalSendWithReceipt({
+      ptyId: leaf.ptyId,
+      incarnationId: leafIncarnationId,
+      operationId: options.operationId,
+      payload,
+      write: () => this.writeTerminalAction(leaf.ptyId!, action, payload, options)
+    })
+    return { handle, accepted: true, ...delivery }
   }
 
   async sendTerminalAgentPrompt(
@@ -128,6 +140,7 @@ export class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntimeWithReso
     options: RuntimeAgentPromptWriteOptions = {}
   ): Promise<RuntimeTerminalSend> {
     const payload = buildAgentPromptPasteBytes(prompt)
+    const receiptedPayload = `${payload}${AGENT_PROMPT_SUBMIT}`
     const pty = this.getLivePtyForHandle(handle)
     if (pty) {
       if (!pty.pty.connected) {
@@ -135,27 +148,35 @@ export class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntimeWithReso
       }
       await assertTerminalInputWithinLimitWithYield(payload)
       const generation = this.getPtyLifecycleGeneration(pty.pty.ptyId)
-      const delivery = await this.serializeAgentPromptSubmission(
-        pty.pty.ptyId,
-        generation,
-        async () => {
-          this.assertLiveTerminalHandleTargetsPty(handle, pty.pty.ptyId)
-          this.assertAgentPromptGeneration(pty.pty.ptyId, generation)
-          return await this.writeTerminalAgentPrompt(
-            handle,
+      const incarnationId =
+        pty.pty.incarnationId ?? `runtime:${this.getPtyLifecycleGeneration(pty.pty.ptyId)}`
+      const delivery = await this.writeTerminalSendWithReceipt({
+        ptyId: pty.pty.ptyId,
+        incarnationId,
+        operationId: options.operationId,
+        payload: receiptedPayload,
+        write: async () => {
+          return await this.serializeAgentPromptSubmission(
             pty.pty.ptyId,
             generation,
-            payload,
-            options
+            async () => {
+              this.assertLiveTerminalHandleTargetsPty(handle, pty.pty.ptyId)
+              this.assertAgentPromptGeneration(pty.pty.ptyId, generation)
+              return await this.writeTerminalAgentPrompt(
+                handle,
+                pty.pty.ptyId,
+                generation,
+                payload,
+                options
+              )
+            }
           )
         }
-      )
-      const bytesWritten = Buffer.byteLength(payload, 'utf8') + delivery.submits
+      })
       return {
         handle,
         accepted: true,
-        bytesWritten,
-        ...(delivery.prompt ? { prompt: delivery.prompt } : {})
+        ...delivery
       }
     }
 
@@ -170,17 +191,32 @@ export class OrcaRuntimeWithControllerKnowsPtyIsLive extends OrcaRuntimeWithReso
       throw new Error('terminal_not_writable')
     }
     const generation = this.getPtyLifecycleGeneration(leaf.ptyId)
-    const delivery = await this.serializeAgentPromptSubmission(leaf.ptyId, generation, async () => {
-      this.assertLiveTerminalHandleTargetsPty(handle, leaf.ptyId!)
-      this.assertAgentPromptGeneration(leaf.ptyId!, generation)
-      return await this.writeTerminalAgentPrompt(handle, leaf.ptyId!, generation, payload, options)
+    const incarnationId =
+      this.ptysById.get(leaf.ptyId)?.incarnationId ??
+      `runtime:${this.getPtyLifecycleGeneration(leaf.ptyId)}`
+    const delivery = await this.writeTerminalSendWithReceipt({
+      ptyId: leaf.ptyId,
+      incarnationId,
+      operationId: options.operationId,
+      payload: receiptedPayload,
+      write: async () => {
+        return await this.serializeAgentPromptSubmission(leaf.ptyId!, generation, async () => {
+          this.assertLiveTerminalHandleTargetsPty(handle, leaf.ptyId!)
+          this.assertAgentPromptGeneration(leaf.ptyId!, generation)
+          return await this.writeTerminalAgentPrompt(
+            handle,
+            leaf.ptyId!,
+            generation,
+            payload,
+            options
+          )
+        })
+      }
     })
-    const bytesWritten = Buffer.byteLength(payload, 'utf8') + delivery.submits
     return {
       handle,
       accepted: true,
-      bytesWritten,
-      ...(delivery.prompt ? { prompt: delivery.prompt } : {})
+      ...delivery
     }
   }
 }

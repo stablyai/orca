@@ -1,4 +1,5 @@
 import type { SinkWriteSettlement } from './dispatcher-client-writer'
+import { onceDispatcherWriterSettlement } from './dispatcher-writer-admission'
 import type { JsonRpcNotification } from './protocol'
 import {
   DROPPED_NOTIFICATION_LOG_KEY_LIMIT,
@@ -8,6 +9,16 @@ import {
 import { RelayDispatcherPtyPublication } from './dispatcher-pty-publication'
 
 export abstract class RelayDispatcherNotificationPublication extends RelayDispatcherPtyPublication {
+  assertSettledProducerTransport(clientId: number, generation: number): void {
+    const client = this.clients.get(clientId)
+    if (this.disposed || !client || client.closed || client.generation !== generation) {
+      throw new Error('relay_producer_transport_unverifiable')
+    }
+    if (!client.writer.supportsWriteCallback) {
+      throw new Error('relay_producer_write_callback_required')
+    }
+  }
+
   notify(method: string, params?: Record<string, unknown>): void {
     if (this.disposed) {
       return
@@ -50,14 +61,24 @@ export abstract class RelayDispatcherNotificationPublication extends RelayDispat
     params?: Record<string, unknown>,
     // Why: a caller that recovers from rejection itself (the watcher emitter re-sends the batch in
     // chunks) would otherwise log "Dropped" for a frame it goes on to deliver in full.
-    options?: { logDrop?: boolean }
+    options?: {
+      logDrop?: boolean
+      onSettled?: (result: SinkWriteSettlement) => void
+      settledTransportGeneration?: number
+      isStillAdmitted?: () => boolean
+    }
   ): boolean {
-    if (this.disposed) {
+    const settle = onceDispatcherWriterSettlement(options?.onSettled ?? (() => {}))
+    const refuse = (message: string): false => {
+      settle({ ok: false, error: new Error(message) })
       return false
+    }
+    if (this.disposed) {
+      return refuse('Relay dispatcher is disposed')
     }
     const client = this.clients.get(clientId)
     if (!client || client.closed) {
-      return false
+      return refuse('Relay client is not connected')
     }
     const msg: JsonRpcNotification = {
       jsonrpc: '2.0',
@@ -65,17 +86,29 @@ export abstract class RelayDispatcherNotificationPublication extends RelayDispat
       ...(params !== undefined ? { params } : {})
     }
     if (method === 'pty.data' && !this.admitsPtyDataPublication(client.id, params ?? {})) {
-      return false
+      return refuse('Relay PTY publication is not admitted')
     }
-    const frame = this.prepareFrame(msg)
-    if (this.publishPreparedToClient(client, frame, 'ordinary')) {
+    let frame: PreparedRelayFrame
+    try {
+      if (options?.settledTransportGeneration !== undefined) {
+        this.assertSettledProducerTransport(clientId, options.settledTransportGeneration)
+      }
+      frame = this.prepareFrame(msg)
+      if (options?.settledTransportGeneration !== undefined) {
+        this.assertSettledProducerTransport(clientId, options.settledTransportGeneration)
+      }
+    } catch (error) {
+      settle({ ok: false, error: error instanceof Error ? error : new Error(String(error)) })
+      throw error
+    }
+    if (this.publishPreparedToClient(client, frame, 'ordinary', settle, options?.isStillAdmitted)) {
       return true
     }
     // Why: same diagnostics as notify() — a producer that drops here must not do so silently.
     if (options?.logDrop !== false) {
       this.logDroppedProducerNotification(client, method, frame.frameBytes)
     }
-    return false
+    return refuse('Relay producer publication was not accepted')
   }
 
   notifyClient(clientId: number, method: string, params?: Record<string, unknown>): void {

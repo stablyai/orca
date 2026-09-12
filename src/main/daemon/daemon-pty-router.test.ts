@@ -1,28 +1,19 @@
+import { createAdapter } from './daemon-pty-router-test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { DaemonPtyRouter } from './daemon-pty-router'
+import { stubWriteSettlement } from '../providers/settled-pty-write-stub'
 import { SessionNotFoundError, TerminalSessionOwnerUnverifiedError } from './daemon-errors'
 import type { DaemonPtyAdapter } from './daemon-pty-adapter'
-import { settledWriteStub, stubWriteSettlement } from '../providers/settled-pty-write-stub'
-import type { PtyBackgroundStreamEvent, PtySpawnOptions, PtySpawnResult } from '../providers/types'
+import type { PtySpawnResult } from '../providers/types'
 import {
   AGENT_SESSION_CLAIM_DAEMON_PROTOCOL_VERSION,
-  AGENT_SESSION_CREATE_OPERATION_DAEMON_PROTOCOL_VERSION,
-  GIT_CREDENTIAL_GUARD_HOST_PROTOCOL_VERSION
+  AGENT_SESSION_CREATE_OPERATION_DAEMON_PROTOCOL_VERSION
 } from './types'
 import {
   HISTORY_SEED_TRANSFER_PROTOCOL_VERSION,
   PROTOCOL_VERSION,
-  SNAPSHOT_SERIALIZER_FIDELITY_DAEMON_PROTOCOL_VERSION,
   STABLE_PANE_ATTACH_ONLY_DAEMON_PROTOCOL_VERSION
 } from './daemon-protocol-version'
-
-type AdapterMock = DaemonPtyAdapter & {
-  emitData: (id: string, data: string, sequenceChars?: number) => void
-  emitBackground: (event: PtyBackgroundStreamEvent) => void
-  emitExit: (id: string, code: number, incarnationId?: string) => void
-  emitIdentityChange: () => void
-  triggerWriteUnavailable: (id: string) => void
-}
 
 const LARGE_RECONCILE_SESSION_COUNT = 150_000
 
@@ -32,152 +23,6 @@ function buildSessionIds(prefix: string, count: number): string[] {
     ids.push(`${prefix}-${index}`)
   }
   return ids
-}
-
-function createAdapter(
-  label: string,
-  sessions: string[] = [],
-  reconcileResult?: { alive: string[]; killed: string[] },
-  protocolVersion = GIT_CREDENTIAL_GUARD_HOST_PROTOCOL_VERSION
-): AdapterMock {
-  const writes: { id: string; data: string }[] = []
-  const dataListeners: ((payload: { id: string; data: string; sequenceChars?: number }) => void)[] =
-    []
-  const backgroundListeners: ((payload: PtyBackgroundStreamEvent) => void)[] = []
-  const writeUnavailableListeners: ((payload: { id: string }) => void)[] = []
-  const exitListeners: ((payload: { id: string; code: number; incarnationId?: string }) => void)[] =
-    []
-  const identityChangeListeners: (() => void)[] = []
-  return {
-    protocolVersion,
-    supportsGitCredentialGuardHost: () =>
-      protocolVersion >= GIT_CREDENTIAL_GUARD_HOST_PROTOCOL_VERSION,
-    supportsAgentSessionClaims: () =>
-      protocolVersion >= AGENT_SESSION_CLAIM_DAEMON_PROTOCOL_VERSION,
-    supportsAgentSessionCreateOperations: () =>
-      protocolVersion >= AGENT_SESSION_CREATE_OPERATION_DAEMON_PROTOCOL_VERSION,
-    providesAgentSessionOwnerListings: () =>
-      protocolVersion >= AGENT_SESSION_CLAIM_DAEMON_PROTOCOL_VERSION,
-    canProvideAuthoritativeBufferSnapshot: () =>
-      protocolVersion >= SNAPSHOT_SERIALIZER_FIDELITY_DAEMON_PROTOCOL_VERSION,
-    spawn: vi.fn(async (opts: PtySpawnOptions): Promise<PtySpawnResult> => {
-      const id = opts.sessionId ?? `${label}-new`
-      sessions.push(id)
-      return { id }
-    }),
-    listProcesses: vi.fn(async () =>
-      sessions.map((id) => ({
-        id,
-        cwd: '',
-        title: label
-      }))
-    ),
-    hasPty: vi.fn((id: string) => sessions.includes(id)),
-    probePtyLiveness: vi.fn(async (id: string) => sessions.includes(id)),
-    write: vi.fn((id: string, data: string) => {
-      writes.push({ id, data })
-    }),
-    writeWithSettlement: vi.fn(settledWriteStub()),
-    resize: vi.fn(),
-    setPtyBackgrounded: vi.fn(),
-    getBufferSnapshot: vi.fn(async () => null),
-    shutdown: vi.fn(async (id: string) => {
-      const idx = sessions.indexOf(id)
-      if (idx !== -1) {
-        sessions.splice(idx, 1)
-      }
-    }),
-    attach: vi.fn(async () => {}),
-    sendSignal: vi.fn(async () => {}),
-    getCwd: vi.fn(async () => ''),
-    getInitialCwd: vi.fn(async () => ''),
-    clearBuffer: vi.fn(async () => {}),
-    acknowledgeDataEvent: vi.fn(),
-    hasChildProcesses: vi.fn(async () => false),
-    getForegroundProcess: vi.fn(async () => null),
-    inspectProcess: vi.fn(async () => ({ foregroundProcess: null, hasChildProcesses: false })),
-    confirmForegroundProcess: vi.fn(async () => `${label}-confirmed`),
-    serialize: vi.fn(async () => '{}'),
-    revive: vi.fn(async () => {}),
-    getDefaultShell: vi.fn(async () => '/bin/zsh'),
-    getProfiles: vi.fn(async () => []),
-    onData: vi.fn(
-      (callback: (payload: { id: string; data: string; sequenceChars?: number }) => void) => {
-        dataListeners.push(callback)
-        return () => {
-          const idx = dataListeners.indexOf(callback)
-          if (idx !== -1) {
-            dataListeners.splice(idx, 1)
-          }
-        }
-      }
-    ),
-    onBackgroundStreamEvent: vi.fn((callback: (payload: PtyBackgroundStreamEvent) => void) => {
-      backgroundListeners.push(callback)
-      return () => {
-        const idx = backgroundListeners.indexOf(callback)
-        if (idx !== -1) {
-          backgroundListeners.splice(idx, 1)
-        }
-      }
-    }),
-    onWriteUnavailable: vi.fn((callback: (payload: { id: string }) => void) => {
-      writeUnavailableListeners.push(callback)
-      return () => {
-        const idx = writeUnavailableListeners.indexOf(callback)
-        if (idx !== -1) {
-          writeUnavailableListeners.splice(idx, 1)
-        }
-      }
-    }),
-    onExit: vi.fn(
-      (callback: (payload: { id: string; code: number; incarnationId?: string }) => void) => {
-        exitListeners.push(callback)
-        return () => {
-          const idx = exitListeners.indexOf(callback)
-          if (idx !== -1) {
-            exitListeners.splice(idx, 1)
-          }
-        }
-      }
-    ),
-    onDaemonIdentityChanged: vi.fn((callback: () => void) => {
-      identityChangeListeners.push(callback)
-      return () => {
-        const idx = identityChangeListeners.indexOf(callback)
-        if (idx !== -1) {
-          identityChangeListeners.splice(idx, 1)
-        }
-      }
-    }),
-    ackColdRestore: vi.fn(),
-    clearTombstone: vi.fn(),
-    reconcileOnStartup: vi.fn(async () => reconcileResult ?? { alive: sessions, killed: [] }),
-    dispose: vi.fn(),
-    disconnectOnly: vi.fn(async () => {}),
-    emitData: (id: string, data: string, sequenceChars?: number) => {
-      for (const listener of dataListeners) {
-        listener({ id, data, ...(sequenceChars === undefined ? {} : { sequenceChars }) })
-      }
-    },
-    emitBackground: (event: PtyBackgroundStreamEvent) => {
-      for (const listener of backgroundListeners) {
-        listener(event)
-      }
-    },
-    emitExit: (id: string, code: number, incarnationId?: string) => {
-      for (const listener of exitListeners) {
-        listener({ id, code, ...(incarnationId ? { incarnationId } : {}) })
-      }
-    },
-    emitIdentityChange: () => identityChangeListeners.forEach((listener) => listener()),
-    triggerWriteUnavailable: (id: string) => {
-      for (const listener of writeUnavailableListeners) {
-        listener({ id })
-      }
-    },
-    _writes: writes
-  } as unknown as AdapterMock
 }
 
 it('forwards dead-endpoint write-unavailable signals from every routed adapter', () => {
@@ -247,6 +92,99 @@ it('forwards the owning legacy daemon sequence from attach', async () => {
 })
 
 describe('DaemonPtyRouter', () => {
+  it('advertises runtime-owned transfer framing without enabling live mutation', async () => {
+    const router = new DaemonPtyRouter({
+      current: createAdapter('current', [], undefined, PROTOCOL_VERSION),
+      legacy: []
+    })
+
+    await expect(router.getOwnershipBridgeCapabilities()).resolves.toEqual({
+      protocolVersions: [1],
+      maxReplayBytes: 128 * 1024,
+      maxInputIds: 4_096,
+      inputDeduplication: true,
+      rollback: true,
+      liveTransfer: false
+    })
+  })
+
+  describe('idle retirement', () => {
+    it('retires every empty daemon generation and fences subsequent spawns', async () => {
+      const current = createAdapter('current', [], undefined, PROTOCOL_VERSION)
+      const legacy = createAdapter('legacy', [], undefined, PROTOCOL_VERSION)
+      const router = new DaemonPtyRouter({ current, legacy: [legacy] })
+
+      await expect(router.requestIdleRetirement()).resolves.toEqual({ state: 'retiring' })
+      expect(current.requestIdleRetirement).toHaveBeenCalledOnce()
+      expect(legacy.requestIdleRetirement).toHaveBeenCalledOnce()
+      await expect(router.spawn({ sessionId: 'late', cols: 80, rows: 24 })).rejects.toThrow(
+        'Terminal daemon is decommissioning'
+      )
+    })
+
+    it('reports live inventory before retiring any generation and reopens admission', async () => {
+      const current = createAdapter('current', [], undefined, PROTOCOL_VERSION)
+      const legacy = createAdapter('legacy', ['legacy-live'], undefined, PROTOCOL_VERSION)
+      const router = new DaemonPtyRouter({ current, legacy: [legacy] })
+
+      await expect(router.requestIdleRetirement()).resolves.toEqual({
+        state: 'busy',
+        liveSessions: 1,
+        admissionReopened: true
+      })
+      expect(current.requestIdleRetirement).not.toHaveBeenCalled()
+      expect(legacy.requestIdleRetirement).not.toHaveBeenCalled()
+      await expect(
+        router.spawn({ sessionId: 'after-refusal', cols: 80, rows: 24 })
+      ).resolves.toEqual({
+        id: 'after-refusal'
+      })
+    })
+
+    it('does not partially retire when a generation predates clean idle shutdown', async () => {
+      const current = createAdapter('current', [], undefined, PROTOCOL_VERSION)
+      const legacy = createAdapter('legacy', [], undefined, 23)
+      const router = new DaemonPtyRouter({ current, legacy: [legacy] })
+
+      await expect(router.requestIdleRetirement()).resolves.toEqual({ state: 'unsupported' })
+      expect(current.requestIdleRetirement).not.toHaveBeenCalled()
+      expect(legacy.requestIdleRetirement).not.toHaveBeenCalled()
+    })
+
+    it('keeps admission fenced after a partial multi-generation retirement', async () => {
+      const current = createAdapter('current', [], undefined, PROTOCOL_VERSION)
+      const legacy = createAdapter('legacy', [], undefined, PROTOCOL_VERSION)
+      vi.mocked(legacy.requestIdleRetirement).mockResolvedValueOnce({
+        state: 'busy',
+        liveSessions: 0
+      })
+      const router = new DaemonPtyRouter({ current, legacy: [legacy] })
+
+      await expect(router.requestIdleRetirement()).resolves.toEqual({ state: 'unverifiable' })
+      await expect(router.spawn({ sessionId: 'unsafe', cols: 80, rows: 24 })).rejects.toThrow(
+        'Terminal daemon is decommissioning'
+      )
+    })
+
+    it('does not certify reopened admission when another generation retired beside live sessions', async () => {
+      const current = createAdapter('current', [], undefined, PROTOCOL_VERSION)
+      const legacy = createAdapter('legacy', [], undefined, PROTOCOL_VERSION)
+      vi.mocked(legacy.requestIdleRetirement).mockResolvedValueOnce({
+        state: 'busy',
+        liveSessions: 1,
+        admissionReopened: true
+      })
+      const router = new DaemonPtyRouter({ current, legacy: [legacy] })
+      await expect(router.requestIdleRetirement()).resolves.toEqual({
+        state: 'busy',
+        liveSessions: 1
+      })
+      await expect(
+        router.spawn({ sessionId: 'unsafe-partial', cols: 80, rows: 24 })
+      ).rejects.toThrow('Terminal daemon is decommissioning')
+    })
+  })
+
   it('reports separate conservative resume and fresh-create boundaries', () => {
     const current = createAdapter(
       'current',

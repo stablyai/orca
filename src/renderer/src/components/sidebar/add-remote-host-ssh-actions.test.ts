@@ -66,8 +66,9 @@ describe('individual SSH config host selection', () => {
     const outcome = await saveNewSshHostFromForm({
       form: selection!.form,
       ssh,
-      recordSshRepoReadoptions: vi.fn(),
-      setSshTargetsMetadata: vi.fn(),
+      provisionTarget: async (target) => {
+        savedTarget = target
+      },
       recordFeatureInteraction: vi.fn()
     })
 
@@ -107,13 +108,15 @@ describe('manual SSH host label fallback', () => {
     const outcome = await saveNewSshHostFromForm({
       form: { ...EMPTY_FORM, host: '10.0.0.7' },
       ssh,
-      recordSshRepoReadoptions: vi.fn(),
-      setSshTargetsMetadata: vi.fn(),
+      provisionTarget: async (target) => {
+        savedTarget = target
+      },
       recordFeatureInteraction: vi.fn()
     })
 
     expect(outcome).toBe('saved')
     expect(savedTarget?.label).toBe('10.0.0.7')
+    expect(ssh.addTarget).not.toHaveBeenCalled()
   })
 })
 

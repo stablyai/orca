@@ -15,6 +15,7 @@ export class BrowserNetworkTunnelDuplex extends Duplex {
   constructor(options: BrowserNetworkTunnelDuplexOptions) {
     super({
       allowHalfOpen: true,
+      autoDestroy: false,
       readableHighWaterMark: BROWSER_NETWORK_TUNNEL_INITIAL_WINDOW_BYTES
     })
     // Why: retirement destroys with an error before any consumer holds the duplex

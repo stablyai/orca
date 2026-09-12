@@ -69,11 +69,13 @@ export const ptySessionControlApi = {
     /** Host verdict on the shell-ready marker; absent when the execution host predates the field. */
     shellReadyArmed?: boolean
   }> => ipcRenderer.invoke('pty:spawn', opts),
-  write: (id: string, data: string): void => {
-    ipcRenderer.send('pty:write', { id, data })
+  write: (id: string, data: string, options?: { operationId?: string }): void => {
+    ipcRenderer.send('pty:write', { id, data, ...options })
   },
-  writeAccepted: (id: string, data: string): Promise<boolean> =>
-    ipcRenderer.invoke('pty:writeAccepted', { id, data }),
+  writeAccepted: (id: string, data: string, options?: { operationId?: string }): Promise<boolean> =>
+    ipcRenderer.invoke('pty:writeAccepted', { id, data, ...options }),
+  retireWriteOperation: (id: string, operationId: string): Promise<boolean> =>
+    ipcRenderer.invoke('pty:retireWriteOperation', { id, operationId }),
   onWriteUnavailable: (
     callback: (payload: {
       id: string

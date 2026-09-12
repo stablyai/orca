@@ -81,78 +81,96 @@ describe('session tabs retirement proof delta', () => {
 
 // Why: the host pins up to 64 proofs per worktree for its lifetime, so this is the steady-state
 // cost of every title tick on a churn-heavy worktree for a paired mobile/relay/SSH client.
-describe('session.tabs.subscribe retirement proof payload', () => {
-  // Real identities are UUID-sized: tab/leaf/pty ids and `term_<uuid>` handles.
-  const uuid = (index: number): string =>
-    `${index.toString(16).padStart(8, '0')}-4a1b-4c2d-8e3f-000000000000`
-  const proofs = Array.from({ length: 64 }, (_, index) => ({
-    parentTabId: `terminal-${uuid(index)}`,
-    leafId: uuid(index + 1000),
-    ptyId: uuid(index + 2000),
-    terminal: `term_${uuid(index + 3000)}`,
-    incarnationId: uuid(index + 4000)
-  }))
+describe.each(['session.tabs.subscribe', 'session.tabs.subscribeAll'])(
+  '%s retirement proof payload',
+  (method) => {
+    // Real identities are UUID-sized: tab/leaf/pty ids and `term_<uuid>` handles.
+    const uuid = (index: number): string =>
+      `${index.toString(16).padStart(8, '0')}-4a1b-4c2d-8e3f-000000000000`
+    const proofs = Array.from({ length: 64 }, (_, index) => ({
+      parentTabId: `terminal-${uuid(index)}`,
+      leafId: uuid(index + 1000),
+      ptyId: uuid(index + 2000),
+      terminal: `term_${uuid(index + 3000)}`,
+      incarnationId: uuid(index + 4000)
+    }))
 
-  async function subscribeAndTick(clientCapabilities: readonly string[] | undefined): Promise<{
-    initial: string
-    tick: string
-  }> {
-    let listener: ((snapshot: RuntimeMobileSessionTabsResult) => void) | undefined
-    const runtime = {
-      getRuntimeId: () => 'test-runtime',
-      getClientSettings: () => ({}),
-      listMobileSessionTabs: vi.fn().mockResolvedValue(frame(1, proofs)),
-      registerSubscriptionCleanup: vi.fn(),
-      onMobileSessionTabsChanged: vi.fn(
-        (next: (snapshot: RuntimeMobileSessionTabsResult) => void) => {
-          listener = next
-          return () => {}
-        }
+    async function subscribeAndTick(clientCapabilities: readonly string[] | undefined): Promise<{
+      initial: string
+      tick: string
+      recreated: string
+    }> {
+      let listener:
+        | ((snapshot: RuntimeMobileSessionTabsResult, sequence: number) => void)
+        | undefined
+      const runtime = {
+        getRuntimeId: () => 'test-runtime',
+        getClientSettings: () => ({}),
+        listMobileSessionTabs: vi.fn().mockResolvedValue(frame(1, proofs)),
+        supportsAuthoritativeSessionTabsInventory: () => false,
+        listAllMobileSessionTabsWithChangeSequence: async () => ({
+          snapshots: [frame(1, proofs)],
+          changeSequence: 1
+        }),
+        registerSubscriptionCleanup: vi.fn(),
+        onMobileSessionTabsChanged: vi.fn(
+          (next: (snapshot: RuntimeMobileSessionTabsResult, sequence: number) => void) => {
+            listener = next
+            return () => {}
+          }
+        )
+      } as unknown as OrcaRuntimeService
+      const dispatcher = new RpcDispatcher({ runtime, methods: SESSION_TAB_METHODS })
+      const messages: string[] = []
+      await dispatcher.dispatchStreaming(
+        {
+          id: 'req-1',
+          authToken: 'tok',
+          method,
+          ...(method === 'session.tabs.subscribe' ? { params: { worktree: 'id:wt' } } : {})
+        },
+        (message) => messages.push(message),
+        { clientKind: 'runtime', clientCapabilities }
       )
-    } as unknown as OrcaRuntimeService
-    const dispatcher = new RpcDispatcher({ runtime, methods: SESSION_TAB_METHODS })
-    const messages: string[] = []
-    await dispatcher.dispatchStreaming(
-      {
-        id: 'req-1',
-        authToken: 'tok',
-        method: 'session.tabs.subscribe',
-        params: { worktree: 'id:wt' }
-      },
-      (message) => messages.push(message),
-      { clientKind: 'runtime', clientCapabilities }
-    )
-    // An OSC title change bumps the version and republishes the same 64 proofs.
-    listener!(frame(2, proofs))
-    return { initial: messages[0]!, tick: messages[1]! }
+      // An OSC title change bumps the version and republishes the same 64 proofs.
+      listener!(frame(2, proofs), 2)
+      listener!({ ...frame(3), removed: true } as RuntimeMobileSessionTabsResult, 3)
+      listener!(frame(4, proofs), 4)
+      const initial = JSON.parse(messages[0]!)
+      if (method === 'session.tabs.subscribeAll') {
+        initial.result = initial.result.snapshots[0]
+      }
+      return { initial: JSON.stringify(initial), tick: messages[1]!, recreated: messages[3]! }
+    }
+
+    // Why: a reconnect is a new subscribe with fresh per-stream state, and the client's ledger
+    // resets on its new connection generation — so the first frame must carry the full set.
+    it('resends the full proof set on the first frame of a fresh stream', async () => {
+      const first = await subscribeAndTick([SESSION_TABS_RETIREMENT_PROOF_DELTA_RUNTIME_CAPABILITY])
+      const reconnected = await subscribeAndTick([
+        SESSION_TABS_RETIREMENT_PROOF_DELTA_RUNTIME_CAPABILITY
+      ])
+      expect(JSON.parse(first.initial).result.retiredTerminalSurfaces).toEqual(proofs)
+      expect(JSON.parse(reconnected.initial).result.retiredTerminalSurfaces).toEqual(proofs)
+      expect(JSON.parse(first.recreated).result.retiredTerminalSurfaces).toEqual(proofs)
+    })
+
+    it('drops the repeated proof list from a title tick for a negotiated client', async () => {
+      const legacy = await subscribeAndTick(undefined)
+      const delta = await subscribeAndTick([SESSION_TABS_RETIREMENT_PROOF_DELTA_RUNTIME_CAPABILITY])
+
+      const legacyTick = JSON.parse(legacy.tick).result
+      const deltaTick = JSON.parse(delta.tick).result
+      expect(legacyTick.retiredTerminalSurfaces).toHaveLength(64)
+      expect(deltaTick.retiredTerminalSurfaces).toEqual([])
+      // Both clients still receive the full list on the initial snapshot.
+      expect(JSON.parse(legacy.initial).result.retiredTerminalSurfaces).toHaveLength(64)
+      expect(JSON.parse(delta.initial).result.retiredTerminalSurfaces).toHaveLength(64)
+
+      // The delta tick keeps a two-byte `[]` so the client can tell "nothing new" from "no proofs".
+      const proofBytes = Buffer.byteLength(JSON.stringify(proofs))
+      expect(proofBytes).toBeGreaterThan(8_000)
+      expect(Buffer.byteLength(legacy.tick) - Buffer.byteLength(delta.tick)).toBe(proofBytes - 2)
+    })
   }
-
-  // Why: a reconnect is a new subscribe with fresh per-stream state, and the client's ledger
-  // resets on its new connection generation — so the first frame must carry the full set.
-  it('resends the full proof set on the first frame of a fresh stream', async () => {
-    const first = await subscribeAndTick([SESSION_TABS_RETIREMENT_PROOF_DELTA_RUNTIME_CAPABILITY])
-    const reconnected = await subscribeAndTick([
-      SESSION_TABS_RETIREMENT_PROOF_DELTA_RUNTIME_CAPABILITY
-    ])
-    expect(JSON.parse(first.initial).result.retiredTerminalSurfaces).toEqual(proofs)
-    expect(JSON.parse(reconnected.initial).result.retiredTerminalSurfaces).toEqual(proofs)
-  })
-
-  it('drops the repeated proof list from a title tick for a negotiated client', async () => {
-    const legacy = await subscribeAndTick(undefined)
-    const delta = await subscribeAndTick([SESSION_TABS_RETIREMENT_PROOF_DELTA_RUNTIME_CAPABILITY])
-
-    const legacyTick = JSON.parse(legacy.tick).result
-    const deltaTick = JSON.parse(delta.tick).result
-    expect(legacyTick.retiredTerminalSurfaces).toHaveLength(64)
-    expect(deltaTick.retiredTerminalSurfaces).toEqual([])
-    // Both clients still receive the full list on the initial snapshot.
-    expect(JSON.parse(legacy.initial).result.retiredTerminalSurfaces).toHaveLength(64)
-    expect(JSON.parse(delta.initial).result.retiredTerminalSurfaces).toHaveLength(64)
-
-    // The delta tick keeps a two-byte `[]` so the client can tell "nothing new" from "no proofs".
-    const proofBytes = Buffer.byteLength(JSON.stringify(proofs))
-    expect(proofBytes).toBeGreaterThan(8_000)
-    expect(Buffer.byteLength(legacy.tick) - Buffer.byteLength(delta.tick)).toBe(proofBytes - 2)
-  })
-})
+)

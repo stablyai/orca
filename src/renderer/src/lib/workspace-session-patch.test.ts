@@ -2,6 +2,28 @@ import { describe, expect, it } from 'vitest'
 import type { Repo } from '../../../shared/repo-types'
 import type { WorkspaceSessionSnapshot } from './workspace-session'
 import { buildWorkspaceSessionPatch } from './workspace-session-patch'
+import { worktreeWorkspaceKey } from '../../../shared/workspace-scope'
+
+it.each(['runtime:destination', null] as const)(
+  'persists workspace selection ownership %s in incremental patches',
+  (activeWorkspaceExecutionHostId) => {
+    const selection = {
+      activeRepoId: 'repo-1',
+      activeWorktreeId: 'wt-1',
+      activeWorkspaceKey: worktreeWorkspaceKey('wt-1'),
+      activeWorkspaceExecutionHostId
+    }
+    expect(
+      buildWorkspaceSessionPatch(
+        createSnapshot(selection),
+        Object.keys(selection) as (keyof WorkspaceSessionSnapshot)[]
+      )
+    ).toEqual(selection)
+    expect(
+      buildWorkspaceSessionPatch(createSnapshot(selection), ['activeWorkspaceExecutionHostId'])
+    ).toEqual({ activeWorkspaceExecutionHostId })
+  }
+)
 
 function createSnapshot(
   overrides: Partial<WorkspaceSessionSnapshot> = {}

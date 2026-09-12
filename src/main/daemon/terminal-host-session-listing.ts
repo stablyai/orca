@@ -24,7 +24,7 @@ export function listLiveTerminalHostSessions(
       cwd: session.getCwd(),
       cols: size?.cols ?? 0,
       rows: size?.rows ?? 0,
-      createdAt: 0,
+      createdAt: session.createdAt,
       agentSessionOwners: agentSessionOwners.listForPty(session.sessionId)
     })
   }

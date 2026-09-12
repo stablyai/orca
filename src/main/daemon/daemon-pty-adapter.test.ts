@@ -116,7 +116,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
     it('carries classified startup spans from the daemon source to the adapter', async () => {
       const onData = vi.fn()
       adapter.onData(onData)
-      const { id } = await adapter.spawn({
+      const { id, incarnationId } = await adapter.spawn({
         cols: 80,
         rows: 24,
         startupIngress: {
@@ -134,11 +134,12 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       expect(onData).toHaveBeenCalledWith({
         id,
         data: '',
+        incarnationId,
         sequenceChars: query.length,
         seq: query.length,
         transformed: true
       })
-      expect(onData).toHaveBeenCalledWith({ id, data: 'prompt' })
+      expect(onData).toHaveBeenCalledWith({ id, data: 'prompt', incarnationId })
       await expect(adapter.getBufferSnapshot(id)).resolves.toMatchObject({
         data: expect.not.stringContaining(']10;rgb')
       })
@@ -673,24 +674,24 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       const dataPayloads: { id: string; data: string }[] = []
       adapter.onData((payload) => dataPayloads.push(payload))
 
-      const { id } = await adapter.spawn({ cols: 80, rows: 24 })
+      const { id, incarnationId } = await adapter.spawn({ cols: 80, rows: 24 })
       lastSubprocess._simulateData('hello')
 
       await waitFor(() => dataPayloads.length > 0)
-      expect(dataPayloads[0]).toEqual({ id, data: 'hello' })
+      expect(dataPayloads[0]).toEqual({ id, data: 'hello', incarnationId })
     })
 
     it('coalesces burst data events before serializing daemon stream output', async () => {
       const dataPayloads: { id: string; data: string }[] = []
       adapter.onData((payload) => dataPayloads.push(payload))
 
-      const { id } = await adapter.spawn({ cols: 80, rows: 24 })
+      const { id, incarnationId } = await adapter.spawn({ cols: 80, rows: 24 })
       lastSubprocess._simulateData('a')
       lastSubprocess._simulateData('b')
       lastSubprocess._simulateData('c')
 
       await waitFor(() => dataPayloads.length > 0)
-      expect(dataPayloads).toEqual([{ id, data: 'abc' }])
+      expect(dataPayloads).toEqual([{ id, data: 'abc', incarnationId }])
     })
   })
 

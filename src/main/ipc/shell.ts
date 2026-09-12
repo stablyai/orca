@@ -84,7 +84,7 @@ async function openInExternalEditor(
     if (!sshTarget) {
       return { ok: false, reason: 'ssh-target-not-found' }
     }
-    if (sshTarget.owner?.type === 'on-demand-runtime') {
+    if (sshTarget.owner) {
       return { ok: false, reason: 'remote-runtime-unsupported' }
     }
     if (!posix.isAbsolute(request.path) && !win32.isAbsolute(request.path)) {

@@ -11,7 +11,7 @@ import {
   utimesSync
 } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { decodeRemotePowerShellScript } from './ssh-remote-powershell'
 import {
@@ -151,7 +151,9 @@ describe('ssh remote command builders', () => {
   function stageRelayInstall(isWindows: boolean): string {
     const dir = mkdtempSync(join(tmpdir(), 'orca-relay-probe-'))
     for (const filename of relayArtifactFilenames(isWindows)) {
-      writeFileSync(join(dir, filename), '')
+      const artifactPath = join(dir, filename)
+      mkdirSync(dirname(artifactPath), { recursive: true })
+      writeFileSync(artifactPath, '')
     }
     writeFileSync(join(dir, RELAY_INSTALL_COMPLETE_FILENAME), '')
     return dir
@@ -276,6 +278,17 @@ describe('ssh remote command builders', () => {
     expect(listRelayBaseDirsCommand(windows, 'C:/Users/me/.orca-remote')).toContain(
       '-EncodedCommand'
     )
+  })
+
+  it('uses a bundled Bun executable for Windows liveness probes', () => {
+    const command = relayLivenessProbeCommand(windows, 'C:/Users/me/.orca-remote/relay-0.1.0', {
+      runtimePath: 'C:/Users/me/.orca-remote/relay-0.1.0/bun-runtime.exe',
+      runtimeKind: 'bun',
+      pipePaths: ['\\\\.\\pipe\\orca-relay-1234567890abcdef1234']
+    })
+    const script = decodePowerShellCommand(command)
+    expect(script).toContain("'C:/Users/me/.orca-remote/relay-0.1.0/bun-runtime.exe'")
+    expect(script).toContain('net.connect(pipe)')
   })
 
   it.runIf(process.platform !== 'win32')(

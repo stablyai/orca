@@ -441,6 +441,35 @@ describe('current daemon lifecycle retirement', () => {
     adopted.dispose()
   })
 
+  it('atomically retires an idle daemon and permanently fences adapter spawns', async () => {
+    await startServer()
+    const adapter = new DaemonPtyAdapter({ socketPath, tokenPath })
+
+    await expect(adapter.requestIdleRetirement()).resolves.toEqual({ state: 'retiring' })
+    await expect(
+      adapter.spawn({ sessionId: 'late-after-decommission', cols: 80, rows: 24 })
+    ).rejects.toThrow('Terminal daemon is decommissioning')
+    await waitFor(() => onIdleShutdown.mock.calls.length === 1)
+    adapter.dispose()
+  })
+
+  it('reopens adapter admission when the daemon refuses retirement for a live session', async () => {
+    await startServer()
+    const adapter = new DaemonPtyAdapter({ socketPath, tokenPath })
+    await adapter.spawn({ sessionId: 'already-live', cols: 80, rows: 24 })
+
+    await expect(adapter.requestIdleRetirement()).resolves.toEqual({
+      state: 'busy',
+      liveSessions: 1,
+      admissionReopened: true
+    })
+    await expect(
+      adapter.spawn({ sessionId: 'allowed-after-refusal', cols: 80, rows: 24 })
+    ).resolves.toMatchObject({ id: 'allowed-after-refusal' })
+    expect(onIdleShutdown).not.toHaveBeenCalled()
+    adapter.dispose()
+  })
+
   it('does not let repeated authenticated control probes extend the startup deadline', async () => {
     await startServer()
     const healthControl = connect(socketPath)

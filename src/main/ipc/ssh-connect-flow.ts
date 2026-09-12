@@ -2,6 +2,7 @@ import { appendFileSync } from 'node:fs'
 import type { SshConnection } from '../ssh/ssh-connection'
 import { SshRelaySession } from '../ssh/ssh-relay-session'
 import type { SshConnectionState, SshConnectionStatus } from '../../shared/ssh-types'
+import { getManagedOrcadOwnerEnvironmentId } from '../../shared/managed-orcad-ssh-owner'
 import { createCancelledConnectAttemptError } from '../ssh/ssh-connect-attempt-cancellation'
 import { isAuthError } from '../ssh/ssh-connection-utils'
 import {
@@ -41,8 +42,10 @@ import {
 } from './ssh-renderer-broadcast'
 import { abandonCancelledConnectAttempt, abandonFailedSshSession } from './ssh-session-teardown'
 import { awaitTargetLifecycle } from './ssh-target-lifecycle-queue'
+import { assertSshResetAdmissionAllowed } from './ssh-reset-production-state'
 
 export async function connectTarget(targetId: string): Promise<SshConnectionState> {
+  assertSshResetAdmissionAllowed(targetId)
   const e2eProbePath = process.env.ORCA_E2E_FORBID_LOCAL_SSH_CONNECT_PROBE
   if (e2eProbePath) {
     appendFileSync(e2eProbePath, `${JSON.stringify(targetId)}\n`)
@@ -55,6 +58,7 @@ export async function connectTarget(targetId: string): Promise<SshConnectionStat
   if (reset) {
     await reset
   }
+  assertSshResetAdmissionAllowed(targetId)
 
   // Why: serialize concurrent ssh:connect for the same target; interleaved connects otherwise leak the first session.
   const existing = connectInFlight.get(targetId)
@@ -101,6 +105,9 @@ async function doConnect(
   const target = getSshTargetRegistryStore()!.getTarget(targetId)
   if (!target) {
     throw new Error(`SSH target "${targetId}" not found`)
+  }
+  if (target.orcadProvisioning || getManagedOrcadOwnerEnvironmentId(target.owner) !== null) {
+    throw new Error('This SSH target is reserved for its managed Orca server.')
   }
 
   const existingSession = activeSessions.get(targetId)
@@ -167,6 +174,7 @@ async function doConnect(
   // owns nothing to clean up.
   assertSshConnectsNotFenced()
   // Why: create the session early so onStateChange sees it in 'deploying' and skips reconnect logic.
+  assertSshResetAdmissionAllowed(targetId)
   const session = new SshRelaySession(
     targetId,
     getCurrentMainWindow,

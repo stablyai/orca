@@ -14,6 +14,54 @@ type E2eTerminalPtyDataInjectionWindow = Window & {
 
 const e2eTerminalPtyDataInjectors = new Map<string, (data: string, meta?: PtyDataMeta) => void>()
 
+type InputDisposition =
+  | 'entered'
+  | 'replay'
+  | 'stale'
+  | 'locked'
+  | 'quarantine'
+  | 'sent'
+  | 'rejected'
+  | 'transport-flush'
+  | 'transport-unavailable'
+  | 'stream-submitted'
+  | 'claim-queued'
+  | 'claim-cleared'
+  | 'claim-submitted'
+  | 'claim-rejected'
+  | 'unary-submitted'
+  | 'unary-accepted'
+  | 'unary-rejected'
+  | 'unary-error'
+type InputDispositionWindow = Window & {
+  __terminalInputDisposition?: {
+    begin: (paneId: number, ptyId?: string) => void
+    finish: () => Partial<Record<InputDisposition, number>>
+  }
+}
+let inputProbe: {
+  paneId: number
+  ptyId?: string
+  counts: Partial<Record<InputDisposition, number>>
+} | null = null
+
+export function recordE2eTransportInputDisposition(
+  ptyId: string | null,
+  disposition: InputDisposition,
+  codeUnits: number
+): void {
+  if (e2eConfig.exposeStore && ptyId && inputProbe?.ptyId === ptyId) {
+    inputProbe.counts[disposition] = (inputProbe.counts[disposition] ?? 0) + codeUnits
+  }
+}
+
+/** Opt-in counters only: no terminal data, identifiers, callbacks or retained sessions. */
+export function recordE2eInputDisposition(paneId: number, disposition: InputDisposition): void {
+  if (e2eConfig.exposeStore && inputProbe?.paneId === paneId) {
+    inputProbe.counts[disposition] = (inputProbe.counts[disposition] ?? 0) + 1
+  }
+}
+
 type E2eTerminalHiddenSnapshotOverrideApi = {
   setPending: (ptyId: string, snapshot: PtyBufferSnapshot) => void
   resolve: (ptyId: string) => void
@@ -59,6 +107,16 @@ export function exposeE2eTerminalPtyOutputDebug(): void {
     return
   }
   const target = window as E2eTerminalPtyOutputDebugWindow
+  ;(window as InputDispositionWindow).__terminalInputDisposition ??= {
+    begin: (paneId, ptyId) => {
+      inputProbe = { paneId, ptyId, counts: {} }
+    },
+    finish: () => {
+      const counts = inputProbe?.counts ?? {}
+      inputProbe = null
+      return { ...counts }
+    }
+  }
   target.__terminalPtyOutputDebug ??= {
     reset: resetE2eTerminalPtyOutputDebug,
     snapshot: () => ({ ...e2eTerminalPtyOutputDebugState })

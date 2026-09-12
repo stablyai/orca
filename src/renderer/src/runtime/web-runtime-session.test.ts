@@ -84,6 +84,31 @@ vi.mock('./web-runtime-browser-materialization', () => ({
 afterEach(() => resetWebSessionCloseIntentForTests())
 
 describe('refreshWebRuntimeSessionTabsSnapshot', () => {
+  it.each([1, 2])('rejects cohort drift at validation %s before mirror publication', async (at) => {
+    const snapshot = makeSnapshot()
+    vi.stubGlobal('window', {
+      api: {
+        runtimeEnvironments: {
+          call: vi.fn().mockResolvedValue({ id: 'list', ok: true, result: snapshot })
+        }
+      }
+    })
+    const validateSnapshot = vi.fn(() => {
+      if (validateSnapshot.mock.calls.length === at) {
+        throw new Error('migration-cohort-changed')
+      }
+    })
+    await expect(
+      refreshWebRuntimeSessionTabsSnapshot(ENVIRONMENT_ID, WORKTREE_ID, {
+        errorMode: 'throw',
+        validateSnapshot
+      })
+    ).rejects.toThrow('migration-cohort-changed')
+    expect(validateSnapshot).toHaveBeenCalledTimes(at)
+    expect(mocks.recoverWebSessionTerminalOrphansBeforeApply).toHaveBeenCalledTimes(at - 1)
+    expect(mocks.setState).not.toHaveBeenCalled()
+  })
+
   afterEach(() => {
     resetWebAgentSessionHandoffsForTests()
     replaceRuntimeEnvironmentRevisions([])
