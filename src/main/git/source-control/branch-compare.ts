@@ -3,7 +3,7 @@ import type {
   GitBranchCompareSummary
 } from '../../../shared/git-diff-compare-types'
 import { readBranchCompareHead } from '../../../shared/git-branch-compare-head'
-import { resolveWorktreeAddBaseRef } from '../../../shared/worktree/base-ref'
+import { resolveBranchCompareBaseRef } from '../../../shared/worktree/base-ref'
 import type { GitRuntimeOptions } from '../git-runtime-options'
 import { resolveWorktreeBaseCommitOid } from '../worktree-base-ref-probe'
 import { loadBranchChanges } from './branch-change-entries'
@@ -35,8 +35,9 @@ export async function getBranchCompare(
   const { compareRef, headOidResult, baseOidResult } = await readBranchCompareHead({
     readCompareRef: () => resolveCompareRef(worktreePath, options),
     resolveBaseRef: () =>
-      // Why: short refs like "origin/main" can collide with a local branch; use the proven remote-tracking ref.
-      resolveWorktreeAddBaseRef(baseRef, async (qualifiedRef) => {
+      // Why: short refs like "origin/main" can collide with a local branch; a
+      // stale local default must not beat origin/<branch> when that ref exists.
+      resolveBranchCompareBaseRef(baseRef, async (qualifiedRef) => {
         const oid = await resolveWorktreeBaseCommitOid(worktreePath, qualifiedRef, options)
         if (oid !== null && qualifiedRef.startsWith('refs/heads/')) {
           reusableProbedOidByRef.set(qualifiedRef, oid)

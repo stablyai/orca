@@ -25,6 +25,90 @@ export async function resolveWorktreeAddBaseRef(
 }
 
 /**
+ * Bare local compare bases, including slash-containing names such as
+ * `release/24`. Explicit remote pins (`origin/master`, `refs/remotes/...`)
+ * stay untouched.
+ */
+export function localBranchNameForCompareBase(baseRef: string): string | null {
+  const trimmed = baseRef.trim()
+  if (!trimmed) {
+    return null
+  }
+  if (trimmed.startsWith('refs/heads/')) {
+    return trimmed.slice('refs/heads/'.length) || null
+  }
+  // Why: `origin/master` is already a remote-tracking pin. Other slash names
+  // such as `release/24` are local branch paths and still need origin/.
+  if (trimmed.startsWith('refs/') || trimmed.startsWith('origin/')) {
+    return null
+  }
+  return trimmed
+}
+
+function isRemoteTrackingCompareBase(baseRef: string): boolean {
+  const trimmed = baseRef.trim()
+  if (trimmed.startsWith('refs/remotes/')) {
+    return true
+  }
+  return !trimmed.startsWith('refs/') && trimmed.includes('/')
+}
+
+function compareBaseBranchFamily(baseRef: string): string | null {
+  const trimmed = baseRef.trim()
+  const localBranch = localBranchNameForCompareBase(trimmed)
+  if (localBranch) {
+    return localBranch
+  }
+  if (trimmed.startsWith('refs/')) {
+    return worktreeBaseRefFamily(trimmed)
+  }
+  return trimmed.includes('/') ? worktreeBaseRefFamily(`refs/remotes/${trimmed}`) : null
+}
+
+/**
+ * Prefer a remote-tracking copy of the same branch when the worktree pin is a
+ * local default (`master`) and the repo/default pin is `origin/master`.
+ */
+export function preferRemoteTrackingCompareBase(
+  worktreeBaseRef: string | null | undefined,
+  remoteCandidate: string | null | undefined
+): string | null {
+  const worktree = worktreeBaseRef?.trim() || null
+  const remote = remoteCandidate?.trim() || null
+  if (!worktree) {
+    return remote
+  }
+  if (
+    remote &&
+    localBranchNameForCompareBase(worktree) !== null &&
+    isRemoteTrackingCompareBase(remote) &&
+    compareBaseBranchFamily(worktree) === compareBaseBranchFamily(remote)
+  ) {
+    return remote
+  }
+  return worktree
+}
+
+/**
+ * Qualify a committed-on-branch compare base. A stale local default branch is
+ * not the merge-base when `origin/<branch>` still exists.
+ */
+export async function resolveBranchCompareBaseRef(
+  baseRef: string,
+  refExists: WorktreeBaseRefExists
+): Promise<string> {
+  const trimmed = baseRef.trim()
+  const localBranch = localBranchNameForCompareBase(trimmed)
+  if (localBranch) {
+    const remoteTracking = `refs/remotes/origin/${localBranch}`
+    if (await refExists(remoteTracking)) {
+      return remoteTracking
+    }
+  }
+  return resolveWorktreeAddBaseRef(trimmed, refExists)
+}
+
+/**
  * The branch identity two base refs share when one is the local branch and the
  * other is a remote-tracking copy of it: `refs/heads/main` and
  * `refs/remotes/origin/main` both return `main`.
