@@ -244,6 +244,11 @@ module.exports = {
   // disappears from Agent Session History in packaged builds only. Worker
   // entries reached solely from the Electron main process stay packed, since
   // asar redirects their app.asar paths.
+  // Why: the symbol-index parser (src/main/symbol-index/parser.ts) resolves
+  // grammar/runtime wasm files via createRequire(...).resolve() at runtime and
+  // reads them off disk with fs.readFile. Unpack both the web-tree-sitter
+  // runtime wasm and the @vscode/tree-sitter-wasm grammar wasm files so those
+  // paths exist as real files in the packaged app.
   asarUnpack: [
     'out/package.json',
     'out/cli/**',
@@ -271,7 +276,9 @@ module.exports = {
     'node_modules/ws/**',
     'node_modules/tweetnacl/**',
     'node_modules/zod/**',
-    'node_modules/yaml/**'
+    'node_modules/yaml/**',
+    'node_modules/web-tree-sitter/*.wasm',
+    'node_modules/@vscode/tree-sitter-wasm/wasm/**'
   ],
   artifactBuildCompleted: ({ file, arch }) => {
     if (file.endsWith('.AppImage')) {

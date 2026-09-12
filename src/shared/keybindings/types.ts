@@ -84,6 +84,7 @@ export type KeybindingActionId =
   | 'browser.focusAddressBar'
   | 'browser.grabElement'
   | 'editor.find'
+  | 'editor.goToDefinition'
   | 'editor.replace'
   | 'editor.save'
   | 'editor.markdownPreview'

@@ -46,6 +46,26 @@ export function installEditorFindShortcut(target: HTMLElement, onFind: () => voi
   return () => target.removeEventListener('keydown', handleKeyDown, true)
 }
 
+export function installEditorGoToDefinitionShortcut(
+  target: HTMLElement,
+  onTrigger: () => void
+): () => void {
+  const handleKeyDown = (event: KeyboardEvent): void => {
+    if (!editorShortcutMatches('editor.goToDefinition', event)) {
+      return
+    }
+    // Why: capture-phase preventDefault beats the global sidebar.left.toggle
+    // (Mod+B) binding, but only while the editor DOM has focus.
+    event.preventDefault()
+    event.stopPropagation()
+    if (!event.repeat) {
+      onTrigger()
+    }
+  }
+  target.addEventListener('keydown', handleKeyDown, true)
+  return () => target.removeEventListener('keydown', handleKeyDown, true)
+}
+
 type MonacoDiffNavigationEditor = {
   getContainerDomNode: () => HTMLElement
   goToDiff: (target: 'next' | 'previous') => void
