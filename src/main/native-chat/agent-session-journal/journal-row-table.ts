@@ -52,7 +52,18 @@ export function readJournalEpochRows(
   sessionId: string,
   epoch: string
 ): JournalStoredRow[] {
-  return toStoredRows(db.prepare(SELECT_EPOCH_ROWS).all(sessionId, epoch))
+  return [...iterateJournalEpochRows(db, sessionId, epoch)]
+}
+
+/** Consume synchronously: closing or breaking the loop releases SQLite's read snapshot. */
+export function* iterateJournalEpochRows(
+  db: Database.Database,
+  sessionId: string,
+  epoch: string
+): Generator<JournalStoredRow> {
+  for (const row of db.prepare(SELECT_EPOCH_ROWS).iterate(sessionId, epoch)) {
+    yield toStoredRow(row)
+  }
 }
 
 export function readJournalRowsAfter(
@@ -92,8 +103,10 @@ export function deleteJournalRowSuffix(
 }
 
 function toStoredRows(rows: readonly unknown[]): JournalStoredRow[] {
-  return rows.map((entry) => {
-    const record = entry as { epoch: string; seq: number; ts: number; row_json: string }
-    return { epoch: record.epoch, seq: record.seq, ts: record.ts, rowJson: record.row_json }
-  })
+  return rows.map(toStoredRow)
+}
+
+function toStoredRow(entry: unknown): JournalStoredRow {
+  const record = entry as { epoch: string; seq: number; ts: number; row_json: string }
+  return { epoch: record.epoch, seq: record.seq, ts: record.ts, rowJson: record.row_json }
 }
