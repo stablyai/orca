@@ -1,3 +1,4 @@
+import { startAndroidForegroundPushPresentation } from '../src/notifications/android-foreground-push'
 import { registerPushDismissalTask } from '../src/notifications/push-background-dismissal'
 import { readNativeNotificationData } from '../src/notifications/native-notification-data'
 import { setNotificationViewingWorkspace } from '../src/notifications/notification-viewing-policy'
@@ -64,6 +65,7 @@ export default function RootLayout() {
   // Why: a rolled APNs/FCM token stops delivering silently, so every paired host
   // has to be re-registered with the new one as soon as the provider hands it over.
   useEffect(() => startPushTokenSync(), [])
+  useEffect(() => startAndroidForegroundPushPresentation(), [])
 
   // Why: route `orca://pair?...` deep links to the confirm screen so
   // the same pairing flow runs whether the link arrived via QR scan,
