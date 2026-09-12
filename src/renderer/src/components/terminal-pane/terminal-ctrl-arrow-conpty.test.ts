@@ -117,4 +117,35 @@ describe('isLocalWindowsConptyPaneForCtrlArrow', () => {
       })
     ).toBe(false)
   })
+
+  // Why: a local Git Bash pane on Windows is a native ConPTY, but its shell is
+  // readline, not PSReadLine — it does NOT bind \e[1;5D / \e[1;5C, so it still
+  // needs the \eb / \ef translation. Treating it as a passthrough ConPTY pane
+  // would break Ctrl+←/→ word-nav in Git Bash.
+  it('does NOT gate out translation for a local Git Bash pane (readline, not PSReadLine)', () => {
+    const worktreeId = 'repo-1::C:\\repo'
+    for (const shellOverride of [
+      'git-bash',
+      'C:\\Program Files\\Git\\bin\\bash.exe',
+      'bash.exe'
+    ]) {
+      expect(
+        isLocalWindowsConptyPaneForCtrlArrow({
+          isWindows: true,
+          userAgent: WINDOWS_UA,
+          state: state({
+            tabsByWorktree: {
+              [worktreeId]: [{ id: 'tab-1', shellOverride }]
+            }
+          }),
+          worktreeId,
+          tabId: 'tab-1',
+          paneId: 1,
+          paneCwd: new Map([[1, { cwd: 'C:\\repo', confirmed: true }]]),
+          fallbackCwd: 'C:\\repo',
+          transport: localTransport({ cwd: 'C:\\repo', shellOverride })
+        })
+      ).toBe(false)
+    }
+  })
 })
