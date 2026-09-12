@@ -60,17 +60,22 @@ process.stdin.resume()
 setInterval(() => {}, 60_000)
 `
 
-if (process.platform === 'win32') {
-  writeFileSync(path.join(fakeCliDir, 'fake-codex.js'), fakeCodexSource)
-  writeFileSync(
-    path.join(fakeCliDir, 'codex.cmd'),
-    '@echo off\r\nnode "%~dp0\\fake-codex.js" %*\r\n'
-  )
-} else {
-  const executable = path.join(fakeCliDir, 'codex')
-  writeFileSync(executable, `#!/usr/bin/env node\n${fakeCodexSource}`)
-  chmodSync(executable, 0o755)
+function installCompletedWorkerFakeCodex(): void {
+  mkdirSync(fakeCliDir, { recursive: true })
+  if (process.platform === 'win32') {
+    writeFileSync(path.join(fakeCliDir, 'fake-codex.js'), fakeCodexSource)
+    writeFileSync(
+      path.join(fakeCliDir, 'codex.cmd'),
+      '@echo off\r\nnode "%~dp0\\fake-codex.js" %*\r\n'
+    )
+  } else {
+    const executable = path.join(fakeCliDir, 'codex')
+    writeFileSync(executable, `#!/usr/bin/env node\n${fakeCodexSource}`)
+    chmodSync(executable, 0o755)
+  }
 }
+
+installCompletedWorkerFakeCodex()
 
 export const completedWorkerLaunchEnv = {
   PATH: `${fakeCliDir}${path.delimiter}${process.env.PATH ?? ''}`,
@@ -91,6 +96,8 @@ export type TerminalIdentity = Pick<
 >
 
 export function clearCompletedWorkerLedger(): void {
+  // Another spec can clean up this cached fixture before the next test uses it.
+  installCompletedWorkerFakeCodex()
   rmSync(lifecycleLedgerPath, { force: true })
 }
 

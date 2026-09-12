@@ -9,7 +9,11 @@ import {
 import { createAbortError } from './abort-error'
 import { killSpawnedCommandTree } from './spawned-command-tree-kill'
 import type { ResolvedCommand } from './wsl-command-resolution'
-import { DEFAULT_GIT_MAX_BUFFER, type GitExecOptions } from './git-exec-options'
+import {
+  DEFAULT_GIT_MAX_BUFFER,
+  type GitAdmissionTier,
+  type GitExecOptions
+} from './git-exec-options'
 import {
   pendingWslDirectGitReadEnvironment,
   directWslGitExitCode,
@@ -21,6 +25,8 @@ import {
 import { prepareWindowsHostGitEnvironment } from './windows-host-git-environment'
 import { nonInteractiveGitEnv, untranslatedGitOutputEnv } from './git-process-env'
 import { gitSpawn } from './git-spawn'
+import { acquireGitAdmission } from './git-subprocess-admission'
+import { GitCommandTimeoutError, gitCommandTimeoutMs } from './git-command-timeout'
 
 /** Result of a streamed git command; `stoppedEarly` is true when onStdout asked to stop before the child exited. */
 export type GitStreamResult = { stoppedEarly: boolean }
@@ -33,6 +39,11 @@ export type GitStreamOptions = {
   signal?: AbortSignal
   /** Byte backstop; defaults to DEFAULT_GIT_MAX_BUFFER. */
   maxBuffer?: number
+  /** Explicit wall-clock deadline; read commands default to the production backstop. */
+  timeoutMs?: number
+  /** Overrides only the default read deadline in tests. */
+  timeoutMsForTest?: number
+  admissionTier?: GitAdmissionTier
   /**
    * Called for each decoded stdout chunk. Return true to stop: the child is
    * killed and the promise resolves with stoppedEarly=true.
@@ -52,7 +63,8 @@ export async function gitStreamStdout(
   options: GitStreamOptions
 ): Promise<GitStreamResult> {
   const maxBuffer = options.maxBuffer ?? DEFAULT_GIT_MAX_BUFFER
-  return withGitSpan({ args, cwd: options.cwd }, async () => {
+  const timeoutMs = gitCommandTimeoutMs(args, options.timeoutMs, options.timeoutMsForTest)
+  return withGitSpan({ args, cwd: options.cwd }, async (span) => {
     if (isWslLinkedWorktreeGitRoutingCandidate(options.cwd, options.wslDistro)) {
       await prepareWslLinkedWorktreeGitRouting(options.cwd, options.wslDistro, {
         signal: options.signal
@@ -63,7 +75,8 @@ export async function gitStreamStdout(
       ...(options.env ? { env: options.env } : {}),
       ...(options.wslDistro ? { wslDistro: options.wslDistro } : {}),
       ...(options.preferWslDirectGit ? { preferWslDirectGit: true } : {}),
-      ...(options.signal ? { signal: options.signal } : {})
+      ...(options.signal ? { signal: options.signal } : {}),
+      ...(options.admissionTier ? { admissionTier: options.admissionTier } : {})
     }
     const readEnvironmentReady = pendingWslDirectGitReadEnvironment(args, gitOptions)
     if (readEnvironmentReady) {
@@ -79,6 +92,15 @@ export async function gitStreamStdout(
       gitOptions.env = await environmentReady
     }
     resolved = resolveGitCommand(args, gitOptions)
+    const grant = await acquireGitAdmission({
+      args,
+      cwd: options.cwd,
+      wslDistro: options.wslDistro,
+      tier: options.admissionTier,
+      signal: options.signal
+    })
+    span?.setAttribute('git.queue_wait_ms', grant.queueWaitMs)
+    const terminationState: { current: Promise<void> | null } = { current: null }
     const stream = (command: ResolvedCommand): Promise<GitStreamResult> =>
       new Promise<GitStreamResult>((resolve, reject) => {
         if (options.signal?.aborted) {
@@ -106,8 +128,25 @@ export async function gitStreamStdout(
         } else {
           child = gitSpawn(args, spawnOptions)
         }
+        let terminationReported = false
+        terminationState.current = new Promise<void>((resolveTermination) => {
+          const reportTermination = (): void => {
+            if (terminationReported) {
+              return
+            }
+            terminationReported = true
+            resolveTermination()
+          }
+          child.once('close', reportTermination)
+          child.once('error', () => {
+            if (!child.pid) {
+              reportTermination()
+            }
+          })
+        })
 
         let settled = false
+        let timeoutTimer: ReturnType<typeof setTimeout> | null = null
         let stoppedEarly = false
         let stdoutBytes = 0
         let stderr = ''
@@ -117,6 +156,10 @@ export async function gitStreamStdout(
         const stderrDecoder = new StringDecoder('utf8')
 
         const cleanup = (): void => {
+          if (timeoutTimer) {
+            clearTimeout(timeoutTimer)
+            timeoutTimer = null
+          }
           child.stdout?.off('data', onStdoutData)
           child.stderr?.off('data', onStderrData)
           child.off('error', onError)
@@ -194,32 +237,52 @@ export async function gitStreamStdout(
           finish(createAbortError())
         }
 
+        function onTimeout(): void {
+          void killSpawnedCommandTree(child)
+          finish(new GitCommandTimeoutError(timeoutMs as number))
+        }
+
         child.stdout?.on('data', onStdoutData)
         child.stderr?.on('data', onStderrData)
         child.on('error', onError)
         child.on('close', onClose)
         options.signal?.addEventListener('abort', onAbort, { once: true })
+        if (timeoutMs !== undefined && timeoutMs > 0) {
+          timeoutTimer = setTimeout(onTimeout, timeoutMs)
+        }
         if (options.signal?.aborted) {
           onAbort()
         }
       })
     try {
-      return await stream(resolved)
-    } catch (error) {
-      const stdoutBytes =
-        error && typeof error === 'object' ? (error as { stdoutBytes?: unknown }).stdoutBytes : null
-      if (
-        stdoutBytes === 0 &&
-        directWslGitExitCode(error, resolved) !== null &&
-        !options.signal?.aborted
-      ) {
-        const wasMissing = invalidateMissingDirectWslGit(error, resolved)
-        resolved = resolveGitCommandWithoutProbe(args, gitOptions)
-        const result = await stream(resolved)
-        disableDirectWslGitAfterSuccessfulFallback(wasMissing, resolved)
-        return result
+      try {
+        return await stream(resolved)
+      } catch (error) {
+        const stdoutBytes =
+          error && typeof error === 'object'
+            ? (error as { stdoutBytes?: unknown }).stdoutBytes
+            : null
+        if (
+          stdoutBytes === 0 &&
+          directWslGitExitCode(error, resolved) !== null &&
+          !options.signal?.aborted
+        ) {
+          await terminationState.current
+          const wasMissing = invalidateMissingDirectWslGit(error, resolved)
+          resolved = resolveGitCommandWithoutProbe(args, gitOptions)
+          const result = await stream(resolved)
+          disableDirectWslGitAfterSuccessfulFallback(wasMissing, resolved)
+          return result
+        }
+        throw error
       }
-      throw error
+    } finally {
+      const termination = terminationState.current
+      if (termination) {
+        void termination.then(grant.release)
+      } else {
+        grant.release()
+      }
     }
   })
 }

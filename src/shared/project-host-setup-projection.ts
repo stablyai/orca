@@ -8,8 +8,15 @@ import { githubRepoIdentityKey, isDefaultGitHubHost } from './github/repository-
 import type { Project, ProjectHostSetup, ProjectProviderIdentity } from './project-types'
 import type { Repo } from './repo-types'
 
+/**
+ * A projection-local draft. `project` is always freshly built by `createProjectFromRepo`, never a
+ * caller's or persisted row, because `mergeProjectRepo` writes to it in place; seeding it from an
+ * existing `Project` would leak those writes to whoever else holds that row. `sourceRepoIds`
+ * mirrors `project.sourceRepoIds` so membership is a lookup rather than a rescan.
+ */
 type ProjectAccumulator = {
   project: Project
+  sourceRepoIds: Set<string>
 }
 
 export type ProjectHostSetupProjection = {
@@ -262,19 +269,16 @@ function createProjectFromRepo(repo: Repo): Project {
   }
 }
 
-function mergeProjectRepo(project: Project, repo: Repo): Project {
-  const sourceRepoIds = project.sourceRepoIds.includes(repo.id)
-    ? project.sourceRepoIds
-    : [...project.sourceRepoIds, repo.id]
-  // Why unknown-aware on both sides: the accumulator itself carries 0 when the first repo of the
-  // project had no addedAt, so a plain min() would let repo order decide the project's createdAt.
-  const addedAt = catalogTimestampFromAddedAt(repo.addedAt)
-  return {
-    ...project,
-    sourceRepoIds,
-    createdAt: mergeCatalogCreatedAt(project.createdAt, addedAt),
-    updatedAt: mergeCatalogUpdatedAt(project.updatedAt, addedAt)
+/** Mutates the draft in place — only ever call this on an accumulator this projection owns. */
+function mergeProjectRepo(accumulator: ProjectAccumulator, repo: Repo): void {
+  const { project, sourceRepoIds } = accumulator
+  if (!sourceRepoIds.has(repo.id)) {
+    sourceRepoIds.add(repo.id)
+    project.sourceRepoIds.push(repo.id)
   }
+  const addedAt = catalogTimestampFromAddedAt(repo.addedAt)
+  project.createdAt = mergeCatalogCreatedAt(project.createdAt, addedAt)
+  project.updatedAt = mergeCatalogUpdatedAt(project.updatedAt, addedAt)
 }
 
 function createSetupFromRepo(repo: Repo, projectId: string): ProjectHostSetup {
@@ -312,15 +316,15 @@ export function projectHostSetupProjectionFromRepos(
   for (const repo of repos) {
     const projectId = getProjectId(repo)
     const existing = projectById.get(projectId)
-    const project = existing
-      ? mergeProjectRepo(existing.project, repo)
-      : createProjectFromRepo(repo)
+    if (existing) {
+      mergeProjectRepo(existing, repo)
+    } else {
+      const project = createProjectFromRepo(repo)
+      projectById.set(projectId, { project, sourceRepoIds: new Set(project.sourceRepoIds) })
+    }
     // Why normalize here: a repo row is untrusted persisted/wire data too, and these
     // constructors copy repo.path / repo.id straight onto fields consumers call .trim() on.
     const setup = normalizeProjectHostSetupRow(createSetupFromRepo(repo, projectId))
-    projectById.set(projectId, {
-      project
-    })
     setups.push(setup)
   }
 

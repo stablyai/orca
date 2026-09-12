@@ -1,0 +1,31 @@
+# WSL/preflight probes that turn a failure into the same value a legitimate
+# negative answer produces -- `catch { return false | [] | null }`.
+#
+# Enforced by ../wsl-probe-failure-semantics.test.ts. See
+# docs/reference/wsl-probe-failure-semantics.md for what to do instead.
+#
+# Swallowing on its own is survivable: the caller re-probes and the answer
+# self-heals. It turns into a user-visible bug when the swallowed value is then
+# CACHED or GATES DISCOVERY, because "the distro was busy for one second"
+# becomes "you have no git" or "you have no sessions" until relaunch. Every
+# entry below is currently safe only because nothing downstream pins it.
+#
+# The list only shrinks. A new entry is not forbidden, but it has to be added
+# deliberately with a note saying why the swallowed value cannot be pinned --
+# which is the review conversation this guard exists to force.
+#
+# Known real instances of the pinned form, for context:
+#   - preflight per-distro caching (#17350) -- fixed by bounding the entry.
+#   - `glab auth status` waking an idle VM (#8941) -- open.
+#   - `listRunningWslDistrosAsync` failing closed with no last-known-good,
+#     polled every 2s (PR #17072 review) -- open.
+main/ipc/preflight-command-exec.ts
+main/ipc/preflight-test-harness.ts
+main/ipc/preflight-wsl-agent-detection.ts
+main/wsl.ts
+# Scanned only because the filename starts with `wsl`; it answers nothing about a
+# distro. The swallow is a `statSync` on a LOCAL WINDOWS directory, and only the
+# positive answer is memoized -- and re-validated on every call, which is the
+# point of the module (#16463). A failed stat drops to the next candidate for
+# that one call and is re-asked on the next, so there is no value to pin.
+main/wsl-interop-spawn-directory.ts

@@ -1,16 +1,17 @@
+import type { RelayControlClientOptions } from './relay-control-client-options'
 import { randomUUID } from 'node:crypto'
 import WebSocket, { type RawData } from 'ws'
 import { MOBILE_RELAY_CLOSE_CODE } from '../../../shared/mobile-relay-close-codes'
-import type { E2EEKeypair } from '../e2ee-keypair'
+import type { RelayHostCloseReason } from '../../../shared/relay-host-close-reason'
 import {
   RelayConnectionOpenMessageSchema,
   RelayDrainMessageSchema,
   RelayHostChallengeMessageSchema,
   RelayHostHelloAckMessageSchema,
   RelayPingMessageSchema,
+  RELAY_HOST_CAPABILITY_HEADERS,
+  encodeRelayHostHello,
   parseRelayControlMessage,
-  type RelayConnectionOpenMessage,
-  type RelayDrainMessage,
   type RelayHostHelloAckMessage,
   type RelayInviteCreatedMessage
 } from './relay-control-protocol'
@@ -21,27 +22,10 @@ import {
   RELAY_CONTROL_SILENCE_LIMIT_MS,
   RelayControlSilenceWatchdog
 } from './relay-control-silence-watchdog'
+import { closeRelayControlSocket } from './relay-control-socket-close'
 import { controlWebSocketUrl } from './relay-control-url'
 
 type RelayControlState = 'idle' | 'opening' | 'proving' | 'active' | 'draining' | 'closed'
-
-type RelayControlClientOptions = {
-  cellUrl: string
-  relayJwt: string
-  relayHostId: string
-  assignmentEpoch: number
-  identity: { userId: string; profileId: string; organizationId: string }
-  keypair: E2EEKeypair
-  appVersion: string
-  previousGeneration?: number
-  controlResumeSecret?: string
-  onConnectionOpen: (message: RelayConnectionOpenMessage) => void
-  onDrain: (message: RelayDrainMessage) => void
-  onClose: (code: number) => void
-  createSocket?: (url: string, relayJwt: string) => WebSocket
-  connectDeadlineMs?: number
-  silenceLimitMs?: number
-}
 
 const RELAY_CONTROL_CONNECT_DEADLINE_MS = 15_000
 
@@ -50,7 +34,7 @@ export class RelayControlClient {
   private readonly relayOrigin: string
   private readonly controlUrl: string
   private readonly createSocket: NonNullable<RelayControlClientOptions['createSocket']>
-  private readonly requests = new RelayControlRequests()
+  private readonly requests: RelayControlRequests
   private socket: WebSocket | null = null
   private state: RelayControlState = 'idle'
   private connectResolve: ((ack: RelayHostHelloAckMessage) => void) | null = null
@@ -60,6 +44,7 @@ export class RelayControlClient {
 
   constructor(options: RelayControlClientOptions) {
     this.options = options
+    this.requests = new RelayControlRequests(options.onPendingChanged)
     const endpoint = controlWebSocketUrl(options.cellUrl)
     this.relayOrigin = endpoint.origin
     this.controlUrl = endpoint.url
@@ -71,7 +56,7 @@ export class RelayControlClient {
       options.createSocket ??
       ((url, token) =>
         new WebSocket(url, {
-          headers: { authorization: `Bearer ${token}` },
+          headers: { authorization: `Bearer ${token}`, ...RELAY_HOST_CAPABILITY_HEADERS },
           perMessageDeflate: false,
           maxPayload: 64 * 1024
         }))
@@ -166,7 +151,7 @@ export class RelayControlClient {
     return this.requests.confirmResume(reqId, basisConnId, (payload) => this.sendActive(payload))
   }
 
-  closeNow(): void {
+  closeNow(hostCloseReason?: RelayHostCloseReason): void {
     const wasConnecting = this.state === 'opening' || this.state === 'proving'
     this.state = 'closed'
     this.silenceWatchdog.stop()
@@ -175,8 +160,9 @@ export class RelayControlClient {
       this.clearConnectPromise()
     }
     this.requests.rejectAll(new Error('relay_control_closed'))
-    this.socket?.terminate()
+    const socket = this.socket
     this.socket = null
+    closeRelayControlSocket(socket, hostCloseReason)
   }
 
   private sendHostHello(): void {
@@ -185,19 +171,9 @@ export class RelayControlClient {
     }
     this.state = 'proving'
     this.socket.send(
-      JSON.stringify({
-        type: 'host-hello',
-        v: 1,
-        relayHostId: this.options.relayHostId,
-        assignmentEpoch: this.options.assignmentEpoch,
-        hostPublicKeyB64: this.options.keypair.publicKeyB64,
-        appVersion: this.options.appVersion,
-        ...(this.options.previousGeneration === undefined
-          ? {}
-          : { previousGeneration: this.options.previousGeneration }),
-        ...(this.options.controlResumeSecret
-          ? { controlResumeSecret: this.options.controlResumeSecret }
-          : {})
+      encodeRelayHostHello({
+        ...this.options,
+        hostPublicKeyB64: this.options.keypair.publicKeyB64
       })
     )
   }
@@ -221,7 +197,10 @@ export class RelayControlClient {
       return
     }
     const connection = RelayConnectionOpenMessageSchema.safeParse(message)
-    if (connection.success && this.state === 'active') {
+    if (connection.success) {
+      // Also while draining: a drain-only cell refuses new phones, so a conn-open
+      // arriving after drain was issued before it and only this cell holds that
+      // pending connection. Dropping it stranded the phone until its attach deadline.
       this.options.onConnectionOpen(connection.data)
       return
     }
@@ -234,7 +213,18 @@ export class RelayControlClient {
     if (this.requests.resolveMessage(message)) {
       return
     }
-    this.failProtocol('unknown control message')
+    // Drop a well-formed control message we do not recognize, matching how every
+    // other Orca decoder treats an unknown frame (see the silent-drop convention
+    // in docs/reference/remote-wire-compatibility.md). The control channel has no
+    // opcode negotiation step, so this reaches either a newer relay's message
+    // this build predates, or a reply whose request already timed out and has no
+    // waiter (relay control ops run DB transactions that can exceed the request
+    // deadline under load). Self-closing here was strictly worse than ignoring:
+    // it orphaned the relay session, which answered the phone with HOST_OFFLINE
+    // for the orphan-grace window plus the director's reconnect throttle — minutes
+    // of outage from a single stray frame.
+    const messageType = typeof message.type === 'string' ? message.type : 'unknown'
+    console.warn(`[relay] ignoring unrecognized control message type=${messageType}`)
   }
 
   private handleProofMessage(message: Record<string, unknown>): void {

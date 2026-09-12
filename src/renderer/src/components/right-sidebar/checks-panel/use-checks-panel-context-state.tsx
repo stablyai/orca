@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useAppStore } from '@/store'
+import { useNow } from '@/hooks/use-now'
 import { isFolderRepo } from '../../../../../shared/repo-kind'
 import { getGitHubPRCacheKey } from '@/store/slices/github-cache-key'
 import { getHostedReviewCacheKey } from '@/store/slices/hosted-review-cache-identity'
@@ -125,6 +126,10 @@ export function useChecksPanelContextState(model: ChecksPanelContextStateInput) 
   // Why: no key={worktreeId} remount (caused an IPC storm on Windows); reset branch-specific state during render (not useEffect) so it lands on the same paint.
   const [prevPanelContextKey, setPrevPanelContextKey] = useState(panelContextKey)
   const [prRefreshStateNow, setPrRefreshStateNow] = useState(() => Date.now())
+  // Why: eligibility expires on wall time, independently of the PR refresh-state
+  // timers, so the freshness gate needs its own tick. ChecksPanel is unmounted
+  // (not hidden) when the panel closes, so the clock needs no visibility gate.
+  const panelClockNow = useNow(30_000)
   if (panelContextKey !== prevPanelContextKey) {
     setPrevPanelContextKey(panelContextKey)
     setEditingTitle(false)
@@ -138,7 +143,6 @@ export function useChecksPanelContextState(model: ChecksPanelContextStateInput) 
     setIsRefreshing(false)
     setEmptyRefreshing(false)
     setConflictDetailsRefreshing(false)
-    setPrRefreshStateNow(Date.now())
     createPrInFlightRef.current = null
     setIsCreatingPr(false)
     setCreatePrError(null)
@@ -212,6 +216,7 @@ export function useChecksPanelContextState(model: ChecksPanelContextStateInput) 
     null
   // Why: branch lookup is lossy for fork/deleted-head PRs; reuse a known PR number from metadata or cache whenever we have one.
   const linkedPR = activeWorktree?.linkedPR ?? null
+  const suppressedGitHubPR = activeWorktree?.suppressedGitHubPR ?? null
   const fallbackGitHubPRNumber = linkedPR == null ? (pr?.number ?? null) : null
   const linkedGitLabMR = activeWorktree?.linkedGitLabMR ?? null
   const linkedBitbucketPR = activeWorktree?.linkedBitbucketPR ?? null
@@ -220,6 +225,8 @@ export function useChecksPanelContextState(model: ChecksPanelContextStateInput) 
   const activeReview: ChecksPanelReview | null = selectChecksPanelReview({
     hostedReview,
     pr,
+    linkedPR,
+    suppressedGitHubPR,
     linkedGitLabMR,
     linkedBitbucketPR,
     linkedAzureDevOpsPR,
@@ -229,7 +236,9 @@ export function useChecksPanelContextState(model: ChecksPanelContextStateInput) 
   const isGitLabReviewContext = Boolean(activeGitLabReview || linkedGitLabMR !== null)
   const activeConflictReview = activeReview?.mergeable === 'CONFLICTING' ? activeReview : null
   const prRefreshState = useAppStore((s) =>
-    prCacheKey ? s.getEffectiveGitHubPRRefreshState(prCacheKey, prRefreshStateNow) : undefined
+    prCacheKey
+      ? s.getEffectiveGitHubPRRefreshState(prCacheKey, Math.max(prRefreshStateNow, panelClockNow))
+      : undefined
   )
   const rawPRRefreshState = useAppStore((s) =>
     prCacheKey ? s.prRefreshStates[prCacheKey] : undefined
@@ -324,8 +333,7 @@ export function useChecksPanelContextState(model: ChecksPanelContextStateInput) 
     clearTitleInputFocusTimer,
     setChecksPanelContentRef,
     prevPanelContextKey,
-    prRefreshStateNow,
-    setPrRefreshStateNow,
+    prRefreshStateNow: Math.max(prRefreshStateNow, panelClockNow),
     isFolder,
     prCacheKey,
     hostedReviewCacheKey,
@@ -336,6 +344,7 @@ export function useChecksPanelContextState(model: ChecksPanelContextStateInput) 
     hostedReview,
     linkedReviewNumber,
     linkedPR,
+    suppressedGitHubPR,
     fallbackGitHubPRNumber,
     linkedGitLabMR,
     linkedBitbucketPR,

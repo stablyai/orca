@@ -1,3 +1,5 @@
+import { isAgentSessionRewindRecord, type AgentSessionRewindRecord } from './agent-session-rewind'
+import { isAgentSessionConversationName } from './agent-session-conversation-name'
 /**
  * Durable agent-session record and its single-writer lease.
  *
@@ -7,6 +9,10 @@
  */
 
 import type { ExecutionHostId } from './execution-host'
+import {
+  isAgentSessionConversationCommandRecord,
+  type AgentSessionConversationCommandRecord
+} from './agent-session-conversation-command'
 import {
   isAgentSessionProviderHandleChain,
   type AgentSessionHandleProvider,
@@ -110,6 +116,10 @@ export type AgentSessionLease = {
    */
   minimumNextFence?: number
   deathEvidence: AgentSessionDeathEvidence | null
+  /** A positively observed provider exit whose terminal journal settlement still needs retry. */
+  settlementRetryRequired?: boolean
+  /** Stable lifecycle batch id used when retrying the terminal settlement. */
+  settlementRetryId?: string
 }
 
 export type AgentSessionRecord = {
@@ -121,6 +131,10 @@ export type AgentSessionRecord = {
   accountHome: AgentSessionAccountHome
   /** Provider options acknowledged for the next turn, restored across owner replacement. */
   options?: Record<string, string>
+  rewind?: AgentSessionRewindRecord
+  conversationCommand?: AgentSessionConversationCommandRecord
+  /** The name Orca gave this conversation, so a later acquisition need not name it again. */
+  conversationName?: string
   launchArgs?: AgentSessionLaunchArgs
   lease: AgentSessionLease
   createdAt: number
@@ -217,7 +231,7 @@ function isAgentSessionAccountHome(value: unknown): value is AgentSessionAccount
   )
 }
 
-function isAgentSessionOptions(value: unknown): value is Record<string, string> {
+export function isAgentSessionOptions(value: unknown): value is Record<string, string> {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) {
     return false
   }
@@ -310,6 +324,10 @@ function isAgentSessionLease(value: unknown): value is AgentSessionLease {
       lease.claimStatus === 'conflicted' ||
       lease.claimStatus === 'released') &&
     typeof lease.unreconciled === 'boolean' &&
+    (lease.settlementRetryRequired === undefined ||
+      typeof lease.settlementRetryRequired === 'boolean') &&
+    (lease.settlementRetryId === undefined ||
+      isBoundedString(lease.settlementRetryId, MAX_ID_LENGTH)) &&
     (lease.deathEvidence === null || isAgentSessionDeathEvidence(lease.deathEvidence))
   )
 }
@@ -327,6 +345,11 @@ export function isAgentSessionRecord(value: unknown): value is AgentSessionRecor
     isAgentSessionProviderHandleChain(record.providerHandleChain) &&
     isAgentSessionAccountHome(record.accountHome) &&
     (record.options === undefined || isAgentSessionOptions(record.options)) &&
+    (record.rewind === undefined || isAgentSessionRewindRecord(record.rewind)) &&
+    (record.conversationCommand === undefined ||
+      isAgentSessionConversationCommandRecord(record.conversationCommand)) &&
+    (record.conversationName === undefined ||
+      isAgentSessionConversationName(record.conversationName)) &&
     (record.launchArgs === undefined || isAgentSessionLaunchArgs(record.launchArgs)) &&
     !Object.hasOwn(record, 'launchEnv') &&
     isAgentSessionLease(record.lease) &&

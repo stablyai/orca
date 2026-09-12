@@ -7,6 +7,7 @@ import {
   reportedCodexThreadOptions,
   restoredCodexSessionOptions
 } from './codex-structured-session-options'
+import { CodexBackgroundTaskTracker } from './codex-background-task-tracker'
 import type { CodexSession } from './codex-structured-session-state'
 
 function optionSession(request: CodexAppServerConnection['request']): CodexSession {
@@ -20,7 +21,11 @@ function optionSession(request: CodexAppServerConnection['request']): CodexSessi
       respondWithError: () => {},
       close: async () => true
     },
+    backgroundTasks: new CodexBackgroundTaskTracker('thread-1'),
     ended: false,
+    requestedClose: false,
+    fence: 1,
+    acquisitionGeneration: 'generation-1',
     threadId: 'thread-1',
     historyPath: null,
     prompts: new CodexAcquisitionWindow().prompts,

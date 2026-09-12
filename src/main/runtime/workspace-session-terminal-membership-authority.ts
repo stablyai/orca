@@ -5,6 +5,7 @@ import type {
 } from '../../shared/terminal-tab-types'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 import { getRepoIdFromWorktreeId } from '../../shared/worktree/id'
+import { layoutContainsLeafId } from '../persistence/restoring-sessions/terminal-layout-normalization'
 import { pruneTabGroupLayoutAfterRetirement } from './mobile-session-terminal-retirement'
 
 function collectLeafIds(node: TerminalPaneLayoutNode | null, ids: Set<string>): void {
@@ -92,17 +93,18 @@ function rebaseTabGroups(
     if (tabOrder.length === 0) {
       return []
     }
+    const tabIds = new Set(tabOrder)
     const activeTabId =
-      group.activeTabId && tabOrder.includes(group.activeTabId)
-        ? group.activeTabId
-        : (tabOrder[0] ?? null)
-    const recentTabIds = group.recentTabIds?.filter((tabId) => tabOrder.includes(tabId))
+      group.activeTabId && tabIds.has(group.activeTabId) ? group.activeTabId : (tabOrder[0] ?? null)
+    const recentTabIds = group.recentTabIds?.filter((tabId) => tabIds.has(tabId))
     return [
       {
         ...group,
         tabOrder,
         activeTabId,
-        ...(recentTabIds && recentTabIds.length > 0 ? { recentTabIds } : {})
+        // Why assigned even when it filters to empty: omitting the key lets `...group`
+        // re-introduce the unfiltered array, persisting ids for tabs the host dropped.
+        ...(group.recentTabIds ? { recentTabIds: recentTabIds ?? [] } : {})
       }
     ]
   })
@@ -164,15 +166,22 @@ export function advanceTerminalTopologyRevision(
  * The tab whose live layout holds this leaf. Only the leaf half of a pane key is remint-stable —
  * `detachTerminalPaneToTab` moves a live pane into a new tab, so a stored tabId names the tab the
  * pane left. Callers fencing on location must resolve it here rather than trust a frozen tabId.
+ *
+ * Stateless on purpose: writers graft leaves by assigning into a layout that is already inside the
+ * layouts record, so any cache here would need a revalidation key that is itself O(tabs) per read —
+ * the same cost as this walk, with a staleness invariant to keep. `Object.keys` over a guarded
+ * `for...in` is deliberate too: the key array is cheaper than a `hasOwn` call per tab (measured).
  */
 export function findTerminalTabIdForLeaf(
   session: WorkspaceSessionState | undefined,
   leafId: string
 ): string | undefined {
-  for (const [tabId, layout] of Object.entries(session?.terminalLayoutsByTabId ?? {})) {
-    const leafIds = new Set<string>()
-    collectLeafIds(layout.root, leafIds)
-    if (leafIds.has(leafId)) {
+  const layouts = session?.terminalLayoutsByTabId
+  if (!layouts) {
+    return undefined
+  }
+  for (const tabId of Object.keys(layouts)) {
+    if (layoutContainsLeafId(layouts[tabId]?.root ?? null, leafId)) {
       return tabId
     }
   }

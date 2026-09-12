@@ -112,5 +112,13 @@ describe('useChecksPanelManualRefresh ordering', () => {
       'comments-loading:false',
       'refreshing:false'
     ])
+    expect(input.fetchPRForBranch).toHaveBeenCalledWith('/workspace/repo', 'main', {
+      force: true,
+      repoId: 'repo-1',
+      worktreeId: undefined,
+      linkedPRNumber: null,
+      fallbackPRNumber: null,
+      reason: 'manual'
+    })
   })
 })

@@ -1,3 +1,5 @@
+import type { RuntimeHostStatusSnapshot } from '../../shared/runtime-host-status'
+import { resetRuntimeEnvironmentStatusOwners } from './runtime-environment-request-connections'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -23,6 +25,7 @@ const {
   getRemoteRuntimeSharedControlDiagnosticsMock,
   reconnectRemoteRuntimeSharedControlConnectionMock,
   retryRemoteRuntimeSharedControlConnectionsNowMock,
+  retryRemoteRuntimeSharedControlConnectionNowMock,
   closeRemoteRuntimeRequestConnectionMock
 } = vi.hoisted(() => ({
   handleMock: vi.fn(),
@@ -38,10 +41,12 @@ const {
   getRemoteRuntimeSharedControlDiagnosticsMock: vi.fn(),
   reconnectRemoteRuntimeSharedControlConnectionMock: vi.fn(),
   retryRemoteRuntimeSharedControlConnectionsNowMock: vi.fn(),
+  retryRemoteRuntimeSharedControlConnectionNowMock: vi.fn(),
   closeRemoteRuntimeRequestConnectionMock: vi.fn()
 }))
 
 vi.mock('electron', () => ({
+  BrowserWindow: { getAllWindows: () => [] },
   app: { getPath: getPathMock },
   ipcMain: {
     handle: handleMock,
@@ -56,15 +61,23 @@ vi.mock('../../shared/remote-runtime-client', () => ({
   subscribeRemoteRuntimeRequest: subscribeRemoteRuntimeRequestMock
 }))
 
-vi.mock('./runtime-environment-request-connections', () => ({
-  sendRemoteRuntimeConnectionRequest: sendRemoteRuntimeConnectionRequestMock,
-  sendRemoteRuntimeSharedControlRequest: sendRemoteRuntimeSharedControlRequestMock,
-  subscribeRemoteRuntimeSharedControlRequest: subscribeRemoteRuntimeSharedControlRequestMock,
-  getRemoteRuntimeSharedControlDiagnostics: getRemoteRuntimeSharedControlDiagnosticsMock,
-  reconnectRemoteRuntimeSharedControlConnection: reconnectRemoteRuntimeSharedControlConnectionMock,
-  retryRemoteRuntimeSharedControlConnectionsNow: retryRemoteRuntimeSharedControlConnectionsNowMock,
-  closeRemoteRuntimeRequestConnection: closeRemoteRuntimeRequestConnectionMock
-}))
+vi.mock('./runtime-environment-request-connections', async () => {
+  const { withRuntimeStatusOwners } = await import('./runtime-environments-ipc-test-harness')
+  return withRuntimeStatusOwners({
+    sendRemoteRuntimeConnectionRequest: sendRemoteRuntimeConnectionRequestMock,
+    sendRemoteRuntimeSharedControlRequest: sendRemoteRuntimeSharedControlRequestMock,
+    subscribeRemoteRuntimeSharedControlRequest: subscribeRemoteRuntimeSharedControlRequestMock,
+    getRemoteRuntimeSharedControlDiagnostics: getRemoteRuntimeSharedControlDiagnosticsMock,
+    reconnectRemoteRuntimeSharedControlConnection:
+      reconnectRemoteRuntimeSharedControlConnectionMock,
+    retryRemoteRuntimeSharedControlConnectionsNow:
+      retryRemoteRuntimeSharedControlConnectionsNowMock,
+    retryRemoteRuntimeSharedControlConnectionNow: retryRemoteRuntimeSharedControlConnectionNowMock,
+    ensureRemoteRuntimeSharedControlConnection: vi.fn(),
+    pauseRemoteRuntimeSharedControlRetry: vi.fn(),
+    closeRemoteRuntimeRequestConnection: closeRemoteRuntimeRequestConnectionMock
+  })
+})
 
 import { registerRuntimeEnvironmentHandlers } from './runtime-environments'
 import { channelHandlerLookup, pairingCode } from './runtime-environments-ipc-test-harness'
@@ -115,10 +128,12 @@ describe('registerRuntimeEnvironmentHandlers', () => {
     getRemoteRuntimeSharedControlDiagnosticsMock.mockReturnValue(null)
     reconnectRemoteRuntimeSharedControlConnectionMock.mockReset()
     retryRemoteRuntimeSharedControlConnectionsNowMock.mockReset()
+    retryRemoteRuntimeSharedControlConnectionNowMock.mockReset()
     closeRemoteRuntimeRequestConnectionMock.mockReset()
   })
 
   afterEach(() => {
+    resetRuntimeEnvironmentStatusOwners()
     rmSync(userDataPath, { recursive: true, force: true })
   })
 
@@ -126,6 +141,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
     registerRuntimeEnvironmentHandlers(store as never)
 
     expect(handleMock.mock.calls.map((call) => call[0])).toEqual([
+      'runtimeEnvironments:getStatusSnapshots',
       'runtimeEnvironments:list',
       'runtimeEnvironments:addFromPairingCode',
       'runtimeEnvironments:verifyAndAddFromPairingCode',
@@ -133,6 +149,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       'runtimeEnvironments:remove',
       'runtimeEnvironments:disconnect',
       'runtimeEnvironments:connect',
+      'runtimeEnvironments:retryControlConnection',
       'runtimeEnvironments:prepareBrowserClientHostPlacement',
       'runtimeEnvironments:retryConnectionsNow',
       'runtimeEnvironments:getStatus',
@@ -156,8 +173,10 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       'runtimeEnvironments:remove',
       'runtimeEnvironments:disconnect',
       'runtimeEnvironments:connect',
+      'runtimeEnvironments:retryControlConnection',
       'runtimeEnvironments:prepareBrowserClientHostPlacement',
       'runtimeEnvironments:getStatus',
+      'runtimeEnvironments:getStatusSnapshots',
       'runtimeEnvironments:call',
       'runtimeEnvironments:subscribe',
       'runtimeEnvironments:unsubscribe',
@@ -173,6 +192,29 @@ describe('registerRuntimeEnvironmentHandlers', () => {
     await retryConnectionsNow(null, undefined)
 
     expect(retryRemoteRuntimeSharedControlConnectionsNowMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('retries one control connection without reversing manual disconnect intent', async () => {
+    registerRuntimeEnvironmentHandlers(store as never)
+    const add = handler<{ name: string; pairingCode: string }, { environment: { id: string } }>(
+      'runtimeEnvironments:addFromPairingCode'
+    )
+    const added = await add(null, { name: 'desk', pairingCode: pairingCode() })
+    const retry = handler<{ selector: string }, void>('runtimeEnvironments:retryControlConnection')
+
+    await retry(null, { selector: 'desk' })
+    expect(retryRemoteRuntimeSharedControlConnectionNowMock).toHaveBeenCalledWith(
+      added.environment.id
+    )
+    expect(sendRemoteRuntimeRequestMock).not.toHaveBeenCalled()
+
+    const disconnect = handler<{ selector: string }, unknown>('runtimeEnvironments:disconnect')
+    await disconnect(null, { selector: 'desk' })
+    retryRemoteRuntimeSharedControlConnectionNowMock.mockClear()
+    await retry(null, { selector: 'desk' })
+
+    expect(retryRemoteRuntimeSharedControlConnectionNowMock).not.toHaveBeenCalled()
+    expect(sendRemoteRuntimeRequestMock).not.toHaveBeenCalled()
   })
 
   it('stores, resolves, lists, and removes environments under Electron userData', async () => {
@@ -436,6 +478,13 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       ok: false,
       error: { code: 'runtime_manually_disconnected' }
     })
+    const getSnapshots = handler<undefined, RuntimeHostStatusSnapshot[]>(
+      'runtimeEnvironments:getStatusSnapshots'
+    )
+    // A new renderer only has the snapshot read, not the earlier disconnect event.
+    expect(await getSnapshots(null, undefined)).toMatchObject([
+      { environmentId: added.environment.id, retired: true, transport: 'disconnected' }
+    ])
     const call = handler<
       { selector: string; method: string },
       { ok: boolean; error?: { code: string } }
@@ -461,6 +510,10 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       result: { runtimeId: 'runtime-remote' }
     })
     expect(sendRemoteRuntimeRequestMock).toHaveBeenCalledOnce()
+    expect(await getSnapshots(null, undefined)).toMatchObject([
+      { environmentId: added.environment.id, verification: 'verified' }
+    ])
+    expect((await getSnapshots(null, undefined))[0].retired).not.toBe(true)
   })
 
   it('marks environments owned by ephemeral VM runtimes in the public list', async () => {

@@ -28,7 +28,7 @@ function fakeClient(script: (method: string, call: number) => unknown, calls: Ca
 }
 
 describe('createBlankWorkspace', () => {
-  it('sends no agent-launch fields for a blank workspace', async () => {
+  it('pins a manually entered blank-workspace name and sends no agent-launch fields', async () => {
     const calls: Call[] = []
     const client = fakeClient(() => ({ worktree: { id: 'wt-1' } }), calls)
 
@@ -51,6 +51,8 @@ describe('createBlankWorkspace', () => {
         repo: 'id:repo-1',
         setupDecision: 'inherit',
         name: 'octopus',
+        displayName: 'octopus',
+        displayNameKind: 'user',
         // Idempotency key so a create interrupted by a connection migration can be
         // safely retried without the host spawning a duplicate worktree.
         clientMutationId: expect.any(String)

@@ -47,6 +47,29 @@ function makeFolderWorkspace(overrides: Partial<FolderWorkspace> = {}): FolderWo
   }
 }
 
+function rememberedBrowserSurface(workspaceKey: string): Partial<AppState> {
+  return {
+    browserTabsByWorktree: {
+      [workspaceKey]: [
+        {
+          id: 'remembered',
+          worktreeId: workspaceKey,
+          url: 'about:blank',
+          title: 'Browser',
+          loading: false,
+          faviconUrl: null,
+          canGoBack: false,
+          canGoForward: false,
+          loadError: null,
+          createdAt: 1
+        }
+      ]
+    },
+    activeBrowserTabIdByWorktree: { [workspaceKey]: 'remembered' },
+    activeTabTypeByWorktree: { [workspaceKey]: 'browser' }
+  }
+}
+
 type FolderWorkspaceUpdateArgs = {
   folderWorkspaceId: string
   updates: Partial<FolderWorkspace>
@@ -119,6 +142,100 @@ describe('folder workspace generic activation and activity', () => {
       folderWorkspaceId: folderWorkspace.id,
       updates: { isUnread: false }
     })
+  })
+
+  it.each([
+    ['simulator', 'local'],
+    ['agent-session', 'local'],
+    ['simulator', 'ssh:test-host'],
+    ['agent-session', 'ssh:test-host']
+  ] as const)(
+    'restores a folder %s tab on %s using its concrete visible type',
+    (contentType, executionHostId) => {
+      const folder = makeFolderWorkspace({ executionHostId })
+      const workspaceKey = folderWorkspaceKey(folder.id)
+      const store = seedLocalFolderStore(folder)
+      store.getState().createUnifiedTab(workspaceKey, contentType, { id: 'selected' })
+      store.setState({ activeTabTypeByWorktree: { [workspaceKey]: 'editor' } })
+
+      store.getState().setActiveFolderWorkspace(folder.id, executionHostId)
+
+      expect(store.getState().activeWorkspaceExecutionHostId).toBe(executionHostId)
+      expect(store.getState().activeTabType).toBe(contentType)
+      expect(store.getState().activeTabTypeByWorktree[workspaceKey]).toBe(contentType)
+      expect(store.getState().getActiveTab(workspaceKey)?.id).toBe('selected')
+    }
+  )
+
+  it('does not let remembered browser state select content in an empty folder group', () => {
+    const folder = makeFolderWorkspace()
+    const workspaceKey = folderWorkspaceKey(folder.id)
+    const store = seedLocalFolderStore(folder)
+    store.setState({
+      ...rememberedBrowserSurface(workspaceKey),
+      groupsByWorktree: {
+        [workspaceKey]: [
+          {
+            id: 'empty',
+            worktreeId: workspaceKey,
+            activeTabId: null,
+            tabOrder: []
+          }
+        ]
+      },
+      activeGroupIdByWorktree: { [workspaceKey]: 'empty' }
+    } as Partial<AppState>)
+
+    store.getState().setActiveFolderWorkspace(folder.id)
+
+    expect(store.getState().activeTabType).toBe('terminal')
+    expect(store.getState().activeBrowserTabId).toBe('remembered')
+  })
+
+  it('keeps layout-only folder ownership above remembered browser state', () => {
+    const folder = makeFolderWorkspace()
+    const workspaceKey = folderWorkspaceKey(folder.id)
+    const store = seedLocalFolderStore(folder)
+    store.setState({
+      ...rememberedBrowserSurface(workspaceKey),
+      groupsByWorktree: {},
+      layoutByWorktree: { [workspaceKey]: { type: 'leaf', groupId: 'pending' } }
+    } as Partial<AppState>)
+
+    store.getState().setActiveFolderWorkspace(folder.id)
+
+    expect(store.getState().activeTabType).toBe('terminal')
+    expect(store.getState().activeBrowserTabId).toBe('remembered')
+  })
+
+  it('falls back to an open file when nothing else owns the folder surface', () => {
+    const folder = makeFolderWorkspace()
+    const workspaceKey = folderWorkspaceKey(folder.id)
+    const store = seedLocalFolderStore(folder)
+    store.setState({
+      groupsByWorktree: {},
+      layoutByWorktree: {},
+      // Why: the remembered browser tab is gone, so only the open file is left to show.
+      activeBrowserTabIdByWorktree: { [workspaceKey]: 'closed' },
+      browserTabsByWorktree: { [workspaceKey]: [] },
+      activeTabTypeByWorktree: { [workspaceKey]: 'browser' },
+      openFiles: [
+        {
+          id: 'fallback-file',
+          worktreeId: workspaceKey,
+          filePath: '/workspace/folder/file',
+          relativePath: 'file',
+          language: 'plaintext',
+          isDirty: false,
+          mode: 'edit'
+        }
+      ]
+    } as Partial<AppState>)
+
+    store.getState().setActiveFolderWorkspace(folder.id)
+
+    expect(store.getState().activeTabType).toBe('editor')
+    expect(store.getState().activeFileId).toBe('fallback-file')
   })
 
   it('coalesces repeated activity persistence while keeping local activity current', async () => {

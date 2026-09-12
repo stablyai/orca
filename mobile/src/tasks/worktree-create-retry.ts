@@ -21,7 +21,9 @@ import {
 // branches outlive worktrees in git, and remote branches/PRs aren't visible from
 // worktree.ps. Retry by appending -2, -3, ... mirroring the desktop createWorktree
 // loop in src/renderer/src/store/slices/worktrees.ts.
-export type WorktreeCreateResult = { worktreeId: string; name: string } | { error: string }
+export type WorktreeCreateResult =
+  | { worktreeId: string; name: string; warning?: string }
+  | { error: string }
 
 // Why: a create in flight when the mobile transport migrates (relay/direct
 // hand-off on shoddy cellular, relay lease rotation) rejects with a cutover error
@@ -82,8 +84,22 @@ export async function createWorktreeWithNameRetry(
       : candidateParams
     const response = await sendWorktreeCreateResilient(client, params, worktreeCreateIdempotency)
     if (response.ok) {
-      const result = (response as RpcSuccess).result as { worktree: { id: string } }
-      return { worktreeId: result.worktree.id, name: candidateName }
+      const result = (response as RpcSuccess).result as {
+        worktree: { id: string; displayName?: string }
+        warning?: string
+      }
+      const authoritativeName = result.worktree.displayName
+      // Why: a create can succeed with the startup terminal failing (pty exhaustion); dropping
+      // `warning` here is what lands the phone on an unexplained empty session.
+      const warning = typeof result.warning === 'string' ? result.warning.trim() : ''
+      return {
+        worktreeId: result.worktree.id,
+        name:
+          typeof authoritativeName === 'string' && authoritativeName.trim()
+            ? authoritativeName
+            : candidateName,
+        ...(warning ? { warning } : {})
+      }
     }
     lastError = response.error.message
     if (!isRetryableWorktreeCreateConflict(lastError ?? '')) {

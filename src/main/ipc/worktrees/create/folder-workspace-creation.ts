@@ -5,6 +5,7 @@ import type { CreateWorktreeResult } from '../../../../shared/worktree/create-ty
 import type { Store } from '../../../persistence/loading-store/store'
 import type { CreateWorktreeArgsWithSystemProvenance } from '../ipc-context-schemas'
 import { getFolderWorkspaceInstanceId, mergeFolderWorkspace } from '../folder-workspace-model'
+import { resolveWorktreeCreateDisplayNameRequest } from '../../worktree-logic'
 
 export function createFolderWorkspace(
   args: CreateWorktreeArgsWithSystemProvenance,
@@ -14,12 +15,22 @@ export function createFolderWorkspace(
   const now = Date.now()
   const instanceId = randomUUID()
   const worktreeId = getFolderWorkspaceInstanceId(repo, instanceId)
+  const displayNameRequest = resolveWorktreeCreateDisplayNameRequest(
+    args.displayName,
+    args.displayNameKind,
+    args.name,
+    args.cliProvenance?.kind === 'created-by-cli',
+    args.nameWasGenerated === true
+  )
   const meta = store.setWorktreeMeta(worktreeId, {
     instanceId,
     ...(store.getProjectHostSetups
       ? getProjectHostSetupWorktreeMeta(store.getProjectHostSetups(), repo)
       : {}),
-    displayName: args.displayName || args.name,
+    displayName: displayNameRequest.value || args.name,
+    ...(displayNameRequest.kind === 'user' && displayNameRequest.value
+      ? { displayNameIsPinned: true }
+      : {}),
     lastActivityAt: now,
     createdAt: now,
     orcaCreatedAt: now,

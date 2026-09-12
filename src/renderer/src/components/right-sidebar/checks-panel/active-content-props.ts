@@ -47,7 +47,6 @@ export type ChecksPanelActiveContentModel = Pick<
     | 'activeGitLabReview'
     | 'activeReview'
     | 'linkedGitLabMR'
-    | 'linkedPR'
     | 'pr'
     | 'prRefreshState'
     | 'setChecksPanelContentRef'

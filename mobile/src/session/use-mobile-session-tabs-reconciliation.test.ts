@@ -1,9 +1,11 @@
-import { createElement } from 'react'
+import { createElement, useEffect } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
+import type { ConnectionState } from '../transport/types'
 import type { SessionTabsApplyOutcome } from './mobile-session-tabs-stream-health'
 import { useMobileSessionTabsReconciliation } from './use-mobile-session-tabs-reconciliation'
+import type { MobileTerminalInventoryRefreshOptions } from './use-mobile-terminal-inventory-recovery'
 
 const lifecycle = vi.hoisted(() => ({
   appState: 'active',
@@ -38,7 +40,10 @@ type TestResult = {
   tabs: string[]
 }
 
-const fetchTerminals = vi.fn(async () => {})
+const fetchTerminals = vi.fn(async (options?: MobileTerminalInventoryRefreshOptions) => {
+  options?.onPhysicalRequestStarted?.(Date.now())
+  return true
+})
 const applySessionTabs = vi.fn((value: TestResult): SessionTabsApplyOutcome<string> => ({
   accepted: true,
   effectiveTabs: value.tabs
@@ -50,6 +55,9 @@ const hasRecoveryNeed = () => recoveryNeeded
 const subscribe = vi.fn()
 const unsubscribe = vi.fn()
 let streamListener: ((payload: unknown) => void) | null = null
+let requestTerminalInventoryRecovery: (() => void) | null = null
+let connectionState: ConnectionState = 'connected'
+let clientConnectionState: ConnectionState = 'connected'
 let listSequence = 0
 const sendRequest = vi.fn(async () => ({
   id: `list-${++listSequence}`,
@@ -62,8 +70,17 @@ const sendRequest = vi.fn(async () => ({
 }))
 const client = {
   sendRequest,
-  subscribe
+  subscribe,
+  getState: () => clientConnectionState
 } as unknown as RpcClient
+const replacementClient = {
+  sendRequest,
+  subscribe,
+  getState: () => clientConnectionState
+} as unknown as RpcClient
+let currentClient: RpcClient = client
+let currentWorktreeId = 'repo::worktree'
+let currentTerminalInventoryRecoveryScopeKey = 'host::repo::worktree'
 
 function applyWithRecovery(value: TestResult): SessionTabsApplyOutcome<string> {
   const outcome = applySessionTabs(value)
@@ -74,15 +91,24 @@ function applyWithRecovery(value: TestResult): SessionTabsApplyOutcome<string> {
 }
 
 function Harness(): null {
-  useMobileSessionTabsReconciliation<TestResult, string>({
-    client,
-    connState: 'connected',
-    worktreeId: 'repo::worktree',
+  const actions = useMobileSessionTabsReconciliation<TestResult, string>({
+    client: currentClient,
+    connState: connectionState,
+    worktreeId: currentWorktreeId,
     applySessionTabs: applyWithRecovery,
     consumeAcceptedSessionTabs,
     fetchTerminals,
+    terminalInventoryRecoveryScopeKey: currentTerminalInventoryRecoveryScopeKey,
     hasRecoveryNeed
   })
+  useEffect(() => {
+    requestTerminalInventoryRecovery = actions.requestTerminalInventoryRecovery
+    return () => {
+      if (requestTerminalInventoryRecovery === actions.requestTerminalInventoryRecovery) {
+        requestTerminalInventoryRecovery = null
+      }
+    }
+  }, [actions.requestTerminalInventoryRecovery])
   return null
 }
 
@@ -108,6 +134,13 @@ async function setAppState(state: string): Promise<void> {
   })
 }
 
+function expectedRecoveryInventoryOptions() {
+  return expect.objectContaining({
+    allowEmptyLoaded: true,
+    onPhysicalRequestStarted: expect.any(Function)
+  })
+}
+
 describe('useMobileSessionTabsReconciliation', () => {
   let renderer: ReactTestRenderer | null = null
   async function mount(): Promise<void> {
@@ -123,10 +156,19 @@ describe('useMobileSessionTabsReconciliation', () => {
     lifecycle.appState = 'active'
     lifecycle.focused = true
     lifecycle.listeners.clear()
+    connectionState = 'connected'
+    clientConnectionState = 'connected'
+    currentClient = client
+    currentWorktreeId = 'repo::worktree'
+    currentTerminalInventoryRecoveryScopeKey = 'host::repo::worktree'
     recoveryNeeded = false
     clearRecoveryAt = Number.POSITIVE_INFINITY
     listSequence = 0
-    fetchTerminals.mockClear()
+    fetchTerminals.mockReset()
+    fetchTerminals.mockImplementation(async (options?: MobileTerminalInventoryRefreshOptions) => {
+      options?.onPhysicalRequestStarted?.(Date.now())
+      return true
+    })
     applySessionTabs.mockClear()
     consumeAcceptedSessionTabs.mockClear()
     unsubscribe.mockClear()
@@ -145,10 +187,11 @@ describe('useMobileSessionTabsReconciliation', () => {
     act(() => renderer?.unmount())
     renderer = null
     streamListener = null
+    requestTerminalInventoryRecovery = null
     vi.useRealTimers()
   })
 
-  it('does zero tab lists and thirty terminal lists in a certified warm minute', async () => {
+  it('runs one terminal health sweep and zero tab lists in a certified warm minute', async () => {
     await mount()
     await emitStream({ type: 'updated', snapshotVersion: 1, tabs: ['tab-1'] })
     sendRequest.mockClear()
@@ -159,7 +202,275 @@ describe('useMobileSessionTabsReconciliation', () => {
     })
 
     expect(sendRequest).not.toHaveBeenCalled()
-    expect(fetchTerminals).toHaveBeenCalledTimes(30)
+    expect(fetchTerminals).toHaveBeenCalledTimes(1)
+  })
+
+  it('backs off a failed certified terminal sweep for another minute', async () => {
+    await mount()
+    await emitStream({ type: 'updated', snapshotVersion: 1, tabs: ['tab-1'] })
+    fetchTerminals.mockClear()
+    fetchTerminals.mockResolvedValue(false)
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(60_000)
+    })
+    expect(fetchTerminals).toHaveBeenCalledTimes(1)
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(58_000)
+    })
+    expect(fetchTerminals).toHaveBeenCalledTimes(1)
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2_000)
+    })
+    expect(fetchTerminals).toHaveBeenCalledTimes(2)
+  })
+
+  it('coalesces terminal teardown into two separated inventory passes', async () => {
+    await mount()
+    await emitStream({ type: 'updated', snapshotVersion: 1, tabs: ['tab-1'] })
+    fetchTerminals.mockClear()
+
+    await act(async () => {
+      requestTerminalInventoryRecovery?.()
+      requestTerminalInventoryRecovery?.()
+      requestTerminalInventoryRecovery?.()
+      await flush()
+    })
+
+    expect(fetchTerminals).toHaveBeenCalledExactlyOnceWith(expectedRecoveryInventoryOptions())
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(749)
+    })
+    expect(fetchTerminals).toHaveBeenCalledTimes(1)
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1)
+    })
+    expect(fetchTerminals).toHaveBeenCalledTimes(2)
+    expect(fetchTerminals).toHaveBeenLastCalledWith(expectedRecoveryInventoryOptions())
+  })
+
+  it('moves the certified sweep deadline after teardown recovery', async () => {
+    await mount()
+    await emitStream({ type: 'updated', snapshotVersion: 1, tabs: ['tab-1'] })
+    fetchTerminals.mockClear()
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(59_000)
+      requestTerminalInventoryRecovery?.()
+      await flush()
+      await vi.advanceTimersByTimeAsync(1_000)
+    })
+
+    expect(fetchTerminals).toHaveBeenCalledTimes(2)
+    expect(fetchTerminals).toHaveBeenNthCalledWith(1, expectedRecoveryInventoryOptions())
+    expect(fetchTerminals).toHaveBeenNthCalledWith(2, expectedRecoveryInventoryOptions())
+  })
+
+  it.each(['failure', 'rejection'] as const)(
+    'does not confirm terminal absence after an unverifiable first-pass %s',
+    async (outcome) => {
+      await mount()
+      await emitStream({ type: 'updated', snapshotVersion: 1, tabs: ['tab-1'] })
+      fetchTerminals.mockClear()
+      if (outcome === 'failure') {
+        fetchTerminals.mockResolvedValueOnce(false)
+      } else {
+        fetchTerminals.mockRejectedValueOnce(new Error('transport lost'))
+      }
+
+      await act(async () => {
+        requestTerminalInventoryRecovery?.()
+        await flush()
+        await vi.advanceTimersByTimeAsync(750)
+      })
+
+      expect(fetchTerminals).toHaveBeenCalledExactlyOnceWith(expectedRecoveryInventoryOptions())
+    }
+  )
+
+  it.each(['background', 'blur', 'disconnect', 'socket-loss', 'unmount'] as const)(
+    'cancels terminal inventory confirmation on %s',
+    async (lifecycleChange) => {
+      await mount()
+      await emitStream({ type: 'updated', snapshotVersion: 1, tabs: ['tab-1'] })
+      fetchTerminals.mockClear()
+      await act(async () => {
+        requestTerminalInventoryRecovery?.()
+        await flush()
+      })
+      expect(fetchTerminals).toHaveBeenCalledTimes(1)
+
+      if (lifecycleChange === 'background') {
+        await setAppState('background')
+      } else if (lifecycleChange === 'blur') {
+        lifecycle.focused = false
+        await act(async () => {
+          renderer?.update(createElement(Harness))
+          await flush()
+        })
+      } else if (lifecycleChange === 'disconnect') {
+        connectionState = 'disconnected'
+        await act(async () => {
+          renderer?.update(createElement(Harness))
+          await flush()
+        })
+      } else if (lifecycleChange === 'socket-loss') {
+        clientConnectionState = 'disconnected'
+      } else {
+        await act(async () => {
+          renderer?.unmount()
+          await flush()
+        })
+        renderer = null
+      }
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(750)
+      })
+      expect(fetchTerminals).toHaveBeenCalledTimes(1)
+    }
+  )
+
+  it('resumes a pending terminal confirmation after returning to the foreground', async () => {
+    await mount()
+    await emitStream({ type: 'updated', snapshotVersion: 1, tabs: ['tab-1'] })
+    fetchTerminals.mockClear()
+    await act(async () => {
+      requestTerminalInventoryRecovery?.()
+      await flush()
+    })
+    expect(fetchTerminals).toHaveBeenCalledTimes(1)
+
+    await setAppState('background')
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(750)
+    })
+    expect(fetchTerminals).toHaveBeenCalledTimes(1)
+
+    await setAppState('active')
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(750)
+    })
+
+    expect(fetchTerminals).toHaveBeenCalledTimes(4)
+    expect(fetchTerminals).toHaveBeenNthCalledWith(3, expectedRecoveryInventoryOptions())
+    expect(fetchTerminals).toHaveBeenNthCalledWith(4, expectedRecoveryInventoryOptions())
+  })
+
+  it('resumes pending terminal recovery after a silent socket reconnect', async () => {
+    await mount()
+    await emitStream({ type: 'updated', snapshotVersion: 1, tabs: ['tab-1'] })
+    fetchTerminals.mockClear()
+    await act(async () => {
+      requestTerminalInventoryRecovery?.()
+      await flush()
+    })
+    expect(fetchTerminals).toHaveBeenCalledTimes(1)
+
+    clientConnectionState = 'disconnected'
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(750)
+    })
+    expect(fetchTerminals).toHaveBeenCalledTimes(1)
+
+    clientConnectionState = 'connected'
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1_250)
+      await vi.advanceTimersByTimeAsync(750)
+    })
+
+    expect(fetchTerminals).toHaveBeenCalledTimes(3)
+    expect(fetchTerminals).toHaveBeenNthCalledWith(2, expectedRecoveryInventoryOptions())
+    expect(fetchTerminals).toHaveBeenNthCalledWith(3, expectedRecoveryInventoryOptions())
+  })
+
+  it('resumes a pending terminal confirmation after controller replacement', async () => {
+    await mount()
+    await emitStream({ type: 'updated', snapshotVersion: 1, tabs: ['tab-1'] })
+    fetchTerminals.mockClear()
+    await act(async () => {
+      requestTerminalInventoryRecovery?.()
+      await flush()
+    })
+    expect(fetchTerminals).toHaveBeenCalledTimes(1)
+
+    currentClient = replacementClient
+    await act(async () => {
+      renderer?.update(createElement(Harness))
+      await flush()
+    })
+    expect(fetchTerminals).toHaveBeenCalledTimes(3)
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(750)
+    })
+    expect(fetchTerminals).toHaveBeenCalledTimes(4)
+    expect(fetchTerminals).toHaveBeenLastCalledWith(expectedRecoveryInventoryOptions())
+  })
+
+  it('drops pending terminal confirmation when the route identity changes', async () => {
+    await mount()
+    await emitStream({ type: 'updated', snapshotVersion: 1, tabs: ['tab-1'] })
+    fetchTerminals.mockClear()
+    await act(async () => {
+      requestTerminalInventoryRecovery?.()
+      await flush()
+    })
+    expect(fetchTerminals).toHaveBeenCalledTimes(1)
+
+    currentWorktreeId = 'repo::other-worktree'
+    currentTerminalInventoryRecoveryScopeKey = 'host::repo::other-worktree'
+    await act(async () => {
+      renderer?.update(createElement(Harness))
+      await flush()
+    })
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(750)
+    })
+
+    expect(fetchTerminals).toHaveBeenCalledTimes(2)
+    expect(fetchTerminals).toHaveBeenLastCalledWith(
+      expect.objectContaining({ onPhysicalRequestStarted: expect.any(Function) })
+    )
+  })
+
+  it('starts replacement-tab polling after confirmed terminal inventory absence', async () => {
+    await mount()
+    await emitStream({ type: 'updated', snapshotVersion: 1, tabs: ['tab-1'] })
+    sendRequest.mockClear()
+    fetchTerminals.mockClear()
+    clearRecoveryAt = 4_000
+    let successfulEmptyInventories = 0
+    let terminalPruned = false
+    fetchTerminals.mockImplementation(async () => {
+      successfulEmptyInventories += 1
+      if (successfulEmptyInventories === 2) {
+        terminalPruned = true
+        recoveryNeeded = true
+      }
+      return true
+    })
+
+    await act(async () => {
+      requestTerminalInventoryRecovery?.()
+      await flush()
+    })
+    expect(terminalPruned).toBe(false)
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(750)
+    })
+    expect(successfulEmptyInventories).toBe(2)
+    expect(terminalPruned).toBe(true)
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(5_250)
+    })
+
+    expect(sendRequest).toHaveBeenCalledTimes(2)
+    expect(recoveryNeeded).toBe(false)
   })
 
   it('runs an immediate list plus five fallback lists over ten probing seconds', async () => {
@@ -260,7 +571,7 @@ describe('useMobileSessionTabsReconciliation', () => {
     })
 
     expect(sendRequest).toHaveBeenCalledTimes(5)
-    expect(fetchTerminals).toHaveBeenCalledTimes(6)
+    expect(fetchTerminals).toHaveBeenCalledTimes(5)
     expect(recoveryNeeded).toBe(false)
   })
 

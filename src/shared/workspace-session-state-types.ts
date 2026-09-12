@@ -4,6 +4,7 @@ import type { WorkspaceKey } from './folder-workspace-types'
 import type { Tab, TabGroup, TabGroupLayoutNode, WorkspaceVisibleTabType } from './tab-types'
 import type { TerminalLayoutSnapshot, TerminalTab } from './terminal-tab-types'
 import type { BrowserHistoryEntry, BrowserPage, BrowserWorkspace } from './browser-workspace-types'
+import type { WorkspaceDocHistoryEntry } from './workspace-doc-history'
 import type { ClientHostedBrowserCloseIntent } from './client-hosted-browser-close-intent'
 import type { PersistedClientHostedBrowserPage } from './client-hosted-browser-page-record'
 import type { ClosedTerminalTabTombstonesByTabId } from './closed-terminal-tab-tombstones'
@@ -76,6 +77,8 @@ export type WorkspaceSessionState = {
   activeTabTypeByWorktree?: Record<string, WorkspaceVisibleTabType>
   /** Global browser URL history for address bar autocomplete. */
   browserUrlHistory?: BrowserHistoryEntry[]
+  /** Previewed workspace documents for the same dropdown — document identities, never URLs. */
+  workspaceDocHistory?: WorkspaceDocHistoryEntry[]
   /** Per-worktree last-active terminal tab ID at shutdown. */
   activeTabIdByWorktree?: Record<string, string | null>
   /** Unified tab model — present when saved by a build that includes TabsSlice.

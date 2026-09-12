@@ -1,62 +1,30 @@
-import { mkdtemp, rm } from 'node:fs/promises'
-import { tmpdir } from 'node:os'
-import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
+import { beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
 import type { AgentSessionOwnerProbe } from '../../../shared/agent-session-lease-adjudication'
-import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
-import type {
-  AgentSessionMutationEnvelope,
-  AgentSessionSubscribeEvent
-} from '../../../shared/agent-session-wire'
+import type { AgentSessionSubscribeEvent } from '../../../shared/agent-session-wire'
+import { join } from 'node:path'
 import { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
-import { journalDirectoryFor } from '../agent-session-journal/journal-paths'
-import {
-  openAgentSessionJournal,
-  type AgentSessionJournal
-} from '../agent-session-journal/journal-store'
-import type {
-  AgentSessionDispatchOutcome,
-  StructuredAgentSessionAdapter
-} from './structured-agent-session-adapter'
-import type { AgentSessionAttachParams } from './structured-agent-session-attach'
+import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
+import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
+import {
+  adapter,
+  attach,
+  attachParams,
+  CALLER,
+  ensureParams,
+  envelope,
+  hostTestState,
+  replaceHostTestState,
+  seedApproval
+} from './structured-agent-session-host-test-harness'
 import {
   HOST_TEST_NOW as NOW,
   HOST_TEST_SESSION as SESSION,
   HOST_TEST_THREAD as THREAD,
-  hostTestAttachParams,
-  hostTestMessage,
-  hostTestOperationId,
-  resetHostTestOperationIds
+  hostTestMessage
 } from './structured-agent-session-host-test-data'
-
-const CALLER = { callerKey: 'client-1' }
-
-function envelope(
-  method: string,
-  fields: Record<string, unknown>,
-  overrides: Partial<AgentSessionMutationEnvelope> = {}
-): AgentSessionMutationEnvelope {
-  return {
-    sessionId: SESSION,
-    clientOperationId: hostTestOperationId(),
-    expectedRuntimeFence: store.getRecord(SESSION)?.lease.runtimeFence ?? 1,
-    payloadFingerprint: computeAgentSessionPayloadFingerprint({
-      method,
-      sessionId: SESSION,
-      fields
-    }),
-    ...overrides
-  }
-}
-
-const attachParams = (
-  overrides: Partial<AgentSessionAttachParams> = {}
-): AgentSessionAttachParams => hostTestAttachParams(null, overrides)
-
-const ensureParams = (fence: number): AgentSessionAttachParams => hostTestAttachParams(fence)
 
 let root: string
 let store: AgentSessionRecordStore
@@ -67,100 +35,19 @@ let dispatch: Mock<StructuredAgentSessionAdapter['dispatch']>
 let cancelTurn: Mock<StructuredAgentSessionAdapter['cancelTurn']>
 let answerPrompt: Mock<StructuredAgentSessionAdapter['answerPrompt']>
 let setOption: Mock<StructuredAgentSessionAdapter['setOption']>
-let ordinal = 0
 
-function accepted(): AgentSessionDispatchOutcome {
-  ordinal += 1
-  return {
-    state: 'accepted',
-    providerIdentity: { provider: 'codex', threadId: THREAD, turnId: 'turn-1', ordinal }
-  }
-}
-
-function adapter(): StructuredAgentSessionAdapter {
-  return {
+beforeEach(() => {
+  ;({
+    root,
+    store,
+    host,
     acquire,
     releaseAcquisition,
     dispatch,
     cancelTurn,
     answerPrompt,
     setOption
-  }
-}
-
-async function attach(): Promise<AgentSessionRecord | null> {
-  const result = await host.attach(CALLER, attachParams())
-  expect(result.ok).toBe(true)
-  return store.getRecord(SESSION)
-}
-
-/** Puts a pending approval in the journal BEFORE attach, which is the only way
- *  1d can stage one: the adapter that would emit it is phase 2's. */
-async function seedApproval(optionId = 'allow'): Promise<{ itemId: string; revision: number }> {
-  const identity = { provider: 'codex' as const, threadId: THREAD, turnId: 'turn-1', ordinal: 99 }
-  const journalDir = journalDirectoryFor(root, { workspaceId: 'workspace-1', sessionId: SESSION })
-  const journal = await openAgentSessionJournal({
-    identity: {
-      sessionId: SESSION,
-      workspaceId: 'workspace-1',
-      hostId: 'local',
-      agent: 'codex',
-      providerHandle: { kind: 'codex', threadId: THREAD }
-    },
-    journalDir
-  })
-  const appended = await journal.appendItem(
-    identity,
-    {
-      kind: 'approval',
-      title: 'Run the command?',
-      detail: null,
-      options: [{ id: optionId, label: 'Allow' }],
-      resolution: { state: 'pending', selectedOptionId: null, resolvedBy: null, resolvedAt: null }
-    },
-    { fence: 1 }
-  )
-  return { itemId: appended.itemId, revision: appended.revision }
-}
-
-beforeEach(async () => {
-  root = await mkdtemp(join(tmpdir(), 'orca-wire-host-'))
-  resetHostTestOperationIds()
-  ordinal = 0
-  acquire = vi.fn(async ({ fence }) => ({
-    process: {
-      hostId: 'local',
-      pid: 4242,
-      processStartTimeMs: 1_700_000_000_000,
-      spawnToken: store.getRecord(SESSION)?.lease.reservedSpawnToken ?? 'spawn-a'
-    },
-    link: {
-      linkId: `link-${fence}`,
-      handle: { provider: 'codex', threadId: THREAD },
-      origin: store.getRecord(SESSION)?.providerHandleChain.length ? 'resumed' : 'created',
-      mintedAtFence: fence,
-      observedAt: NOW
-    }
-  }))
-  releaseAcquisition = vi.fn(async () => true)
-  dispatch = vi.fn(async () => accepted())
-  cancelTurn = vi.fn(async () => ({ cancelled: true }))
-  answerPrompt = vi.fn(async () => undefined)
-  setOption = vi.fn(async () => undefined)
-  store = await AgentSessionRecordStore.open({ directory: join(root, 'store'), hostId: 'local' })
-  host = new StructuredAgentSessionHost({
-    store,
-    adapter: adapter(),
-    journalRoot: root,
-    claimKeyId: 'key-1',
-    mintSpawnToken: () => 'spawn-a',
-    now: () => NOW
-  })
-})
-
-afterEach(async () => {
-  await host.flushAllStreamedEvents()
-  await rm(root, { recursive: true, force: true })
+  } = hostTestState())
 })
 
 describe('attach', () => {
@@ -307,149 +194,8 @@ describe('attach', () => {
   })
 })
 
-describe('send', () => {
-  it('writes the submission before dispatching and resolves it accepted', async () => {
-    await attach()
-    const body = hostTestMessage('add a retry')
-    const result = await host.send(CALLER, {
-      envelope: envelope('agentSession.send', { body }),
-      body
-    })
-    if (!result.ok) {
-      throw new Error(`expected a send, got ${result.refusal.code}`)
-    }
-    expect(result.value.submission.dispatchState).toBe('accepted')
-    expect(dispatch).toHaveBeenCalledTimes(1)
-    const page = host.history({ sessionId: SESSION, direction: 'tail' })
-    expect(page.ok && page.page.items).toHaveLength(1)
-    expect(page.ok && page.page.fence).toBe(1)
-    expect(page.providerSession).toEqual({ key: 'session_id', id: THREAD })
-  })
-
-  it('settles a thrown dispatch as unknown, never as a rejection', async () => {
-    await attach()
-    dispatch.mockRejectedValueOnce(new Error('socket closed'))
-    const body = hostTestMessage('add a retry')
-    const result = await host.send(CALLER, {
-      envelope: envelope('agentSession.send', { body }),
-      body
-    })
-    expect(result).toMatchObject({ ok: true, value: { submission: { dispatchState: 'unknown' } } })
-  })
-
-  it('replays a retried send from the journal without dispatching twice', async () => {
-    await attach()
-    const body = hostTestMessage('add a retry')
-    const params = { envelope: envelope('agentSession.send', { body }), body }
-    await host.send(CALLER, params)
-    const retry = await host.send(CALLER, params)
-    expect(retry).toMatchObject({ ok: true, replayed: true })
-    expect(dispatch).toHaveBeenCalledTimes(1)
-  })
-
-  it('redispatches an explicitly retried durable unknown without appending a second submission', async () => {
-    await attach()
-    dispatch
-      .mockRejectedValueOnce(new Error('socket closed'))
-      .mockImplementationOnce(async () => accepted())
-    const body = hostTestMessage('possibly delivered')
-    const params = { envelope: envelope('agentSession.send', { body }), body }
-
-    const first = await host.send(CALLER, params)
-    expect(first).toMatchObject({
-      ok: true,
-      value: { submission: { dispatchState: 'unknown' } }
-    })
-    const retried = await host.send(CALLER, { ...params, retryUnknown: true })
-
-    expect(retried).toMatchObject({
-      ok: true,
-      replayed: false,
-      value: { submission: { dispatchState: 'accepted' } }
-    })
-    expect(dispatch).toHaveBeenCalledTimes(2)
-    const state = host.history({ sessionId: SESSION, direction: 'tail' })
-    expect(state.ok && state.page.submissions).toHaveLength(1)
-  })
-
-  it('advances an explicit retry after a ledger-unknown send is reconciled in the journal', async () => {
-    await attach()
-    const journal = (
-      host as unknown as { sessions: Map<string, { journal: AgentSessionJournal }> }
-    ).sessions.get(SESSION)!.journal
-    vi.spyOn(journal, 'resolveDispatch').mockRejectedValueOnce(new Error('journal resolve failed'))
-    const body = hostTestMessage('possibly delivered before persistence failed')
-    const params = { envelope: envelope('agentSession.send', { body }), body }
-
-    await expect(host.send(CALLER, params)).rejects.toThrow('journal resolve failed')
-    expect(
-      store.listOperationRows().find((row) => row.operationId === params.envelope.clientOperationId)
-        ?.outcome
-    ).toEqual({ status: 'unknown' })
-    expect(dispatch).toHaveBeenCalledTimes(1)
-
-    await journal.markPendingSubmissionsUnknown(store.getRecord(SESSION)?.lease.runtimeFence ?? 1)
-    await expect(host.send(CALLER, params)).resolves.toMatchObject({
-      ok: false,
-      refusal: { code: 'agent_session_operation_unknown' }
-    })
-    expect(dispatch).toHaveBeenCalledTimes(1)
-
-    await expect(host.send(CALLER, { ...params, retryUnknown: true })).resolves.toMatchObject({
-      ok: true,
-      replayed: false,
-      value: { submission: { dispatchState: 'accepted' } }
-    })
-    expect(dispatch).toHaveBeenCalledTimes(2)
-    expect(journal.submissions()).toHaveLength(1)
-  })
-
-  it('refuses a stale fence and hands back the current one', async () => {
-    const record = await attach()
-    const body = hostTestMessage('add a retry')
-    const result = await host.send(CALLER, {
-      envelope: envelope(
-        'agentSession.send',
-        { body },
-        { expectedRuntimeFence: (record?.lease.runtimeFence ?? 1) + 5 }
-      ),
-      body
-    })
-    expect(result).toMatchObject({
-      ok: false,
-      refusal: { code: 'agent_session_checkpoint_stale', currentFence: record?.lease.runtimeFence }
-    })
-  })
-
-  it('does not let a refused call leave a ledger row that replays past the fence', async () => {
-    const record = await attach()
-    const body = hostTestMessage('add a retry')
-    const params = {
-      envelope: envelope(
-        'agentSession.send',
-        { body },
-        { expectedRuntimeFence: (record?.lease.runtimeFence ?? 1) + 5 }
-      ),
-      body
-    }
-    await host.send(CALLER, params)
-    expect(await host.send(CALLER, params)).toMatchObject({
-      ok: false,
-      refusal: { code: 'agent_session_checkpoint_stale' }
-    })
-    expect(dispatch).not.toHaveBeenCalled()
-  })
-
-  it('refuses any mutation against a session this host has not attached', async () => {
-    const body = hostTestMessage('add a retry')
-    expect(
-      await host.send(CALLER, { envelope: envelope('agentSession.send', { body }), body })
-    ).toMatchObject({ ok: false, refusal: { code: 'agent_session_ownership_unknown' } })
-  })
-})
-
 describe('cancel', () => {
-  it('records the outcome as a status item keyed by the operation id', async () => {
+  it('records the request acknowledgement as a status item keyed by the operation id', async () => {
     await attach()
     const result = await host.cancel(CALLER, {
       envelope: envelope('agentSession.cancel', { turnId: 'turn-1' }),
@@ -459,7 +205,7 @@ describe('cancel', () => {
     const page = host.history({ sessionId: SESSION, direction: 'tail' })
     expect(page.ok && page.page.items[0]?.body).toMatchObject({
       kind: 'status',
-      text: 'Turn cancelled.'
+      text: 'Cancellation requested.'
     })
     expect(JSON.stringify(page.ok && page.page.items[0]?.body)).not.toContain('turn-1')
   })
@@ -659,6 +405,7 @@ describe('restart', () => {
       probeOwner,
       now: () => NOW
     })
+    replaceHostTestState({ store, host })
   }
 
   /** The refusal a restarted host owes a client holding the dead generation's

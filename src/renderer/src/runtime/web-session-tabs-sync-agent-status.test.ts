@@ -71,6 +71,83 @@ describe('applyWebSessionTabsSnapshot', () => {
     expect(patch.sortEpoch).toBe(1)
   })
 
+  it('clears stale tool-output provenance when a newer host preview is assistant prose', () => {
+    const hostPaneKey = makePaneKey('host-tab-1', LEAF_ID)
+    const initialSnapshot = makeSnapshot([
+      {
+        type: 'terminal',
+        id: HOST_SURFACE_ID,
+        title: 'claude [working]',
+        parentTabId: 'host-tab-1',
+        leafId: LEAF_ID,
+        isActive: true,
+        status: 'ready',
+        terminal: 'terminal-1',
+        agentStatus: {
+          state: 'working',
+          prompt: 'fix web parity',
+          updatedAt: NOW,
+          stateStartedAt: NOW - 1_000,
+          agentType: 'claude',
+          paneKey: hostPaneKey,
+          worktreeId: WT,
+          terminalTitle: 'claude [working]',
+          lastAssistantMessage: 'same preview',
+          lastAssistantMessageIsToolOutput: true,
+          stateHistory: []
+        }
+      }
+    ])
+    const initialPatch = applyWebSessionTabsSnapshot(
+      makeState(),
+      initialSnapshot,
+      ENV,
+      NOW
+    ) as Partial<WebSessionTabsSyncState>
+    const mirroredPaneKey = Object.keys(initialPatch.agentStatusByPaneKey ?? {})[0]!
+
+    const prosePatch = applyWebSessionTabsSnapshot(
+      { ...makeState(), ...initialPatch },
+      makeSnapshot(
+        [
+          {
+            type: 'terminal',
+            id: HOST_SURFACE_ID,
+            title: 'claude [working]',
+            parentTabId: 'host-tab-1',
+            leafId: LEAF_ID,
+            isActive: true,
+            status: 'ready',
+            terminal: 'terminal-1',
+            agentStatus: {
+              state: 'working',
+              prompt: 'fix web parity',
+              stateStartedAt: NOW - 1_000,
+              agentType: 'claude',
+              paneKey: hostPaneKey,
+              worktreeId: WT,
+              terminalTitle: 'claude [working]',
+              lastAssistantMessage: 'same preview',
+              stateHistory: [],
+              updatedAt: NOW - 100,
+              lastAssistantMessageIsToolOutput: undefined
+            }
+          }
+        ],
+        { snapshotVersion: 2 }
+      ),
+      ENV,
+      NOW
+    ) as Partial<WebSessionTabsSyncState>
+
+    expect(prosePatch.agentStatusByPaneKey?.[mirroredPaneKey]?.lastAssistantMessage).toBe(
+      'same preview'
+    )
+    expect(
+      prosePatch.agentStatusByPaneKey?.[mirroredPaneKey]?.lastAssistantMessageIsToolOutput
+    ).toBeUndefined()
+  })
+
   it('applies a marker-only host restart degradation to mirrored agent status', () => {
     const hostPaneKey = makePaneKey('host-tab-1', LEAF_ID)
     const snapshot = makeSnapshot([

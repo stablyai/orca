@@ -7,6 +7,8 @@ import { collectWorktreePurgeDoomedIds } from './worktree-purge-doomed-ids'
 import { createWorktreePurgeOmitters } from './worktree-purge-omitters'
 import { removeDeleteStatesForWorktreeIds } from './worktree-delete-state'
 import { removeWorktreeVisitEntriesForTargets } from '@/lib/worktree-visit-recency'
+import { forgetAmbiguousOwnerWarnings } from '../listing/worktree-owner-settings'
+import { forgetWorktreeSleepIntent } from '@/lib/worktree-sleep-intent'
 
 export function buildWorktreePurgeState(
   s: AppState,
@@ -17,8 +19,13 @@ export function buildWorktreePurgeState(
   )
   const worktreeIdSet = new Set(normalizedTargets.map((target) => target.id))
   pruneHostedReviewLinkMutationGenerations(worktreeIdSet)
+  // Why: ids are repo::path, so a worktree recreated at the same path must not inherit a stale sleep.
+  for (const id of worktreeIdSet) {
+    forgetWorktreeSleepIntent(id)
+  }
   // Why: every authoritative and explicit purge converges here, so a deleted path can't inherit stale UI state.
   forgetHugeRepoWarningDismissalsForWorktrees(worktreeIdSet)
+  forgetAmbiguousOwnerWarnings(worktreeIdSet)
 
   const doomed = collectWorktreePurgeDoomedIds(s, worktreeIdSet)
   const {
@@ -79,6 +86,7 @@ export function buildWorktreePurgeState(
     lastKnownRelayPtyIdByTabId: omitByTabId(s.lastKnownRelayPtyIdByTabId),
     // Why: liveness-authoritative reconnect maps (orphan sweep reads them); drop purged tabs' entries here too so a re-materialized id can't inherit phantom liveness.
     pendingReconnectPtyIdByTabId: omitByTabId(s.pendingReconnectPtyIdByTabId),
+    unverifiedPtyLossTabIds: omitByTabId(s.unverifiedPtyLossTabIds),
     deferredSshSessionIdsByTabId: omitByTabId(s.deferredSshSessionIdsByTabId),
     pendingInitialCwdByTabId: omitByTabId(s.pendingInitialCwdByTabId),
     pendingIssueCommandSplitByTabId: omitByTabId(s.pendingIssueCommandSplitByTabId),
@@ -103,6 +111,8 @@ export function buildWorktreePurgeState(
       : {}),
     agentLaunchConfigByPaneKey: omitByPaneKeyTabPrefix(s.agentLaunchConfigByPaneKey),
     acknowledgedAgentsByPaneKey: omitByPaneKeyTabPrefix(s.acknowledgedAgentsByPaneKey),
+    activityClearedAtByPaneKey: omitByPaneKeyTabPrefix(s.activityClearedAtByPaneKey),
+    manuallyUnreadTurnsByPaneKey: omitByPaneKeyTabPrefix(s.manuallyUnreadTurnsByPaneKey),
     paneForegroundAgentByPaneKey: omitByPaneKeyTabPrefix(s.paneForegroundAgentByPaneKey),
     sleepingAgentSessionsByPaneKey: omitByPaneKeyTabPrefix(s.sleepingAgentSessionsByPaneKey),
     unreadTerminalTabs: omitByTabId(s.unreadTerminalTabs),

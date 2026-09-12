@@ -4,7 +4,8 @@ import {
   resolveAutomationWorkspaceProvenance
 } from '../../../automations/workspace-provenance'
 import { buildCliWorkspaceProvenance } from '../../../../shared/cli-workspace-provenance'
-import { defineMethod, type RpcMethod } from '../core'
+import { displayNameUpdatePinsLabel } from '../../../../shared/worktree/display-name-provenance'
+import { defineMethod } from '../core'
 import { buildManagedWorktreeCreateArgs } from './worktree-create-args'
 import { resolvePairedCallerHostId } from './paired-caller-host-id'
 import { resolveRuntimeNavigationTarget } from '../../../../shared/runtime-navigation'
@@ -23,7 +24,7 @@ import {
 } from './worktree-schemas'
 import { WORKTREE_CATALOG_METHODS } from './worktree-catalog-methods'
 
-export const WORKTREE_METHODS: RpcMethod[] = [
+export const WORKTREE_METHODS = [
   ...WORKTREE_CATALOG_METHODS,
   defineMethod({
     name: 'worktree.teardownMissingTerminals',
@@ -133,8 +134,12 @@ export const WORKTREE_METHODS: RpcMethod[] = [
     handler: async (params, { runtime }) => ({
       worktree: await runtime.updateManagedWorktreeMeta(params.worktree, {
         displayName: params.displayName,
+        ...(params.displayName !== undefined
+          ? { displayNameIsPinned: displayNameUpdatePinsLabel(params.displayName) }
+          : {}),
         linkedIssue: params.linkedIssue,
         linkedPR: params.linkedPR,
+        suppressedGitHubPR: params.suppressedGitHubPR,
         linkedLinearIssue: params.linkedLinearIssue,
         linkedLinearIssueWorkspaceId: params.linkedLinearIssueWorkspaceId,
         linkedLinearIssueOrganizationUrlKey: params.linkedLinearIssueOrganizationUrlKey,

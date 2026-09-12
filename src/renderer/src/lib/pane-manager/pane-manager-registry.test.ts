@@ -3,12 +3,10 @@ import { collectRendererMemoryProfileCounts } from '../renderer-memory-profile'
 import {
   forEachLivePaneForDesyncSentinel,
   getLivePaneCensus,
-  presentAllTerminalPanesWithoutAtlasClear,
   getLivePaneMemoryProfileCounts,
   refitAndRefreshAllTerminalPanes,
   registerLivePaneManager,
   resetAndRefreshAllTerminalWebglAtlases,
-  resetAllTerminalWebglAtlases,
   unregisterLivePaneManager
 } from './pane-manager-registry'
 
@@ -30,39 +28,13 @@ describe('pane manager registry', () => {
     }
   })
 
-  it('resets atlases on every registered manager', () => {
-    const first = registerManager()
-    const second = registerManager()
-
-    resetAllTerminalWebglAtlases()
-
-    expect(first.resetWebglTextureAtlases).toHaveBeenCalledTimes(1)
-    expect(second.resetWebglTextureAtlases).toHaveBeenCalledTimes(1)
-  })
-
   it('stops resetting managers after they unregister', () => {
     const manager = registerManager()
     unregisterLivePaneManager(manager)
 
-    resetAllTerminalWebglAtlases()
+    resetAndRefreshAllTerminalWebglAtlases()
 
     expect(manager.resetWebglTextureAtlases).not.toHaveBeenCalled()
-  })
-
-  it('continues resetting later managers when one manager throws', () => {
-    const broken = {
-      resetWebglTextureAtlases: vi.fn<() => void>(() => {
-        throw new Error('pane disposed')
-      })
-    }
-    registerLivePaneManager(broken)
-    registeredManagers.push(broken)
-    const healthy = registerManager()
-
-    expect(() => resetAllTerminalWebglAtlases()).not.toThrow()
-
-    expect(broken.resetWebglTextureAtlases).toHaveBeenCalledTimes(1)
-    expect(healthy.resetWebglTextureAtlases).toHaveBeenCalledTimes(1)
   })
 
   it('refreshes managers after all atlas resets complete', () => {
@@ -173,29 +145,6 @@ describe('pane manager registry', () => {
     expect(broken.refreshAllPanes).not.toHaveBeenCalled()
     expect(healthy.resetWebglTextureAtlases).toHaveBeenCalledTimes(1)
     expect(healthy.refreshAllPanes).toHaveBeenCalledTimes(1)
-  })
-
-  it('presents visible managers without resetting their atlases', () => {
-    const visible = {
-      resetWebglTextureAtlases: vi.fn<() => void>(),
-      scheduleRevealPresent: vi.fn<() => void>(),
-      isVisibleForAtlasRecovery: () => true
-    }
-    const hidden = {
-      resetWebglTextureAtlases: vi.fn<() => void>(),
-      scheduleRevealPresent: vi.fn<() => void>(),
-      isVisibleForAtlasRecovery: () => false
-    }
-    registerLivePaneManager(visible)
-    registeredManagers.push(visible)
-    registerLivePaneManager(hidden)
-    registeredManagers.push(hidden)
-
-    presentAllTerminalPanesWithoutAtlasClear()
-
-    expect(visible.scheduleRevealPresent).toHaveBeenCalledOnce()
-    expect(visible.resetWebglTextureAtlases).not.toHaveBeenCalled()
-    expect(hidden.scheduleRevealPresent).not.toHaveBeenCalled()
   })
 
   it('fits and refreshes every registered manager', () => {

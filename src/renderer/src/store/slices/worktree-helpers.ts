@@ -25,6 +25,11 @@ import type {
 import type { WorktreeRemovalTarget } from '../../../../shared/worktree/removal'
 import type { TerminalGitHubPRLink } from '../../../../shared/terminal-github-pr-link-detector'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { TerminalPaneRecoveryOutcome } from '../../../../shared/terminal-tab-types'
+import type {
+  TerminalRecoveryRemountRequest,
+  TerminalRecoveryRemountResult
+} from '../terminals/terminal-tab-recovery-ledger'
 import type { RemoveWorktreeOptions } from './worktree-removal-options'
 import type {
   HostQualifiedDetectedWorktreeResult,
@@ -221,6 +226,7 @@ export type WorktreeSlice = {
       loaderVisible?: boolean
       request?: PendingWorktreeCreation['request']
       provisioningLog?: string
+      structuredLaunchRecoveryWorktreeId?: string
     }
   ) => void
   /** Drop a pending entry, clearing the active surface if it pointed at this
@@ -309,9 +315,24 @@ export type WorktreeSlice = {
    * TerminalPane unmounts, detaches (preserving a live PTY), and remounts with
    * a fresh xterm that reattaches and replays. Used by terminal-pane-recovery
    * when a pane's write pipeline is certified dead or its input is
-   * undeliverable while the PTY is alive. Returns false when the tab is gone.
+   * undeliverable while the PTY is alive.
+   *
+   * The generation bump and the tab's recovery ledger are written together, so
+   * the budget cannot outlive — or be released independently of — the row it
+   * belongs to. Omitting the request marks an external lifecycle remount: it
+   * skips admission and writes no ledger.
    */
-  remountTerminalTabForRecovery: (tabId: string) => boolean
+  remountTerminalTabForRecovery: (
+    tabId: string,
+    request?: TerminalRecoveryRemountRequest
+  ) => TerminalRecoveryRemountResult
+  /** Record what a mounted pane observed for its recovery attempt. Ignored
+   *  unless `generation` is the row's current, still-pending ledger epoch. */
+  settleTerminalTabRecovery: (
+    tabId: string,
+    generation: number,
+    outcome: Exclude<TerminalPaneRecoveryOutcome, 'pending'>
+  ) => void
   setActiveFolderWorkspace: (folderWorkspaceId: string, executionHostId?: ExecutionHostId) => void
   setRenamingWorktreeId: (request: string | WorktreeRenameRequest | null) => void
   allWorktrees: () => Worktree[]

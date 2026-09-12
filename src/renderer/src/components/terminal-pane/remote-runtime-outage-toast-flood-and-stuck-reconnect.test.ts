@@ -26,6 +26,7 @@ import {
 import { RuntimeRpcCallQueueOverloadError } from '../../../../shared/runtime-rpc-call-queue'
 import { withRemoteRuntimeTailscaleHint } from '../../../../shared/remote-runtime-tailscale-hint'
 import type { PtyTransportRecoveryState } from './pty-transport-types'
+import { REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS } from './remote-runtime-pty-recovery-state'
 
 const ELECTRON_IPC_PREFIX = "Error invoking remote method 'runtimeEnvironments:call': "
 
@@ -409,7 +410,7 @@ describe('remote runtime outage: toast flood and stuck reconnect (issue3)', () =
       await vi.advanceTimersByTimeAsync(16_000)
 
       // Auto-recovery deadline latches the pane 'disconnected'.
-      await vi.advanceTimersByTimeAsync(60_000)
+      await vi.advanceTimersByTimeAsync(REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS)
       expect(transport.getRecoveryState?.().phase).toBe('disconnected')
 
       // Connectivity restored; 'online'/system-resume trigger fires.
@@ -417,7 +418,7 @@ describe('remote runtime outage: toast flood and stuck reconnect (issue3)', () =
       await vi.advanceTimersByTimeAsync(16_000)
 
       // Latch again, then the user clicks the Reconnect banner.
-      await vi.advanceTimersByTimeAsync(60_000)
+      await vi.advanceTimersByTimeAsync(REMOTE_RUNTIME_AUTO_RECOVERY_TIMEOUT_MS)
       transport.retryRecovery?.()
       await vi.advanceTimersByTimeAsync(16_000)
 

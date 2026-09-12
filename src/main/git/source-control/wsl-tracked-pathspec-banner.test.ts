@@ -35,6 +35,9 @@ vi.mock('../../../shared/git-discard-path-safety', () => ({
 
 import { bulkDiscardChanges } from './discard-changes'
 import { resetWslGitReadEnvironmentForTests } from '../wsl-git-read-environment'
+import { _resetGitAdmissionForTests } from '../command-runner/git-subprocess-admission'
+
+afterEach(() => _resetGitAdmissionForTests())
 
 const DISTRO = 'Ubuntu-24.04'
 const WSL_WORKTREE = `\\\\wsl$\\${DISTRO}\\home\\emilio\\projects\\orca`

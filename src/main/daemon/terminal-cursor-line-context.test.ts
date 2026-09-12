@@ -2,7 +2,7 @@ import { Terminal } from '@xterm/headless'
 import { describe, expect, it } from 'vitest'
 import { detectTerminalComposerDraft } from '../../shared/terminal-composer-draft'
 import { HeadlessEmulator } from './headless-emulator'
-import { readTerminalCursorLineContext } from './terminal-cursor-line-context'
+import { readTerminalCursorLineContext } from '../../shared/terminal-cursor-line-context'
 
 function writeSync(terminal: Terminal, data: string): void {
   const core = (terminal as unknown as { _core: { writeSync(data: string): void } })._core

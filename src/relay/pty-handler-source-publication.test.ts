@@ -7,10 +7,13 @@ import {
 } from './dispatcher'
 import { encodeJsonRpcFrame, MessageType } from './protocol'
 import { PtyHandler } from './pty-handler'
+import { TEST_PTY_ID_MINT_EPOCH, testPtyId } from './pty-handler-test-harness'
 import { RelayPtySourcePublication } from './relay-pty-source-publication'
 import { SshPtyConsumerSessionAdapter } from './ssh-pty-consumer-session-adapter'
 
 const { mockPtySpawn } = vi.hoisted(() => ({ mockPtySpawn: vi.fn() }))
+
+const PTY_1 = testPtyId(1)
 
 vi.mock('node-pty', () => ({ spawn: mockPtySpawn }))
 
@@ -127,7 +130,7 @@ describe('PtyHandler negotiated source publication', () => {
       },
       endpointIdentity
     )
-    handler = new PtyHandler(dispatcher)
+    handler = new PtyHandler(dispatcher, undefined, TEST_PTY_ID_MINT_EPOCH)
     adapter = new SshPtyConsumerSessionAdapter(dispatcher, 'build-a', undefined, (id) =>
       publication.onCreditAvailable(id)
     )
@@ -659,14 +662,14 @@ describe('PtyHandler negotiated source publication', () => {
         4
       )
     ).toMatchObject({
-      id: 'pty-1',
+      id: PTY_1,
       incarnationId: expect.any(String),
       sourceActivation: expect.objectContaining({ deliveryToken: expect.any(String) })
     })
     expect(
       replacementWrites.map(notification).find((frame) => frame?.method === 'pty.data')?.params
     ).toMatchObject({
-      id: 'pty-1',
+      id: PTY_1,
       data: 'prompt',
       sourceLengthSu: 6,
       sourceEndSu: 6
@@ -688,7 +691,7 @@ describe('PtyHandler negotiated source publication', () => {
     await vi.advanceTimersByTimeAsync(8)
     expect(projectSpy).toHaveBeenCalledTimes(1)
 
-    handler.handleSourcePublicationCapacity('pty-1')
+    handler.handleSourcePublicationCapacity(PTY_1)
     await vi.advanceTimersByTimeAsync(8)
 
     // Retried projection carries the byte-identical span params.
@@ -783,7 +786,7 @@ describe('PtyHandler negotiated source publication', () => {
   describe('a second attach for the same client', () => {
     async function attach(id: number, params: Record<string, unknown>) {
       writes = []
-      dispatcher.feed(requestFrame(id, 'pty.attach', { id: 'pty-1', ...params }))
+      dispatcher.feed(requestFrame(id, 'pty.attach', { id: PTY_1, ...params }))
       await vi.advanceTimersByTimeAsync(0)
       return writes.map((buffer) => responseResult(buffer, id)).find(Boolean)
     }

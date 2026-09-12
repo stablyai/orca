@@ -24,6 +24,7 @@ import {
   handleContextualTourOverlayKeyDown,
   type ActiveTourRenderState
 } from './ContextualTourOverlaySurface'
+import { installWindowVisibilityInterval } from '@/lib/window-visibility-interval'
 import { requestActiveTerminalPaneSplit } from '@/components/tab-bar/request-active-terminal-pane-split'
 import { performContextualTourStepAction } from './contextual-tour-step-actions'
 import { openWorkspaceCreationComposerWithTourHandoff } from './workspace-creation-tour-handoff'
@@ -228,14 +229,20 @@ export function ContextualTourOverlay(): JSX.Element | null {
     const scheduleFullMeasure = (): void => scheduleMeasure(true)
     window.addEventListener('resize', scheduleFullMeasure)
     window.addEventListener('scroll', scheduleTargetMeasure, true)
-    const interval = window.setInterval(scheduleFullMeasure, 500)
+    // Why gated: a hidden window paints no frames, so the queued rAF never runs
+    // and the pass is pure wakeup. The becoming-visible run re-queues it, and
+    // the layout effect measures on every render, so nothing is missed.
+    const stopFullPassInterval = installWindowVisibilityInterval({
+      run: scheduleFullMeasure,
+      intervalMs: 500
+    })
     return () => {
       if (frame !== null) {
         window.cancelAnimationFrame(frame)
       }
       window.removeEventListener('resize', scheduleFullMeasure)
       window.removeEventListener('scroll', scheduleTargetMeasure, true)
-      window.clearInterval(interval)
+      stopFullPassInterval()
     }
   }, [activeTourId, measureTourOverlay])
 

@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest'
 import type { RuntimeStatus } from '../../../shared/runtime-types'
 import {
   isConnectedRuntimeHostState,
+  isDisconnectedRuntimeHostState,
   runtimeHostConnectionState,
+  runtimeHostConnectionStateForEntry,
   runtimeStatusForOverall
 } from './runtime-host-connection-state'
 
@@ -38,6 +40,18 @@ describe('runtime host connection state', () => {
     expect(runtimeStatusForOverall('disconnected')).toBe('disconnected')
     expect(isConnectedRuntimeHostState('reconnecting')).toBe(false)
     expect(isConnectedRuntimeHostState('disconnected')).toBe(false)
+  })
+
+  it('distinguishes a connected transport from an unavailable runtime', () => {
+    expect(
+      runtimeHostConnectionState({
+        hasStatusEntry: true,
+        status: null,
+        transportStatus: 'connected'
+      })
+    ).toBe('runtime-unavailable')
+    expect(runtimeStatusForOverall('runtime-unavailable')).toBe('connected')
+    expect(isConnectedRuntimeHostState('runtime-unavailable')).toBe(true)
   })
 
   it('still counts a workspace-window-closed remote server as a connected host', () => {
@@ -93,6 +107,33 @@ describe('runtime host connection state', () => {
     }
   }
 
+  it('uses outer transport diagnostics when status is unavailable', () => {
+    expect(
+      runtimeHostConnectionState({
+        hasStatusEntry: true,
+        status: null,
+        remoteControl: remoteControl({ state: 'ready' })
+      })
+    ).toBe('runtime-unavailable')
+    expect(
+      runtimeHostConnectionState({
+        hasStatusEntry: true,
+        status: null,
+        remoteControl: remoteControl({ state: 'reconnecting' })
+      })
+    ).toBe('reconnecting')
+    for (const state of ['awaiting_ready', 'awaiting_authenticated'] as const) {
+      expect(
+        runtimeHostConnectionState({
+          hasStatusEntry: true,
+          status: null,
+          remoteControl: remoteControl({ state })
+        }),
+        state
+      ).toBe('checking')
+    }
+  })
+
   it('reports a cleanly closed control channel as disconnected even with no error', () => {
     // Why: a clean close (server restart, host sleep, network blip) leaves lastError null.
     // Requiring an error string to call it disconnected paints a dead host green.
@@ -137,4 +178,73 @@ describe('runtime host connection state', () => {
       })
     ).toBe('disconnected')
   })
+})
+
+describe('runtime host connection state for a recorded status entry', () => {
+  it('separates a host that was never probed from one a probe found unreachable', () => {
+    // The sidebar read raw truthiness, which collapsed these two into the same red glyph.
+    expect(runtimeHostConnectionStateForEntry(undefined)).toBe('checking')
+    expect(runtimeHostConnectionStateForEntry({ status: null })).toBe('disconnected')
+  })
+
+  it('reads the remote-control diagnostics recorded beside a failed probe', () => {
+    expect(
+      runtimeHostConnectionStateForEntry({
+        status: null,
+        remoteControl: remoteControl('reconnecting')
+      })
+    ).toBe('reconnecting')
+  })
+
+  it('agrees with the status bar that a closed control channel is disconnected', () => {
+    expect(
+      runtimeHostConnectionStateForEntry({
+        status: makeStatus({ remoteControl: remoteControl('closed') })
+      })
+    ).toBe('disconnected')
+  })
+
+  it('names only the disconnected verdict as disconnected', () => {
+    expect(isDisconnectedRuntimeHostState('disconnected')).toBe(true)
+    for (const state of [
+      'connected',
+      'checking',
+      'reconnecting',
+      'runtime-unavailable',
+      'workspace-window-closed'
+    ] as const) {
+      expect(isDisconnectedRuntimeHostState(state)).toBe(false)
+    }
+  })
+})
+
+function remoteControl(
+  state: NonNullable<RuntimeStatus['remoteControl']>['state']
+): NonNullable<RuntimeStatus['remoteControl']> {
+  return {
+    state,
+    pendingRequestCount: 0,
+    subscriptionCount: 0,
+    reconnectAttempt: 1,
+    lastConnectedAt: null,
+    lastClose: null,
+    lastError: null
+  }
+}
+
+it('does not report reconnecting after verification is terminally blocked', () => {
+  expect(
+    runtimeHostConnectionStateForEntry({
+      status: null,
+      snapshot: {
+        environmentId: 'browser',
+        pairingRevision: 1,
+        sequence: 1,
+        checkedAt: 1,
+        status: null,
+        verification: 'blocked',
+        transport: 'disconnected'
+      }
+    })
+  ).toBe('disconnected')
 })

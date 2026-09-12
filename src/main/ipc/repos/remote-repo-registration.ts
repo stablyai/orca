@@ -3,9 +3,10 @@ import type { Store } from '../../persistence'
 import type { Repo } from '../../../shared/repo-types'
 import { DEFAULT_REPO_BADGE_COLOR } from '../../../shared/constants'
 import { normalizeRuntimePathForComparison } from '../../../shared/cross-platform-path'
+import { getRepoSshConnectionId, toSshExecutionHostId } from '../../../shared/execution-host'
 import { getSshGitProvider } from '../../providers/ssh-git-dispatch'
 import { detectRepoIconAndUpstream } from '../../repo-icon-autodetect'
-import { getActiveMultiplexer } from '../ssh'
+import { getActiveMultiplexer } from '../../ssh/ssh-target-registry'
 import { resolveRemoteHomePath } from './remote-home-path'
 
 export async function addRemoteRepoFromPath(
@@ -26,11 +27,13 @@ export async function addRemoteRepoFromPath(
   let repoKind: 'git' | 'folder' = args.kind ?? 'git'
   let resolvedPath = await resolveRemoteHomePath(args.connectionId, args.remotePath)
 
+  // Resolve the host: a row stamped only `executionHostId: 'ssh:*'` is the same registration, and
+  // missing it here registers a duplicate repo for a path the host already owns.
   const existing = store
     .getRepos()
     .find(
       (repo) =>
-        repo.connectionId === args.connectionId &&
+        getRepoSshConnectionId(repo) === args.connectionId &&
         normalizeRuntimePathForComparison(repo.path) ===
           normalizeRuntimePathForComparison(resolvedPath)
     )
@@ -61,7 +64,7 @@ export async function addRemoteRepoFromPath(
     .getRepos()
     .find(
       (repo) =>
-        repo.connectionId === args.connectionId &&
+        getRepoSshConnectionId(repo) === args.connectionId &&
         normalizeRuntimePathForComparison(repo.path) ===
           normalizeRuntimePathForComparison(resolvedPath)
     )
@@ -81,7 +84,7 @@ export async function addRemoteRepoFromPath(
   const detected = await detectRepoIconAndUpstream({
     repoPath: resolvedPath,
     kind: repoKind,
-    connectionId: args.connectionId
+    executionHostId: toSshExecutionHostId(args.connectionId)
   })
   const repo: Repo = {
     id: randomUUID(),
@@ -92,6 +95,9 @@ export async function addRemoteRepoFromPath(
     addedAt: Date.now(),
     kind: repoKind,
     connectionId: args.connectionId,
+    // Stamp the unified spelling at creation: this is now the runtime's SSH registration path too,
+    // and minting `connectionId`-only rows leaves every host-resolving reader on the legacy field.
+    executionHostId: toSshExecutionHostId(args.connectionId),
     ...(repoKind === 'git'
       ? {
           externalWorktreeVisibilityLegacy: false,

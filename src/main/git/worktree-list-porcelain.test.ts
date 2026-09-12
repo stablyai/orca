@@ -243,7 +243,13 @@ describe('listWorktrees', () => {
         isMainWorktree: false
       }
     ])
-    expect(resolveGitDirMock).toHaveBeenCalledWith(featureWorktreePath)
+    // The second argument is what carries the distro when the caller has one; this listing has
+    // none, and the UNC repo path names the distro on its own.
+    const gitDirCall = resolveGitDirMock.mock.calls.find(
+      ([probed]) => probed === featureWorktreePath
+    )
+    expect(gitDirCall).toBeDefined()
+    expect(gitDirCall?.[1]?.wslDistro).toBeUndefined()
     // Why: the detection path must not spawn a git subprocess per worktree —
     // the perf regression in #1131 came from `git sparse-checkout list` firing
     // on every poll.

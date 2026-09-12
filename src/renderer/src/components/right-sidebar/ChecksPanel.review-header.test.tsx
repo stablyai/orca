@@ -20,6 +20,12 @@ vi.mock('@/components/ui/dropdown-menu', () => ({
   }) => <div data-disabled={disabled ? 'true' : undefined}>{children}</div>
 }))
 
+vi.mock('@/components/ui/tooltip', () => ({
+  Tooltip: ({ children }: { children: ReactNode }) => <>{children}</>,
+  TooltipContent: ({ children }: { children: ReactNode }) => <>{children}</>,
+  TooltipTrigger: ({ children }: { children: ReactNode }) => <>{children}</>
+}))
+
 beforeEach(() => {
   vi.stubGlobal('navigator', { userAgent: 'Macintosh' })
 })
@@ -74,7 +80,10 @@ describe('ChecksPanelReviewHeader', () => {
     expect(markup).toContain('#2964')
     expect(markup).toContain('underline decoration-border underline-offset-2')
     expect(markup).toContain('More PR actions')
-    expect(markup).toContain('unlink PR')
+    expect(markup).toContain('Unlink PR from workspace')
+    expect(markup).toContain(
+      'Orca will hide PR #2964 details for this workspace. The PR and branch on GitHub won’t be changed.'
+    )
     expect(markup).toContain('Link another PR')
     expect(markup).toContain('lucide-ellipsis')
     expect(markup).not.toContain('lucide-external-link')
@@ -108,11 +117,11 @@ describe('ChecksPanelReviewHeader', () => {
     expect(markup).not.toContain('Ctrl+click to open')
   })
 
-  it('disables unlinking when the displayed PR is not manually linked', () => {
-    const markup = renderHeader({ canUnlinkReview: false })
+  it('enables unlinking for a displayed auto-detected PR', () => {
+    const markup = renderHeader({ canUnlinkReview: true })
 
-    expect(markup).toContain('data-disabled="true"')
-    expect(markup).toContain('unlink PR')
+    expect(markup).not.toContain('data-disabled="true"')
+    expect(markup).toContain('Unlink PR from workspace')
   })
 
   it('shows GitLab MR identity with provider-appropriate link management actions', () => {
@@ -121,7 +130,10 @@ describe('ChecksPanelReviewHeader', () => {
     expect(markup).toContain('Open on GitLab')
     expect(markup).toContain('!31')
     expect(markup).toContain('More MR actions')
-    expect(markup).toContain('Unlink MR')
+    expect(markup).toContain('Unlink MR from workspace')
+    expect(markup).toContain(
+      'Orca will hide MR !31 details for this workspace. The MR and branch on GitLab won’t be changed.'
+    )
     expect(markup).toContain('Link another MR')
   })
 })

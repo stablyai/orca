@@ -155,7 +155,9 @@ __orca_deferred_init() {
   if [[ -n "${_orca_histfile:-}" ]]; then
     HISTFILE="$_orca_histfile"
   fi
-  if __orca_has_feature ready; then
+  if __orca_has_feature ready || __orca_has_feature startup; then
+    __orca_emit_ready_marker=""
+    __orca_has_feature ready && __orca_emit_ready_marker=1
     # Why: capture the prior zle-line-init so the marker chains to it. On a
     # re-source we are already the bound widget, so keep the function captured
     # the first time instead of clobbering it to empty (which would silently
@@ -170,11 +172,19 @@ __orca_deferred_init() {
       __orca_prev_line_init_fn=""
     fi
     __orca_prompt_mark() {
-      printf "\033]777;orca-shell-ready\007"
+      if [[ "${__orca_emit_ready_marker-1}" == 1 ]]; then
+        printf "\033]777;orca-shell-ready\007"
+      fi
       # Why: call the prior hook as a plain function, not an aliased widget, so
       # $WIDGET stays zle-line-init for add-zle-hook-widget dispatchers.
       if [[ -n "${__orca_prev_line_init_fn:-}" ]]; then
         "${__orca_prev_line_init_fn}" "$@"
+      fi
+      if (( ${+ORCA_POSIX_SHELL_STARTUP_COMMAND} )); then
+        BUFFER="$ORCA_POSIX_SHELL_STARTUP_COMMAND"
+        CURSOR=${#BUFFER}
+        builtin unset ORCA_POSIX_SHELL_STARTUP_COMMAND
+        zle accept-line
       fi
     }
     zle -N zle-line-init __orca_prompt_mark

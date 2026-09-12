@@ -1,3 +1,4 @@
+import { resetRuntimeEnvironmentStatusOwners } from './runtime-environment-request-connections'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -44,6 +45,7 @@ const {
 }))
 
 vi.mock('electron', () => ({
+  BrowserWindow: { getAllWindows: () => [] },
   app: { getPath: getPathMock },
   ipcMain: {
     handle: handleMock,
@@ -58,15 +60,23 @@ vi.mock('../../shared/remote-runtime-client', () => ({
   subscribeRemoteRuntimeRequest: subscribeRemoteRuntimeRequestMock
 }))
 
-vi.mock('./runtime-environment-request-connections', () => ({
-  sendRemoteRuntimeConnectionRequest: sendRemoteRuntimeConnectionRequestMock,
-  sendRemoteRuntimeSharedControlRequest: sendRemoteRuntimeSharedControlRequestMock,
-  subscribeRemoteRuntimeSharedControlRequest: subscribeRemoteRuntimeSharedControlRequestMock,
-  getRemoteRuntimeSharedControlDiagnostics: getRemoteRuntimeSharedControlDiagnosticsMock,
-  reconnectRemoteRuntimeSharedControlConnection: reconnectRemoteRuntimeSharedControlConnectionMock,
-  retryRemoteRuntimeSharedControlConnectionsNow: retryRemoteRuntimeSharedControlConnectionsNowMock,
-  closeRemoteRuntimeRequestConnection: closeRemoteRuntimeRequestConnectionMock
-}))
+vi.mock('./runtime-environment-request-connections', async () => {
+  const { withRuntimeStatusOwners } = await import('./runtime-environments-ipc-test-harness')
+  return withRuntimeStatusOwners({
+    sendRemoteRuntimeConnectionRequest: sendRemoteRuntimeConnectionRequestMock,
+    sendRemoteRuntimeSharedControlRequest: sendRemoteRuntimeSharedControlRequestMock,
+    subscribeRemoteRuntimeSharedControlRequest: subscribeRemoteRuntimeSharedControlRequestMock,
+    getRemoteRuntimeSharedControlDiagnostics: getRemoteRuntimeSharedControlDiagnosticsMock,
+    reconnectRemoteRuntimeSharedControlConnection:
+      reconnectRemoteRuntimeSharedControlConnectionMock,
+    retryRemoteRuntimeSharedControlConnectionsNow:
+      retryRemoteRuntimeSharedControlConnectionsNowMock,
+    retryRemoteRuntimeSharedControlConnectionNow: vi.fn(),
+    ensureRemoteRuntimeSharedControlConnection: vi.fn(),
+    pauseRemoteRuntimeSharedControlRetry: vi.fn(),
+    closeRemoteRuntimeRequestConnection: closeRemoteRuntimeRequestConnectionMock
+  })
+})
 
 import { registerRuntimeEnvironmentHandlers } from './runtime-environments'
 import { channelHandlerLookup, pairingCode } from './runtime-environments-ipc-test-harness'
@@ -109,6 +119,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
   })
 
   afterEach(() => {
+    resetRuntimeEnvironmentStatusOwners()
     rmSync(userDataPath, { recursive: true, force: true })
   })
 
@@ -336,7 +347,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       undefined,
       15_000,
       undefined,
-      undefined,
+      expect.any(AbortSignal),
       ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES
     )
     expect(sendRemoteRuntimeSharedControlRequestMock).toHaveBeenCalledWith(
@@ -448,7 +459,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
     }
   )
 
-  it('keeps uncoded call failures on the rejected IPC fallback path', async () => {
+  it('returns uncoded status failures through the owner response', async () => {
     registerRuntimeEnvironmentHandlers(store as never)
     sendRemoteRuntimeRequestMock.mockRejectedValue(new Error('shared down'))
 
@@ -461,9 +472,10 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       'runtimeEnvironments:call'
     )
 
-    await expect(call(null, { selector: 'desk', method: 'status.get' })).rejects.toThrow(
-      'shared down'
-    )
+    await expect(call(null, { selector: 'desk', method: 'status.get' })).resolves.toMatchObject({
+      ok: false,
+      error: { code: 'runtime_unavailable', message: 'shared down' }
+    })
   })
 
   it('does not fall back after a shared-control request fails on a supported runtime', async () => {

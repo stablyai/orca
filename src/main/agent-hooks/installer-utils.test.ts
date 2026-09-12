@@ -31,7 +31,10 @@ import {
   type HooksConfig
 } from './installer-utils'
 import { buildPosixAgentHookPostCommand } from './hook-post-command'
-import { POSIX_HOOK_STDIN_DRAIN_COMMAND } from './hook-stdin-contract'
+import {
+  POSIX_HOOK_STDIN_DRAIN_COMMAND,
+  WINDOWS_POWERSHELL_HOOK_ENVIRONMENT_GUARD
+} from './hook-stdin-contract'
 import { wrapRuntimeHomeHookCommand } from './runtime-home-hook-command'
 
 let tmpDir: string
@@ -618,7 +621,10 @@ function expectedDecodedWindowsHookCommand(scriptPath: string): string {
   // Why: the execution-policy bypass rides in the payload, not on the command
   // line, so the launcher cannot spell the AV-blocked flag triple (#16003).
   // Why: PowerShell progress CLIXML corrupts consumers that merge stderr into JSON stdout.
-  return `$ProgressPreference='SilentlyContinue'; try { Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force -ErrorAction SilentlyContinue } catch {}; if (Test-Path -LiteralPath ${quoted} -PathType Leaf) { & ${quoted}; exit $LASTEXITCODE }; [Console]::In.ReadToEnd() | Out-Null; exit 0`
+  // Why the guard is spelled by import: the launcher owns stdin on the missing-script path,
+  // so it obeys the shared Windows rule (#11549), and re-typing it here would let the two
+  // drift back apart.
+  return `$ProgressPreference='SilentlyContinue'; try { Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass -Force -ErrorAction SilentlyContinue } catch {}; if (Test-Path -LiteralPath ${quoted} -PathType Leaf) { & ${quoted}; exit $LASTEXITCODE }; ${WINDOWS_POWERSHELL_HOOK_ENVIRONMENT_GUARD}; [Console]::In.ReadToEnd() | Out-Null; exit 0`
 }
 
 describe('wrapWindowsHookCommand', () => {
@@ -640,15 +646,23 @@ describe('wrapWindowsHookCommand', () => {
     )
   })
 
-  it('emits fallback stdout when the managed script is missing', () => {
-    const command = wrapWindowsHookCommand(
-      'C:\\hooks\\cursor-hook.cmd',
-      {},
-      { fallbackStdout: '{"permission":"allow"}' }
+  // Why the ordering matters: a gate event reads silence as deny (#2426), and outside an
+  // Orca pane the guard exits before the read — so an answer placed after the drain never
+  // reaches the agent at all when the caller abandons the pipe (#11549).
+  it('answers before it guards, and guards before it owns stdin', () => {
+    const decoded = decodeWindowsHookCommand(
+      wrapWindowsHookCommand(
+        'C:\\hooks\\cursor-hook.cmd',
+        {},
+        { fallbackStdout: '{"permission":"allow"}' }
+      )
     )
-    expect(decodeWindowsHookCommand(command)).toContain(
-      'Write-Output \'{"permission":"allow"}\'; exit 0'
-    )
+    const answer = decoded.indexOf('Write-Output \'{"permission":"allow"}\'')
+    const guard = decoded.indexOf(WINDOWS_POWERSHELL_HOOK_ENVIRONMENT_GUARD)
+    const ownsStdin = decoded.indexOf('[Console]::In.ReadToEnd()')
+    expect(answer).toBeGreaterThan(-1)
+    expect(guard).toBeGreaterThan(answer)
+    expect(ownsStdin).toBeGreaterThan(guard)
   })
 
   // Why: a user profile path like `C:\Users\Jane Doe` is the regression from

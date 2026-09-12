@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { detectTerminalComposerDraft } from './terminal-composer-draft'
+import {
+  detectTerminalComposerDraft,
+  hasTerminalComposerPlaceholder
+} from './terminal-composer-draft'
 
 describe('detectTerminalComposerDraft', () => {
   it('separates a cursor-right suggestion from the composer line', () => {
@@ -26,20 +29,47 @@ describe('detectTerminalComposerDraft', () => {
   })
 
   it('keeps stock dim placeholders out of draft metadata', () => {
-    expect(
-      detectTerminalComposerDraft({
-        rows: ['› Ask Codex to do anything'],
-        typedRows: ['›'],
-        promptGlyphBoldRows: [true],
-        rowsBelow: [],
-        typedRowsBelow: [],
-        beforeCursor: '› ',
-        afterCursor: '',
-        rawAfterCursor: 'Ask Codex to do anything',
-        cursorHidden: false,
-        cursorViewportRow: 4
-      })
-    ).toBeNull()
+    const context = {
+      rows: ['› Ask Codex to do anything'],
+      typedRows: ['›'],
+      promptGlyphBoldRows: [true],
+      rowsBelow: ['', 'gpt-5.6 · ~/repo'],
+      typedRowsBelow: ['', 'gpt-5.6 · ~/repo'],
+      beforeCursor: '› ',
+      afterCursor: '',
+      rawAfterCursor: 'Ask Codex to do anything',
+      cursorHidden: false,
+      cursorViewportRow: 4
+    }
+
+    expect(detectTerminalComposerDraft(context)).toBeNull()
+    expect(hasTerminalComposerPlaceholder(context)).toBe(true)
+  })
+
+  it('keeps a typed draft whose stock placeholder is still rendered to its right', () => {
+    // The placeholder normally clears the moment you type, but a repaint can land the two on the
+    // row together. Classifying that as a placeholder would mask the row the user's text is on.
+    const context = {
+      rows: ['\u203a \uc548\ub155Ask Codex to do anything'],
+      typedRows: ['\u203a \uc548\ub155'],
+      promptGlyphBoldRows: [true],
+      rowsBelow: ['', 'gpt-5.6 \u00b7 ~/repo'],
+      typedRowsBelow: ['', 'gpt-5.6 \u00b7 ~/repo'],
+      beforeCursor: '\u203a \uc548\ub155',
+      afterCursor: '',
+      rawAfterCursor: 'Ask Codex to do anything',
+      cursorHidden: false,
+      cursorViewportRow: 4
+    }
+
+    expect(detectTerminalComposerDraft(context)).toEqual({
+      text: '\uc548\ub155',
+      promptRow: 4,
+      cursorRow: 4,
+      endRow: 4,
+      promptGlyph: '\u203a'
+    })
+    expect(hasTerminalComposerPlaceholder(context)).toBe(false)
   })
 
   it('does not duplicate real typed text left of the cursor', () => {
@@ -187,20 +217,21 @@ describe('detectTerminalComposerDraft', () => {
   })
 
   it('preserves an ordinary shell prompt that uses the Codex glyph', () => {
-    expect(
-      detectTerminalComposerDraft({
-        rows: ['last command output', '› git status'],
-        typedRows: ['last command output', '› git status'],
-        promptGlyphBoldRows: [false, true],
-        rowsBelow: [],
-        typedRowsBelow: [],
-        beforeCursor: '› git status',
-        afterCursor: '',
-        rawAfterCursor: '',
-        cursorHidden: false,
-        cursorViewportRow: 7
-      })
-    ).toBeNull()
+    const context = {
+      rows: ['last command output', '› git status'],
+      typedRows: ['last command output', '› git status'],
+      promptGlyphBoldRows: [false, true],
+      rowsBelow: [],
+      typedRowsBelow: [],
+      beforeCursor: '› git status',
+      afterCursor: '',
+      rawAfterCursor: '',
+      cursorHidden: false,
+      cursorViewportRow: 7
+    }
+
+    expect(detectTerminalComposerDraft(context)).toBeNull()
+    expect(hasTerminalComposerPlaceholder(context)).toBe(false)
   })
 
   it('keeps the side-thread placeholder out of draft metadata', () => {

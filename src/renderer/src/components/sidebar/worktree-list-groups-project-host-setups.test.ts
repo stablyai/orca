@@ -52,6 +52,61 @@ describe('buildRows with pinned worktrees', () => {
     ])
   })
 
+  it('keeps the cross-host project header label when another project section renders', () => {
+    // Why: the project header must read the project's own display name, not the
+    // anchor checkout's repo name, however many sections are visible — toggling
+    // "Hide sleeping workspaces" must not rename a project (#16127).
+    const otherRepo: Repo = {
+      ...repo,
+      id: 'repo-other',
+      path: '/tmp/design-assets',
+      displayName: 'design-assets'
+    }
+    const otherWorktree: Worktree = {
+      ...worktree,
+      id: 'wt-other',
+      repoId: otherRepo.id,
+      path: '/tmp/design-assets-feature',
+      displayName: 'palette'
+    }
+    const buildHeaders = (extraWorktrees: Worktree[], extraRepos: Repo[]) => {
+      const worktrees = [worktree, remoteWorktree, ...extraWorktrees]
+      const rows = buildRows(
+        'repo',
+        worktrees,
+        new Map([
+          [repo.id, repo],
+          [remoteRepo.id, remoteRepo],
+          ...extraRepos.map((entry): [string, Repo] => [entry.id, entry])
+        ]),
+        null,
+        new Set(),
+        undefined,
+        undefined,
+        undefined,
+        {},
+        new Map(worktrees.map((entry) => [entry.id, entry])),
+        false,
+        undefined,
+        [],
+        new Set(),
+        new Map(),
+        new Map(),
+        [],
+        { projects: [project], projectHostSetups }
+      )
+      return rows.filter((row) => row.type === 'header')
+    }
+
+    expect(buildHeaders([], [])).toMatchObject([
+      { key: 'project:github:stablyai/orca', label: 'Orca' }
+    ])
+    expect(buildHeaders([otherWorktree], [otherRepo])).toMatchObject([
+      { key: 'project:github:stablyai/orca', label: 'Orca' },
+      { key: 'repo:repo-other', label: 'design-assets' }
+    ])
+  })
+
   it('renders same-project records with git remote identity as one mixed-host project header', () => {
     const localRepo: Repo = {
       ...repo,
@@ -724,11 +779,12 @@ describe('buildRows with pinned worktrees', () => {
     ])
     // The provisioned copy nests under the plain project key with only its own
     // worktree; it never gets a path-scoped `::setup:` header like the real
-    // checkouts do. (buildRows disambiguates its visible label to the repo name.)
+    // checkouts do, and that header keeps the project's own display name.
     expect(
       headers.some((row) => row.key === 'project:github:stablyai/orca::setup:repo-runtime-b')
     ).toBe(false)
     expect(headers.find((row) => row.key === 'project:github:stablyai/orca')).toMatchObject({
+      label: 'Orca',
       count: 1
     })
   })

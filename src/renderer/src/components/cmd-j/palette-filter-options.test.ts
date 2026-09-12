@@ -5,11 +5,7 @@ import type { Project, ProjectHostSetup } from '../../../../shared/project-types
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { buildSidebarHostOptions } from '../sidebar/sidebar-host-options'
-import {
-  buildPaletteFilterModel,
-  resolveRepoFilterHostId,
-  resolveWorktreeFilterHostId
-} from './palette-filter-options'
+import { buildPaletteFilterModel, resolveWorktreeFilterHostId } from './palette-filter-options'
 
 function repo(id: string, displayName: string, connectionId: string | null = null): Repo {
   return {
@@ -66,15 +62,17 @@ const buildModel = (worktrees: readonly Worktree[]) =>
   buildPaletteFilterModel({ repos, worktrees, hostOptions, projects, projectHostSetups })
 
 describe('buildPaletteFilterModel', () => {
-  it('collapses the repos of one project into a single row', () => {
+  it('keeps filter options repo-granular while retaining project-row membership', () => {
     const model = buildModel([worktree('w1', 'r1'), worktree('w2', 'r2'), worktree('w3', 'r3')])
 
     expect(model.repoIdsByProjectKey.get('project:p1')).toEqual(['r1', 'r2'])
-    expect(model.projects.map((option) => [option.id, option.label, option.count])).toEqual([
-      ['project:p1', 'Orca', 2],
-      ['repo:r3', 'Solo', 1]
+    expect(model.repositories.map((option) => [option.id, option.label, option.count])).toEqual([
+      ['r1', 'Orca', 1],
+      ['r2', 'Orca (builder)', 1],
+      ['r3', 'Solo', 1]
     ])
-    expect(model.projects[0]?.searchText).toBe('orca')
+    expect(model.repositories[0]?.searchText).toContain('orca')
+    expect(model.repositories[0]?.searchText).toContain(path.join('/repos', 'r1'))
   })
 
   it('counts a worktree against its own host stamp, not its repo host', () => {
@@ -88,8 +86,8 @@ describe('buildPaletteFilterModel', () => {
       ['local', 1],
       ['ssh:ssh-1', 2]
     ])
-    // Host stamp does not move the workspace out of its project row.
-    expect(model.projects.find((option) => option.id === 'project:p1')?.count).toBe(3)
+    expect(model.repositories.find((option) => option.id === 'r1')?.count).toBe(2)
+    expect(model.repositories.find((option) => option.id === 'r2')?.count).toBe(1)
   })
 
   it('omits archived worktrees from every count', () => {
@@ -99,29 +97,85 @@ describe('buildPaletteFilterModel', () => {
       worktree('w3', 'r3', { isArchived: true })
     ])
 
-    expect(model.hosts.map((option) => option.id)).toEqual(['local'])
-    expect(model.hosts[0]?.count).toBe(1)
-    expect(model.projects.map((option) => option.id)).toEqual(['project:p1'])
+    expect(model.hosts.map((option) => [option.id, option.count])).toEqual([
+      ['local', 1],
+      ['ssh:ssh-1', 0]
+    ])
+    expect(model.repositories.map((option) => [option.id, option.count])).toEqual([
+      ['r1', 1],
+      ['r2', 0],
+      ['r3', 0]
+    ])
   })
 
-  it('offers no options at all when there is nothing to narrow', () => {
+  it('retains options while worktrees are loading', () => {
     const model = buildModel([])
 
-    expect(model.hosts).toEqual([])
-    expect(model.projects).toEqual([])
-    // The mapping still resolves so a lingering selection prunes cleanly.
+    expect(model.hosts.map((option) => [option.id, option.count])).toEqual([
+      ['local', 0],
+      ['ssh:ssh-1', 0]
+    ])
+    expect(model.repositories.map((option) => [option.id, option.count])).toEqual([
+      ['r1', 0],
+      ['r2', 0],
+      ['r3', 0]
+    ])
     expect(model.repoIdsByProjectKey.get('project:p1')).toEqual(['r1', 'r2'])
-    expect(model.hostIdByRepoId.get('r2')).toBe('ssh:ssh-1')
+    expect(model.hostIdsByRepoId.get('r2')).toEqual(new Set(['ssh:ssh-1']))
   })
 
-  it('sorts project rows by workspace count then label', () => {
+  it('deduplicates a repository ID shared by multiple hosts', () => {
+    const duplicateRepos = [repo('shared', 'Shared'), repo('shared', 'Shared remote', 'ssh-1')]
+    const model = buildPaletteFilterModel({
+      repos: duplicateRepos,
+      worktrees: [
+        worktree('local', 'shared', { hostId: 'local' }),
+        worktree('remote', 'shared', { hostId: 'ssh:ssh-1' })
+      ],
+      hostOptions: buildSidebarHostOptions({
+        repos: duplicateRepos,
+        sshTargetLabels: new Map([['ssh-1', 'Builder']]),
+        settings: { activeRuntimeEnvironmentId: null }
+      }),
+      projects: [],
+      projectHostSetups: []
+    })
+
+    expect(model.repositories.map((option) => [option.id, option.count])).toEqual([['shared', 2]])
+    expect(model.hostIdsByRepoId.get('shared')).toEqual(new Set(['local', 'ssh:ssh-1']))
+    expect(model.repoIdsByProjectKey.get('repo:shared')).toEqual(['shared'])
+  })
+
+  it('disambiguates repositories with the same display name', () => {
+    const duplicateNames = [
+      { ...repo('payments', 'api'), path: path.join('/repos', 'payments', 'api') },
+      { ...repo('billing', 'api'), path: path.join('/repos', 'billing', 'api') }
+    ]
+    const model = buildPaletteFilterModel({
+      repos: duplicateNames,
+      worktrees: [],
+      hostOptions: [],
+      projects: [],
+      projectHostSetups: []
+    })
+
+    expect(model.repositories.map((option) => option.label)).toEqual([
+      'billing/api',
+      'payments/api'
+    ])
+  })
+
+  it('sorts repository options by workspace count then label', () => {
     const model = buildModel([worktree('w1', 'r3'), worktree('w2', 'r1'), worktree('w3', 'r2')])
 
-    // Orca has 2 workspaces, Solo has 1 — popularity beats alpha.
-    expect(model.projects.map((option) => option.label)).toEqual(['Orca', 'Solo'])
+    expect(model.repositories.map((option) => option.label)).toEqual([
+      'Orca',
+      'Orca (builder)',
+      'Solo'
+    ])
   })
 
-  it('prefers a busier project ahead of an alphabetically earlier quiet one', () => {
+  it('prefers a busier repository ahead of an alphabetically earlier quiet one', () => {
     const model = buildModel([
       worktree('w1', 'r3'),
       worktree('w2', 'r3'),
@@ -129,26 +183,41 @@ describe('buildPaletteFilterModel', () => {
       worktree('w4', 'r1')
     ])
 
-    expect(model.projects.map((option) => [option.label, option.count])).toEqual([
+    expect(model.repositories.map((option) => [option.label, option.count])).toEqual([
       ['Solo', 3],
-      ['Orca', 1]
+      ['Orca', 1],
+      ['Orca (builder)', 0]
     ])
   })
 })
 
 describe('resolveWorktreeFilterHostId', () => {
-  const hostIdByRepoId = new Map<string, ExecutionHostId>([['r2', 'ssh:ssh-1']])
+  const repoById = new Map([['r2', repo('r2', 'Remote', 'ssh-1')]])
 
   it('prefers the worktree stamp, then the repo host, then the default host', () => {
-    expect(
-      resolveWorktreeFilterHostId({ repoId: 'r2', hostId: 'local' }, hostIdByRepoId, 'local')
-    ).toBe('local')
-    expect(resolveWorktreeFilterHostId({ repoId: 'r2' }, hostIdByRepoId, 'local')).toBe('ssh:ssh-1')
-    expect(resolveWorktreeFilterHostId({ repoId: 'unknown' }, hostIdByRepoId, 'local')).toBe(
+    expect(resolveWorktreeFilterHostId({ repoId: 'r2', hostId: 'local' }, repoById, 'local')).toBe(
       'local'
     )
+    expect(resolveWorktreeFilterHostId({ repoId: 'r2' }, repoById, 'local')).toBe('ssh:ssh-1')
+    expect(resolveWorktreeFilterHostId({ repoId: 'unknown' }, repoById, 'local')).toBe('local')
+    expect(resolveWorktreeFilterHostId({ repoId: 'unknown' }, repoById, 'runtime:env-1')).toBe(
+      'runtime:env-1'
+    )
+  })
+
+  it('uses the same last repository row as the sidebar for a shared legacy ID', () => {
+    const duplicateRepos = [repo('shared', 'Shared'), repo('shared', 'Shared remote', 'ssh-1')]
+    const sidebarRepoMap = new Map(duplicateRepos.map((entry) => [entry.id, entry]))
+
+    expect(resolveWorktreeFilterHostId({ repoId: 'shared' }, sidebarRepoMap, 'local')).toBe(
+      'ssh:ssh-1'
+    )
     expect(
-      resolveWorktreeFilterHostId({ repoId: 'unknown' }, hostIdByRepoId, 'runtime:env-1')
+      resolveWorktreeFilterHostId(
+        { repoId: 'shared', hostId: 'runtime:env-1' },
+        sidebarRepoMap,
+        'local'
+      )
     ).toBe('runtime:env-1')
   })
 
@@ -174,20 +243,10 @@ describe('resolveWorktreeFilterHostId', () => {
         defaultHostId
       })
       for (const entry of cases) {
-        expect(resolveWorktreeFilterHostId(entry, model.hostIdByRepoId, model.defaultHostId)).toBe(
+        expect(resolveWorktreeFilterHostId(entry, model.repoById, model.defaultHostId)).toBe(
           getWorktreeExecutionHostId(entry, repoMap.get(entry.repoId), defaultHostId)
         )
       }
     }
-  })
-})
-
-describe('resolveRepoFilterHostId', () => {
-  it('falls back to the default host when the repo has no stamp', () => {
-    const hostIdByRepoId = new Map<string, ExecutionHostId>([['r2', 'ssh:ssh-1']])
-    expect(resolveRepoFilterHostId('r2', hostIdByRepoId, 'local')).toBe('ssh:ssh-1')
-    expect(resolveRepoFilterHostId('missing', hostIdByRepoId, 'runtime:env-1')).toBe(
-      'runtime:env-1'
-    )
   })
 })

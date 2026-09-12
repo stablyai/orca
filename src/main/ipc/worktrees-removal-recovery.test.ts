@@ -500,7 +500,9 @@ describe('registerWorktreeHandlers', () => {
       runtime: runtimeStub,
       resolvedWorktreeId: worktreeId,
       localProvider: ptyProvider,
-      onPtyStopped: clearProviderPtyStateMock
+      onPtyStopped: clearProviderPtyStateMock,
+      // Folder-workspace removal best-effort closes structured sessions the PTY sweeps cannot see.
+      closeStructuredSessions: true
     })
     expect(killAllProcessesForWorktreeMock.mock.invocationCallOrder[0]).toBeLessThan(
       store.removeWorktreeMeta.mock.invocationCallOrder[0]
@@ -564,7 +566,8 @@ describe('registerWorktreeHandlers', () => {
       localProvider: sshPtyProvider,
       onPtyStopped: clearProviderPtyStateMock,
       includeProviderInventory: true,
-      includeLocalRegistry: false
+      includeLocalRegistry: false,
+      closeStructuredSessions: true
     })
     expect(store.removeWorktreeMeta).toHaveBeenCalledWith(worktreeId, 'ssh:conn-1')
     expect(advertisedUrlWatcherForgetWorktreeMock).not.toHaveBeenCalled()
@@ -597,7 +600,8 @@ describe('registerWorktreeHandlers', () => {
       localProvider: runtimePtyProvider,
       onPtyStopped: clearProviderPtyStateMock,
       includeProviderInventory: false,
-      includeLocalRegistry: false
+      includeLocalRegistry: false,
+      closeStructuredSessions: true
     })
     expect(getSshPtyProviderMock).not.toHaveBeenCalled()
   })

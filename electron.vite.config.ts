@@ -194,6 +194,14 @@ function createMainBootstrapPlugin() {
 export const electronViteConfig: UserConfig = {
   main: {
     build: {
+      // Why: 'esbuild' makes rolldown disable its own minifier and re-print every
+      // chunk through esbuild, which is undeclared here and only resolves via
+      // pnpm hoisting. 'oxc' is rolldown's in-process minifier.
+      minify: 'oxc',
+      // Why: 'hidden' emits .js.map with no sourceMappingURL, so the shipped
+      // bundle never references maps that packaging strips out. Release CI
+      // uploads them so minified crash traces stay decodable.
+      sourcemap: 'hidden',
       // Why: daemon-entry.js is asar-unpacked so child_process.fork() can
       // execute it from disk. Node's module resolution from the unpacked
       // directory cannot reach into app.asar; startup-critical pure JS must
@@ -244,6 +252,9 @@ export const electronViteConfig: UserConfig = {
           // this path for `orca agent hooks ...`, so it must survive rebuilds.
           'agent-hooks/managed-agent-hook-controls': resolve(
             'src/main/agent-hooks/managed-agent-hook-controls.ts'
+          ),
+          'codex/managed-home-shell-preflight': resolve(
+            'src/main/codex/managed-home-shell-preflight.ts'
           ),
           // Why: account import mutates the user's macOS Keychain from the CLI.
           'claude-accounts/keychain': resolve('src/main/claude-accounts/keychain.ts')
@@ -298,6 +309,7 @@ export const electronViteConfig: UserConfig = {
     build: {
       manifest: true,
       modulePreload: { polyfill: true },
+      minify: 'oxc',
       target: 'es2020',
       // Why: the pop-out dashboard is a second top-level window with its own
       // React root. It gets its own HTML entry so it can boot independently of

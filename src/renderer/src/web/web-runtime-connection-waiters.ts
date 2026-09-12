@@ -13,7 +13,10 @@ export class WebRuntimeConnectionWaiters {
 
   constructor(private readonly options: WebRuntimeConnectionWaiterOptions) {}
 
-  wait(timeoutMs = 30_000): Promise<void> {
+  wait(timeoutMs = 30_000, signal?: AbortSignal): Promise<void> {
+    if (signal?.aborted) {
+      return Promise.reject(signal.reason)
+    }
     if (this.options.getState() === 'connected') {
       return Promise.resolve()
     }
@@ -24,11 +27,20 @@ export class WebRuntimeConnectionWaiters {
       return Promise.reject(new Error('Remote Orca runtime connection closed.'))
     }
     return new Promise((resolve, reject) => {
-      const timeout = window.setTimeout(() => {
-        const index = this.waiters.findIndex((waiter) => waiter.resolve === resolve)
+      const cleanup = (): void => {
+        window.clearTimeout(timeout)
+        signal?.removeEventListener('abort', abort)
+        const index = this.waiters.indexOf(waiter)
         if (index !== -1) {
           this.waiters.splice(index, 1)
         }
+      }
+      const abort = (): void => {
+        cleanup()
+        reject(signal?.reason)
+      }
+      const timeout = window.setTimeout(() => {
+        cleanup()
         reject(
           new Error(
             withRemoteRuntimeTailscaleHint(
@@ -38,16 +50,18 @@ export class WebRuntimeConnectionWaiters {
           )
         )
       }, timeoutMs)
-      this.waiters.push({
+      const waiter = {
         resolve: () => {
-          window.clearTimeout(timeout)
+          cleanup()
           resolve()
         },
-        reject: (error) => {
-          window.clearTimeout(timeout)
+        reject: (error: Error) => {
+          cleanup()
           reject(error)
         }
-      })
+      }
+      this.waiters.push(waiter)
+      signal?.addEventListener('abort', abort, { once: true })
     })
   }
 

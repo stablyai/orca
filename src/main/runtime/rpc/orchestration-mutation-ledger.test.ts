@@ -44,7 +44,7 @@ describe('durable orchestration mutation ledger', () => {
     const runtime = new OrcaRuntimeService()
     runtime.setOrchestrationDb(db)
     const effect = vi.fn((subject: string) =>
-      db.insertMessage({ from: 'caller', to: 'recipient', subject })
+      db.insertMessage({ runId: 'run_legacy_local', from: 'caller', to: 'recipient', subject })
     )
     const dispatcher = new RpcDispatcher({
       runtime,
@@ -299,7 +299,10 @@ describe('durable orchestration mutation ledger', () => {
     const db = new OrchestrationDb(':memory:')
     const runtime = new OrcaRuntimeService()
     runtime.setOrchestrationDb(db)
-    const params = { from: 'term_coord', task: db.createTask({ spec: 'restart' }).id }
+    const params = {
+      from: 'term_coord',
+      task: db.createTask({ runId: 'run_legacy_local', spec: 'restart' }).id
+    }
     const callerFingerprint = db.getOrCreateLocalMutationCallerFingerprint()
     const payloadHash = createHash('sha256')
       .update(JSON.stringify({ method: 'orchestration.workerStart', params }))

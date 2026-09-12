@@ -74,6 +74,16 @@ async function authenticateSession(onLog?: ConnectionLogSink) {
       _meta: { runtimeId: 'runtime-1' }
     })
   )
+  await vi.waitFor(() => expect(fakes.sendText).toHaveBeenCalledTimes(2))
+  const capabilities = sentRequests()[1]!
+  fakes.linkOptions!.onText(
+    JSON.stringify({
+      id: capabilities.id,
+      ok: true,
+      result: {},
+      _meta: { runtimeId: 'runtime-1' }
+    })
+  )
   await vi.waitFor(() => expect(session.getState()).toBe('connected'))
   fakes.sendText.mockClear()
   return session

@@ -32,9 +32,17 @@ jobs:
         with:
           native-runtime: node
           node-version: ${{ matrix.node }}
+          cache-electron-package: 'true'
 
       - name: Install Electron package binary for tests
         run: node config/scripts/install-electron-package-binary.mjs
+
+      # The real two-cell transport test imports cloud relay source and its contracts.
+      - name: Install relay integration dependencies
+        working-directory: cloud
+        run: |
+          npx --yes pnpm@10.24.0 --filter '@orca-cloud/relay...' install --frozen-lockfile --ignore-scripts
+          npx --yes pnpm@10.24.0 --filter '@orca-cloud/relay^...' build
 
       - name: Test shard
         run: |

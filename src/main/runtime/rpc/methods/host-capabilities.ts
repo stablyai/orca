@@ -1,9 +1,9 @@
-import { defineMethod, type RpcMethod } from '../core'
+import { defineMethod } from '../core'
 import { isPwshAvailableAsync } from '../../../pwsh'
 import { isWslAvailableAsync, listWslDistrosAsync } from '../../../wsl'
 import { isGitBashAvailable } from '../../../git-bash'
 
-export const HOST_CAPABILITY_METHODS: RpcMethod[] = [
+export const HOST_CAPABILITY_METHODS = [
   defineMethod({
     name: 'host.platform',
     params: null,

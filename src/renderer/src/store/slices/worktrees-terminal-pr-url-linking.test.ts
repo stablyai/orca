@@ -69,7 +69,8 @@ describe('worktree remote runtime mutations', () => {
       worktreeId: wt.id,
       linkedPRNumber: null,
       fallbackPRNumber: null,
-      fallbackPRSource: 'explicit'
+      fallbackPRSource: 'explicit',
+      reason: 'active'
     })
     for (let i = 0; i < 6; i++) {
       await Promise.resolve()
@@ -78,8 +79,123 @@ describe('worktree remote runtime mutations', () => {
     expect(mockApi.worktrees.updateMeta).toHaveBeenCalledWith({
       worktreeId: wt.id,
       executionHostId: 'local',
-      updates: { linkedPR: 42 }
+      updates: { linkedPR: 42, suppressedGitHubPR: null }
     })
+  })
+
+  it('ignores a terminal URL matching current GitHub PR suppression', () => {
+    const store = createTestStore()
+    const fetchPRForBranch = vi.fn().mockResolvedValue({ number: 42 })
+    const wt = makeWorktree({
+      id: 'repo1::/path/wt1',
+      repoId: 'repo1',
+      path: '/worktrees/orca',
+      branch: 'refs/heads/feature/pr-link',
+      linkedPR: null,
+      suppressedGitHubPR: 42
+    })
+    store.setState({
+      repos: [
+        { id: 'repo1', path: '/repos/orca', displayName: 'orca', badgeColor: '#000', addedAt: 0 }
+      ],
+      worktreesByRepo: { repo1: [wt] },
+      fetchPRForBranch
+    } as unknown as Partial<AppState>)
+
+    store.getState().observeTerminalGitHubPullRequestLink(wt.id, {
+      url: 'https://github.com/acme/orca/pull/42',
+      slug: { owner: 'acme', repo: 'orca' },
+      number: 42
+    })
+
+    expect(fetchPRForBranch).not.toHaveBeenCalled()
+    expect(mockApi.worktrees.updateMeta).not.toHaveBeenCalled()
+  })
+
+  it('allows terminal observation of a different PR than the suppressed one', async () => {
+    const store = createTestStore()
+    const fetchPRForBranch = vi.fn().mockResolvedValue({ number: 43 })
+    const wt = makeWorktree({
+      id: 'repo1::/path/wt1',
+      repoId: 'repo1',
+      path: '/worktrees/orca',
+      branch: 'refs/heads/feature/pr-link',
+      linkedPR: null,
+      suppressedGitHubPR: 42,
+      pushTarget: {
+        remoteName: 'origin',
+        branchName: 'feature/pr-link'
+      }
+    })
+    store.setState({
+      repos: [
+        { id: 'repo1', path: '/repos/orca', displayName: 'orca', badgeColor: '#000', addedAt: 0 }
+      ],
+      worktreesByRepo: { repo1: [wt] },
+      fetchPRForBranch
+    } as unknown as Partial<AppState>)
+
+    store.getState().observeTerminalGitHubPullRequestLink(wt.id, {
+      url: 'https://github.com/acme/orca/pull/43',
+      slug: { owner: 'acme', repo: 'orca' },
+      number: 43
+    })
+    for (let i = 0; i < 6; i++) {
+      await Promise.resolve()
+    }
+
+    expect(mockApi.worktrees.updateMeta).toHaveBeenCalledWith({
+      worktreeId: wt.id,
+      executionHostId: 'local',
+      updates: { linkedPR: 43, suppressedGitHubPR: null }
+    })
+  })
+
+  it('rechecks GitHub PR suppression after branch confirmation resolves', async () => {
+    const store = createTestStore()
+    let resolveLookup: (value: { number: number } | null) => void = () => {}
+    const fetchPRForBranch = vi.fn(
+      () =>
+        new Promise<{ number: number } | null>((resolve) => {
+          resolveLookup = resolve
+        })
+    )
+    const wt = makeWorktree({
+      id: 'repo1::/path/wt1',
+      repoId: 'repo1',
+      path: '/worktrees/orca',
+      branch: 'refs/heads/feature/pr-link',
+      linkedPR: null,
+      pushTarget: {
+        remoteName: 'origin',
+        branchName: 'feature/pr-link'
+      }
+    })
+    store.setState({
+      repos: [
+        { id: 'repo1', path: '/repos/orca', displayName: 'orca', badgeColor: '#000', addedAt: 0 }
+      ],
+      worktreesByRepo: { repo1: [wt] },
+      fetchPRForBranch
+    } as unknown as Partial<AppState>)
+
+    store.getState().observeTerminalGitHubPullRequestLink(wt.id, {
+      url: 'https://github.com/acme/orca/pull/42',
+      slug: { owner: 'acme', repo: 'orca' },
+      number: 42
+    })
+    store.setState({
+      worktreesByRepo: {
+        repo1: [{ ...wt, linkedPR: null, suppressedGitHubPR: 42 }]
+      }
+    } as Partial<AppState>)
+
+    resolveLookup({ number: 42 })
+    for (let i = 0; i < 6; i++) {
+      await Promise.resolve()
+    }
+
+    expect(mockApi.worktrees.updateMeta).not.toHaveBeenCalled()
   })
 
   it('waits for branch confirmation before linking a same-repo terminal PR URL', async () => {
@@ -116,7 +232,8 @@ describe('worktree remote runtime mutations', () => {
       worktreeId: wt.id,
       linkedPRNumber: null,
       fallbackPRNumber: null,
-      fallbackPRSource: 'explicit'
+      fallbackPRSource: 'explicit',
+      reason: 'active'
     })
     for (let i = 0; i < 6; i++) {
       await Promise.resolve()
@@ -125,7 +242,7 @@ describe('worktree remote runtime mutations', () => {
     expect(mockApi.worktrees.updateMeta).toHaveBeenCalledWith({
       worktreeId: wt.id,
       executionHostId: 'local',
-      updates: { linkedPR: 42 }
+      updates: { linkedPR: 42, suppressedGitHubPR: null }
     })
   })
 
@@ -307,7 +424,8 @@ describe('worktree remote runtime mutations', () => {
       worktreeId: wt.id,
       linkedPRNumber: null,
       fallbackPRNumber: null,
-      fallbackPRSource: 'explicit'
+      fallbackPRSource: 'explicit',
+      reason: 'active'
     })
 
     for (let i = 0; i < 6; i++) {
@@ -317,7 +435,7 @@ describe('worktree remote runtime mutations', () => {
     expect(mockApi.worktrees.updateMeta).toHaveBeenCalledWith({
       worktreeId: wt.id,
       executionHostId: 'local',
-      updates: { linkedPR: 42 }
+      updates: { linkedPR: 42, suppressedGitHubPR: null }
     })
   })
 })

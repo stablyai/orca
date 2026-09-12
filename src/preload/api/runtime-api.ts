@@ -1,3 +1,4 @@
+import type { RuntimeHostStatusSnapshot } from '../../shared/runtime-host-status'
 import type {
   RuntimeBrowserDriverState,
   RuntimeRendererSyncWindowGraph,
@@ -13,6 +14,7 @@ import type {
   BrowserClientHostPlacementPreparationRequest,
   BrowserPageCreationPlacement
 } from '../../shared/browser-client-host-placement'
+import type { RemoteRuntimeSharedConnectionDiagnostics } from '../../shared/remote-runtime-shared-control-types'
 
 export type RuntimeEnvironmentSubscriptionHandle = {
   unsubscribe: () => void
@@ -76,6 +78,8 @@ export type RuntimeApi = {
     ) => () => void
   }
   runtimeEnvironments: {
+    getStatusSnapshots: () => Promise<RuntimeHostStatusSnapshot[]>
+    onStatusChanged: (callback: (snapshot: RuntimeHostStatusSnapshot) => void) => () => void
     list: () => Promise<PublicKnownRuntimeEnvironment[]>
     addFromPairingCode: (args: {
       name: string
@@ -98,7 +102,16 @@ export type RuntimeApi = {
     getStatus: (args: {
       selector: string
       timeoutMs?: number
+      observeOnly?: true
     }) => Promise<RuntimeRpcResponse<RuntimeStatus>>
+    retryControlConnection?: (args: { selector: string }) => Promise<void>
+    onSharedControlDiagnostics?: (
+      callback: (event: {
+        environmentId: string
+        transportGeneration: number
+        diagnostics: RemoteRuntimeSharedConnectionDiagnostics
+      }) => void
+    ) => () => void
     prepareBrowserClientHostPlacement: (
       args: BrowserClientHostPlacementPreparationRequest
     ) => Promise<BrowserPageCreationPlacement>

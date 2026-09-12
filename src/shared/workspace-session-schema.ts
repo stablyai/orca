@@ -25,6 +25,7 @@ import { isTuiAgent } from './tui-agent-config'
 import { isWorkspaceKey } from './workspace-scope'
 import {
   browserHistoryEntriesSchema,
+  workspaceDocHistoryEntriesSchema,
   browserPageSchema,
   browserWorkspaceSchema
 } from './workspace-session-browser-schema'
@@ -46,9 +47,10 @@ const workspaceKeySchema = z.custom<WorkspaceKey>(
 )
 
 // Why: z.lazy + type annotation keeps the recursive inference working without
-// forcing zod to resolve the whole tree at definition time.
+// forcing zod to resolve the whole tree at definition time. Discriminated on `type` because a
+// plain union re-tries the leaf branch for every split node of every restored terminal layout.
 const terminalPaneLayoutNodeSchema: z.ZodType<TerminalPaneLayoutNode> = z.lazy(() =>
-  z.union([
+  z.discriminatedUnion('type', [
     z.object({
       type: z.literal('leaf'),
       leafId: z.string()
@@ -97,6 +99,12 @@ const terminalTabSchema = z.object({
   customTitle: z.string().nullable(),
   color: z.string().nullable(),
   isPinned: z.boolean().optional(),
+  // Why: recovery asks the terminal row who owns the surface, so a row that
+  // loses viewMode on reload reads as "not chat-owned" and lets a hidden chat
+  // surface remount itself. Declared here so the row survives the parse, with
+  // the same `.catch('terminal')` degradation the unified tab uses below.
+  // Legacy rows that predate this stay undefined → 'terminal' in the renderer.
+  viewMode: z.enum(['terminal', 'chat']).catch('terminal').optional(),
   sortOrder: z.number(),
   createdAt: z.number(),
   generation: z.number().optional(),
@@ -167,7 +175,7 @@ const tabGroupSchema = z.object({
 const tabGroupSplitDirectionSchema = z.enum(['horizontal', 'vertical'])
 
 const tabGroupLayoutNodeSchema: z.ZodType<TabGroupLayoutNode> = z.lazy(() =>
-  z.union([
+  z.discriminatedUnion('type', [
     z.object({
       type: z.literal('leaf'),
       groupId: z.string()
@@ -246,6 +254,7 @@ export const workspaceSessionStateSchema: z.ZodType<WorkspaceSessionState> = z.o
     salvagingRecord(worktreeIdSchema, workspaceVisibleTabTypeSchema)
   ),
   browserUrlHistory: salvagedOptional('browserUrlHistory', browserHistoryEntriesSchema),
+  workspaceDocHistory: salvagedOptional('workspaceDocHistory', workspaceDocHistoryEntriesSchema),
   activeTabIdByWorktree: salvagedOptional(
     'activeTabIdByWorktree',
     salvagingRecord(worktreeIdSchema, z.string().nullable())

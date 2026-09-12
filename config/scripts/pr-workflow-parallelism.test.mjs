@@ -1,4 +1,4 @@
-import { globSync, readFileSync } from 'node:fs'
+import { existsSync, globSync, readFileSync } from 'node:fs'
 import { parse } from 'yaml'
 import { describe, expect, it } from 'vitest'
 
@@ -59,6 +59,9 @@ describe('PR workflow parallelism', () => {
     const primerInstall = workflow.jobs.test_native_cache.steps.find(
       (step) => step.uses === './.github/actions/install-node-dependencies'
     )
+    const nodeNextPrimerInstall = nodeNextWorkflow.jobs.test_native_cache.steps.find(
+      (step) => step.uses === './.github/actions/install-node-dependencies'
+    )
 
     expect(workflow.jobs.test.uses).toBe('./.github/workflows/unit-tests.yml')
     expect(JSON.parse(workflow.jobs.test.with.node_versions)).toEqual(['24'])
@@ -72,6 +75,7 @@ describe('PR workflow parallelism', () => {
     )
     expect(sharedTest.strategy.matrix.shard_total).toEqual([8])
     expect(installStep.with['node-version']).toBe('${{ matrix.node }}')
+    expect(installStep.with['cache-electron-package']).toBe('true')
     expect(testStep.run).toContain('--shard=${{ matrix.shard }}/${{ matrix.shard_total }}')
     for (const testFile of nativeShellContractFiles) {
       expect(testStep.run).toContain(`--exclude=${testFile}`)
@@ -79,6 +83,9 @@ describe('PR workflow parallelism', () => {
     expect(primerInstall.with['native-runtime']).toBe('node')
     expect(primerInstall.with['node-version']).toBe('24')
     expect(workflow.jobs.test.needs).toContain('test_native_cache')
+    expect(nodeNextPrimerInstall.with['native-runtime']).toBe('node')
+    expect(nodeNextPrimerInstall.with['node-version']).toBe('26')
+    expect(nodeNextWorkflow.jobs.test.needs).toEqual(['test_native_cache'])
   })
 
   it('runs real-shell coverage once outside the general shards', () => {
@@ -95,8 +102,13 @@ describe('PR workflow parallelism', () => {
         .split(/\s+/)
         .filter((token) => !['apt-get', 'install', 'sudo', ''].includes(token))
         .filter((token) => !token.startsWith('-'))
-    const jobsInstallingPackages = Object.entries(workflow.jobs)
-      .filter(([, job]) => (job.steps ?? []).some((step) => aptPackages(step).length > 0))
+    const requiredShells = ['zsh', 'fish']
+    const jobsInstallingShells = Object.entries(workflow.jobs)
+      .filter(([, job]) =>
+        (job.steps ?? []).some((step) =>
+          aptPackages(step).some((packageName) => requiredShells.includes(packageName))
+        )
+      )
       .map(([name]) => name)
 
     expect(shellStep).toBeDefined()
@@ -104,11 +116,11 @@ describe('PR workflow parallelism', () => {
     expect(shellStep.run.split(/\s+/)).toContain('--maxWorkers=1')
     // Why the whole workflow, not just the general shards: any other lane installing
     // these shells would silently start running the real-shell tests twice.
-    expect(jobsInstallingPackages).toEqual(['shell_contracts'])
+    expect(jobsInstallingShells).toEqual(['shell_contracts'])
     // Why each shell is asserted: the live tests skip themselves when the binary is
     // missing, so a dropped package silently empties this lane instead of failing it.
     const shellPackages = workflow.jobs.shell_contracts.steps.flatMap(aptPackages)
-    for (const shell of ['zsh', 'fish']) {
+    for (const shell of requiredShells) {
       expect(shellPackages).toContain(shell)
     }
     expect(shellInstall.with['native-runtime']).toBe('node')
@@ -176,6 +188,15 @@ describe('PR workflow parallelism', () => {
       // Why this file is excluded: it carries the detector pattern as a literal
       // and would otherwise match itself.
       .filter((testFile) => testFile !== 'config/scripts/pr-workflow-parallelism.test.mjs')
+      // TypeScript builds can leave an ignored JavaScript companion beside a source
+      // test. Inspect the source file once so generated output cannot duplicate it.
+      .filter(
+        (testFile) =>
+          !testFile.endsWith('.js') ||
+          !['.ts', '.tsx', '.mjs', '.cjs'].some((extension) =>
+            existsSync(testFile.replace(/\.js$/, extension))
+          )
+      )
       .filter((testFile) => realZshUsage.test(readFileSync(testFile, 'utf8')))
       .sort()
 
@@ -283,6 +304,11 @@ describe('PR workflow parallelism', () => {
     expect(installFor('package').with['native-runtime']).toBe('electron')
     expect(installFor('package_windows').with['native-runtime']).toBe('node')
     expect(installFor('package_windows').with['persist-native-cache']).toBe('false')
+    expect(
+      workflow.jobs.package_windows.steps.find(
+        (step) => step.name === 'Save compiled Node native modules'
+      ).if
+    ).toBe("steps.deps.outputs.native-cache-hit != 'true'")
 
     expect(dependencyAction.inputs['persist-native-cache'].default).toBe('true')
     expect(
@@ -351,7 +377,9 @@ describe('PR workflow parallelism', () => {
       expect(cacheStep.with.key).toContain('${{ inputs.native-runtime }}')
       expect(cacheStep.with.key).toContain('${{ runner.os }}')
       expect(cacheStep.with.key).toContain('${{ runner.arch }}')
-      expect(cacheStep.with.key).toContain('steps.requested-node.outputs.node-version')
+      expect(cacheStep.with.key).toContain(
+        'steps.requested-node.outputs.node-version || steps.default-node.outputs.node-version'
+      )
       expect(cacheStep.with.key).toContain('steps.native-cache-scope.outputs.scope')
       expect(cacheStep.with.key).toContain('config/patches/node-pty@1.1.0.patch')
       expect(cacheStep.with.key).toContain(
@@ -365,12 +393,31 @@ describe('PR workflow parallelism', () => {
       expect(cacheStep.with.path).toContain('@vscode+windows-process-tree@')
       expect(cacheStep.with['restore-keys']).toBeUndefined()
     }
+    expect(steps[cacheIndex].id).toBe('native-cache-restore')
+    expect(restoreOnly.id).toBe('native-cache-restore-only')
     const cacheScope = steps.find((step) => step.name === 'Resolve native cache scope')
     expect(cacheScope.if).toBe("inputs.native-runtime != 'none'")
     expect(cacheScope.run).toContain('/etc/os-release')
     expect(dependencyAction.outputs['native-cache-scope'].value).toBe(
       '${{ steps.native-cache-scope.outputs.scope }}'
     )
+    expect(dependencyAction.outputs['native-cache-hit'].value).toContain(
+      'steps.native-cache-restore.outputs.cache-hit'
+    )
+    expect(dependencyAction.outputs['native-cache-hit'].value).toContain(
+      'steps.native-cache-restore-only.outputs.cache-hit'
+    )
+    const electronCache = steps.find((step) => step.name === 'Cache Electron package archive')
+    const electronCacheResolution = steps.find(
+      (step) => step.name === 'Resolve Electron package cache'
+    )
+    expect(electronCacheResolution.if).toBe(
+      "inputs.native-runtime == 'electron' || inputs.cache-electron-package == 'true'"
+    )
+    expect(electronCache.if).toBe(electronCacheResolution.if)
+    expect(electronCache.uses).toBe('actions/cache@v5')
+    expect(electronCache.with.key).toContain('steps.electron-package-cache.outputs.version')
+    expect(dependencyAction.inputs['cache-electron-package'].default).toBe('false')
   })
 
   it('reuses TypeScript incremental state across typecheck runs', () => {
@@ -381,13 +428,15 @@ describe('PR workflow parallelism', () => {
     expect(cacheIndex).toBeGreaterThanOrEqual(0)
     expect(cacheIndex).toBeLessThan(checkIndex)
     expect(steps[cacheIndex].with.path).toBe('config/*.tsbuildinfo')
-    // Why restore-keys matter here: an exact-key miss is the normal case (the key is
-    // per-SHA), so without them the cache would never once be read.
+    // Why restore-keys matter here: the base SHA key is shared by every commit in a PR,
+    // but actions/cache keeps the first successful graph until the base or config changes.
     expect(steps[cacheIndex].with['restore-keys']).toBeTruthy()
     // The buildinfo is only reusable while the compiler options that produced it hold.
     expect(steps[cacheIndex].with.key).toContain(
       "hashFiles('pnpm-lock.yaml', 'config/tsconfig*.json')"
     )
+    expect(steps[cacheIndex].with.key).toContain('github.event.pull_request.base.sha')
+    expect(steps[cacheIndex].with['restore-keys']).not.toContain('tsbuildinfo-${{ runner.os }}-\n')
   })
 
   it('checks out full history without historical blobs', () => {
@@ -410,6 +459,7 @@ describe('PR workflow parallelism', () => {
       'root_directory_guard',
       'typecheck',
       'git_compatibility',
+      'codex_index_heal_contract',
       'xterm_patch_sync',
       'shell_contracts',
       'test',

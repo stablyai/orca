@@ -72,6 +72,11 @@ type Overrides = {
   inputLockReason?: 'disconnected' | 'waiting' | null
   onSend?: (text: string) => Promise<boolean>
   pending?: Parameters<typeof MobileNativeChatView>[0]['pending']
+  structuredActivityUi?: boolean
+  turnIndicator?: Parameters<typeof MobileNativeChatView>[0]['turnIndicator']
+  agentWorking?: boolean
+  canStop?: boolean
+  sendSurfaceId?: string
 }
 
 function assistantTurn(id: string, text: string): NativeChatMessage {
@@ -85,6 +90,8 @@ function chatViewElement(overrides: Overrides): ReturnType<typeof createElement>
     status: 'ready',
     streaming: null,
     onSend: vi.fn().mockResolvedValue(true),
+    sendSurfaceId: 'tab-a',
+    getSendCompletionGeneration: () => 0,
     pending: [],
     composerText: '',
     onComposerTextChange: vi.fn(),
@@ -113,6 +120,18 @@ describe('MobileNativeChatView', () => {
   }
 
   /** Ids of the rows the list is currently rendering. */
+  it('keeps Stop hidden during a structured dispatch until a provider turn can be cancelled', async () => {
+    const props = { structuredActivityUi: true, agentWorking: true, canStop: false }
+    await render(props)
+    const stops = () =>
+      renderer!.root.findAll((node) => node.props.accessibilityLabel === 'Stop the agent')
+    expect(stops()).toHaveLength(0)
+    await update({ ...props, canStop: true })
+    expect(stops()).toHaveLength(1)
+    await update({ agentWorking: true })
+    expect(stops()).toHaveLength(1)
+  })
+
   function listIds(): string[] {
     const list = renderer!.root.find((node) => node.type === 'FlatList')
     return (list.props.data as { id: string }[]).map((row) => row.id)
@@ -240,5 +259,170 @@ describe('MobileNativeChatView', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+
+  describe('structured turn status wiring', () => {
+    const userTurn = (id: string, text: string): NativeChatMessage => ({
+      id,
+      role: 'user',
+      blocks: [{ type: 'text', text }],
+      timestamp: 0,
+      source: 'transcript'
+    })
+
+    function rowProps(id: string): Record<string, unknown> {
+      return (renderedRow(id) as { props: Record<string, unknown> }).props
+    }
+
+    function footerProps(): Record<string, unknown> | null {
+      const list = renderer!.root.find((node) => node.type === 'FlatList')
+      const footer = list.props.ListFooterComponent as
+        | { props: Record<string, unknown> }
+        | null
+        | undefined
+      return footer?.props ?? null
+    }
+
+    function workingIndicators(): ReactTestInstance[] {
+      return renderer!.root.findAll((node) => node.type === 'WorkingIndicator')
+    }
+
+    it('puts the live status at the turn tail and drops the three-dot indicator', async () => {
+      const folded = [userTurn('u1', 'go'), assistantTurn('a1', 'still working')]
+      await render({ messages: folded, folded, structuredActivityUi: true, agentWorking: true })
+      const props = rowProps('u1')
+      expect(props.structuredActivityUi).toBe(true)
+      expect(props.turnStatus).toBeNull()
+      // Nothing reports reasoning, so the one live footer counts instead of guessing.
+      expect(footerProps()).toMatchObject({ thinking: false, workedSeconds: null })
+      expect(listIds().at(-1)).toBe('a1')
+      expect(props.activeTurnIsWorking).toBe(true)
+      expect(workingIndicators()).toHaveLength(0)
+    })
+
+    it('reports the live turn as thinking only when its journal says it is reasoning', async () => {
+      const folded = [userTurn('u1', 'go')]
+      await render({
+        messages: folded,
+        folded,
+        structuredActivityUi: true,
+        agentWorking: true,
+        turnIndicator: { thinking: true, activityText: null }
+      })
+      expect(rowProps('u1').turnStatus).toBeNull()
+      expect(footerProps()).toMatchObject({ thinking: true, workedSeconds: null })
+    })
+
+    it('hands the live row the provider activity copy that outranks its fallbacks', async () => {
+      const folded = [userTurn('u1', 'go')]
+      await render({
+        messages: folded,
+        folded,
+        structuredActivityUi: true,
+        agentWorking: true,
+        turnIndicator: { thinking: true, activityText: 'Running pnpm test' }
+      })
+      expect(footerProps()).toMatchObject({
+        thinking: true,
+        activityText: 'Running pnpm test'
+      })
+    })
+
+    it('keeps the activity copy on the live footer instead of a historical row', async () => {
+      const folded = [userTurn('u1', 'go'), userTurn('u2', 'again')]
+      await render({
+        messages: folded,
+        folded,
+        structuredActivityUi: true,
+        agentWorking: true,
+        turnIndicator: { thinking: false, activityText: 'Running pnpm test' }
+      })
+      expect(rowProps('u1')).not.toHaveProperty('turnActivityText')
+      expect(rowProps('u2')).not.toHaveProperty('turnActivityText')
+      expect(footerProps()).toMatchObject({ activityText: 'Running pnpm test' })
+    })
+
+    it('keeps the bridge lane on the three-dot indicator with no turn status', async () => {
+      const folded = [userTurn('u1', 'go')]
+      await render({ messages: folded, folded, agentWorking: true })
+      const props = rowProps('u1')
+      expect(props.structuredActivityUi).toBe(false)
+      expect(props.turnStatus).toBeNull()
+      expect(props.activeTurnIsWorking).toBe(false)
+      expect(footerProps()).toBeNull()
+      expect(workingIndicators()).toHaveLength(1)
+    })
+
+    it('settles the finished turn to a tappable duration', async () => {
+      const folded = [userTurn('u1', 'go'), assistantTurn('a1', 'done')]
+      await render({ messages: folded, folded, structuredActivityUi: true, agentWorking: true })
+      expect(rowProps('u1').turnStatus).toBeNull()
+      expect(footerProps()).toMatchObject({ thinking: false, workedSeconds: null })
+      await update({ messages: folded, folded, structuredActivityUi: true, agentWorking: false })
+      const settled = rowProps('u1')
+      expect(settled.turnStatus).toMatchObject({ thinking: false })
+      expect((settled.turnStatus as { workedSeconds: number | null }).workedSeconds).toBeTypeOf(
+        'number'
+      )
+      expect(settled.onToggleTurn).toBeTypeOf('function')
+      expect(settled.activeTurnIsWorking).toBe(false)
+      expect(footerProps()).toBeNull()
+    })
+
+    it('hangs no status row on an assistant row', async () => {
+      const folded = [userTurn('u1', 'go'), assistantTurn('a1', 'done')]
+      await render({ messages: folded, folded, structuredActivityUi: true, agentWorking: true })
+      expect(rowProps('a1').turnStatus).toBeNull()
+      // The assistant row still belongs to the live turn, so its tool row stays visible.
+      expect(rowProps('a1').activeTurnIsWorking).toBe(true)
+      expect(footerProps()).toMatchObject({ workedSeconds: null })
+    })
+
+    it('does not carry a running turn clock across chat surfaces', async () => {
+      vi.useFakeTimers()
+      try {
+        vi.setSystemTime(1_000)
+        const firstTab = [userTurn('u1', 'first')]
+        await render({
+          messages: firstTab,
+          folded: firstTab,
+          structuredActivityUi: true,
+          agentWorking: true,
+          sendSurfaceId: 'host\0worktree\0tab-a'
+        })
+        expect(footerProps()).toMatchObject({ startedAt: 1_000 })
+
+        vi.setSystemTime(12_000)
+        const secondTab = [userTurn('u2', 'second')]
+        await update({
+          messages: secondTab,
+          folded: secondTab,
+          structuredActivityUi: true,
+          agentWorking: true,
+          sendSurfaceId: 'host\0worktree\0tab-b'
+        })
+
+        expect(footerProps()).toMatchObject({ startedAt: 12_000 })
+      } finally {
+        vi.useRealTimers()
+      }
+    })
+
+    it('does not treat pre-user history as part of the live turn', async () => {
+      const history = [
+        assistantTurn('a0', 'before the first prompt'),
+        userTurn('u1', 'go'),
+        assistantTurn('a1', 'working')
+      ]
+      await render({
+        messages: history,
+        folded: history,
+        structuredActivityUi: true,
+        agentWorking: true
+      })
+
+      expect(rowProps('a0').activeTurnIsWorking).toBe(false)
+      expect(rowProps('a1').activeTurnIsWorking).toBe(true)
+    })
   })
 })

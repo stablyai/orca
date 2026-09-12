@@ -1,3 +1,4 @@
+import { NotificationCardStack } from '../components/NotificationCardStack'
 import { Suspense } from 'react'
 import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
 import { translate } from '@/i18n/i18n'
@@ -16,6 +17,11 @@ import { shouldRenderPetOverlay } from '../components/pet/pet-overlay-visibility
 import { useAppStore } from '../store'
 import type { UpdateStatus } from '../../../shared/update-status-types'
 import { useLazyModalMounts } from './use-lazy-modal-mounts'
+import {
+  selectAppRootSurfacePetEnabled,
+  selectAppRootSurfaceTelemetryOptedIn,
+  selectAppRootSurfaceVoiceEnabled
+} from './app-root-surface-settings'
 import type { FloatingWorkspacePanelState } from './use-floating-workspace-panel'
 import type { OnboardingGate } from './use-onboarding-and-feature-tips'
 
@@ -52,6 +58,11 @@ const SshPassphraseDialog = lazy(() =>
 )
 const UpdateCard = lazy(() =>
   import('../components/UpdateCard').then((module) => ({ default: module.UpdateCard }))
+)
+const UnexpectedSignoutCard = lazy(() =>
+  import('../components/UnexpectedSignoutCard').then((module) => ({
+    default: module.UnexpectedSignoutCard
+  }))
 )
 const RemoteServerUpdateDialog = lazy(
   () => import('../components/settings/RemoteServerUpdateDialog')
@@ -122,11 +133,14 @@ export function AppRootSurfaces(props: {
   const { mountedLazyModalIds, shouldMountAddRepoDialog } = useLazyModalMounts()
   const activeView = useAppStore((s) => s.activeView)
   const activeModal = useAppStore((s) => s.activeModal)
-  const settings = useAppStore((s) => s.settings)
+  // Keep this always-mounted surface subscribed only to the settings fields it reads. A
+  // settings object replacement for an unrelated preference should not rerender every overlay.
+  const voiceEnabled = useAppStore(selectAppRootSurfaceVoiceEnabled)
+  const petEnabled = useAppStore(selectAppRootSurfacePetEnabled)
+  const telemetryOptedIn = useAppStore(selectAppRootSurfaceTelemetryOptedIn)
   const statusBarVisible = useAppStore((s) => s.statusBarVisible)
   const persistedUIReady = useAppStore((s) => s.persistedUIReady)
   const petVisible = useAppStore((s) => s.petVisible)
-  const petEnabled = useAppStore((s) => s.settings?.experimentalPet === true)
   const dictationState = useAppStore((s) => s.dictationState)
   const updateStatus = useAppStore((s) => s.updateStatus)
   const activeContextualTourId = useAppStore((s) => s.activeContextualTourId)
@@ -134,8 +148,7 @@ export function AppRootSurfaces(props: {
 
   const shouldMountSetupGuideTelemetryObserver = persistedUIReady
   const shouldMountUpdateCard = shouldMountUpdateCardForStatus(updateStatus)
-  const shouldMountDictationController =
-    settings?.voice?.enabled === true || dictationState !== 'idle'
+  const shouldMountDictationController = voiceEnabled || dictationState !== 'idle'
   const renderPetOverlay = shouldRenderPetOverlay({ persistedUIReady, petEnabled, petVisible })
 
   return (
@@ -266,25 +279,29 @@ export function AppRootSurfaces(props: {
           </OverlayBoundary>
         </Suspense>
       ) : null}
-      {shouldMountUpdateCard ? (
+      <NotificationCardStack>
+        {shouldMountUpdateCard ? (
+          <Suspense fallback={null}>
+            <OverlayBoundary boundaryId="overlay.update-card" resetKey={activeView}>
+              <UpdateCard />
+            </OverlayBoundary>
+          </Suspense>
+        ) : null}
         <Suspense fallback={null}>
-          <OverlayBoundary boundaryId="overlay.update-card" resetKey={activeView}>
-            <UpdateCard />
+          <OverlayBoundary boundaryId="overlay.unexpected-signout" resetKey={activeView}>
+            <UnexpectedSignoutCard />
           </OverlayBoundary>
         </Suspense>
-      ) : null}
-      <OverlayBoundary boundaryId="overlay.star-nag" resetKey={activeView}>
-        <StarNagCard />
-      </OverlayBoundary>
+        <OverlayBoundary boundaryId="overlay.star-nag" resetKey={activeView}>
+          <StarNagCard />
+        </OverlayBoundary>
+      </NotificationCardStack>
       <OverlayBoundary boundaryId="overlay.star-nag-toast" resetKey={activeView}>
         <StarNagToastHost />
       </OverlayBoundary>
       <StarNagAgentValueMomentObserver />
       {/* Why: mount at App root to render once per session; internal cohort gate limits it to pre-telemetry users — see telemetry-plan.md §First-launch experience. */}
-      <OverlayBoundary
-        boundaryId="overlay.telemetry-first-launch"
-        resetKey={settings?.telemetry?.optedIn ?? 'unknown'}
-      >
+      <OverlayBoundary boundaryId="overlay.telemetry-first-launch" resetKey={telemetryOptedIn}>
         <TelemetryFirstLaunchSurface />
       </OverlayBoundary>
       <OverlayBoundary boundaryId="overlay.zoom" resetKey={activeView}>

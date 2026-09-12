@@ -154,6 +154,22 @@ export async function waitForSessionReady(page: Page, timeoutMs = 30_000): Promi
     .toBe(true)
 }
 
+/**
+ * Wait until the deferred startup worktree scan has completed.
+ *
+ * Why: hydration fires an unawaited full catalog refresh after
+ * `workspaceSessionReady`; a fixture seeded before it lands is silently
+ * overwritten when it does.
+ */
+export async function waitForStartupWorktreeRefresh(page: Page, timeoutMs = 60_000): Promise<void> {
+  await expect
+    .poll(async () => getStoreState<boolean>(page, 'startupWorktreeRefreshCompleted'), {
+      timeout: timeoutMs,
+      message: 'startupWorktreeRefreshCompleted did not become true'
+    })
+    .toBe(true)
+}
+
 /** Wait until a worktree is active and return its ID. */
 export async function waitForActiveWorktree(page: Page, timeoutMs = 30_000): Promise<string> {
   let activeWorktreeId: string | null = null

@@ -5,7 +5,9 @@ import type {
   ArtifactWriteRequest
 } from '../../../../shared/artifacts'
 import {
-  ARTIFACT_CLI_MAX_RPC_BYTES,
+  ARTIFACT_MAX_CONTENT_BYTES,
+  ARTIFACT_MAX_REQUEST_BYTES,
+  artifactContentByteLength,
   artifactWriteRequestByteLength
 } from '../../../../shared/artifacts'
 import { translate } from '@/i18n/i18n'
@@ -33,7 +35,10 @@ export function validateArtifactPublishRequest(
   if (!request.content) {
     throw new ArtifactPublishPreparationError('empty')
   }
-  if (artifactWriteRequestByteLength(request) > ARTIFACT_CLI_MAX_RPC_BYTES) {
+  if (
+    artifactContentByteLength(request.content) > ARTIFACT_MAX_CONTENT_BYTES ||
+    artifactWriteRequestByteLength(request) > ARTIFACT_MAX_REQUEST_BYTES
+  ) {
     throw new ArtifactPublishPreparationError('too-large')
   }
   return request
@@ -123,7 +128,7 @@ function artifactPreparationErrorDescription(code: ArtifactPublishPreparationErr
     case 'too-large':
       return translate(
         'auto.components.artifacts.artifact-publish-flow.6112db5a1c',
-        'Artifacts shared from Orca must be smaller than 800 KB.'
+        'This artifact is too large to share.'
       )
     case 'unreadable':
       return translate(

@@ -628,7 +628,7 @@ describe('OrcaRuntimeRpcServer', () => {
       expectedCodexResetScope
     )
     expect(mocks.readTerminal).toHaveBeenCalledWith('term-1', { cursor: undefined })
-    expect(mocks.getRuntimeGitStatus).toHaveBeenCalledWith('id:wt-1')
+    expect(mocks.getRuntimeGitStatus).toHaveBeenCalledWith('id:wt-1', { admissionTier: 'status' })
     expect(mocks.pushRuntimeGit).toHaveBeenCalledWith('id:wt-1', true, undefined, undefined)
     expect(mocks.getRuntimeGitUpstreamStatus).toHaveBeenCalledWith('id:wt-1')
     expect(mocks.bulkStageRuntimeGitPaths).toHaveBeenCalledWith('id:wt-1', ['a.ts', 'b.ts'])

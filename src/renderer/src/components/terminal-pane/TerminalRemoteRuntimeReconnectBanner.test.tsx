@@ -17,7 +17,7 @@ describe('TerminalRemoteRuntimeReconnectBanner', () => {
     render(<TerminalRemoteRuntimeReconnectBanner phase="backoff" onReconnect={vi.fn()} />)
 
     expect(screen.getByText('Reconnecting to remote runtime')).toBeInTheDocument()
-    expect(screen.getByText(/retry for up to one minute/)).toBeInTheDocument()
+    expect(screen.getByText(/retrying automatically/)).toBeInTheDocument()
     expect(screen.queryByRole('button')).not.toBeInTheDocument()
   })
 

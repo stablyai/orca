@@ -2,6 +2,20 @@ import { describe, expect, it } from 'vitest'
 import { GrowingByteBuffer } from './growing-byte-buffer'
 
 describe('GrowingByteBuffer', () => {
+  it('transfers binary bytes without changing them on clear or reuse', () => {
+    const buffer = new GrowingByteBuffer()
+    const bytes = Buffer.from([0, 255, 128, 10, 0])
+    buffer.append(bytes.subarray(0, 2))
+    buffer.append(bytes.subarray(2))
+    const taken = buffer.takeBuffer()
+    expect(taken).toEqual(bytes)
+    expect(buffer.byteLength).toBe(0)
+    expect(buffer.takeBuffer()).toEqual(Buffer.alloc(0))
+    buffer.append(Buffer.alloc(1024, 7))
+    buffer.clear()
+    expect(taken).toEqual(bytes)
+  })
+
   it('retains 100,000 one-byte fragments in one growable allocation', () => {
     const buffer = new GrowingByteBuffer()
     const expected = Buffer.alloc(100_000)

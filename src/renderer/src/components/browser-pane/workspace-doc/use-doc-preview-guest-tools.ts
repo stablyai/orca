@@ -41,7 +41,8 @@ export function useDocPreviewGuestTools({
   // Why still empty before the first grant: the page is only a tool target once a document is on
   // screen, and useGrabMode needs a stable identity every render rather than one to guess with.
   const toolTargetId = grantId === null ? '' : previewId
-  const annotationViewportBridgeTokenRef = useRef(createBrowserUuid().replaceAll('-', ''))
+  const annotationViewportBridgeTokenRef = useRef<string>(undefined!)
+  annotationViewportBridgeTokenRef.current ??= createBrowserUuid().replaceAll('-', '')
   const [browserOverlayViewport, setBrowserOverlayViewport] = useState<BrowserOverlayViewport>({
     scrollX: 0,
     scrollY: 0,
@@ -50,7 +51,7 @@ export function useDocPreviewGuestTools({
 
   const grabElementShortcut = useShortcutLabel('browser.grabElement')
   const grab = useGrabMode(toolTargetId)
-  const markup = useBrowserPageMarkupCapture(webviewRef, containerRef)
+  const markup = useBrowserPageMarkupCapture(webviewRef)
   const annotationSend = useBrowserPageAnnotationSend({ browserTabId: previewId, worktreeId })
   const grabAnnotations = useBrowserPageGrabAnnotations({
     browserTabId: previewId,

@@ -3,8 +3,10 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
-import { openAgentSessionJournal } from '../agent-session-journal/journal-store'
+import { createTrackedJournalOpener } from '../agent-session-journal/journal-store-test-open'
 import { StructuredTuiTranscriptCatchup } from './structured-tui-transcript-catchup'
+
+const journals = createTrackedJournalOpener()
 
 const NOW = 1_800_000_000_000
 const SESSION = 'session-catchup'
@@ -27,6 +29,7 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
+  await journals.closeAll()
   await rm(root, { recursive: true, force: true })
 })
 
@@ -83,7 +86,7 @@ async function createCatchupFixture() {
     },
     now: NOW
   })
-  const journal = await openAgentSessionJournal({
+  const journal = await journals.open({
     identity: {
       sessionId: SESSION,
       workspaceId: 'workspace-1',
@@ -103,7 +106,8 @@ function createCatchup(input: Awaited<ReturnType<typeof createCatchupFixture>>) 
       hasProviderChild: false,
       journal: input.journal,
       params: {} as never,
-      fence: input.fence
+      fence: input.fence,
+      acquisitionGeneration: null
     }),
     schedule: async (_sessionId, task) => task(),
     publish: vi.fn(),

@@ -1,5 +1,22 @@
-import { Fragment, memo, useMemo, type ReactNode } from 'react'
-import { Linking, Pressable, ScrollView, Text, View } from 'react-native'
+import { MobileSelectableText } from './MobileSelectableText'
+import {
+  Fragment,
+  createElement,
+  createContext,
+  memo,
+  useContext,
+  useMemo,
+  type ComponentType,
+  type ReactNode
+} from 'react'
+import {
+  Linking,
+  Pressable,
+  ScrollView,
+  Text as NativeText,
+  View,
+  type TextProps
+} from 'react-native'
 import { normalizeMobileMarkdownPreviewHtml } from './mobile-markdown-preview-html'
 import { styles } from './mobile-markdown-styles'
 import {
@@ -19,6 +36,8 @@ import { MermaidDiagram } from './pr-sidebar/MermaidDiagram'
 type Props = {
   content?: string
   fallback?: string
+  /** Enables iOS range selection for native-chat transcript prose. */
+  rangeSelectable?: boolean
   /** Multiplier for prose font size (paragraphs, lists, quotes). Defaults to 1;
    *  the chat view passes >1 so agent prose reads larger than the compact base. */
   textScale?: number
@@ -33,6 +52,12 @@ const MAX_TABLE_ROWS = 40
 const MAX_TABLE_COLUMNS = 8
 /** Prose base size — passed to MermaidDiagram fallback mono text. */
 const MERMAID_BASE = 13
+const MarkdownTextContext = createContext<ComponentType<TextProps>>(NativeText)
+
+function MarkdownText(props: TextProps): React.JSX.Element {
+  const TextComponent = useContext(MarkdownTextContext)
+  return createElement(TextComponent, props)
+}
 
 // Web/mail hrefs open the system handler; file-target hrefs (file: URIs and
 // scheme-less paths — the entire desktop file-link contract) go to onOpenFile.
@@ -64,13 +89,13 @@ function renderTextRun(
   return segments.map((segment, segmentIndex) => {
     if (segment.type === 'file') {
       return (
-        <Text
+        <MarkdownText
           key={`${keyPrefix}:${segmentIndex}`}
           style={styles.link}
           onPress={() => onOpenFile(segment.path)}
         >
           {segment.value}
-        </Text>
+        </MarkdownText>
       )
     }
     return <Fragment key={`${keyPrefix}:${segmentIndex}`}>{segment.value}</Fragment>
@@ -105,22 +130,34 @@ function renderInline(text: string, onOpenFile?: (pathText: string) => void): Re
     const link = token.match(/^\[([^\]]+)\]\(([^)]+)\)$/)
     if (image) {
       parts.push(
-        <Text key={key} style={styles.link} onPress={() => openMarkdownHref(image[2]!, onOpenFile)}>
+        <MarkdownText
+          key={key}
+          style={styles.link}
+          onPress={() => openMarkdownHref(image[2]!, onOpenFile)}
+        >
           {image[1] || 'image'}
-        </Text>
+        </MarkdownText>
       )
     } else if (link) {
       parts.push(
-        <Text key={key} style={styles.link} onPress={() => openMarkdownHref(link[2]!, onOpenFile)}>
+        <MarkdownText
+          key={key}
+          style={styles.link}
+          onPress={() => openMarkdownHref(link[2]!, onOpenFile)}
+        >
           {link[1]}
-        </Text>
+        </MarkdownText>
       )
     } else if (/^https?:\/\//i.test(token)) {
       const { url, trailing } = trimAutolinkTrailingPunctuation(token)
       parts.push(
-        <Text key={key} style={styles.link} onPress={() => openMarkdownHref(url, onOpenFile)}>
+        <MarkdownText
+          key={key}
+          style={styles.link}
+          onPress={() => openMarkdownHref(url, onOpenFile)}
+        >
           {url}
-        </Text>
+        </MarkdownText>
       )
       if (trailing) {
         parts.push(<Fragment key={`${key}p`}>{trailing}</Fragment>)
@@ -129,38 +166,38 @@ function renderInline(text: string, onOpenFile?: (pathText: string) => void): Re
       const code = token.slice(1, -1)
       if (onOpenFile && isFilePathCodeSpan(code)) {
         parts.push(
-          <Text
+          <MarkdownText
             key={key}
             style={[styles.inlineCode, styles.inlineCodeLink]}
             onPress={() => onOpenFile(normalizeFilePath(code.trim()))}
           >
             {code}
-          </Text>
+          </MarkdownText>
         )
       } else {
         parts.push(
-          <Text key={key} style={styles.inlineCode}>
+          <MarkdownText key={key} style={styles.inlineCode}>
             {code}
-          </Text>
+          </MarkdownText>
         )
       }
     } else if (token.startsWith('~~')) {
       parts.push(
-        <Text key={key} style={styles.strike}>
+        <MarkdownText key={key} style={styles.strike}>
           {renderTextRun(token.slice(2, -2), `${key}i`, onOpenFile)}
-        </Text>
+        </MarkdownText>
       )
     } else if (token.startsWith('**') || token.startsWith('__')) {
       parts.push(
-        <Text key={key} style={styles.bold}>
+        <MarkdownText key={key} style={styles.bold}>
           {renderTextRun(token.slice(2, -2), `${key}i`, onOpenFile)}
-        </Text>
+        </MarkdownText>
       )
     } else {
       parts.push(
-        <Text key={key} style={styles.italic}>
+        <MarkdownText key={key} style={styles.italic}>
           {renderTextRun(token.slice(1, -1), `${key}i`, onOpenFile)}
-        </Text>
+        </MarkdownText>
       )
     }
   }
@@ -171,7 +208,13 @@ function renderInline(text: string, onOpenFile?: (pathText: string) => void): Re
   return parts
 }
 
-function MobileMarkdownInner({ content, fallback = '', textScale = 1, onOpenFile }: Props) {
+function MobileMarkdownContent({
+  content,
+  fallback = '',
+  rangeSelectable = false,
+  textScale = 1,
+  onOpenFile
+}: Props) {
   const text = content?.trim() ?? ''
   const previewText = useMemo(() => normalizeMobileMarkdownPreviewHtml(text), [text])
   const blocks = useMemo(() => parseMobileMarkdown(previewText), [previewText])
@@ -181,27 +224,35 @@ function MobileMarkdownInner({ content, fallback = '', textScale = 1, onOpenFile
   const proseScale = scaled(13)
   const listScale = scaled(14)
   if (!text) {
-    return fallback ? <Text style={styles.paragraph}>{fallback}</Text> : null
+    return fallback ? (
+      <MarkdownText selectable={rangeSelectable} style={styles.paragraph}>
+        {fallback}
+      </MarkdownText>
+    ) : null
   }
   const mermaidSourceOccurrences = new Map<string, number>()
+  // Native-chat range selection is set on each block; nested inline spans inherit it.
 
   return (
     <View style={styles.root}>
       {blocks.map((block, index) => {
         if (block.type === 'heading') {
           return (
-            <Text
+            <MarkdownText
               key={index}
+              selectable
               style={[styles.heading, block.level <= 2 ? styles.headingLarge : null]}
             >
               {renderInline(block.text, onOpenFile)}
-            </Text>
+            </MarkdownText>
           )
         }
         if (block.type === 'quote') {
           return (
             <View key={index} style={styles.quote}>
-              <Text style={styles.quoteText}>{renderInline(block.text, onOpenFile)}</Text>
+              <MarkdownText selectable style={styles.quoteText}>
+                {renderInline(block.text, onOpenFile)}
+              </MarkdownText>
             </View>
           )
         }
@@ -222,8 +273,12 @@ function MobileMarkdownInner({ content, fallback = '', textScale = 1, onOpenFile
           }
           return (
             <View key={index} style={styles.codeBlock}>
-              {block.language ? <Text style={styles.codeLanguage}>{block.language}</Text> : null}
-              <Text style={styles.codeText}>{block.text}</Text>
+              {block.language ? (
+                <NativeText style={styles.codeLanguage}>{block.language}</NativeText>
+              ) : null}
+              <MarkdownText selectable style={styles.codeText}>
+                {block.text}
+              </MarkdownText>
             </View>
           )
         }
@@ -234,10 +289,10 @@ function MobileMarkdownInner({ content, fallback = '', textScale = 1, onOpenFile
               style={styles.imageFrame}
               onPress={() => openMarkdownHref(block.url, onOpenFile)}
             >
-              <Text style={styles.link}>{block.alt || 'Open image'}</Text>
-              <Text style={styles.imageCaption} numberOfLines={1}>
+              <NativeText style={styles.link}>{block.alt || 'Open image'}</NativeText>
+              <NativeText style={styles.imageCaption} numberOfLines={1}>
                 {block.url}
-              </Text>
+              </NativeText>
             </Pressable>
           )
         }
@@ -251,26 +306,30 @@ function MobileMarkdownInner({ content, fallback = '', textScale = 1, onOpenFile
               <View style={styles.table}>
                 <View style={styles.tableRow}>
                   {visibleHeaders.map((header, cellIndex) => (
-                    <Text key={cellIndex} style={[styles.tableCell, styles.tableHeader]}>
+                    <MarkdownText
+                      key={cellIndex}
+                      selectable
+                      style={[styles.tableCell, styles.tableHeader]}
+                    >
                       {renderInline(header, onOpenFile)}
-                    </Text>
+                    </MarkdownText>
                   ))}
                 </View>
                 {visibleRows.map((row, rowIndex) => (
                   <View key={rowIndex} style={styles.tableRow}>
                     {visibleHeaders.map((_, cellIndex) => (
-                      <Text key={cellIndex} style={styles.tableCell}>
+                      <MarkdownText key={cellIndex} selectable style={styles.tableCell}>
                         {renderInline(row[cellIndex] ?? '', onOpenFile)}
-                      </Text>
+                      </MarkdownText>
                     ))}
                   </View>
                 ))}
                 {hiddenRows > 0 || hiddenColumns > 0 ? (
-                  <Text style={styles.tableTruncated}>
+                  <NativeText style={styles.tableTruncated}>
                     {hiddenRows > 0 ? `${hiddenRows} more rows` : ''}
                     {hiddenRows > 0 && hiddenColumns > 0 ? ' · ' : ''}
                     {hiddenColumns > 0 ? `${hiddenColumns} more columns` : ''}
-                  </Text>
+                  </NativeText>
                 ) : null}
               </View>
             </ScrollView>
@@ -281,7 +340,7 @@ function MobileMarkdownInner({ content, fallback = '', textScale = 1, onOpenFile
             <View key={index} style={styles.list}>
               {block.items.map((item, itemIndex) => (
                 <View key={itemIndex} style={styles.listItem}>
-                  <Text style={styles.listMarker}>
+                  <NativeText style={styles.listMarker}>
                     {item.checked == null
                       ? block.ordered
                         ? `${itemIndex + 1}.`
@@ -289,10 +348,10 @@ function MobileMarkdownInner({ content, fallback = '', textScale = 1, onOpenFile
                       : item.checked
                         ? '[x]'
                         : '[ ]'}
-                  </Text>
-                  <Text style={[styles.listText, listScale]}>
+                  </NativeText>
+                  <MarkdownText selectable style={[styles.listText, listScale]}>
                     {renderInline(item.text, onOpenFile)}
-                  </Text>
+                  </MarkdownText>
                 </View>
               ))}
             </View>
@@ -302,17 +361,30 @@ function MobileMarkdownInner({ content, fallback = '', textScale = 1, onOpenFile
           return <View key={index} style={styles.rule} />
         }
         return (
-          <Text key={index} style={[styles.paragraph, proseScale]}>
+          <MarkdownText
+            key={index}
+            selectable={rangeSelectable}
+            style={[styles.paragraph, proseScale]}
+          >
             {block.text.split('\n').map((line, lineIndex) => (
               <Fragment key={lineIndex}>
                 {lineIndex > 0 ? '\n' : null}
                 {renderInline(line, onOpenFile)}
               </Fragment>
             ))}
-          </Text>
+          </MarkdownText>
         )
       })}
     </View>
+  )
+}
+
+function MobileMarkdownInner(props: Props): React.JSX.Element | null {
+  const TextComponent = props.rangeSelectable ? MobileSelectableText : NativeText
+  return (
+    <MarkdownTextContext.Provider value={TextComponent}>
+      <MobileMarkdownContent {...props} />
+    </MarkdownTextContext.Provider>
   )
 }
 

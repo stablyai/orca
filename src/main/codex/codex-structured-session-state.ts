@@ -1,12 +1,16 @@
 import type { AgentSessionJournalIdentity } from '../../shared/agent-session-journal-types'
+import { randomUUID } from 'node:crypto'
 import { cancelProcessAcquisition } from '../../shared/child-process/cancel-process-acquisition'
 import type {
   CodexAppServerConnection,
   openCodexAppServerConnection
 } from './codex-app-server-connection'
 import { CodexAcquisitionWindow } from './codex-structured-acquisition-window'
+import type { AgentSessionBackgroundTaskState } from '../../shared/agent-session-wire'
+import type { CodexBackgroundTaskTracker } from './codex-background-task-tracker'
 import type { CodexJournalTranslator } from './codex-structured-journal-translation'
 import type { CodexTurnProcessSnapshot } from './codex-structured-turn-processes'
+import type { StructuredAgentSessionLifecycleEvent } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 
 export type CodexStructuredLaunch = {
   command: string
@@ -19,7 +23,15 @@ export type CodexStructuredLaunch = {
 }
 
 export type CodexStructuredSessionEvent =
-  | { type: 'notification'; sessionId: string; threadId: string; method: string; params: unknown }
+  | {
+      type: 'notification'
+      sessionId: string
+      threadId: string
+      method: string
+      params: unknown
+      /** Host receipt time of a turn boundary; survives retry and deferral so a replay is not re-stamped. */
+      observedAt?: number
+    }
   | { type: 'server-request'; sessionId: string; threadId: string; method: string; params: unknown }
   | { type: 'provider-frame'; sessionId: string; threadId: string; kind: string; payload: unknown }
   | {
@@ -31,16 +43,25 @@ export type CodexStructuredSessionEvent =
       codexItemId: string
       promptKey: string
     }
-  | { type: 'ended'; sessionId: string; reason: string }
+  | StructuredAgentSessionLifecycleEvent
+  /** Translator-only compatibility for callers that do not participate in host recovery. */
+  | { type: 'ended'; sessionId: string; reason: string; observedAt?: number }
 
 export type CodexStructuredSessionAdapterDeps = {
   resolveLaunch: (input: {
     identity: AgentSessionJournalIdentity
   }) => Promise<CodexStructuredLaunch>
+  /** Host capability seam; production uses the native Windows process table. */
+  isWindowsProcessStartTimeAvailable?: () => boolean
   onEvent?: (event: CodexStructuredSessionEvent) => void
+  onBackgroundTasksChanged?: (
+    sessionId: string,
+    state: AgentSessionBackgroundTaskState | null
+  ) => void
   openConnection?: typeof openCodexAppServerConnection
   readProcessStartTime?: (pid: number) => Promise<number | null>
   mintLinkId?: () => string
+  mintAcquisitionGeneration?: () => string
   now?: () => number
   requestTimeoutMs?: number
   captureTurnProcesses?: (rootPid: number) => Promise<CodexTurnProcessSnapshot | null>
@@ -53,13 +74,48 @@ export type CodexStructuredSessionAdapterDeps = {
 export type CodexSession = {
   connection: CodexAppServerConnection
   ended: boolean
+  /** First observed child exit survives rejected settlement admission. */
+  exitObservedAt?: number
+  requestedClose: boolean
+  fence: number
+  acquisitionGeneration: string
   threadId: string
   historyPath: string | null
+  historyMode?: 'legacy' | 'paginated'
+  activeTurnIds?: Set<string>
+  dispatchPending?: boolean
   prompts: CodexAcquisitionWindow['prompts']
   options: Map<string, string>
   reportedOptions: { model?: string; effort?: string }
   turnIdWaiters: ((turnId: string) => void)[]
   translator: CodexJournalTranslator | null
+  /** Ephemeral roster behind the background-tasks strip; never durable state. */
+  backgroundTasks: CodexBackgroundTaskTracker
+  unbindReadingControl?: () => void
+  /** Terminates this exact child as an unexpected death and enters host recovery. */
+  forceCloseUnexpected?: (reason: Error) => Promise<boolean>
+}
+
+export function mintCodexAcquisitionGeneration(deps: CodexStructuredSessionAdapterDeps): string {
+  return deps.mintAcquisitionGeneration?.() ?? randomUUID()
+}
+
+export function codexSessionLifecycle(
+  fence: number,
+  acquisitionGeneration: string
+): Pick<CodexSession, 'ended' | 'requestedClose' | 'fence' | 'acquisitionGeneration'> {
+  return { ended: false, requestedClose: false, fence, acquisitionGeneration }
+}
+
+export function requireLiveCodexSession(
+  sessions: Map<string, CodexSession>,
+  sessionId: string
+): CodexSession {
+  const session = sessions.get(sessionId)
+  if (!session || session.ended) {
+    throw new Error(`no live codex app-server for session ${sessionId}`)
+  }
+  return session
 }
 
 export type CodexAcquisitionAttempt = {

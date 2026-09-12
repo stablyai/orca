@@ -5,15 +5,19 @@ import {
   boundJournalKeyComponent,
   MAX_JOURNAL_KEY_COMPONENT_CHARS
 } from '../../../shared/agent-session-journal-item-key'
-import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
+import type {
+  AgentJournalItemIdentity,
+  AgentJournalMessageItem
+} from '../../../shared/agent-session-journal-types'
 import { structuredAgentSessionPayloadFingerprint } from '../../../shared/structured-agent-session-mutation'
 import {
   applyJournalRow,
   createJournalReducerState,
-  referencedBlobDigests,
+  MAX_JOURNAL_APPLIED_SETTLEMENT_IDS,
   renderJournalState,
   type JournalReducerState
 } from './journal-reducer'
+import { buildJournalItemRow, buildJournalTombstoneRow } from './journal-row-builders'
 import type { JournalRow } from './journal-row-schema'
 
 const EPOCH = 'epoch-1'
@@ -207,10 +211,145 @@ describe('submission and dispatch state machine', () => {
     const items = renderJournalState(state).items
     expect(items).toHaveLength(1)
     expect(items[0]?.itemId).toBe(agentJournalSubmissionKey('cm_1'))
-    // The echo updates content in place; the bubble keeps its original slot.
+    // The echo advances the revision; the submitted bubble keeps its original slot.
     expect(items[0]?.sequence).toBe(1)
     expect(items[0]?.revision).toBe(1)
   })
+
+  it('durably accepts a pending submission from the provider echo row itself', () => {
+    const body = userText('hi')
+    const state = fold([
+      { ...submission, payloadFingerprint: sendFingerprint(body) },
+      {
+        kind: 'item',
+        itemId: 'claude:session-1:user-1',
+        revision: 1,
+        body,
+        ...base(2)
+      }
+    ])
+
+    expect(state.submissions.get('cm_1')).toMatchObject({
+      dispatchState: 'accepted',
+      providerItemId: 'claude:session-1:user-1',
+      resolvedAt: 1_002
+    })
+    expect(state.receipts.get('cm_1')).toMatchObject({
+      providerItemId: 'claude:session-1:user-1',
+      cursor: { epoch: EPOCH, sequence: 2 }
+    })
+  })
+
+  it('does not give a newer identical echo to an older proven-undelivered submission', () => {
+    const body = userText('same message')
+    const state = fold([
+      {
+        ...submission,
+        body,
+        payloadFingerprint: sendFingerprint(body)
+      },
+      {
+        kind: 'dispatch',
+        clientMessageId: 'cm_1',
+        state: 'unknown',
+        providerItemId: null,
+        reason: 'provider_write_failed: closed before enqueue',
+        ...base(2)
+      },
+      {
+        ...submission,
+        clientMessageId: 'cm_2',
+        body,
+        payloadFingerprint: sendFingerprint(body),
+        ...base(3)
+      },
+      {
+        kind: 'item',
+        itemId: 'claude:session-1:user-1',
+        revision: 1,
+        body,
+        ...base(4)
+      }
+    ])
+
+    expect(state.submissions.get('cm_1')?.dispatchState).toBe('unknown')
+    expect(state.submissions.get('cm_2')).toMatchObject({
+      dispatchState: 'accepted',
+      providerItemId: 'claude:session-1:user-1'
+    })
+    expect(state.receipts.has('cm_1')).toBe(false)
+    expect(state.receipts.get('cm_2')?.providerItemId).toBe('claude:session-1:user-1')
+  })
+
+  it('does not accept a submission from a stale provider item behind its tombstone', () => {
+    const body = userText('hi')
+    const providerItemId = 'claude:session-1:user-1'
+    const state = fold([
+      { ...submission, payloadFingerprint: sendFingerprint(body) },
+      { kind: 'tombstone', itemId: providerItemId, revision: 2, ...base(2) },
+      { kind: 'item', itemId: providerItemId, revision: 1, body, ...base(3) }
+    ])
+
+    expect(state.submissions.get('cm_1')?.dispatchState).toBe('pending')
+    expect(state.receipts.has('cm_1')).toBe(false)
+    expect(state.aliases.has(providerItemId)).toBe(false)
+  })
+
+  it('does not accept a submission from a stale lifecycle item behind its tombstone', () => {
+    const body = userText('hi')
+    const providerItemId = 'claude:session-1:user-1'
+    const state = fold([
+      { ...submission, payloadFingerprint: sendFingerprint(body) },
+      {
+        kind: 'lifecycle-batch',
+        settlementId: 'settlement-1',
+        mutations: [
+          { kind: 'tombstone', itemId: providerItemId, revision: 2 },
+          { kind: 'item', itemId: providerItemId, revision: 1, body }
+        ],
+        ...base(2)
+      }
+    ])
+
+    expect(state.submissions.get('cm_1')?.dispatchState).toBe('pending')
+    expect(state.receipts.has('cm_1')).toBe(false)
+    expect(state.aliases.has(providerItemId)).toBe(false)
+  })
+
+  it.each(['codex:thread-1:turn-1:0', 'claude:session-1:user-1'])(
+    'preserves submitted text and attachments when %s is restored',
+    (providerItemId) => {
+      const body: AgentJournalMessageItem = {
+        kind: 'message',
+        role: 'user',
+        blocks: [
+          { type: 'text', text: '/example-skill inspect this' },
+          { type: 'image-ref', path: '/tmp/original.png' }
+        ]
+      }
+      const state = fold([
+        { ...submission, body, payloadFingerprint: sendFingerprint(body) },
+        {
+          kind: 'dispatch',
+          clientMessageId: 'cm_1',
+          state: 'accepted',
+          providerItemId,
+          reason: null,
+          ...base(2)
+        },
+        {
+          kind: 'item',
+          itemId: providerItemId,
+          revision: 1,
+          body: userText('# Expanded skill instructions'),
+          ...base(3)
+        }
+      ])
+      expect(renderJournalState(state).items).toEqual([
+        expect.objectContaining({ itemId: agentJournalSubmissionKey('cm_1'), body, revision: 1 })
+      ])
+    }
+  )
 
   it('adopts a provider echo that arrives before dispatch settles', () => {
     const body = userText('early echo')
@@ -345,6 +484,36 @@ describe('submission and dispatch state machine', () => {
     expect(state.receipts.get('cm_1')).toBeTruthy()
   })
 
+  it('returns a proven retry to pending without moving its original submission', () => {
+    const state = fold([
+      submission,
+      {
+        kind: 'dispatch',
+        clientMessageId: 'cm_1',
+        state: 'unknown',
+        providerItemId: null,
+        reason: 'provider_write_failed: closed before enqueue',
+        ...base(2)
+      },
+      {
+        kind: 'dispatch',
+        clientMessageId: 'cm_1',
+        state: 'pending',
+        providerItemId: null,
+        reason: null,
+        ...base(3)
+      }
+    ])
+
+    expect(state.submissions.get('cm_1')).toMatchObject({
+      dispatchState: 'pending',
+      submittedAt: submission.ts,
+      reason: null,
+      resolvedAt: null
+    })
+    expect(renderJournalState(state).items[0]?.sequence).toBe(submission.seq)
+  })
+
   it('ignores a dispatch for a submission this epoch never saw', () => {
     const state = fold([
       {
@@ -361,55 +530,20 @@ describe('submission and dispatch state machine', () => {
   })
 })
 
-describe('blob retention', () => {
-  it('reports the digests live rows still reference', () => {
-    const state = fold([
-      {
-        kind: 'item',
-        itemId: 'tool',
-        revision: 1,
-        body: {
-          kind: 'tool-call',
-          name: 'bash',
-          input: {},
-          state: 'completed',
-          output: { head: 'x', byteLength: 999, digest: 'digest-a', truncated: true }
-        },
-        ...base(1)
-      },
-      {
-        kind: 'item',
-        itemId: 'inline',
-        revision: 1,
-        body: {
-          kind: 'tool-call',
-          name: 'bash',
-          input: {},
-          state: 'completed',
-          output: { head: 'y', byteLength: 1, digest: 'digest-b', truncated: false }
-        },
-        ...base(2)
-      }
-    ])
-    expect([...referencedBlobDigests(state)]).toEqual(['digest-a'])
-  })
-
-  it('stops referencing a digest once its item is tombstoned', () => {
-    const state = fold([
-      {
-        kind: 'item',
-        itemId: 'tool',
-        revision: 1,
-        body: {
-          kind: 'diff',
-          path: 'a.ts',
-          patch: { head: 'x', byteLength: 999, digest: 'digest-a', truncated: true }
-        },
-        ...base(1)
-      },
-      { kind: 'tombstone', itemId: 'tool', revision: 2, ...base(2) }
-    ])
-    expect(referencedBlobDigests(state).size).toBe(0)
+describe('lifecycle settlement deduplication', () => {
+  it('retains only the newest bounded settlement ids', () => {
+    const state = createJournalReducerState('session-1', EPOCH)
+    for (let index = 0; index <= MAX_JOURNAL_APPLIED_SETTLEMENT_IDS; index += 1) {
+      applyJournalRow(state, {
+        kind: 'lifecycle-batch',
+        settlementId: `settlement-${index}`,
+        mutations: [{ kind: 'tombstone', itemId: 'item', revision: index + 1 }],
+        ...base(index + 1)
+      })
+    }
+    expect(state.appliedSettlementIds.size).toBe(MAX_JOURNAL_APPLIED_SETTLEMENT_IDS)
+    expect(state.appliedSettlementIds.has('settlement-0')).toBe(false)
+    expect(state.appliedSettlementIds.has('settlement-1')).toBe(true)
   })
 })
 
@@ -442,5 +576,51 @@ describe('bounded item-key collisions', () => {
       oversizedKey,
       mimicKey
     ])
+  })
+})
+
+describe('re-adding a tombstoned row', () => {
+  it('builds the rebuilt row above the tombstone that removed it', () => {
+    const identity: AgentJournalItemIdentity = { provider: 'orca', clientMessageId: 'roster' }
+    const itemId = agentJournalItemKey(identity)
+    const state = createJournalReducerState('session-1', EPOCH)
+    applyJournalRow(
+      state,
+      buildJournalItemRow({ state, identity, body: text('first'), seq: 1, fence: 1, ts: 1_001 })
+    )
+    applyJournalRow(state, buildJournalTombstoneRow({ state, itemId, seq: 2, fence: 1, ts: 1_002 }))
+    expect(renderJournalState(state).items).toEqual([])
+
+    // Same identity, re-added later in the session: a revision built only from
+    // `items` would restart at 1 and lose to the tombstone forever.
+    applyJournalRow(
+      state,
+      buildJournalItemRow({ state, identity, body: text('second'), seq: 3, fence: 1, ts: 1_003 })
+    )
+    expect(renderJournalState(state).items.map((item) => item.body)).toEqual([text('second')])
+  })
+
+  // `upsertItem` clearing the tombstone on a re-add is a map-state invariant:
+  // `items` and `tombstones` stay disjoint, so a re-added row is never both
+  // present and removed. Revision ordering is now independent of it —
+  // `buildJournalTombstoneRow` takes `max(itemRevision, tombstoneRevision) + 1`
+  // — so what this pins is the map state itself, not the ranking.
+  it('removes the row again after it was re-added', () => {
+    const identity: AgentJournalItemIdentity = { provider: 'orca', clientMessageId: 'roster' }
+    const itemId = agentJournalItemKey(identity)
+    const state = createJournalReducerState('session-1', EPOCH)
+    applyJournalRow(
+      state,
+      buildJournalItemRow({ state, identity, body: text('first'), seq: 1, fence: 1, ts: 1_001 })
+    )
+    applyJournalRow(state, buildJournalTombstoneRow({ state, itemId, seq: 2, fence: 1, ts: 1_002 }))
+    applyJournalRow(
+      state,
+      buildJournalItemRow({ state, identity, body: text('second'), seq: 3, fence: 1, ts: 1_003 })
+    )
+    expect(state.tombstones.get(itemId)).toBeUndefined()
+
+    applyJournalRow(state, buildJournalTombstoneRow({ state, itemId, seq: 4, fence: 1, ts: 1_004 }))
+    expect(renderJournalState(state).items).toEqual([])
   })
 })

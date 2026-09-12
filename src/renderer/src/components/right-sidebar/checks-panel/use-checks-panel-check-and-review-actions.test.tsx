@@ -2,11 +2,116 @@
 
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import type { ChecksPanelCheckAndReviewActionsInput } from './check-and-review-action-dependencies'
 import { useChecksPanelCheckAndReviewActions } from './use-checks-panel-check-and-review-actions'
 
-type Input = Parameters<typeof useChecksPanelCheckAndReviewActions>[0]
+type Input = ChecksPanelCheckAndReviewActionsInput
 
 afterEach(cleanup)
+
+const mocks = vi.hoisted(() => ({ toastError: vi.fn() }))
+vi.mock('sonner', () => ({
+  toast: { error: mocks.toastError, message: vi.fn(), success: vi.fn() }
+}))
+
+function renderActions(overrides: Partial<ChecksPanelCheckAndReviewActionsInput> = {}) {
+  const updateWorktreeMeta = vi.fn().mockResolvedValue({ ok: true })
+  const openModal = vi.fn()
+  const model = {
+    activeReview: {
+      provider: 'github',
+      number: 42,
+      title: 'Detected PR',
+      state: 'open',
+      url: 'https://github.com/acme/orca/pull/42',
+      status: 'pending',
+      updatedAt: '2026-08-27T00:00:00Z',
+      mergeable: 'UNKNOWN'
+    },
+    activeWorktree: {
+      id: 'wt-1',
+      repoId: 'repo-1',
+      hostId: 'ssh:devbox',
+      displayName: 'feature',
+      linkedIssue: null,
+      linkedPR: null,
+      comment: ''
+    },
+    activeWorktreeId: 'wt-1',
+    linkedPR: null,
+    suppressedGitHubPR: null,
+    updateWorktreeMeta,
+    openModal,
+    ...overrides
+  } as unknown as ChecksPanelCheckAndReviewActionsInput
+
+  return {
+    ...renderHook(() => useChecksPanelCheckAndReviewActions(model)),
+    openModal,
+    updateWorktreeMeta
+  }
+}
+
+describe('useChecksPanelCheckAndReviewActions', () => {
+  it('unlinks an auto-detected PR with a durable suppression tombstone', async () => {
+    const { result, updateWorktreeMeta } = renderActions()
+
+    await act(() => result.current.handleUnlinkReview())
+
+    expect(updateWorktreeMeta).toHaveBeenCalledWith(
+      'wt-1',
+      { linkedPR: null, suppressedGitHubPR: 42 },
+      { executionHostId: 'ssh:devbox' }
+    )
+  })
+
+  it('tombstones the explicit link rather than stale displayed cache data', async () => {
+    const { result, updateWorktreeMeta } = renderActions({
+      activeReview: {
+        provider: 'github',
+        number: 43,
+        title: 'Stale branch PR'
+      } as never,
+      linkedPR: 42
+    })
+
+    await act(() => result.current.handleUnlinkReview())
+
+    expect(updateWorktreeMeta).toHaveBeenCalledWith(
+      'wt-1',
+      { linkedPR: null, suppressedGitHubPR: 42 },
+      { executionHostId: 'ssh:devbox' }
+    )
+  })
+
+  it('surfaces a remote-host capability rejection instead of silently restoring the PR', async () => {
+    const updateWorktreeMeta = vi.fn().mockResolvedValue({
+      ok: false,
+      error: 'Update the remote runtime to unlink GitHub pull requests'
+    })
+    const { result } = renderActions({ updateWorktreeMeta: updateWorktreeMeta as never })
+
+    await act(() => result.current.handleUnlinkReview())
+
+    expect(mocks.toastError).toHaveBeenCalledWith(
+      'Update the remote runtime to unlink GitHub pull requests'
+    )
+  })
+
+  it('can relink from durable suppression before PR data refetches', () => {
+    const { result, openModal } = renderActions({
+      activeReview: null,
+      suppressedGitHubPR: 42
+    })
+
+    act(() => result.current.handleLinkSuppressedPullRequest())
+
+    expect(openModal).toHaveBeenCalledWith(
+      'edit-meta',
+      expect.objectContaining({ worktreeId: 'wt-1', currentReview: 42, focus: 'pr' })
+    )
+  })
+})
 
 function makeInput(overrides: Partial<Input> = {}): Input {
   const worktree = {
@@ -18,6 +123,7 @@ function makeInput(overrides: Partial<Input> = {}): Input {
     displayName: 'MR workspace',
     linkedGitLabMR: 42,
     linkedPR: null,
+    suppressedGitHubPR: null,
     comment: ''
   }
   return {
@@ -49,6 +155,7 @@ function makeInput(overrides: Partial<Input> = {}): Input {
     linkedGiteaPR: null,
     linkedGitLabMR: 42,
     linkedPR: null,
+    suppressedGitHubPR: null,
     localExecutionScope: null,
     openModal: vi.fn(),
     panelContextKey: 'context',

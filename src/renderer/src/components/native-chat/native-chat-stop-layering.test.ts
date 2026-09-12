@@ -6,29 +6,30 @@ function source(path: string): string {
   return readFileSync(join(process.cwd(), path), 'utf8')
 }
 
-describe('native chat Stop layering', () => {
-  it('keeps a working chat pane above bottom-right product chrome', () => {
+describe('native chat layering', () => {
+  it('keeps working chat at the pane layer below app notifications and floating surfaces', () => {
     const css = source('src/renderer/src/assets/main.css')
-    const terminalPane = source('src/renderer/src/components/terminal-pane/TerminalPane.tsx')
-
-    expect(terminalPane).toContain('native-chat-pane-shell absolute inset-0 z-10')
+    for (const path of [
+      'src/renderer/src/components/terminal-pane/TerminalOverlaySlot.tsx',
+      'src/renderer/src/components/native-chat/StructuredAgentSessionPaneOverlayLayer.tsx'
+    ]) {
+      expect(source(path)).toContain('<RetainedPaneHost')
+    }
+    expect(css).not.toMatch(/\.native-chat-pane-shell:has\(\[data-native-chat-working/)
     expect(css).toMatch(/\[data-sonner-toaster\][^{]*\{[^}]*z-index:\s*40\s*!important;/s)
-    expect(css).toMatch(
-      /\.native-chat-pane-shell:has\(\[data-native-chat-working='true'\]\)[^{]*\{[^}]*z-index:\s*50;/s
-    )
   })
 
   it('publishes working state from both structured and bridge chat roots', () => {
     for (const path of [
       'src/renderer/src/components/native-chat/NativeChatStructuredSession.tsx',
-      'src/renderer/src/components/native-chat/NativeChatView.tsx'
+      'src/renderer/src/components/native-chat/NativeChatResolvedView.tsx'
     ]) {
       expect(source(path)).toContain('data-native-chat-working=')
     }
   })
 
   it('owns structured session panes at the retained worktree overlay layer', () => {
-    const terminal = source('src/renderer/src/components/Terminal.tsx')
+    const terminal = source('src/renderer/src/components/TerminalWorktreeSplitSurface.tsx')
     const tabGroup = source('src/renderer/src/components/tab-group/TabGroupPanel.tsx')
 
     expect(terminal).toContain('<StructuredAgentSessionPaneOverlayLayer')

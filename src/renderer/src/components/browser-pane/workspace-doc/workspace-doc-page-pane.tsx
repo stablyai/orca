@@ -48,12 +48,15 @@ export function WorkspaceDocPagePane({
     // grab in flight, exactly as a URL page's pane does.
     <div className="absolute inset-0 flex min-h-0 flex-col" hidden={!isActive}>
       <HtmlDocPreview
+        isActive={isActive}
         holdsGuestFocus={isActive && isReaderSurface}
         previewId={page.id}
         filePath={filePath}
         relativePath={relativePath}
         worktreeId={worktreeId}
         runtimeEnvironmentId={runtimeEnvironmentId}
+        convertedFrom={page.convertedFrom ?? null}
+        convertedTo={page.convertedTo ?? null}
       />
     </div>
   )
