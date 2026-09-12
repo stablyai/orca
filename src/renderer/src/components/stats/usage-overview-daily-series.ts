@@ -5,27 +5,51 @@ export function getClaudeDailyTotal(entry: ClaudeUsageDailyPoint): number {
   return entry.inputTokens + entry.outputTokens + entry.cacheReadTokens + entry.cacheWriteTokens
 }
 
-function getIntensity(totalTokens: number, maxTokens: number): 0 | 1 | 2 | 3 | 4 {
-  if (totalTokens <= 0 || maxTokens <= 0) {
-    return 0
+type UsageIntensity = 0 | 1 | 2 | 3 | 4
+
+/**
+ * Rank-based intensity: each non-zero level holds roughly a quarter of the
+ * active days among `totals`, so callers rank exactly the set of days they
+ * render. With fewer than four active days the lower levels go unused (one
+ * active day is level 4, three distinct days are 2/3/4).
+ *
+ * Why: daily volume spans orders of magnitude across providers, so a linear
+ * ramp against the single best day left most active days at the faintest
+ * level and indistinguishable from idle ones.
+ * @param totals - Token totals of every day, zero for idle days.
+ * @returns Intensity per index of `totals`; idle days stay 0, the best day is 4.
+ */
+export function rankUsageIntensities(totals: number[]): UsageIntensity[] {
+  const active = totals.filter((total) => total > 0).sort((left, right) => left - right)
+  // Why: a value -> cumulative-count map keeps each lookup O(1); ties share the
+  // higher rank (the last index written) so equal days never render differently.
+  const countAtOrBelow = new Map<number, number>()
+  for (let index = 0; index < active.length; index += 1) {
+    countAtOrBelow.set(active[index], index + 1)
   }
-  const ratio = totalTokens / maxTokens
-  if (ratio <= 0.25) {
-    return 1
-  }
-  if (ratio <= 0.5) {
-    return 2
-  }
-  if (ratio <= 0.75) {
-    return 3
-  }
-  return 4
+  return totals.map((total) => {
+    if (total <= 0) {
+      return 0
+    }
+    const atOrBelow = countAtOrBelow.get(total) ?? 0
+    return Math.max(1, Math.ceil((atOrBelow / active.length) * 4)) as UsageIntensity
+  })
 }
 
+/**
+ * Count distinct days in a list of `YYYY-MM-DD` keys.
+ * @param days - Day keys, possibly repeated across providers.
+ * @returns Number of distinct days.
+ */
 export function countActiveDays(days: string[]): number {
   return new Set(days).size
 }
 
+/**
+ * Merge every provider's daily series into one per-day total with a rank intensity.
+ * @param input - Per-provider scan state, summary, and daily series.
+ * @returns One point per day, sorted ascending, ranked across all days present.
+ */
 export function buildDailyOverview(input: UsageOverviewInput): UsageOverviewDailyPoint[] {
   const byDay = new Map<string, Omit<UsageOverviewDailyPoint, 'intensity'>>()
 
@@ -69,18 +93,9 @@ export function buildDailyOverview(input: UsageOverviewInput): UsageOverviewDail
     byDay.set(entry.day, current)
   }
 
-  let maxTokens = 0
-  // Why: usage history can be large enough to exceed V8's argument limit if
-  // every day is spread into Math.max.
-  for (const entry of byDay.values()) {
-    maxTokens = Math.max(maxTokens, entry.totalTokens)
-  }
-  return [...byDay.values()]
-    .sort((left, right) => left.day.localeCompare(right.day))
-    .map((entry) => ({
-      ...entry,
-      intensity: getIntensity(entry.totalTokens, maxTokens)
-    }))
+  const entries = [...byDay.values()].sort((left, right) => left.day.localeCompare(right.day))
+  const intensities = rankUsageIntensities(entries.map((entry) => entry.totalTokens))
+  return entries.map((entry, index) => ({ ...entry, intensity: intensities[index] ?? 0 }))
 }
 
 function formatLocalDay(date: Date): string {
@@ -90,6 +105,13 @@ function formatLocalDay(date: Date): string {
   return `${year}-${month}-${day}`
 }
 
+/**
+ * Pad a daily series to a fixed trailing window ending at `anchorDate`.
+ * @param daily - Ranked daily points, any order.
+ * @param dayCount - Number of trailing days to return.
+ * @param anchorDate - Last day of the window; defaults to today.
+ * @returns Exactly `dayCount` points, idle days filled with zero tokens and intensity 0.
+ */
 export function getRecentUsageDays(
   daily: UsageOverviewDailyPoint[],
   dayCount: number,

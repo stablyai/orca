@@ -14,7 +14,7 @@ import type {
   OpenCodeUsageScanState,
   OpenCodeUsageSummary
 } from '../../../../shared/opencode-usage-types'
-import { getRecentUsageDays } from './usage-overview-daily-series'
+import { getRecentUsageDays, rankUsageIntensities } from './usage-overview-daily-series'
 import { buildUsageOverview, formatUsageCost, formatUsageTokens } from './usage-overview-model'
 
 function enabledClaudeScanState(): ClaudeUsageScanState {
@@ -189,6 +189,20 @@ describe('usage overview model', () => {
       cacheTokens: 250,
       totalTokens: 1_600
     })
+  })
+
+  it('ranks active days into quartiles instead of scaling against the best day', () => {
+    // A 200x spread: linear scaling would leave every day but the last at level 1.
+    expect(rankUsageIntensities([0, 1, 2, 5, 10, 20, 50, 100, 200, 0])).toEqual([
+      0, 1, 1, 2, 2, 3, 3, 4, 4, 0
+    ])
+  })
+
+  it('gives tied days the same intensity and a lone active day the top level', () => {
+    expect(rankUsageIntensities([7, 7, 0, 7])).toEqual([4, 4, 0, 4])
+    expect(rankUsageIntensities([3])).toEqual([4])
+    expect(rankUsageIntensities([0, 0])).toEqual([0, 0])
+    expect(rankUsageIntensities([])).toEqual([])
   })
 
   it('pads recent usage days with zero-token cells', () => {
