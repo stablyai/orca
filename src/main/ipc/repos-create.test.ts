@@ -144,7 +144,13 @@ describe('repos:create', () => {
     prepareLocalWorktreeRootForRepoMock.mockReset().mockResolvedValue(undefined)
 
     // Default baseline: target does NOT exist yet, mkdir succeeds, git OK.
-    accessMock.mockReset().mockRejectedValue(new Error('ENOENT'))
+    // Why: mirror what fs actually throws — a bare Error('ENOENT') has no `code`, and the
+    // "is this already a repository" probe must not read an unrecognised error as "absent".
+    accessMock
+      .mockReset()
+      .mockRejectedValue(
+        Object.assign(new Error('ENOENT: no such file or directory'), { code: 'ENOENT' })
+      )
     readdirMock.mockReset().mockResolvedValue([])
     mkdirMock.mockReset().mockResolvedValue(undefined)
     rmMock.mockReset().mockResolvedValue(undefined)
@@ -405,10 +411,12 @@ describe('repos:create', () => {
     expect(result).toMatchObject({ error: expect.stringContaining('commit') })
   })
 
-  it('strips only .git/ when commit fails in a pre-existing empty folder', async () => {
+  it('deletes nothing when commit fails in a pre-existing empty folder', async () => {
     // User pre-created an empty folder; git init succeeded, commit failed.
-    // The folder itself must survive (user owns it) but the half-init'd
-    // .git/ should be removed so the folder looks untouched.
+    // The cosmetic .git/ cleanup this used to do was removed deliberately (STA-6079):
+    // `git init` is idempotent and never reports whether it created or reinitialized, so the
+    // rollback could not prove the .git was ours. A leftover .git is recoverable; a deleted
+    // one is not. Only an exclusive mkdir (createdDir) proves ownership, and it is false here.
     accessMock.mockResolvedValueOnce(undefined)
     readdirMock.mockResolvedValueOnce([])
     gitExecFileAsyncMock
@@ -418,16 +426,141 @@ describe('repos:create', () => {
 
     const result = await callCreate({ parentPath: '/tmp', name: 'pre-existing', kind: 'git' })
 
-    expect(rmMock).toHaveBeenCalledWith(tmpPath('pre-existing', '.git'), {
-      recursive: true,
-      force: true
-    })
-    expect(rmMock).not.toHaveBeenCalledWith(tmpPath('pre-existing'), {
-      recursive: true,
-      force: true
-    })
+    expect(rmMock).not.toHaveBeenCalled()
     expect(mockStore.addRepo).not.toHaveBeenCalled()
     expect(result).toMatchObject({ error: expect.stringContaining('commit') })
+  })
+
+  it('tells the user a leftover .git blocks the retry', async () => {
+    // Without this the folder is now non-empty, so the next attempt dead-ends on the
+    // "already exists ... is not empty" guard with nothing explaining why.
+    accessMock.mockResolvedValueOnce(undefined)
+    readdirMock.mockResolvedValueOnce([])
+    gitExecFileAsyncMock
+      .mockReset()
+      .mockResolvedValueOnce({ stdout: '', stderr: '' })
+      .mockRejectedValueOnce(new Error('commit broke'))
+
+    const result = await callCreate({ parentPath: '/tmp', name: 'pre-existing', kind: 'git' })
+
+    expect(result).toMatchObject({ error: expect.stringContaining('.git') })
+    expect(result).toMatchObject({ error: expect.stringContaining('before retrying') })
+  })
+
+  it('still removes the whole directory when it created that directory', async () => {
+    // Pins the one rollback that IS proven: mkdir(recursive:false) is exclusive, so a
+    // successful create is atomic proof we own the directory.
+    gitExecFileAsyncMock
+      .mockReset()
+      .mockResolvedValueOnce({ stdout: '', stderr: '' })
+      .mockRejectedValueOnce(new Error('commit broke'))
+
+    const result = await callCreate({ parentPath: '/tmp', name: 'ours', kind: 'git' })
+
+    expect(rmMock).toHaveBeenCalledWith(tmpPath('ours'), { recursive: true, force: true })
+    expect(result).toMatchObject({ error: expect.stringContaining('commit') })
+    // Why: we removed the directory, so there is no leftover to warn about.
+    expect(result).not.toMatchObject({ error: expect.stringContaining('before retrying') })
+  })
+
+  it('warns about a partial .git left by a failed git init', async () => {
+    // `git init` is not atomic: it can create .git and then fail (ENOSPC, permissions). A
+    // pre-existing folder is deliberately not rolled back, so the partial .git blocks the retry.
+    accessMock.mockResolvedValueOnce(undefined) // target exists
+    readdirMock.mockResolvedValueOnce([])
+    gitExecFileAsyncMock.mockReset().mockRejectedValueOnce(new Error('init broke'))
+
+    const result = await callCreate({ parentPath: '/tmp', name: 'partial-init', kind: 'git' })
+
+    expect(result).toMatchObject({ error: expect.stringContaining('initialize') })
+    expect(result).toMatchObject({ error: expect.stringContaining('before retrying') })
+    expect(rmMock).not.toHaveBeenCalled()
+  })
+
+  it('warns about the leftover when cleanup of a directory we created fails', async () => {
+    // `createdDir` proves ownership, not that the removal succeeded. If cleanup fails the
+    // directory and its .git remain, and the retry hits "not empty" with no explanation.
+    rmMock.mockRejectedValueOnce(new Error('EBUSY: resource busy or locked'))
+    gitExecFileAsyncMock
+      .mockReset()
+      .mockResolvedValueOnce({ stdout: '', stderr: '' })
+      .mockRejectedValueOnce(new Error('commit broke'))
+
+    const result = await callCreate({ parentPath: '/tmp', name: 'locked', kind: 'git' })
+
+    expect(result).toMatchObject({ error: expect.stringContaining('before retrying') })
+  })
+
+  it('does not read a non-ENOENT errno as absence even if its message quotes ENOENT', async () => {
+    // The shared isENOENT message fallback is unanchored, so a path containing the canonical
+    // phrase would otherwise read as "absent". A string errno settles it on its own.
+    accessMock.mockResolvedValueOnce(undefined) // target exists
+    accessMock.mockRejectedValueOnce(
+      Object.assign(
+        new Error(
+          "EACCES: permission denied, access '/tmp/ENOENT: no such file or directory/.git'"
+        ),
+        { code: 'EACCES' }
+      )
+    )
+    gitExecFileAsyncMock.mockReset()
+
+    const result = await callCreate({ parentPath: '/tmp', name: 'tricky', kind: 'git' })
+
+    expect(result).toMatchObject({ error: expect.stringContaining('Could not check') })
+    expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
+    expect(rmMock).not.toHaveBeenCalled()
+  })
+
+  it('says a file target is not a folder rather than "could not check"', async () => {
+    // Probing `<file>/.git` yields ENOTDIR. That is a definite answer about the target — it is a
+    // file — so it must not be reported as an indeterminate probe.
+    accessMock.mockResolvedValueOnce(undefined) // target exists
+    accessMock.mockRejectedValueOnce(
+      Object.assign(new Error("ENOTDIR: not a directory, access '/tmp/afile/.git'"), {
+        code: 'ENOTDIR'
+      })
+    )
+    gitExecFileAsyncMock.mockReset()
+
+    const result = await callCreate({ parentPath: '/tmp', name: 'afile', kind: 'git' })
+
+    expect(result).toMatchObject({ error: expect.stringContaining('is not a folder') })
+    expect(result).not.toMatchObject({ error: expect.stringContaining('Could not check') })
+    expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
+  })
+
+  it('refuses a target that is already a git repository, before running git', async () => {
+    // Positive evidence: we saw a .git. Refusing here is what stops `git init` from silently
+    // reinitializing someone's repository.
+    accessMock.mockResolvedValueOnce(undefined) // target exists
+    accessMock.mockResolvedValueOnce(undefined) // .git exists
+    gitExecFileAsyncMock.mockReset()
+
+    const result = await callCreate({ parentPath: '/tmp', name: 'existing-repo', kind: 'git' })
+
+    expect(result).toMatchObject({
+      error: expect.stringContaining('already a git repository')
+    })
+    expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
+    expect(rmMock).not.toHaveBeenCalled()
+    expect(mockStore.addRepo).not.toHaveBeenCalled()
+  })
+
+  it('refuses, and touches nothing, when the repository check itself fails', async () => {
+    // A probe that did not complete is not evidence of absence. Fail closed.
+    accessMock.mockResolvedValueOnce(undefined) // target exists
+    accessMock.mockRejectedValueOnce(
+      Object.assign(new Error('EACCES: permission denied'), { code: 'EACCES' })
+    )
+    gitExecFileAsyncMock.mockReset()
+
+    const result = await callCreate({ parentPath: '/tmp', name: 'unreadable', kind: 'git' })
+
+    expect(result).toMatchObject({ error: expect.stringContaining('Could not check') })
+    expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
+    expect(rmMock).not.toHaveBeenCalled()
+    expect(mockStore.addRepo).not.toHaveBeenCalled()
   })
 
   // ── friendly messaging ────────────────────────────────────────────

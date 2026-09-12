@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { readFile } from 'node:fs/promises'
 import {
   DEFAULT_REPO_BADGE_COLOR,
   EventEmitter,
@@ -194,6 +195,48 @@ describe('OrcaRuntimeService', () => {
 
       expect(result).toHaveProperty('repo.badgeColor', DEFAULT_REPO_BADGE_COLOR)
       expect(added).toEqual([expect.objectContaining({ badgeColor: DEFAULT_REPO_BADGE_COLOR })])
+    } finally {
+      await rm(parentDir, { recursive: true, force: true })
+    }
+  })
+
+  // Why real bytes: a pre-existing .git must remain untouched after a rejected create.
+  it('refuses a runtime create into an existing repository and leaves its .git intact', async () => {
+    const runtime = new OrcaRuntimeService(store as never)
+    const parentDir = await mkdtemp(join(tmpdir(), 'orca-runtime-existing-repo-'))
+    try {
+      const target = join(parentDir, 'existing')
+      await mkdir(join(target, '.git'), { recursive: true })
+      await writeFile(join(target, '.git', 'HEAD'), 'ref: refs/heads/main\n')
+
+      const result = await runtime.createRepo(parentDir, 'existing', 'git')
+
+      expect(result).toMatchObject({
+        error: expect.stringContaining('already a git repository')
+      })
+      await expect(readFile(join(target, '.git', 'HEAD'), 'utf8')).resolves.toBe(
+        'ref: refs/heads/main\n'
+      )
+    } finally {
+      await rm(parentDir, { recursive: true, force: true })
+    }
+  })
+
+  it('refuses a runtime create when the target holds a .git pointer file', async () => {
+    // Linked worktrees and submodules point with a `.git` FILE, not a directory.
+    const runtime = new OrcaRuntimeService(store as never)
+    const parentDir = await mkdtemp(join(tmpdir(), 'orca-runtime-gitfile-'))
+    try {
+      const target = join(parentDir, 'linked')
+      await mkdir(target, { recursive: true })
+      await writeFile(join(target, '.git'), 'gitdir: /somewhere/.git/worktrees/linked\n')
+
+      const result = await runtime.createRepo(parentDir, 'linked', 'git')
+
+      expect(result).toMatchObject({
+        error: expect.stringContaining('already a git repository')
+      })
+      await expect(readFile(join(target, '.git'), 'utf8')).resolves.toContain('gitdir:')
     } finally {
       await rm(parentDir, { recursive: true, force: true })
     }
