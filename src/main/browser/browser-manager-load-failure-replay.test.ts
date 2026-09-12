@@ -66,6 +66,159 @@ describe('browserManager', () => {
     vi.useRealTimers()
   })
 
+  it('publishes successful offscreen navigation to the owning worktree', () => {
+    const stateChanged = vi.fn()
+    const guest = {
+      id: 606,
+      isDestroyed: vi.fn(() => false),
+      getType: vi.fn(() => 'window'),
+      setBackgroundThrottling: vi.fn(),
+      setWindowOpenHandler: vi.fn(),
+      on: vi.fn(),
+      off: vi.fn(),
+      getURL: vi.fn(() => 'https://remote.test/link')
+    }
+    webContentsFromIdMock.mockReturnValue(guest)
+    browserManager.setBrowserGuestStateChangedListener(stateChanged)
+    browserManager.registerOffscreenGuest({
+      browserPageId: 'background-page',
+      worktreeId: 'remote-worktree',
+      webContentsId: guest.id
+    })
+    stateChanged.mockClear()
+    const committed = guest.on.mock.calls.find(([event]) => event === 'did-navigate')?.[1]
+    expect(committed).toBeTypeOf('function')
+    committed!(null, guest.getURL())
+    expect(stateChanged).toHaveBeenCalledWith('remote-worktree')
+  })
+
+  it('publishes a same-document offscreen navigation, and only for the main frame', () => {
+    const stateChanged = vi.fn()
+    const guest = {
+      id: 607,
+      isDestroyed: vi.fn(() => false),
+      getType: vi.fn(() => 'window'),
+      setBackgroundThrottling: vi.fn(),
+      setWindowOpenHandler: vi.fn(),
+      on: vi.fn(),
+      off: vi.fn(),
+      getURL: vi.fn(() => 'https://remote.test/app#route')
+    }
+    webContentsFromIdMock.mockReturnValue(guest)
+    browserManager.setBrowserGuestStateChangedListener(stateChanged)
+    browserManager.registerOffscreenGuest({
+      browserPageId: 'spa-page',
+      worktreeId: 'remote-worktree',
+      webContentsId: guest.id
+    })
+    stateChanged.mockClear()
+    // Why this event and not 'did-navigate': Electron never emits a full commit for a
+    // same-document navigation, so pushState/replaceState/hash routes would otherwise leave the
+    // published snapshot on the pre-navigation url while a pull reads the new one.
+    const inPage = guest.on.mock.calls.find(([event]) => event === 'did-navigate-in-page')?.[1]
+    expect(inPage).toBeTypeOf('function')
+    inPage!(null, guest.getURL(), false)
+    expect(stateChanged).not.toHaveBeenCalled()
+    inPage!(null, guest.getURL(), true)
+    expect(stateChanged).toHaveBeenCalledWith('remote-worktree')
+  })
+
+  it('settles a stale failure on a standalone same-document commit, but not across a full navigation', () => {
+    const mk = (id: number) => ({
+      id,
+      isDestroyed: vi.fn(() => false),
+      getType: vi.fn(() => 'window'),
+      setBackgroundThrottling: vi.fn(),
+      setWindowOpenHandler: vi.fn(),
+      on: vi.fn(),
+      off: vi.fn(),
+      getURL: vi.fn(() => 'https://spa.test/app'),
+      getUserAgent: vi.fn(() => 'Mozilla/5.0 Chrome/140.0.0.0'),
+      setUserAgent: vi.fn()
+    })
+    const handlers = (guest: ReturnType<typeof mk>) => ({
+      fail: guest.on.mock.calls.find(([e]) => e === 'did-fail-load')?.[1] as (
+        ...a: unknown[]
+      ) => void,
+      start: guest.on.mock.calls.find(([e]) => e === 'did-start-navigation')?.[1] as (
+        ...a: unknown[]
+      ) => void,
+      inPage: guest.on.mock.calls.find(([e]) => e === 'did-navigate-in-page')?.[1] as (
+        ...a: unknown[]
+      ) => void
+    })
+
+    // Standalone: the surviving document routes in place, so its own stale failure must go —
+    // tabList publishes loadError.validatedUrl ahead of getURL() and would republish the failure.
+    const alone = mk(701)
+    webContentsFromIdMock.mockReturnValue(alone)
+    browserManager.registerOffscreenGuest({
+      browserPageId: 'spa-alone',
+      worktreeId: 'remote-worktree',
+      webContentsId: alone.id
+    })
+    const a = handlers(alone)
+    a.fail(null, -105, 'Name not resolved', 'https://missing.test/', true)
+    expect(browserManager.getBrowserPageLoadError('spa-alone')).not.toBeNull()
+    a.inPage(null, 'https://spa.test/app#route', true)
+    expect(browserManager.getBrowserPageLoadError('spa-alone')).toBeNull()
+
+    // Overlapping: a full navigation is in flight and owns the transaction. An in-page commit from
+    // the still-live old document must not settle it, or the wrong navigation gets resolved.
+    const overlap = mk(702)
+    webContentsFromIdMock.mockReturnValue(overlap)
+    browserManager.registerOffscreenGuest({
+      browserPageId: 'spa-overlap',
+      worktreeId: 'remote-worktree',
+      webContentsId: overlap.id
+    })
+    const o = handlers(overlap)
+    o.fail(null, -105, 'Name not resolved', 'https://missing.test/', true)
+    // A full navigation start stashes the visible error so an abort can restore it.
+    o.start(null, 'https://elsewhere.test/', false, true)
+    expect(browserManager.getBrowserPageLoadError('spa-overlap')).toBeNull()
+    o.inPage(null, 'https://spa.test/app#route', true)
+    // The stash must survive: the in-page commit belongs to the outgoing document, not to the
+    // full navigation that owns it. Aborting the full navigation then restores the real error.
+    o.fail(null, -3, 'Aborted', 'https://elsewhere.test/', true)
+    expect(browserManager.getBrowserPageLoadError('spa-overlap')).toEqual({
+      code: -105,
+      description: 'Name not resolved',
+      validatedUrl: 'https://missing.test/'
+    })
+  })
+
+  it('detaches the same-document navigation listener with the rest of the policy', () => {
+    const guest = {
+      id: 608,
+      isDestroyed: vi.fn(() => false),
+      getType: vi.fn(() => 'window'),
+      setBackgroundThrottling: vi.fn(),
+      setWindowOpenHandler: vi.fn(),
+      on: vi.fn(),
+      off: vi.fn(),
+      getURL: vi.fn(() => 'https://remote.test/app')
+    }
+    webContentsFromIdMock.mockReturnValue(guest)
+    browserManager.registerOffscreenGuest({
+      browserPageId: 'detach-page',
+      worktreeId: 'remote-worktree',
+      webContentsId: guest.id
+    })
+    const destroyed = guest.on.mock.calls.find(([event]) => event === 'destroyed')?.[1]
+    expect(destroyed).toBeTypeOf('function')
+    destroyed!()
+    // Why assert the pairing: a listener added without a matching off() outlives its guest.
+    const attached = guest.on.mock.calls.map(([event]) => event).filter((e) => e !== 'destroyed')
+    const detached = new Set(guest.off.mock.calls.map(([event]) => event))
+    // Why assert membership too: iterating an empty or in-page-less list would pass vacuously and
+    // stop protecting the very listener this commit adds.
+    expect(attached).toContain('did-navigate-in-page')
+    for (const event of attached) {
+      expect(detached.has(event), `${event} was attached but never detached`).toBe(true)
+    }
+  })
+
   it('tracks offscreen load failures for the owning worktree snapshot', () => {
     const stateChanged = vi.fn()
     const offscreenGuest = {
