@@ -7,7 +7,7 @@ import { mergeCapturedLeafState } from './merge-captured-leaf-state'
 import { resolveTerminalLayoutActiveLeafId } from './terminal-layout-leaf-ids'
 import { TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT } from '../../../../shared/terminal-scrollback-limits'
 import { serializeWithAbsoluteCursor } from '../../../../shared/terminal-serialize-absolute-cursor'
-import { getUtf8ByteLength, measureUtf8ByteLength } from '../../../../shared/utf8-byte-limits'
+import { getUtf8ByteLength, isUtf8ByteLengthWithinLimit } from '../../../../shared/utf8-byte-limits'
 
 const MAX_BUFFER_BYTES = TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT
 
@@ -43,7 +43,7 @@ function omitClearedLeafState(
 }
 
 function fitsSessionScrollbackByteLimit(serialized: string): boolean {
-  return !measureUtf8ByteLength(serialized, { stopAfterBytes: MAX_BUFFER_BYTES }).exceededLimit
+  return isUtf8ByteLengthWithinLimit(serialized, MAX_BUFFER_BYTES)
 }
 
 // Why bounded: a plain row bisection costs ~13 full serializes per over-limit pane (~250ms at the
