@@ -44,9 +44,9 @@ export type ClaudeLeadTurnState = {
   waitingAgentId?: string
   /** Tool call that owns the wait; late completions from parallel sibling tools must not dismiss its card. */
   waitingToolUseId?: string
-  /** End time of the lead turn closed while background inventory kept the pane `working`. Repeated on the later all-clear `done`. */
+  /** End time of a lead turn closed while background inventory kept the pane `working`; retained across lifecycle reconciliation for stable completion identity. */
   turnCompletedAt?: number
-  /** Lead state a child-induced wait displaced, restored when the wait clears; can't invent 'working' since the done-gate only downgrades done→working, never back. */
+  /** Lead state a child-induced wait displaced, restored when the wait clears so the later child lifecycle can decide whether the parent resumes. */
   stateBeforeWait?: Pick<ClaudeLeadTurnState, 'state' | 'interrupted' | 'turnCompletedAt'>
 }
 

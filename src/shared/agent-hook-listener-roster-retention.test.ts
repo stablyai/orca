@@ -64,7 +64,7 @@ describe('Claude hook roster retention', () => {
       hook_event_name: 'TeammateIdle',
       teammate_name: 'reviewer'
     })
-    expect(idled?.payload.state).toBe('done')
+    expect(idled?.payload.state).toBe('working')
     expect(idled?.payload.subagents).toEqual([
       expect.objectContaining({ id: 'areviewer-6d3cb5b52120b7bf', state: 'idle' })
     ])
