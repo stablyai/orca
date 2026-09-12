@@ -98,6 +98,13 @@ export function usePierreFileDiff(input: PierreDiffInput | null, editable = fals
       () => {
         if (!controller.signal.aborted) {
           setPrimeReady(true)
+          // Why: retry re-primes immediately but same-file parse is coalesced 120ms,
+          // so leaving this set keeps the banner up after recovery already succeeded.
+          setSnapshot((previous) =>
+            previous && previous.diff === fileDiff && previous.error
+              ? { ...previous, error: null }
+              : previous
+          )
         }
       },
       (error: unknown) => {

@@ -15,10 +15,13 @@ export function PierreDiffLoading({
   return (
     <div
       className={cn(
-        'flex min-h-16 items-center gap-2 px-3 text-xs text-muted-foreground',
-        overlay && 'absolute inset-x-0 top-0 z-10 border-b border-border bg-background'
+        'flex items-center gap-2 px-3 text-xs text-muted-foreground',
+        overlay
+          ? 'absolute inset-x-0 top-0 z-10 border-b border-border bg-background py-2'
+          : 'min-h-16'
       )}
-      role="status"
+      // Why: status is for the loading line; an error with Retry matches the other editor banners.
+      role={error ? 'alert' : 'status'}
     >
       <span>
         {error ?? translate('auto.components.editor.DiffSectionBody.f5cf81cec2', 'Loading diff...')}
