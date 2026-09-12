@@ -2,6 +2,7 @@ import React, { useMemo } from 'react'
 import type { Components } from 'react-markdown'
 import type { MarkdownDocument } from '../../../../shared/filesystem-entry-types'
 import CodeBlockCopyButton from './CodeBlockCopyButton'
+import { ExpandableMermaidDiagram } from './MermaidDiagramLightbox'
 import MermaidBlock from './MermaidBlock'
 import {
   getMarkdownDocLinkAnchor,
@@ -156,7 +157,11 @@ export function useMarkdownPreviewComponents({
       code: ({ className, children, ...props }) => {
         if (/language-mermaid/.test(className || '')) {
           return (
-            <MermaidBlock content={String(children).trimEnd()} isDark={isDark} htmlLabels={false} />
+            <ExpandableMermaidDiagram
+              content={String(children).trimEnd()}
+              isDark={isDark}
+              htmlLabels={false}
+            />
           )
         }
         return (
@@ -167,7 +172,10 @@ export function useMarkdownPreviewComponents({
       },
       pre: ({ node, children, ...props }) => {
         const child = React.Children.toArray(children)[0]
-        if (React.isValidElement(child) && child.type === MermaidBlock) {
+        if (
+          React.isValidElement(child) &&
+          (child.type === ExpandableMermaidDiagram || child.type === MermaidBlock)
+        ) {
           return <>{children}</>
         }
         return wrapAnnotatedBlock(

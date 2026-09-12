@@ -221,6 +221,7 @@ describe('CommentMarkdown', () => {
     expect(markup).toContain('mermaid-block')
     expect(markup).toContain('overflow-x-auto')
     expect(markup).toContain('[&amp;_.mermaid-block_pre]:max-h-80')
+    expect(markup).toContain('group/mermaid-diagram')
     expect(markup).not.toContain('<pre')
   })
 

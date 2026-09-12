@@ -14800,6 +14800,16 @@
         "MermaidBlock": {
           "dcc132e691": "Diagram error:"
         },
+        "MermaidDiagramLightbox": {
+          "zoomOut": "Zoom out",
+          "resetZoom": "Reset zoom",
+          "zoomIn": "Zoom in",
+          "title": "Diagram",
+          "close": "Close",
+          "preview": "Full-screen diagram preview. Pinch or hold Ctrl and scroll to zoom. Scroll to pan.",
+          "escToClose": "Press Esc to close",
+          "expand": "Expand diagram"
+        },
         "MonacoEditor": {
           "68cb83f4a7": "Add note on selected text",
           "fd68ae03b3": "Search in Files",
