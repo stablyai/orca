@@ -140,15 +140,7 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
     const claudeFetchGated =
       !options?.force && this.shouldSkipAutomatedClaudeFetch(previousState.claude)
 
-    const [
-      claudeResult,
-      codexResult,
-      geminiResult,
-      opencodeGoResult,
-      kimiResult,
-      miniMaxResult,
-      antigravityResult
-    ] = await Promise.allSettled([
+    const results = await Promise.allSettled([
       claudeFetchGated
         ? Promise.resolve(previousState.claude as ProviderRateLimits)
         : fetchClaudeRateLimits({
@@ -204,15 +196,7 @@ export abstract class RateLimitServiceFullCyclePreparation extends RateLimitServ
       miniMaxConfigChanged,
       miniMaxGeneration,
       claudeFetchGated,
-      results: [
-        claudeResult,
-        codexResult,
-        geminiResult,
-        opencodeGoResult,
-        kimiResult,
-        miniMaxResult,
-        antigravityResult
-      ],
+      results,
       grokResultPromise
     }
   }
