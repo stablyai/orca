@@ -142,7 +142,7 @@ describe('createTerminalImeLinuxCandidateState', () => {
     ).toBe(false)
   })
 
-  it('resets missed releases on blur and removes the listener on dispose', () => {
+  it('keeps a letter held across a blur matched so its release does not arm the guard, and removes the listener on dispose', () => {
     let time = 100
     const terminalElement = new EventTarget()
     const removeEventListener = vi.spyOn(terminalElement, 'removeEventListener')
@@ -152,12 +152,14 @@ describe('createTerminalImeLinuxCandidateState', () => {
 
     terminalElement.dispatchEvent(new Event('blur'))
     time += 10
-    const orphanKeyup = event({ type: 'keyup', key: 'a', code: 'KeyA' })
-    state.observeKeyboardEvent(orphanKeyup, state.classifyKeyboardEvent(orphanKeyup))
+    const heldReleaseKeyup = event({ type: 'keyup', key: 'a', code: 'KeyA' })
+    state.observeKeyboardEvent(heldReleaseKeyup, state.classifyKeyboardEvent(heldReleaseKeyup))
     time += 10
+    // Why: a focus change must not wipe a still-held key's keydown; its release
+    // matches, so the next bare digit is not mistaken for a candidate selector.
     expect(
       state.classifyKeyboardEvent(event({ key: '1', code: 'Digit1' })).candidateDigitGuardActive
-    ).toBe(true)
+    ).toBe(false)
 
     state.dispose()
     expect(removeEventListener).toHaveBeenCalledWith('blur', state.resetCandidateGuard, true)
@@ -197,7 +199,7 @@ describe('createTerminalImeLinuxCandidateState', () => {
     expect(removeWindowListener).toHaveBeenCalledWith('keyup', expect.any(Function))
   })
 
-  it('clears renderer-wide pressed letters when the window blurs', () => {
+  it('keeps renderer-wide pressed letters across a window blur so a held-key release does not arm the guard', () => {
     let time = 100
     const rendererWindow = new EventTarget()
     const state = installTerminalImeLinuxCandidateState(
@@ -209,12 +211,14 @@ describe('createTerminalImeLinuxCandidateState', () => {
     state.observeKeyboardEvent(letterKeydown, state.classifyKeyboardEvent(letterKeydown))
 
     rendererWindow.dispatchEvent(new Event('blur'))
-    const orphanKeyup = event({ type: 'keyup', key: 'a', code: 'KeyA' })
-    state.observeKeyboardEvent(orphanKeyup, state.classifyKeyboardEvent(orphanKeyup))
+    const heldReleaseKeyup = event({ type: 'keyup', key: 'a', code: 'KeyA' })
+    state.observeKeyboardEvent(heldReleaseKeyup, state.classifyKeyboardEvent(heldReleaseKeyup))
     time += 10
+    // Why: a window focus change must not drop the user's next digit; the still
+    // -held letter's release matches its keydown instead of arming the guard.
     expect(
       state.classifyKeyboardEvent(event({ key: '1', code: 'Digit1' })).candidateDigitGuardActive
-    ).toBe(true)
+    ).toBe(false)
     state.dispose()
   })
 
