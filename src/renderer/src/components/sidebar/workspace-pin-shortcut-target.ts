@@ -43,6 +43,13 @@ export function resolveWorkspacePinShortcutTarget(
       ? candidate
       : null
   }
+  return resolveFocusedWorkspacePinTarget(state)
+}
+
+/** The focused workspace alone — for surfaces with no pointer to read, such as the Cmd+J palette. */
+export function resolveFocusedWorkspacePinTarget(
+  state: WorkspacePinShortcutState
+): Worktree | DetectedWorktree | null {
   const activeWorkspaceId = getActiveSidebarWorkspaceId(
     state.activeWorkspaceKey,
     state.activeWorktreeId
