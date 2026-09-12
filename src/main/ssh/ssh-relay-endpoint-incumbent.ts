@@ -65,6 +65,7 @@ export type RelayEndpointIncumbent = {
 const PROBE_BEGIN = 'ORCA-INCUMBENT-BEGIN'
 const PROBE_END = 'ORCA-INCUMBENT-END'
 const CONNECT_PROBE_TIMEOUT_MS = 1000
+const LSOF_PROBE_TIMEOUT_MS = 5_000
 
 // Why ES5 syntax: nodePath may be a host-resolved system node, not the bundled one.
 const CONNECT_PROBE_JS = [
@@ -76,6 +77,15 @@ const CONNECT_PROBE_JS = [
   's.on("error",function(e){',
   'say(e.code==="ECONNREFUSED"?"refused":e.code==="ENOENT"?"absent":"unknown")});',
   `setTimeout(function(){say("unknown")},${CONNECT_PROBE_TIMEOUT_MS})`
+].join('')
+
+// Why Node: macOS does not ship the POSIX `timeout` utility, but every relay host has Node.
+const LSOF_PROBE_JS = [
+  'var r=require("child_process").spawnSync("lsof",',
+  '["-t","-a","-U",process.argv[1]],',
+  `{encoding:"utf8",timeout:${LSOF_PROBE_TIMEOUT_MS},killSignal:"SIGKILL"});`,
+  'var unavailable=!!r.error||r.signal!==null||(r.status!==0&&r.status!==1);',
+  'process.stdout.write(unavailable?"unavailable\\n":"lsof\\n"+(r.stdout||""))'
 ].join('')
 
 /**
@@ -99,17 +109,25 @@ export function relayEndpointIncumbentProbeCommand(nodePath: string, sockPath: s
     'fi',
     'printf \'LISTEN=%s\\n\' "$listen"',
     'if command -v lsof >/dev/null 2>&1; then',
-    "  printf 'HOLDERS_SOURCE=lsof\\n'",
-    // Why -a: lsof ORs its selectors, so without it every unix-socket holder on the box
-    // would be reported as holding this path (#8762).
-    '  for pid in $(lsof -t -a -U "$sock" 2>/dev/null); do',
-    '    args=$(ps -o args= -p "$pid" 2>/dev/null | tr "\\n" " ")',
-    '    match=no',
-    '    case "$args" in *relay.js*"$sock"*) match=yes ;; esac',
-    ...relayDaemonChildCensusShell().map((line) => `    ${line}`),
-    '    printf \'HOLDER=%s %s %s %s\\n\' "$pid" "$match" ' +
+    // Why -a: lsof ORs selectors without it and reports unrelated unix-socket holders (#8762).
+    `  lsof_result=$("$node" -e ${shellEscape(LSOF_PROBE_JS)} "$sock" 2>/dev/null) || lsof_result=unavailable`,
+    '  case "$lsof_result" in',
+    '    lsof*)',
+    "      printf 'HOLDERS_SOURCE=lsof\\n'",
+    "      pids=$(printf '%s\\n' \"$lsof_result\" | sed '1d')",
+    '      for pid in $pids; do',
+    '        args=$(ps -o args= -p "$pid" 2>/dev/null | tr "\\n" " ")',
+    '        match=no',
+    '        case "$args" in *relay.js*"$sock"*) match=yes ;; esac',
+    ...relayDaemonChildCensusShell().map((line) => `        ${line}`),
+    '        printf \'HOLDER=%s %s %s %s\\n\' "$pid" "$match" ' +
       `"$${RELAY_CHILD_COUNT_VAR}" "$${RELAY_UNRECOGNIZED_CHILD_COUNT_VAR}"`,
-    '  done',
+    '      done',
+    '      ;;',
+    '    *)',
+    "      printf 'HOLDERS_SOURCE=unavailable\\n'",
+    '      ;;',
+    '  esac',
     'else',
     "  printf 'HOLDERS_SOURCE=unavailable\\n'",
     'fi',
