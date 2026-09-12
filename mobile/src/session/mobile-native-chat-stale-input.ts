@@ -55,6 +55,8 @@ export async function healMobileNativeChatStaleInput(args: {
       terminal: args.terminal,
       deviceToken: args.deviceToken,
       imagePaths: [],
+      // No attachment writes to shape — the heal is the leading clear alone.
+      agent: null,
       followedByText: false,
       ...(args.deadline === undefined ? {} : { deadline: args.deadline })
     })

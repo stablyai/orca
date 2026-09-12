@@ -38,6 +38,8 @@ type Args = {
   ) => Promise<MobileNativeChatSendOutcome>
   /** Structured agent sessions do not have a terminal paste path. */
   readonly structuredNativeChat: boolean
+  /** Agent on the chat tab, read at send time — picks the attachment form. */
+  readonly nativeChatAgentRef: CurrentRef<string | null>
   /** Launch-context text parked on the agent's TUI input line, or null — sizes
    *  the image paste's leading clear so a multi-line draft cannot ride along. */
   readonly readSeededLaunchDraft: () => string | null
@@ -65,6 +67,7 @@ export function useMobileSessionImageAttachments({
   beforeTerminalSend,
   nativeChatBaseSend,
   structuredNativeChat,
+  nativeChatAgentRef,
   readSeededLaunchDraft,
   showToast,
   onNativeChatSendError,
@@ -96,6 +99,7 @@ export function useMobileSessionImageAttachments({
     scopeKey: nativeChatScopeKey,
     enabled: structuredNativeChat ? connState === 'connected' : nativeChatInputLeaseReady,
     structuredNativeChat,
+    agentRef: nativeChatAgentRef,
     showToast,
     onSendError: onNativeChatSendError,
     baseSend: nativeChatBaseSend,
