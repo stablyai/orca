@@ -84,7 +84,7 @@ async function acquired(
   processControl: Partial<
     Pick<
       CodexStructuredSessionAdapterDeps,
-      'captureTurnProcesses' | 'terminateTurnProcesses' | 'now'
+      'captureTurnProcesses' | 'terminateTurnProcesses' | 'now' | 'requestTimeoutMs'
     >
   > = {},
   eventSink?: StructuredAgentSessionEventSink
@@ -143,7 +143,11 @@ describe('CodexStructuredSessionAdapter.cancelTurn', () => {
         itemId: 'journal-q1',
         fence: 7
       })
-    ).toEqual({ turnId: 'turn-1', itemIds: ['journal-q1', 'journal-q2'] })
+    ).toEqual({
+      threadId: THREAD_ID,
+      turnId: 'turn-1',
+      itemIds: ['journal-q1', 'journal-q2']
+    })
     await expect(
       adapter.cancelTurn({
         sessionId: 'session-1',
@@ -165,6 +169,110 @@ describe('CodexStructuredSessionAdapter.cancelTurn', () => {
     expect(codex.connections[0].calls.at(-1)).toEqual({
       method: 'turn/interrupt',
       params: { threadId: THREAD_ID, turnId: 'turn-1' }
+    })
+  })
+
+  it('interrupts a child prompt on its owning thread and defers that completion', async () => {
+    const events: CodexStructuredSessionEvent[] = []
+    const childThreadId = 'thread-child'
+    const terminateTurnProcesses = vi.fn(async () => true)
+    const codex = fakeCodex()
+    const adapter = await acquired(codex, events, {
+      terminateTurnProcesses
+    })
+    codex.connections[0].handlers.onServerRequest?.({
+      id: 2,
+      method: 'item/commandExecution/requestApproval',
+      params: {
+        itemId: 'child-command',
+        approvalId: 'child-approval',
+        threadId: childThreadId,
+        turnId: 'turn-child',
+        availableDecisions: ['accept', 'decline']
+      }
+    })
+    adapter.bindPromptItemId('session-1', 'journal-child', 'child-approval', childThreadId)
+
+    expect(
+      adapter.promptCancellation?.({
+        sessionId: 'session-1',
+        itemId: 'journal-child',
+        fence: 7
+      })
+    ).toEqual({
+      threadId: childThreadId,
+      turnId: 'turn-child',
+      itemIds: ['journal-child']
+    })
+    const pending = adapter.cancelTurn({
+      sessionId: 'session-1',
+      threadId: childThreadId,
+      turnId: 'turn-child',
+      fence: 7,
+      promptItemId: 'journal-child',
+      promptCancellationId: 'prompt-cancel:operation-1'
+    })
+    await vi.waitFor(() => expect(codex.connections[0].calls.at(-1)?.method).toBe('turn/interrupt'))
+    expect(codex.connections[0].calls.at(-1)).toEqual({
+      method: 'turn/interrupt',
+      params: { threadId: childThreadId, turnId: 'turn-child' }
+    })
+    expect(terminateTurnProcesses).not.toHaveBeenCalled()
+    expect(events).not.toContainEqual(expect.objectContaining({ method: 'turn/completed' }))
+
+    codex.connections[0].handlers.onNotification?.('turn/completed', {
+      threadId: THREAD_ID,
+      turn: { id: 'turn-child', status: 'interrupted' }
+    })
+    expect(events.at(-1)).toMatchObject({ threadId: THREAD_ID, method: 'turn/completed' })
+
+    codex.connections[0].handlers.onNotification?.('turn/completed', {
+      threadId: childThreadId,
+      turn: { id: 'turn-child', status: 'interrupted' }
+    })
+    await expect(pending).resolves.toEqual({ cancelled: true })
+    expect(events.at(-1)).toMatchObject({
+      threadId: childThreadId,
+      method: 'turn/completed',
+      settlementId: 'prompt-cancel:operation-1'
+    })
+  })
+
+  it('does not interrupt a prompt twice while its acknowledged completion is pending', async () => {
+    const events: CodexStructuredSessionEvent[] = []
+    const codex = fakeCodex()
+    const adapter = await acquired(codex, events, { requestTimeoutMs: 5 })
+    codex.connections[0].handlers.onServerRequest?.({
+      id: 3,
+      method: 'item/commandExecution/requestApproval',
+      params: {
+        itemId: 'command-1',
+        approvalId: 'approval-1',
+        threadId: THREAD_ID,
+        turnId: 'turn-1',
+        availableDecisions: ['accept', 'decline']
+      }
+    })
+    adapter.bindPromptItemId('session-1', 'journal-approval', 'approval-1')
+    const input = {
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      fence: 7,
+      promptItemId: 'journal-approval',
+      promptCancellationId: 'prompt-cancel:operation-1'
+    }
+
+    await expect(adapter.cancelTurn(input)).rejects.toThrow('completion record is still pending')
+    const retry = adapter.cancelTurn(input)
+    completeTurn(codex)
+
+    await expect(retry).resolves.toEqual({ cancelled: true })
+    expect(
+      codex.connections[0].calls.filter((call) => call.method === 'turn/interrupt')
+    ).toHaveLength(1)
+    expect(events.at(-1)).toMatchObject({
+      method: 'turn/completed',
+      settlementId: 'prompt-cancel:operation-1'
     })
   })
 
@@ -192,6 +300,41 @@ describe('CodexStructuredSessionAdapter.cancelTurn', () => {
         fence: 7
       })
     ).resolves.toEqual({ cancelled: false })
+  })
+
+  it('does not attribute a natural completion to a declined prompt interruption', async () => {
+    const events: CodexStructuredSessionEvent[] = []
+    const codex = fakeCodex()
+    codex.routes['turn/interrupt'] = () => {
+      completeTurn(codex)
+      throw new CodexAppServerRequestError('turn/interrupt', -32602, 'no such turn')
+    }
+    const adapter = await acquired(codex, events)
+    codex.connections[0].handlers.onServerRequest?.({
+      id: 4,
+      method: 'item/commandExecution/requestApproval',
+      params: {
+        itemId: 'command-natural',
+        approvalId: 'approval-natural',
+        threadId: THREAD_ID,
+        turnId: 'turn-1',
+        availableDecisions: ['accept', 'decline']
+      }
+    })
+    adapter.bindPromptItemId('session-1', 'journal-natural', 'approval-natural')
+
+    await expect(
+      adapter.cancelTurn({
+        sessionId: 'session-1',
+        turnId: 'turn-1',
+        fence: 7,
+        promptItemId: 'journal-natural',
+        promptCancellationId: 'prompt-cancel:operation-natural'
+      })
+    ).resolves.toEqual({ cancelled: false })
+    const completion = events.find((event) => event.type === 'notification')
+    expect(completion).toMatchObject({ method: 'turn/completed' })
+    expect(completion).not.toHaveProperty('settlementId')
   })
 
   it('rethrows an unsettled interrupt so the turn is not shown as cancelled', async () => {

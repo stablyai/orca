@@ -9,6 +9,7 @@ import {
   type AgentSessionOperationOutcome,
   type AgentSessionOperationRow
 } from '../../shared/agent-session-operation-ledger'
+import { settleAgentSessionRecordOperationIfCurrent } from './agent-session-record-operation-settlement'
 import {
   admitAgentSessionOperationRow,
   type AgentSessionOperationAdmission
@@ -287,6 +288,22 @@ export class AgentSessionRecordStore {
   }): Promise<void> {
     await this.transact(() => {
       this.state.operations = settleAgentSessionOperation(this.state.operations, args)
+    })
+  }
+
+  async recordOperationOutcomeIfCurrent(args: {
+    callerKey: string
+    operationId: string
+    outcome: AgentSessionOperationOutcome
+    current: 'pending' | 'unsettled'
+  }): Promise<boolean> {
+    return this.transact(() => {
+      const operations = settleAgentSessionRecordOperationIfCurrent(this.state.operations, args)
+      if (!operations) {
+        return false
+      }
+      this.state.operations = operations
+      return true
     })
   }
 

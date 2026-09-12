@@ -37,6 +37,7 @@ import {
 import { CodexStructuredTurnCancellation } from './codex-structured-turn-cancellation'
 import { createCodexStructuredNotificationRetry } from './codex-structured-notification-retry'
 import { acquireCodexStructuredSession } from './codex-structured-session-acquire'
+import { cancelCodexStructuredSessionTurn } from './codex-structured-session-prompt-cancellation'
 
 export type {
   CodexStructuredLaunch,
@@ -55,13 +56,25 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
   constructor(private readonly deps: CodexStructuredSessionAdapterDeps) {
     this.notificationRetries = createCodexStructuredNotificationRetry({
       sessionFor: (sessionId) => this.sessions.get(sessionId),
-      translate: (sessionId, session, method, params, observedAt) =>
+      translate: (
+        sessionId,
+        session,
+        method,
+        params,
+        observedAt,
+        settlementId,
+        resolvedBy,
+        resolvedAt
+      ) =>
         translateCodexNotification({
           sessionId,
           session,
           method,
           params,
           observedAt,
+          ...(settlementId ? { settlementId } : {}),
+          ...(resolvedBy ? { resolvedBy } : {}),
+          ...(resolvedAt !== undefined ? { resolvedAt } : {}),
           turnCancellation: this.turnCancellation,
           emit: (current, event) => this.emit(current, event)
         })
@@ -83,7 +96,15 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
         const admission = this.emit(session, event)
         if (!admission.accepted && event.type === 'notification') {
           const { sessionId, method, params, observedAt } = event
-          this.notificationRetries.handle(sessionId, method, params, observedAt)
+          this.notificationRetries.handle(
+            sessionId,
+            method,
+            params,
+            observedAt,
+            event.settlementId,
+            event.resolvedBy,
+            event.resolvedAt
+          )
         }
         return admission
       }
@@ -179,10 +200,13 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
     sessionId
   ) => this.sessions.get(sessionId)?.backgroundTasks.state
 
-  bindPromptItemId = (sessionId: string, journalItemId: string, promptKey: string): void =>
-    this.sessions
-      .get(sessionId)
-      ?.prompts.bindJournalItemId(journalItemId, this.session(sessionId).threadId, promptKey)
+  bindPromptItemId = (
+    sessionId: string,
+    journalItemId: string,
+    promptKey: string,
+    threadId = this.session(sessionId).threadId
+  ): void =>
+    this.sessions.get(sessionId)?.prompts.bindJournalItemId(journalItemId, threadId, promptKey)
 
   async dispatch(input: {
     sessionId: string
@@ -202,21 +226,21 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
 
   async cancelTurn(input: {
     sessionId: string
+    threadId?: string
     turnId: string
     fence: number
     promptItemId?: string
+    promptCancellationId?: string
+    promptCancellationResolvedBy?: string
+    promptCancellationResolvedAt?: number
   }): Promise<{ cancelled: boolean }> {
     const session = this.session(input.sessionId)
-    const turnId = this.compactions.providerTurnId(input.sessionId, input.turnId)
-    const prompt = input.promptItemId ? session.prompts.find(input.promptItemId) : null
-    if (!turnId || (input.promptItemId && prompt?.turnId !== turnId)) {
-      return { cancelled: false }
-    }
-    const result = await this.turnCancellation.cancel(session, turnId)
-    if (result.cancelled && prompt) {
-      session.prompts.forget(prompt)
-    }
-    return result
+    return cancelCodexStructuredSessionTurn({
+      input,
+      session,
+      providerTurnId: this.compactions.providerTurnId(input.sessionId, input.turnId),
+      turnCancellation: this.turnCancellation
+    })
   }
 
   promptCancellation: NonNullable<StructuredAgentSessionAdapter['promptCancellation']> = (input) =>

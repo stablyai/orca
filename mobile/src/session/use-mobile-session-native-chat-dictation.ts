@@ -24,7 +24,7 @@ export function useMobileSessionNativeChatDictation(
   scope: MobileSessionFeedbackCapabilitiesModel,
   sendLiveTerminalInput: (handle: string, bytes: string) => Promise<boolean>
 ) {
-  const { hostCapabilities, statusPending } = useHostProtocolGates()
+  const { hostCapabilities, hostCapabilitiesPending } = useHostProtocolGates()
   const {
     hostId,
     worktreeId,
@@ -75,7 +75,7 @@ export function useMobileSessionNativeChatDictation(
     nativeChatTranscriptIsLocalReadable,
     nativeChatInputLeaseReady,
     connState,
-    promptCancelSupported: statusPending
+    promptCancelSupported: hostCapabilitiesPending
       ? undefined
       : hostCapabilities.includes(AGENT_SESSION_PROMPT_CANCEL_RUNTIME_CAPABILITY),
     onSendError: nativeChatSendError.show,

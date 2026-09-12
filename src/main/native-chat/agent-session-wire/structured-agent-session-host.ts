@@ -260,6 +260,7 @@ export class StructuredAgentSessionHost {
       deps: this.deps,
       sessions: this.sessions,
       publish: (sessionId, journal) => this.subscribers.publish(sessionId, journal),
+      flushLifecycle: (sessionId) => this.runtimeState.flushEventSink(sessionId),
       requireSession: (sessionId) => this.requireSession(sessionId),
       serialize: (sessionId, task) => this.serialize(sessionId, task),
       now: () => this.now()

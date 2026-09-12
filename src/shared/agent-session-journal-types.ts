@@ -122,6 +122,8 @@ export type AgentJournalResolution = {
   /** Opaque client identity of the resolver, for "answered on <device>". */
   resolvedBy: string | null
   resolvedAt: number | null
+  /** Operation-specific proof for a provider-confirmed cancellation. */
+  settlementId?: string
 }
 
 export type AgentJournalPromptOption = {

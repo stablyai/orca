@@ -29,8 +29,6 @@ import {
 import { collectCodexTurnPromptCancellations } from './codex-structured-prompt-turn-settlement'
 import type { CodexPendingJournalPrompt } from './codex-structured-prompt-turn-settlement'
 
-export type { CodexPendingJournalPrompt } from './codex-structured-prompt-turn-settlement'
-
 export type CodexActiveJournalItem = {
   threadId: string
   turnId: string | null
@@ -106,16 +104,18 @@ export function settleCodexJournalSession(input: {
   return ADMITTED
 }
 
-export function settleCodexJournalTurn(input: {
-  sessionId: string
-  threadId: string
-  turnId: string
-  turnLifecycle: AgentJournalTurnLifecycle | null
-  sink: StructuredAgentSessionEventSink
-  streams: CodexStructuredItemStreams
-  activeItems: Map<string, CodexActiveJournalItem>
-  pendingPrompts: Map<string, CodexPendingJournalPrompt>
-}): StructuredAgentSessionSinkAdmission {
+export function settleCodexJournalTurn(
+  input: {
+    sessionId: string
+    threadId: string
+    turnId: string
+    turnLifecycle: AgentJournalTurnLifecycle | null
+    sink: StructuredAgentSessionEventSink
+    streams: CodexStructuredItemStreams
+    activeItems: Map<string, CodexActiveJournalItem>
+    pendingPrompts: Map<string, CodexPendingJournalPrompt>
+  } & Parameters<typeof collectCodexTurnPromptCancellations>[0]
+): StructuredAgentSessionSinkAdmission {
   const mutations: JournalLifecycleMutationInput[] = []
   const activeItemsToForget: { key: string; threadId: string; itemId: string }[] = []
   for (const [key, active] of input.activeItems) {
@@ -149,7 +149,7 @@ export function settleCodexJournalTurn(input: {
   }
   const admission = appendLifecycleMutations(
     input.sink,
-    `turn-completed:${input.sessionId}:${input.threadId}:${input.turnId}`,
+    input.settlementId ?? `turn-completed:${input.sessionId}:${input.threadId}:${input.turnId}`,
     mutations
   )
   if (!admission.accepted) {

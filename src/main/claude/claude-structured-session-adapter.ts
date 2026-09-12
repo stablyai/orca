@@ -242,8 +242,13 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
                 session.activeTurnSequence === session.dispatchSequence))
         )
       },
-      emitPromptCancelled: (promptKey) => {
-        this.emit(session, { type: 'prompt-cancelled', sessionId: input.sessionId, promptKey })
+      emitPromptCancelled: (promptKey, settlement) => {
+        this.emit(session, {
+          type: 'prompt-cancelled',
+          sessionId: input.sessionId,
+          promptKey,
+          ...settlement
+        })
       }
     })
   }

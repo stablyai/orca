@@ -51,4 +51,44 @@ export class JournalRowWriter {
       return row
     })
   }
+
+  enqueueBatchIf(
+    build: (firstSeq: number, ts: number) => readonly JournalRow[]
+  ): Promise<readonly JournalRow[]> {
+    return this.deps.serialize(async () => {
+      assertJournalWritable(this.deps.readOnly(), this.deps.sessionId)
+      const firstSeq = this.deps.nextSequence()
+      const rows = build(firstSeq, this.deps.now())
+      if (rows.length === 0) {
+        return []
+      }
+      const epoch = rows[0]!.epoch
+      for (const [index, row] of rows.entries()) {
+        if (row.epoch !== epoch) {
+          throw new Error('journal_batch_epoch_invalid')
+        }
+        if (row.seq !== firstSeq + index) {
+          throw new Error('journal_batch_sequence_invalid')
+        }
+        assertJournalFence(row.fence, this.deps.highestFence())
+      }
+      const { db } = this.deps.database()
+      db.exec('BEGIN IMMEDIATE')
+      try {
+        for (const row of rows) {
+          insertJournalRow(db, this.deps.sessionId, row)
+        }
+        const last = rows.at(-1)!
+        upsertJournalSessionRow(db, this.deps.sessionId, last.epoch, last.ts)
+        db.exec('COMMIT')
+      } catch (error) {
+        db.exec('ROLLBACK')
+        throw error
+      }
+      for (const row of rows) {
+        this.deps.commit(row)
+      }
+      return rows
+    })
+  }
 }

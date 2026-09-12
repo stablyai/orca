@@ -9,7 +9,10 @@ export async function cancelClaudeStructuredTurn(input: {
   request: CancelTurnInput
   requestTimeoutMs?: number
   stillOwnsTurn: () => boolean
-  emitPromptCancelled: (promptKey: string) => void
+  emitPromptCancelled: (
+    promptKey: string,
+    settlement?: { settlementId: string; resolvedBy?: string; resolvedAt?: number }
+  ) => void
 }): Promise<{ cancelled: boolean }> {
   const { session, request } = input
   const prompt = request.promptItemId
@@ -28,10 +31,24 @@ export async function cancelClaudeStructuredTurn(input: {
       )
     })
     cancelled = result.cancelled
-    return result
   } finally {
     if (prompt && session.prompts.finishHostCancellation(prompt, cancelled)) {
-      input.emitPromptCancelled(prompt.promptKey)
+      cancelled = true
+      input.emitPromptCancelled(
+        prompt.promptKey,
+        request.promptCancellationId
+          ? {
+              settlementId: request.promptCancellationId,
+              ...(request.promptCancellationResolvedBy
+                ? { resolvedBy: request.promptCancellationResolvedBy }
+                : {}),
+              ...(request.promptCancellationResolvedAt !== undefined
+                ? { resolvedAt: request.promptCancellationResolvedAt }
+                : {})
+            }
+          : undefined
+      )
     }
   }
+  return { cancelled }
 }

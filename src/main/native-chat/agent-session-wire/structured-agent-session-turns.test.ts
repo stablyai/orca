@@ -52,6 +52,8 @@ describe('performCancel', () => {
       fence: 1,
       adapter: { cancelTurn } as unknown as StructuredAgentSessionAdapter,
       persistOptions: async () => undefined,
+      persistOperationOutcome: async () => undefined,
+      flushLifecycle: async () => undefined,
       resolvedBy: 'client-1',
       publish: vi.fn(),
       now: () => 1
@@ -99,6 +101,8 @@ describe('performCancel', () => {
         cancelTurn: vi.fn(async () => ({ cancelled: false }))
       } as unknown as StructuredAgentSessionAdapter,
       persistOptions: async () => undefined,
+      persistOperationOutcome: async () => undefined,
+      flushLifecycle: async () => undefined,
       resolvedBy: 'client-1',
       publish: vi.fn(),
       now: () => 1
@@ -131,6 +135,8 @@ describe('performCancel', () => {
       fence: 1,
       adapter: { cancelTurn, stopBackgroundTasks } as unknown as StructuredAgentSessionAdapter,
       persistOptions: async () => undefined,
+      persistOperationOutcome: async () => undefined,
+      flushLifecycle: async () => undefined,
       resolvedBy: 'client-1',
       publish: vi.fn(),
       now: () => 1
@@ -162,6 +168,8 @@ describe('performCancel', () => {
       fence: 1,
       adapter: { cancelTurn, stopBackgroundTasks } as unknown as StructuredAgentSessionAdapter,
       persistOptions: async () => undefined,
+      persistOperationOutcome: async () => undefined,
+      flushLifecycle: async () => undefined,
       resolvedBy: 'client-1',
       publish: vi.fn(),
       now: () => 1

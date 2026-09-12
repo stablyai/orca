@@ -4,6 +4,8 @@ import {
   AGENT_SESSION_OPERATION_FUTURE_SKEW_MS
 } from './agent-session-host-authority'
 import {
+  AGENT_SESSION_PROMPT_CANCEL_MAX_ITEM_ID_BYTES,
+  AGENT_SESSION_PROMPT_CANCEL_MAX_PROMPTS,
   agentSessionOperationExpiry,
   agentSessionOperationKey,
   evaluateAgentSessionOperation,
@@ -148,6 +150,27 @@ describe('retention', () => {
 })
 
 describe('persisted row validation', () => {
+  function promptCancelRow(
+    row: AgentSessionOperationRow,
+    prompts: { itemId: string; expectedRevision: number }[]
+  ): AgentSessionOperationRow {
+    return {
+      ...row,
+      outcome: {
+        status: 'unknown',
+        promptCancelSettlement: {
+          phase: 'prepared',
+          sessionId: 's-1',
+          runtimeFence: 1,
+          turnId: 'turn-1',
+          target: prompts[0]!,
+          prompts,
+          resolvedAt: NOW
+        }
+      }
+    }
+  }
+
   it('accepts every recorded outcome shape', () => {
     const rows = new Map<string, AgentSessionOperationRow>()
     const row = admit(rows)
@@ -156,6 +179,23 @@ describe('persisted row validation', () => {
       isAgentSessionOperationRow({ ...row, outcome: { status: 'succeeded', sessionId: 's-1' } })
     ).toBe(true)
     expect(isAgentSessionOperationRow({ ...row, outcome: { status: 'unknown' } })).toBe(true)
+    expect(
+      isAgentSessionOperationRow({
+        ...row,
+        outcome: {
+          status: 'unknown',
+          promptCancelSettlement: {
+            phase: 'provider-confirmed',
+            sessionId: 's-1',
+            runtimeFence: 1,
+            turnId: 'turn-1',
+            target: { itemId: 'codex:thread:turn:1', expectedRevision: 1 },
+            prompts: [{ itemId: 'codex:thread:turn:1', expectedRevision: 1 }],
+            resolvedAt: NOW
+          }
+        }
+      })
+    ).toBe(true)
     expect(isAgentSessionOperationRow({ ...row, outcome: { status: 'failed', code: 'x' } })).toBe(
       true
     )
@@ -168,7 +208,89 @@ describe('persisted row validation', () => {
     expect(isAgentSessionOperationRow({ ...row, callerKey: '' })).toBe(false)
     expect(isAgentSessionOperationRow({ ...row, expiresAt: 1.5 })).toBe(false)
     expect(isAgentSessionOperationRow({ ...row, outcome: { status: 'succeeded' } })).toBe(false)
+    const promptCancellation = promptCancelRow(row, [
+      { itemId: 'codex:thread:turn:1', expectedRevision: 1 }
+    ])
+    if (
+      promptCancellation.outcome.status !== 'unknown' ||
+      !promptCancellation.outcome.promptCancelSettlement
+    ) {
+      throw new Error('prompt cancellation fixture was not built')
+    }
+    expect(
+      isAgentSessionOperationRow({
+        ...promptCancellation,
+        outcome: {
+          ...promptCancellation.outcome,
+          promptCancelSettlement: {
+            ...promptCancellation.outcome.promptCancelSettlement,
+            runtimeFence: 0
+          }
+        }
+      })
+    ).toBe(false)
+    expect(
+      isAgentSessionOperationRow({
+        ...row,
+        outcome: {
+          status: 'unknown',
+          promptCancelSettlement: {
+            phase: 'prepared',
+            sessionId: 's-1',
+            runtimeFence: 1,
+            turnId: '',
+            target: { itemId: 'codex:thread:turn:1', expectedRevision: 1 },
+            prompts: [],
+            resolvedAt: NOW
+          }
+        }
+      })
+    ).toBe(false)
     expect(isAgentSessionOperationRow({ ...row, outcome: null })).toBe(false)
     expect(isAgentSessionOperationRow(null)).toBe(false)
+  })
+
+  it('keeps accepting successful cancellation rows written before provider ids were bounded', () => {
+    const row = admit(new Map<string, AgentSessionOperationRow>())
+
+    expect(
+      isAgentSessionOperationRow({
+        ...row,
+        outcome: {
+          status: 'succeeded',
+          sessionId: 's-1',
+          cancelledTurnId: 'é'.repeat(257)
+        }
+      })
+    ).toBe(true)
+  })
+
+  it('bounds prompt cancellation target count', () => {
+    const rows = new Map<string, AgentSessionOperationRow>()
+    const row = admit(rows)
+    const prompts = Array.from(
+      { length: AGENT_SESSION_PROMPT_CANCEL_MAX_PROMPTS + 1 },
+      (_, index) => ({
+        itemId: `codex:thread:turn:${index}`,
+        expectedRevision: 1
+      })
+    )
+
+    expect(isAgentSessionOperationRow(promptCancelRow(row, prompts))).toBe(false)
+  })
+
+  it('bounds aggregate multibyte prompt cancellation item ids', () => {
+    const rows = new Map<string, AgentSessionOperationRow>()
+    const row = admit(rows)
+    const encoded = encodeURIComponent('界'.repeat(1_000))
+    const prompts = Array.from({ length: 30 }, (_, index) => ({
+      itemId: `orca:${encoded}${index}`,
+      expectedRevision: 1
+    }))
+    expect(
+      prompts.reduce((bytes, prompt) => bytes + Buffer.byteLength(prompt.itemId, 'utf8'), 0)
+    ).toBeGreaterThan(AGENT_SESSION_PROMPT_CANCEL_MAX_ITEM_ID_BYTES)
+
+    expect(isAgentSessionOperationRow(promptCancelRow(row, prompts))).toBe(false)
   })
 })

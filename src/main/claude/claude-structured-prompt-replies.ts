@@ -1,4 +1,5 @@
 import { decodeAgentSessionQuestionAnswers } from '../../shared/agent-session-question-answer'
+import { isBoundedAgentSessionOperationProviderId } from '../../shared/agent-session-operation-ledger'
 import { ClaudeHostPromptCancellation } from './claude-host-prompt-cancellation'
 import type {
   ClaudePendingPrompt,
@@ -99,7 +100,14 @@ export class ClaudePromptRegistry {
     const toolUseId = readString(registration.toolUseId)
     const toolName = readString(registration.toolName)
     const input = isRecord(registration.input) ? registration.input : null
-    if (!toolUseId || !toolName || !input) {
+    if (
+      !toolUseId ||
+      !toolName ||
+      !input ||
+      (registration.turnId !== null &&
+        registration.turnId !== undefined &&
+        !isBoundedAgentSessionOperationProviderId(registration.turnId))
+    ) {
       return null
     }
     const questions = toolName === 'AskUserQuestion' ? questionsFrom(input) : []

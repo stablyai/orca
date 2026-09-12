@@ -31,6 +31,10 @@ export type CodexStructuredSessionEvent =
       params: unknown
       /** Host receipt time of a turn boundary; survives retry and deferral so a replay is not re-stamped. */
       observedAt?: number
+      /** Operation-specific lifecycle id when this completion proves a prompt cancellation. */
+      settlementId?: string
+      resolvedBy?: string
+      resolvedAt?: number
     }
   | { type: 'server-request'; sessionId: string; threadId: string; method: string; params: unknown }
   | { type: 'provider-frame'; sessionId: string; threadId: string; kind: string; payload: unknown }

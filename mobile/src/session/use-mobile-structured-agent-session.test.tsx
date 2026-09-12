@@ -709,7 +709,7 @@ describe('useMobileStructuredAgentSession', () => {
     expect(onCancelResolved).toHaveBeenCalledOnce()
   })
 
-  it('refuses prompt cancellation for a host without prompt cancellation', async () => {
+  it('falls back to turn-only cancellation for a host without prompt cancellation', async () => {
     act(() => {
       renderer = create(createElement(Harness))
     })
@@ -721,6 +721,43 @@ describe('useMobileStructuredAgentSession', () => {
           ...snapshotEvent(3).page,
           items: [runningStatusItem(), approvalItem()]
         }
+      })
+    )
+
+    sendRequest.mockImplementation(async (method, params) =>
+      method === 'agentSession.cancel'
+        ? ok({
+            ok: true,
+            replayed: false,
+            fence: 3,
+            cursor: { epoch: 'epoch-1', sequence: 4 },
+            value: { turnId: 'turn-1', cancelled: true }
+          })
+        : defaultSendRequest(method, params)
+    )
+
+    await act(async () => {
+      hook!.cancel()
+      await Promise.resolve()
+    })
+
+    const cancelParams = sendRequest.mock.calls.find(
+      ([method]) => method === 'agentSession.cancel'
+    )?.[1]
+    expect(cancelParams).toMatchObject({ turnId: 'turn-1' })
+    expect(cancelParams).not.toHaveProperty('prompt')
+    expect(onCancelResolved).toHaveBeenCalledOnce()
+  })
+
+  it('requires an updated host when only the prompt identifies the turn', async () => {
+    act(() => {
+      renderer = create(createElement(Harness))
+    })
+    await vi.waitFor(() => expect(listener).toEqual(expect.any(Function)))
+    act(() =>
+      listener?.({
+        ...snapshotEvent(3),
+        page: { ...snapshotEvent(3).page, items: [approvalItem()] }
       })
     )
 

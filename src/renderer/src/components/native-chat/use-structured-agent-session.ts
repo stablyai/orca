@@ -243,10 +243,12 @@ export function useStructuredAgentSession(args: {
             requestRevision
           )
         } catch (error) {
-          reportWriteError(error, targetFence)
-          return null
+          if (!turnId) {
+            reportWriteError(error, targetFence)
+            return null
+          }
         }
-        if (!promptSupported) {
+        if (!promptSupported && !turnId) {
           reportWriteError(
             new Error(AGENT_SESSION_PROMPT_CANCEL_UPDATE_REQUIRED_MESSAGE),
             targetFence

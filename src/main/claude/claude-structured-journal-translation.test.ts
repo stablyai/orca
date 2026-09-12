@@ -26,12 +26,21 @@ import { createClaudeJournalTranslator } from './claude-structured-journal-trans
 function sinkState() {
   const items: { identity: AgentJournalItemIdentity; body: AgentJournalItemBody }[] = []
   const tombstones: AgentJournalItemIdentity[] = []
+  const settlements: string[] = []
   const sink: StructuredAgentSessionEventSink = {
     appendItem: (identity, body) => items.push({ identity, body }),
     appendTombstone: (identity) => tombstones.push(identity),
+    appendLifecycleBatch: (settlementId, mutations) => {
+      settlements.push(settlementId)
+      for (const mutation of mutations) {
+        if (mutation.kind === 'item') {
+          items.push({ identity: mutation.identity, body: mutation.body })
+        }
+      }
+    },
     publish: vi.fn()
   }
-  return { sink, items, tombstones }
+  return { sink, items, tombstones, settlements }
 }
 
 /** `[recordId, state]` of every lifecycle append, in journal order. */
@@ -770,6 +779,7 @@ describe('Claude structured journal translation', () => {
       questionIds: ['Libraries?']
     })
     translator.handle({ type: 'prompt', sessionId: 'orca-session', prompt: multiSelect })
+    expect(translator.pendingPromptGroups).toBe(3)
     expect(state.items.at(-1)?.body).toMatchObject({
       kind: 'question',
       question: '1 grouped question from Claude',
@@ -788,9 +798,49 @@ describe('Claude structured journal translation', () => {
     translator.handle({
       type: 'prompt-cancelled',
       sessionId: 'orca-session',
-      promptKey: 'questions-1'
+      promptKey: 'questions-1',
+      settlementId: 'prompt-cancel:operation-1'
     })
-    expect(state.tombstones).toHaveLength(1)
+    expect(state.tombstones).toHaveLength(0)
+    expect(state.settlements).toContain('prompt-cancel:operation-1')
+    expect(state.items.at(-1)?.body).toMatchObject({
+      kind: 'question',
+      resolution: {
+        state: 'cancelled',
+        settlementId: 'prompt-cancel:operation-1'
+      }
+    })
+    expect(translator.pendingPromptGroups).toBe(2)
+  })
+
+  it('releases a normally answered prompt when its tool result arrives', () => {
+    const state = sinkState()
+    const translator = createClaudeJournalTranslator({ sink: state.sink })
+    translator.handle({
+      type: 'prompt',
+      sessionId: 'orca-session',
+      prompt: prompt({
+        requestId: 'permission-1',
+        promptKey: 'permission-1',
+        toolUseId: 'tool-1',
+        toolName: 'Bash',
+        kind: 'approval',
+        input: { command: 'git status' },
+        questionIds: []
+      })
+    })
+    expect(translator.pendingPromptGroups).toBe(1)
+
+    translator.handle(
+      message(
+        'user',
+        'tool-result-1',
+        [{ type: 'tool_result', tool_use_id: 'tool-1', content: 'done' }],
+        'tool-1'
+      )
+    )
+
+    expect(translator.pendingPromptGroups).toBe(0)
   })
 })
 

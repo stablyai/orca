@@ -17,7 +17,7 @@ import {
   appendCodexLifecycleItem,
   publishCodexLifecycle
 } from './codex-structured-journal-sink'
-import type { CodexPendingJournalPrompt } from './codex-structured-journal-settlement'
+import type { CodexPendingJournalPrompt } from './codex-structured-prompt-turn-settlement'
 import { readCodexTurnId } from './codex-structured-thread-facts'
 
 export class CodexJournalPrompts {

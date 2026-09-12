@@ -4,6 +4,10 @@ import type {
   AgentJournalResolution
 } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionWireRefusal } from '../../../shared/agent-session-wire'
+import {
+  isAgentSessionPromptCancelItemIdListWithinBounds,
+  isAgentSessionPromptCancelTargetsWithinBounds
+} from '../../../shared/agent-session-operation-ledger'
 import type { AgentSessionTurnContext, TurnOutcome } from './structured-agent-session-turns'
 
 type PromptTarget = { itemId: string; expectedRevision: number }
@@ -20,6 +24,7 @@ export async function preparePromptCancellation(
   | PromptCancellationRefusal
   | {
       ok: true
+      threadId?: string
       turnId: string
       prompts: PromptTarget[]
     }
@@ -37,7 +42,7 @@ export async function preparePromptCancellation(
   if (
     !cancellation ||
     !cancellation.itemIds.includes(target.itemId) ||
-    new Set(cancellation.itemIds).size !== cancellation.itemIds.length
+    !isAgentSessionPromptCancelItemIdListWithinBounds(cancellation.itemIds)
   ) {
     return invalid(`Item ${target.itemId} is not pending on a cancellable turn.`)
   }
@@ -66,7 +71,15 @@ export async function preparePromptCancellation(
       ) ?? invalid(`Item ${target.itemId} is not a pending prompt.`)
     )
   }
-  return { ok: true, turnId: cancellation.turnId, prompts }
+  if (!isAgentSessionPromptCancelTargetsWithinBounds(prompts)) {
+    return invalid(`The prompt group for ${target.itemId} is too large to cancel durably.`)
+  }
+  return {
+    ok: true,
+    ...(cancellation.threadId ? { threadId: cancellation.threadId } : {}),
+    turnId: cancellation.turnId,
+    prompts
+  }
 }
 
 function promptCancellationRefusal(

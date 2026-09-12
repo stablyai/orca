@@ -18,6 +18,7 @@ import {
   AGENT_SESSION_OPERATION_FUTURE_SKEW_MS,
   parseAgentSessionOperationTimestamp
 } from './agent-session-host-authority'
+import { parseAgentJournalItemKey } from './agent-session-journal-item-key'
 import {
   isAgentSessionConversationCommandResult,
   type AgentSessionConversationCommandResult
@@ -25,6 +26,22 @@ import {
 
 export const AGENT_SESSION_DURABLE_OPERATION_PER_CLIENT_LIMIT = 512
 export const AGENT_SESSION_DURABLE_OPERATION_GLOBAL_LIMIT = 4_096
+export const AGENT_SESSION_OPERATION_PROVIDER_ID_MAX_BYTES = 512
+export const AGENT_SESSION_PROMPT_CANCEL_MAX_PROMPTS = 64
+export const AGENT_SESSION_PROMPT_CANCEL_MAX_ITEM_ID_BYTES = 256 * 1024
+
+export type AgentSessionPromptCancelTarget = { itemId: string; expectedRevision: number }
+
+export type AgentSessionPromptCancelSettlement = {
+  phase: 'prepared' | 'provider-confirmed'
+  sessionId: string
+  runtimeFence: number
+  threadId?: string
+  turnId: string
+  target: AgentSessionPromptCancelTarget
+  prompts: readonly AgentSessionPromptCancelTarget[]
+  resolvedAt: number
+}
 
 export type AgentSessionOperationOutcome =
   | { status: 'pending' }
@@ -39,7 +56,11 @@ export type AgentSessionOperationOutcome =
     }
   | { status: 'failed'; code: string; message?: string; rewindReason?: AgentSessionRewindReason }
   /** The effect may or may not have happened; replay this answer instead of spawning again. */
-  | { status: 'unknown' }
+  | {
+      status: 'unknown'
+      /** Durable intent written before interruption, advanced once the provider confirms it. */
+      promptCancelSettlement?: AgentSessionPromptCancelSettlement
+    }
 
 export type AgentSessionOperationRow = {
   callerKey: string
@@ -196,12 +217,15 @@ export function isAgentSessionOperationRow(value: unknown): value is AgentSessio
       (outcome.status === 'succeeded' &&
         typeof outcome.sessionId === 'string' &&
         (outcome.cancelled === undefined || typeof outcome.cancelled === 'boolean') &&
+        // Older builds persisted provider-owned ids without this release's ingress bound.
         (outcome.cancelledTurnId === undefined || typeof outcome.cancelledTurnId === 'string') &&
         (outcome.rewind === undefined || isAgentSessionRewindResult(outcome.rewind)) &&
         (outcome.conversationCommand === undefined ||
           isAgentSessionConversationCommandResult(outcome.conversationCommand))) ||
       (outcome.status === 'failed' && typeof outcome.code === 'string') ||
-      outcome.status === 'unknown')
+      (outcome.status === 'unknown' &&
+        (outcome.promptCancelSettlement === undefined ||
+          isPromptCancelSettlement(outcome.promptCancelSettlement))))
   return (
     typeof row.callerKey === 'string' &&
     row.callerKey.length > 0 &&
@@ -214,5 +238,96 @@ export function isAgentSessionOperationRow(value: unknown): value is AgentSessio
     Number.isSafeInteger(row.recordedAt) &&
     Number.isSafeInteger(row.expiresAt) &&
     outcomeValid
+  )
+}
+
+function isPromptCancelSettlement(value: unknown): boolean {
+  if (typeof value !== 'object' || value === null) {
+    return false
+  }
+  const settlement = value as {
+    sessionId?: unknown
+    threadId?: unknown
+    turnId?: unknown
+    runtimeFence?: unknown
+    phase?: unknown
+    target?: unknown
+    prompts?: unknown
+    resolvedAt?: unknown
+  }
+  const target = settlement.target
+  const prompts = settlement.prompts
+  return (
+    (settlement.phase === 'prepared' || settlement.phase === 'provider-confirmed') &&
+    typeof settlement.sessionId === 'string' &&
+    settlement.sessionId.length > 0 &&
+    Number.isSafeInteger(settlement.runtimeFence) &&
+    (settlement.runtimeFence as number) > 0 &&
+    (settlement.threadId === undefined || isBoundedProviderId(settlement.threadId)) &&
+    isBoundedProviderId(settlement.turnId) &&
+    isAgentSessionPromptCancelTargetsWithinBounds(prompts) &&
+    isPromptTarget(target) &&
+    prompts.some(
+      (prompt) =>
+        prompt.itemId === target.itemId && prompt.expectedRevision === target.expectedRevision
+    ) &&
+    Number.isSafeInteger(settlement.resolvedAt)
+  )
+}
+
+export function isAgentSessionPromptCancelItemIdListWithinBounds(
+  value: unknown
+): value is readonly string[] {
+  if (
+    !Array.isArray(value) ||
+    value.length === 0 ||
+    value.length > AGENT_SESSION_PROMPT_CANCEL_MAX_PROMPTS
+  ) {
+    return false
+  }
+  let bytes = 0
+  const ids = new Set<string>()
+  for (const itemId of value) {
+    if (typeof itemId !== 'string' || !parseAgentJournalItemKey(itemId) || ids.has(itemId)) {
+      return false
+    }
+    ids.add(itemId)
+    bytes += Buffer.byteLength(itemId, 'utf8')
+    if (bytes > AGENT_SESSION_PROMPT_CANCEL_MAX_ITEM_ID_BYTES) {
+      return false
+    }
+  }
+  return true
+}
+
+export function isAgentSessionPromptCancelTargetsWithinBounds(
+  value: unknown
+): value is readonly AgentSessionPromptCancelTarget[] {
+  if (!Array.isArray(value) || !value.every(isPromptTarget)) {
+    return false
+  }
+  return isAgentSessionPromptCancelItemIdListWithinBounds(value.map((target) => target.itemId))
+}
+
+export function isBoundedAgentSessionOperationProviderId(value: unknown): value is string {
+  return isBoundedProviderId(value)
+}
+
+function isBoundedProviderId(value: unknown): value is string {
+  return (
+    typeof value === 'string' &&
+    value.length > 0 &&
+    Buffer.byteLength(value, 'utf8') <= AGENT_SESSION_OPERATION_PROVIDER_ID_MAX_BYTES
+  )
+}
+
+function isPromptTarget(value: unknown): value is AgentSessionPromptCancelTarget {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    typeof (value as { itemId?: unknown }).itemId === 'string' &&
+    parseAgentJournalItemKey((value as { itemId: string }).itemId) !== null &&
+    Number.isSafeInteger((value as { expectedRevision?: unknown }).expectedRevision) &&
+    ((value as { expectedRevision: number }).expectedRevision ?? -1) >= 0
   )
 }

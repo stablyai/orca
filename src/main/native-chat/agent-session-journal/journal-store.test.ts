@@ -19,6 +19,8 @@ import {
   DEFAULT_JOURNAL_PAYLOAD_LIMITS
 } from './journal-payload-bounds'
 import { journalDatabaseFile, journalDirectoryFor, journalPathSegment } from './journal-paths'
+import { readJournalEpochRows } from './journal-row-table'
+import { MAX_JOURNAL_LIFECYCLE_BATCH_BYTES } from './journal-row-schema'
 import { AgentSessionJournalError, type AgentSessionJournal } from './journal-store'
 import type { openAgentSessionJournal } from './journal-store-factory'
 import { createTrackedJournalOpener } from './journal-store-test-open'
@@ -330,6 +332,82 @@ describe('lifecycle batches', () => {
             )
         )
     ).toBe(false)
+  })
+
+  it('atomically partitions a large prompt cancellation into bounded replay-safe rows', async () => {
+    const journal = await open()
+    const prompts: { itemId: string; expectedRevision: number }[] = []
+    const options = Array.from({ length: 48 }, (_unused, index) => ({
+      id: `option-${index}`,
+      label: 'l'.repeat(512),
+      description: 'd'.repeat(512)
+    }))
+    for (let index = 0; index < 64; index += 1) {
+      const appended = await journal.appendItem(
+        item(index),
+        {
+          kind: 'question',
+          question: `Question ${index}`,
+          options,
+          resolution: {
+            state: 'pending',
+            selectedOptionId: null,
+            resolvedBy: null,
+            resolvedAt: null
+          }
+        },
+        { fence: 1 }
+      )
+      prompts.push({ itemId: appended.itemId, expectedRevision: appended.revision })
+    }
+
+    await expect(
+      journal.cancelPromptsAtRevisions({
+        prompts,
+        settlementId: 'cancel:operation-1',
+        resolvedBy: 'client-1',
+        resolvedAt: tick(),
+        fence: 1
+      })
+    ).resolves.toBe(64)
+
+    const settled = journal
+      .snapshot()
+      .items.filter((entry) => prompts.some((prompt) => prompt.itemId === entry.itemId))
+    expect(settled).toHaveLength(64)
+    expect(
+      settled.every(
+        (entry) =>
+          (entry.body.kind === 'approval' || entry.body.kind === 'question') &&
+          entry.body.resolution.state === 'cancelled' &&
+          entry.body.resolution.settlementId === 'cancel:operation-1'
+      )
+    ).toBe(true)
+    await withJournalDatabase(root, (db) => {
+      const rows = readJournalEpochRows(db, IDENTITY.sessionId, journal.epoch)
+        .map((entry) => entry.rowJson)
+        .filter((rowJson) => rowJson.includes('"kind":"lifecycle-batch"'))
+      expect(rows.length).toBeGreaterThan(1)
+      expect(
+        rows.every(
+          (rowJson) => Buffer.byteLength(rowJson, 'utf8') + 1 <= MAX_JOURNAL_LIFECYCLE_BATCH_BYTES
+        )
+      ).toBe(true)
+      expect(rows.map((rowJson) => JSON.parse(rowJson).settlementId)).toEqual(
+        rows.map((_row, index) => `cancel:operation-1:${index + 1}/${rows.length}`)
+      )
+    })
+    const beforeReplay = journal.cursor()
+    await expect(
+      journal.cancelPromptsAtRevisions({
+        prompts,
+        settlementId: 'cancel:operation-1',
+        resolvedBy: 'client-1',
+        resolvedAt: tick(),
+        fence: 1
+      })
+    ).resolves.toBe(0)
+    expect(journal.cursor()).toEqual(beforeReplay)
   })
 })
 

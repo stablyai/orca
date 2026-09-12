@@ -129,7 +129,8 @@ const Resolution = z.object({
   state: z.string().min(1),
   selectedOptionId: z.string().nullable(),
   resolvedBy: z.string().nullable(),
-  resolvedAt: z.number().nullable()
+  resolvedAt: z.number().nullable(),
+  settlementId: z.string().min(1).optional()
 })
 
 const MessageBody = z.object({

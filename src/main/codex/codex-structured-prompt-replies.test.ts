@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   applyCodexPromptAnswer,
   CodexPromptRegistry,
+  MAX_CODEX_PROMPT_REGISTRY_BYTES,
   MAX_CODEX_PROMPT_REGISTRY_ENTRIES,
   codexJournalPromptIdPart,
   decodeCodexQuestionOptionId,
@@ -114,6 +115,7 @@ describe('CodexPromptRegistry', () => {
     registry.bindJournalItemId('journal-q2', 'thread-1', 'codex-item-1')
 
     expect(registry.cancellation('journal-q1')).toEqual({
+      threadId: 'thread-1',
       turnId: 'turn-1',
       itemIds: ['journal-q1', 'journal-q2']
     })
@@ -138,6 +140,53 @@ describe('CodexPromptRegistry', () => {
     })
     fallback.bindJournalItemId('journal-fallback', 'thread-1', 'item-fallback', 'turn-active')
     expect(fallback.cancellation('journal-fallback')?.turnId).toBe('turn-active')
+  })
+
+  it('does not let a late turn identity exceed the retained prompt byte cap', () => {
+    const registry = new CodexPromptRegistry()
+    registry.register({
+      id: 8,
+      method: 'item/commandExecution/requestApproval',
+      params: { itemId: 'item-bounded', threadId: 'thread-1' }
+    })
+
+    registry.bindJournalItemId(
+      'journal-bounded',
+      'thread-1',
+      'item-bounded',
+      't'.repeat(MAX_CODEX_PROMPT_REGISTRY_BYTES)
+    )
+
+    expect(registry.bytes).toBeLessThanOrEqual(MAX_CODEX_PROMPT_REGISTRY_BYTES)
+    expect(registry.cancellation('journal-bounded')).toBeNull()
+  })
+
+  it('rejects multibyte provider identities beyond the durable-operation bound', () => {
+    const oversizedId = '🧀'.repeat(129)
+    const registry = new CodexPromptRegistry()
+
+    expect(
+      registry.register({
+        id: 9,
+        method: 'item/commandExecution/requestApproval',
+        params: { itemId: 'item-thread', threadId: oversizedId, turnId: 'turn-1' }
+      })
+    ).toBeNull()
+    expect(
+      registry.register({
+        id: 10,
+        method: 'item/commandExecution/requestApproval',
+        params: { itemId: 'item-turn', threadId: 'thread-1', turnId: oversizedId }
+      })
+    ).toBeNull()
+
+    registry.register({
+      id: 11,
+      method: 'item/commandExecution/requestApproval',
+      params: { itemId: 'item-fallback', threadId: 'thread-1' }
+    })
+    registry.bindJournalItemId('journal-fallback', 'thread-1', 'item-fallback', oversizedId)
+    expect(registry.cancellation('journal-fallback')).toBeNull()
   })
 
   it('keeps identical item ids on different threads independently answerable', () => {

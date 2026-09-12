@@ -20,6 +20,7 @@ import {
   performPrompt,
   performSend,
   performSetOption,
+  resumePromptCancellation,
   type AgentSessionTurnContext,
   type TurnOutcome
 } from './structured-agent-session-turns'
@@ -29,6 +30,12 @@ export type MutationPlan<TValue> = {
   fields: Record<string, unknown>
   beforeRun?: () => void
   run: (ctx: AgentSessionTurnContext) => Promise<TurnOutcome<TValue>>
+  resume?: (
+    ctx: AgentSessionTurnContext,
+    outcome: AgentSessionOperationOutcome
+  ) => Promise<TurnOutcome<TValue> | null> | TurnOutcome<TValue> | null
+  /** A provider-confirmed retry has no provider effect left; settle it under the current host fence. */
+  resumeAtCurrentFence?: (outcome: AgentSessionOperationOutcome) => boolean
   replay: (ctx: AgentSessionTurnContext, outcome: AgentSessionOperationOutcome) => TValue | null
   rerunWhenReplayMissing?: (ctx: AgentSessionTurnContext) => boolean
   recoverUnknownFromDurableState?: boolean
@@ -103,26 +110,23 @@ export function cancelPlan(params: {
       cancelled: value.cancelled,
       cancelledTurnId: value.turnId
     }),
-    recoverUnknownFromDurableState: params.prompt !== undefined,
+    resume: (ctx, outcome) => {
+      const settlement = outcome.status === 'unknown' ? outcome.promptCancelSettlement : undefined
+      return settlement?.sessionId === params.envelope.sessionId
+        ? resumePromptCancellation(ctx, params.envelope.clientOperationId, settlement)
+        : null
+    },
+    resumeAtCurrentFence: (outcome) =>
+      outcome.status === 'unknown' &&
+      outcome.promptCancelSettlement?.phase === 'provider-confirmed',
     // Interrupting twice would kill a turn the client never asked to stop.
-    replay: (ctx, outcome) => {
-      if (outcome.status === 'unknown' && params.prompt) {
-        const item = ctx.journal
-          .snapshot()
-          .items.find((candidate) => candidate.itemId === params.prompt?.itemId)
-        const cancelled =
-          (item?.body.kind === 'approval' || item?.body.kind === 'question') &&
-          item.body.resolution.state === 'cancelled'
-        return cancelled ? { turnId: params.turnId ?? params.prompt.itemId, cancelled: true } : null
-      }
-      return {
-        turnId:
-          outcome.status === 'succeeded' && outcome.cancelledTurnId
-            ? outcome.cancelledTurnId
-            : (params.turnId ?? params.prompt?.itemId ?? 'unknown'),
-        cancelled: outcome.status === 'succeeded' && outcome.cancelled === true
-      }
-    }
+    replay: (_ctx, outcome) =>
+      outcome.status === 'succeeded'
+        ? {
+            turnId: outcome.cancelledTurnId ?? params.turnId ?? params.prompt?.itemId ?? 'unknown',
+            cancelled: outcome.cancelled === true
+          }
+        : null
   }
 }
 

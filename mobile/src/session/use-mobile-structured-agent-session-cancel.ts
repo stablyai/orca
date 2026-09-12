@@ -44,7 +44,7 @@ export function useMobileStructuredAgentSessionCancel(args: {
       onSendError('Stop not sent')
       return
     }
-    if (prompt && promptCancelSupported !== true) {
+    if (prompt && promptCancelSupported !== true && !turnId) {
       onSendError(
         promptCancelSupported === false
           ? AGENT_SESSION_PROMPT_CANCEL_UPDATE_REQUIRED_MESSAGE

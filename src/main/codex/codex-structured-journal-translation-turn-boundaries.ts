@@ -24,6 +24,9 @@ type TurnBoundaryEvent = {
   threadId: string
   params: unknown
   observedAt?: number
+  settlementId?: string
+  resolvedBy?: string
+  resolvedAt?: number
 }
 
 /** Opens and settles the durable lifecycle row for each primary-thread turn. */
@@ -96,7 +99,10 @@ export class CodexJournalTurnBoundaries {
           : null,
       streams: this.deps.items.streams,
       activeItems: this.deps.items.activeItems,
-      pendingPrompts: this.deps.prompts.pending
+      pendingPrompts: this.deps.prompts.pending,
+      ...(event.settlementId ? { settlementId: event.settlementId } : {}),
+      ...(event.resolvedBy ? { resolvedBy: event.resolvedBy } : {}),
+      ...(event.resolvedAt !== undefined ? { resolvedAt: event.resolvedAt } : {})
     })
     if (admission.accepted) {
       this.deps.items.ordinals.forgetTurn(event.threadId, turnId)

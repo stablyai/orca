@@ -67,11 +67,16 @@ describe('ClaudeStructuredSessionAdapter turns and controls', () => {
         sessionId: 'session-1',
         turnId: 'turn-1',
         fence: 7,
-        promptItemId: 'journal-approval'
+        promptItemId: 'journal-approval',
+        promptCancellationId: 'prompt-cancel:operation-1'
       })
     ).resolves.toEqual({ cancelled: true })
     await expect(pending.promise).resolves.toBeNull()
-    expect(events.some((event) => event.type === 'prompt-cancelled')).toBe(false)
+    expect(events.at(-1)).toMatchObject({
+      type: 'prompt-cancelled',
+      promptKey: 'permission-1',
+      settlementId: 'prompt-cancel:operation-1'
+    })
     expect(
       adapter.promptCancellation?.({
         sessionId: 'session-1',
@@ -81,7 +86,7 @@ describe('ClaudeStructuredSessionAdapter turns and controls', () => {
     ).toBeNull()
   })
 
-  it('publishes an SDK prompt abort when provider interruption is refused', async () => {
+  it('treats an SDK prompt abort as confirmation when the interrupt reply says not running', async () => {
     const controller = new AbortController()
     const events: Parameters<typeof acquired>[2] = []
     const claude = fakeClaude({
@@ -110,11 +115,16 @@ describe('ClaudeStructuredSessionAdapter turns and controls', () => {
         sessionId: 'session-1',
         turnId: 'turn-1',
         fence: 7,
-        promptItemId: 'journal-approval'
+        promptItemId: 'journal-approval',
+        promptCancellationId: 'prompt-cancel:operation-1'
       })
-    ).resolves.toEqual({ cancelled: false })
+    ).resolves.toEqual({ cancelled: true })
     await expect(pending.promise).resolves.toBeNull()
-    expect(events.at(-1)).toMatchObject({ type: 'prompt-cancelled', promptKey: 'permission-1' })
+    expect(events.at(-1)).toMatchObject({
+      type: 'prompt-cancelled',
+      promptKey: 'permission-1',
+      settlementId: 'prompt-cancel:operation-1'
+    })
   })
 
   it("admits a dispatch on the write and names it from Claude's replay", async () => {

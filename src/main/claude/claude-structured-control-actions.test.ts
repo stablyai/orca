@@ -87,6 +87,22 @@ describe('cancelClaudeTurn', () => {
 })
 
 describe('answerClaudePrompt', () => {
+  it('rejects a multibyte provider turn identity beyond the durable-operation bound', () => {
+    const prompts = new ClaudePromptRegistry()
+
+    expect(
+      prompts.register({
+        requestId: 'question-oversized',
+        turnId: '🧀'.repeat(129),
+        toolName: 'AskUserQuestion',
+        toolUseId: 'tool-oversized',
+        input: { questions: [{ question: 'One?' }] },
+        suggestions: [],
+        settle: vi.fn()
+      })
+    ).toBeNull()
+  })
+
   it('groups journal rows only under the live turn that owns the prompt', () => {
     const prompts = new ClaudePromptRegistry()
     const prompt = prompts.register({

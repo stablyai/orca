@@ -45,6 +45,7 @@ export type AgentSessionMutationRequest<TValue> = {
   /** Journal of the attached session; absent when this host holds none. */
   journal: AgentSessionJournal | undefined
   publish: (journal: AgentSessionJournal) => void
+  flushLifecycle?: (sessionId: string) => Promise<void>
   now: () => number
 }
 
@@ -83,6 +84,34 @@ export async function admitAndRunAgentSessionMutation<TValue>(
   const fence = record.lease.runtimeFence
   const context = turnContext(request, journal, fence)
   if (admission.decision === 'replay') {
+    let resumed: Awaited<ReturnType<NonNullable<typeof plan.resume>>> = null
+    if (plan.resume && admission.row.outcome.status === 'unknown') {
+      const resumeEnvelope = plan.resumeAtCurrentFence?.(admission.row.outcome)
+        ? { ...envelope, expectedRuntimeFence: record.lease.runtimeFence }
+        : envelope
+      const resumeAdmission = admitAgentSessionMutation({
+        envelope: resumeEnvelope,
+        hostFingerprint,
+        ledger: { decision: 'admit', row: admission.row },
+        lease: record.lease
+      })
+      if (resumeAdmission.decision === 'refused') {
+        return refuseAgentSessionMutation(resumeAdmission.refusal)
+      }
+      resumed = await plan.resume(context, admission.row.outcome)
+    }
+    if (resumed) {
+      const outcome = await runSettledAgentSessionMutation({
+        store: request.store,
+        callerKey: request.callerKey,
+        envelope,
+        plan: { ...plan, run: async () => resumed },
+        context
+      })
+      return outcome.ok
+        ? { ok: true, replayed: true, fence, cursor: journal.cursor(), value: outcome.value }
+        : refuseAgentSessionMutation(outcome.refusal)
+    }
     const replay = resolveAgentSessionReplayOutcome({
       operationId: envelope.clientOperationId,
       outcome: admission.row.outcome,
@@ -145,6 +174,16 @@ function turnContext<TValue>(
           now: request.now()
         })
         .then(() => undefined),
+    persistOperationOutcome: (operationId, outcome) =>
+      request.store
+        .recordOperationOutcomeIfCurrent({
+          callerKey: request.callerKey,
+          operationId,
+          outcome,
+          current: 'unsettled'
+        })
+        .then(() => undefined),
+    flushLifecycle: () => request.flushLifecycle?.(request.envelope.sessionId) ?? Promise.resolve(),
     resolvedBy: request.callerKey,
     publish: () => request.publish(journal),
     now: () => request.now()

@@ -192,12 +192,16 @@ export type StructuredAgentSessionAdapter = {
     sessionId: string
     itemId: string
     fence: number
-  }): { turnId: string; itemIds: readonly string[] } | null
+  }): { threadId?: string; turnId: string; itemIds: readonly string[] } | null
   cancelTurn(input: {
     sessionId: string
+    threadId?: string
     turnId: string
     fence: number
     promptItemId?: string
+    promptCancellationId?: string
+    promptCancellationResolvedBy?: string
+    promptCancellationResolvedAt?: number
   }): Promise<{ cancelled: boolean }>
   stopBackgroundTasks?(input: {
     sessionId: string

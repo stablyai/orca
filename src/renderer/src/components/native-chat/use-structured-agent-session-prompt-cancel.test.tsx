@@ -145,16 +145,34 @@ describe('useStructuredAgentSession prompt cancellation', () => {
     })
   })
 
-  it('refuses prompt cancellation on an older remote host', async () => {
+  it('falls back to turn-only cancellation on an older remote host', async () => {
     items = [pendingPrompt('approval', 'approval-1', 2)]
     mocks.supportsPromptCancel.mockResolvedValue(false)
+    mocks.call.mockImplementation((_target, method) =>
+      method === 'agentSession.cancel'
+        ? Promise.resolve({ ok: true, value: { turnId: 'turn-1', cancelled: true } })
+        : Promise.resolve(null)
+    )
     const target = { kind: 'environment', environmentId: 'legacy-host' } as const
     const { result } = renderSession(target)
 
     await act(async () => void (await result.current.cancel('turn-1', result.current.prompts[0])))
 
-    expect(mocks.call.mock.calls.some((call) => call[1] === 'agentSession.cancel')).toBe(false)
+    const call = mocks.call.mock.calls.find((candidate) => candidate[1] === 'agentSession.cancel')
+    expect(call?.[2]).toMatchObject({ turnId: 'turn-1' })
+    expect(call?.[2]).not.toHaveProperty('prompt')
     expect(mocks.supportsPromptCancel).toHaveBeenCalledWith(target, 31)
+    expect(result.current.error).toBeNull()
+  })
+
+  it('requires an updated remote host when only the prompt identifies the turn', async () => {
+    items = [pendingPrompt('approval', 'approval-1', 2)]
+    mocks.supportsPromptCancel.mockResolvedValue(false)
+    const { result } = renderSession({ kind: 'environment', environmentId: 'legacy-host' })
+
+    await act(async () => void (await result.current.cancel(null, result.current.prompts[0])))
+
+    expect(mocks.call.mock.calls.some((call) => call[1] === 'agentSession.cancel')).toBe(false)
     expect(result.current.error).toBe(
       'Cancelling a pending prompt requires a newer Orca server. Update the server and try again.'
     )
@@ -178,16 +196,21 @@ describe('useStructuredAgentSession prompt cancellation', () => {
     expect(mocks.supportsPromptCancel).not.toHaveBeenCalled()
   })
 
-  it('does not cancel when remote prompt-cancel support cannot be verified', async () => {
+  it('falls back to turn-only cancellation when the remote capability probe fails', async () => {
     items = [pendingPrompt('approval', 'approval-1', 2)]
     mocks.supportsPromptCancel.mockRejectedValue(new Error('Host unreachable'))
-    const { result } = renderSession({ kind: 'environment', environmentId: 'offline-host' })
+    mocks.call.mockImplementation((_target, method) =>
+      method === 'agentSession.cancel'
+        ? Promise.resolve({ ok: true, value: { turnId: 'turn-1', cancelled: true } })
+        : Promise.resolve(null)
+    )
+    const { result } = renderSession({ kind: 'environment', environmentId: 'cutover-host' })
 
-    await act(async () => {
-      await expect(result.current.cancel('turn-1', result.current.prompts[0])).resolves.toBeNull()
-    })
+    await act(async () => void (await result.current.cancel('turn-1', result.current.prompts[0])))
 
-    expect(mocks.call.mock.calls.some((call) => call[1] === 'agentSession.cancel')).toBe(false)
-    expect(result.current.error).toBe('Host unreachable')
+    const call = mocks.call.mock.calls.find((candidate) => candidate[1] === 'agentSession.cancel')
+    expect(call?.[2]).toMatchObject({ turnId: 'turn-1' })
+    expect(call?.[2]).not.toHaveProperty('prompt')
+    expect(result.current.error).toBeNull()
   })
 })

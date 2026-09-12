@@ -6,8 +6,7 @@ import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-ses
 import type { AgentSessionMutationEnvelope } from '../../../shared/agent-session-wire'
 import { encodeAgentSessionQuestionAnswers } from '../../../shared/agent-session-question-answer'
 import { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
-import { journalDirectoryFor } from '../agent-session-journal/journal-paths'
-import { openAgentSessionJournal } from '../agent-session-journal/journal-store-factory'
+import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type {
   AgentSessionDispatchOutcome,
   StructuredAgentSessionAdapter
@@ -66,16 +65,9 @@ function adapter(): StructuredAgentSessionAdapter {
 }
 
 async function seedGroupedQuestion(): Promise<{ itemId: string; revision: number }> {
-  const journal = await openAgentSessionJournal({
-    identity: {
-      sessionId: SESSION,
-      workspaceId: 'workspace-1',
-      hostId: 'local',
-      agent: 'codex',
-      providerHandle: { kind: 'codex', threadId: THREAD }
-    },
-    journalDir: journalDirectoryFor(root, { workspaceId: 'workspace-1', sessionId: SESSION })
-  })
+  const journal = (
+    host as unknown as { sessions: Map<string, { journal: AgentSessionJournal }> }
+  ).sessions.get(SESSION)!.journal
   const appended = await journal.appendItem(
     { provider: 'codex', threadId: THREAD, turnId: 'turn-1', ordinal: 100 },
     {
@@ -145,9 +137,9 @@ afterEach(async () => {
 
 describe('grouped question admission', () => {
   it('admits renderer question-group payloads with child ids and multi-select answers', async () => {
-    const prompt = await seedGroupedQuestion()
     const attached = await host.attach(CALLER, attachParams())
     expect(attached.ok).toBe(true)
+    const prompt = await seedGroupedQuestion()
     const optionId = encodeAgentSessionQuestionAnswers([
       { questionId: 'q1', optionIds: ['target-web', 'target-mobile'] },
       { questionId: 'q2', optionIds: [], other: 'SSH host' }

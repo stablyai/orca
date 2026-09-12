@@ -1,4 +1,6 @@
 import { parseAgentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
+import { partitionJournalLifecycleMutations } from './journal-lifecycle-batch-partition'
+import { cancelledJournalPromptBody } from './journal-prompt-body-bounds'
 import type { JournalReducerState } from './journal-reducer'
 import { journalLifecycleBatchRowBuilder } from './journal-row-builders'
 import type { JournalRowWriter } from './journal-row-writer'
@@ -26,7 +28,7 @@ export function cancelJournalPromptsAtRevisions(
     return Promise.resolve(0)
   }
   return rowWriter
-    .enqueueIf((sequence, timestamp) => {
+    .enqueueBatchIf((sequence, timestamp) => {
       const currentState = state()
       const mutations = input.prompts.flatMap((prompt, index) => {
         const resolved = currentState.aliases.get(prompt.itemId) ?? prompt.itemId
@@ -41,31 +43,36 @@ export function cancelJournalPromptsAtRevisions(
         ) {
           return []
         }
+        const body = cancelledJournalPromptBody(current.body, {
+          resolvedBy: input.resolvedBy,
+          resolvedAt: input.resolvedAt,
+          settlementId: input.settlementId
+        })
+        if (!body) {
+          return []
+        }
         return [
           {
             kind: 'item' as const,
             identity,
-            body: {
-              ...current.body,
-              resolution: {
-                state: 'cancelled' as const,
-                selectedOptionId: null,
-                resolvedBy: input.resolvedBy,
-                resolvedAt: input.resolvedAt
-              }
-            }
+            body
           }
         ]
       })
-      return mutations.length === 0
-        ? null
-        : journalLifecycleBatchRowBuilder(state, input.settlementId, mutations, {
-            fence: input.fence
-          })(sequence, timestamp)
+      return partitionJournalLifecycleMutations(input.settlementId, mutations).map((chunk, index) =>
+        journalLifecycleBatchRowBuilder(state, chunk.settlementId, chunk.mutations, {
+          fence: input.fence
+        })(sequence + index, timestamp)
+      )
     })
-    .then((row) =>
-      row?.kind === 'lifecycle-batch'
-        ? row.mutations.filter((mutation) => mutation.kind === 'item').length
-        : 0
+    .then((rows) =>
+      rows.reduce(
+        (count, row) =>
+          count +
+          (row.kind === 'lifecycle-batch'
+            ? row.mutations.filter((mutation) => mutation.kind === 'item').length
+            : 0),
+        0
+      )
     )
 }

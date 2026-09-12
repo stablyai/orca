@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { startRuntimeCapabilityProbe, startRuntimeStatusProbe } from './runtime-capability-probe'
+import { startRuntimeCapabilityProbe } from './runtime-capability-probe'
 import { LogicalClientCutoverError } from './stable-logical-rpc-client'
 import type { RpcClient } from './rpc-client'
 import type { RpcResponse } from './types'
@@ -45,26 +45,6 @@ describe('startRuntimeCapabilityProbe', () => {
     await flushMicrotasks()
     expect(seen).toEqual([['a.v1']])
     expect(calls()).toBe(1)
-    cancel()
-  })
-
-  it('shares retry semantics with full host-status consumers', async () => {
-    const status = {
-      ok: true as const,
-      id: '1',
-      result: { appVersion: '1.2.3', capabilities: ['a.v1'] },
-      _meta: { runtimeId: 'r1' }
-    }
-    const { client, calls } = makeClient([new Error('timeout'), status])
-    const seen: unknown[] = []
-    const cancel = startRuntimeStatusProbe(client, (result) => seen.push(result))
-    await flushMicrotasks()
-    expect(seen).toEqual([])
-
-    await vi.advanceTimersByTimeAsync(1_000)
-
-    expect(seen).toEqual([status.result])
-    expect(calls()).toBe(2)
     cancel()
   })
 

@@ -212,7 +212,6 @@ export const UNVALIDATED_RPC_REQUEST_PORT_PENDING: readonly UnvalidatedRpcReques
   { file: 'src/terminal/worker-terminal-takeover-report.ts', references: 2 },
 
   // src/transport/ — pairing, endpoint probing and capability reads
-  { file: 'src/transport/host-status-gates.ts', references: 1 },
   { file: 'src/transport/mobile-relay-credential-rotation.ts', references: 2 },
   { file: 'src/transport/mobile-relay-direct-upgrade.ts', references: 2 },
   { file: 'src/transport/mobile-relay-pairing-recovery.ts', references: 2 },

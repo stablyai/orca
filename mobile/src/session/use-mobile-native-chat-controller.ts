@@ -16,6 +16,7 @@ import { useThrottledLatestValue } from './use-throttled-latest-value'
 import type { MobileNativeChatController } from './mobile-native-chat-controller-contract'
 import { useMobileBridgeChatPromptWrites } from './use-mobile-bridge-chat-prompt-writes'
 import { useMobileNativeChatActiveResolution } from './use-mobile-native-chat-active-resolution'
+import { canCancelMobileStructuredPrompt } from './mobile-structured-prompt-cancellation'
 
 export type { MobileNativeChatController } from './mobile-native-chat-controller-contract'
 
@@ -281,7 +282,7 @@ export function useMobileNativeChatController(args: {
     nativeChatWorkingStartedAt: activeChatStructured ? structuredNativeChat.workingStartedAt : null,
     nativeChatSettledTurns: activeChatStructured ? structuredNativeChat.settledTurns : null,
     nativeChatCanStop: activeChatStructured
-      ? structuredNativeChat.turnId !== null
+      ? canCancelMobileStructuredPrompt(structuredNativeChat)
       : nativeChatAgentWorking,
     nativeChatStreamingText,
     nativeChatStreamLive,

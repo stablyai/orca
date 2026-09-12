@@ -246,6 +246,10 @@ export class AgentSessionJournal {
     return cancelJournalPromptsAtRevisions(this.rowWriter, () => this.state, input)
   }
 
+  hasAppliedSettlement(settlementId: string): boolean {
+    return this.state.appliedSettlementIds.has(settlementId)
+  }
+
   appendTombstone(
     identity: AgentJournalItemIdentity,
     options: JournalTombstoneInput

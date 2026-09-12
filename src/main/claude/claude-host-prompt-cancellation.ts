@@ -18,13 +18,14 @@ export class ClaudeHostPromptCancellation {
     isPending: () => boolean,
     settle: () => void
   ): boolean {
-    if (confirmed && isPending()) {
+    const pending = isPending()
+    if (confirmed && pending) {
       settle()
       prompt.settle(null)
     }
     this.active.delete(prompt)
     const suppressed = this.suppressedProviderEvents.delete(prompt)
-    return suppressed && !confirmed
+    return suppressed || (confirmed && pending)
   }
 
   consume(prompt: ClaudePendingPrompt): boolean {
