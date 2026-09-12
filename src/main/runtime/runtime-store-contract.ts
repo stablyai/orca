@@ -115,6 +115,20 @@ export type RuntimeStore = {
     terminalMainSideEffectAuthority?: GlobalSettings['terminalMainSideEffectAuthority']
     terminalHiddenDeliveryGate?: GlobalSettings['terminalHiddenDeliveryGate']
     terminalModelQueryAuthority?: GlobalSettings['terminalModelQueryAuthority']
+    // Why: the host terminal palette published to headless mobile tabs. All
+    // optional even where GlobalSettings requires them — test store mocks
+    // return literals with as few as five keys.
+    theme?: GlobalSettings['theme']
+    terminalThemeDark?: GlobalSettings['terminalThemeDark']
+    terminalThemeLight?: GlobalSettings['terminalThemeLight']
+    terminalUseSeparateLightTheme?: GlobalSettings['terminalUseSeparateLightTheme']
+    terminalDividerColorDark?: GlobalSettings['terminalDividerColorDark']
+    terminalDividerColorLight?: GlobalSettings['terminalDividerColorLight']
+    terminalCustomThemes?: GlobalSettings['terminalCustomThemes']
+    terminalColorOverrides?: GlobalSettings['terminalColorOverrides']
+    terminalBackgroundOpacity?: GlobalSettings['terminalBackgroundOpacity']
+    terminalCursorOpacity?: GlobalSettings['terminalCursorOpacity']
+    terminalMinimumContrastRatio?: GlobalSettings['terminalMinimumContrastRatio']
     worktreeVisibilityDefaults?: GlobalSettings['worktreeVisibilityDefaults']
     hostSettingOverrides?: GlobalSettings['hostSettingOverrides']
     agentSkillSharingEnabled?: GlobalSettings['agentSkillSharingEnabled']
