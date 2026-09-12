@@ -57,6 +57,78 @@ describe('AutomationService', () => {
     rmSync(testState.dir, { recursive: true, force: true })
   })
 
+  it('dispatches a zero-grace automation when the tick lands within one tick interval', async () => {
+    vi.setSystemTime(new Date('2026-05-13T08:59:00'))
+    const store = await createStore()
+    store.addRepo(makeRepo())
+    const automation = store.createAutomation({
+      name: 'Zero-grace check',
+      prompt: 'Check the repo',
+      agentId: 'claude',
+      projectId: 'r1',
+      workspaceMode: 'existing',
+      workspaceId: 'wt1',
+      timezone: 'UTC',
+      rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
+      dtstart: new Date('2026-05-12T00:00:00').getTime(),
+      missedRunGraceMinutes: 0
+    })
+
+    vi.setSystemTime(new Date('2026-05-13T09:00:45'))
+    const send = vi.fn()
+    const service = new AutomationService(store, { tickMs: 60_000 })
+    service.setWebContents({
+      isDestroyed: () => false,
+      send
+    } as never)
+
+    service.start()
+    service.setRendererReady()
+    await vi.waitFor(() =>
+      expect(send).toHaveBeenCalledWith('automations:dispatchRequested', expect.any(Object))
+    )
+    service.stop()
+
+    expect(store.listAutomationRuns(automation.id)[0]?.status).toBe('dispatching')
+  })
+
+  it('skips a zero-grace automation when the delay exceeds one tick interval', async () => {
+    vi.setSystemTime(new Date('2026-05-13T08:59:00'))
+    const store = await createStore()
+    store.addRepo(makeRepo())
+    const automation = store.createAutomation({
+      name: 'Zero-grace skip',
+      prompt: 'Check the repo',
+      agentId: 'claude',
+      projectId: 'r1',
+      workspaceMode: 'existing',
+      workspaceId: 'wt1',
+      timezone: 'UTC',
+      rrule: 'FREQ=DAILY;BYHOUR=9;BYMINUTE=0',
+      dtstart: new Date('2026-05-12T00:00:00').getTime(),
+      missedRunGraceMinutes: 0
+    })
+
+    vi.setSystemTime(new Date('2026-05-13T09:01:30'))
+    const send = vi.fn()
+    const service = new AutomationService(store, { tickMs: 60_000 })
+    service.setWebContents({
+      isDestroyed: () => false,
+      send
+    } as never)
+
+    service.start()
+    service.setRendererReady()
+    await vi.waitFor(() => {
+      const runs = store.listAutomationRuns(automation.id)
+      return runs.length > 0 && runs[0]?.status === 'skipped_missed'
+    })
+    service.stop()
+
+    expect(store.listAutomationRuns(automation.id)[0]?.status).toBe('skipped_missed')
+    expect(send).not.toHaveBeenCalled()
+  })
+
   it('dispatches an enabled automation when its next run is due', async () => {
     vi.setSystemTime(new Date('2026-05-13T08:59:00'))
     const store = await createStore()
