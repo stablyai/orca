@@ -31,7 +31,10 @@ export function startOfLastNonBlankLines(value: string, count: number): number {
         return lineStart
       }
     }
-    if (lineStart === 0) {
+    // Why `lineEnd === 0`: a tail whose first character is a newline makes
+    // `lastIndexOf('\n', -1)` answer 0 (the position argument clamps up), so
+    // `lineStart` stays 1 while `lineEnd` stays 0 and the walk never advances.
+    if (lineStart === 0 || lineEnd === 0) {
       return 0
     }
     lineEnd = lineStart - 1

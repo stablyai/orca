@@ -13,7 +13,10 @@ import {
   terminalTitleBlocksExplicitAgentStatus,
   getLatestAgentCandidateTitleInfo
 } from './runtime-worktree-status-projection'
-import { detectTerminalWaitBlockedReason } from './terminal-wait-detection'
+import {
+  detectTerminalWaitBlockedReason,
+  isUnconditionalTerminalWaitBlockedReason
+} from './terminal-wait-detection'
 import { getTerminalState } from './terminal-wait-results'
 import { buildTerminalWaitText } from './terminal-wait-tail-state'
 
@@ -72,7 +75,7 @@ export class RuntimeTerminalAgentStatusQuery {
       terminal.titleStatus !== null &&
       terminal.titleStatus !== 'permission' &&
       !isOpenCodeNativeTitle(terminal.title) &&
-      blockedByWaitText !== 'agent-approval-prompt'
+      !isUnconditionalTerminalWaitBlockedReason(blockedByWaitText)
     const newestPermissionAt = Math.max(
       explicitStatus?.status === 'permission' ? explicitStatus.updatedAt : -1,
       lifecycle?.status === 'permission' ? lifecycle.updatedAt : -1,
@@ -88,7 +91,7 @@ export class RuntimeTerminalAgentStatusQuery {
     if (
       blockedByWaitText &&
       (!liveTitleClearsBlockedText || lifecycle?.status === terminal.titleStatus) &&
-      (blockedByWaitText === 'agent-approval-prompt' ||
+      (isUnconditionalTerminalWaitBlockedReason(blockedByWaitText) ||
         (newestPermissionAt >= 0 && newestPermissionAt >= newestClearAt))
     ) {
       return { handle, isRunningAgent: true, status: 'permission' }

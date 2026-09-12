@@ -3,7 +3,10 @@ import { OrcaRuntimeWithAgentPromptRequestCorrelation } from './orca-runtime-age
 import type { RuntimeTerminalAgentStatusSnapshot } from './runtime-terminal-agent-status-query'
 import type { AgentStatus } from '../../shared/agent-detection'
 import type { RuntimeTerminalWaitBlockedReason } from '../../shared/runtime-types'
-import { detectTerminalWaitBlockedReason } from './terminal-wait-detection'
+import {
+  detectTerminalWaitBlockedReason,
+  isUnconditionalTerminalWaitBlockedReason
+} from './terminal-wait-detection'
 import { isOpenCodeNativeTitle } from '../../shared/agent-detection'
 import type { AgentStatusEntry } from '../../shared/agent-status-types'
 import type { RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
@@ -31,11 +34,11 @@ export class OrcaRuntimeWithResolveAuthoritativeTerminalWaitPermission extends O
       terminal.titleStatus !== null &&
       terminal.titleStatus !== 'permission' &&
       !isOpenCodeNativeTitle(terminal.title) &&
-      blockedByWaitText !== 'agent-approval-prompt'
+      !isUnconditionalTerminalWaitBlockedReason(blockedByWaitText)
     if (liveTitleClearsBlockedText && lifecycle?.status !== terminal.titleStatus) {
       return null
     }
-    if (blockedByWaitText === 'agent-approval-prompt') {
+    if (isUnconditionalTerminalWaitBlockedReason(blockedByWaitText)) {
       return blockedByWaitText
     }
     const newestPermissionAt = Math.max(

@@ -8,7 +8,7 @@ import {
   tailMayContainBlockedSignal
 } from './terminal-tail-sentinel-index'
 import { computeTerminalTailWaitState } from './terminal-wait-tail-state'
-import { TERMINAL_WAIT_BLOCKED_SENTINEL_RE } from './terminal-wait-detection'
+import { TERMINAL_WAIT_BLOCKED_SENTINEL_RE } from './terminal-wait-blocked-sentinel'
 import type { RetainedTailRedrawCursor } from './terminal-tail-redraw-buffer'
 
 // The definition the incremental index must reproduce: does ANY retained line (or the
