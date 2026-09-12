@@ -257,7 +257,18 @@ export function createTerminalKeyboardEventHandlers(context: EventContext) {
       // mid-preedit is the corruption itself, so this one waits on the composition rather than a
       // deadline. The sender owns the wait so blur and teardown can drop it.
       if (e.isComposing || hasPendingImeComposition) {
-        deferredChordSender.defer(pane.terminal.element, sendResolvedInput)
+        deferredChordSender.defer(
+          { code: e.code, timeStamp: e.timeStamp },
+          pane.terminal.element,
+          sendResolvedInput
+        )
+        return
+      }
+      // Why: 2-Set Korean ends the composition on the chord itself, and the platform then replays
+      // that press unmarked. It resolves to the same action here, so without this the held chord
+      // and its replay both send — one `Option+←` walking the cursor two words (#17616). Same
+      // identity the Enter path uses: Chromium keeps the original `timeStamp` on a re-dispatch.
+      if (deferredChordSender.absorbRedispatchedChord({ code: e.code, timeStamp: e.timeStamp })) {
         return
       }
       sendResolvedInput()
