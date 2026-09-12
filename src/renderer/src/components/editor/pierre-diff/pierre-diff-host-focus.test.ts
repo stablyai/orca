@@ -1,7 +1,11 @@
 // @vitest-environment happy-dom
 
 import { describe, expect, it } from 'vitest'
-import { isActiveElementInsideHost, shouldFocusPierreDiffHost } from './pierre-diff-host-focus'
+import {
+  isActiveElementInsideHost,
+  shouldAutoFocusPierreDiffHost,
+  shouldFocusPierreDiffHost
+} from './pierre-diff-host-focus'
 
 function clickPath(...nodes: EventTarget[]): Pick<Event, 'composedPath'> {
   return { composedPath: () => nodes }
@@ -71,5 +75,30 @@ describe('shouldFocusPierreDiffHost', () => {
     host.append(input)
     expect(shouldFocusPierreDiffHost(host, document.body, clickPath(input, host))).toBe(false)
     expect(shouldFocusPierreDiffHost(host, input, clickPath(input, host))).toBe(false)
+  })
+})
+
+describe('shouldAutoFocusPierreDiffHost', () => {
+  it('steals from the sidebar so Cmd+F works after opening a file', () => {
+    const host = document.createElement('div')
+    const sidebar = document.createElement('button')
+    document.body.append(host, sidebar)
+    expect(shouldAutoFocusPierreDiffHost(host, sidebar)).toBe(true)
+  })
+
+  it('does not steal from a terminal textarea or another editor', () => {
+    const host = document.createElement('div')
+    const terminal = document.createElement('textarea')
+    const editor = document.createElement('div')
+    editor.contentEditable = 'true'
+    document.body.append(host, terminal, editor)
+    expect(shouldAutoFocusPierreDiffHost(host, terminal)).toBe(false)
+    expect(shouldAutoFocusPierreDiffHost(host, editor)).toBe(false)
+  })
+
+  it('does not steal when the host already has focus', () => {
+    const host = document.createElement('div')
+    document.body.append(host)
+    expect(shouldAutoFocusPierreDiffHost(host, host)).toBe(false)
   })
 })

@@ -20,16 +20,27 @@ export function isActiveElementInsideHost(host: HTMLElement, active: Element | n
   return false
 }
 
+function isEditingControl(node: EventTarget | null): boolean {
+  return (
+    node instanceof HTMLElement &&
+    (node.isContentEditable ||
+      node.matches('input, textarea, select, [contenteditable=""], [contenteditable="true"]'))
+  )
+}
+
 function isEditableComposedOrigin(path: EventTarget[]): boolean {
-  return path.some((node) => {
-    if (!(node instanceof HTMLElement)) {
-      return false
-    }
-    return (
-      node.isContentEditable ||
-      node.matches('input, textarea, select, [contenteditable=""], [contenteditable="true"]')
-    )
-  })
+  return path.some((node) => isEditingControl(node))
+}
+
+/**
+ * Mount-time host focus must restore Cmd+F/F7 from the sidebar, but must not
+ * yank a caret the user already moved to a terminal, find field, or other editor.
+ */
+export function shouldAutoFocusPierreDiffHost(host: HTMLElement, active: Element | null): boolean {
+  if (isActiveElementInsideHost(host, active)) {
+    return false
+  }
+  return !isEditingControl(active)
 }
 
 /**

@@ -34,7 +34,7 @@ import { editorShortcutMatches } from '../editor-shortcuts'
 import { usePierreDiffNoteNavigation } from './use-pierre-diff-note-navigation'
 import { canCommentOnPierreRange } from './pierre-diff-comment-range'
 import { withPierreDiffEditState } from './pierre-diff-edit-state'
-import { shouldFocusPierreDiffHost } from './pierre-diff-host-focus'
+import { shouldAutoFocusPierreDiffHost, shouldFocusPierreDiffHost } from './pierre-diff-host-focus'
 
 export type PierreDiffInstance = PierreFileDiff<PierreDiffAnnotationData> &
   Partial<Pick<VirtualizedFileDiff, 'getLinePosition'>>
@@ -110,13 +110,30 @@ export function PierreDiffSurface({
   )
   const containerRef = useRef<HTMLDivElement | null>(null)
   const editorRef = useRef<Editor<'file-diff', PierreDiffAnnotationData, undefined> | null>(null)
+  const autoFocusContextRef = useRef({ worktreeId, activeGroupId })
+  autoFocusContextRef.current = { worktreeId, activeGroupId }
   // Why: Monaco focused the single-file DiffEditor on mount so Cmd+F/F7 worked
   // without a click. Combined DiffSectionItem did not — do not steal there.
+  // Skip when the user already moved to a terminal/input or another tab group;
+  // a late parse completing must not yank that caret. Group identity is read
+  // from a ref so this stays once-per-mount (autoFocusHost is the only trigger).
   useLayoutEffect(() => {
     if (!autoFocusHost) {
       return
     }
-    containerRef.current?.focus({ preventScroll: true })
+    const host = containerRef.current
+    if (!host) {
+      return
+    }
+    const { worktreeId: focusWorktreeId, activeGroupId: focusGroupId } = autoFocusContextRef.current
+    const group = host.closest<HTMLElement>('[data-tab-group-body-id]')
+    if (focusWorktreeId && group && group.dataset.tabGroupBodyId !== focusGroupId) {
+      return
+    }
+    if (!shouldAutoFocusPierreDiffHost(host, document.activeElement)) {
+      return
+    }
+    host.focus({ preventScroll: true })
   }, [autoFocusHost])
   const onEditChangeRef = useRef(onEditChange)
   const {
@@ -239,6 +256,12 @@ export function PierreDiffSurface({
         {
           onAttach: (editor) => {
             editorRef.current = editor
+            const host = containerRef.current
+            // Host focus lands in layout before Pierre queues onAttach. If we still
+            // own it, move to the editor so Changes-mode typing works without a click.
+            if (autoFocusHost && host && document.activeElement === host) {
+              editor.focus({ preventScroll: true })
+            }
           },
           onComplete: () => {
             editorRef.current = null
@@ -252,7 +275,7 @@ export function PierreDiffSurface({
         isEditable ? editStateKey : undefined,
         fileDiff
       ),
-    [isEditable, editStateKey, fileDiff]
+    [autoFocusHost, isEditable, editStateKey, fileDiff]
   )
   const renderAnnotation = useCallback(
     (annotation: PierreDiffCommentAnnotation) =>

@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { act, renderHook } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { StrictMode, useRef } from 'react'
+import { StrictMode, useRef, useState } from 'react'
 import type { DiffSection } from '../../diff-section-types'
 import { useCombinedDiffSectionLoadRegistry } from './combined-diff-section-load-registry'
 import { useCombinedDiffSectionRetry } from './use-combined-diff-section-retry'
@@ -26,16 +26,19 @@ function section(overrides: Partial<DiffSection> = {}): DiffSection {
 const invalidate = vi.fn()
 function setup(initial: DiffSection[]) {
   return renderHook(() => {
-    const sectionsRef = useRef(initial)
+    const [sections, setSections] = useState(initial)
+    const sectionsRef = useRef(sections)
+    sectionsRef.current = sections
     const registry = useCombinedDiffSectionLoadRegistry(sectionsRef)
     const actions = useCombinedDiffSectionRetry({
       invalidateViewStateCache: invalidate,
       registry,
+      sections,
       setSectionHeights: vi.fn(),
-      setSections: vi.fn()
+      setSections
     })
     registry.renderedIndicesRef.current.add(0)
-    return { actions, registry, sectionsRef }
+    return { actions, registry, sectionsRef, setSections }
   })
 }
 
@@ -70,6 +73,23 @@ describe('deferred section reloads', () => {
     expect(invalidate).toHaveBeenCalledOnce()
   })
 
+  it('re-drives a refused reload when the row becomes clean without saving', () => {
+    const view = setup([section({ dirty: true, modifiedContent: 'draft' })])
+    act(() => view.result.current.actions.requestSectionReload(0))
+    expect(invalidate).not.toHaveBeenCalled()
+    act(() => view.result.current.setSections([section()]))
+    expect(invalidate).toHaveBeenCalledOnce()
+  })
+
+  it('does not re-drive while the row is still dirty', () => {
+    const view = setup([section({ dirty: true, modifiedContent: 'draft' })])
+    act(() => view.result.current.actions.requestSectionReload(0))
+    act(() =>
+      view.result.current.setSections([section({ dirty: true, modifiedContent: 'more typing' })])
+    )
+    expect(invalidate).not.toHaveBeenCalled()
+  })
+
   it('ignores a reload requested after the viewer unmounts', () => {
     const view = setup([section()])
     view.unmount()
@@ -88,6 +108,7 @@ it('still reloads after StrictMode replays the registry effect', () => {
       const actions = useCombinedDiffSectionRetry({
         invalidateViewStateCache: invalidate,
         registry,
+        sections: sectionsRef.current,
         setSectionHeights: vi.fn(),
         setSections: vi.fn()
       })

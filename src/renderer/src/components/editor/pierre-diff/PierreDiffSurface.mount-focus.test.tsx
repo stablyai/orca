@@ -80,3 +80,36 @@ it('does not steal focus on mount for combined-diff rows', () => {
   renderSurface()
   expect(document.activeElement).toBe(sidebar)
 })
+
+it('does not steal focus from a terminal when a late parse mounts the host', () => {
+  const terminal = document.createElement('textarea')
+  document.body.append(terminal)
+  terminal.focus()
+  expect(document.activeElement).toBe(terminal)
+
+  renderSurface(true)
+  expect(document.activeElement).toBe(terminal)
+})
+
+it('does not steal focus when the surface mounts in a background tab group', () => {
+  const sidebar = document.createElement('button')
+  document.body.append(sidebar)
+  sidebar.focus()
+
+  render(
+    <div data-tab-group-body-id="other-group">
+      <PierreDiffSurface
+        fileDiff={fileDiff}
+        sideBySide={false}
+        isEditable={false}
+        collapseUnchanged
+        autoFocusHost
+        worktreeId="wt"
+        filePath="file.ts"
+        comments={[]}
+        onDeleteComment={() => {}}
+      />
+    </div>
+  )
+  expect(document.activeElement).toBe(sidebar)
+})

@@ -1,4 +1,4 @@
-import { useCallback } from 'react'
+import { useCallback, useLayoutEffect } from 'react'
 import type React from 'react'
 import type { DiffSection } from '../../diff-section-types'
 import { removeDiffSectionMeasuredHeight } from '../../diff-section-height-cache'
@@ -18,11 +18,13 @@ export type CombinedDiffSectionRetryActions = {
 export function useCombinedDiffSectionRetry({
   invalidateViewStateCache,
   registry,
+  sections,
   setSectionHeights,
   setSections
 }: {
   invalidateViewStateCache: () => void
   registry: CombinedDiffSectionLoadRegistry
+  sections: DiffSection[]
   setSectionHeights: React.Dispatch<React.SetStateAction<Record<number, number>>>
   setSections: React.Dispatch<React.SetStateAction<DiffSection[]>>
 }): CombinedDiffSectionRetryActions {
@@ -149,12 +151,16 @@ export function useCombinedDiffSectionRetry({
   )
   requestSectionReloadRef.current = requestSectionReload
 
-  // Why: saving is the only moment a row goes clean, but reloading on every save costs a whole
-  // `git diff` per Cmd+S. Only the rows that actually refused a reload need one.
+  // Why: a row can go clean via save or undo. Reloading on every clean costs a whole
+  // `git diff`; only the rows that actually refused a reload need one.
   const retryDeferredSectionReload = useCallback(
     (index: number): void => {
-      const key = sectionsRef.current[index]?.key
-      if (key === undefined || !deferredReloadKeysRef.current.has(key)) {
+      const section = sectionsRef.current[index]
+      if (
+        section === undefined ||
+        section.dirty ||
+        !deferredReloadKeysRef.current.has(section.key)
+      ) {
         return
       }
       requestSectionReload(index)
@@ -162,6 +168,19 @@ export function useCombinedDiffSectionRetry({
     [deferredReloadKeysRef, requestSectionReload, sectionsRef]
   )
   retryDeferredSectionReloadRef.current = retryDeferredSectionReload
+
+  useLayoutEffect(() => {
+    const deferred = deferredReloadKeysRef.current
+    if (deferred.size === 0) {
+      return
+    }
+    for (let index = 0; index < sections.length; index += 1) {
+      const section = sections[index]
+      if (section && !section.dirty && deferred.has(section.key)) {
+        retryDeferredSectionReload(index)
+      }
+    }
+  }, [deferredReloadKeysRef, retryDeferredSectionReload, sections])
 
   const ensureSectionLoaded = useCallback(
     (index: number): void => {

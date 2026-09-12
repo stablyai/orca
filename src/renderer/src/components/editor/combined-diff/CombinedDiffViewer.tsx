@@ -116,6 +116,7 @@ export default function CombinedDiffViewer({
   const { ensureSectionLoaded, requestSectionReload, retrySection } = useCombinedDiffSectionRetry({
     invalidateViewStateCache: restore.invalidateViewStateCache,
     registry,
+    sections,
     setSectionHeights,
     setSections
   })

@@ -24,7 +24,12 @@ export function getPierreDiffCacheIdentity(
   const key = `orca-diff:${++nextIdentity}`
   identities.set(scope, { original, modified, key })
   retainedCharacters += original.length + modified.length
-  while (identities.size > 64 || retainedCharacters > MAX_RETAINED_CHARACTERS) {
+  // Why: a single diff can exceed the cap (4e6–6e6 sits under the large-diff render gate).
+  // Evicting it immediately would mint a new identity on every remount and defeat Pierre's AST cache.
+  while (
+    identities.size > 64 ||
+    (retainedCharacters > MAX_RETAINED_CHARACTERS && identities.size > 1)
+  ) {
     const oldest = identities.entries().next().value
     if (!oldest) {
       break
