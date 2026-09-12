@@ -14,6 +14,7 @@ import {
 } from '@/store/plugin-panels'
 import { useShortcutLabel } from '@/hooks/useShortcutLabel'
 import { translate } from '@/i18n/i18n'
+import { selectWorktreeDiffCommentsOrEmpty } from '@/store/worktree-diff-comments-selector'
 import { AgentSessionHistoryIcon } from './agent-session-history-icon'
 import type { ActivityBarItem } from './activity-bar-buttons'
 
@@ -35,8 +36,9 @@ export function useRightSidebarActivityItems({
   const checksShortcut = useShortcutLabel('sidebar.checks.toggle')
   const portsShortcut = useShortcutLabel('sidebar.ports.toggle')
   const activeWorktreeId = useAppStore((s) => (rightSidebarOpen ? s.activeWorktreeId : null))
-  // Why: source control and checks are meaningless for non-git folders.
-  // Hide those tabs so the activity bar only shows relevant actions.
+  // Why: source control and checks are normally meaningless for non-git folders.
+  // A folder with editor review notes still needs the source-control Notes shelf
+  // so its global send shortcut has a mounted menu responder.
   const activeWorktree = useAppStore((s) =>
     activeWorktreeId ? (s.getKnownWorktreeById(activeWorktreeId) ?? null) : null
   )
@@ -45,6 +47,9 @@ export function useRightSidebarActivityItems({
   const isFolderWorkspace = activeWorkspaceScope?.type === 'folder'
   const isFolder = isFolderWorkspace || (activeRepo ? isFolderRepo(activeRepo) : false)
   const isSshRepo = Boolean(activeRepo?.connectionId)
+  const hasReviewNotes = useAppStore(
+    (s) => selectWorktreeDiffCommentsOrEmpty(s, activeWorktreeId).length > 0
+  )
   const pluginSystemEnabled = useAppStore((s) => s.settings?.pluginSystemEnabled === true)
   const pluginPanels = usePluginPanels()
   const visiblePluginPanels = useMemo(
@@ -128,11 +133,12 @@ export function useRightSidebarActivityItems({
   const visibleItems = useMemo(
     () =>
       getVisibleRightSidebarActivityItems(activityItems, {
+        hasReviewNotes,
         isFolder,
         isFolderWorkspace,
         isSshRepo
       }),
-    [activityItems, isFolder, isFolderWorkspace, isSshRepo]
+    [activityItems, hasReviewNotes, isFolder, isFolderWorkspace, isSshRepo]
   )
 
   const activeFolderWorkspaceKey = isFolderWorkspace ? (activeWorktreeId ?? null) : null

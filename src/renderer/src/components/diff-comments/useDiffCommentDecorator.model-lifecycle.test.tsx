@@ -5,11 +5,15 @@ import type { editor as MonacoEditor } from 'monaco-editor'
 
 const storeFixture = vi.hoisted(() => ({
   activeGroupIdByWorktree: {},
-  clearDeliveredDiffComments: vi.fn()
+  clearDeliveredDiffComments: vi.fn(),
+  keybindings: { 'editor.addReviewNote': ['Ctrl+L'] }
 }))
 
 vi.mock('@/store', () => ({
-  useAppStore: (selector: (state: typeof storeFixture) => unknown) => selector(storeFixture)
+  useAppStore: Object.assign(
+    (selector: (state: typeof storeFixture) => unknown) => selector(storeFixture),
+    { getState: () => storeFixture }
+  )
 }))
 
 import { useDiffCommentDecorator } from './useDiffCommentDecorator'
@@ -57,5 +61,84 @@ describe('useDiffCommentDecorator model lifecycle', () => {
     expect(disposeMouseMove).toHaveBeenCalledOnce()
     expect(disposeMouseLeave).toHaveBeenCalledOnce()
     expect(disposeScroll).toHaveBeenCalledOnce()
+  })
+
+  it('opens a diff note from the configured shortcut and preserves an open draft', () => {
+    const editorDomNode = document.createElement('div')
+    const input = document.createElement('textarea')
+    editorDomNode.appendChild(input)
+    document.body.appendChild(editorDomNode)
+    let positionLine = 4
+    const editor = {
+      getDomNode: () => editorDomNode,
+      getModel: () => ({ getLineCount: () => 8 }),
+      getOption: () => 20,
+      getPosition: () => ({ lineNumber: positionLine, column: 1 }),
+      getScrollTop: () => 10,
+      getSelection: () => null,
+      getTopForLineNumber: (lineNumber: number) => lineNumber * 20,
+      onMouseMove: () => ({ dispose: vi.fn() }),
+      onMouseLeave: () => ({ dispose: vi.fn() }),
+      onDidScrollChange: () => ({ dispose: vi.fn() }),
+      changeViewZones: (callback: (accessor: object) => void) => callback({})
+    } as unknown as MonacoEditor.ICodeEditor
+    const onAddCommentClick = vi.fn()
+    const hook = renderHook(
+      ({ isAddCommentDraftOpen }) =>
+        useDiffCommentDecorator({
+          editor,
+          filePath: 'notes.ts',
+          worktreeId: 'worktree-1',
+          comments: [],
+          commentableLineNumbers: [4, 5],
+          enableAddReviewNoteShortcut: true,
+          isAddCommentDraftOpen,
+          onAddCommentClick,
+          onDeleteComment: vi.fn()
+        }),
+      { initialProps: { isAddCommentDraftOpen: false } }
+    )
+    const event = new KeyboardEvent('keydown', {
+      key: 'l',
+      code: 'KeyL',
+      ctrlKey: true,
+      bubbles: true,
+      cancelable: true
+    })
+
+    input.dispatchEvent(event)
+
+    expect(event.defaultPrevented).toBe(true)
+    expect(onAddCommentClick).toHaveBeenCalledWith({
+      lineNumber: 4,
+      startLine: undefined,
+      top: 90
+    })
+
+    hook.rerender({ isAddCommentDraftOpen: true })
+    positionLine = 5
+    const openDraftEvent = new KeyboardEvent('keydown', {
+      key: 'l',
+      code: 'KeyL',
+      ctrlKey: true,
+      bubbles: true,
+      cancelable: true
+    })
+    input.dispatchEvent(openDraftEvent)
+
+    expect(openDraftEvent.defaultPrevented).toBe(true)
+    expect(onAddCommentClick).toHaveBeenCalledOnce()
+
+    hook.unmount()
+    input.dispatchEvent(
+      new KeyboardEvent('keydown', {
+        key: 'l',
+        code: 'KeyL',
+        ctrlKey: true,
+        bubbles: true,
+        cancelable: true
+      })
+    )
+    expect(onAddCommentClick).toHaveBeenCalledOnce()
   })
 })

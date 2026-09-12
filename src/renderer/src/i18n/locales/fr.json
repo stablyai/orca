@@ -11690,8 +11690,6 @@
             "901140f47d": "Vérifiez le prompt avant de démarrer un agent.",
             "19652ddd76": "Résoudre les conflits avec l'IA",
             "c9ad22888e": "Choisissez la cible de comparaison de branches pour ce dépôt.",
-            "574d2f4413": "Effacer les notes",
-            "05bb8f4a48": "Annuler",
             "48db37cca9": "Tout afficher",
             "78ce2d37ac": "Pousse vers le fork",
             "c05fe04839": "Pousse vers le fork situé à {{value0}} (pas origin)",
@@ -12418,6 +12416,16 @@
                   "e7876a2bde": "Indexez au moins un fichier pour générer un message.",
                   "0904be2505": "Effacez le message pour le régénérer.",
                   "1ea9ba37aa": "Choisissez un agent dans Paramètres -> Git -> IA du contrôle de code source."
+                }
+              },
+              "panel": {
+                "notes": {
+                  "clear": {
+                    "dialog": {
+                      "cc676e6af8": "Effacer les notes",
+                      "43f996cfae": "Annuler"
+                    }
+                  }
                 }
               }
             }

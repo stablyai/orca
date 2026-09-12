@@ -1,13 +1,10 @@
 import React from 'react'
-import { Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { BaseRefPicker } from '@/components/settings/BaseRefPicker'
-import { Button } from '@/components/ui/button'
 import {
   Dialog,
   DialogContent,
   DialogDescription,
-  DialogFooter,
   DialogHeader,
   DialogTitle
 } from '@/components/ui/dialog'
@@ -22,12 +19,6 @@ type DiscardDialogProps = React.ComponentProps<typeof SourceControlDiscardDialog
 type TextGenerationDialogProps = React.ComponentProps<typeof SourceControlTextGenerationDialog>
 
 export function SourceControlDialogLayer({
-  clearNotesOpen,
-  clearNotesDescription,
-  clearNotesCount,
-  isClearingNotes,
-  onDismissClearNotes,
-  onConfirmClearNotes,
   pendingDiscard,
   onCancelDiscard,
   onConfirmDiscard,
@@ -64,12 +55,6 @@ export function SourceControlDialogLayer({
   onGeneratePullRequestFields,
   onSavePullRequestDefaults
 }: {
-  clearNotesOpen: boolean
-  clearNotesDescription: string
-  clearNotesCount: number
-  isClearingNotes: boolean
-  onDismissClearNotes: () => void
-  onConfirmClearNotes: () => void
   pendingDiscard: DiscardDialogProps['pendingDiscard']
   onCancelDiscard: DiscardDialogProps['onCancel']
   onConfirmDiscard: DiscardDialogProps['onConfirm']
@@ -108,43 +93,6 @@ export function SourceControlDialogLayer({
 }): React.JSX.Element {
   return (
     <>
-      <Dialog
-        open={clearNotesOpen}
-        onOpenChange={(open) => {
-          if (!open && !isClearingNotes) {
-            onDismissClearNotes()
-          }
-        }}
-      >
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle className="text-sm">
-              {translate('auto.components.right.sidebar.SourceControl.574d2f4413', 'Clear Notes')}
-            </DialogTitle>
-            <DialogDescription className="text-xs">{clearNotesDescription}</DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={onDismissClearNotes}
-              disabled={isClearingNotes}
-            >
-              {translate('auto.components.right.sidebar.SourceControl.05bb8f4a48', 'Cancel')}
-            </Button>
-            <Button
-              type="button"
-              variant="destructive"
-              onClick={onConfirmClearNotes}
-              disabled={isClearingNotes || clearNotesCount === 0}
-            >
-              <Trash2 className="size-4" />
-              {translate('auto.components.right.sidebar.SourceControl.574d2f4413', 'Clear Notes')}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
       <SourceControlDiscardDialog
         pendingDiscard={pendingDiscard}
         onCancel={onCancelDiscard}
