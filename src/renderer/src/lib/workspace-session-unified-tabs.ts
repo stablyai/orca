@@ -7,10 +7,6 @@ type PersistedUnifiedTabSessionData = Pick<
   'activeGroupIdByWorktree' | 'tabGroupLayouts' | 'tabGroups' | 'unifiedTabs'
 >
 
-function dedupePersistedTabIds(tabIds: string[]): string[] {
-  return Array.from(new Set(tabIds))
-}
-
 function prunePersistedLayoutForGroups(
   root: TabGroupLayoutNode,
   validGroupIds: Set<string>
@@ -43,17 +39,18 @@ function buildPersistedGroupsForWorktree(tabs: Tab[], groups: TabGroup[]): TabGr
 
   return groups
     .map((group) => {
-      const tabOrder = dedupePersistedTabIds([
+      const orderedTabIds = new Set([
         ...group.tabOrder.filter((tabId) => validTabIds.has(tabId)),
         ...(tabIdsByGroup.get(group.id) ?? [])
       ])
+      const tabOrder = Array.from(orderedTabIds)
       const activeTabId =
-        group.activeTabId && tabOrder.includes(group.activeTabId) ? group.activeTabId : null
+        group.activeTabId && orderedTabIds.has(group.activeTabId) ? group.activeTabId : null
       return {
         ...group,
         activeTabId,
         tabOrder,
-        recentTabIds: group.recentTabIds?.filter((tabId) => tabOrder.includes(tabId))
+        recentTabIds: group.recentTabIds?.filter((tabId) => orderedTabIds.has(tabId))
       }
     })
     .filter((group) => group.tabOrder.length > 0)
