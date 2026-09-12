@@ -8,6 +8,7 @@ import type { ExecutionHostId } from '../../shared/execution-host'
 import { setImmediate as yieldToEventLoop } from 'node:timers/promises'
 import type { RemoteHostPlatform } from '../ssh/ssh-remote-platform'
 import {
+  CodexSessionCollection,
   codexRolloutHardlinkIdentity,
   dedupeCodexRolloutFileAliases,
   dedupeCodexSessionsBySessionId
@@ -139,7 +140,7 @@ async function parseRemoteSessionCandidates(args: {
   issues: AiVaultScanIssue[]
   limit: number
 }): Promise<{ sessions: AiVaultSession[]; parsedFilePaths: Set<string> }> {
-  const sessions: AiVaultSession[] = []
+  const sessions = new CodexSessionCollection()
   const parsedFilePaths = new Set<string>()
   let index = 0
 
@@ -149,7 +150,7 @@ async function parseRemoteSessionCandidates(args: {
     }
 
     const remaining = args.candidates.length - index
-    const needed = Math.max(args.limit - sessions.length, 1)
+    const needed = Math.max(args.limit - sessions.size, 1)
     const batchSize = Math.min(REMOTE_SCAN_CONCURRENCY, needed, remaining)
     const batch = args.candidates.slice(index, index + batchSize)
     for (const candidate of batch) {
@@ -159,9 +160,11 @@ async function parseRemoteSessionCandidates(args: {
     const results = await Promise.all(
       batch.map((candidate) => parseRemoteSessionCandidate(candidate, args.context, args.issues))
     )
-    sessions.push(...results.filter(isAiVaultSession))
-    const uniqueSessions = dedupeCodexSessionsBySessionId(sessions)
-    sessions.splice(0, sessions.length, ...uniqueSessions)
+    for (const session of results) {
+      if (session) {
+        sessions.add(session)
+      }
+    }
     index += batchSize
     await yieldToEventLoop()
   }
@@ -169,7 +172,7 @@ async function parseRemoteSessionCandidates(args: {
   // The loop can terminate on the yield after its final batch, so re-check
   // rather than letting a cancelled scan return a partial parse as a success.
   throwIfAiVaultScanCancelled(args.context.signal)
-  return { sessions, parsedFilePaths }
+  return { sessions: [...sessions.values()], parsedFilePaths }
 }
 
 async function scanRemoteInScopeSessions(args: {
@@ -309,15 +312,14 @@ function normalizeRemoteScopePaths(scopePaths: readonly string[]): string[] {
 }
 
 function canStopParsingRemoteSessions(
-  sessions: AiVaultSession[],
+  sessions: CodexSessionCollection,
   limit: number,
   nextCandidateMtimeMs: number | undefined
 ): boolean {
-  if (sessions.length < limit || typeof nextCandidateMtimeMs !== 'number') {
+  if (sessions.size < limit || typeof nextCandidateMtimeMs !== 'number') {
     return false
   }
-  const visibleCutoff = sessions
-    .map(sessionSortTime)
+  const visibleCutoff = Array.from(sessions.values(), sessionSortTime)
     .sort((left, right) => right - left)
     .at(limit - 1)
 
