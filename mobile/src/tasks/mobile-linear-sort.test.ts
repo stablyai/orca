@@ -27,6 +27,7 @@ function originalSort(input: readonly LinearIssue[], mode: LinearOrderBy): Linea
       return taskTime(b.updatedAt) - taskTime(a.updatedAt)
     }
     if (mode === 'identifier') {
+      // oxlint-disable-next-line sort-comparator-performance/no-repeated-collator -- Preserve the old comparator as the parity oracle.
       return a.identifier.localeCompare(b.identifier, undefined, { numeric: true })
     }
     return (
