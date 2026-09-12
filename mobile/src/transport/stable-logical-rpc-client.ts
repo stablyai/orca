@@ -7,12 +7,16 @@ import {
 import { waitForAuthenticated } from './replacement-session-authentication'
 import { projectMobileRpcRequestParams } from './mobile-rpc-request-projection'
 import { LogicalClientConnectionPath } from './logical-client-connection-path'
+import { isRpcDeliveryUnknown, markRpcDeliveryUnknown } from './rpc-delivery-ambiguity'
 
 export type MobileConnectionPath = 'lan' | 'tailscale' | 'relay'
 
 export class LogicalClientCutoverError extends Error {
-  constructor() {
-    super('RPC interrupted by connection migration')
+  constructor(cause?: unknown) {
+    super('RPC interrupted by connection migration', { cause })
+    if (isRpcDeliveryUnknown(cause)) {
+      markRpcDeliveryUnknown(this)
+    }
   }
 }
 
@@ -31,10 +35,6 @@ type SubscriptionRecord = {
   options?: Parameters<RpcClient['subscribe']>[3]
   disposePhysical: (() => void) | null
   cancelled: boolean
-}
-
-type PendingRequest = {
-  reject: (error: Error) => void
 }
 
 export type StableLogicalRpcClient = RpcClient & {
@@ -75,7 +75,6 @@ export function createStableLogicalRpcClient(
   let nextSubscriptionId = 0
   let activeStateUnsubscribe: (() => void) | null = null
   const subscriptions = new Map<number, SubscriptionRecord>()
-  const pendingRequests = new Set<PendingRequest>()
   const stateListeners = new Set<(state: ConnectionState) => void>()
   let state = initialSession.getState()
   const connectionPath = new LogicalClientConnectionPath(() => state === 'connected')
@@ -93,13 +92,10 @@ export function createStableLogicalRpcClient(
       const requestGeneration = generation
       const session = activeSession
       return new Promise<RpcResponse>((resolve, reject) => {
-        const pending = { reject }
-        pendingRequests.add(pending)
         void session
           .sendRequest(method, projectMobileRpcRequestParams(method, params), options)
           .then(
             (response) => {
-              pendingRequests.delete(pending)
               if (closed) {
                 reject(new Error('Client closed'))
               } else if (requestGeneration !== generation) {
@@ -109,8 +105,9 @@ export function createStableLogicalRpcClient(
               }
             },
             (error: unknown) => {
-              pendingRequests.delete(pending)
-              reject(error)
+              reject(
+                requestGeneration !== generation ? new LogicalClientCutoverError(error) : error
+              )
             }
           )
       })
@@ -265,15 +262,12 @@ export function createStableLogicalRpcClient(
       suspended = false
       previousStateUnsubscribe?.()
       bindActiveState(nextSession, nextGeneration)
-      for (const pending of pendingRequests) {
-        pending.reject(new LogicalClientCutoverError())
-      }
-      pendingRequests.clear()
       state = nextSession.getState()
       connectionPath.clearAfterConnected()
       for (const listener of stateListeners) {
         listener(state)
       }
+      // Only the physical sender knows whether a pending request reached the wire.
       previous.close()
     },
 

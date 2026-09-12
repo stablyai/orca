@@ -90,6 +90,7 @@ describe('stable logical RPC client', () => {
     const nextSession = new FakeSession('connecting')
     const pending = deferred<RpcResponse>()
     oldSession.sendRequest.mockReturnValue(pending.promise)
+    oldSession.close.mockImplementation(() => pending.reject(new Error('Client closed')))
     nextSession.sendRequest.mockResolvedValue(success('next'))
     const client = createStableLogicalRpcClient(oldSession, 'lan')
     const stream = vi.fn()
