@@ -1,6 +1,10 @@
-// Cron field parsing for Orca's automation schedules.
-// A field step is bounded by the count of distinct values the field holds: a step of 90 on
-// minutes is one value at :00, never "every 90 minutes", so it is refused as input (#15895).
+// Orca's cron dialect (vixie/POSIX):
+// - `N/step` is the open-ended sequence `N-max/step`; a bare `N` is only itself (#15723).
+// - A day field is restricted iff no term of it ranges over a star, so `1-31` restricts but
+//   `*/2` does not (#15896). Restriction is lexical: the expanded set cannot tell `1-31` from
+//   `*`. When both day fields are restricted the day matches on either; otherwise on both.
+// - A field step is bounded by the count of distinct values the field holds; a step of 90 on
+//   minutes is one value at :00, never "every 90 minutes" (#15895).
 export type CronParseOptions = {
   /** Input-time gate: reject a step wider than the field's domain instead of silently
    *  degenerating to a single value. Off for persisted rows, which must keep running the
@@ -104,7 +108,8 @@ export function parseCronField(args: {
       end = parseCronNumber(endPart, args.names ?? null, args.field)
     } else {
       start = parseCronNumber(rangePart, args.names ?? null, args.field)
-      end = start
+      // `N/step` is the open-ended `N-max/step` sequence; a bare `N` is only itself.
+      end = stepPart === undefined ? start : args.max
     }
 
     const normalizedStart = args.normalize?.(start) ?? start
@@ -130,4 +135,13 @@ export function parseCronField(args: {
     throw new Error(`Invalid cron ${args.field}.`)
   }
   return result
+}
+
+// A day field restricts iff none of its terms ranges over a star, matching what vixie cron
+// and robfig/cron both do. crontab(5) says "restricted (ie, are not *)", which reads as a
+// literal-`*` test, but vixie's own entry.c sets DOM_STAR/DOW_STAR off the field's leading
+// character, so `*/2` is a star there too; we follow the implementations over the prose,
+// because reading `*/2` as restricted flips its day rule to OR and fires it ~8x more.
+export function isCronDayFieldRestricted(field: string): boolean {
+  return !field.split(',').some((term) => term.split('/')[0].trim() === '*')
 }
