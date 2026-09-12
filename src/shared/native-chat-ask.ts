@@ -77,6 +77,10 @@ for (const name of ['AskUserQuestion', 'ask_user_question', 'askUserQuestion']) 
 }
 
 function parseToolInput(toolName: string | undefined, input: unknown): AskPrompt | null {
+  // Async questions return before the user answers and never own a blocking selector.
+  if (toolName === 'request_user_input_async') {
+    return null
+  }
   const parser = toolName ? QUESTION_TOOL_PARSERS.get(toolName) : undefined
   return (parser ? parser(input) : null) ?? parseQuestionsShape(input)
 }

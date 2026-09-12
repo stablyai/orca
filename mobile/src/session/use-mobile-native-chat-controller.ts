@@ -16,6 +16,7 @@ import { useThrottledLatestValue } from './use-throttled-latest-value'
 import type { MobileNativeChatController } from './mobile-native-chat-controller-contract'
 import { useMobileBridgeChatPromptWrites } from './use-mobile-bridge-chat-prompt-writes'
 import { useMobileNativeChatActiveResolution } from './use-mobile-native-chat-active-resolution'
+import { useMobileNativeChatAskActions } from './use-mobile-native-chat-ask-actions'
 
 export type { MobileNativeChatController } from './mobile-native-chat-controller-contract'
 
@@ -251,8 +252,14 @@ export function useMobileNativeChatController(args: {
     recordSessionOptionCommandRef.current = recordNativeChatSessionOptionCommand
   }, [recordNativeChatSessionOptionCommand])
   // Card actions retire the route's held failure banner too, not just sends.
-  const answerAsk = useNativeChatAcceptedAction(handleNativeChatAnswerAsk, onSendResolved)
-  const cancelAsk = useNativeChatAcceptedAction(handleNativeChatCancelAsk, onSendResolved)
+  const { answer: answerAsk, cancel: cancelAsk } = useMobileNativeChatAskActions({
+    prompt: nativeChatAskPrompt,
+    setComposerText: setChatComposerText,
+    streamIdentity,
+    answerBlocking: handleNativeChatAnswerAsk,
+    cancelBlocking: handleNativeChatCancelAsk,
+    onSendResolved
+  })
   const handleNativeChatRespondPermission = activeChatStructured
     ? structuredNativeChat.respondPermission
     : legacyHandleNativeChatRespondPermission

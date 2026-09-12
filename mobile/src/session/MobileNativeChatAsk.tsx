@@ -3,6 +3,7 @@ import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-
 import { Check } from 'lucide-react-native'
 import type { AskAnswerSelection, AskPrompt } from '../../../src/shared/native-chat-ask'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { isMobileAsyncAsk } from './mobile-native-chat-async-ask'
 
 type Props = {
   prompt: AskPrompt
@@ -21,6 +22,7 @@ const OTHER = -1
  *  on the last step), and a Cancel that dismisses the prompt. Neutral styling
  *  with a subtle green accent on the active choice to match the rest of the app. */
 export function MobileNativeChatAsk({ prompt, onAnswer, onCancel }: Props): React.JSX.Element {
+  const composeAnswer = isMobileAsyncAsk(prompt)
   const [index, setIndex] = useState(0)
   const [selections, setSelections] = useState<number[][]>(() => prompt.questions.map(() => []))
   const [otherText, setOtherText] = useState<string[]>(() => prompt.questions.map(() => ''))
@@ -174,7 +176,7 @@ export function MobileNativeChatAsk({ prompt, onAnswer, onCancel }: Props): Reac
           disabled={submitting}
           hitSlop={8}
         >
-          <Text style={styles.cancelText}>Cancel</Text>
+          <Text style={styles.cancelText}>{composeAnswer ? 'Dismiss' : 'Cancel'}</Text>
         </Pressable>
         {total > 1 ? (
           <Text style={styles.progress}>
@@ -187,7 +189,7 @@ export function MobileNativeChatAsk({ prompt, onAnswer, onCancel }: Props): Reac
           disabled={!canAdvance}
         >
           <Text style={[styles.nextText, !canAdvance && styles.nextTextDisabled]}>
-            {isLast ? 'Submit' : 'Next'}
+            {isLast ? (composeAnswer ? 'Add to message' : 'Submit') : 'Next'}
           </Text>
         </Pressable>
       </View>
