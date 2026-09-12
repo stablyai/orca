@@ -203,9 +203,23 @@ afterEach(() => {
   useAppStore.setState(initialAppState, true)
   vi.useRealTimers()
   vi.restoreAllMocks()
+  vi.unstubAllGlobals()
 })
 
 describe('useAiVaultSessionRefresh refocus behavior', () => {
+  it('refreshes in a non-secure context without crypto.randomUUID', async () => {
+    vi.stubGlobal('crypto', {
+      getRandomValues: (bytes: Uint8Array) => bytes.fill(0)
+    })
+
+    await renderHook()
+    await flushMicrotasks()
+
+    expect(lastCallArgs()).toMatchObject({
+      requestToken: '00000000-0000-4000-8000-000000000000'
+    })
+  })
+
   it('uses the shared scan cache on local panel entry', async () => {
     await renderHook()
     await flushMicrotasks()
