@@ -65,6 +65,31 @@ describe('CodexSessionCollection', () => {
     ).toEqual([first, first, first])
   })
 
+  it('preserves order as winning rows alternate between single and repeated occurrences', () => {
+    const other = session({ agent: 'claude' })
+    const custom = session({ codexHome: '/tmp/custom' })
+    const managed = session({ codexHome: '/tmp/codex-runtime-home/home' })
+    const newerManaged = session({ ...managed, updatedAt: '1970-01-01T00:00:03Z' })
+    const real = session()
+    const newerReal = session({ updatedAt: '1970-01-01T00:00:05Z' })
+    const tied = session({ ...newerReal })
+
+    expect(
+      checkBatches([
+        [custom, other],
+        [managed],
+        [managed, other, managed],
+        [newerManaged],
+        [real],
+        [real],
+        [real, other],
+        [newerReal],
+        [newerReal],
+        [tied]
+      ])
+    ).toEqual([other, other, other, newerReal, newerReal])
+  })
+
   it('retains non-Codex and non-rollout occurrences unchanged', () => {
     const claude = session({ agent: 'claude' })
     const otherFile = session({ filePath: '/tmp/session.jsonl' })

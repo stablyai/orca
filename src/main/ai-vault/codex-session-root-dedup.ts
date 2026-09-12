@@ -255,7 +255,10 @@ export function dedupeCodexSessionsBySessionId(
 /** Scan-local accumulation; parsed rows must not be mutated after admission. */
 export class CodexSessionCollection {
   private readonly sessions = new Map<number, AiVaultSession>()
-  private readonly bestByKey = new Map<string, { session: AiVaultSession; indices: number[] }>()
+  private readonly bestByKey = new Map<
+    string,
+    { session: AiVaultSession; indices: number | number[] }
+  >()
   private nextIndex = 0
 
   get size(): number {
@@ -273,17 +276,25 @@ export class CodexSessionCollection {
       const best = this.bestByKey.get(key)
       if (best?.session === session) {
         // The batch filter retains every occurrence of the winning object.
-        best.indices.push(index)
+        if (typeof best.indices === 'number') {
+          best.indices = [best.indices, index]
+        } else {
+          best.indices.push(index)
+        }
       } else {
         if (best) {
           if (!codexSessionAliasBeats(session, best.session)) {
             return
           }
-          for (const previousIndex of best.indices) {
-            this.sessions.delete(previousIndex)
+          if (typeof best.indices === 'number') {
+            this.sessions.delete(best.indices)
+          } else {
+            for (const previousIndex of best.indices) {
+              this.sessions.delete(previousIndex)
+            }
           }
         }
-        this.bestByKey.set(key, { session, indices: [index] })
+        this.bestByKey.set(key, { session, indices: index })
       }
     }
     this.sessions.set(index, session)
