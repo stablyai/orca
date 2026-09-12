@@ -27,7 +27,8 @@ async function* cancellableContentLines(
 
   for (let index = 0; index <= content.length; index++) {
     if (index < content.length && content.charCodeAt(index) !== 10) {
-      continue
+      const newline = content.indexOf('\n', index)
+      index = newline === -1 ? content.length : newline
     }
     const lineEnd = index > lineStart && content.charCodeAt(index - 1) === 13 ? index - 1 : index
     yield content.slice(lineStart, lineEnd)
