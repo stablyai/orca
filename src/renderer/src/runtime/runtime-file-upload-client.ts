@@ -1,6 +1,9 @@
 import { joinPath, normalizeRelativePath } from '@/lib/path'
 import type { RuntimeFileOperationArgs } from './runtime-file-client-types'
-import { callRuntimeFileMutation } from './runtime-file-mutation-rpc'
+import {
+  callRuntimeFileImportMutation,
+  type RuntimeFileImportSession
+} from './runtime-file-mutation-rpc'
 import {
   getRemoteFileArgs,
   joinRuntimeRelativePath,
@@ -12,32 +15,27 @@ import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
 const REMOTE_UPLOAD_BASE64_CHUNK_CHARS = 512 * 1024
 
 export async function uploadRuntimeFileWithoutClobber(
-  target: { kind: 'environment'; environmentId: string },
+  session: RuntimeFileImportSession,
   worktreeId: string,
   relativePath: string,
   contentBase64: string,
-  assertCurrent?: () => void,
   expectedSshConnectionGeneration?: number,
   expectedSshTargetId?: string,
-  expectedExecutionHostId?: 'local' | `ssh:${string}`,
-  expectedEnvironmentPairingRevision?: number
+  expectedExecutionHostId?: 'local' | `ssh:${string}`
 ): Promise<void> {
   const tempRelativePath = makeRuntimeUploadTempPath(relativePath)
   try {
     await writeRuntimeBase64File(
-      target,
+      session,
       worktreeId,
       tempRelativePath,
       contentBase64,
-      assertCurrent,
       expectedSshConnectionGeneration,
       expectedSshTargetId,
-      expectedExecutionHostId,
-      expectedEnvironmentPairingRevision
+      expectedExecutionHostId
     )
-    assertCurrent?.()
-    await callRuntimeFileMutation(
-      target,
+    await callRuntimeFileImportMutation(
+      session,
       'files.commitUpload',
       {
         worktree: toRuntimeWorktreeSelector(worktreeId),
@@ -47,13 +45,11 @@ export async function uploadRuntimeFileWithoutClobber(
         expectedSshConnectionGeneration,
         expectedExecutionHostId
       },
-      30_000,
-      expectedEnvironmentPairingRevision
+      30_000
     )
   } finally {
-    assertCurrent?.()
-    await callRuntimeFileMutation(
-      target,
+    await callRuntimeFileImportMutation(
+      session,
       'files.delete',
       {
         worktree: toRuntimeWorktreeSelector(worktreeId),
@@ -63,27 +59,23 @@ export async function uploadRuntimeFileWithoutClobber(
         expectedSshConnectionGeneration,
         expectedExecutionHostId
       },
-      15_000,
-      expectedEnvironmentPairingRevision
+      15_000
     ).catch(() => {})
   }
 }
 
 async function writeRuntimeBase64File(
-  target: { kind: 'environment'; environmentId: string },
+  session: RuntimeFileImportSession,
   worktreeId: string,
   relativePath: string,
   contentBase64: string,
-  assertCurrent?: () => void,
   expectedSshConnectionGeneration?: number,
   expectedSshTargetId?: string,
-  expectedExecutionHostId?: 'local' | `ssh:${string}`,
-  expectedEnvironmentPairingRevision?: number
+  expectedExecutionHostId?: 'local' | `ssh:${string}`
 ): Promise<void> {
   if (contentBase64.length <= REMOTE_UPLOAD_BASE64_CHUNK_CHARS) {
-    assertCurrent?.()
-    await callRuntimeFileMutation(
-      target,
+    await callRuntimeFileImportMutation(
+      session,
       'files.writeBase64',
       {
         worktree: toRuntimeWorktreeSelector(worktreeId),
@@ -93,16 +85,14 @@ async function writeRuntimeBase64File(
         expectedSshConnectionGeneration,
         expectedExecutionHostId
       },
-      30_000,
-      expectedEnvironmentPairingRevision
+      30_000
     )
     return
   }
 
   for (let offset = 0; offset < contentBase64.length; offset += REMOTE_UPLOAD_BASE64_CHUNK_CHARS) {
-    assertCurrent?.()
-    await callRuntimeFileMutation(
-      target,
+    await callRuntimeFileImportMutation(
+      session,
       'files.writeBase64Chunk',
       {
         worktree: toRuntimeWorktreeSelector(worktreeId),
@@ -113,8 +103,7 @@ async function writeRuntimeBase64File(
         expectedSshConnectionGeneration,
         expectedExecutionHostId
       },
-      30_000,
-      expectedEnvironmentPairingRevision
+      30_000
     )
   }
 }
@@ -131,8 +120,7 @@ function makeRuntimeUploadTempPath(relativePath: string): string {
 export async function ensureRuntimeDirectory(
   context: RuntimeFileOperationArgs,
   destinationDir: string,
-  assertCurrent: () => void,
-  expectedEnvironmentPairingRevision: number | undefined
+  session: RuntimeFileImportSession
 ): Promise<void> {
   const destinationArgs = getRemoteFileArgs(context, destinationDir)
   if (!destinationArgs) {
@@ -145,20 +133,20 @@ export async function ensureRuntimeDirectory(
   for (const part of parts) {
     current = joinRuntimeRelativePath(current, part)
     const absolutePath = joinPath(context.worktreePath ?? '', current)
-    assertCurrent()
-    if (await runtimePathExists(context, absolutePath, expectedEnvironmentPairingRevision)) {
+    session.assertCurrent()
+    if (
+      await runtimePathExists(context, absolutePath, session.expectedEnvironmentPairingRevision)
+    ) {
       continue
     }
-    assertCurrent?.()
-    await callRuntimeFileMutation(
-      destinationArgs.target,
+    await callRuntimeFileImportMutation(
+      session,
       'files.createDir',
       withSshMutationExpectation(context, {
         worktree: destinationArgs.worktreeSelector,
         relativePath: current
       }),
-      15_000,
-      expectedEnvironmentPairingRevision
+      15_000
     )
   }
 }

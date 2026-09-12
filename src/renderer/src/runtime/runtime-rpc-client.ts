@@ -54,6 +54,7 @@ export async function callRuntimeRpc<TResult>(
     skipCompatibilityCheck?: boolean
     signal?: AbortSignal
     expectedEnvironmentPairingRevision?: number
+    expectedEnvironmentRuntimeId?: string
   } = {}
 ): Promise<TResult> {
   const expectedEnvironmentPairingRevision =
@@ -88,7 +89,8 @@ export async function callRuntimeRpc<TResult>(
           params: nextParams,
           timeoutMs: options.timeoutMs,
           signal: options.signal,
-          expectedEnvironmentPairingRevision
+          expectedEnvironmentPairingRevision,
+          expectedEnvironmentRuntimeId: options.expectedEnvironmentRuntimeId
         })
   return unwrapRuntimeRpcResult<TResult>(response as RuntimeRpcResponse<TResult>)
 }

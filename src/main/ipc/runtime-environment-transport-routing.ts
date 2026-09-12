@@ -70,7 +70,7 @@ export async function callRuntimeEnvironment(
   timeoutMs?: number,
   expectedEnvironmentPairingRevision?: number,
   envelope?: RuntimeOrchestrationEnvelope,
-  options?: { signal?: AbortSignal }
+  options?: { signal?: AbortSignal; expectedEnvironmentRuntimeId?: string }
 ): Promise<RuntimeRpcResponse<unknown>> {
   if (method === 'status.get') {
     const environment = resolveEnvironment(userDataPath, selector)
@@ -97,7 +97,8 @@ export async function callRuntimeEnvironment(
         const revisionFailure = runtimeEnvironmentRevisionFailure(
           currentEnvironment,
           expectedEnvironmentPairingRevision,
-          method
+          method,
+          options?.expectedEnvironmentRuntimeId
         )
         if (revisionFailure) {
           return revisionFailure
