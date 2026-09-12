@@ -111,6 +111,9 @@ export function buildBreakdown(
 ): CodexUsageBreakdownRow[] {
   const rows = new Map<string, CodexUsageBreakdownRow>()
   const filteredDaily = getFilteredDaily(state, scope, range)
+  if (filteredDaily.length === 0) {
+    return []
+  }
   const filteredSessions = getFilteredSessions(state, scope, range)
 
   for (const daily of filteredDaily) {
