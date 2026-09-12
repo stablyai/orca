@@ -135,6 +135,22 @@ describe('discoverSkillsOnTarget', () => {
     expect(wslScans).toHaveLength(3)
   })
 
+  it('distinguishes an absent WSL cwd from the literal undefined path', async () => {
+    await discoverSkillsOnTarget(
+      { kind: 'wsl', distro: 'Ubuntu', homeDir: '/home/dev', cwd: undefined },
+      []
+    )
+    await discoverSkillsOnTarget(
+      { kind: 'wsl', distro: 'Ubuntu', homeDir: '/home/dev', cwd: 'undefined' },
+      []
+    )
+
+    expect(wslScans).toEqual([
+      { distro: 'Ubuntu', homeDir: '/home/dev' },
+      { distro: 'Ubuntu', homeDir: '/home/dev', cwd: 'undefined' }
+    ])
+  })
+
   it('re-reads a WSL target when the caller refreshes', async () => {
     const target = {
       kind: 'wsl',

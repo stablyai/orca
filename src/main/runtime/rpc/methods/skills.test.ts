@@ -106,6 +106,25 @@ describe('skills.discover RPC', () => {
   it('accepts a params payload from an older client that cannot send refresh', () => {
     expect(discoverMethod().params?.parse({ cwd: '/repo' })).toEqual({ cwd: '/repo' })
   })
+
+  it('preserves portable filters through the server RPC boundary', async () => {
+    await discoverMethod().handler(
+      { names: ['orchestration'], sourceKinds: ['home'] },
+      makeContext({})
+    )
+
+    expect(vi.mocked(resolveSkillDiscoveryTarget)).toHaveBeenLastCalledWith(
+      expect.objectContaining({ names: ['orchestration'], sourceKinds: ['home'] })
+    )
+  })
+
+  it('accepts empty portable filters as an unbounded request', async () => {
+    await discoverMethod().handler({ names: [], sourceKinds: [] }, makeContext({}))
+
+    expect(vi.mocked(resolveSkillDiscoveryTarget)).toHaveBeenLastCalledWith(
+      expect.objectContaining({ names: [], sourceKinds: [] })
+    )
+  })
 })
 
 describe('skills.install RPC', () => {

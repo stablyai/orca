@@ -82,6 +82,88 @@ describe('WSL skill discovery', () => {
     expect(script).toContain(`'/work/alice'\\''s project/.agents/skills'`)
   })
 
+  it('filters requested names before reading skill payloads', () => {
+    const script = buildWslSkillDiscoveryCommand([homeRoot], ['Orchestration', 'computer-use'])
+
+    expect(script).toContain("'orchestration'|'computer-use') return 0")
+    expect(script).toContain('local normalized_name=${1,,}')
+    expect(script).toContain('metadata_name_known=0')
+    expect(script).toContain('IFS= read -r -n "$remaining" line || read_status=$?')
+    expect(script).toContain('[ "$line_length" -ge "$remaining" ] && return')
+    expect(script).toContain('[[ "$candidate_name" =~ $non_ascii_pattern ]] && continue')
+    expect(script).toContain("line=${line#$'\\xEF\\xBB\\xBF'}")
+    expect(script).toContain('if [ "$metadata_name_known" -eq 1 ]; then')
+    expect(script).toContain('done < "$1"')
+    expect(script).not.toContain("awk '")
+    expect(script).not.toContain("tr '[:upper:]'")
+    expect(script.indexOf('matches_requested_name "$metadata_name" || continue')).toBeLessThan(
+      script.indexOf('encoded_markdown=$(head')
+    )
+  })
+
+  it('filters classified source kinds while parsing', () => {
+    const markdown = Buffer.from('---\nname: Bundled\n---\n').toString('base64')
+    const output = [
+      record('R', '0', '1'),
+      record(
+        'S',
+        '0',
+        '/home/alice/.codex/skills/.system/bundled/SKILL.md',
+        '/home/alice/.codex/skills/.system/bundled/SKILL.md',
+        '1700000000',
+        markdown
+      )
+    ].join('')
+
+    expect(parseWslSkillDiscoveryOutput(output, [homeRoot], 42, ['home']).skills).toEqual([])
+    expect(parseWslSkillDiscoveryOutput(output, [homeRoot], 42, []).skills).toHaveLength(1)
+    expect(parseWslSkillDiscoveryOutput(output, [homeRoot], 42, [], ['   ']).skills).toHaveLength(1)
+  })
+
+  it('keeps ASCII prefiltering for mixed-locale requested names', () => {
+    const script = buildWslSkillDiscoveryCommand([homeRoot], ['orchestration', 'hébergement'])
+
+    expect(script).toContain("'orchestration') return 0")
+    expect(script).not.toContain('hébergement) return 0')
+    expect(script).toContain('is_ascii_name "$directory_name"')
+  })
+
+  it('uses the TypeScript summary parser for uncertain WSL name candidates', () => {
+    const blockName = Buffer.from('\uFEFF---\nname: >-\n  Agent\n  Orchestration\n---\n').toString(
+      'base64'
+    )
+    const headingName = Buffer.from('# Computer Use\n\nUse the computer.\n').toString('base64')
+    const output = [
+      record('R', '0', '1'),
+      record(
+        'S',
+        '0',
+        '/home/alice/.agents/skills/renamed-a/SKILL.md',
+        '/home/alice/.agents/skills/renamed-a/SKILL.md',
+        '1700000000',
+        blockName
+      ),
+      record(
+        'S',
+        '0',
+        '/home/alice/.agents/skills/renamed-b/SKILL.md',
+        '/home/alice/.agents/skills/renamed-b/SKILL.md',
+        '1700000000',
+        headingName
+      )
+    ].join('')
+
+    expect(
+      parseWslSkillDiscoveryOutput(
+        output,
+        [homeRoot],
+        42,
+        ['home'],
+        ['agent orchestration', 'computer use']
+      ).skills.map((skill) => skill.name)
+    ).toEqual(['Agent Orchestration', 'Computer Use'])
+  })
+
   it('rejects malformed host responses instead of reporting an empty scan', () => {
     expect(() => parseWslSkillDiscoveryOutput(record('S', '9'), [homeRoot])).toThrow(
       'unknown source'

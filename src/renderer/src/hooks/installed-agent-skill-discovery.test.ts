@@ -231,6 +231,47 @@ describe('installed agent skill discovery lifecycle', () => {
       'repo-1:repair:wsl-distro-required:default'
     )
   })
+
+  it('normalizes effective filters into local, project, and environment keys', () => {
+    const target = {
+      projectRuntime: resolvedWslProjectRuntime,
+      names: [' Computer-Use ', 'orchestration', 'computer-use'],
+      sourceKinds: ['home' as const]
+    }
+    const normalizedFilters = [['computer-use', 'orchestration'], ['home']]
+
+    expect(getSkillDiscoveryTargetKey(target)).toBe(
+      JSON.stringify(['repo-1:wsl:Ubuntu', ...normalizedFilters])
+    )
+    expect(getRuntimeScopedSkillDiscoveryKey(remote('env-a'), target)).toBe(
+      JSON.stringify(['runtime:env-a', ...normalizedFilters])
+    )
+    expect(getSkillDiscoveryTargetKey(target, [], [])).toBe(
+      JSON.stringify(['repo-1:wsl:Ubuntu', ...normalizedFilters])
+    )
+    expect(getSkillDiscoveryTargetKey(target, ['ORCHESTRATION'], [])).toBe(
+      JSON.stringify(['repo-1:wsl:Ubuntu', ['orchestration'], ['home']])
+    )
+  })
+
+  it('isolates project-runtime caches by target-contained filters', async () => {
+    discoverSkillsForRuntimeTarget.mockResolvedValueOnce(result(1)).mockResolvedValueOnce(result(2))
+
+    await expect(
+      discoverInstalledAgentSkills(false, {
+        projectRuntime: resolvedWslProjectRuntime,
+        names: ['orchestration']
+      })
+    ).resolves.toEqual(result(1))
+    await expect(
+      discoverInstalledAgentSkills(false, {
+        projectRuntime: resolvedWslProjectRuntime,
+        names: ['computer-use']
+      })
+    ).resolves.toEqual(result(2))
+
+    expect(discoverSkillsForRuntimeTarget).toHaveBeenCalledTimes(2)
+  })
   it('keys the bounded cache by runtime scope, not by the client target', async () => {
     // Why: #6887 scopes remote scans by environment. The cap rewrites this same
     // module, so pin that getRuntimeScopedSkillDiscoveryKey stays the producer —
