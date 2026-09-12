@@ -29,4 +29,12 @@ describe('hostedReviewInfoFromGitHubPRInfo', () => {
       githubRepository
     })
   })
+
+  it('passes the unresolved review comment count through only when present', () => {
+    expect(hostedReviewInfoFromGitHubPRInfo(pr)).not.toHaveProperty('unresolvedReviewCommentCount')
+    expect(
+      hostedReviewInfoFromGitHubPRInfo({ ...pr, unresolvedReviewCommentCount: 3 })
+        .unresolvedReviewCommentCount
+    ).toBe(3)
+  })
 })

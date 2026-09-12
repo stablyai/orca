@@ -50,6 +50,8 @@ export type HostedReviewInfo = {
   /** Target branch name for review-created worktree compare-base repair. */
   baseRefName?: string
   conflictSummary?: PRConflictSummary
+  /** Unresolved, non-bot review threads. Absent when the provider could not report it. */
+  unresolvedReviewCommentCount?: number
 }
 
 export type HostedReviewForBranchArgs = {

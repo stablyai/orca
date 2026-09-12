@@ -5550,7 +5550,9 @@
           "cliCreated": "Created by Orca CLI",
           "jiraIssue": "Jira {{value0}}",
           "viewOnJira": "View on Jira",
-          "linkedJira": "Linked Jira {{value0}}"
+          "linkedJira": "Linked Jira {{value0}}",
+          "unresolvedCommentOne": "1 unresolved comment",
+          "unresolvedCommentOther": "{{count}} unresolved comments"
         },
         "WorktreeCardMetadataStatusBadges": {
           "fe188062a1": "State: Open",

@@ -26,7 +26,7 @@ vi.mock('./github-api-repository', async (importOriginal) =>
   )
 )
 
-import { getPRForBranch } from './client'
+import { getPRForBranch, getPRForBranchOutcome } from './client'
 import { resetPRForBranchMocks } from './client-test-harness'
 
 const {
@@ -203,5 +203,83 @@ describe('getPRForBranch', () => {
     const pr = await getPRForBranch('/repo-root', 'no-pr-branch')
 
     expect(pr).toBeNull()
+  })
+})
+
+describe('getPRForBranchOutcome unresolved review comment count', () => {
+  beforeEach(() => {
+    resetPRForBranchMocks(clientMocks)
+  })
+
+  const exactLookup = {
+    number: 42,
+    title: 'Fix PR discovery',
+    state: 'OPEN',
+    url: 'https://github.com/acme/widgets/pull/42',
+    statusCheckRollup: [],
+    updatedAt: '2026-03-28T00:00:00Z',
+    isDraft: false,
+    mergeable: 'MERGEABLE',
+    reviewDecision: null,
+    mergeStateStatus: 'CLEAN',
+    autoMergeRequest: null,
+    baseRefName: 'main',
+    headRefName: 'feature/test',
+    baseRefOid: 'base-oid',
+    headRefOid: 'head-oid'
+  }
+  const thread = (isResolved: boolean, login: string, typename = 'User') => ({
+    isResolved,
+    comments: { nodes: [{ author: { __typename: typename, login } }] }
+  })
+
+  function primeGhExec(): void {
+    ghExecFileAsyncMock.mockImplementation(async (args: string[]) => {
+      if (args[0] === 'api' && args[1]?.includes('pulls?head=')) {
+        return {
+          stdout: JSON.stringify([
+            {
+              number: 42,
+              title: 'Fix PR discovery',
+              state: 'open',
+              html_url: exactLookup.url,
+              updated_at: exactLookup.updatedAt,
+              base: { ref: 'main', sha: 'base-oid' },
+              head: { ref: 'feature/test', sha: 'head-oid' }
+            }
+          ])
+        }
+      }
+      if (args[0] === 'pr' && args[1] === 'view') {
+        return { stdout: JSON.stringify(exactLookup) }
+      }
+      if (args.includes('graphql') && args.some((arg) => arg.includes('reviewThreads'))) {
+        const nodes = [thread(false, 'alice'), thread(true, 'alice'), thread(false, 'ci', 'Bot')]
+        return {
+          stdout: JSON.stringify({
+            data: { repository: { pullRequest: { reviewThreads: { nodes } } } }
+          })
+        }
+      }
+      return { stdout: '{}' }
+    })
+  }
+
+  it('counts unresolved human review threads only when the hosted-review path opts in', async () => {
+    getOwnerRepoMock.mockResolvedValue({ owner: 'acme', repo: 'widgets' })
+    primeGhExec()
+
+    const outcome = await getPRForBranchOutcome('/repo-root', 'feature/test', null, null, null, {
+      includeUnresolvedReviewCommentCount: true
+    })
+    expect(outcome.kind === 'found' && outcome.pr.unresolvedReviewCommentCount).toBe(1)
+
+    ghExecFileAsyncMock.mockClear()
+    const plain = await getPRForBranchOutcome('/repo-root', 'feature/test')
+    expect(plain.kind === 'found' && plain.pr.unresolvedReviewCommentCount).toBeUndefined()
+    const askedForThreads = ghExecFileAsyncMock.mock.calls.some((call) =>
+      call[0].some((arg: string) => arg.includes('reviewThreads'))
+    )
+    expect(askedForThreads).toBe(false)
   })
 })

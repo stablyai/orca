@@ -4,7 +4,7 @@ import { cn } from '@/lib/utils'
 import { LinearIcon } from '@/components/icons/LinearIcon'
 import { JiraIcon } from '@/components/icons/JiraIcon'
 import { MetaIconBadge } from './WorktreeCardMetadataControls'
-import { getReviewLabel, ReviewIcon } from './worktree-review-helpers'
+import { getReviewLabel, ReviewCommentCountBadge, ReviewIcon } from './worktree-review-helpers'
 import type {
   WorktreeCardMetaBadgesProps,
   WorktreeCardMetaBadgesRootProps
@@ -44,6 +44,7 @@ export const WorktreeCardMetaBadges = React.forwardRef<
     linearIssue,
     jiraIssue,
     review,
+    unresolvedReviewCommentCount = 0,
     comment,
     automationProvenance,
     cliProvenance,
@@ -52,7 +53,9 @@ export const WorktreeCardMetaBadges = React.forwardRef<
   },
   ref
 ): React.JSX.Element | null {
+  // Why: the new card style passes review=null here and only the count, so the count alone keeps the row.
   if (
+    unresolvedReviewCommentCount <= 0 &&
     !hasWorktreeCardDetails({
       issue,
       linearIssue,
@@ -151,6 +154,9 @@ export const WorktreeCardMetaBadges = React.forwardRef<
         >
           <ReviewIcon review={review} />
         </MetaIconBadge>
+      )}
+      {unresolvedReviewCommentCount > 0 && (
+        <ReviewCommentCountBadge count={unresolvedReviewCommentCount} />
       )}
     </div>
   )

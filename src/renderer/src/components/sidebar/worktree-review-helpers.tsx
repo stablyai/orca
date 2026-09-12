@@ -1,6 +1,8 @@
 import { createElement } from 'react'
-import { GitMerge } from 'lucide-react'
+import { GitMerge, MessageSquare } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { translate } from '@/i18n/i18n'
 import { getReviewStateIcon } from '@/components/github/review-state-presentation'
 import { PullRequestIcon } from './WorktreeCardHelpers'
 import type { WorktreeCardPrDisplay } from './worktree-card-pr-display'
@@ -77,4 +79,42 @@ export function ReviewIcon({
   return createElement(Icon, {
     className: cn(className, getCheckTone(review) ?? getStateTone(review.state))
   })
+}
+
+export function getUnresolvedReviewCommentCount(review: WorktreeCardPrDisplay | null): number {
+  return review && 'unresolvedReviewCommentCount' in review
+    ? (review.unresolvedReviewCommentCount ?? 0)
+    : 0
+}
+
+/** Speech-bubble count beside the review glyph; callers hide it at zero. */
+export function ReviewCommentCountBadge({ count }: { count: number }): React.JSX.Element {
+  const label =
+    count === 1
+      ? translate(
+          'auto.components.sidebar.WorktreeCardMeta.unresolvedCommentOne',
+          '1 unresolved comment'
+        )
+      : translate(
+          'auto.components.sidebar.WorktreeCardMeta.unresolvedCommentOther',
+          '{{count}} unresolved comments',
+          { count }
+        )
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span
+          className="inline-flex h-3.5 shrink-0 items-center gap-0.5 text-[10px] font-medium tabular-nums leading-none text-muted-foreground/70 hover:text-foreground"
+          data-testid="review-comment-count"
+        >
+          <MessageSquare className="size-3" aria-hidden="true" />
+          {count}
+          <span className="sr-only">{label}</span>
+        </span>
+      </TooltipTrigger>
+      <TooltipContent side="top" sideOffset={4}>
+        {label}
+      </TooltipContent>
+    </Tooltip>
+  )
 }
