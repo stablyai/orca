@@ -7,6 +7,7 @@ import {
   type SleepingAgentSessionRecord
 } from '../../../../shared/agent-session-resume'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import { findTabAndWorktree } from './tab-group-state'
 import { findTabForAgentEntry } from './agent-status-pane-key-tab-binding'
 
 export function copyLaunchConfig(config: SleepingAgentLaunchConfig): SleepingAgentLaunchConfig {
@@ -39,6 +40,10 @@ export function sleepingRecordFromEntry(args: {
     return null
   }
   const tab = args.tab ?? findTabForAgentEntry(args.state, args.worktreeId, args.entry)
+  // Why: viewMode lives on the unified tab, not the legacy TerminalTab captured above.
+  const unifiedViewMode = tab
+    ? findTabAndWorktree(args.state.unifiedTabsByWorktree, tab.id)?.tab.viewMode
+    : undefined
   return {
     paneKey: args.entry.paneKey,
     ...(tab ? { tabId: tab.id } : {}),
@@ -57,6 +62,7 @@ export function sleepingRecordFromEntry(args: {
       ? { lastAssistantMessage: args.entry.lastAssistantMessage }
       : {}),
     ...(args.launchConfig ? { launchConfig: copyLaunchConfig(args.launchConfig) } : {}),
+    ...(unifiedViewMode === 'chat' ? { viewMode: 'chat' } : {}),
     ...(args.entry.interrupted ? { interrupted: true } : {}),
     ...(args.origin ? { origin: args.origin } : {})
   }

@@ -57,6 +57,11 @@ export type SleepingAgentSessionRecord = {
   interrupted?: boolean
   connectionId?: string | null
   launchConfig?: SleepingAgentLaunchConfig
+  /** The source tab's unified-tab view mode at capture time. When the pane's
+   *  tab is gone at resume (worktree-sleep/quit), the fresh resume tab is
+   *  minted from this record alone, so 'chat' must be carried here or the
+   *  resumed tab silently falls back to the raw terminal view (#19668). */
+  viewMode?: 'terminal' | 'chat'
   /** How the record was captured. Worktree-sleep records (legacy records have
    *  no origin) are consumed by worktree activation, which opens a fresh tab.
    *  Quit/live records describe panes that still exist in the restored session,

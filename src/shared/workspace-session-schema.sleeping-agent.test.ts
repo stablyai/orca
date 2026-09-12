@@ -457,6 +457,38 @@ describe('parseWorkspaceSession sleeping agents', () => {
     }
   })
 
+  it('preserves the chat viewMode across hydration (#19668)', () => {
+    const result = parseWorkspaceSession({
+      activeRepoId: null,
+      activeWorktreeId: null,
+      activeTabId: null,
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {},
+      sleepingAgentSessionsByPaneKey: {
+        'tab1:pane-1': {
+          paneKey: 'tab1:pane-1',
+          tabId: 'tab1',
+          worktreeId: 'wt',
+          agent: 'codex',
+          providerSession: { key: 'session_id', id: 'codex-session' },
+          prompt: 'continue',
+          state: 'done',
+          capturedAt: 10,
+          updatedAt: 9,
+          origin: 'worktree-sleep',
+          viewMode: 'chat'
+        }
+      }
+    })
+
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      // Why: dropped on hydration means a real app restart re-opens the resumed
+      // tab as a raw terminal even though the fix threads viewMode in memory.
+      expect(result.value.sleepingAgentSessionsByPaneKey?.['tab1:pane-1']?.viewMode).toBe('chat')
+    }
+  })
+
   it('preserves legacy live sleeping agent origins across hydration', () => {
     const result = parseWorkspaceSession({
       activeRepoId: null,
