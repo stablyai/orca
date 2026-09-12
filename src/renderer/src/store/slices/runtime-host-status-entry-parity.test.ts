@@ -4,9 +4,9 @@
 // `remoteControl` and #20003 added `snapshot`; the copies these assertions cover were not updated
 // either time. Like the other typed-contract tests, they fail at typecheck, not at runtime.
 import { describe, expectTypeOf, it } from 'vitest'
-import { buildExecutionHostRegistry } from '../../../../shared/execution-host-registry'
-import { buildSidebarHostOptions } from '@/components/sidebar/sidebar-host-options'
-import { getRuntimeAutomationAvailability } from '@/components/automations/automation-target-availability'
+import type { buildExecutionHostRegistry } from '../../../../shared/execution-host-registry'
+import type { buildSidebarHostOptions } from '@/components/sidebar/sidebar-host-options'
+import type { getRuntimeAutomationAvailability } from '@/components/automations/automation-target-availability'
 import type { RuntimeEnvironmentStatus } from './runtime-status-types'
 
 // Compare the entry each reader accepts rather than the surrounding map, so a mismatch names the
