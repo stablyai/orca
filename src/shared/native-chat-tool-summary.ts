@@ -1,7 +1,10 @@
+import {
+  collapsedToolInputPrefix,
+  MAX_TOOL_PREVIEW_LENGTH
+} from './native-chat-tool-preview-prefix'
 import type { NativeChatMcpIdentity } from './native-chat-tool-identity'
 import { isToolCallBlock, type NativeChatBlock } from './native-chat-types'
 
-const MAX_PREVIEW_LENGTH = 80
 const MAX_PREVIEW_STRING_INPUT = 160
 const MAX_PREVIEW_COLLECTION_ITEMS = 8
 const MAX_PREVIEW_DEPTH = 2
@@ -34,10 +37,10 @@ export type ToolInputDisplay = {
 }
 
 export function summarizeToolInput(input: unknown): string {
-  const collapsed = toRawPreview(input).replace(/\s+/g, ' ').trim()
-  return collapsed.length <= MAX_PREVIEW_LENGTH
+  const collapsed = collapsedToolInputPrefix(toRawPreview(input))
+  return collapsed.length <= MAX_TOOL_PREVIEW_LENGTH
     ? collapsed
-    : `${collapsed.slice(0, MAX_PREVIEW_LENGTH - 1)}…`
+    : `${collapsed.slice(0, MAX_TOOL_PREVIEW_LENGTH - 1)}…`
 }
 
 /** Build the renderer-independent row model from one normalization pass. Detail
@@ -124,7 +127,7 @@ function normalizedToolInputHasDetail(input: unknown, label: string): boolean {
   if (isStructuredNormalizedToolInput(input)) {
     return true
   }
-  return typeof input === 'string' && input.replace(/\s+/g, ' ').trim() !== label
+  return typeof input === 'string' && collapsedToolInputPrefix(input) !== label
 }
 
 export function toolFilePath(input: unknown): string | null {
@@ -241,10 +244,10 @@ function firstPrimaryToolArg(
  *  absolute path drops the filename, the one part that tells two rows apart. */
 function summarizeToolPath(path: string): string {
   const collapsed = path.replace(/\s+/g, ' ').trim()
-  if (collapsed.length <= MAX_PREVIEW_LENGTH) {
+  if (collapsed.length <= MAX_TOOL_PREVIEW_LENGTH) {
     return collapsed
   }
-  const tail = collapsed.slice(collapsed.length - (MAX_PREVIEW_LENGTH - 1))
+  const tail = collapsed.slice(collapsed.length - (MAX_TOOL_PREVIEW_LENGTH - 1))
   // Start at a segment boundary so the label doesn't open mid-name.
   const boundary = tail.search(/[\\/]/)
   return `…${boundary > 0 ? tail.slice(boundary) : tail}`
