@@ -199,12 +199,14 @@ export function readCheckSummary(value: unknown): ProviderCheckSummary | undefin
   ) {
     return undefined
   }
+  const actionRequired = readNumber(value.actionRequired)
   return {
     state,
     total: readNumber(value.total) ?? 0,
     passed: readNumber(value.passed) ?? 0,
     failed: readNumber(value.failed) ?? 0,
     pending: readNumber(value.pending) ?? 0,
-    neutral: readNumber(value.neutral) ?? 0
+    neutral: readNumber(value.neutral) ?? 0,
+    ...(actionRequired !== undefined ? { actionRequired } : {})
   }
 }

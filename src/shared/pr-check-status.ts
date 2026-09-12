@@ -1,12 +1,32 @@
-import { summarizeProviderChecks } from './provider-check-summary'
+import {
+  getProviderChecksPresentationState,
+  summarizeProviderChecks
+} from './provider-check-summary'
 import type { PRCheckDetail } from './github/check-types'
-import type { CheckStatus } from './github/pull-request-types'
+import type { CheckPresentationStatus, CheckStatus } from './github/pull-request-types'
+
+export type PRCheckStatuses = {
+  status: CheckStatus
+  presentationStatus: CheckPresentationStatus
+}
+
+/** Derives both the legacy wire status and the richer presentation status. */
+export function derivePRCheckStatuses(checks: readonly PRCheckDetail[]): PRCheckStatuses {
+  const summary = summarizeProviderChecks(checks)
+  const status = summary.state === 'none' ? 'neutral' : summary.state
+  const presentationState = getProviderChecksPresentationState(summary)
+  return {
+    status,
+    presentationStatus:
+      presentationState === undefined || presentationState === 'none'
+        ? 'neutral'
+        : presentationState
+  }
+}
 
 /** Derives the review status from the normalized check contract. */
 export function derivePRCheckStatus(checks: readonly PRCheckDetail[]): CheckStatus {
-  const { state } = summarizeProviderChecks(checks)
-  // Why: CheckStatus has no 'none'; an empty rollup carries the same "nothing to report" meaning.
-  return state === 'none' ? 'neutral' : state
+  return derivePRCheckStatuses(checks).status
 }
 
 type RawCheckRollup = { status?: unknown; conclusion?: unknown; state?: unknown }
@@ -19,11 +39,13 @@ function normalizeRollupCheck(raw: RawCheckRollup, index: number): PRCheckDetail
     conclusion === 'error' || conclusion === 'startup_failure'
       ? 'failure'
       : conclusion ||
-        (state === 'failure' || state === 'error'
-          ? 'failure'
-          : state === 'success'
-            ? 'success'
-            : '')
+        (state === 'action_required'
+          ? 'action_required'
+          : state === 'failure' || state === 'error'
+            ? 'failure'
+            : state === 'success'
+              ? 'success'
+              : '')
   const isPending =
     status === 'queued' ||
     status === 'in_progress' ||
@@ -41,14 +63,18 @@ function normalizeRollupCheck(raw: RawCheckRollup, index: number): PRCheckDetail
   }
 }
 
-/** Derives status from provider rollups while retaining status/conclusion semantics. */
-export function derivePRCheckStatusFromRollup(rollup: unknown): CheckStatus {
+export function derivePRCheckStatusesFromRollup(rollup: unknown): PRCheckStatuses {
   if (!Array.isArray(rollup) || rollup.length === 0) {
-    return 'neutral'
+    return { status: 'neutral', presentationStatus: 'neutral' }
   }
-  return derivePRCheckStatus(
+  return derivePRCheckStatuses(
     rollup.map((raw, index) =>
       normalizeRollupCheck(raw && typeof raw === 'object' ? (raw as RawCheckRollup) : {}, index)
     )
   )
+}
+
+/** Derives status from provider rollups while retaining status/conclusion semantics. */
+export function derivePRCheckStatusFromRollup(rollup: unknown): CheckStatus {
+  return derivePRCheckStatusesFromRollup(rollup).status
 }

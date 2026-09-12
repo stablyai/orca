@@ -1,10 +1,12 @@
 import type { PRCheckDetail } from '../../../../src/shared/github/check-types'
 import type {
-  PRState,
-  ProviderCheckSummary
+  CheckPresentationStatus,
+  PRState
 } from '../../../../src/shared/github/pull-request-types'
 import {
   classifyCheckOutcome,
+  getProviderCheckFailureCount,
+  getProviderChecksPresentationState,
   summarizeProviderChecks,
   type CheckOutcome as SharedCheckOutcome
 } from '../../../../src/shared/provider-check-summary'
@@ -25,11 +27,12 @@ export type MobileStatusToken =
   | 'statusPurple'
   | 'textSecondary'
 
-export type CheckOutcome = 'success' | 'pending' | 'failure' | 'neutral'
+export type CheckOutcome = CheckPresentationStatus
 
 const OUTCOME_BY_SHARED: Record<SharedCheckOutcome, CheckOutcome> = {
   passed: 'success',
   failed: 'failure',
+  action_required: 'action_required',
   pending: 'pending',
   neutral: 'neutral'
 }
@@ -41,13 +44,14 @@ export function checkOutcome(check: PRCheckDetail): CheckOutcome {
   return OUTCOME_BY_SHARED[classifyCheckOutcome(check)]
 }
 
-// Sort order: failures first (most actionable), then pending, then success /
-// neutral. Stable within a bucket so the upstream ordering is preserved.
+// Sort order: failures first (most actionable), then action required, pending,
+// and resolved checks. Stable within a bucket so upstream ordering is preserved.
 const OUTCOME_RANK: Record<CheckOutcome, number> = {
   failure: 0,
-  pending: 1,
-  neutral: 2,
-  success: 3
+  action_required: 1,
+  pending: 2,
+  neutral: 3,
+  success: 4
 }
 
 export function sortPRChecks(checks: readonly PRCheckDetail[]): PRCheckDetail[] {
@@ -62,29 +66,36 @@ export type PRChecksSummary = {
   passed: number
   pending: number
   failed: number
+  actionRequired: number
   // Worst-case outcome across all checks, for the summary badge color.
   outcome: CheckOutcome | 'none'
   label: string
 }
 
-const OUTCOME_BY_STATE: Record<ProviderCheckSummary['state'], CheckOutcome | 'none'> = {
-  success: 'success',
-  failure: 'failure',
-  pending: 'pending',
-  neutral: 'neutral',
-  none: 'none'
-}
-
 export function summarizePRChecks(checks: readonly PRCheckDetail[]): PRChecksSummary {
   if (checks.length === 0) {
-    return { total: 0, passed: 0, pending: 0, failed: 0, outcome: 'none', label: 'No checks' }
+    return {
+      total: 0,
+      passed: 0,
+      pending: 0,
+      failed: 0,
+      actionRequired: 0,
+      outcome: 'none',
+      label: 'No checks'
+    }
   }
   // Counts and the worst-case rollup come from the shared summarizer; only the label wording is mobile's.
-  const { total, passed, pending, failed, neutral, state } = summarizeProviderChecks(checks)
-  const outcome = OUTCOME_BY_STATE[state]
+  const summary = summarizeProviderChecks(checks)
+  const { total, passed, pending, neutral } = summary
+  const failed = getProviderCheckFailureCount(summary)
+  const actionRequired = summary.actionRequired ?? 0
+  const outcome = getProviderChecksPresentationState(summary) ?? 'none'
   const parts: string[] = []
   if (failed > 0) {
     parts.push(`${failed} failing`)
+  }
+  if (actionRequired > 0) {
+    parts.push(`Action required: ${actionRequired}`)
   }
   if (pending > 0) {
     parts.push(`${pending} pending`)
@@ -100,6 +111,7 @@ export function summarizePRChecks(checks: readonly PRCheckDetail[]): PRChecksSum
     passed,
     pending,
     failed,
+    actionRequired,
     outcome,
     label: parts.join(' · ')
   }
@@ -136,6 +148,7 @@ export function checkOutcomeToken(outcome: CheckOutcome | 'none'): MobileStatusT
     case 'success':
       return 'statusGreen'
     case 'pending':
+    case 'action_required':
       return 'statusAmber'
     case 'failure':
       return 'statusRed'

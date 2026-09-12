@@ -21,6 +21,7 @@ export type HostedReviewActionInfo = Pick<
   Partial<
     Pick<
       HostedReviewInfo,
+      | 'checksPresentationStatus'
       | 'reviewDecision'
       | 'autoMergeEnabled'
       | 'autoMergeAllowed'

@@ -1,5 +1,6 @@
 import React from 'react'
 import { Bell, GitBranch } from 'lucide-react'
+import { getHostedReviewCheckPresentationStatus } from '../../../../shared/hosted-review'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
@@ -74,13 +75,21 @@ function getReviewStatusLabel(review: WorktreeCardPrDisplay): string {
   if (review.state === 'draft') {
     return `${label}: Draft`
   }
-  if (review.status === 'failure') {
+  const status = getHostedReviewCheckPresentationStatus(review)
+  if (status === 'failure') {
     return `${label} checks: Failed`
   }
-  if (review.status === 'pending') {
+  if (status === 'action_required') {
+    return translate(
+      'auto.components.sidebar.WorktreeCardStatusSlot.actionRequiredChecks',
+      '{{reviewLabel}} checks: Action required',
+      { reviewLabel: label }
+    )
+  }
+  if (status === 'pending') {
     return `${label} checks: Pending`
   }
-  if (review.status === 'success') {
+  if (status === 'success') {
     return `${label} checks: Passing`
   }
   return `${label}: Open`

@@ -1,6 +1,10 @@
-import type { CheckStatus } from '../../../../shared/github/pull-request-types'
-import type { HostedReviewInfo } from '../../../../shared/hosted-review'
+import type { CheckPresentationStatus } from '../../../../shared/github/pull-request-types'
+import {
+  getHostedReviewCheckPresentationStatus,
+  type HostedReviewInfo
+} from '../../../../shared/hosted-review'
 import { translate } from '@/i18n/i18n'
+import { getActionRequiredCheckCountLabel } from '@/components/pr-check-counts'
 import type {
   ParentPrChecksGroupKey,
   ParentPrChecksRefreshOutcome,
@@ -60,13 +64,17 @@ export function classifyKnownReviewStatus(review: HostedReviewInfo): ParentPrChe
   if (review.state === 'draft') {
     return 'draft'
   }
-  if (review.status === 'failure') {
+  const checksStatus = getHostedReviewCheckPresentationStatus(review)
+  if (checksStatus === 'failure') {
     return 'failing'
   }
-  if (review.status === 'pending') {
+  if (checksStatus === 'action_required') {
+    return 'actionRequired'
+  }
+  if (checksStatus === 'pending') {
     return 'pending'
   }
-  if (review.status === 'success') {
+  if (checksStatus === 'success') {
     return 'success'
   }
   return 'neutral'
@@ -75,6 +83,7 @@ export function classifyKnownReviewStatus(review: HostedReviewInfo): ParentPrChe
 export function groupForRowStatus(status: ParentPrChecksRowStatus): ParentPrChecksGroupKey {
   switch (status) {
     case 'failing':
+    case 'actionRequired':
     case 'conflict':
     case 'closed':
     case 'linkedDetailsUnavailable':
@@ -102,7 +111,7 @@ export function groupForRowStatus(status: ParentPrChecksRowStatus): ParentPrChec
 export function getRowCheckTone(
   status: ParentPrChecksRowStatus,
   review: HostedReviewInfo | null | undefined
-): CheckStatus {
+): CheckPresentationStatus {
   if (
     ['failing', 'conflict', 'closed', 'linkedDetailsUnavailable', 'refreshError'].includes(status)
   ) {
@@ -111,10 +120,13 @@ export function getRowCheckTone(
   if (status === 'pending' || status === 'loading') {
     return 'pending'
   }
+  if (status === 'actionRequired') {
+    return 'action_required'
+  }
   if (status === 'success' || status === 'merged') {
     return 'success'
   }
-  return review?.status ?? 'neutral'
+  return review ? (getHostedReviewCheckPresentationStatus(review) ?? 'neutral') : 'neutral'
 }
 
 export function getRowSummary(
@@ -122,7 +134,13 @@ export function getRowSummary(
   review: HostedReviewInfo | null | undefined,
   detailNames: readonly string[]
 ): string {
-  if (detailNames.length > 0 && (status === 'failing' || status === 'pending')) {
+  if (
+    detailNames.length > 0 &&
+    (status === 'failing' || status === 'actionRequired' || status === 'pending')
+  ) {
+    if (status === 'actionRequired') {
+      return getActionRequiredCheckCountLabel(detailNames.length)
+    }
     return status === 'failing'
       ? translate(
           'auto.components.rightSidebar.parentPrChecks.rowSummary.failingCount',
@@ -140,6 +158,11 @@ export function getRowSummary(
       return translate(
         'auto.components.rightSidebar.parentPrChecks.rowSummary.checksFailing',
         'Checks failing'
+      )
+    case 'actionRequired':
+      return translate(
+        'auto.components.rightSidebar.parentPrChecks.rowSummary.actionRequired',
+        'Action required'
       )
     case 'conflict':
       return translate(

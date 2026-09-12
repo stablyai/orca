@@ -1,4 +1,5 @@
 import React from 'react'
+import { getHostedReviewCheckPresentationStatus } from '../../../../shared/hosted-review'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -46,6 +47,7 @@ export function WorktreeCardReviewDetailSection({
 
   const reviewLabel = getReviewLabel(review)
   const reviewProvider = getProviderName(review)
+  const checksStatus = getHostedReviewCheckPresentationStatus(review)
   const moreActionsLabel = translate(
     'auto.components.sidebar.WorktreeCardMeta.dbe2d18972',
     'More {{value0}} actions',
@@ -170,10 +172,10 @@ export function WorktreeCardReviewDetailSection({
         <div className="text-[13px] font-semibold leading-snug text-foreground break-words">
           {review.title}
         </div>
-        {(review.state || (review.status && review.status !== 'neutral')) && (
+        {(review.state || (checksStatus && checksStatus !== 'neutral')) && (
           <div className="flex flex-wrap gap-1">
             <ReviewStateBadge state={review.state} label={reviewLabel} />
-            <ReviewChecksBadge status={review.status} />
+            <ReviewChecksBadge status={checksStatus} />
           </div>
         )}
       </WorktreeCardDetailSectionContent>

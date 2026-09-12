@@ -5,7 +5,10 @@ import type { GitLabProjectRef } from '../../../../../shared/gitlab-types'
 import type { PRCheckDetail, PRCheckRunDetails } from '../../../../../shared/github/check-types'
 import type { GitHubRepositoryIdentity } from '../../../../../shared/github/pull-request-types'
 import { sortChecksBySeverity } from '../../../../../shared/pr-check-severity-order'
-import { summarizeProviderChecks } from '../../../../../shared/provider-check-summary'
+import {
+  getProviderCheckFailureCount,
+  summarizeProviderChecks
+} from '../../../../../shared/provider-check-summary'
 import { createCheckRunDetailsRequestId } from '@/components/editor/check-run-details-tab'
 import { translate } from '@/i18n/i18n'
 import { useCheckDetailsResize } from '../check-details-resize'
@@ -13,7 +16,7 @@ import {
   type CheckDetailsLoadState,
   type CheckDetailsStickySurface,
   getCheckDetailsKey,
-  isFailedCheck
+  isCheckRequiringAttention
 } from './check-details-model'
 
 export type ChecksListProps = {
@@ -64,12 +67,12 @@ export function useChecksListState({
   // Why: every header count comes from the same classifier the checks pill uses — counting only
   // `success` made a 2-success/3-skipped PR say "2 passing" next to "5/5 passed", and treating a
   // null conclusion as pending kept a completed-but-unresolved check spinning forever.
-  const {
-    passed: passingCount,
-    failed: failingCount,
-    pending: pendingCount,
-    neutral: neutralCount
-  } = summarizeProviderChecks(checks)
+  const summary = summarizeProviderChecks(checks)
+  const passingCount = summary.passed
+  const failingCount = getProviderCheckFailureCount(summary)
+  const actionRequiredCount = summary.actionRequired ?? 0
+  const pendingCount = summary.pending
+  const neutralCount = summary.neutral
 
   useEffect(() => {
     const validKeys = new Set(rows.map((row) => row.key))
@@ -85,9 +88,9 @@ export function useChecksListState({
     setExpandedCheckKeys((current) => {
       const next = new Set([...current].filter((key) => validKeys.has(key)))
       if (autoExpandedContextRef.current !== checkDetailsContextKey) {
-        const firstFailed = rows.find((row) => isFailedCheck(row.check))
-        if (firstFailed) {
-          next.add(firstFailed.key)
+        const firstRequiringAttention = rows.find((row) => isCheckRequiringAttention(row.check))
+        if (firstRequiringAttention) {
+          next.add(firstRequiringAttention.key)
         }
         autoExpandedContextRef.current = checkDetailsContextKey
       }
@@ -341,6 +344,7 @@ export function useChecksListState({
     rows,
     passingCount,
     failingCount,
+    actionRequiredCount,
     pendingCount,
     neutralCount,
     toggleCheckExpanded,

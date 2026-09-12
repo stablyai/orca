@@ -65,9 +65,23 @@ describe('buildMobilePrChipSummary', () => {
     expect(summary.rollup).toEqual({ kind: 'passed', text: '3/3', token: 'statusGreen' })
   })
 
-  it('treats a merge-blocking action_required gate as failing, not passing', () => {
+  it('presents a merge-blocking action_required gate as an amber manual action', () => {
     const summary = buildMobilePrChipSummary(
       ready(pr(), [check('success'), check('action_required')])
+    )
+    if (summary.kind !== 'ready') {
+      throw new Error('expected ready')
+    }
+    expect(summary.rollup).toEqual({
+      kind: 'action_required',
+      text: 'Action required: 1',
+      token: 'statusAmber'
+    })
+  })
+
+  it('keeps genuine failures red when action is also required', () => {
+    const summary = buildMobilePrChipSummary(
+      ready(pr(), [check('failure'), check('action_required')])
     )
     if (summary.kind !== 'ready') {
       throw new Error('expected ready')

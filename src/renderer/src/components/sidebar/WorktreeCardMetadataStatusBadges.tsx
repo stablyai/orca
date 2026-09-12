@@ -1,10 +1,13 @@
 import React from 'react'
 import { Badge } from '@/components/ui/badge'
-import { CircleCheck, CircleDot, CircleX, Clock, GitMerge } from 'lucide-react'
+import { AlertTriangle, CircleCheck, CircleDot, CircleX, Clock, GitMerge } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { PullRequestIcon, checksLabel } from './WorktreeCardHelpers'
 import type { WorktreeCardPrDisplay } from './worktree-card-pr-display'
-import type { IssueInfo } from '../../../../shared/github/pull-request-types'
+import type {
+  CheckPresentationStatus,
+  IssueInfo
+} from '../../../../shared/github/pull-request-types'
 import { translate } from '@/i18n/i18n'
 
 function MetadataStatusBadge({
@@ -156,7 +159,7 @@ export function ReviewStateBadge({
 export function ReviewChecksBadge({
   status
 }: {
-  status: WorktreeCardPrDisplay['status']
+  status: CheckPresentationStatus | undefined
 }): React.JSX.Element | null {
   if (!status || status === 'neutral') {
     return null
@@ -182,6 +185,17 @@ export function ReviewChecksBadge({
         className="border-rose-500/25 bg-rose-500/5 text-rose-600 dark:text-rose-300"
       >
         <CircleX />
+      </MetadataStatusBadge>
+    )
+  }
+
+  if (status === 'action_required') {
+    return (
+      <MetadataStatusBadge
+        label={label}
+        className="border-amber-500/25 bg-amber-500/5 text-amber-600 dark:text-amber-300"
+      >
+        <AlertTriangle />
       </MetadataStatusBadge>
     )
   }

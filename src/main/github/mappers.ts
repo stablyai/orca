@@ -1,6 +1,10 @@
 import type { PRCheckDetail } from '../../shared/github/check-types'
 import type { CheckStatus, IssueInfo, PRInfo } from '../../shared/github/pull-request-types'
-import { derivePRCheckStatusFromRollup } from '../../shared/pr-check-status'
+import {
+  derivePRCheckStatusesFromRollup,
+  derivePRCheckStatusFromRollup,
+  type PRCheckStatuses
+} from '../../shared/pr-check-status'
 
 // ── REST API check-runs mapping ───────────────────────────────────────
 // The REST check-runs endpoint returns separate status + conclusion fields
@@ -148,4 +152,8 @@ export function mapIssueInfo(data: {
 
 export function deriveCheckStatus(rollup: unknown[] | null | undefined): CheckStatus {
   return derivePRCheckStatusFromRollup(rollup)
+}
+
+export function deriveCheckStatuses(rollup: unknown[] | null | undefined): PRCheckStatuses {
+  return derivePRCheckStatusesFromRollup(rollup)
 }

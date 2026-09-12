@@ -1,5 +1,8 @@
 import { translate } from '../i18n/i18n'
-import { summarizeProviderChecks } from '../../../shared/provider-check-summary'
+import {
+  getProviderCheckFailureCount,
+  summarizeProviderChecks
+} from '../../../shared/provider-check-summary'
 import type { PRCheckDetail } from '../../../shared/github/check-types'
 
 export type PRCheckCounts = {
@@ -23,16 +26,12 @@ export function getCheckConclusion(check: PRCheckDetail): NonNullable<PRCheckDet
  */
 export function getCheckCounts(checks: readonly PRCheckDetail[]): PRCheckCounts {
   // Why: every bucket is read off the shared rollup rather than re-derived, so these panes cannot
-  // disagree with the checks pill. action_required is the one split back out: it blocks merge like
-  // a failure but reads amber, not red.
+  // disagree with the checks pill.
   const summary = summarizeProviderChecks(checks)
-  const needsAction = checks.filter(
-    (check) => getCheckConclusion(check) === 'action_required'
-  ).length
   return {
     passing: summary.passed,
-    failing: summary.failed - needsAction,
-    needsAction,
+    failing: getProviderCheckFailureCount(summary),
+    needsAction: summary.actionRequired ?? 0,
     pending: summary.pending,
     neutral: summary.neutral
   }
@@ -42,6 +41,14 @@ export function getCheckCounts(checks: readonly PRCheckDetail[]): PRCheckCounts 
 export type PRCheckCountChip = {
   tone: 'success' | 'failure' | 'action_required' | 'pending' | 'neutral'
   label: string
+}
+
+export function getActionRequiredCheckCountLabel(count: number): string {
+  return translate(
+    'auto.components.pr-check-counts.needsActionChip',
+    'Action required: {{value0}}',
+    { value0: count }
+  )
 }
 
 /**
@@ -70,11 +77,7 @@ export function getCheckCountChips(counts: PRCheckCounts): PRCheckCountChip[] {
   if (counts.needsAction > 0) {
     chips.push({
       tone: 'action_required',
-      label: translate(
-        'auto.components.pr-check-counts.needsActionChip',
-        '{{value0}} action required',
-        { value0: counts.needsAction }
-      )
+      label: getActionRequiredCheckCountLabel(counts.needsAction)
     })
   }
   if (counts.pending > 0) {

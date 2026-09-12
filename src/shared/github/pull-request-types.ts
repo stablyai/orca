@@ -1,6 +1,7 @@
 export type PRState = 'open' | 'closed' | 'merged' | 'draft'
 export type IssueState = 'open' | 'closed'
 export type CheckStatus = 'pending' | 'success' | 'failure' | 'neutral'
+export type CheckPresentationStatus = CheckStatus | 'action_required'
 
 export type PRMergeableState = 'MERGEABLE' | 'CONFLICTING' | 'UNKNOWN'
 export type PRReviewDecision = 'APPROVED' | 'CHANGES_REQUESTED' | 'REVIEW_REQUIRED'
@@ -54,6 +55,8 @@ export type PRInfo = {
   state: PRState
   url: string
   checksStatus: CheckStatus
+  /** Optional richer status; absent runtimes fall back to the legacy checksStatus field. */
+  checksPresentationStatus?: CheckPresentationStatus
   updatedAt: string
   mergeable: PRMergeableState
   reviewDecision?: PRReviewDecision | null
@@ -117,6 +120,8 @@ export type ProviderCheckSummary = {
   failed: number
   pending: number
   neutral: number
+  /** Subset of `failed` retained separately so new clients can distinguish approval gates. */
+  actionRequired?: number
 }
 
 export type GitHubPRReviewSummary = {
