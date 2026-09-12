@@ -7,8 +7,9 @@ import {
   normalizeVisibleTaskProviders,
   resolveVisibleTaskProvider
 } from '../../../../shared/task-providers'
-import { JiraIcon } from '@/components/icons/JiraIcon'
-import { LinearIcon } from '@/components/icons/LinearIcon'
+import { JiraIcon } from '../icons/JiraIcon'
+import { LinearIcon } from '../icons/LinearIcon'
+import { PlaneIcon } from '../icons/PlaneIcon'
 import { Button } from '@/components/ui/button'
 import { useAppStore } from '@/store'
 import { SearchableSetting } from './SearchableSetting'
@@ -22,7 +23,8 @@ import {
 } from './task-source-setup-state'
 import {
   JIRA_INTEGRATION_SECTION_ID,
-  LINEAR_INTEGRATION_SECTION_ID
+  LINEAR_INTEGRATION_SECTION_ID,
+  PLANE_INTEGRATION_SECTION_ID
 } from './task-provider-integration-section-ids'
 import { getTasksPaneSearchKeywords } from './tasks-search'
 import { useIntegrationProviderStatusRefresh } from './use-integration-provider-status-refresh'
@@ -89,6 +91,18 @@ const PROVIDER_META: Record<
       )
     },
     Icon: ({ className }) => <JiraIcon className={className} />
+  },
+  plane: {
+    get label() {
+      return 'Plane'
+    },
+    get description() {
+      return translate(
+        'auto.components.settings.TasksPane.planeDescription',
+        'Connect Plane Cloud or self-hosted Plane and show it in Tasks.'
+      )
+    },
+    Icon: ({ className }) => <PlaneIcon className={className} />
   }
 }
 
@@ -221,6 +235,18 @@ export function TasksPane({ settings, updateSettings }: TasksPaneProps): React.J
                     onToggleVisible={() => toggleProvider('jira')}
                     onConnected={() => void checkJiraConnection()}
                     onOpenIntegrations={() => openIntegrations(JIRA_INTEGRATION_SECTION_ID)}
+                  />
+                ) : provider === 'plane' ? (
+                  <CodeHostSetupSteps
+                    providerLabel={meta.label}
+                    connected={readiness.connected}
+                    checking={readiness.checking}
+                    unavailable={readiness.unavailable}
+                    visible={visible}
+                    canHide={canHide}
+                    onToggleVisible={() => toggleProvider('plane')}
+                    onOpenIntegrations={() => openIntegrations(PLANE_INTEGRATION_SECTION_ID)}
+                    onRetryConnection={() => void refreshPreflightStatus({ force: true })}
                   />
                 ) : (
                   <CodeHostSetupSteps
