@@ -110,6 +110,123 @@ describe('buildTitleDerivedAgentRows', () => {
     ])
   })
 
+  // Why: Codex titles its panes with the worktree name, so a live Codex pane's title carries
+  // neither an agent name nor a status frame. Titles below were captured from
+  // `orca terminal list --json` on Windows 11 and cross-referenced to each tab's persisted
+  // launchAgent. Before #14464 every one of these panes produced no row at all, so a restored
+  // Codex tab disappeared from the sidebar and Agent Dashboard while its PTY stayed connected.
+  describe('owned panes whose title carries no agent frame (#14464)', () => {
+    for (const title of [
+      'gh-13695',
+      'issue-13626-complete',
+      'pr-13977-best-review',
+      'gh-13752-current-main...',
+      'Terminal 1'
+    ]) {
+      it(`keeps a live Codex pane titled ${JSON.stringify(title)} as an idle Codex row`, () => {
+        const rows = buildWorktreeAgentRows({
+          tabs: [makeTab('tab-1', { title, defaultTitle: 'Terminal 1', launchAgent: 'codex' })],
+          entries: [],
+          retained: [],
+          ptyIdsByTabId: { 'tab-1': ['pty-codex'] },
+          terminalLayoutsByTabId: { 'tab-1': makeSingleLayout(LEAF_ID_1) },
+          now: 2000
+        })
+
+        expect(rows.map((row) => [row.agentType, row.state, row.entry.prompt])).toEqual([
+          ['codex', 'idle', 'Codex']
+        ])
+        expect(rows.map((row) => row.paneKey)).toEqual([makePaneKey('tab-1', LEAF_ID_1)])
+      })
+    }
+
+    // Why: node-pty reports the foreground process as the console title on Windows, so a
+    // full-path shell title is positive evidence the agent exited and left its shell behind.
+    // That must not be resurrected as an agent row just because launchAgent outlived it.
+    for (const shellTitle of [
+      'C:\\Program Files\\WindowsApps\\Microsoft.PowerShell_7.6.4.0_x64__8wekyb3d8bbwe\\pwsh.exe',
+      'C:\\WINDOWS\\System32\\WindowsPowerShell\\v1.0\\powershell.exe',
+      'bash',
+      'pwsh.exe'
+    ]) {
+      it(`drops a pane whose title is the shell ${JSON.stringify(shellTitle)}`, () => {
+        const rows = buildWorktreeAgentRows({
+          tabs: [
+            makeTab('tab-1', {
+              title: shellTitle,
+              defaultTitle: 'Terminal 1',
+              launchAgent: 'codex'
+            })
+          ],
+          entries: [],
+          retained: [],
+          ptyIdsByTabId: { 'tab-1': ['pty-codex'] },
+          terminalLayoutsByTabId: { 'tab-1': makeSingleLayout(LEAF_ID_1) },
+          now: 2000
+        })
+
+        expect(rows).toEqual([])
+      })
+    }
+
+    it('still drops an unowned pane whose title carries no agent frame', () => {
+      const rows = buildWorktreeAgentRows({
+        tabs: [makeTab('tab-1', { title: 'gh-13695', defaultTitle: 'Terminal 1' })],
+        entries: [],
+        retained: [],
+        ptyIdsByTabId: { 'tab-1': ['pty-shell'] },
+        terminalLayoutsByTabId: { 'tab-1': makeSingleLayout(LEAF_ID_1) },
+        now: 2000
+      })
+
+      expect(rows).toEqual([])
+    })
+
+    it('still drops an owned pane with no live PTY', () => {
+      const rows = buildWorktreeAgentRows({
+        tabs: [makeTab('tab-1', { title: 'gh-13695', launchAgent: 'codex' })],
+        entries: [],
+        retained: [],
+        ptyIdsByTabId: {},
+        terminalLayoutsByTabId: { 'tab-1': makeSingleLayout(LEAF_ID_1) },
+        now: 2000
+      })
+
+      expect(rows).toEqual([])
+    })
+
+    // Why: launchAgent is tab-scoped, so inside a split it is not pane ownership — letting it
+    // seed rows there would brand a sibling pane with the other pane's agent.
+    it('does not brand split panes from the tab-scoped launch agent', () => {
+      const rows = buildWorktreeAgentRows({
+        tabs: [makeTab('tab-1', { title: 'gh-13695', launchAgent: 'codex' })],
+        entries: [],
+        retained: [],
+        runtimePaneTitlesByTabId: { 'tab-1': { 1: 'gh-13695', 2: 'gh-13695' } },
+        ptyIdsByTabId: { 'tab-1': ['pty-left', 'pty-right'] },
+        terminalLayoutsByTabId: { 'tab-1': makeSplitLayout() },
+        now: 2000
+      })
+
+      expect(rows).toEqual([])
+    })
+
+    // Why: the owner is a fallback, never an override — a title that names a live agent still
+    // decides identity and activity.
+    it('lets an agent-naming title win over the launch owner', () => {
+      const rows = buildWorktreeAgentRows({
+        tabs: [makeTab('tab-1', { title: '\u280b Codex', launchAgent: 'codex' })],
+        entries: [],
+        retained: [],
+        ptyIdsByTabId: { 'tab-1': ['pty-codex'] },
+        terminalLayoutsByTabId: { 'tab-1': makeSingleLayout(LEAF_ID_1) },
+        now: 2000
+      })
+
+      expect(rows.map((row) => [row.agentType, row.state])).toEqual([['codex', 'working']])
+    })
+  })
+
   it('does not add title-derived rows for panes without a live PTY', () => {
     const rows = buildWorktreeAgentRows({
       tabs: [makeTab('tab-1')],
