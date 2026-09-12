@@ -45,26 +45,22 @@ export function getTaskSourceContextSummary(args: {
   selectedRepoCount?: number
   linearWorkspaceName?: string | null
   jiraSiteName?: string | null
+  redmineSiteName?: string | null
 }): TaskSourceContextSummary {
-  switch (args.provider) {
-    case 'github':
-    case 'gitlab':
-      return getRepoBackedTaskSourceSummary(args)
-    case 'linear':
-      return getAccountBackedTaskSourceSummary(args.providerLabel, {
-        accountLabel: args.linearWorkspaceName,
-        accountHostId: args.accountHostId,
-        hostLabelById: args.hostLabelById,
-        hostAvailability: args.hostAvailability
-      })
-    case 'jira':
-      return getAccountBackedTaskSourceSummary(args.providerLabel, {
-        accountLabel: args.jiraSiteName,
-        accountHostId: args.accountHostId,
-        hostLabelById: args.hostLabelById,
-        hostAvailability: args.hostAvailability
-      })
+  if (args.provider === 'github' || args.provider === 'gitlab') {
+    return getRepoBackedTaskSourceSummary(args)
   }
+  return getAccountBackedTaskSourceSummary(args.providerLabel, {
+    accountLabel:
+      args.provider === 'linear'
+        ? args.linearWorkspaceName
+        : args.provider === 'jira'
+          ? args.jiraSiteName
+          : args.redmineSiteName,
+    accountHostId: args.accountHostId,
+    hostLabelById: args.hostLabelById,
+    hostAvailability: args.hostAvailability
+  })
 }
 
 export function getTaskSourceAvailabilityNotice(args: {
@@ -197,6 +193,7 @@ function getProviderIdentityLabel(
     case 'linear':
       return identity.workspaceName ?? identity.workspaceId ?? null
     case 'jira':
+    case 'redmine':
       return identity.siteUrl ?? identity.siteId ?? null
   }
 }

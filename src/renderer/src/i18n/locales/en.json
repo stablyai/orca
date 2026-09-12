@@ -2256,7 +2256,17 @@
         "linearModeHasWorktreeTooltip": "Linear tickets linked to an Orca workspace",
         "linearEmptyHasWorktree": "No Linear tickets are linked to an Orca workspace yet. Start work from a Linear issue to see it here.",
         "linearOpenAttachedWorkspace": "Open workspace attached to {{value0}}",
-        "linearWorktreesColumn": "Workspaces"
+        "linearWorktreesColumn": "Workspaces",
+        "redmineLabel": "Redmine",
+        "redmineConnectTitle": "Connect your Redmine server",
+        "redmineConnectBody": "Add a self-hosted Redmine server URL and an API key to browse your assigned issues.",
+        "redmineSiteUrl": "Server URL",
+        "redmineApiKey": "API key",
+        "redmineConnecting": "Connecting…",
+        "redmineConnect": "Connect Redmine",
+        "redmineTitle": "Redmine issues",
+        "redmineBackToList": "Back to list",
+        "redmineNoIssues": "No Redmine issues found"
       },
       "Terminal": {
         "73768427cf": "Close",
@@ -8477,7 +8487,9 @@
           "integrationsHint": "Credentials for all providers also live under",
           "integrationsLink": "Integrations",
           "skillHint": ". After Linear is connected, usage examples stay under Settings → Linear.",
-          "incompleteBannerBodyWithLinear": "Hide providers you do not use, or expand a card and finish its steps. For Linear: API access, the agent skill, and Show in Tasks."
+          "incompleteBannerBodyWithLinear": "Hide providers you do not use, or expand a card and finish its steps. For Linear: API access, the agent skill, and Show in Tasks.",
+          "redmineLabel": "Redmine",
+          "redmineDescription": "Connect a self-hosted Redmine and show its issues in Tasks."
         },
         "TerminalAppearanceSection": {
           "a14a427ae4": "Thickness of the pane divider line.",
