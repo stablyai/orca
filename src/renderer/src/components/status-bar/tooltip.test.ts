@@ -54,7 +54,8 @@ const PROVIDER_IDS: ProviderRateLimits['provider'][] = [
   'opencode-go',
   'kimi',
   'minimax',
-  'grok'
+  'grok',
+  'zhipu'
 ]
 
 afterEach(() => {

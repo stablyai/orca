@@ -48,6 +48,10 @@ vi.mock('./grok-fetcher', () => ({
   fetchGrokRateLimits: vi.fn()
 }))
 
+vi.mock('./zhipu-fetcher', () => ({
+  fetchZhipuRateLimits: vi.fn()
+}))
+
 vi.mock('./grok-auth', () => ({
   readGrokAuthSession: vi.fn(() => ({ status: 'missing' }))
 }))
@@ -55,6 +59,13 @@ vi.mock('./grok-auth', () => ({
 vi.mock('../minimax/minimax-cookie-store', () => ({
   hasMiniMaxSessionCookie: vi.fn(() => false)
 }))
+
+vi.mock('../zhipu/zhipu-credential-store', () => ({
+  hasZhipuCredentials: vi.fn(() => false),
+  readZhipuCredentials: vi.fn(() => null)
+}))
+
+const allowsBackgroundClaudePty = process.platform !== 'win32'
 
 function serviceInternals(service: RateLimitService): { fetchAll: () => Promise<void> } {
   return service as unknown as { fetchAll: () => Promise<void> }
@@ -388,7 +399,7 @@ describe('RateLimitService', () => {
       expect.objectContaining({
         authPreparation: undefined,
         allowPtyFallback: false,
-        allowUsagePanelSupplement: true,
+        allowUsagePanelSupplement: allowsBackgroundClaudePty,
         signal: expect.any(AbortSignal)
       })
     )

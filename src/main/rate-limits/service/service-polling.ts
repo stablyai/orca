@@ -78,6 +78,7 @@ export abstract class RateLimitServicePolling extends RateLimitServiceFetchQueue
       kimi: this.state.kimi,
       minimax: this.state.minimax,
       grok: this.state.grok,
+      zhipu: this.state.zhipu,
       antigravity: this.state.antigravity
     }
     return Object.entries(byProvider).map(([provider, limits]) => ({

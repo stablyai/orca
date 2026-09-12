@@ -37,6 +37,22 @@ export function MiniMaxIcon({ size = 14 }: { size?: number }): React.JSX.Element
 // Why: each instance needs unique filter/mask IDs — reusing the same ID across
 // multiple SVGs on the same page causes the browser to resolve to the first one,
 // breaking all subsequent instances.
+export function ZhipuIcon({ size = 14 }: { size?: number }): React.JSX.Element {
+  return (
+    <span
+      aria-hidden="true"
+      className="inline-flex shrink-0 items-center justify-center rounded-[3px] border border-border bg-muted/30 font-semibold leading-none text-muted-foreground"
+      style={{
+        width: size,
+        height: size,
+        fontSize: Math.max(8, Math.round(size * 0.62))
+      }}
+    >
+      Z
+    </span>
+  )
+}
+
 let _geminiIconCount = 0
 
 export function GeminiIcon({ size = 14 }: { size?: number }): React.JSX.Element {

@@ -4,12 +4,24 @@ import {
   MIN_REFETCH_MS,
   isSameUsageWindow,
   normalizeClaudeConfigDir,
+  toErrorMessage,
   type ClaudeRuntimeAuthPreparation,
   type ClaudeStatusLineRateLimits,
   type NormalizedClaudeAccountSelectionTarget,
   type ProviderRateLimits
 } from './service-types'
 import { mapClaudeUsageWindow } from '../claude-usage-window'
+import {
+  hasZhipuCredentials,
+  readZhipuCredentials,
+  type ZhipuCredentials
+} from '../../zhipu/zhipu-credential-store'
+import { ZHIPU_DEFAULT_BASE_URL } from '../../../shared/zhipu-usage'
+
+type ZhipuResolvedCredentials = {
+  credentials: ZhipuCredentials
+  error: string | null
+}
 
 export abstract class RateLimitServiceFetchPolicy extends RateLimitServiceFetchTargets {
   protected getMiniMaxCredentialError(message: string): ProviderRateLimits {
@@ -17,6 +29,43 @@ export abstract class RateLimitServiceFetchPolicy extends RateLimitServiceFetchT
       provider: 'minimax',
       session: null,
       weekly: null,
+      updatedAt: Date.now(),
+      error: message,
+      status: 'error',
+      usageMetadata: { failureKind: 'keychain-unavailable', source: 'web' }
+    }
+  }
+
+  protected resolveZhipuCredentials(): ZhipuResolvedCredentials {
+    try {
+      const credentials = readZhipuCredentials()
+      this.zhipuCredentialsConfigured = credentials !== null
+      return {
+        credentials: credentials ?? {
+          baseUrl: ZHIPU_DEFAULT_BASE_URL,
+          authToken: ''
+        },
+        error: null
+      }
+    } catch (error) {
+      this.zhipuCredentialsConfigured = hasZhipuCredentials()
+      // Why: one unreadable token must not abort every provider's refresh; surface it as Zhipu-only state instead.
+      return {
+        credentials: {
+          baseUrl: ZHIPU_DEFAULT_BASE_URL,
+          authToken: ''
+        },
+        error: toErrorMessage(error)
+      }
+    }
+  }
+
+  protected getZhipuCredentialError(message: string): ProviderRateLimits {
+    return {
+      provider: 'zhipu',
+      session: null,
+      weekly: null,
+      monthly: null,
       updatedAt: Date.now(),
       error: message,
       status: 'error',

@@ -73,6 +73,20 @@ export type MinimaxCredentialsApi = {
   clearApiKey: () => Promise<{ apiKeyConfigured: boolean }>
 }
 
+export type ZhipuCredentialsApi = {
+  getStatus: () => Promise<{ configured: boolean; baseUrl: string | null }>
+  save: (args: { baseUrl: string; authToken: string }) => Promise<{
+    configured: boolean
+    baseUrl: string | null
+  }>
+  clear: () => Promise<{ configured: boolean; baseUrl: string | null }>
+  importFromCcSwitch: () => Promise<{
+    configured: boolean
+    baseUrl: string | null
+    importedProviderName: string
+  }>
+}
+
 export type CodexConfigSyncApi = {
   status: () => Promise<CodexConfigSyncStatus>
 }
