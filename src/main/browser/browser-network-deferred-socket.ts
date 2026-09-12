@@ -2,13 +2,17 @@ import { EventEmitter } from 'node:events'
 import type { Duplex } from 'node:stream'
 import type { BrowserNetworkTunnelSocket } from './browser-network-tunnel-stream-state'
 
-type DeferredSocketSource = Duplex & { setNoDelay?: (noDelay?: boolean) => unknown }
+type DeferredSocketSource = Duplex & {
+  setNoDelay?: (noDelay?: boolean) => unknown
+  settleRead?: (bytes: number) => void
+}
 
 export class BrowserNetworkDeferredSocket
   extends EventEmitter
   implements BrowserNetworkTunnelSocket
 {
   destroyed = false
+  settleRead?: (bytes: number) => void
   private source: DeferredSocketSource | null = null
   private paused = false
   private noDelay = false
@@ -20,6 +24,7 @@ export class BrowserNetworkDeferredSocket
       return
     }
     this.source = source
+    this.settleRead = source.settleRead?.bind(source)
     source.setNoDelay?.(this.noDelay)
     source.on('data', (bytes) => this.emit('data', bytes))
     source.on('end', () => this.emit('end'))
@@ -45,6 +50,7 @@ export class BrowserNetworkDeferredSocket
       return
     }
     this.destroyed = true
+    this.source?.destroy()
     this.emit('error', error)
     this.emitClose()
   }
@@ -67,9 +73,15 @@ export class BrowserNetworkDeferredSocket
     return this
   }
 
-  write(bytes: Uint8Array<ArrayBufferLike>, callback?: () => void): boolean {
+  write(bytes: Uint8Array<ArrayBufferLike>, callback?: (error?: Error | null) => void): boolean {
     if (!this.source || this.destroyed) {
-      callback?.()
+      const error = new Error(
+        this.destroyed ? 'browser_deferred_socket_closed' : 'browser_deferred_socket_not_connected'
+      )
+      queueMicrotask(() => {
+        callback?.(error)
+        this.fail(error)
+      })
       return false
     }
     return this.source.write(bytes, callback)

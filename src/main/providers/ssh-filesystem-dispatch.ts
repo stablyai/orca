@@ -37,6 +37,16 @@ export function unregisterSshFilesystemProvider(connectionId: string): void {
   sshProviders.delete(connectionId)
 }
 
+export function unregisterSshFilesystemProviderIfCurrent(
+  connectionId: string,
+  expected: IFilesystemProvider
+): boolean {
+  if (sshProviders.get(connectionId) !== expected) {
+    return false
+  }
+  return sshProviders.delete(connectionId)
+}
+
 export function getSshFilesystemProvider(connectionId: string): IFilesystemProvider | undefined {
   return sshProviders.get(connectionId)
 }

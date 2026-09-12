@@ -94,11 +94,10 @@ export function terminateWatcherChild(child: ChildProcess): Promise<boolean> {
   })
 }
 
-export function createWatcherChildTerminationFailure(child: ChildProcess): WatcherProcessFailure {
-  const physicalExit =
-    child.exitCode !== null || child.signalCode !== null
-      ? Promise.resolve()
-      : (physicalExitPromises.get(child) ??
+export function watcherChildPhysicalExit(child: ChildProcess): Promise<void> {
+  return child.exitCode !== null || child.signalCode !== null
+    ? Promise.resolve()
+    : (physicalExitPromises.get(child) ??
         new Promise<void>((resolve) => {
           const finish = (): void => {
             child.removeListener('exit', finish)
@@ -108,11 +107,14 @@ export function createWatcherChildTerminationFailure(child: ChildProcess): Watch
           child.once('exit', finish)
           child.once('close', finish)
         }))
+}
+
+export function createWatcherChildTerminationFailure(child: ChildProcess): WatcherProcessFailure {
   return new WatcherProcessFailure(
     'file watcher process did not exit after termination deadline',
     'supervisor',
     'process_unavailable',
-    physicalExit
+    watcherChildPhysicalExit(child)
   )
 }
 
@@ -127,10 +129,12 @@ export async function terminateIdleWatcherChild(
   pendingUnsubscribes: Map<number, PendingWatcherUnsubscribe>,
   onFinished: (exited: boolean) => void
 ): Promise<void> {
+  // Windows directory handles require physical exit, not merely an accepted signal.
   try {
     await requireWatcherChildTermination(child)
     onFinished(true)
   } catch (error) {
+    // Idle children retain capacity but cannot double-watch; the owner may remain reusable.
     onFinished(false)
     resolvePendingWatcherUnsubscribes(
       pendingUnsubscribes,

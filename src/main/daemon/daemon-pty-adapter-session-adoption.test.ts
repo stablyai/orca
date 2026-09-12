@@ -288,7 +288,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
 
   describe('attach', () => {
     it('reattaches to existing session and receives events', async () => {
-      const { id } = await adapter.spawn({ cols: 80, rows: 24 })
+      const { id, incarnationId } = await adapter.spawn({ cols: 80, rows: 24 })
 
       // Create a second adapter simulating app restart
       const adapter2 = new DaemonPtyAdapter({ socketPath, tokenPath })
@@ -299,7 +299,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
 
       lastSubprocess._simulateData('after-reattach')
       await waitFor(() => dataPayloads.length > 0)
-      expect(dataPayloads[0]).toEqual({ id, data: 'after-reattach' })
+      expect(dataPayloads[0]).toEqual({ id, data: 'after-reattach', incarnationId })
 
       adapter2.dispose()
     })
@@ -505,28 +505,36 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       expect(adapter.hasPty(id)).toBe(true)
     })
 
-    it('returns active sessions', async () => {
-      await adapter.spawn({
-        cols: 80,
-        rows: 24,
-        cwd: '/repo/owned-before-osc7',
-        worktreeId: 'repo::/repo/owned-before-osc7'
-      })
-      await adapter.spawn({ cols: 80, rows: 24 })
+    it.each(['repo::/repo/owned-before-osc7', 'folder:folder-abc'])(
+      'restores active session ownership for %s through a fresh adapter',
+      async (worktreeId) => {
+        await adapter.spawn({
+          cols: 80,
+          rows: 24,
+          cwd: '/repo/owned-before-osc7',
+          worktreeId
+        })
+        await adapter.spawn({ cols: 80, rows: 24 })
 
-      const procs = await adapter.listProcesses()
-      expect(procs).toHaveLength(2)
-      expect(procs[0]).toHaveProperty('id')
-      expect(procs[0]).toHaveProperty('cwd')
-      expect(procs[0]).toHaveProperty('title')
-      expect(procs[0].cwd).toBe('/repo/owned-before-osc7')
-      expect(procs[0].worktreeId).toBe('repo::/repo/owned-before-osc7')
-      expect(adapter.getLastAuditObservation()).toMatchObject({
-        state: 'present',
-        reason: 'authenticated_inventory',
-        inventoryAuthority: 'authoritative'
-      })
-    })
+        const procs = await adapter.listProcesses()
+        expect(procs).toHaveLength(2)
+        expect(procs[0]).toHaveProperty('id')
+        expect(procs[0]).toHaveProperty('cwd')
+        expect(procs[0]).toHaveProperty('title')
+        expect(procs[0].cwd).toBe('/repo/owned-before-osc7')
+        expect(procs[0].worktreeId).toBe(worktreeId)
+        expect(adapter.getLastAuditObservation()).toMatchObject({
+          state: 'present',
+          reason: 'authenticated_inventory',
+          inventoryAuthority: 'authoritative'
+        })
+        adapter.dispose()
+        adapter = new DaemonPtyAdapter({ socketPath, tokenPath })
+        expect(await adapter.listProcesses()).toEqual(
+          expect.arrayContaining([expect.objectContaining({ id: procs[0].id, worktreeId })])
+        )
+      }
+    )
 
     it('loads persisted Linux birth identity for audit observations', async () => {
       adapter.dispose()

@@ -1,4 +1,5 @@
 import { ipcMain } from 'electron'
+import { assertSshResetAdmissionAllowed } from './ssh-reset-production-state'
 import type {
   SshConfigHostListArgs,
   SshRepoReadoption,
@@ -13,6 +14,7 @@ import { rotateSshProviderAuthority } from '../ssh/ssh-provider-authority'
 import { getSshTargetRegistryStore } from '../ssh/ssh-target-registry'
 import { getCurrentMainWindow } from './ssh-ipc-context'
 import { removeRegisteredSshTarget } from './ssh-session-teardown'
+import { isRuntimeOwnedSshTarget } from '../ssh/ssh-connection-store'
 
 // Why: add/import can re-adopt workspaces orphaned on a removed target id (see ssh-target-readoption); the renderer must refresh its repo list to surface them.
 function takeRepoReadoptions(): SshRepoReadoption[] {
@@ -34,8 +36,17 @@ function takeRepoReadoptions(): SshRepoReadoption[] {
   return repoReadoptions
 }
 
-function omitRendererSshTargetGeneration<T extends object>(value: T): Omit<T, 'generation'> {
-  const { generation: _generation, ...rest } = value as T & { generation?: unknown }
+function omitRendererSshTargetGeneration<T extends object>(
+  value: T
+): Omit<T, 'generation' | 'orcadProvisioning'> {
+  const {
+    generation: _generation,
+    orcadProvisioning: _intent,
+    ...rest
+  } = value as T & {
+    generation?: unknown
+    orcadProvisioning?: unknown
+  }
   return rest
 }
 
@@ -60,6 +71,11 @@ export function registerSshTargetCrudHandlers(): void {
   ipcMain.handle(
     'ssh:updateTarget',
     (_event, args: { id: string; updates: SshTargetUpdateInput }) => {
+      assertSshResetAdmissionAllowed(args.id)
+      const target = getSshTargetRegistryStore()!.getTarget(args.id)
+      if (target && isRuntimeOwnedSshTarget(target)) {
+        throw new Error('Managed runtime SSH targets cannot be edited from SSH settings.')
+      }
       return getSshTargetRegistryStore()!.updateTarget(
         args.id,
         omitRendererSshTargetGeneration(args.updates)
@@ -68,6 +84,10 @@ export function registerSshTargetCrudHandlers(): void {
   )
 
   ipcMain.handle('ssh:removeTarget', async (_event, args: { id: string }) => {
+    const target = getSshTargetRegistryStore()!.getTarget(args.id)
+    if (target && isRuntimeOwnedSshTarget(target)) {
+      throw new Error('Managed runtime SSH targets must be removed with their runtime environment.')
+    }
     await removeRegisteredSshTarget(args.id)
   })
 

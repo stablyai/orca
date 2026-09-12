@@ -11,6 +11,7 @@ import {
 } from './pty-source-credit-scheduler'
 import type { SshPtyConsumerSessionAdapter } from './ssh-pty-consumer-session-adapter'
 import { completePtySourceRecovery } from './relay-pty-source-recovery-completion'
+import { reservePtySourceSend, sourceFrameParams } from './relay-pty-source-send-reservation'
 
 export type RelayPtySourceDeliveryRecord = {
   clientId: number
@@ -43,8 +44,6 @@ export type RelayPtySourcePublicationCounters = {
   exitCommitted: number
   exitRolledBack: number
 }
-
-const PTY_SOURCE_FRAME_MAX_SU = 16 * 1024
 
 export function onceSinkSettlement(
   callback: (result: SinkWriteSettlement) => void
@@ -199,27 +198,12 @@ export class RelayPtySourceSendScheduler {
       })
       return
     }
-    const snapshot = this.session.sourceDeliverySnapshot(record.identity)
-    const encodedDataBudget = this.dispatcher.producerDataBudget(
-      'pty.data',
-      {
-        id: record.identity.id,
-        rawLength: PTY_SOURCE_FRAME_MAX_SU,
-        transformed: false,
-        deliveryToken: record.identity.deliveryToken,
-        clientGeneration: record.identity.clientGeneration,
-        ownerGeneration: record.identity.ownerGeneration,
-        ptyIncarnation: record.identity.ptyIncarnation,
-        sourceEndSu: snapshot.receivedEndSu,
-        sourceLengthSu: PTY_SOURCE_FRAME_MAX_SU
-      },
-      record.clientId
-    )
-    const maxSourceSu = Math.min(
-      PTY_SOURCE_FRAME_MAX_SU,
-      Math.max(1, Math.floor(Math.max(0, encodedDataBudget - 32) / 6))
-    )
-    const reservation = this.session.reserveSourceSend(record.identity, maxSourceSu)
+    const reservation = reservePtySourceSend({
+      dispatcher: this.dispatcher,
+      session: this.session,
+      identity: record.identity,
+      clientId: record.clientId
+    })
     if (!reservation) {
       return
     }
@@ -251,14 +235,10 @@ export class RelayPtySourceSendScheduler {
     const accepted = this.dispatcher.tryNotifyPtyDataToClient(
       record.clientId,
       {
-        id: reservation.identity.id,
+        ...sourceFrameParams(record.identity, reservation.span),
         data: reservation.span.data,
         rawLength: sourceLengthSu,
         transformed: reservation.span.transform.transformed,
-        deliveryToken: reservation.identity.deliveryToken,
-        clientGeneration: reservation.identity.clientGeneration,
-        ownerGeneration: reservation.identity.ownerGeneration,
-        ptyIncarnation: reservation.identity.ptyIncarnation,
         sourceEndSu: reservation.span.sourceEndSu,
         sourceLengthSu
       },

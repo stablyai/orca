@@ -58,6 +58,7 @@ export type DaemonPtyAdapterOptions = {
   historyPath?: string
   runtimeDir?: string
   packagedAppVersion?: string | null
+  recoveryOnly?: boolean
   respawn?: (reason: DaemonRespawnReason) => Promise<void | (() => void)>
 }
 
@@ -72,8 +73,15 @@ export type DaemonIdentityChangeEvent = {
   current: DaemonEndpointIdentity
 }
 
+export type DaemonIdleRetirementResult =
+  | { state: 'retiring' }
+  | { state: 'busy'; liveSessions: number | null; admissionReopened?: true }
+  | { state: 'unsupported' }
+  | { state: 'unverifiable' }
+
 export abstract class DaemonPtyRuntimeState {
   readonly protocolVersion: number
+  readonly recoveryOnly: boolean
   protected socketPath: string
   protected tokenPath: string
   protected pidPath: string | null
@@ -93,6 +101,9 @@ export abstract class DaemonPtyRuntimeState {
   protected packagedAppVersion: string | null
   protected pendingRespawnAdoptionRelease: (() => void) | null = null
   protected respawnAdoptionClosed = false
+  protected idleRetirementAdmissionClosed = false
+  protected idleRetirementState: 'open' | 'checking' | 'retiring' | 'unverifiable' = 'open'
+  protected idleRetirementPromise: Promise<DaemonIdleRetirementResult> | null = null
   protected respawnPromise: Promise<void> | null = null
   protected staleBundleReplacementPromise: Promise<void> | null = null
   protected writeRecoveryPromise: Promise<void> | null = null
@@ -202,6 +213,7 @@ export abstract class DaemonPtyRuntimeState {
 
   constructor(opts: DaemonPtyAdapterOptions) {
     this.protocolVersion = opts.protocolVersion ?? PROTOCOL_VERSION
+    this.recoveryOnly = opts.recoveryOnly === true
     this.socketPath = opts.socketPath
     this.tokenPath = opts.tokenPath
     this.pidPath = opts.pidPath ?? null
@@ -221,7 +233,7 @@ export abstract class DaemonPtyRuntimeState {
     })
     this.historyManager = opts.historyPath ? new HistoryManager(opts.historyPath) : null
     this.historyReader = opts.historyPath ? new HistoryReader(opts.historyPath) : null
-    this.respawnFn = opts.respawn ?? null
+    this.respawnFn = this.recoveryOnly ? null : (opts.respawn ?? null)
     this.runtimeDir = opts.runtimeDir ?? opts.profileScope ?? null
     this.packagedAppVersion = opts.packagedAppVersion ?? null
     this.supportsCheckpoints = this.protocolVersion >= 4

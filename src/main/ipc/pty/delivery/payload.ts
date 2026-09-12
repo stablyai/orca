@@ -127,7 +127,7 @@ export function sendPtyDataToRenderer(
       session,
       id,
       'delivery-heal',
-      session.runtime?.getPtyOutputSequence(id)
+      session.runtime?.getPtyOutputSequence?.(id)
     )
   ) {
     // Why cleared only on a successful send: an unsent marker leaves the restore pending.

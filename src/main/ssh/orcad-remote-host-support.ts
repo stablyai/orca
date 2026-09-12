@@ -1,29 +1,9 @@
-/**
- * Which hosts the orcad launch/lifecycle path actually supports, declared rather than
- * discovered at runtime.
- *
- * The install transaction is host-agnostic — it is the relay's, and the relay runs on
- * Windows. The launch, liveness and stop path is not: it uses `nohup`, a redirected stdout,
- * `kill -0` and `ps`. Emitting a PowerShell-shaped approximation of that would produce a
- * deploy that reports success on a host where nothing is running.
- */
+/** Host-dialect assertions and process-liveness fragments shared by the POSIX lifecycle path. */
 import { isWindowsRemoteHost, type RemoteHostPlatform } from './ssh-remote-platform'
-
-export class OrcadRemoteLaunchUnsupportedError extends Error {
-  readonly code = 'orcad_remote_launch_unsupported_host'
-  constructor(hostLabel: string) {
-    super(
-      `Deploying orcad to a ${hostLabel} host is not implemented. The install transaction is ` +
-        'host-agnostic, but the launch and readiness path is POSIX-only: it uses nohup, a ' +
-        'redirected stdout and `kill -0` liveness. Use the relay for this host.'
-    )
-    this.name = 'OrcadRemoteLaunchUnsupportedError'
-  }
-}
 
 export function assertPosixOrcadHost(host: RemoteHostPlatform): void {
   if (isWindowsRemoteHost(host)) {
-    throw new OrcadRemoteLaunchUnsupportedError('Windows')
+    throw new Error('Expected the POSIX orcad lifecycle command path')
   }
 }
 

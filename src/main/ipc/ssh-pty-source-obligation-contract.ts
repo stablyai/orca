@@ -4,7 +4,11 @@ import type {
   PtySourceSpan
 } from '../../shared/pty-source-credit-contract'
 
-export type SshPtySourceConsumerId = 'model' | 'desktop' | `remote:${string}`
+export type SshPtySourceConsumerId =
+  | 'model'
+  | 'desktop'
+  | `remote:${string}`
+  | `ownership-transfer:${string}`
 
 export type SshPtySourceObligationState =
   | Readonly<{ state: 'open' }>

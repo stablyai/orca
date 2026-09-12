@@ -13,6 +13,7 @@ import { isRelayInstallLockStale, RELAY_INSTALL_LOCK_NAME } from './ssh-relay-in
 import {
   RELAY_INSTALL_MODEL,
   remoteInstallGcPermits,
+  remoteInstallGcTombstoneRegex,
   remoteInstallVersionDirRegex,
   type RemoteInstallModel
 } from './remote-install-model'
@@ -21,7 +22,7 @@ import {
   releaseRelayGcClaimWithRetry,
   tryAcquireRelayGcClaim
 } from './ssh-relay-gc-claim'
-import { cleanupRelayGcTombstones } from './ssh-relay-gc-tombstone'
+import { cleanupRemoteInstallGcTombstones } from './remote-install-gc-tombstone'
 import { gcRelayNativeDepsCache } from './ssh-relay-native-deps-cache-gc'
 import {
   listRemoteInstallBaseDirsCommand,
@@ -55,6 +56,10 @@ function execHostCommand(
 }
 
 export type RemoteInstallGcOptions = {
+  /** Runtime executable used for Windows liveness probes (Bun or Node). */
+  windowsRuntimePath?: string
+  windowsRuntimeKind?: 'bun' | 'node'
+  /** @deprecated Use windowsRuntimePath. */
   windowsNodePath?: string
   windowsSockNames?: string[]
   /**
@@ -104,14 +109,16 @@ export async function gcOldRemoteInstallVersions(
     .filter(Boolean)
     .slice(0, MAX_RELAY_GC_LISTING_ENTRIES)
 
-  await cleanupRelayGcTombstones(conn, baseDir, entries, host)
+  await cleanupRemoteInstallGcTombstones(conn, model, baseDir, entries, host)
 
   const versionDirRegex = remoteInstallVersionDirRegex(model)
+  const tombstoneRegex = remoteInstallGcTombstoneRegex(model)
   const pinned = new Set([currentDirName, ...(options.pinnedDirNames ?? [])])
   const candidates = entries
     // Why re-check ownership after a prefix-scoped listing: this is the one line that stands
     // between a parameterized GC and deleting the sibling model's live install.
     .filter((name) => remoteInstallGcPermits(model, name))
+    .filter((name) => !tombstoneRegex.test(name))
     .filter((name) => versionDirRegex.test(name))
     .filter((name) => !pinned.has(name))
 
@@ -244,6 +251,9 @@ export async function gcOldRelayVersions(
   currentDirAbsPath: string,
   host: RemoteHostPlatform = DEFAULT_REMOTE_HOST,
   options?: {
+    windowsRuntimePath?: string
+    windowsRuntimeKind?: 'bun' | 'node'
+    /** @deprecated Use windowsRuntimePath. */
     windowsNodePath?: string
     windowsSockNames?: string[]
     /**
@@ -272,17 +282,22 @@ async function hasLiveRelaySocket(
   dir: string,
   host: RemoteHostPlatform = DEFAULT_REMOTE_HOST,
   options?: {
+    windowsRuntimePath?: string
+    windowsRuntimeKind?: 'bun' | 'node'
+    /** @deprecated Use windowsRuntimePath. */
     windowsNodePath?: string
     windowsSockNames?: string[]
   }
 ): Promise<boolean> {
   try {
     // Why: `test -S` only — a connect-and-close probe would race with a daemon about to idle.
+    const windowsRuntimePath = options?.windowsRuntimePath ?? options?.windowsNodePath
     const windowsOptions =
-      isWindowsRemoteHost(host) && options?.windowsNodePath
+      isWindowsRemoteHost(host) && windowsRuntimePath
         ? {
-            nodePath: options.windowsNodePath,
-            pipePaths: (options.windowsSockNames ?? []).flatMap((sockName) =>
+            runtimePath: windowsRuntimePath,
+            runtimeKind: options?.windowsRuntimeKind,
+            pipePaths: (options?.windowsSockNames ?? []).flatMap((sockName) =>
               windowsRelayPipePathsForSocketName(host, dir, sockName)
             )
           }

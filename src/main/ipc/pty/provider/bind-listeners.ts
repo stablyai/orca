@@ -56,7 +56,7 @@ export function bindProviderListeners(session: PtyIpcSession): void {
         session.sendModelRestoreNeededMarker(
           payload.id,
           'hidden-drop',
-          session.runtime?.getPtyOutputSequence(payload.id)
+          session.runtime?.getPtyOutputSequence?.(payload.id)
         )
         return
       }
@@ -71,7 +71,7 @@ export function bindProviderListeners(session: PtyIpcSession): void {
     localProvider.onData((payload) => {
       const rawLength = payload.sequenceChars ?? payload.data.length
       const outputSeq = isLocalProvider
-        ? session.runtime?.getPtyOutputSequence(payload.id)
+        ? session.runtime?.getPtyOutputSequence?.(payload.id)
         : session.runtime?.onPtyData(
             payload.id,
             payload.data,

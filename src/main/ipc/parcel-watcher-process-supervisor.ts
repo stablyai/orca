@@ -1,8 +1,7 @@
 import type { ChildProcess } from 'node:child_process'
-import { existsSync } from 'node:fs'
 import { restartCancelledWatcherChild } from './parcel-watcher-cancellation-restart'
 import { WatcherCancellationTracker } from './parcel-watcher-cancellation-tracker'
-import { getWatcherProcessEntryPath } from './parcel-watcher-entry-path'
+import { getWatcherProcessEntryPath, watcherProcessEntryExists } from './parcel-watcher-entry-path'
 import { removeWatcherCanaryDirectory } from './parcel-watcher-canary-directory'
 import * as termination from './parcel-watcher-child-termination'
 import { launchWatcherChild } from './parcel-watcher-child-launch'
@@ -39,6 +38,7 @@ import {
 } from './parcel-watcher-supervisor-subscribe'
 import { disposeWatcherSupervisor } from './parcel-watcher-supervisor-disposal'
 import { handleWatcherSupervisorMessage } from './parcel-watcher-supervisor-message'
+import { WatcherOwnedChildren } from './parcel-watcher-owned-children'
 
 export class WatcherProcessSupervisor {
   private child: ChildProcess | null = null
@@ -52,6 +52,7 @@ export class WatcherProcessSupervisor {
   private readonly pendingUnsubscribes = new Map<number, PendingWatcherUnsubscribe>()
   private readonly cancelledSubscribes = new WatcherCancellationTracker()
   private readonly capacityWait = new WatcherSupervisorCapacityWait()
+  private ownedChildren = new WatcherOwnedChildren()
 
   constructor(private readonly options: WatcherProcessSupervisorOptions = {}) {}
 
@@ -107,12 +108,15 @@ export class WatcherProcessSupervisor {
 
   resetForTest(): void {
     this.dispose()
+    this.ownedChildren = new WatcherOwnedChildren()
     this.shutdownRequested = false
     this.terminatingChild = null
     this.terminationQueue.resetForTest()
     this.crashFuse.reset()
     resetWatcherChildRegistryForTest()
   }
+
+  disposeAndWait = (): Promise<void> => this.ownedChildren.disposeAndWait(() => this.dispose())
 
   private ensureWatcherProcess(
     entryPath = this.options.entryPath ?? getWatcherProcessEntryPath()
@@ -126,8 +130,7 @@ export class WatcherProcessSupervisor {
     if (this.crashFuse.isOpen()) {
       return null
     }
-    if (!existsSync(entryPath)) {
-      console.error(`[parcel-watcher-process] entry not found at ${entryPath}; refusing fail-open`)
+    if (!watcherProcessEntryExists(entryPath)) {
       return null
     }
     const launched = launchWatcherChild(
@@ -145,7 +148,7 @@ export class WatcherProcessSupervisor {
       return null
     }
     this.canaryDir = launched.canaryDir
-    this.child = launched.child
+    this.child = this.ownedChildren.track(launched.child)
     return launched.child
   }
 
@@ -251,14 +254,9 @@ export class WatcherProcessSupervisor {
     }
     this.child = null
     this.terminatingChild = proc
-    // Why: destructive Windows cleanup must await exit to release directory handles.
     this.canaryDir = removeWatcherCanaryDirectory(this.canaryDir)
     return this.terminationQueue.track(
       termination.terminateIdleWatcherChild(proc, this.pendingUnsubscribes, () => {
-        // Why: an idle child owns zero records, so a missed exit deadline has no
-        // double-watch hazard; the child keeps its capacity reservation until
-        // physical exit, and poisoning this supervisor would permanently end
-        // local watching — the shared singleton has no retire-and-replace path.
         this.terminatingChild = null
       })
     )

@@ -122,6 +122,14 @@ export function resolveDefaultCwd(
  * Tries /proc on Linux and lsof on macOS before falling back to `fallbackCwd`.
  */
 export async function resolveProcessCwd(pid: number, fallbackCwd: string): Promise<string> {
+  return (await probeProcessCwd(pid)) ?? fallbackCwd
+}
+
+/** Missing host evidence must not become a claim that the shell remains in its initial cwd. */
+export async function probeProcessCwd(pid: number): Promise<string | null> {
+  if (!Number.isSafeInteger(pid) || pid <= 0 || process.platform === 'win32') {
+    return null
+  }
   // Try to read /proc/{pid}/cwd on Linux. Skip an existsSync gate — the
   // check+read pair races a concurrent exit anyway, and the catch already
   // falls through to lsof.
@@ -163,7 +171,7 @@ export async function resolveProcessCwd(pid: number, fallbackCwd: string): Promi
     // Fall through
   }
 
-  return fallbackCwd
+  return null
 }
 
 // Why: signal 0 probes existence without delivering a signal. Only ESRCH ("no

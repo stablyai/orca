@@ -10,6 +10,7 @@ import {
   listEnvironments,
   MAX_RUNTIME_ENVIRONMENT_STORE_FILE_BYTES,
   markEnvironmentUsed,
+  restoreManagedOrcadEnvironmentLink,
   updateEnvironmentFromPairingCode
 } from './runtime-environment-store'
 
@@ -57,6 +58,26 @@ describe('runtime environment store', () => {
       })
     ).toThrow(RuntimeEnvironmentStoreError)
     expect(listEnvironments(userDataPath)).toEqual([first])
+  })
+
+  it('accepts a caller-owned id and rejects duplicate ids', () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-env-store-'))
+    tempDirs.push(userDataPath)
+
+    const environment = addEnvironmentFromPairingCode(userDataPath, {
+      id: 'managed-environment',
+      name: 'managed box',
+      pairingCode: pairingCode()
+    })
+
+    expect(environment.id).toBe('managed-environment')
+    expect(() =>
+      addEnvironmentFromPairingCode(userDataPath, {
+        id: 'managed-environment',
+        name: 'another name',
+        pairingCode: pairingCode()
+      })
+    ).toThrow('already exists')
   })
 
   it('advances pairing revisions across equal and backward clock readings', () => {
@@ -109,6 +130,122 @@ describe('runtime environment store', () => {
       connectionDependency: 'ssh-tunnel'
     })
     expect(direct).not.toHaveProperty('connectionDependency')
+  })
+
+  it('persists the orcad deployment identity across loopback re-pairing', () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-env-store-'))
+    tempDirs.push(userDataPath)
+    const orcadDeployment = {
+      sshTargetId: 'ssh-prod',
+      sshTargetGeneration: 7,
+      localPort: 46_768,
+      remotePort: 6_768
+    }
+    const environment = addEnvironmentFromPairingCode(userDataPath, {
+      name: 'managed box',
+      pairingCode: pairingCode(),
+      connectionDependency: 'ssh-tunnel',
+      orcadDeployment
+    })
+
+    expect(environment.orcadDeployment).toEqual(orcadDeployment)
+    expect(
+      updateEnvironmentFromPairingCode(userDataPath, environment.id, {
+        pairingCode: pairingCode('ws://localhost:46768')
+      }).orcadDeployment
+    ).toEqual(orcadDeployment)
+  })
+
+  it('drops the orcad deployment identity when re-paired to a direct endpoint', () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-env-store-'))
+    tempDirs.push(userDataPath)
+    const environment = addEnvironmentFromPairingCode(userDataPath, {
+      name: 'managed box',
+      pairingCode: pairingCode(),
+      connectionDependency: 'ssh-tunnel',
+      orcadDeployment: {
+        sshTargetId: 'ssh-prod',
+        sshTargetGeneration: 7,
+        localPort: 46_768,
+        remotePort: 6_768
+      }
+    })
+
+    const updated = updateEnvironmentFromPairingCode(userDataPath, environment.id, {
+      pairingCode: pairingCode('wss://runtime.example.com')
+    })
+    expect(updated).not.toHaveProperty('orcadDeployment')
+  })
+
+  it('restores stripped managed deployment metadata without changing environment identity', () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-env-store-'))
+    tempDirs.push(userDataPath)
+    const environment = addEnvironmentFromPairingCode(userDataPath, {
+      id: 'managed-environment',
+      name: 'managed box',
+      pairingCode: pairingCode('ws://localhost:46768', 'paired-device'),
+      connectionDependency: 'ssh-tunnel',
+      now: 1_000
+    })
+    markEnvironmentUsed(userDataPath, environment.id, {
+      runtimeId: 'runtime-1',
+      now: 2_000
+    })
+    const before = listEnvironments(userDataPath)[0]!
+
+    const restored = restoreManagedOrcadEnvironmentLink(userDataPath, environment.id, {
+      sshTargetId: 'ssh-prod',
+      sshTargetGeneration: 7,
+      remotePort: 6_768
+    })
+
+    expect(restored).toEqual({
+      ...before,
+      connectionDependency: 'ssh-tunnel',
+      orcadDeployment: {
+        sshTargetId: 'ssh-prod',
+        sshTargetGeneration: 7,
+        localPort: 46_768,
+        remotePort: 6_768
+      }
+    })
+    expect(listEnvironments(userDataPath)).toEqual([restored])
+  })
+
+  it('refuses to restore a managed link from an ambiguous endpoint or conflicting identity', () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-env-store-'))
+    tempDirs.push(userDataPath)
+    const direct = addEnvironmentFromPairingCode(userDataPath, {
+      name: 'direct box',
+      pairingCode: pairingCode('ws://192.0.2.10:46768')
+    })
+    expect(() =>
+      restoreManagedOrcadEnvironmentLink(userDataPath, direct.id, {
+        sshTargetId: 'ssh-prod',
+        sshTargetGeneration: 7,
+        remotePort: 6_768
+      })
+    ).toThrow('explicit loopback endpoint')
+
+    const managed = addEnvironmentFromPairingCode(userDataPath, {
+      name: 'managed box',
+      pairingCode: pairingCode('ws://127.0.0.1:46769'),
+      connectionDependency: 'ssh-tunnel',
+      orcadDeployment: {
+        sshTargetId: 'ssh-prod',
+        sshTargetGeneration: 8,
+        localPort: 46_769,
+        remotePort: 6_768
+      }
+    })
+    expect(() =>
+      restoreManagedOrcadEnvironmentLink(userDataPath, managed.id, {
+        sshTargetId: 'ssh-prod',
+        sshTargetGeneration: 7,
+        remotePort: 6_768
+      })
+    ).toThrow('conflicting deployment metadata')
+    expect(listEnvironments(userDataPath)).toEqual([direct, managed])
   })
 
   it('throttles lastUsedAt writes so it does not rewrite the store on every runtime call', () => {

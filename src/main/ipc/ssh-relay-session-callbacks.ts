@@ -3,6 +3,7 @@ import { rotateSshProviderAuthority } from '../ssh/ssh-provider-authority'
 import { getSshTargetRegistryStore } from '../ssh/ssh-target-registry'
 import { activeSessions } from './ssh-active-relay-sessions'
 import { testingTargets } from './ssh-connect-attempt-registry'
+import { isSshResetAdmissionBlocked } from './ssh-reset-production-state'
 import { relayGracePeriodForTarget } from './ssh-connection-state-callbacks'
 import {
   connectionManager,
@@ -31,6 +32,9 @@ import {
 
 export function configureRelaySessionCallbacks(session: SshRelaySession): void {
   session.setOnTerminalRelayError((tid, err) => {
+    if (isSshResetAdmissionBlocked(tid)) {
+      return
+    }
     clearRelayLostBackoff(tid)
     if (activeSessions.get(tid)?.getState() !== 'deploying') {
       rotateSshProviderAuthority(tid)
@@ -42,6 +46,10 @@ export function configureRelaySessionCallbacks(session: SshRelaySession): void {
   })
 
   session.setOnRelayLost((tid) => {
+    if (isSshResetAdmissionBlocked(tid)) {
+      clearRelayLostBackoff(tid)
+      return
+    }
     const s = activeSessions.get(tid)
     if (!s) {
       return
@@ -91,6 +99,10 @@ export function configureRelaySessionCallbacks(session: SshRelaySession): void {
     const scheduleRelayRedeploy = (delay: number, attemptCharged: boolean): void => {
       state.reconnectTimer = setTimeout(() => {
         state.reconnectTimer = null
+        if (isSshResetAdmissionBlocked(tid)) {
+          clearRelayLostBackoff(tid)
+          return
+        }
         relayLostBackoff.set(tid, state)
         const liveConn = connectionManager?.getConnection(tid)
         if (!liveConn || !activeSessions.has(tid)) {
@@ -151,6 +163,9 @@ export function configureRelaySessionCallbacks(session: SshRelaySession): void {
 
   // Why: fires after both establish() and reconnect() reach 'ready'; re-create persisted port forwards so they survive restarts and blips.
   session.setOnReady((tid) => {
+    if (isSshResetAdmissionBlocked(tid)) {
+      return
+    }
     const state = relayLostBackoff.get(tid)
     if (state) {
       if (state.stabilizedTimer) {

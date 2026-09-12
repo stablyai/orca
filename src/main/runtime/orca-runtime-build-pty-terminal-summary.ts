@@ -9,6 +9,7 @@ import type { TerminalHandleRecord } from './runtime-terminal-contracts'
 import { readTerminalTail } from './terminal-tail-read'
 import { structuredWorkerTerminalRefusal } from './structured-worker-terminal-refusal'
 import { randomUUID } from 'node:crypto'
+import { assertOutgoingPtyRegistrationAllowed } from './outgoing-pty-registration-fence'
 
 export class OrcaRuntimeWithBuildPtyTerminalSummary extends OrcaRuntimeWithGetPtyRecordForPaneKey {
   protected buildPtyTerminalSummary(
@@ -97,6 +98,7 @@ export class OrcaRuntimeWithBuildPtyTerminalSummary extends OrcaRuntimeWithGetPt
       return null
     }
     // Why: renderer adoption can race with CLI reads; keep ptyId → handle populated so summaries don't mint a second handle for the same terminal.
+    assertOutgoingPtyRegistrationAllowed(this, record.ptyId)
     this.handleByPtyId.set(record.ptyId, handle)
     return { record, pty }
   }
@@ -134,6 +136,9 @@ export class OrcaRuntimeWithBuildPtyTerminalSummary extends OrcaRuntimeWithGetPt
   }
 
   protected issueHandle(leaf: RuntimeLeafRecord): string {
+    if (leaf.ptyId) {
+      assertOutgoingPtyRegistrationAllowed(this, leaf.ptyId)
+    }
     const leafKey = this.getLeafKey(leaf.tabId, leaf.leafId)
     const existingHandle = this.handleByLeafKey.get(leafKey)
     if (existingHandle) {

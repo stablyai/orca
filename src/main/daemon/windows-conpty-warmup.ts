@@ -1,7 +1,39 @@
 import os from 'node:os'
-import * as pty from 'node-pty'
+import { createRequire } from 'node:module'
+import type * as pty from 'node-pty'
+import { canUseBunPty, spawnBunPty } from './pty-subprocess/bun-pty-process'
 
 const WARMUP_KILL_TIMEOUT_MS = 10_000
+const requireFromMain = createRequire(__filename)
+
+function spawnWarmupPty(spawnPty?: typeof pty.spawn): pty.IPty {
+  const file = process.env.COMSPEC || 'cmd.exe'
+  const args = ['/c', 'exit']
+  const cwd = os.homedir()
+  const env = process.env as Record<string, string>
+  if (spawnPty) {
+    return spawnPty(file, args, {
+      name: 'xterm-256color',
+      cols: 2,
+      rows: 1,
+      cwd,
+      env,
+      useConptyDll: true
+    })
+  }
+  if (canUseBunPty()) {
+    return spawnBunPty({ file, args, cwd, env, cols: 2, rows: 1 })
+  }
+  const nodePty = requireFromMain('node-pty') as typeof pty
+  return nodePty.spawn(file, args, {
+    name: 'xterm-256color',
+    cols: 2,
+    rows: 1,
+    cwd,
+    env,
+    useConptyDll: true
+  })
+}
 
 /**
  * Pays the one-time cost of the first ConPTY spawn (conpty native module
@@ -9,7 +41,7 @@ const WARMUP_KILL_TIMEOUT_MS = 10_000
  * those binaries) at daemon boot instead of on the user's first terminal.
  * Measured ~2.7s on a Windows dev profile for the first spawn vs ~70ms after.
  */
-export function warmWindowsConptyOnce(spawnPty: typeof pty.spawn = pty.spawn): void {
+export function warmWindowsConptyOnce(spawnPty?: typeof pty.spawn): void {
   if (process.platform !== 'win32') {
     return
   }
@@ -17,16 +49,7 @@ export function warmWindowsConptyOnce(spawnPty: typeof pty.spawn = pty.spawn): v
   // real spawn arriving first simply does the warming itself.
   setImmediate(() => {
     try {
-      const proc = spawnPty(process.env.COMSPEC || 'cmd.exe', ['/c', 'exit'], {
-        name: 'xterm-256color',
-        cols: 2,
-        rows: 1,
-        cwd: os.homedir(),
-        env: process.env as Record<string, string>,
-        // Match real terminal spawns so the bundled ConPTY binaries are the
-        // ones warmed, not the legacy system ConPTY.
-        useConptyDll: true
-      })
+      const proc = spawnWarmupPty(spawnPty)
       const killTimer = setTimeout(() => {
         try {
           proc.kill()

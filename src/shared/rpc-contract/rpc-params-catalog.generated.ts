@@ -17,6 +17,10 @@ import {
   PairingGetEndpointsParamsSchema,
   PairingProvisionRelayParamsSchema
 } from '../mobile-relay-credential-contract'
+import { OrcadDecommissionParamsSchema } from '../orcad-decommission'
+import { OrcadManagedDecommissionParamsSchema } from '../orcad-managed-decommission'
+import { OrcadManagedStopRequestSchema } from '../orcad-managed-stop-request'
+import { OrcadMigrationSnapshotChunkRequestSchema } from '../orcad-migration-scrollback'
 import { pluginConsentRequestSchema } from '../plugins/plugin-consent-request'
 import {
   AccountsUnsubscribeParams,
@@ -946,6 +950,12 @@ export const RPC_PARAMS_BY_METHOD = {
   'notifications.testPush': null,
   'notifications.unregisterPush': null,
   'notifications.unsubscribe': NotificationUnsubscribeParams,
+  'orcad.cancelPreparedStop': OrcadManagedStopRequestSchema,
+  'orcad.decommissionIfIdle': OrcadDecommissionParamsSchema,
+  'orcad.decommissionManagedIfIdle': OrcadManagedDecommissionParamsSchema,
+  'orcad.health': null,
+  'orcad.managedStopIdentity': null,
+  'orcad.migration.stageSnapshotChunk': OrcadMigrationSnapshotChunkRequestSchema,
   'orchestration.ask': AskParams,
   'orchestration.check': CheckParams,
   'orchestration.dispatch': DispatchParams,
@@ -1153,8 +1163,34 @@ export const RPC_PARAMS_BY_METHOD = {
 // graph reaches into src/main. Listing them keeps the gap visible instead of absent.
 export const RPC_METHODS_WITHOUT_SHARED_PARAMS: readonly string[] = [
   'emulator.install',
+  'orcad.migration.abortCatalog',
+  'orcad.migration.catalogState',
+  'orcad.migration.commitCatalog',
+  'orcad.migration.importCatalog',
+  'orcad.migration.stageCatalog',
+  'orcad.terminalCensus',
   'orchestration.send',
-  'orchestration.taskUpdate'
+  'orchestration.taskUpdate',
+  'pty.ownershipTransfer.abortSource',
+  'pty.ownershipTransfer.acknowledgeOutputSource',
+  'pty.ownershipTransfer.attachSource',
+  'pty.ownershipTransfer.capturedDestinationCapabilities',
+  'pty.ownershipTransfer.commitSource',
+  'pty.ownershipTransfer.controlSource',
+  'pty.ownershipTransfer.grantSource',
+  'pty.ownershipTransfer.inputSource',
+  'pty.ownershipTransfer.inspectCapturedCatalogActivation',
+  'pty.ownershipTransfer.inspectCapturedCatalogOutputCoverage',
+  'pty.ownershipTransfer.preflightSource',
+  'pty.ownershipTransfer.prepareCapturedDestination',
+  'pty.ownershipTransfer.prepareSource',
+  'pty.ownershipTransfer.publishSource',
+  'pty.ownershipTransfer.rekeyReconnectSource',
+  'pty.ownershipTransfer.replaySource',
+  'pty.ownershipTransfer.retireCapturedSourceDelivery',
+  'pty.ownershipTransfer.retireInputSource',
+  'pty.ownershipTransfer.statusSource',
+  'pty.ownershipTransfer.streamSource'
 ]
 
 export type RpcMethodName = keyof typeof RPC_PARAMS_BY_METHOD

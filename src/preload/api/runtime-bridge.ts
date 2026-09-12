@@ -15,6 +15,11 @@ export const runtimeApi = {
   syncWindowGraph: (graph: RuntimeRendererSyncWindowGraph): Promise<RuntimeSyncWindowGraphResult> =>
     ipcRenderer.invoke('runtime:syncWindowGraph', graph),
   getStatus: (): Promise<RuntimeStatus> => ipcRenderer.invoke('runtime:getStatus'),
+  transferPtyOwnership: (request) => ipcRenderer.invoke('runtime:transferPtyOwnership', request),
+  preflightPtyOwnershipTransfer: (request) =>
+    ipcRenderer.invoke('runtime:preflightPtyOwnershipTransfer', request),
+  getPtyOwnershipTransferStatus: (request) =>
+    ipcRenderer.invoke('runtime:getPtyOwnershipTransferStatus', request),
   call: (args: { method: string; params?: unknown }): Promise<RuntimeRpcResponse<unknown>> =>
     ipcRenderer.invoke('runtime:call', args),
   subscribe: async (

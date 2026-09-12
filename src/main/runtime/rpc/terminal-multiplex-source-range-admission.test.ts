@@ -234,7 +234,8 @@ describe('terminal multiplex RPC', () => {
       expect(closeProvider).not.toHaveBeenCalled()
       expect(intake.getDebugSnapshot().source).toEqual({
         openedTokens: 0,
-        ptyIdentities: 0
+        ptyIdentities: 0,
+        pendingOwnershipTransferSettlements: 0
       })
 
       harness.registry.cleanupSubscription('terminal-multiplex:conn-desktop-first-paint')

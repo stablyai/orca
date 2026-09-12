@@ -6,7 +6,7 @@
  * never matches, a `tar` invocation that silently captures nothing. These run the strings.
  */
 import { execFileSync, spawn } from 'node:child_process'
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -134,20 +134,17 @@ describe('liveness and stop commands, run for real', () => {
     expect(parseOrcadLiveness(sh(orcadLivenessProbeCommand(host, versionDir)))).toBe('DEAD')
   })
 
-  it('reports LIVE for a running process and stops it with SIGTERM', async () => {
+  it('reports LIVE but never signals a recorded PID that may belong to another process', async () => {
     const child = spawn('/bin/sh', ['-c', 'sleep 30'], { stdio: 'ignore' })
     try {
       writeFileSync(join(versionDir, ORCAD_PID_FILENAME), String(child.pid))
       expect(parseOrcadLiveness(sh(orcadLivenessProbeCommand(host, versionDir)))).toBe('LIVE')
 
-      const exited = new Promise<NodeJS.Signals | null>((resolve) =>
-        child.once('exit', (_code, signal) => resolve(signal))
-      )
       expect(
-        parseOrcadStopOutcome(sh(stopOrcadCommand(host, versionDir, { waitSeconds: 10 })))
-      ).toBe('stopped')
-      expect(await exited).toBe('SIGTERM')
-      expect(parseOrcadLiveness(sh(orcadLivenessProbeCommand(host, versionDir)))).toBe('DEAD')
+        parseOrcadStopOutcome(sh(stopOrcadCommand(host, versionDir, { waitSeconds: 1 })))
+      ).toBe('still-running')
+      expect(existsSync(join(versionDir, '.orcad-stop-request'))).toBe(true)
+      expect(parseOrcadLiveness(sh(orcadLivenessProbeCommand(host, versionDir)))).toBe('LIVE')
     } finally {
       child.kill('SIGKILL')
     }

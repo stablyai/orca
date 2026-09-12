@@ -6,6 +6,10 @@ import { cn } from '@/lib/utils'
 import { SearchableSetting } from './SearchableSetting'
 import { EphemeralVmRuntimesSection } from './EphemeralVmRuntimesSection'
 import { CloudVmSetupGuide } from './CloudVmSetupGuide'
+import { ManagedOrcadServersSection } from './ManagedOrcadServersSection'
+import { OrcadCaptureRecoverySection } from './OrcadCaptureRecoverySection'
+import { OrcadLiveMigrationSection } from './OrcadLiveMigrationSection'
+import { RuntimeEnvironmentReconciliationControl } from './RuntimeEnvironmentReconciliationControl'
 import {
   getRuntimeEnvironmentsSearchEntry,
   getWebRuntimeEnvironmentsSearchEntry
@@ -72,6 +76,7 @@ export function RuntimeEnvironmentsPane({
   const consumedAddServerIntentSignalRef = useRef(0)
   const {
     environments,
+    selectableEnvironments,
     isLoading,
     detailsByEnvironmentId,
     setDetailsByEnvironmentId,
@@ -86,7 +91,10 @@ export function RuntimeEnvironmentsPane({
     if (value === NO_RUNTIME_VALUE) {
       return 'No server connected'
     }
-    return environments.find((environment) => environment.id === value)?.name ?? 'remote server'
+    return (
+      selectableEnvironments.find((environment) => environment.id === value)?.name ??
+      'remote server'
+    )
   }
   const {
     connectingId,
@@ -203,6 +211,12 @@ export function RuntimeEnvironmentsPane({
         onWorkflowChange={setWorkflow}
       />
 
+      <div className={cn(visibleWorkflow !== 'connect' && 'hidden')}>
+        <ManagedOrcadServersSection
+          activeEnvironmentId={settings.activeRuntimeEnvironmentId}
+          onEnvironmentsChanged={loadEnvironments}
+        />
+      </div>
       <RuntimeServersConnectSection
         visible={visibleWorkflow === 'connect'}
         environments={environments}
@@ -233,6 +247,7 @@ export function RuntimeEnvironmentsPane({
         onConnect={(environment) => void connectEnvironment(environment)}
         onDisconnect={(environment) => void disconnectEnvironment(environment)}
         onRemove={openRemoveDialog}
+        onSshAccessChanged={loadEnvironments}
       />
 
       <div className={cn('space-y-5 pt-2', visibleWorkflow !== 'cloud-vm' && 'hidden')}>
@@ -247,7 +262,7 @@ export function RuntimeEnvironmentsPane({
         localRuntimeValue={LOCAL_RUNTIME_VALUE}
         noRuntimeValue={NO_RUNTIME_VALUE}
         activeValue={activeValue}
-        environments={environments}
+        environments={selectableEnvironments}
         detailsByEnvironmentId={detailsByEnvironmentId}
         isBusy={isBusy}
         isLoading={isLoading}
@@ -259,6 +274,17 @@ export function RuntimeEnvironmentsPane({
         onRefresh={() => void loadEnvironments()}
       />
 
+      {visibleWorkflow === 'connect' && advancedOpen ? (
+        <>
+          <RuntimeEnvironmentReconciliationControl onChanged={loadEnvironments} />
+          <OrcadLiveMigrationSection
+            environments={selectableEnvironments}
+            disabled={isBusy}
+            onConnectDestination={connectEnvironment}
+          />
+          <OrcadCaptureRecoverySection environments={selectableEnvironments} />
+        </>
+      ) : null}
       {visibleWorkflow === 'share' && canGeneratePairingUrl ? (
         <RuntimeServerShareSection
           shareServerFormOpen={shareServerFormOpen}

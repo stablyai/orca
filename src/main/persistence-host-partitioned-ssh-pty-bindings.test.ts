@@ -38,6 +38,35 @@ vi.mock('./telemetry/cohort-classifier', () => ({
 }))
 
 describe('Store SSH remote PTY bindings across host partitions', () => {
+  it('durably retires an exact reset selection through the public store and refuses a replacement', async () => {
+    const store = createStore()
+    store.upsertSshRemotePtyLease({
+      targetId: 'target-reset',
+      ptyId: 'pty-reset',
+      state: 'attached',
+      createdAt: 1,
+      updatedAt: 2
+    })
+    const selection = structuredClone(store.getSshRemotePtyLeases('target-reset'))
+    await store.retireSshRemotePtyLeaseSelection('target-reset', selection, 100)
+    const restored = createStore()
+    expect(restored.getSshRemotePtyLeases('target-reset')).toEqual(
+      selection.map((lease) => ({ ...lease, state: 'expired', updatedAt: 100 }))
+    )
+    await restored.retireSshRemotePtyLeaseSelection('target-reset', selection, 100)
+    restored.upsertSshRemotePtyLease({
+      targetId: 'target-reset',
+      ptyId: 'pty-reset',
+      state: 'attached',
+      updatedAt: 200
+    })
+    await expect(
+      restored.retireSshRemotePtyLeaseSelection('target-reset', selection, 100)
+    ).rejects.toThrow('selection_changed')
+    expect(restored.getSshRemotePtyLeases('target-reset')[0].state).toBe('attached')
+    await restored.flushPendingOrThrowAsync()
+  })
+
   beforeEach(() => {
     testState.dir = mkdtempSync(join(tmpdir(), 'orca-test-'))
   })

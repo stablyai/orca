@@ -14,6 +14,7 @@ import {
   tailGainedNewerBlockedReason
 } from './terminal-wait-tail-state'
 import { extractOscTitleScanTail } from '../../shared/osc-title-scan-tail'
+import { assertOutgoingPtyModelMutationAllowed } from './outgoing-pty-registration-fence'
 
 export class OrcaRuntimeWithOnPtyData extends OrcaRuntimeWithPreparePtyExecutionContext {
   onPtyData(
@@ -25,6 +26,10 @@ export class OrcaRuntimeWithOnPtyData extends OrcaRuntimeWithPreparePtyExecution
     captureModelReceipt?: (completion: Promise<void>) => void,
     sourceRanges?: readonly TerminalOutputSourceRange[]
   ): number {
+    assertOutgoingPtyModelMutationAllowed(this, ptyId)
+    if (this.headlessTerminals.get(ptyId)?.restoringSnapshot) {
+      throw new Error('pty_model_restore_in_progress')
+    }
     const outputSequence = (this.ptyOutputSequenceById.get(ptyId) ?? 0) + sequenceChars
     this.ptyOutputSequenceById.set(ptyId, outputSequence)
     this.providerModeTrackersByPtyId.get(ptyId)?.scan(data)

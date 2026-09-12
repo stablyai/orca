@@ -8,21 +8,25 @@ import {
 } from './terminal-paste-limits'
 import { runTerminalPasteOperationWithTimeout } from './terminal-paste-operation-timeout'
 import { runTerminalPtyInputTransaction } from './terminal-pty-input-transaction'
+import { createBrowserUuid } from '@/lib/browser-uuid'
 import type {
   TerminalPasteExecutionReason,
   TerminalPasteExecutionResult,
   TerminalPastePlan,
   TerminalPasteTextOptions
 } from './terminal-paste-model'
+import type { PtyInputOperationOptions } from './pty-transport-types'
 
 type ExecuteTerminalPastePlanArgs = {
   pasteText: (text: string, options?: TerminalPasteTextOptions) => void | Promise<void>
-  writePty?: (data: string) => boolean | Promise<boolean>
+  writePty?: (data: string, options?: PtyInputOperationOptions) => boolean | Promise<boolean>
   isTargetCurrent?: () => boolean
   canContinue?: () => boolean
   yieldToEventLoop?: () => Promise<void>
   operationTimeoutMs?: number
   now?: () => number
+  /** Optional base ID; chunked paste derives one stable ID per emitted chunk. */
+  operationId?: string
 }
 
 export async function executeTerminalPastePlan(
@@ -43,7 +47,8 @@ async function executeTerminalPastePlanNow(
     canContinue,
     yieldToEventLoop = yieldToEventLoopTask,
     operationTimeoutMs = getTerminalPasteOperationTimeoutMs(plan),
-    now = defaultNow
+    now = defaultNow,
+    operationId
   }: ExecuteTerminalPastePlanArgs
 ): Promise<TerminalPasteExecutionResult> {
   const startedAtMs = now()
@@ -81,6 +86,27 @@ async function executeTerminalPastePlanNow(
   let chunksWritten = 0
   let bracketedPasteOpen = false
   // Why: best-effort — a close that hangs or throws must not mask the real exit reason.
+  let nextOperationIndex = 0
+  // Remote-runtime acknowledged writes can be retried after a lost RPC. Keep
+  // legacy local/SSH fire-and-forget paths unchanged until they expose a
+  // truthful settlement/retirement contract.
+  const effectiveOperationId =
+    operationId ??
+    (plan.target.runtime.kind === 'remote-runtime' ? `paste-${createBrowserUuid()}` : undefined)
+  const writeOptions = (): PtyInputOperationOptions | undefined => {
+    if (!effectiveOperationId) {
+      return undefined
+    }
+    const current = nextOperationIndex
+    nextOperationIndex += 1
+    return {
+      operationId: current === 0 ? effectiveOperationId : `${effectiveOperationId}:chunk:${current}`
+    }
+  }
+  const writePtyInput = (data: string): boolean | Promise<boolean> => {
+    const options = writeOptions()
+    return options ? writePty(data, options) : writePty(data)
+  }
   const closeBracketedPasteFrame = async (): Promise<{ timedOut: boolean }> => {
     if (!bracketedPasteOpen) {
       return { timedOut: false }
@@ -91,7 +117,7 @@ async function executeTerminalPastePlanNow(
     }
     try {
       const closeResult = await runTerminalPasteOperationWithTimeout(
-        () => writePty(BRACKETED_PASTE_END),
+        () => writePtyInput(BRACKETED_PASTE_END),
         operationTimeoutMs
       )
       if (closeResult.timedOut) {
@@ -115,7 +141,7 @@ async function executeTerminalPastePlanNow(
         return { status: 'cancelled', reason: 'target-disconnected' }
       }
       const writeResult = await runTerminalPasteOperationWithTimeout(
-        () => writePty(chunk),
+        () => writePtyInput(chunk),
         operationTimeoutMs
       )
       // Why: a failed close chunk is already the close attempt; retrying would emit a stray end.

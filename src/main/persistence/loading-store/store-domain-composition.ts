@@ -54,6 +54,10 @@ import {
   PtyBindingPersistenceOperations,
   installPtyBindingPersistenceOperationsContext
 } from './pty-binding-persistence'
+import {
+  PtyOwnershipTransferSurfacePersistence,
+  installPtyOwnershipTransferSurfacePersistenceContext
+} from './pty-ownership-transfer-surface-persistence'
 import { SshProfileOperations, installSshProfileOperationsContext } from './ssh-profile-operations'
 import {
   RetiredWorktreeNamePersistence,
@@ -63,6 +67,22 @@ import {
   SshLeaseRecoveryOperations,
   installSshLeaseRecoveryOperationsContext
 } from './ssh-lease-recovery-operations'
+import {
+  OrcadCatalogImportPersistence,
+  installOrcadCatalogImportPersistenceContext
+} from '../migrating-orcad-catalog/orcad-catalog-import'
+import {
+  OrcadSourceCutoverPersistence,
+  installOrcadSourceCutoverPersistenceContext
+} from '../migrating-orcad-catalog/orcad-source-cutover'
+import {
+  OrcadSourceRetirementPersistence,
+  installOrcadSourceRetirementPersistenceContext
+} from '../migrating-orcad-catalog/orcad-source-retirement-persistence'
+import {
+  PtyOwnershipTransferJournalPersistence,
+  installPtyOwnershipTransferJournalPersistenceContext
+} from '../pty-ownership-transfer/pty-ownership-transfer-journal'
 
 export type StoreDomains = {
   adaptation: LoadedStateAdaptationOperations
@@ -84,9 +104,14 @@ export type StoreDomains = {
   mobileTabSelections: MobileTabSelectionPersistence
   sparsePresets: SparsePresetPersistence
   ptyBindings: PtyBindingPersistenceOperations
+  ptyOwnershipTransferSurfaces: PtyOwnershipTransferSurfacePersistence
   sshProfiles: SshProfileOperations
   retiredWorktreeNames: RetiredWorktreeNamePersistence
   sshLeases: SshLeaseRecoveryOperations
+  orcadCatalogImports: OrcadCatalogImportPersistence
+  orcadSourceCutovers: OrcadSourceCutoverPersistence
+  orcadSourceRetirement: OrcadSourceRetirementPersistence
+  ptyOwnershipTransfers: PtyOwnershipTransferJournalPersistence
 }
 
 export const STORE_DOMAIN_OPERATION_CLASSES = [
@@ -102,9 +127,14 @@ export const STORE_DOMAIN_OPERATION_CLASSES = [
   SessionHostPartitionOperations,
   SessionSnapshotOperations,
   PtyBindingPersistenceOperations,
+  PtyOwnershipTransferSurfacePersistence,
   SshProfileOperations,
   RetiredWorktreeNamePersistence,
   SshLeaseRecoveryOperations,
+  OrcadCatalogImportPersistence,
+  OrcadSourceCutoverPersistence,
+  PtyOwnershipTransferJournalPersistence,
+  OrcadSourceRetirementPersistence,
   WriteFlushBarrierOperations
 ] as const
 
@@ -121,9 +151,14 @@ export function installStoreDomainContexts(target: object, domains: StoreDomains
   installSessionHostPartitionOperationsContext(target, domains.sessions)
   installSessionSnapshotOperationsContext(target, domains.sessionSnapshots)
   installPtyBindingPersistenceOperationsContext(target, domains.ptyBindings)
+  installPtyOwnershipTransferSurfacePersistenceContext(target, domains.ptyOwnershipTransferSurfaces)
   installSshProfileOperationsContext(target, domains.sshProfiles)
   installRetiredWorktreeNamePersistenceContext(target, domains.retiredWorktreeNames)
   installSshLeaseRecoveryOperationsContext(target, domains.sshLeases)
+  installOrcadCatalogImportPersistenceContext(target, domains.orcadCatalogImports)
+  installOrcadSourceCutoverPersistenceContext(target, domains.orcadSourceCutovers)
+  installOrcadSourceRetirementPersistenceContext(target, domains.orcadSourceRetirement)
+  installPtyOwnershipTransferJournalPersistenceContext(target, domains.ptyOwnershipTransfers)
   installWriteFlushBarrierOperationsContext(target, domains.flushBarriers)
 }
 
@@ -152,6 +187,11 @@ export function createStoreDomains(runtime: StoreRuntimeState): StoreDomains {
   const mobileTabSelections = new MobileTabSelectionPersistence(runtime, scheduling)
   const sparsePresets = new SparsePresetPersistence(runtime, scheduling)
   const ptyBindings = new PtyBindingPersistenceOperations(runtime, sessions)
+  const ptyOwnershipTransferSurfaces = new PtyOwnershipTransferSurfacePersistence(
+    runtime,
+    sessions,
+    ptyBindings
+  )
   const sshProfiles = new SshProfileOperations(runtime, scheduling, flushBarriers, repos)
   const retiredWorktreeNames = new RetiredWorktreeNamePersistence(runtime, scheduling)
   const sshLeases = new SshLeaseRecoveryOperations(
@@ -160,6 +200,15 @@ export function createStoreDomains(runtime: StoreRuntimeState): StoreDomains {
     bindingRecovery,
     scheduling
   )
+  const orcadCatalogImports = new OrcadCatalogImportPersistence(runtime, repos, scheduling)
+  const orcadSourceCutovers = new OrcadSourceCutoverPersistence(
+    runtime,
+    projects,
+    repos,
+    scheduling
+  )
+  const ptyOwnershipTransfers = new PtyOwnershipTransferJournalPersistence(runtime, scheduling)
+  const orcadSourceRetirement = new OrcadSourceRetirementPersistence(runtime, scheduling, projects)
   return {
     adaptation,
     backups,
@@ -180,8 +229,13 @@ export function createStoreDomains(runtime: StoreRuntimeState): StoreDomains {
     mobileTabSelections,
     sparsePresets,
     ptyBindings,
+    ptyOwnershipTransferSurfaces,
     sshProfiles,
     retiredWorktreeNames,
-    sshLeases
+    sshLeases,
+    orcadCatalogImports,
+    orcadSourceCutovers,
+    orcadSourceRetirement,
+    ptyOwnershipTransfers
   }
 }

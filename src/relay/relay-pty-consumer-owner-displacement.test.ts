@@ -6,6 +6,7 @@ import {
 } from './dispatcher'
 import { encodeJsonRpcFrame, MessageType } from './protocol'
 import { SshPtyConsumerSessionAdapter } from './ssh-pty-consumer-session-adapter'
+import { RelayOwnerReset } from './relay-owner-reset'
 import {
   PTY_CONSUMER_OWNER_RECOVERY_PENDING_ERROR,
   PTY_CONSUMER_OWNER_RECOVERY_SUPERSEDED_ERROR
@@ -56,6 +57,70 @@ describe('relay PTY consumer owner displacement', () => {
   afterEach(() => {
     dispatcher?.dispose()
     dispatcher = null
+  })
+
+  it('refuses reset while a replacement response is queued without disturbing either grant', async () => {
+    const writes: Buffer[] = []
+    const close = vi.fn()
+    dispatcher = new RelayDispatcher(
+      (data, settle) => {
+        writes.push(Buffer.from(data))
+        settle({ ok: true })
+        return true
+      },
+      { supportsWriteCallback: true, close },
+      endpointIdentity
+    )
+    const adapter = new SshPtyConsumerSessionAdapter(dispatcher, 'build-a')
+    const lifecycle = { prepareShutdown: vi.fn(async () => {}), finishShutdown: vi.fn() }
+    const reset = new RelayOwnerReset({ owners: adapter, lifecycle, ownsEndpoint: () => true })
+    dispatcher.onRequest('relay.reset', (params, context) => reset.prepare(params, context))
+    dispatcher.feed(requestFrame(1, 'pty.openClient', ownerHelloParams()))
+    await flushRequests()
+    const grant = response(writes, 1)!.result as Record<string, unknown>
+    const pending: ((result: SinkWriteSettlement) => void)[] = []
+    const replacement = dispatcher.attachClient(
+      (_data, settle) => {
+        pending.push(settle)
+        return true
+      },
+      { supportsWriteCallback: true },
+      endpointIdentity
+    )
+    dispatcher.feedClient(
+      replacement,
+      requestFrame(
+        1,
+        'pty.openClient',
+        ownerHelloParams({
+          ownerGeneration: grant.ownerGeneration,
+          ownerLease: grant.ownerLease
+        })
+      )
+    )
+    await flushRequests()
+    dispatcher.feed(
+      requestFrame(2, 'relay.reset', {
+        version: 1,
+        operationId: 'reset',
+        runtimeIncarnation: reset.runtimeIncarnation,
+        ownerGeneration: grant.ownerGeneration,
+        ownerLease: grant.ownerLease
+      })
+    )
+    await flushRequests()
+    expect(response(writes, 2)?.error).toMatchObject({
+      message: 'pty_consumer_owner_publication_pending'
+    })
+    expect(lifecycle.prepareShutdown).not.toHaveBeenCalled()
+    expect(close).not.toHaveBeenCalled()
+    expect(adapter.activeSessionOwner(1)?.ownerGeneration).toBe(grant.ownerGeneration)
+    expect(adapter.activeSessionOwner(replacement)).toBeNull()
+    pending[0]({ ok: true })
+    expect(adapter.activeSessionOwner(1)).toBeNull()
+    expect(adapter.activeSessionOwner(replacement)).not.toBeNull()
+    expect(lifecycle.finishShutdown).not.toHaveBeenCalled()
+    expect(() => adapter.assertOwnerPublicationSettled()).not.toThrow()
   })
 
   it('displaces a half-open owner and retains its deliveries for the reconnected client', async () => {

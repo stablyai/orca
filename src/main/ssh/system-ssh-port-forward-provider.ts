@@ -1,4 +1,5 @@
 import type { SshConnection } from './ssh-connection'
+import { allocateLoopbackPort } from './loopback-port-allocation'
 import {
   startSystemSshPortForwardProcess,
   systemSshForwardError
@@ -16,9 +17,10 @@ export class SystemSshPortForwardProvider implements SshPortForwardProvider {
 
   async start(conn: SshConnection, options: PortForwardStartOptions): Promise<StartedPortForward> {
     const target = conn.getTarget()
+    const localPort = options.localPort === 0 ? await allocateLoopbackPort() : options.localPort
     const forward = await startSystemSshPortForwardProcess(
       target,
-      options.localPort,
+      localPort,
       options.remoteHost,
       options.remotePort,
       conn.getSystemSshBuildArgsOptions()
@@ -42,7 +44,7 @@ export class SystemSshPortForwardProvider implements SshPortForwardProvider {
     const entry = {
       id: options.id,
       connectionId: options.connectionId,
-      localPort: options.localPort,
+      localPort,
       remoteHost: options.remoteHost,
       remotePort: options.remotePort,
       label: options.label

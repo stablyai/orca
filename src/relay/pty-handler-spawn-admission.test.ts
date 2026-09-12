@@ -209,6 +209,35 @@ describe('PtyHandler', () => {
     expect(handler.activePtyCount).toBe(1)
   })
 
+  it('advertises read-only creation inspection without spawning a missing operation', async () => {
+    expect(await dispatcher.callRequest('pty.getCapabilities', {})).toMatchObject({
+      agentSessionCreateOperationInspectionVersion: 1
+    })
+    const agentSessionCreateOperationId = 'b'.repeat(43)
+    const params = { agentSessionCreateOperationId }
+    expect(await dispatcher.callRequest('pty.inspectCreateOperation', params)).toEqual({
+      version: 1,
+      operationId: agentSessionCreateOperationId,
+      outcome: 'unverifiable'
+    })
+    expect(mockPtySpawn).not.toHaveBeenCalled()
+    const created = (await dispatcher.callRequest('pty.spawn', {
+      ...params,
+      cols: 80,
+      rows: 24
+    })) as { id: string; incarnationId: string }
+    expect(await dispatcher.callRequest('pty.inspectCreateOperation', params)).toEqual({
+      version: 1,
+      operationId: agentSessionCreateOperationId,
+      outcome: 'recorded',
+      terminalId: created.id,
+      incarnationId: created.incarnationId
+    })
+    expect(mockPtySpawn).toHaveBeenCalledOnce()
+    expect(mockPtyInstance.kill).not.toHaveBeenCalled()
+    expect(handler.activePtyCount).toBe(1)
+  })
+
   it('retains an operation fence when publication fails after native spawn', async () => {
     const operationId = 'f'.repeat(43)
     mockPtySpawn.mockReturnValue({

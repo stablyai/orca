@@ -1,5 +1,20 @@
 /* eslint-disable max-lines -- Why: SSH connection lifecycle, credential retries, reconnect policy, and transport fallback are intentionally co-located so state transitions stay auditable in one file. */
 import * as net from 'node:net'
+import { createHash } from 'node:crypto'
+import type { SshConnectionDestination } from './ssh-connection-destination'
+import { SshConnectionWorkLedger } from './ssh-connection-work-ledger'
+import { observeSshTransportClose } from './ssh-transport-close-observation'
+import { SshTransportCloseLedger } from './ssh-transport-close-ledger'
+import { assertProfileLifetimeAdmission } from './profile-lifetime-admission'
+import { openTrackedSshUploadSession } from './ssh-upload-session-lifetime'
+import {
+  forwardTrackedSshChannel,
+  forwardTrackedSshStreamLocalChannel
+} from './ssh-forward-channel-lifetime'
+import {
+  openTrackedSshSocket,
+  trackSshConnectionChannelLifetime
+} from './ssh-connection-channel-lifetime'
 import { Client as SshClient } from 'ssh2'
 import type { ChildProcess } from 'node:child_process'
 import type {
@@ -10,6 +25,7 @@ import type {
   SFTPWrapper
 } from 'ssh2'
 import type { SshTarget, SshConnectionState, SshConnectionStatus } from '../../shared/ssh-types'
+import { isEphemeralRuntimeSshOwner } from '../../shared/managed-orcad-ssh-owner'
 import {
   getOrcaControlSocketPath,
   spawnSystemSsh,
@@ -172,6 +188,43 @@ function isGitHubRestrictedShellProbeSuccess(
 }
 
 export class SshConnection {
+  private readonly workLedger = new SshConnectionWorkLedger(
+    () => this.notifyTransportClosure(),
+    () => {
+      if (this.disposed) {
+        throw createSshOperationAbortError()
+      }
+    }
+  )
+  private resetConnectionFenced = false
+  private readonly automaticReconnect: boolean
+  private activeConnectCalls = 0
+  private unprovenStartupTransport = false
+
+  fenceWorkForReset(controlChannel?: object) {
+    if (
+      this.disposed ||
+      this.state.status !== 'connected' ||
+      (!this.client && !this.useSystemSshTransport) ||
+      this.pendingSsh2Clients.size > 0
+    ) {
+      throw new Error('ssh_connection_reset_transport_not_connected')
+    }
+    const fence = this.workLedger.fenceForReset(controlChannel)
+    this.resetConnectionFenced = true
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer)
+      this.reconnectTimer = null
+    }
+    return fence
+  }
+
+  private assertConnectionReplacementAllowed(): void {
+    assertProfileLifetimeAdmission()
+    if (this.resetConnectionFenced) {
+      throw new Error('ssh_connection_reset_replacement_refused')
+    }
+  }
   private client: SshClient | null = null
   private proxyProcess: ChildProcess | null = null
   private systemSsh: SystemSshProcess | null = null
@@ -198,6 +251,42 @@ export class SshConnection {
   private useSystemSshTransport = false
   private credentialAbortController = new AbortController()
   private readonly pendingSsh2Clients = new Set<SshClient>()
+  private readonly transportCloseLedger = new SshTransportCloseLedger(() =>
+    this.notifyTransportClosure()
+  )
+  private readonly transportClosureSubscribers = new Set<() => void>()
+
+  subscribeTransportClosure(onClosed: () => void): () => void {
+    this.transportClosureSubscribers.add(onClosed)
+    this.notifyTransportClosure()
+    return () => {
+      this.transportClosureSubscribers.delete(onClosed)
+    }
+  }
+
+  private notifyTransportClosure(): void {
+    if (
+      !this.transportClosureSubscribers.size ||
+      !this.disposed ||
+      this.state.status !== 'disconnected' ||
+      this.activeConnectCalls !== 0 ||
+      this.pendingSsh2Clients.size !== 0 ||
+      this.unprovenStartupTransport ||
+      !this.transportCloseLedger.isClosed() ||
+      !this.workLedger.isDrained()
+    ) {
+      return
+    }
+    const subscribers = [...this.transportClosureSubscribers]
+    this.transportClosureSubscribers.clear()
+    for (const notify of subscribers) {
+      try {
+        notify()
+      } catch {
+        // Observers must not interrupt physical transport cleanup.
+      }
+    }
+  }
   private state: SshConnectionState
   private callbacks: SshConnectionCallbacks
   private target: SshTarget
@@ -208,8 +297,20 @@ export class SshConnection {
   private cachedPassword: string | null = null
   private hostKeyFingerprint: string | undefined
   private connectGeneration = 0
+  private executionDestination:
+    | {
+        client: SshClient
+        generation: number
+        destination: SshConnectionDestination
+      }
+    | undefined
 
-  constructor(target: SshTarget, callbacks: SshConnectionCallbacks) {
+  constructor(
+    target: SshTarget,
+    callbacks: SshConnectionCallbacks,
+    options: { automaticReconnect?: boolean } = {}
+  ) {
+    this.automaticReconnect = options.automaticReconnect !== false
     this.target = target
     this.callbacks = callbacks
     this.state = {
@@ -224,11 +325,59 @@ export class SshConnection {
   getState(): SshConnectionState {
     return { ...this.state }
   }
+  getTransportGeneration(): number {
+    return this.connectGeneration
+  }
+  getExecutionDestination(): SshConnectionDestination | undefined {
+    const captured = this.executionDestination
+    return !this.disposed &&
+      !this.useSystemSshTransport &&
+      this.state.status === 'connected' &&
+      captured?.client === this.client &&
+      captured?.generation === this.connectGeneration
+      ? captured.destination
+      : undefined
+  }
   getClient(): SshClient | null {
     return this.client
   }
+
+  prepareForwardRoute<T>(prepare: () => Promise<T>): Promise<T> {
+    return this.workLedger.run(prepare)
+  }
+
+  openForwardSocket<T extends NodeJS.EventEmitter>(open: () => T): T {
+    return openTrackedSshSocket(this.workLedger, open)
+  }
+
+  forwardOut(
+    client: SshClient,
+    localSocket: object,
+    ...args: Parameters<SshClient['forwardOut']>
+  ): void {
+    if (this.client !== client) {
+      throw new Error('ssh_connection_forward_client_changed')
+    }
+    forwardTrackedSshChannel(this.workLedger, client, localSocket, ...args)
+  }
   usesSystemSshTransport(): boolean {
     return this.useSystemSshTransport
+  }
+  forwardStreamLocal(
+    client: SshClient,
+    ...args: Parameters<SshClient['openssh_forwardOutStreamLocal']>
+  ): void {
+    if (this.client !== client) {
+      throw new Error('ssh_connection_forward_client_changed')
+    }
+    if (this.disposed || this.useSystemSshTransport || this.state.status !== 'connected') {
+      throw new Error('ssh_connection_streamlocal_transport_unavailable')
+    }
+    const [socketPath] = args
+    if (!socketPath.startsWith('/') || socketPath.includes('\0')) {
+      throw new Error('ssh_connection_streamlocal_endpoint_invalid')
+    }
+    forwardTrackedSshStreamLocalChannel(this.workLedger, client, ...args)
   }
   canRunConcurrentExecCommands(): boolean {
     if (!this.useSystemSshTransport) {
@@ -262,56 +411,61 @@ export class SshConnection {
   }
 
   async exec(cmd: string, options?: SshExecOptions): Promise<ClientChannel> {
-    if (options?.signal?.aborted) {
-      throw createSshOperationAbortError()
-    }
-    if (this.useSystemSshTransport) {
-      if (this.disposed || this.state.status !== 'connected') {
+    return this.workLedger.run(async () => {
+      if (options?.signal?.aborted) {
+        throw createSshOperationAbortError()
+      }
+      if (this.useSystemSshTransport) {
+        if (this.disposed || this.state.status !== 'connected') {
+          throw new Error('Not connected')
+        }
+        return this.spawnTrackedSystemSshCommand(cmd, options)
+      }
+      if (!this.client) {
         throw new Error('Not connected')
       }
-      return this.spawnTrackedSystemSshCommand(cmd, options)
-    }
-    if (!this.client) {
-      throw new Error('Not connected')
-    }
-    const client = this.client
-    const remoteCommand = options?.wrapCommand === false ? cmd : wrapRemoteCommandForPosixShell(cmd)
-    return this.openSessionChannelWithRetry(
-      () =>
-        this.waitForSshCallback(
-          'SSH exec channel timed out',
-          (callback) => client.exec(remoteCommand, callback),
-          (channel) => channel.close(),
-          options?.signal,
-          true
-        ),
-      options?.signal
-    )
+      const client = this.client
+      const remoteCommand =
+        options?.wrapCommand === false ? cmd : wrapRemoteCommandForPosixShell(cmd)
+      return this.openSessionChannelWithRetry(
+        () =>
+          this.waitForSshCallback(
+            'SSH exec channel timed out',
+            (callback) => client.exec(remoteCommand, callback),
+            (channel) => channel.close(),
+            options?.signal,
+            true
+          ),
+        options?.signal
+      )
+    })
   }
 
   async sftp(options?: AbortSignal | { signal?: AbortSignal }): Promise<SFTPWrapper> {
-    // Why: relay transfers pass a signal directly, while filesystem factories use an options object.
-    const signal = options && 'aborted' in options ? options : options?.signal
-    if (signal?.aborted) {
-      throw createSshOperationAbortError()
-    }
-    if (this.useSystemSshTransport) {
-      throw new Error('SFTP is not available when using system SSH transport')
-    }
-    if (!this.client) {
-      throw new Error('Not connected')
-    }
-    const client = this.client
-    return this.openSessionChannelWithRetry(
-      () =>
-        this.waitForSshCallback(
-          'SSH SFTP channel timed out',
-          (callback) => client.sftp(callback),
-          (sftp) => sftp.end(),
-          signal
-        ),
-      signal
-    )
+    return this.workLedger.run(async () => {
+      // Why: relay transfers pass a signal directly, while filesystem factories use an options object.
+      const signal = options && 'aborted' in options ? options : options?.signal
+      if (signal?.aborted) {
+        throw createSshOperationAbortError()
+      }
+      if (this.useSystemSshTransport) {
+        throw new Error('SFTP is not available when using system SSH transport')
+      }
+      if (!this.client) {
+        throw new Error('Not connected')
+      }
+      const client = this.client
+      return this.openSessionChannelWithRetry(
+        () =>
+          this.waitForSshCallback(
+            'SSH SFTP channel timed out',
+            (callback) => client.sftp(callback),
+            (sftp) => sftp.end(),
+            signal
+          ),
+        signal
+      )
+    })
   }
 
   private async openSessionChannelWithRetry<T>(
@@ -356,11 +510,13 @@ export class SshConnection {
     signal?: AbortSignal,
     trackRemoteCommandTermination = false
   ): Promise<T> {
+    const work = this.workLedger.beginChannelOpen()
     return new Promise((resolve, reject) => {
       type ChannelOpenTerminationError = Error & { sshChannelCloseConfirmed: boolean }
       let settled = false
       let unconfirmedOpenError: ChannelOpenTerminationError | null = null
       const markOpenUnconfirmed = (error: Error): Error => {
+        work.markUnverifiable(error)
         if (!trackRemoteCommandTermination) {
           return error
         }
@@ -447,6 +603,11 @@ export class SshConnection {
         }
       }
       const finish = (error: Error | undefined, value?: T): void => {
+        if (!error && value !== undefined) {
+          trackSshConnectionChannelLifetime(work, value)
+        } else {
+          work.close(error)
+        }
         if (settled) {
           // Why: ssh2 can invoke the open callback after our timeout rejected; close that late channel so it isn't left open with no owner.
           if (!error && value !== undefined) {
@@ -477,6 +638,7 @@ export class SshConnection {
       if (signal?.aborted) {
         // No open is in flight yet, so failing fast leaks nothing.
         cleanup()
+        work.close()
         reject(createSshOperationAbortError())
         return
       }
@@ -496,53 +658,55 @@ export class SshConnection {
     remoteDir: string,
     options?: SshRemoteFileOptions & { signal?: AbortSignal }
   ): Promise<void> {
-    // Why: relay-deploy timeout and connection teardown are independent owners; either must stop a transfer that could outlive its lock.
-    const linkedSignal = createLinkedSshFileTransferSignal(
-      [this.systemOperationAbortController.signal, options?.signal].filter(
-        (signal): signal is AbortSignal => signal !== undefined
+    return this.workLedger.run(async () => {
+      // Why: relay-deploy timeout and connection teardown are independent owners; either must stop a transfer that could outlive its lock.
+      const linkedSignal = createLinkedSshFileTransferSignal(
+        [this.systemOperationAbortController.signal, options?.signal].filter(
+          (signal): signal is AbortSignal => signal !== undefined
+        )
       )
-    )
-    try {
-      if (!this.useSystemSshTransport) {
-        const sftp = await this.sftp(linkedSignal.signal)
-        const swallowLateSftpError = (): void => {}
-        let sftpEndRequested = false
-        const endSftp = (): void => {
-          if (!sftpEndRequested) {
-            sftpEndRequested = true
-            sftp.end()
+      try {
+        if (!this.useSystemSshTransport) {
+          const sftp = await this.sftp(linkedSignal.signal)
+          const swallowLateSftpError = (): void => {}
+          let sftpEndRequested = false
+          const endSftp = (): void => {
+            if (!sftpEndRequested) {
+              sftpEndRequested = true
+              sftp.end()
+            }
           }
-        }
-        sftp.on('error', swallowLateSftpError)
-        sftp.once('close', () => sftp.removeListener('error', swallowLateSftpError))
-        try {
-          // Why: resolve on the same session that transfers — a later session is not authoritative for this one's namespace.
-          const transfer = (async (): Promise<void> => {
-            const targetDir = await resolveSftpTransferPathIfMapped(sftp, remoteDir, options)
-            linkedSignal.signal.throwIfAborted()
-            const { uploadDirectory } = await import('./ssh-relay-deploy-helpers')
-            await uploadDirectory(sftp, localDir, targetDir, localDir, {
-              signal: linkedSignal.signal
+          sftp.on('error', swallowLateSftpError)
+          sftp.once('close', () => sftp.removeListener('error', swallowLateSftpError))
+          try {
+            // Why: resolve on the same session that transfers — a later session is not authoritative for this one's namespace.
+            const transfer = (async (): Promise<void> => {
+              const targetDir = await resolveSftpTransferPathIfMapped(sftp, remoteDir, options)
+              linkedSignal.signal.throwIfAborted()
+              const { uploadDirectory } = await import('./ssh-relay-deploy-helpers')
+              await uploadDirectory(sftp, localDir, targetDir, localDir, {
+                signal: linkedSignal.signal
+              })
+            })()
+            await raceSftpFileTransferWithAbort(transfer, linkedSignal.signal, (onClose) => {
+              sftp.once('close', onClose)
+              endSftp()
+              return () => sftp.removeListener('close', onClose)
             })
-          })()
-          await raceSftpFileTransferWithAbort(transfer, linkedSignal.signal, (onClose) => {
-            sftp.once('close', onClose)
+          } finally {
             endSftp()
-            return () => sftp.removeListener('close', onClose)
-          })
-        } finally {
-          endSftp()
+          }
+          return
         }
-        return
+        await uploadDirectoryViaSystemSsh(this.target, localDir, remoteDir, {
+          signal: linkedSignal.signal,
+          hostPlatform: options?.hostPlatform,
+          ...this.getSystemSshBuildArgsOptions()
+        })
+      } finally {
+        linkedSignal.dispose()
       }
-      await uploadDirectoryViaSystemSsh(this.target, localDir, remoteDir, {
-        signal: linkedSignal.signal,
-        hostPlatform: options?.hostPlatform,
-        ...this.getSystemSshBuildArgsOptions()
-      })
-    } finally {
-      linkedSignal.dispose()
-    }
+    })
   }
 
   async downloadFile(
@@ -550,24 +714,32 @@ export class SshConnection {
     localPath: string,
     options?: SshRemoteFileOptions
   ): Promise<void> {
-    if (!this.useSystemSshTransport) {
-      const sftp = await this.sftp()
-      try {
-        const { fastGetViaSftp } = await import('../providers/ssh-filesystem-provider-sftp')
-        await fastGetViaSftp(sftp, remotePath, localPath)
-      } finally {
-        sftp.end()
+    return this.workLedger.run(async () => {
+      if (!this.useSystemSshTransport) {
+        const sftp = await this.sftp()
+        try {
+          const { fastGetViaSftp } = await import('../providers/ssh-filesystem-provider-sftp')
+          await fastGetViaSftp(sftp, remotePath, localPath)
+        } finally {
+          sftp.end()
+        }
+        return
       }
-      return
-    }
-    await downloadFileViaSystemSsh(this.target, remotePath, localPath, {
-      signal: this.systemOperationAbortController.signal,
-      hostPlatform: options?.hostPlatform,
-      ...this.getSystemSshBuildArgsOptions()
+      await downloadFileViaSystemSsh(this.target, remotePath, localPath, {
+        signal: this.systemOperationAbortController.signal,
+        hostPlatform: options?.hostPlatform,
+        ...this.getSystemSshBuildArgsOptions()
+      })
     })
   }
 
   async openFileUploadSession(options?: SshRemoteFileOptions): Promise<FileUploadSession> {
+    return openTrackedSshUploadSession(this.workLedger, () => this.createFileUploadSession(options))
+  }
+
+  private async createFileUploadSession(
+    options?: SshRemoteFileOptions
+  ): Promise<FileUploadSession> {
     if (!this.useSystemSshTransport) {
       const sftp = await this.sftp()
       const { uploadFile } = await import('./sftp-upload')
@@ -597,51 +769,53 @@ export class SshConnection {
     contents: string,
     options?: SshRemoteFileOptions & { signal?: AbortSignal }
   ): Promise<void> {
-    // Keep package/version writes under the same dual cancellation contract as uploads.
-    const linkedSignal = createLinkedSshFileTransferSignal(
-      [this.systemOperationAbortController.signal, options?.signal].filter(
-        (signal): signal is AbortSignal => signal !== undefined
+    return this.workLedger.run(async () => {
+      // Keep package/version writes under the same dual cancellation contract as uploads.
+      const linkedSignal = createLinkedSshFileTransferSignal(
+        [this.systemOperationAbortController.signal, options?.signal].filter(
+          (signal): signal is AbortSignal => signal !== undefined
+        )
       )
-    )
-    try {
-      if (!this.useSystemSshTransport) {
-        const sftp = await this.sftp(linkedSignal.signal)
-        const swallowLateSftpError = (): void => {}
-        let sftpEndRequested = false
-        const endSftp = (): void => {
-          if (!sftpEndRequested) {
-            sftpEndRequested = true
-            sftp.end()
+      try {
+        if (!this.useSystemSshTransport) {
+          const sftp = await this.sftp(linkedSignal.signal)
+          const swallowLateSftpError = (): void => {}
+          let sftpEndRequested = false
+          const endSftp = (): void => {
+            if (!sftpEndRequested) {
+              sftpEndRequested = true
+              sftp.end()
+            }
           }
-        }
-        sftp.on('error', swallowLateSftpError)
-        sftp.once('close', () => sftp.removeListener('error', swallowLateSftpError))
-        try {
-          // Why: resolve on the same session that writes — a later session is not authoritative for this one's namespace.
-          const write = (async (): Promise<void> => {
-            const targetPath = await resolveSftpTransferPathIfMapped(sftp, remotePath, options)
-            linkedSignal.signal.throwIfAborted()
-            const { writeStringViaSftp } = await import('./sftp-upload')
-            await writeStringViaSftp(sftp, targetPath, contents)
-          })()
-          await raceSftpFileTransferWithAbort(write, linkedSignal.signal, (onClose) => {
-            sftp.once('close', onClose)
+          sftp.on('error', swallowLateSftpError)
+          sftp.once('close', () => sftp.removeListener('error', swallowLateSftpError))
+          try {
+            // Why: resolve on the same session that writes — a later session is not authoritative for this one's namespace.
+            const write = (async (): Promise<void> => {
+              const targetPath = await resolveSftpTransferPathIfMapped(sftp, remotePath, options)
+              linkedSignal.signal.throwIfAborted()
+              const { writeStringViaSftp } = await import('./sftp-upload')
+              await writeStringViaSftp(sftp, targetPath, contents)
+            })()
+            await raceSftpFileTransferWithAbort(write, linkedSignal.signal, (onClose) => {
+              sftp.once('close', onClose)
+              endSftp()
+              return () => sftp.removeListener('close', onClose)
+            })
+          } finally {
             endSftp()
-            return () => sftp.removeListener('close', onClose)
-          })
-        } finally {
-          endSftp()
+          }
+          return
         }
-        return
+        await writeFileViaSystemSsh(this.target, remotePath, contents, {
+          signal: linkedSignal.signal,
+          hostPlatform: options?.hostPlatform,
+          ...this.getSystemSshBuildArgsOptions()
+        })
+      } finally {
+        linkedSignal.dispose()
       }
-      await writeFileViaSystemSsh(this.target, remotePath, contents, {
-        signal: linkedSignal.signal,
-        hostPlatform: options?.hostPlatform,
-        ...this.getSystemSshBuildArgsOptions()
-      })
-    } finally {
-      linkedSignal.dispose()
-    }
+    })
   }
 
   async writeBuffer(
@@ -649,26 +823,39 @@ export class SshConnection {
     contents: Buffer,
     options?: SshRemoteFileOptions & { append?: boolean; exclusive?: boolean }
   ): Promise<void> {
-    if (!this.useSystemSshTransport) {
-      const sftp = await this.sftp()
-      try {
-        const { uploadBuffer } = await import('./sftp-upload')
-        await uploadBuffer(sftp, contents, remotePath, options)
-      } finally {
-        sftp.end()
+    return this.workLedger.run(async () => {
+      if (!this.useSystemSshTransport) {
+        const sftp = await this.sftp()
+        try {
+          const { uploadBuffer } = await import('./sftp-upload')
+          await uploadBuffer(sftp, contents, remotePath, options)
+        } finally {
+          sftp.end()
+        }
+        return
       }
-      return
-    }
-    await writeBufferViaSystemSsh(this.target, remotePath, contents, {
-      signal: this.systemOperationAbortController.signal,
-      hostPlatform: options?.hostPlatform,
-      append: options?.append,
-      exclusive: options?.exclusive,
-      ...this.getSystemSshBuildArgsOptions()
+      await writeBufferViaSystemSsh(this.target, remotePath, contents, {
+        signal: this.systemOperationAbortController.signal,
+        hostPlatform: options?.hostPlatform,
+        append: options?.append,
+        exclusive: options?.exclusive,
+        ...this.getSystemSshBuildArgsOptions()
+      })
     })
   }
 
   async connect(): Promise<void> {
+    this.activeConnectCalls++
+    try {
+      await this.connectInitialAttempts()
+    } finally {
+      this.activeConnectCalls--
+      this.notifyTransportClosure()
+    }
+  }
+
+  private async connectInitialAttempts(): Promise<void> {
+    this.assertConnectionReplacementAllowed()
     if (this.disposed) {
       throw new Error('Connection disposed')
     }
@@ -676,6 +863,7 @@ export class SshConnection {
     let lastError: Error | null = null
 
     for (let attempt = 0; attempt < INITIAL_RETRY_ATTEMPTS; attempt++) {
+      this.assertConnectionReplacementAllowed()
       const connectGeneration = ++this.connectGeneration
       try {
         await this.attemptConnect(connectGeneration)
@@ -779,6 +967,7 @@ export class SshConnection {
   }
 
   private async attemptConnect(connectGeneration = ++this.connectGeneration): Promise<void> {
+    this.executionDestination = undefined
     this.credentialAbortController.abort()
     this.credentialAbortController = new AbortController()
     this.setState('connecting')
@@ -825,8 +1014,12 @@ export class SshConnection {
 
     // Why: ssh2 doesn't support ProxyCommand/ProxyJump natively; spawn the resolved proxy and pipe its stdin/stdout as config.sock.
     const effectiveProxy = resolveEffectiveProxy(this.target, resolved)
+    const proxyRouteDigest = createHash('sha256')
+      .update(JSON.stringify(effectiveProxy ?? null))
+      .digest('hex')
     if (effectiveProxy) {
       const proxy = spawnProxyCommand(effectiveProxy, config.host!, config.port!, config.username!)
+      this.transportCloseLedger.track(proxy.process)
       this.proxyProcess = proxy.process
       config.sock = proxy.sock
     }
@@ -839,7 +1032,7 @@ export class SshConnection {
     }
 
     try {
-      await this.doSsh2Connect(config, connectGeneration)
+      await this.doSsh2Connect(config, connectGeneration, proxyRouteDigest)
     } catch (err) {
       if (!(err instanceof Error)) {
         this.proxyProcess?.kill()
@@ -908,7 +1101,7 @@ export class SshConnection {
         if (keyConfig.privateKey || keyConfig.password) {
           this.respawnProxy(keyConfig, effectiveProxy)
           try {
-            await this.doSsh2Connect(keyConfig, connectGeneration)
+            await this.doSsh2Connect(keyConfig, connectGeneration, proxyRouteDigest)
             return
           } catch (keyErr) {
             // Same reason as above: the retry re-runs the handshake, so it can be the attempt that
@@ -937,7 +1130,7 @@ export class SshConnection {
                 this.cachedPassphrase = val
                 keyConfig.passphrase = val
                 this.respawnProxy(keyConfig, effectiveProxy)
-                await this.doSsh2Connect(keyConfig, connectGeneration)
+                await this.doSsh2Connect(keyConfig, connectGeneration, proxyRouteDigest)
                 return
               }
             }
@@ -987,7 +1180,7 @@ export class SshConnection {
           this.cachedPassphrase = val
           credentialRetryConfig.passphrase = val
           this.respawnProxy(credentialRetryConfig, effectiveProxy)
-          await this.doSsh2Connect(credentialRetryConfig, connectGeneration)
+          await this.doSsh2Connect(credentialRetryConfig, connectGeneration, proxyRouteDigest)
           return
         }
       }
@@ -1002,7 +1195,7 @@ export class SshConnection {
           this.cachedPassword = val
           credentialRetryConfig.password = val
           this.respawnProxy(credentialRetryConfig, effectiveProxy)
-          await this.doSsh2Connect(credentialRetryConfig, connectGeneration)
+          await this.doSsh2Connect(credentialRetryConfig, connectGeneration, proxyRouteDigest)
           return
         }
       }
@@ -1013,6 +1206,7 @@ export class SshConnection {
   }
 
   async reconnect(): Promise<void> {
+    this.assertConnectionReplacementAllowed()
     if (this.disposed || this.state.status === 'connecting') {
       return
     }
@@ -1029,6 +1223,7 @@ export class SshConnection {
   }
 
   private async doSystemSshProbe(connectGeneration: number): Promise<void> {
+    this.unprovenStartupTransport = true
     this.useSystemSshTransport = true
     this.client = null
     this.proxyProcess?.kill()
@@ -1189,6 +1384,7 @@ export class SshConnection {
     if (!this.isCurrentConnectAttempt(connectGeneration)) {
       throw this.createCancelledConnectAttemptError()
     }
+    this.unprovenStartupTransport = true
     const proc = spawnSystemSsh(this.target, this.getSystemSshBuildArgsOptions())
     this.systemSsh = proc
     let settled = false
@@ -1279,10 +1475,18 @@ export class SshConnection {
       options === undefined && Object.keys(buildArgsOptions).length === 0
         ? undefined
         : { ...options, ...buildArgsOptions }
-    const channel =
-      commandOptions === undefined
-        ? spawnSystemSshCommand(this.target, command)
-        : spawnSystemSshCommand(this.target, command, commandOptions)
+    const work = this.workLedger.beginChannelOpen()
+    let channel: ClientChannel
+    try {
+      channel =
+        commandOptions === undefined
+          ? spawnSystemSshCommand(this.target, command)
+          : spawnSystemSshCommand(this.target, command, commandOptions)
+      trackSshConnectionChannelLifetime(work, channel)
+    } catch (error) {
+      work.close(error)
+      throw error
+    }
     this.systemCommandChannels.add(channel)
     const onAbort = (): void => {
       channel.close()
@@ -1326,6 +1530,7 @@ export class SshConnection {
     }
     this.proxyProcess?.kill()
     const p = spawnProxyCommand(proxy, config.host!, config.port!, config.username!)
+    this.transportCloseLedger.track(p.process)
     this.proxyProcess = p.process
     config.sock = p.sock
   }
@@ -1378,7 +1583,16 @@ export class SshConnection {
     return sources
   }
 
-  private async doSsh2Connect(config: ConnectConfig, connectGeneration: number): Promise<void> {
+  private async doSsh2Connect(
+    config: ConnectConfig,
+    connectGeneration: number,
+    proxyRouteDigest: string
+  ): Promise<void> {
+    const endpoint = {
+      host: config.host ?? '',
+      port: config.port ?? 22,
+      username: config.username ?? ''
+    }
     const hostKeyResolved = this.hostKeyResolvedConfig
     const { host: hostKeyLookupHost, isHostKeyAlias } = resolveKnownHostsLookupHost(
       hostKeyResolved,
@@ -1421,6 +1635,7 @@ export class SshConnection {
       : undefined
     return new Promise<void>((resolve, reject) => {
       const client = new SshClient()
+      this.transportCloseLedger.track(client)
       this.pendingSsh2Clients.add(client)
       let settled = false
       let startupTimer: ReturnType<typeof setTimeout> | null = null
@@ -1443,6 +1658,7 @@ export class SshConnection {
       // the live attempt's error, and substituting a new Error drops ssh2's `code`, so a transient
       // ECONNRESET would stop being classified as retryable.
       let hostKeyRejection: HostKeyVerificationError | null = null
+      let acceptedFingerprint: string | undefined
 
       // Why the fingerprint is still recorded: the relay uses the negotiated server key to isolate
       // shared-home install locks without comparing PIDs from an unrelated SSH host. Its format is
@@ -1456,7 +1672,7 @@ export class SshConnection {
         hostKeyStoreFile: boundSshHostKeyStoreFile() ?? undefined,
         strictHostKeyChecking: hostKeyResolved?.strictHostKeyChecking ?? 'ask',
         isHostKeyAlias,
-        isEphemeralRuntimeTarget: this.target.owner?.type === 'on-demand-runtime',
+        isEphemeralRuntimeTarget: isEphemeralRuntimeSshOwner(this.target.owner),
         siteConfigSuppressed,
         // A file that EXISTS and will not open is the absence of evidence, not evidence of a new
         // host — the entry that would have said "this key changed" may be in it. An ABSENT file is
@@ -1494,6 +1710,7 @@ export class SshConnection {
             connectGeneration === this.connectGeneration
           ) {
             this.hostKeyFingerprint = decision.fingerprint
+            acceptedFingerprint = decision.fingerprint
           }
           if (decision.action === 'reject') {
             hostKeyRejection = new HostKeyVerificationError(
@@ -1569,6 +1786,20 @@ export class SshConnection {
         }
         settled = true
         this.client = client
+        // Only this successful handshake can publish recovery destination authority.
+        this.executionDestination = acceptedFingerprint
+          ? {
+              client,
+              generation: connectGeneration,
+              destination: Object.freeze({
+                version: 1,
+                transport: 'ssh2',
+                ...endpoint,
+                hostKeyFingerprint: acceptedFingerprint,
+                proxyRouteDigest
+              })
+            }
+          : undefined
         this.proxyProcess = null
         this.setupDisconnectHandler(client)
         cleanupStartupListeners()
@@ -1626,6 +1857,7 @@ export class SshConnection {
       if (this.disposed || this.client !== client) {
         return
       }
+      this.workLedger.markTransportUnverifiable()
       this.client = null
       this.scheduleReconnect()
     }
@@ -1636,13 +1868,18 @@ export class SshConnection {
         return
       }
       console.warn(`[ssh] Connection error for ${this.target.label}: ${err.message}`)
+      this.workLedger.markTransportUnverifiable()
       this.client = null
       this.scheduleReconnect()
     })
   }
 
   private scheduleReconnect(): void {
-    if (this.disposed || this.reconnectTimer) {
+    if (this.disposed || this.resetConnectionFenced || this.reconnectTimer) {
+      return
+    }
+    if (!this.automaticReconnect) {
+      this.setState('disconnected')
       return
     }
     const decision = this.reconnectLadder.next(Date.now())
@@ -1657,7 +1894,7 @@ export class SshConnection {
     )
     this.reconnectTimer = setTimeout(async () => {
       this.reconnectTimer = null
-      if (this.disposed) {
+      if (this.disposed || this.resetConnectionFenced) {
         return
       }
       await this.runReconnectAttempt()
@@ -1665,6 +1902,19 @@ export class SshConnection {
   }
 
   private async runReconnectAttempt(): Promise<void> {
+    this.activeConnectCalls++
+    try {
+      await this.runTrackedReconnectAttempt()
+    } finally {
+      this.activeConnectCalls--
+      this.notifyTransportClosure()
+    }
+  }
+
+  private async runTrackedReconnectAttempt(): Promise<void> {
+    if (this.resetConnectionFenced) {
+      return
+    }
     const connectGeneration = ++this.connectGeneration
     try {
       // Why: reset before connecting so the 'connected' broadcast carries reconnectAttempt=0, which ssh.ts uses to trigger relay re-establishment.
@@ -1740,9 +1990,21 @@ export class SshConnection {
   }
 
   async connectViaSystemSsh(): Promise<SystemSshProcess> {
+    this.activeConnectCalls++
+    try {
+      return await this.connectTrackedViaSystemSsh()
+    } finally {
+      this.activeConnectCalls--
+      this.notifyTransportClosure()
+    }
+  }
+
+  private async connectTrackedViaSystemSsh(): Promise<SystemSshProcess> {
+    this.assertConnectionReplacementAllowed()
     if (this.disposed) {
       throw new Error('Connection disposed')
     }
+    this.unprovenStartupTransport = true
     const connectGeneration = ++this.connectGeneration
     this.systemSsh?.kill()
     this.systemSsh = null
@@ -1776,6 +2038,7 @@ export class SshConnection {
       // Why: register the reconnect handler only after handshake succeeds (the onExit above guards with `settled`).
       proc.onExit(() => {
         if (!this.disposed && this.systemSsh === proc) {
+          this.workLedger.markTransportUnverifiable()
           this.systemSsh = null
           this.scheduleReconnect()
         }
@@ -1794,7 +2057,61 @@ export class SshConnection {
     }
   }
 
+  /** Owned migration transport only; local closure never proves remote process exit. */
+  async disconnectAndDrain(signal: AbortSignal): Promise<void> {
+    signal.throwIfAborted()
+    const settledExclusiveStartup =
+      !this.automaticReconnect &&
+      this.activeConnectCalls === 0 &&
+      this.pendingSsh2Clients.size === 0 &&
+      !this.unprovenStartupTransport
+    if (
+      this.useSystemSshTransport ||
+      this.unprovenStartupTransport ||
+      this.activeConnectCalls > 0 ||
+      (!this.client && !settledExclusiveStartup)
+    ) {
+      await this.disconnect()
+      throw new Error('ssh_connection_close_transport_unproven')
+    }
+    let fence: ReturnType<SshConnection['fenceWorkForReset']>
+    try {
+      if (!this.client && settledExclusiveStartup) {
+        fence = this.workLedger.fenceForReset()
+        this.resetConnectionFenced = true
+      } else {
+        fence = this.fenceWorkForReset()
+      }
+    } catch (error) {
+      try {
+        await this.disconnect()
+      } catch (cleanupError) {
+        throw new AggregateError([error, cleanupError], 'ssh_connection_close_cleanup_failed')
+      }
+      throw error
+    }
+    const observation = observeSshTransportClose([
+      ...(this.client ? [this.client] : []),
+      ...(this.proxyProcess ? [this.proxyProcess] : [])
+    ])
+    const waiting = new AbortController()
+    const waitSignal = AbortSignal.any([signal, waiting.signal])
+    try {
+      await this.disconnect()
+      await Promise.all([
+        observation.wait(waitSignal),
+        this.transportCloseLedger.drain(waitSignal),
+        fence.drain(waitSignal)
+      ])
+      fence.assertDrained()
+    } finally {
+      waiting.abort()
+      observation.dispose()
+    }
+  }
+
   async disconnect(): Promise<void> {
+    this.executionDestination = undefined
     this.disposed = true
     this.connectGeneration += 1
     if (this.reconnectTimer) {
@@ -1823,6 +2140,7 @@ export class SshConnection {
     this.useSystemSshTransport = false
     this.reconnectLadder.reset()
     this.setState('disconnected')
+    this.notifyTransportClosure()
   }
 
   private setState(status: SshConnectionStatus, error?: string): void {

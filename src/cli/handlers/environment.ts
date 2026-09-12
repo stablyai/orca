@@ -5,6 +5,7 @@ import { getDefaultUserDataPath, RuntimeClientError } from '../runtime-client'
 import type { RuntimeRpcSuccess } from '../runtime-client'
 import { rejectRemoteSelectionFlags } from '../remote-selection-flag-rejection'
 import { redactRuntimeEnvironment } from '../../shared/runtime-environments'
+import { projectRuntimeEnvironmentCatalog } from '../../shared/runtime-environment-catalog-projection'
 import {
   addEnvironmentFromPairingCode,
   listEnvironments,
@@ -40,11 +41,14 @@ export const ENVIRONMENT_HANDLERS: Record<string, CommandHandler> = {
       '`orca host list`. It answers from this machine\u2019s own pairing store, so a routed answer would name servers paired with a different machine.',
       'Run `orca host list` on that machine to see the SSH targets registered there.'
     )
-    const environments = listEnvironments(getDefaultUserDataPath()).map((environment) => ({
+    const environments = projectRuntimeEnvironmentCatalog(
+      listEnvironments(getDefaultUserDataPath())
+    ).map(({ environment, historicalEnvironmentIds }) => ({
       kind: 'environment' as const,
       name: environment.name,
       id: environment.id,
-      selector: `--environment ${environment.name}`
+      selector: `--environment ${environment.name}`,
+      ...(historicalEnvironmentIds.length ? { historicalEnvironmentIds } : {})
     }))
     const sshTargets = (await listSshTargets(client)).map((target) => ({
       kind: 'ssh' as const,
@@ -74,7 +78,12 @@ export const ENVIRONMENT_HANDLERS: Record<string, CommandHandler> = {
       '`orca environment list`. Paired servers are stored on this machine, so there is no other host to ask.',
       'Run `orca environment list` on that machine to see the servers paired with it.'
     )
-    const environments = listEnvironments(getDefaultUserDataPath()).map(redactRuntimeEnvironment)
+    const environments = projectRuntimeEnvironmentCatalog(
+      listEnvironments(getDefaultUserDataPath())
+    ).map(({ environment, historicalEnvironmentIds }) => ({
+      ...redactRuntimeEnvironment(environment),
+      ...(historicalEnvironmentIds.length ? { historicalEnvironmentIds } : {})
+    }))
     printResult(localSuccess({ environments }), json, formatEnvironmentList)
   },
   'environment show': async ({ flags, json }) => {

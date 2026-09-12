@@ -5,6 +5,7 @@ import type { TuiAgent } from '../../shared/tui-agent'
 import { isValidTerminalTabId } from '../../shared/terminal-tab-id'
 import { isTerminalLeafId, makePaneKey } from '../../shared/stable-pane-id'
 import { isTuiAgent } from '../../shared/tui-agent-config'
+import { assertOutgoingPtyRegistrationAllowed } from './outgoing-pty-registration-fence'
 
 export class OrcaRuntimeWithRegisterPty extends OrcaRuntimeWithInvalidateAllHandlesForPty {
   registerPty(
@@ -25,6 +26,7 @@ export class OrcaRuntimeWithRegisterPty extends OrcaRuntimeWithInvalidateAllHand
     },
     isWsl?: boolean
   ): void {
+    assertOutgoingPtyRegistrationAllowed(this, ptyId)
     this.assertPtyDidNotExitBeforeRegistration(ptyId, binding?.incarnationId)
     const existingPty = this.ptysById.get(ptyId)
     const replacementHandle = binding?.terminalHandle?.trim()
@@ -140,6 +142,7 @@ export class OrcaRuntimeWithRegisterPty extends OrcaRuntimeWithInvalidateAllHand
   }
 
   assertPtyRegistrationAllowed(ptyId: string, incarnationId?: PtyIncarnationId): void {
+    assertOutgoingPtyRegistrationAllowed(this, ptyId)
     // Why: the controller must reject an early exit before persisting bindings or handles.
     this.assertPtyDidNotExitBeforeRegistration(ptyId, incarnationId)
   }

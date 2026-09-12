@@ -13,6 +13,7 @@ import { unwrapRuntimeRpcResult } from '@/runtime/runtime-rpc-client'
 import { extractRuntimeTransportDiagnostics } from '@/runtime/runtime-status-probe-diagnostics'
 import { useAppStore } from '@/store'
 import {
+  isManagedOrcadRuntimeEnvironment,
   isUserManagedRuntimeEnvironment,
   type PublicKnownRuntimeEnvironment
 } from '../../../../shared/runtime-environments'
@@ -21,6 +22,7 @@ import { evaluateHostDetails, type RuntimeHostDetails } from './runtime-environm
 
 type RuntimeEnvironmentCatalog = {
   environments: PublicKnownRuntimeEnvironment[]
+  selectableEnvironments: PublicKnownRuntimeEnvironment[]
   isLoading: boolean
   detailsByEnvironmentId: Record<string, RuntimeHostDetails>
   setDetailsByEnvironmentId: Dispatch<SetStateAction<Record<string, RuntimeHostDetails>>>
@@ -33,6 +35,9 @@ type RuntimeEnvironmentCatalog = {
 
 export function useRuntimeEnvironmentCatalog(): RuntimeEnvironmentCatalog {
   const [environments, setEnvironments] = useState<PublicKnownRuntimeEnvironment[]>([])
+  const [selectableEnvironments, setSelectableEnvironments] = useState<
+    PublicKnownRuntimeEnvironment[]
+  >([])
   const [isLoading, setIsLoading] = useState(false)
   const [detailsByEnvironmentId, setDetailsByEnvironmentId] = useState<
     Record<string, RuntimeHostDetails>
@@ -46,7 +51,10 @@ export function useRuntimeEnvironmentCatalog(): RuntimeEnvironmentCatalog {
       }
       try {
         const nextEnvironments = await window.api.runtimeEnvironments.list()
-        const visibleEnvironments = nextEnvironments.filter(isUserManagedRuntimeEnvironment)
+        const selectable = nextEnvironments.filter(isUserManagedRuntimeEnvironment)
+        const visibleEnvironments = selectable.filter(
+          (environment) => !isManagedOrcadRuntimeEnvironment(environment)
+        )
         // Why: drop store status for servers no longer saved so stale hosts don't
         // linger in the sidebar registry.
         useAppStore.getState().setRuntimeEnvironments(nextEnvironments)
@@ -55,6 +63,7 @@ export function useRuntimeEnvironmentCatalog(): RuntimeEnvironmentCatalog {
         }
         if (mountedRef.current) {
           setEnvironments(visibleEnvironments)
+          setSelectableEnvironments(selectable)
           setDetailsByEnvironmentId((current) => {
             const next: Record<string, RuntimeHostDetails> = {}
             for (const environment of visibleEnvironments) {
@@ -151,6 +160,7 @@ export function useRuntimeEnvironmentCatalog(): RuntimeEnvironmentCatalog {
 
   return {
     environments,
+    selectableEnvironments,
     isLoading,
     detailsByEnvironmentId,
     setDetailsByEnvironmentId,

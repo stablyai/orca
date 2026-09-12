@@ -1,5 +1,7 @@
 import type { DecodedFrame, JsonRpcNotification, JsonRpcRequest, JsonRpcResponse } from './protocol'
 import { ClientRequestAborts } from './client-request-aborts'
+import { RelayWorkAdmission } from './relay-work-admission'
+import type { RequestContext } from './dispatcher-contract'
 import type { PtyConsumerCloseCause } from '../shared/pty-consumer-session-contract'
 import {
   LegacyRelayPublicationLedger,
@@ -23,6 +25,7 @@ import type {
 } from './dispatcher-contract'
 
 export abstract class RelayDispatcherClientState {
+  protected readonly workAdmission = new RelayWorkAdmission()
   protected readonly primaryClient: RelayClient
   protected readonly clients = new Map<number, RelayClient>()
   protected requestHandlers = new Map<string, MethodHandler>()
@@ -57,7 +60,17 @@ export abstract class RelayDispatcherClientState {
   }
 
   onRequest(method: string, handler: MethodHandler): void {
-    this.requestHandlers.set(method, handler)
+    this.requestHandlers.set(method, (params, context) =>
+      this.workAdmission.run(method, context, () => handler(params, context))
+    )
+  }
+
+  beginWorkDrain(exclude?: RequestContext): Promise<void> {
+    return this.workAdmission.beginDrain(exclude)
+  }
+
+  assertActiveWorkContext(context: RequestContext): void {
+    this.workAdmission.assertActiveContext(context)
   }
 
   // Why it throws: this is a single slot, so a second registration silently shadows the
@@ -68,7 +81,9 @@ export abstract class RelayDispatcherClientState {
     if (this.notificationHandlers.has(method)) {
       throw new Error(`Notification handler for ${method} is already registered`)
     }
-    this.notificationHandlers.set(method, handler)
+    this.notificationHandlers.set(method, (params, context) =>
+      this.workAdmission.runNotification(method, context, () => handler(params, context))
+    )
   }
 
   onClientDetached(listener: (clientId: number, cause: PtyConsumerCloseCause) => void): () => void {

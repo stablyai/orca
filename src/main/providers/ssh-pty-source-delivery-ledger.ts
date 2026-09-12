@@ -54,7 +54,19 @@ export class SshPtySourceDeliveryLedger {
     }
     const accepted = Object.freeze({
       ...current,
-      sourceEndSu: pending.source.sourceEndSu
+      sourceEndSu: pending.source.sourceEndSu,
+      ...(current.ownershipTransfer || !pending.source.ownershipTransfer
+        ? {}
+        : { ownershipTransfer: pending.source.ownershipTransfer }),
+      ...(pending.source.ownershipTransfer
+        ? {
+            ownershipTransferProgress: {
+              frameSeq: pending.source.ownershipTransfer.frameSeq,
+              frameLengthSu: pending.source.ownershipTransfer.frameLengthSu,
+              fragmentEndSu: pending.source.ownershipTransfer.fragmentEndSu
+            }
+          }
+        : {})
     }) as SourceDeliveryState
     this.deliveryByPty.set(pending.relayPtyId, accepted)
     if (accepted.lease.phase === 'recovery') {
@@ -74,6 +86,12 @@ export class SshPtySourceDeliveryLedger {
     } else if (current) {
       current.lease.exited = true
     }
+  }
+
+  /** Current committed activation is the client-side proof of relay owner/incarnation authority. */
+  resolveCommittedActivation(relayPtyId: string): PtySourceReceivingActivation | null {
+    const current = this.deliveryByPty.get(relayPtyId)
+    return current?.lease.phase === 'committed' && !current.lease.exited ? current.activation : null
   }
 
   async reject(
@@ -223,6 +241,10 @@ export class SshPtySourceDeliveryLedger {
         Object.freeze({
           activation: current.activation,
           sourceEndSu: current.sourceEndSu,
+          ...(current.ownershipTransfer ? { ownershipTransfer: current.ownershipTransfer } : {}),
+          ...(current.ownershipTransferProgress
+            ? { ownershipTransferProgress: current.ownershipTransferProgress }
+            : {}),
           lease: current.lease
         })
       )

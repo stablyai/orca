@@ -2,6 +2,7 @@ import { mkdirSync, existsSync, unlinkSync } from 'node:fs'
 import { mkdir, open, rm } from 'node:fs/promises'
 import { durableWriteTempPath, renameDurable, writeFileDurableSync } from '../../durable-file-write'
 import { dirname } from 'node:path'
+import { OrcadLiveCompletionDurability } from './orcad-live-completion-durability'
 import {
   parseCodexResetCreditAttemptLedger,
   type CodexResetCreditAttemptLedger
@@ -21,6 +22,7 @@ type PrimaryStateWriteOperationsRuntime = Pick<
   | 'inFlightAsyncTmpFile'
   | 'lastDurableWriteGeneration'
   | 'lastWrittenStateHash'
+  | 'orcadLiveCompletionDurability'
   | 'pendingSnapshotFileWork'
   | 'pendingWrite'
   | 'protectedSecrets'
@@ -142,6 +144,9 @@ export async function writeToDiskAsync(owner: PrimaryStateWriteOperations): Prom
   const gen = owner[primaryStateWriteOperationsContext].runtime.writeGeneration
   const { payload, stateHash, protectedSecretUpdates } =
     owner[primaryStateWriteOperationsContext].serialization.buildStateToSave()
+  const completionSnapshot = OrcadLiveCompletionDurability.capture(
+    owner[primaryStateWriteOperationsContext].runtime.state.orcadMigrationSourceCutovers
+  )
   // Why: don't rewrite a byte-identical multi-MB file when state nets out to already-persisted.
   if (stateHash === owner[primaryStateWriteOperationsContext].runtime.lastWrittenStateHash) {
     owner[primaryStateWriteOperationsContext].runtime.lastDurableWriteGeneration = Math.max(
@@ -189,11 +194,15 @@ export async function writeToDiskAsync(owner: PrimaryStateWriteOperations): Prom
     }
     // Why re-check gen: a mutation or sync flush during rename makes the installed hash ambiguous; invalidate the no-op guard.
     if (renamed && owner[primaryStateWriteOperationsContext].runtime.writeGeneration === gen) {
+      owner[primaryStateWriteOperationsContext].runtime.orcadLiveCompletionDurability.acknowledge(
+        completionSnapshot
+      )
       owner[primaryStateWriteOperationsContext].runtime.lastWrittenStateHash = stateHash
       owner[primaryStateWriteOperationsContext].runtime.protectedSecrets.commitRetentionUpdates(
         protectedSecretUpdates
       )
     } else if (renamed) {
+      owner[primaryStateWriteOperationsContext].runtime.orcadLiveCompletionDurability.invalidate()
       owner[primaryStateWriteOperationsContext].runtime.lastWrittenStateHash = null
     }
     if (renamed) {
@@ -226,6 +235,9 @@ export function writeToDiskSync(
   }
   const { payload, stateHash, protectedSecretUpdates } =
     owner[primaryStateWriteOperationsContext].serialization.buildStateToSave()
+  const completionSnapshot = OrcadLiveCompletionDurability.capture(
+    owner[primaryStateWriteOperationsContext].runtime.state.orcadMigrationSourceCutovers
+  )
   // Why: matching hash means the file already holds this state; force overrides when an async rename may be racing past the gen check.
   if (
     !opts.force &&
@@ -247,6 +259,9 @@ export function writeToDiskSync(
     // content after power loss, losing projects/tabs back to the newest usable .bak slot.
     writeFileDurableSync(tmpFile, dataFile, payload)
     renamed = true
+    owner[primaryStateWriteOperationsContext].runtime.orcadLiveCompletionDurability.acknowledge(
+      completionSnapshot
+    )
     owner[primaryStateWriteOperationsContext].runtime.lastWrittenStateHash = stateHash
     owner[primaryStateWriteOperationsContext].runtime.protectedSecrets.commitRetentionUpdates(
       protectedSecretUpdates

@@ -175,6 +175,41 @@ describe('SSH IPC handlers', () => {
     expect(runtime.notifySshStateChanged).not.toHaveBeenCalled()
   })
 
+  it('keeps claimed managed-orcad SSH state off clients under the original target id', () => {
+    const runtime = {
+      onPtyData: vi.fn(),
+      onPtyExit: vi.fn(),
+      invalidateSshWorktreeScanCache: vi.fn(),
+      notifySshStateChanged: vi.fn()
+    }
+    registerSshHandlers(mockStore as never, () => mockWindow as never, runtime as never)
+    mockSshStore.getTarget.mockReturnValue({
+      id: 'ssh-1',
+      label: 'Managed orcad host',
+      host: 'example.com',
+      port: 22,
+      username: 'deploy',
+      owner: { type: 'on-demand-runtime', runtimeId: 'managed-orcad:environment-1' }
+    } satisfies SshTarget)
+    const callbacks = mockConnectionManager.callbacksRef.current as {
+      onStateChange: (targetId: string, state: SshConnectionState) => void
+    }
+
+    callbacks.onStateChange('ssh-1', {
+      targetId: 'ssh-1',
+      status: 'connected',
+      error: null,
+      reconnectAttempt: 0
+    })
+
+    expect(runtime.invalidateSshWorktreeScanCache).toHaveBeenCalledWith('ssh-1')
+    expect(runtime.notifySshStateChanged).not.toHaveBeenCalled()
+    expect(mockWindow.webContents.send).not.toHaveBeenCalledWith(
+      'ssh:state-changed',
+      expect.anything()
+    )
+  })
+
   it('invalidates runtime scans from hidden SSH state broadcasts', () => {
     const runtime = {
       onPtyData: vi.fn(),

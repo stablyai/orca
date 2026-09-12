@@ -49,3 +49,9 @@ Recorded rather than implied, because a guard that looks complete is worse than 
 ### Verifying a guard change
 
 Plant a violation and watch it fail. Every guard fix in this workstream that was verified only by reading was wrong — three consecutive attempts at an exact lexer each shipped a desync that _reduced_ the offender count, which read as progress. Plant at least: a plain call, one in a template-literal-heavy file, one in a regex-heavy file, `windowsHide: false`, a ternary first argument, and a renamed import.
+
+WSL-managed hook and browser-network relays in release packages carry the pinned Linux Bun
+companions for x64/arm64 glibc and musl guests. Their launchers select the exact architecture/libc
+runtime (or a pinned distro Bun) and strict bundles fail closed if none can run. Only unmarked
+legacy/developer bundles retain the Node 18 fallback, so newly shipped WSL workloads do not require
+system Node or npm.

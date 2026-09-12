@@ -60,6 +60,55 @@ export function execDockerSshRelayTargetControlCommand(
   ])
 }
 
+/** Kills accepted SSH transports without stopping the container's PID 1 sshd listener. */
+export function killDockerSshRelayTargetTransports(target: DockerSshRelayTarget): number {
+  const killed = execDockerSshRelayTargetControlCommand(
+    target,
+    "pids=$(pgrep -f '^sshd: ' || true); for pid in $pids; do kill -9 $pid || true; done; printf '%s' \"$(printf '%s\\n' $pids | grep -c . || true)\""
+  )
+  return Number(killed.trim() || '0')
+}
+
+export function armDockerOrcadTransactionTransportDrop(
+  target: DockerSshRelayTarget,
+  options: {
+    transactionPath: string
+    operation: 'activate' | 'rollback' | 'decommission'
+    phase: string
+    markerPath: string
+    suspendPidPath?: string
+  }
+): void {
+  const transactionReady = [
+    `grep -Fq ${shellQuote(`"operation": "${options.operation}"`)} ${shellQuote(options.transactionPath)} 2>/dev/null`,
+    `grep -Fq ${shellQuote(`"phase": "${options.phase}"`)} ${shellQuote(options.transactionPath)} 2>/dev/null`,
+    ...(options.suspendPidPath ? [`[ -s ${shellQuote(options.suspendPidPath)} ]`] : [])
+  ].join(' && ')
+  const script = [
+    'i=0',
+    'while [ "$i" -lt 12000 ]; do',
+    `if ${transactionReady}; then`,
+    ...(options.suspendPidPath
+      ? [
+          `pid=$(cat ${shellQuote(options.suspendPidPath)} 2>/dev/null || true)`,
+          'case "$pid" in "" | *[!0-9]* ) exit 65;; esac',
+          'kill -STOP "$pid"',
+          `printf '%s' "$pid" > ${shellQuote(options.markerPath)}`
+        ]
+      : [`printf '%s' DROPPED > ${shellQuote(options.markerPath)}`]),
+    "pids=$(pgrep -f '^sshd: ' || true)",
+    'for sshd_pid in $pids; do kill -9 "$sshd_pid" || true; done',
+    'exit 0',
+    'fi',
+    'sleep 0.01',
+    'i=$((i + 1))',
+    'done',
+    `printf '%s' TIMEOUT > ${shellQuote(options.markerPath)}`,
+    'exit 70'
+  ].join('\n')
+  run('docker', ['exec', '-d', target.containerName, 'bash', '--noprofile', '--norc', '-c', script])
+}
+
 function sshArgs(target: DockerSshRelayTarget, command: string): string[] {
   return [
     '-i',

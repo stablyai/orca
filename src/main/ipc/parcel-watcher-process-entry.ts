@@ -10,6 +10,7 @@ import { join } from 'node:path'
 import type * as ParcelWatcher from '@parcel/watcher'
 import { startShallowWatcher } from './parcel-watcher-shallow-subscription'
 import { detectShallowWatchDelivery } from './shallow-watch-delivery-probe'
+import { loadParcelWatcher } from './parcel-watcher-module-loader'
 import {
   createWatcherProcessEventDeliveryQueue,
   type WatcherProcessEventDeliveryQueue
@@ -46,7 +47,7 @@ async function startCanary(getStableActivityRevision: () => number | null): Prom
   let lastEventAt = 0
   try {
     canaryDir = configuredCanaryDir ?? mkdtempSync(join(tmpdir(), 'orca-watcher-canary-'))
-    const watcher = await import('@parcel/watcher')
+    const watcher = await loadParcelWatcher()
     // Why: pin the Windows backend like the main subscriptions do, so the
     // canary never probes for Watchman.
     const opts = (
@@ -117,7 +118,7 @@ async function startCanary(getStableActivityRevision: () => number | null): Prom
 function main(): void {
   const send = (message: WatcherToHostMessage): void => {
     try {
-      process.send?.(message)
+      process.send?.(message, () => undefined)
     } catch {
       // Host is gone; the disconnect handler below exits this process.
     }
@@ -211,7 +212,7 @@ function main(): void {
               send({ op: 'watch-error', id, message: errorMessage(error) })
             )
           }
-          const watcher = await import('@parcel/watcher')
+          const watcher = await loadParcelWatcher()
           return await watcher.subscribe(
             dir,
             (err, events) => {

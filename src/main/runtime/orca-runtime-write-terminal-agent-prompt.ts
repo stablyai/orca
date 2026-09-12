@@ -51,7 +51,11 @@ export class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithReso
       // Keep the bracketed paste frame in one PTY write; Claude's composer can drop the
       // beginning when a large frame is split into independently processed chunks.
       renderGate?.arm()
-      if (!this.ptyController?.write(ptyId, pastePayload)) {
+      if (
+        !(options.operationId
+          ? this.ptyController?.write(ptyId, pastePayload, { operationId: options.operationId })
+          : this.ptyController?.write(ptyId, pastePayload))
+      ) {
         throw new Error('terminal_not_writable')
       }
     } catch (error) {
@@ -88,7 +92,13 @@ export class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithReso
     const baseline = this.getAgentPromptActivity(handle, ptyId, waitTextCache)
     this.assertAgentPromptPermissionSafe(permissionBaseline, baseline)
     agentSessionPtyWriteGate.assertReadmitted(ptyId, admitted)
-    if (!this.ptyController?.write(ptyId, AGENT_PROMPT_SUBMIT)) {
+    if (
+      !(options.operationId
+        ? this.ptyController?.write(ptyId, AGENT_PROMPT_SUBMIT, {
+            operationId: `${options.operationId}:suffix`
+          })
+        : this.ptyController?.write(ptyId, AGENT_PROMPT_SUBMIT))
+    ) {
       throw new Error(options.suffixFailureError ?? 'terminal_not_writable')
     }
     const effectTimeoutMs = resolveAgentPromptEffectTimeoutMs(this.getPtyAgent(ptyId))

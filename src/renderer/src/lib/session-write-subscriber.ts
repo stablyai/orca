@@ -101,7 +101,8 @@ export type SessionWriteSubscriberDeps = {
     subscribe: (listener: (state: AppState) => void) => () => void
     getState: () => AppState
   }
-  persist: (payload: WorkspaceSessionWrite) => void
+  persist: (payload: WorkspaceSessionWrite) => void | Promise<void>
+  onPersistError?: (error: unknown) => void
   debounceMs?: number
 } & SessionWritePersistGate
 
@@ -114,11 +115,14 @@ export type SessionWriteSubscriberDeps = {
 export function createSessionWriteSubscriber({
   store,
   persist,
+  onPersistError,
   shouldSchedulePersist,
   subscribeToPersistGateOpen,
   debounceMs = 150
 }: SessionWriteSubscriberDeps): () => void {
   let timer: ReturnType<typeof setTimeout> | null = null
+  let disposed = false
+  let writing = false
   // Why: the subscriber fires on every store update (agent status, usage
   // refreshes, runtime title ticks, …). Without this gate each fire reset
   // the debounce, and when it finally expired buildWorkspaceSessionPayload
@@ -133,14 +137,17 @@ export function createSessionWriteSubscriber({
   let prevUnifiedTabsSource: UnifiedTabsByWorktree | null = null
   // Why: this set is the only record that a mutation still owes a write — `prev` has already
   // advanced past it, and change detection is identity-based, so a field dropped from here can
-  // never be re-detected. It is retired only by a flush that reached `persist` (or found nothing
-  // left to write), and by unsubscribe. A closed gate never retires it.
+  // never be re-detected. In-flight fields remain owned by that write until acknowledgment;
+  // failures merge them back without overwriting newer same-field edits.
   const pendingChangedFields = new Set<SessionRelevantField>()
   const terminalTabsProjection = createTerminalSessionTabsProjection()
   const unifiedTabsProjection = createUnifiedSessionTabsProjection()
 
   const flushPendingWrite = (): void => {
     timer = null
+    if (disposed || writing || pendingChangedFields.size === 0) {
+      return
+    }
     // Why: rebuild from the freshest store state rather than the snapshot
     // captured when this timer was scheduled. Today this is equivalent
     // because buildWorkspaceSessionPayload reads only SESSION_RELEVANT_FIELDS
@@ -165,10 +172,41 @@ export function createSessionWriteSubscriber({
     if (Object.keys(patch).length === 0) {
       return
     }
-    persist({ patch })
+    writing = true
+    const settle = (failed: boolean, error?: unknown): void => {
+      writing = false
+      if (disposed) {
+        return
+      }
+      if (failed) {
+        for (const field of changed) {
+          pendingChangedFields.add(field)
+        }
+        // A rejection waits for the next store/gate wake, not a retry loop.
+        onPersistError?.(error)
+      } else if (pendingChangedFields.size > 0) {
+        armFlushTimer()
+      }
+    }
+    try {
+      const result = persist({ patch })
+      if (result && typeof result.then === 'function') {
+        void result.then(
+          () => settle(false),
+          (error: unknown) => settle(true, error)
+        )
+      } else {
+        settle(false)
+      }
+    } catch (error) {
+      settle(true, error)
+    }
   }
 
   const armFlushTimer = (): void => {
+    if (disposed || writing) {
+      return
+    }
     if (timer !== null) {
       clearTimeout(timer)
     }
@@ -265,6 +303,7 @@ export function createSessionWriteSubscriber({
   })
 
   return () => {
+    disposed = true
     unsub()
     unsubGateOpen?.()
     if (timer !== null) {

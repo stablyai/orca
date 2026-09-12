@@ -8,6 +8,7 @@ import type { FileUploadSession, IFilesystemProvider } from '../providers/types'
 import type { ImportItemResult } from './filesystem-import-result-types'
 import { assertSafeRemotePathSegment, type RemotePathFlavor } from '../ssh/ssh-remote-platform'
 import { isWindowsAbsolutePathLike } from '../../shared/cross-platform-path'
+import { runSshProviderContinuation } from '../ssh/ssh-provider-continuations'
 import {
   captureLocalUploadRoot,
   preScanSshImportDirectory,
@@ -17,6 +18,12 @@ import {
 // Why: the SSH import path uses SshFilesystemProvider instead of direct SFTP so
 // system-SSH transports (ProxyCommand/ProxyJump/FIDO2) get the same workflows.
 export async function importExternalPathsSsh(
+  ...args: Parameters<typeof importExternalPathsSshTracked>
+): Promise<{ results: ImportItemResult[] }> {
+  return runSshProviderContinuation(args[2], () => importExternalPathsSshTracked(...args))
+}
+
+async function importExternalPathsSshTracked(
   sourcePaths: string[],
   destDir: string,
   connectionId: string,

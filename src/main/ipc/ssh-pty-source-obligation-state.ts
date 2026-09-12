@@ -37,6 +37,7 @@ export type TokenRecord = {
   spans: SpanRecord[]
   exitPublished: boolean
   generationClosed: boolean
+  canceledObligations: boolean
 }
 
 export function createSourceToken(
@@ -53,7 +54,8 @@ export function createSourceToken(
     ackPublishedEndSu: checkpointSourceEndSu,
     spans: [],
     exitPublished: false,
-    generationClosed: false
+    generationClosed: false,
+    canceledObligations: false
   }
 }
 
@@ -152,6 +154,7 @@ export function cancelOpenSourceObligations(token: TokenRecord, reason: string):
   for (const record of token.spans) {
     for (const [consumer, obligation] of record.obligations) {
       if (obligation.state === 'open' || obligation.state === 'transferring') {
+        token.canceledObligations = true
         record.obligations.set(consumer, Object.freeze({ state: 'canceled', reason }))
       }
     }

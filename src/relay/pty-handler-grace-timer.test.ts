@@ -35,6 +35,25 @@ vi.mock('../main/shell-prompt-readiness-probe', () => ({
 import type { PtyHandler } from './pty-handler'
 import { beginPtyHandlerTest, endPtyHandlerTest } from './pty-handler-test-harness'
 import type { MockDispatcher } from './pty-handler-test-harness'
+import { RelayGraceLifecycle } from './relay-grace-lifecycle'
+import type { RelayDispatcher } from './dispatcher'
+
+function createGraceLifecycle(dispatcher: MockDispatcher, handler: PtyHandler, clients = 0) {
+  return new RelayGraceLifecycle({
+    dispatcher: Object.assign(dispatcher, {
+      beginWorkDrain: vi.fn(async () => {})
+    }) as unknown as RelayDispatcher,
+    ptyHandler: handler,
+    detached: true,
+    emptyDetachedStartupGraceMs: 100,
+    idleRelayGraceMs: 100,
+    readSocketClientCount: () => clients,
+    hasAcceptedSocketClient: () => true,
+    ownsSocketPath: () => true,
+    disposeOwnedProcesses: vi.fn(async () => {}),
+    disposeRuntime: vi.fn()
+  })
+}
 
 describe('PtyHandler', () => {
   let dispatcher: MockDispatcher
@@ -52,6 +71,62 @@ describe('PtyHandler', () => {
   afterEach(async () => {
     await endPtyHandlerTest(handler, originalPlatform)
   })
+
+  it('defers source grace expiry while a live transfer fence exists, then resumes after unfencing', async () => {
+    const spawned = (await dispatcher.callRequest('pty.spawn', {})) as { id: string }
+    handler.setGraceTimeMs(100)
+    handler.setOwnershipTransferMutationEnabled(true)
+    const dormant = await dispatcher.callRequest('pty.getOwnershipBridgeCapabilities', {})
+    expect(dormant).not.toHaveProperty('transferGraceGuardVersion')
+    expect(dormant).not.toHaveProperty('transferLifecycleGuardVersion')
+    const lifecycle = createGraceLifecycle(dispatcher, handler)
+    const shutdown = vi.spyOn(lifecycle, 'shutdown').mockImplementation(() => {})
+    expect(await dispatcher.callRequest('pty.getOwnershipBridgeCapabilities', {})).toMatchObject({
+      transferGraceGuardVersion: 1,
+      transferLifecycleGuardVersion: 1
+    })
+    lifecycle.start('source disconnected')
+    handler.setOwnershipTransferInputFenced(spawned.id, true)
+    vi.advanceTimersByTime(300)
+    expect(handler.hasLiveOwnershipTransferFence).toBe(true)
+    expect(shutdown).not.toHaveBeenCalled()
+    expect(mockPtyInstance.kill).not.toHaveBeenCalled()
+    expect(handler.activePtyCount).toBe(1)
+    expect(lifecycle.reason).toBe('ownership transfer active')
+    handler.setOwnershipTransferInputFenced(spawned.id, false)
+    vi.advanceTimersByTime(100)
+    expect(handler.hasLiveOwnershipTransferFence).toBe(false)
+    expect(shutdown).toHaveBeenCalledOnce()
+    handler.setOwnershipTransferMutationEnabled(false)
+    const disabled = await dispatcher.callRequest('pty.getOwnershipBridgeCapabilities', {})
+    expect(disabled).not.toHaveProperty('transferGraceGuardVersion')
+    expect(disabled).not.toHaveProperty('transferLifecycleGuardVersion')
+  })
+
+  it.each([0, 1])(
+    'defers explicit lifecycle shutdown without partial disposal with %s clients',
+    async (clients) => {
+      const spawned = (await dispatcher.callRequest('pty.spawn', {})) as { id: string }
+      handler.setGraceTimeMs(100)
+      handler.setOwnershipTransferInputFenced(spawned.id, true)
+      const lifecycle = createGraceLifecycle(dispatcher, handler, clients)
+      const dispose = vi.spyOn(handler, 'dispose')
+      lifecycle.shutdown()
+      lifecycle.shutdown()
+      expect(dispose).not.toHaveBeenCalled()
+      expect(mockPtyInstance.kill).not.toHaveBeenCalled()
+      expect(handler.writeOwnershipTransferInput(spawned.id, 'still-owned')).toBe(true)
+      await expect(dispatcher.callRequest('pty.spawn', {})).resolves.toHaveProperty('id')
+      expect(handler.graceTimerActive).toBe(clients === 0)
+      handler.setOwnershipTransferInputFenced(spawned.id, false)
+      dispose.mockRejectedValueOnce(new Error('test disposal deferred'))
+      lifecycle.shutdown()
+      await vi.advanceTimersByTimeAsync(0)
+      expect(dispose).toHaveBeenCalledOnce()
+      lifecycle.cancel('test complete')
+      dispose.mockRestore()
+    }
+  )
 
   it('allows callers to shorten a grace timer for empty startup relays', () => {
     const onExpire = vi.fn()

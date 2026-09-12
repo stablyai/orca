@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PtyHandler } from './pty-handler'
+import { RELAY_OWNER_RESET_CAPABILITY } from '../shared/relay-owner-reset-contract'
 
 const daemonMocks = vi.hoisted(() => ({
   dispatcher: null as unknown,
@@ -7,6 +8,8 @@ const daemonMocks = vi.hoisted(() => ({
   mockCreateShellPromptReadinessProbe: vi.fn(),
   mockPtySpawn: vi.fn(),
   socketCleanup: vi.fn(),
+  socketListening: false,
+  socketOwnsCurrentPath: false,
   relayLogLine: vi.fn(),
   forceKillPosixPtyProcessGroups: vi.fn((_pid: number, fallback: () => void) => fallback())
 }))
@@ -65,7 +68,12 @@ vi.mock('./relay-agent-hook-runtime', () => ({
 vi.mock('./relay-socket-ownership', () => ({
   RelaySocketOwnership: class {
     readonly owned = false
-    readonly server = null
+    get server() {
+      return { listening: daemonMocks.socketListening }
+    }
+    ownsCurrentPath(): boolean {
+      return daemonMocks.socketOwnsCurrentPath
+    }
     cleanup(): void {
       daemonMocks.socketCleanup()
     }
@@ -115,6 +123,8 @@ describe('relay daemon fatal PTY reap', () => {
       dispose: vi.fn()
     })
     daemonMocks.socketCleanup.mockReset()
+    daemonMocks.socketListening = false
+    daemonMocks.socketOwnsCurrentPath = false
     daemonMocks.relayLogLine.mockReset()
     daemonMocks.forceKillPosixPtyProcessGroups.mockClear()
   })
@@ -143,6 +153,36 @@ describe('relay daemon fatal PTY reap', () => {
     }
   })
 
+  it('publishes reset discovery only for the current listening endpoint', async () => {
+    await runRelayDaemon({
+      graceTimeMs: 0,
+      connectMode: false,
+      detached: false,
+      cliMode: false,
+      enableOwnershipTransferMutation: false,
+      sockPath: 'relay-test-socket'
+    })
+    const dispatcher = daemonMocks.dispatcher as ReturnType<typeof createMockDispatcher>
+    const unavailable = (await dispatcher.callRequest('relay.status', {})) as {
+      capabilities: string[]
+      ownerReset?: { version: number; runtimeIncarnation: string }
+    }
+    expect(unavailable.ownerReset).toBeUndefined()
+    expect(unavailable.capabilities).not.toContain(RELAY_OWNER_RESET_CAPABILITY)
+    daemonMocks.socketListening = true
+    daemonMocks.socketOwnsCurrentPath = true
+    const available = (await dispatcher.callRequest('relay.status', {})) as typeof unavailable
+    expect(available.capabilities).toEqual([
+      ...unavailable.capabilities,
+      RELAY_OWNER_RESET_CAPABILITY
+    ])
+    expect(available.ownerReset).toEqual({ version: 1, runtimeIncarnation: expect.any(String) })
+    daemonMocks.socketOwnsCurrentPath = false
+    const lost = (await dispatcher.callRequest('relay.status', {})) as typeof unavailable
+    expect(lost.capabilities).toEqual(unavailable.capabilities)
+    expect(lost.ownerReset).toBeUndefined()
+  })
+
   it('synchronously reaps every Windows PTY job before fatal exit', async () => {
     usePlatform('win32')
     const firstKill = vi.fn(() => {
@@ -165,6 +205,7 @@ describe('relay daemon fatal PTY reap', () => {
       connectMode: false,
       detached: false,
       cliMode: false,
+      enableOwnershipTransferMutation: false,
       sockPath: 'relay-test-socket'
     })
     const dispatcher = daemonMocks.dispatcher as ReturnType<typeof createMockDispatcher>
@@ -201,6 +242,7 @@ describe('relay daemon fatal PTY reap', () => {
       connectMode: false,
       detached: false,
       cliMode: false,
+      enableOwnershipTransferMutation: false,
       sockPath: 'relay-test-socket'
     })
     const dispatcher = daemonMocks.dispatcher as ReturnType<typeof createMockDispatcher>

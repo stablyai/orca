@@ -48,6 +48,23 @@ function domainConnectRequest(host: string, port: number, command = 1): Uint8Arr
 }
 
 describe('RemoteBrowserSocksServer', () => {
+  it.each(['greeting', 'request'])(
+    'closes an incomplete %s on client half-close',
+    async (phase) => {
+      const open = vi.fn(async () => new PassThrough())
+      const server = new RemoteBrowserSocksServer({ open })
+      servers.push(server)
+      const socket = await connectClient(server)
+      if (phase === 'request') {
+        await greet(socket)
+      }
+      const closed = once(socket, 'close')
+      socket.end(Buffer.from([5]))
+      await closed
+      expect(open).not.toHaveBeenCalled()
+    }
+  )
+
   it('passes domain names unchanged to the execution-host route', async () => {
     const upstream = new PassThrough()
     const settleRead = vi.fn()

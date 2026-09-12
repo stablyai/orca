@@ -5,7 +5,6 @@ import { normalizeKagiSessionLink } from '../../../shared/browser-url'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import type { SshPtyConsumerRecovery } from '../../../shared/ssh-types'
 import { getDefaultPersistedState } from '../../../shared/constants'
-import { pruneLocalTerminalScrollbackBuffers } from '../../../shared/workspace-session-terminal-buffers'
 import { pruneWorkspaceSessionBrowserHistory } from '../../../shared/workspace-session-browser-history'
 import { clearMissingProjectGroupMemberships } from '../../../shared/project-groups'
 import { migrateWorkspaceSessionTerminalScrollbackSnapshots } from '../../terminal-scrollback-snapshots'
@@ -41,6 +40,7 @@ import { hasStateBackup } from './backup-recovery-rotation'
 import { prepareLoadedTerminalSettings } from './prepare-loaded-terminal-settings'
 import { prepareLoadedProfileSettings } from './prepare-loaded-profile-settings'
 import { normalizeLoadedProfileState } from './normalize-loaded-profile-state'
+import { OrcadLiveCompletionDurability } from './orcad-live-completion-durability'
 
 type PersistenceStartupDetails = Record<string, unknown> | (() => Record<string, unknown>)
 
@@ -64,11 +64,13 @@ import type { LoadedCohortMigrationOperations } from './loaded-cohort-migrations
 type LoadedStateParsingOperationsRuntime = Pick<
   StoreRuntimeState,
   | 'dataFile'
+  | 'orcadLiveCompletionDurability'
   | 'githubCacheDirty'
   | 'loadNeedsSave'
   | 'protectedSecrets'
   | 'storageAuthority'
   | 'terminalScrollbackSnapshotStorage'
+  | 'transferSnapshotHistory'
 >
 
 export class LoadedStateParsingOperations {
@@ -79,6 +81,7 @@ export class LoadedStateParsingOperations {
   ) {}
 
   load(allowBackupRecovery = true): PersistedState {
+    this.runtime.orcadLiveCompletionDurability.invalidate()
     // Capture "has run Orca before?" for telemetry cohort; the telemetry field is new, so field inference misclassifies old users as fresh.
     const dataFile = this.runtime.dataFile
     const fileExistedOnLoad = existsSync(dataFile)
@@ -97,6 +100,9 @@ export class LoadedStateParsingOperations {
         })
         logPersistenceStartupMilestone('persistence-json-parse-start')
         const parsed = JSON.parse(raw) as PersistedState
+        this.runtime.orcadLiveCompletionDurability.acknowledge(
+          OrcadLiveCompletionDurability.capture(parsed.orcadMigrationSourceCutovers)
+        )
         logPersistenceStartupMilestone('persistence-json-parse-done')
 
         // Why: secrets are stored encrypted via safeStorage; decrypt at the load boundary so the app sees plaintext.
@@ -180,6 +186,7 @@ export class LoadedStateParsingOperations {
         })
       }
     } catch (err) {
+      this.runtime.orcadLiveCompletionDurability.invalidate()
       console.error('[persistence] Failed to load primary state, trying backups:', err)
     }
 
@@ -199,7 +206,7 @@ export class LoadedStateParsingOperations {
     }
 
     const workspaceSession = pruneWorkspaceSessionBrowserHistory(
-      pruneLocalTerminalScrollbackBuffers(result.workspaceSession, result.repos)
+      this.runtime.transferSnapshotHistory.prune(result.workspaceSession, result.repos)
     )
     const migratedScrollback = migrateWorkspaceSessionTerminalScrollbackSnapshots(
       workspaceSession,

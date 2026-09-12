@@ -8,9 +8,18 @@ import type { Terminal } from '@xterm/xterm'
 type TerminalWithCoreUserInput = {
   _core?: {
     coreService?: {
+      orcaDataEventIsUserInput?: boolean
       onUserInput?: (listener: () => void) => { dispose?: unknown } | undefined
     }
   }
+}
+
+/** Read synchronously inside onData; the patched dispatcher restores nested event provenance. */
+export function isTerminalDataEventUserInput(terminal: Terminal): boolean {
+  return (
+    (terminal as unknown as TerminalWithCoreUserInput)._core?.coreService
+      ?.orcaDataEventIsUserInput === true
+  )
 }
 
 /**
@@ -49,19 +58,7 @@ export function subscribeToTerminalInputData(
   terminal: Terminal,
   listener: (data: string, wasUserInput: boolean) => void
 ): { dispose: () => void } {
-  let pendingUserInput = false
-  const userInput = subscribeToTerminalUserInput(terminal, () => {
-    pendingUserInput = true
+  return terminal.onData((data) => {
+    listener(data, isTerminalDataEventUserInput(terminal))
   })
-  const dataInput = terminal.onData((data) => {
-    const wasUserInput = pendingUserInput
-    pendingUserInput = false
-    listener(data, wasUserInput)
-  })
-  return {
-    dispose: () => {
-      dataInput.dispose()
-      userInput?.dispose()
-    }
-  }
 }

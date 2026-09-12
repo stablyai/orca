@@ -2,13 +2,15 @@
 // agent-hook relay. Both sides derive paths/methods from here so the guest
 // process and the host manager can never drift on where the relay lives,
 // which JSON-RPC methods the fs bridge speaks, or which exit codes signal
-// "reinstall me" vs "no usable node".
+// "reinstall me" vs "no usable runtime".
 // See docs/agent-status-over-wsl.md (STA-1515).
 
 /** Guest-side install dir for the relay bundle, relative to `$HOME`. */
 export const WSL_HOOK_RELAY_DIR = '.orca-wsl/hook-relay'
 export const WSL_HOOK_RELAY_BUNDLE_NAME = 'wsl-agent-hook-relay.js'
 export const WSL_HOOK_RELAY_VERSION_FILE = '.version'
+/** Present in release bundles whose guest launcher must never use host Node. */
+export const WSL_HOOK_RELAY_BUN_REQUIRED_FILE = '.bun-required'
 
 /** Host-expected bundle version, crossed into the guest launch script via
  *  WSLENV so a stale guest install is detected by the guest itself. Also

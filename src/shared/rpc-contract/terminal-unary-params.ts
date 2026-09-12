@@ -96,6 +96,8 @@ export const TerminalRename = TerminalHandle.extend({
 
 export const TerminalSend = TerminalHandle.extend({
   text: OptionalString,
+  // Stable caller identity for replaying an accepted write after transport loss.
+  operationId: z.string().min(1).max(512).optional(),
   enter: z.unknown().optional(),
   interrupt: z.unknown().optional(),
   // Why: older hosts strip this optional intent and retain their direct-send behavior.

@@ -4,9 +4,8 @@
 // MultiplexerTransport. Kept separate from the manager so the state machine
 // stays readable. See docs/agent-status-over-wsl.md (STA-1515).
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
-import { existsSync, readFileSync } from 'node:fs'
-import { join } from 'node:path'
-import { getAppEnvironment } from '../../shared/app-environment'
+export { resolveWslHookRelayBundle, type WslHookRelayBundle } from './wsl-hook-relay-bundle'
+import { ORCAD_BUN_VERSION } from '../../shared/orcad-bun-runtime'
 
 import type { MultiplexerTransport } from '../ssh/ssh-channel-multiplexer'
 import {
@@ -30,41 +29,6 @@ import {
 
 const INSTALL_TIMEOUT_MS = 30_000
 
-export type WslHookRelayBundle = { jsPath: string; version: string }
-
-export function resolveWslHookRelayBundle(): WslHookRelayBundle | null {
-  // Mirrors getLocalRelayCandidates in ssh-relay-deploy: env override for
-  // tests/dev, then packaged extraResources, then dev out/ paths.
-  const candidates: string[] = []
-  if (process.env.ORCA_RELAY_PATH) {
-    candidates.push(join(process.env.ORCA_RELAY_PATH, 'wsl'))
-  }
-  if (process.resourcesPath) {
-    candidates.push(join(process.resourcesPath, 'relay', 'wsl'))
-    candidates.push(join(process.resourcesPath, 'app.asar.unpacked', 'out', 'relay', 'wsl'))
-  }
-  try {
-    const appPath = getAppEnvironment().getAppPath()
-    candidates.push(join(appPath, 'resources', 'relay', 'wsl'))
-    candidates.push(join(appPath, 'out', 'relay', 'wsl'))
-  } catch {
-    // app not ready in some test contexts — env/resources candidates suffice.
-  }
-  for (const dir of candidates) {
-    const jsPath = join(dir, WSL_HOOK_RELAY_BUNDLE_NAME)
-    const versionPath = join(dir, WSL_HOOK_RELAY_VERSION_FILE)
-    if (existsSync(jsPath) && existsSync(versionPath)) {
-      const version = readFileSync(versionPath, 'utf8').trim()
-      // Why: the version lands inside single-quoted guest shell text and in
-      // a guest path segment — refuse anything outside the safe alphabet.
-      if (/^[A-Za-z0-9+.-]+$/.test(version)) {
-        return { jsPath, version }
-      }
-    }
-  }
-  return null
-}
-
 // Why: the install dir is namespaced by bundle version so concurrent Orca
 // instances with different bundles (dev + prod) never reinstall over each
 // other; each instance launches exactly the version it shipped.
@@ -74,26 +38,46 @@ function guestRelayDirExpr(version: string): string {
 
 /** Guest launcher, installed alongside the bundle. The `.version` marker is
  *  written last by the installer, so the check rejects partial installs;
- *  node resolution probes each candidate's version because `sh -c` does not
- *  source interactive profiles (an apt node 12 on PATH must not shadow an
- *  nvm node 20 off PATH). */
-export function buildGuestLaunchScript(version: string): string {
+ *  Bun is preferred when the distro already provides the pinned version, and
+ *  Node remains the compatibility path for older WSL images. */
+export function buildGuestLaunchScript(
+  version: string,
+  options: { requiresBundledBun?: boolean } = {}
+): string {
   const dir = guestRelayDirExpr(version)
   return [
     '#!/bin/sh',
     `d="${dir}"`,
     `v="$(cat "$d/${WSL_HOOK_RELAY_VERSION_FILE}" 2>/dev/null || true)"`,
     `[ -n "$${WSL_HOOK_RELAY_VERSION_ENV}" ] && [ "$v" = "$${WSL_HOOK_RELAY_VERSION_ENV}" ] || exit ${WSL_HOOK_RELAY_STALE_EXIT_CODE}`,
-    'n=""',
-    'for c in "$(command -v node 2>/dev/null || true)" "$HOME/.nvm/versions/node"/*/bin/node /usr/local/bin/node /usr/bin/node "$HOME/.local/bin/node"; do',
+    'r=""',
+    'orca_arch="$(uname -m 2>/dev/null || true)"',
+    'case "$orca_arch" in x86_64|amd64) orca_arch=x64;; aarch64|arm64) orca_arch=arm64;; *) orca_arch="";; esac',
+    'orca_libc="glibc"',
+    'orca_getconf="$(getconf GNU_LIBC_VERSION 2>/dev/null || true)"',
+    'case "$orca_getconf" in *glibc*|*GLIBC*) orca_libc=glibc;; *) if ldd --version 2>&1 | grep -qi musl; then orca_libc=musl; fi;; esac',
+    'for c in "$d/bun-runtime-${orca_arch}-${orca_libc}" "$(command -v bun 2>/dev/null || true)" "$HOME/.bun/bin/bun"; do',
     '  [ -n "$c" ] && [ -x "$c" ] || continue',
-    `  if "$c" -e 'process.exit(Number(process.versions.node.split(".")[0])>=18?0:1)' 2>/dev/null; then`,
-    '    n="$c"',
+    `  if [ "$("$c" --version 2>/dev/null || true)" = "${ORCAD_BUN_VERSION}" ]; then`,
+    '    r="$c"',
     '    break',
     '  fi',
     'done',
-    `[ -n "$n" ] || exit ${WSL_HOOK_RELAY_NO_NODE_EXIT_CODE}`,
-    `exec "$n" "$d/${WSL_HOOK_RELAY_BUNDLE_NAME}"`,
+    `[ -n "$r" ] && exec "$r" "$d/${WSL_HOOK_RELAY_BUNDLE_NAME}"`,
+    ...(options.requiresBundledBun
+      ? [`exit ${WSL_HOOK_RELAY_NO_NODE_EXIT_CODE}`]
+      : [
+          'n=""',
+          'for c in "$(command -v node 2>/dev/null || true)" "$HOME/.nvm/versions/node"/*/bin/node /usr/local/bin/node /usr/bin/node "$HOME/.local/bin/node"; do',
+          '  [ -n "$c" ] && [ -x "$c" ] || continue',
+          `  if "$c" -e 'process.exit(Number(process.versions.node.split(".")[0])>=18?0:1)' 2>/dev/null; then`,
+          '    n="$c"',
+          '    break',
+          '  fi',
+          'done',
+          `[ -n "$n" ] || exit ${WSL_HOOK_RELAY_NO_NODE_EXIT_CODE}`,
+          `exec "$n" "$d/${WSL_HOOK_RELAY_BUNDLE_NAME}"`
+        ]),
     ''
   ].join('\n')
 }
@@ -102,8 +86,30 @@ export function buildGuestLaunchScript(version: string): string {
  *  quoted delimiters carry the bundle (base64) and launcher verbatim, so no
  *  argv quoting crosses the wsl.exe boundary. Tmp names carry the guest PID
  *  so same-version concurrent installs cannot corrupt each other. */
-export function buildGuestInstallScript(bundleJs: Buffer, version: string): string {
+export function buildGuestInstallScript(
+  bundleJs: Buffer,
+  version: string,
+  bunRuntimes: Record<string, Buffer> = {},
+  options: { requiresBundledBun?: boolean } = {}
+): string {
   const b64 = bundleJs.toString('base64').replace(/(.{1,120})/g, '$1\n')
+  const runtimePayloads = Object.entries(bunRuntimes).flatMap(([key, runtime]) => {
+    const safeKey = key.replace(/[^A-Za-z0-9_-]/g, '')
+    if (!safeKey) {
+      throw new Error(`Invalid Bun runtime payload key: ${key}`)
+    }
+    const marker = `ORCA_EOF_BUN_${safeKey}`
+    return [
+      `base64 -d > "$d/bun-runtime-${safeKey}.$$.tmp" << '${marker}'`,
+      runtime
+        .toString('base64')
+        .replace(/(.{1,120})/g, '$1\n')
+        .trimEnd(),
+      marker,
+      `mv "$d/bun-runtime-${safeKey}.$$.tmp" "$d/bun-runtime-${safeKey}"`,
+      `chmod 700 "$d/bun-runtime-${safeKey}"`
+    ]
+  })
   return [
     'set -e',
     'umask 077',
@@ -113,8 +119,9 @@ export function buildGuestInstallScript(bundleJs: Buffer, version: string): stri
     b64.trimEnd(),
     'ORCA_EOF_BUNDLE',
     `mv "$d/bundle.$$.tmp" "$d/${WSL_HOOK_RELAY_BUNDLE_NAME}"`,
+    ...runtimePayloads,
     `cat > "$d/launch.$$.tmp" << 'ORCA_EOF_LAUNCH'`,
-    buildGuestLaunchScript(version).trimEnd(),
+    buildGuestLaunchScript(version, options).trimEnd(),
     'ORCA_EOF_LAUNCH',
     'mv "$d/launch.$$.tmp" "$d/launch.sh"',
     'chmod 700 "$d/launch.sh"',
@@ -205,6 +212,8 @@ export async function launchWslRelayWithInstall(options: {
   env: NodeJS.ProcessEnv
   bundleJsPath: string
   version: string
+  bunRuntimePaths?: Record<string, string>
+  requiresBundledBun?: boolean
   io: WslRelayLaunchIo
   isDisposed: () => boolean
   onChild: (child: ChildProcessWithoutNullStreams) => void
@@ -235,7 +244,10 @@ export async function launchWslRelayWithInstall(options: {
       if (!failure) {
         throw err
       }
-      if (failure.code === WSL_HOOK_RELAY_NO_NODE_EXIT_CODE) {
+      // Legacy bundles report a missing Node runtime immediately. A strict
+      // Bun bundle gets one repair attempt first, so a damaged guest copy
+      // cannot strand a host that intentionally has no Node installed.
+      if (failure.code === WSL_HOOK_RELAY_NO_NODE_EXIT_CODE && !options.requiresBundledBun) {
         options.onNoNode()
         return
       }
@@ -249,7 +261,19 @@ export async function launchWslRelayWithInstall(options: {
       }
       if (!installTried) {
         installTried = true
-        const script = buildGuestInstallScript(io.readBundle(bundleJsPath), version)
+        const runtimeBuffers: Record<string, Buffer> = {}
+        // The bundle resolver may have staged several architecture/libc Bun
+        // variants. Include only those files in the streamed install payload;
+        // guest launch selects the one matching uname/ldd.
+        for (const [key, path] of Object.entries(options.bunRuntimePaths ?? {})) {
+          runtimeBuffers[key] = io.readBundle(path)
+        }
+        const script = buildGuestInstallScript(
+          io.readBundle(bundleJsPath),
+          version,
+          runtimeBuffers,
+          { requiresBundledBun: options.requiresBundledBun }
+        )
         const result = await io.runInstall(distro, script, env)
         if (result.code === 0) {
           continue
@@ -257,6 +281,10 @@ export async function launchWslRelayWithInstall(options: {
         options.onFailure(
           `guest install failed (code ${result.code ?? 'unknown'}): ${result.stderr.trim()}`
         )
+        return
+      }
+      if (failure.code === WSL_HOOK_RELAY_NO_NODE_EXIT_CODE) {
+        options.onNoNode()
         return
       }
       options.onFailure(formatWslRelayFailure(failure))

@@ -78,6 +78,7 @@ vi.mock('../browser/paired-runtime-browser-client-host-runtime', () => ({
 
 import {
   invalidateRuntimeEnvironmentTransport,
+  retireRuntimeEnvironmentControlTransport,
   registerRuntimeEnvironmentHandlers
 } from './runtime-environments'
 import { channelHandlerLookup, pairingCode } from './runtime-environments-ipc-test-harness'
@@ -485,69 +486,95 @@ describe('registerRuntimeEnvironmentHandlers', () => {
     expect(deliveredCloses).toEqual([])
   })
 
-  it('suppresses stale payloads from a retired transport but never re-sends its close', async () => {
-    registerRuntimeEnvironmentHandlers(store as never)
-    let transportCallbacks: {
-      onResponse: (response: Record<string, unknown>) => void
-      onClose: () => void
-    } | null = null
-    subscribeRemoteRuntimeRequestMock.mockImplementation(
-      async (
-        _environment: unknown,
-        _method: string,
-        _params: unknown,
-        _timeoutMs: number,
-        callbacks: NonNullable<typeof transportCallbacks>
-      ) => {
-        transportCallbacks = callbacks
-        return { requestId: 'multiplex-2', close: vi.fn(), sendBinary: vi.fn() }
-      }
-    )
-
-    const add = handler<
-      { name: string; pairingCode: string },
-      { environment: { id: string; name: string } }
-    >('runtimeEnvironments:addFromPairingCode')
-    const added = await add(null, { name: 'desk', pairingCode: pairingCode() })
-
-    const senderSend = vi.fn()
-    const subscribe = handler<
-      { selector: string; method: string; params?: unknown; subscriptionId?: string },
-      { subscriptionId: string; requestId: string }
-    >('runtimeEnvironments:subscribe')
-    await subscribe(
-      {
-        sender: {
-          id: 1,
-          isDestroyed: () => false,
-          send: senderSend,
-          once: vi.fn(),
-          removeListener: vi.fn()
+  it.each(['full', 'control-only'])(
+    'fences late payloads and duplicate close after %s retirement',
+    async (kind) => {
+      registerRuntimeEnvironmentHandlers(store as never)
+      let transportCallbacks: {
+        onResponse: (response: Record<string, unknown>) => void
+        onClose: () => void
+      } | null = null
+      subscribeRemoteRuntimeRequestMock.mockImplementation(
+        async (
+          _environment: unknown,
+          _method: string,
+          _params: unknown,
+          _timeoutMs: number,
+          callbacks: NonNullable<typeof transportCallbacks>
+        ) => {
+          transportCallbacks = callbacks
+          return { requestId: 'multiplex-2', close: vi.fn(), sendBinary: vi.fn() }
         }
-      },
-      {
-        selector: added.environment.id,
-        method: 'terminal.multiplex',
-        params: {},
-        subscriptionId: 'multiplex-stale'
-      }
-    )
+      )
 
-    invalidateRuntimeEnvironmentTransport(added.environment.id)
-    expect(retirePairedRuntimeBrowserClientHostEnvironmentMock).toHaveBeenCalledWith(
-      added.environment.id,
-      expect.objectContaining({ message: 'Runtime environment transport was invalidated' })
-    )
-    senderSend.mockClear()
-    // A late frame from the retired socket must not reach the renderer...
-    transportCallbacks!.onResponse({
-      id: 'r1',
-      ok: true,
-      result: {},
-      _meta: { runtimeId: 'runtime-a' }
-    })
-    // ...and its late close must not re-fire after the retirement already sent one.
-    transportCallbacks!.onClose()
-    expect(senderSend).not.toHaveBeenCalled()
-  })
+      const add = handler<
+        { name: string; pairingCode: string },
+        { environment: { id: string; name: string } }
+      >('runtimeEnvironments:addFromPairingCode')
+      const added = await add(null, { name: 'desk', pairingCode: pairingCode() })
+
+      const senderSend = vi.fn()
+      const subscribe = handler<
+        { selector: string; method: string; params?: unknown; subscriptionId?: string },
+        { subscriptionId: string; requestId: string }
+      >('runtimeEnvironments:subscribe')
+      await subscribe(
+        {
+          sender: {
+            id: 1,
+            isDestroyed: () => false,
+            send: senderSend,
+            once: vi.fn(),
+            removeListener: vi.fn()
+          }
+        },
+        {
+          selector: added.environment.id,
+          method: 'terminal.multiplex',
+          params: {},
+          subscriptionId: 'multiplex-stale'
+        }
+      )
+
+      if (kind === 'full') {
+        await invalidateRuntimeEnvironmentTransport(added.environment.id)
+        expect(retirePairedRuntimeBrowserClientHostEnvironmentMock).toHaveBeenCalledWith(
+          added.environment.id,
+          expect.objectContaining({ message: 'Runtime environment transport was invalidated' })
+        )
+      } else {
+        retireRuntimeEnvironmentControlTransport(added.environment.id)
+        expect(retirePairedRuntimeBrowserClientHostEnvironmentMock).not.toHaveBeenCalled()
+        expect(senderSend).not.toHaveBeenCalled()
+        transportCallbacks!.onResponse({
+          id: 'preserved',
+          ok: true,
+          result: {},
+          _meta: { runtimeId: 'runtime-a' }
+        })
+        expect(senderSend).toHaveBeenCalledWith(
+          'runtimeEnvironments:subscriptionEvent',
+          expect.objectContaining({ subscriptionId: 'multiplex-stale', type: 'response' })
+        )
+        senderSend.mockClear()
+        await invalidateRuntimeEnvironmentTransport(added.environment.id)
+      }
+      expect(closeRemoteRuntimeRequestConnectionMock).toHaveBeenCalledWith(added.environment.id)
+      expect(senderSend).toHaveBeenCalledWith('runtimeEnvironments:subscriptionEvent', {
+        subscriptionId: 'multiplex-stale',
+        type: 'close'
+      })
+      senderSend.mockClear()
+      // A late frame from the retired socket must not reach the renderer...
+      transportCallbacks!.onResponse({
+        id: 'r1',
+        ok: true,
+        result: {},
+        _meta: { runtimeId: 'runtime-a' }
+      })
+      // ...and its late close must not re-fire after the retirement already sent one.
+      transportCallbacks!.onClose()
+      expect(senderSend).not.toHaveBeenCalled()
+    }
+  )
 })

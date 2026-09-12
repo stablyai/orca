@@ -17,6 +17,8 @@ export type PosixPtyProcessGroupTerminationDeps = {
   signalProcessGroup?: (pgid: number) => void
 }
 
+export type PosixPtyProcessGroupSignalDeps = PosixPtyProcessGroupTerminationDeps
+
 function runPs(args: string[]): string {
   return execFileSync('ps', args, {
     encoding: 'utf8',
@@ -132,6 +134,50 @@ export function forceKillPosixPtyProcessGroups(
       site: 'posix-pty-process-group-sweep',
       scope: 'posix-process-group'
     })
+  }
+  if (firstError !== undefined) {
+    throw firstError
+  }
+}
+
+/** Signal every process group proven to belong to one POSIX PTY. */
+export function signalPosixPtyProcessGroups(
+  rootPid: number,
+  signal: NodeJS.Signals,
+  fallback: () => void,
+  deps: PosixPtyProcessGroupSignalDeps = {}
+): void {
+  if ((deps.platform ?? process.platform) === 'win32') {
+    fallback()
+    return
+  }
+  let groups: number[] | null
+  try {
+    groups = getPosixPtyProcessGroups(
+      (deps.readProcessTable ?? (() => readPtyProcessTable(rootPid)))(),
+      rootPid,
+      deps.currentPid ?? process.pid
+    )
+  } catch {
+    groups = null
+  }
+  if (!groups || groups.length === 0) {
+    fallback()
+    return
+  }
+
+  const signalProcessGroup =
+    deps.signalProcessGroup ?? ((pgid: number) => process.kill(-pgid, signal))
+  let firstError: unknown
+  for (const pgid of groups) {
+    try {
+      signalProcessGroup(pgid)
+    } catch (error) {
+      // A group can exit between the bounded table read and delivery.
+      if (!isProcessAlreadyGone(error) && firstError === undefined) {
+        firstError = error
+      }
+    }
   }
   if (firstError !== undefined) {
     throw firstError

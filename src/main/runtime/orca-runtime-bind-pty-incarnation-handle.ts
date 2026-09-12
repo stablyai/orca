@@ -3,12 +3,17 @@ import { OrcaRuntimeWithBuildPtyTerminalSummary } from './orca-runtime-build-pty
 import type { PtyIncarnationHandleRecord } from './orca-runtime-core'
 import type { RuntimeLeafRecord, RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
 import { randomUUID } from 'node:crypto'
+import { assertOutgoingPtyRegistrationAllowed } from './outgoing-pty-registration-fence'
+import { retainUnchangedGraphRecord } from './runtime-graph-record-republication'
 
 export class OrcaRuntimeWithBindPtyIncarnationHandle extends OrcaRuntimeWithBuildPtyTerminalSummary {
   protected bindPtyIncarnationHandle(
     retained: PtyIncarnationHandleRecord,
     leaf: RuntimeLeafRecord
   ): void {
+    if (leaf.ptyId) {
+      assertOutgoingPtyRegistrationAllowed(this, leaf.ptyId)
+    }
     const leafKey = this.getLeafKey(leaf.tabId, leaf.leafId)
     if (retained.leafKey !== leafKey) {
       if (this.handleByLeafKey.get(retained.leafKey) === retained.handle) {
@@ -16,16 +21,19 @@ export class OrcaRuntimeWithBindPtyIncarnationHandle extends OrcaRuntimeWithBuil
       }
       retained.leafKey = leafKey
     }
-    this.handles.set(retained.handle, {
-      handle: retained.handle,
-      runtimeId: this.runtimeId,
-      rendererGraphEpoch: this.rendererGraphEpoch,
-      worktreeId: leaf.worktreeId,
-      tabId: leaf.tabId,
-      leafId: leaf.leafId,
-      ptyId: leaf.ptyId,
-      ptyGeneration: leaf.ptyGeneration
-    })
+    this.handles.set(
+      retained.handle,
+      retainUnchangedGraphRecord(this.handles.get(retained.handle), {
+        handle: retained.handle,
+        runtimeId: this.runtimeId,
+        rendererGraphEpoch: this.rendererGraphEpoch,
+        worktreeId: leaf.worktreeId,
+        tabId: leaf.tabId,
+        leafId: leaf.leafId,
+        ptyId: leaf.ptyId,
+        ptyGeneration: leaf.ptyGeneration
+      })
+    )
     this.handleByLeafKey.set(leafKey, retained.handle)
   }
 
@@ -71,26 +79,31 @@ export class OrcaRuntimeWithBindPtyIncarnationHandle extends OrcaRuntimeWithBuil
     if (!leaf.ptyId) {
       return null
     }
+    assertOutgoingPtyRegistrationAllowed(this, leaf.ptyId)
     const preAllocated = this.handleByPtyId.get(leaf.ptyId)
     if (!preAllocated) {
       return null
     }
     const leafKey = this.getLeafKey(leaf.tabId, leaf.leafId)
-    this.handles.set(preAllocated, {
-      handle: preAllocated,
-      runtimeId: this.runtimeId,
-      rendererGraphEpoch: this.rendererGraphEpoch,
-      worktreeId: leaf.worktreeId,
-      tabId: leaf.tabId,
-      leafId: leaf.leafId,
-      ptyId: leaf.ptyId,
-      ptyGeneration: leaf.ptyGeneration
-    })
+    this.handles.set(
+      preAllocated,
+      retainUnchangedGraphRecord(this.handles.get(preAllocated), {
+        handle: preAllocated,
+        runtimeId: this.runtimeId,
+        rendererGraphEpoch: this.rendererGraphEpoch,
+        worktreeId: leaf.worktreeId,
+        tabId: leaf.tabId,
+        leafId: leaf.leafId,
+        ptyId: leaf.ptyId,
+        ptyGeneration: leaf.ptyGeneration
+      })
+    )
     this.handleByLeafKey.set(leafKey, preAllocated)
     return preAllocated
   }
 
   protected issuePtyHandle(pty: RuntimePtyWorktreeRecord): string {
+    assertOutgoingPtyRegistrationAllowed(this, pty.ptyId)
     const retained = this.handleByPtyIncarnation.get(pty.ptyId)
     if (retained?.incarnationId === pty.incarnationId) {
       return retained.handle
@@ -167,6 +180,9 @@ export class OrcaRuntimeWithBindPtyIncarnationHandle extends OrcaRuntimeWithBuil
     ptyId: string | null,
     ptyGeneration: number
   ): boolean {
+    if (ptyId) {
+      assertOutgoingPtyRegistrationAllowed(this, ptyId)
+    }
     const handle = this.handleByLeafKey.get(leafKey)
     const record = handle ? this.handles.get(handle) : null
     if (!handle || !record || record.ptyId !== null || ptyId === null) {

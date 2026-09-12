@@ -1,11 +1,20 @@
 import { spawn, type ChildProcess } from 'node:child_process'
-import { connect, createServer, type AddressInfo, type Socket } from 'node:net'
+import { connect, type Socket } from 'node:net'
 import type { SshTarget } from '../../shared/ssh-types'
 import { buildSshArgs, findSystemSsh, type SystemSshBuildArgsOptions } from './ssh-system-fallback'
 import { waitForSystemSshForwardStop } from './system-ssh-forward-process'
+import { allocateLoopbackPort } from './loopback-port-allocation'
+import { TransportPublicationDrain } from '../../shared/transport-publication-drain'
 
 const STARTUP_TIMEOUT_MS = 10_000
 const PROBE_INTERVAL_MS = 50
+
+export class SystemSshDynamicForwardStartupRetiredError extends Error {
+  constructor(cause: unknown) {
+    super(cause instanceof Error ? cause.message : String(cause), { cause })
+    this.name = 'SystemSshDynamicForwardStartupRetiredError'
+  }
+}
 
 export type SystemSshDynamicForwardProcess = {
   localPort: number
@@ -54,13 +63,17 @@ export async function startSystemSshDynamicForwardProcess(
   }
   process.stderr?.on('data', onStderr)
   signal?.addEventListener('abort', onAbort, { once: true })
+  const probes = new TransportPublicationDrain(() => {})
   try {
-    await waitForDynamicForward(process, localPort, () => stderr, signal)
+    await waitForDynamicForward(process, localPort, () => stderr, probes, signal)
+    await probes.drain(signal ?? new AbortController().signal)
+    signal?.throwIfAborted()
   } catch (error) {
     process.stderr?.off('data', onStderr)
     signal?.removeEventListener('abort', onAbort)
     await waitForSystemSshForwardStop(process)
-    throw error
+    await probes.drain(new AbortController().signal)
+    throw new SystemSshDynamicForwardStartupRetiredError(error)
   }
   return {
     localPort,
@@ -84,32 +97,17 @@ export async function startSystemSshDynamicForwardProcess(
   }
 }
 
-function allocateLoopbackPort(): Promise<number> {
-  return new Promise((resolve, reject) => {
-    const server = createServer()
-    server.once('error', reject)
-    server.listen(0, '127.0.0.1', () => {
-      const address = server.address() as AddressInfo | null
-      if (!address) {
-        server.close()
-        reject(new Error('system_ssh_dynamic_forward_port_unavailable'))
-        return
-      }
-      server.close((error) => (error ? reject(error) : resolve(address.port)))
-    })
-  })
-}
-
 function waitForDynamicForward(
   process: ChildProcess,
   localPort: number,
   stderr: () => string,
+  probes: TransportPublicationDrain,
   signal?: AbortSignal
 ): Promise<void> {
   return new Promise((resolve, reject) => {
     let settled = false
     let probeTimer: ReturnType<typeof setTimeout> | undefined
-    let probeSocket: Socket | undefined
+    let closeCurrentProbe: (() => void) | undefined
     const timeout = setTimeout(
       () => finish(() => reject(dynamicForwardError(null, stderr(), 'startup timeout'))),
       STARTUP_TIMEOUT_MS
@@ -117,9 +115,7 @@ function waitForDynamicForward(
     const cleanup = (): void => {
       clearTimeout(timeout)
       clearTimeout(probeTimer)
-      probeSocket?.removeAllListeners()
-      probeSocket?.destroy()
-      probeSocket = undefined
+      closeCurrentProbe?.()
       process.off('error', onError)
       process.off('exit', onExit)
       signal?.removeEventListener('abort', onAbort)
@@ -138,25 +134,42 @@ function waitForDynamicForward(
     const onExit = (code: number | null): void =>
       finish(() => reject(dynamicForwardError(code, stderr())))
     const probe = (): void => {
-      const socket = connect({ host: '127.0.0.1', port: localPort })
-      probeSocket = socket
+      const settleProbe = probes.trackWrite()
+      let socket: Socket
+      try {
+        socket = connect({ host: '127.0.0.1', port: localPort })
+      } catch (error) {
+        settleProbe({ ok: false, error: error instanceof Error ? error : new Error(String(error)) })
+        finish(() => reject(error))
+        return
+      }
+      const ignoreError = (): void => {}
+      socket.on('error', ignoreError)
+      socket.once('close', () => {
+        socket.off('error', ignoreError)
+        settleProbe({ ok: true })
+      })
       const closeProbe = (): void => {
-        if (probeSocket === socket) {
-          probeSocket = undefined
+        if (closeCurrentProbe === closeProbe) {
+          closeCurrentProbe = undefined
         }
-        socket.removeAllListeners()
+        socket.off('connect', onConnect)
+        socket.off('error', onProbeError)
         socket.destroy()
       }
-      socket.once('connect', () => {
+      const onConnect = (): void => {
         closeProbe()
         finish(resolve)
-      })
-      socket.once('error', () => {
+      }
+      const onProbeError = (): void => {
         closeProbe()
         if (!settled) {
           probeTimer = setTimeout(probe, PROBE_INTERVAL_MS)
         }
-      })
+      }
+      closeCurrentProbe = closeProbe
+      socket.once('connect', onConnect)
+      socket.once('error', onProbeError)
     }
     process.once('error', onError)
     process.once('exit', onExit)

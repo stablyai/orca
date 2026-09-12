@@ -22,16 +22,20 @@
  *   - create, navigate, evaluate, and screenshot through the selected host provider.
  */
 import { spawn, spawnSync } from 'node:child_process'
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, rmSync, rmdirSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { randomBytes } from 'node:crypto'
 import process from 'node:process'
+import { hasOrcadLifecycleOutputLine } from './orcad-bun-lifecycle-terminal-probe.mjs'
+import { orcadBunRuntimeFilename } from '../../src/shared/orcad-artifacts.ts'
 
 const projectDir = resolve(import.meta.dirname, '../..')
 const serveEntry = join(projectDir, 'out', 'main', 'index.js')
-const ORCAD_ENTRY = join(projectDir, 'out', 'orcad', 'orcad.js')
+const ORCAD_ENTRY = process.env.ORCA_SMOKE_ORCAD_ENTRY
+  ? resolve(process.env.ORCA_SMOKE_ORCAD_ENTRY)
+  : join(projectDir, 'out', 'orcad', 'orcad.js')
 const READY_TIMEOUT_MS = 120_000
 const OUTPUT_TIMEOUT_MS = 30_000
 const SHUTDOWN_TIMEOUT_MS = 15_000
@@ -149,8 +153,7 @@ async function waitForNonce(pairingCode, terminalHandle, nonce) {
   const deadline = Date.now() + OUTPUT_TIMEOUT_MS
   while (Date.now() < deadline) {
     const read = orca(pairingCode, ['terminal', 'read', '--terminal', terminalHandle])
-    const tail = (read?.terminal?.tail ?? []).map((entry) => String(entry)).join('\n')
-    if (tail.includes(nonce)) {
+    if (hasOrcadLifecycleOutputLine(read, nonce)) {
       return true
     }
     await new Promise((r) => setTimeout(r, 1_000))
@@ -173,9 +176,24 @@ function resolveLaunch(userDataDir) {
   const target =
     flagIndex !== -1 ? process.argv[flagIndex + 1] : (process.env.ORCA_SMOKE_TARGET ?? 'electron')
   if (target === 'orcad') {
+    const runtimeIndex = process.argv.indexOf('--runtime')
+    const runtime =
+      runtimeIndex !== -1
+        ? process.argv[runtimeIndex + 1]
+        : (process.env.ORCA_SMOKE_RUNTIME ?? 'node')
+    if (runtime !== 'node' && runtime !== 'bun' && runtime !== 'bundled-bun') {
+      throw new Error(
+        `--runtime (or ORCA_SMOKE_RUNTIME) must be 'node', 'bun', or 'bundled-bun', got '${runtime}'`
+      )
+    }
     return {
-      label: `orcad (${ORCAD_ENTRY})`,
-      command: process.execPath,
+      label: `orcad/${runtime} (${ORCAD_ENTRY})`,
+      command:
+        runtime === 'bundled-bun'
+          ? join(dirname(ORCAD_ENTRY), orcadBunRuntimeFilename(process.platform))
+          : runtime === 'bun'
+            ? (process.env.BUN_EXECUTABLE ?? 'bun')
+            : process.execPath,
       args: [ORCAD_ENTRY, '--port', String(PORT), '--json'],
       env: { ORCA_USER_DATA: userDataDir }
     }
@@ -222,11 +240,16 @@ function seedGitRepo() {
 
 async function main() {
   const userDataDir = mkdtempSync(join(tmpdir(), 'orca-serve-smoke-'))
+  writeFileSync(
+    join(userDataDir, 'orca-data.json'),
+    JSON.stringify({
+      settings: { workspaceDir: join(userDataDir, 'workspaces'), nestWorkspaces: false }
+    })
+  )
   const launch = resolveLaunch(userDataDir)
   log(`booting ${launch.label} on port ${PORT} with userData ${userDataDir}`)
 
-  // Why tracked out here: the worktree lands in the real workspaces root, not the temp
-  // profile, so the finally block has to remove it explicitly or every run leaks one.
+  // Remove through the owning runtime before tearing down its temporary profile.
   let seeded = null
   let pairing = null
 
@@ -328,7 +351,7 @@ async function main() {
     }
     log(`created ${terminal.handle}`)
 
-    // Why invoke node rather than `echo`: the shell differs per platform, node does not.
+    // Exact output matching distinguishes execution from the shell echoing submitted input.
     const nonce = `ORCA_SMOKE_${randomBytes(8).toString('hex')}`
     orca(pairingCode, [
       'terminal',
@@ -336,7 +359,7 @@ async function main() {
       '--terminal',
       terminal.handle,
       '--text',
-      `"${process.execPath}" -e "console.log('${nonce}')"`,
+      `echo ${nonce}`,
       '--enter'
     ])
 
@@ -372,7 +395,13 @@ async function main() {
       // empty `<workspaces>/<repo-name>/` container behind. Every run would leak one.
       const worktreePath = seeded.worktreeId.split('::')[1]
       if (removed.status === 0 && worktreePath) {
-        rmSync(dirname(worktreePath), { recursive: true, force: true })
+        try {
+          rmdirSync(dirname(worktreePath))
+        } catch (error) {
+          if (error.code !== 'ENOENT' && error.code !== 'ENOTEMPTY' && error.code !== 'EEXIST') {
+            fail(`could not remove empty smoke workspace container: ${error.message}`)
+          }
+        }
       }
       if (removed.status !== 0) {
         log(

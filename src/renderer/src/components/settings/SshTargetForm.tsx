@@ -130,8 +130,8 @@ export function SshTargetForm({
                     'Update connection details for this machine. Changes apply on next connect.'
                   )
                 : translate(
-                    'auto.components.settings.SshTargetForm.addDescription',
-                    'Add a persistent machine you can log into over SSH.'
+                    'auto.components.settings.SshTargetForm.addServerDescription',
+                    'Install an Orca server over SSH. No Node.js installation is needed on the host.'
                   )}
             </DialogDescription>
             {showEditingChip ? (
@@ -252,10 +252,18 @@ export function SshTargetForm({
             <Button type="button" variant="outline" size="sm" onClick={() => onOpenChange(false)}>
               {translate('auto.components.settings.SshTargetForm.fea9cb402e', 'Cancel')}
             </Button>
-            <Button type="submit" size="sm" disabled={saving}>
+            <Button type="submit" size="sm" className="w-36" disabled={saving}>
               {isEditing
                 ? translate('auto.components.settings.SshTargetForm.a62b4cb39a', 'Save Changes')
-                : translate('auto.components.settings.SshTargetForm.9518545cb6', 'Add Target')}
+                : saving
+                  ? translate(
+                      'auto.components.settings.SshTargetForm.provisioning',
+                      'Setting up server…'
+                    )
+                  : translate(
+                      'auto.components.settings.SshTargetForm.installServer',
+                      'Install server'
+                    )}
             </Button>
           </DialogFooter>
         </form>

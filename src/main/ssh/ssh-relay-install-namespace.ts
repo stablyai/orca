@@ -9,7 +9,7 @@
 import { RELAY_REMOTE_DIR } from './relay-protocol'
 import {
   RELAY_INSTALL_MODEL,
-  remoteInstallDirName,
+  remoteInstallVersionDirRegex,
   type RemoteInstallModel
 } from './remote-install-model'
 import type { SftpNamespacePathMapping } from './sftp-namespace-resolution'
@@ -54,7 +54,11 @@ export function remoteInstallDirSegments(
   fullVersion: string,
   pathFlavor: RemotePathFlavor
 ): string[] {
-  const segments = [RELAY_REMOTE_DIR, remoteInstallDirName(model, fullVersion)]
+  // This builder's contract is path safety, not SemVer validation. The version marker is
+  // supplied by the installed bundle and may include prerelease/build syntax (or a legacy
+  // opaque value); GC/listing applies the stricter model regex separately.
+  remoteInstallVersionDirRegex(model)
+  const segments = [RELAY_REMOTE_DIR, `${model.dirPrefix}-${fullVersion}`]
   for (const segment of segments) {
     assertSafeRemotePathSegment(segment, pathFlavor)
     // Why: the version reaches logs and diagnostics, where an embedded CR/LF can forge lines.

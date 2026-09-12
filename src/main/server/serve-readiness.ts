@@ -101,9 +101,11 @@ function renderHumanReadiness(readiness: ServeReadiness): string {
   ]
   if (readiness.health) {
     const daemon = readiness.health.terminalDaemon
+    const runtimeLabel = readiness.health.runtimeKind
+      ? `${readiness.health.runtimeKind === 'bun' ? 'Bun' : 'Node'} ${readiness.health.runtimeVersion ?? readiness.health.nodeVersion}`
+      : `Node ${readiness.health.nodeVersion}`
     lines.push(
-      `Build: ${readiness.health.buildVersion} (${readiness.health.buildHash}), Node ` +
-        `${readiness.health.nodeVersion} ABI ${readiness.health.nodeAbi}`
+      `Build: ${readiness.health.buildVersion} (${readiness.health.buildHash}), ${runtimeLabel}`
     )
     lines.push(
       `Terminal daemon: ${daemon.state} — PTY self-test ${daemon.selfTest.ok ? 'passed' : 'FAILED'}` +

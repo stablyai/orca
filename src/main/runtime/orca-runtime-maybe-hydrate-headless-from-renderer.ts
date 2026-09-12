@@ -3,6 +3,7 @@ import { OrcaRuntimeWithSerializeMainTerminalBuffer } from './orca-runtime-seria
 import { MOBILE_SUBSCRIBE_SCROLLBACK_ROWS } from './scrollback-limits'
 import { detectAgentStatusFromTitle, normalizeTerminalTitle } from '../../shared/agent-detection'
 import { shouldModelAnswerHiddenPtyQueries } from './terminal-model-query-authority'
+import { assertOutgoingPtyModelMutationAllowed } from './outgoing-pty-registration-fence'
 
 export class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends OrcaRuntimeWithSerializeMainTerminalBuffer {
   // Why: hydrate the runtime headless emulator from the desktop renderer's
@@ -12,6 +13,7 @@ export class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends OrcaRuntime
   // trackHeadlessTerminalData chain after the seed via the same writeChain.
   // See docs/mobile-prefer-renderer-scrollback.md.
   protected maybeHydrateHeadlessFromRenderer(ptyId: string): void {
+    assertOutgoingPtyModelMutationAllowed(this, ptyId)
     if (this.headlessHydrationState.has(ptyId)) {
       return
     }
@@ -152,6 +154,7 @@ export class OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer extends OrcaRuntime
     outputSequence: number,
     forwardQueryReplies = false
   ): Promise<void> {
+    assertOutgoingPtyModelMutationAllowed(this, ptyId)
     const state = this.getOrCreateHeadlessTerminal(ptyId)
     const completion = state.writeChain.then(async () => {
       // Why: the ingestion-time ownership decision is closed over this

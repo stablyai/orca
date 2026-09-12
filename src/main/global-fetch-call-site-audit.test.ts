@@ -48,13 +48,16 @@ const AUDITED_GLOBAL_FETCH_LINES = new Map<string, number>([
   ['main/ipc/worktree-remote.ts', 2],
   ['relay/git-handler-fetch-operations.ts', 1],
   // fetch mentioned only in a comment
-  ['main/ipc/feedback.ts', 1]
+  ['main/ipc/feedback.ts', 1],
+  // Bun's serve contract names its request handler `fetch`; this is not an
+  // outbound HTTP call and has no response-body ownership obligation.
+  ['main/runtime/rpc/bun-websocket-transport.ts', 1]
 ])
 
 // A line is a hit when it calls bare `fetch(` or touches `globalThis.fetch` /
 // `global.fetch` in any way (call, alias, fallback like `input.fetch ??
 // globalThis.fetch`). `typeof globalThis.fetch` type annotations are exempt.
-const GLOBAL_FETCH_LINE = /(^|[^.\w])fetch\(|(?<!typeof )\bglobal(This)?\.fetch\b/
+const GLOBAL_FETCH_LINE = /(^|[^:.\w])fetch\(|(?<!typeof )\bglobal(This)?\.fetch\b/
 
 const SCANNED_ROOTS = ['main', 'cli', 'relay']
 

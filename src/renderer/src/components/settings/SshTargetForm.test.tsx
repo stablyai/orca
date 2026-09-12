@@ -56,11 +56,11 @@ describe('SshTargetForm', () => {
     const root = await renderForm({})
     expect(document.body.textContent).toContain('Add SSH host')
     expect(document.body.textContent).toContain(
-      'Add a persistent machine you can log into over SSH.'
+      'Install an Orca server over SSH. No Node.js installation is needed on the host.'
     )
     expect(document.querySelector('#ssh-target-host')).not.toBeNull()
     expect(document.querySelector('#ssh-target-label')).not.toBeNull()
-    expect(document.body.textContent).toContain('Add Target')
+    expect(document.body.textContent).toContain('Install server')
     expect(document.body.textContent).not.toContain('Editing')
     act(() => root.unmount())
   })
@@ -110,7 +110,7 @@ describe('SshTargetForm', () => {
     const root = await renderForm({ onSave, onOpenChange })
 
     await act(async () => {
-      button('Add Target').dispatchEvent(new MouseEvent('click', { bubbles: true }))
+      button('Install server').dispatchEvent(new MouseEvent('click', { bubbles: true }))
     })
     expect(onSave).toHaveBeenCalledOnce()
 
@@ -151,7 +151,7 @@ describe('SshTargetForm', () => {
     const onSave = vi.fn()
     const root = await renderForm({ saving: true, onSave })
 
-    expect(button('Add Target').disabled).toBe(true)
+    expect(button('Setting up server…').disabled).toBe(true)
     // Why: Enter submits past a disabled button, so the form itself must gate too.
     await act(async () => {
       document

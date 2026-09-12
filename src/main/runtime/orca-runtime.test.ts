@@ -113,3 +113,5 @@ await import('./orca-runtime-tests/worktree-removal-and-reconciliation-part-04.s
 await import('./orca-runtime-tests/worktree-removal-execution-host.spec')
 await import('./orca-runtime-tests/targeting-and-resilience.spec')
 await import('./orca-runtime-tests/worktree-scan-cache-ttl.spec')
+await import('./orca-runtime-send-receipts.spec')
+await import('./orca-runtime-recovered-close.spec')

@@ -10,6 +10,7 @@ import {
 import type { StructuredTuiOwner } from '../native-chat/agent-session-wire/structured-agent-session-handoff-types'
 import { resolvePinnedCodexRolloutProof } from '../codex/codex-tui-rollout-proof'
 import { randomUUID } from 'node:crypto'
+import { assertOutgoingPtyRegistrationAllowed } from './outgoing-pty-registration-fence'
 import { waitForStructuredTuiExitProof } from './structured-tui-exit-proof'
 
 export class OrcaRuntimeWithProveRecoveredStructuredTuiPtyProcess extends OrcaRuntimeWithGetWorktreePs {
@@ -138,6 +139,7 @@ export class OrcaRuntimeWithProveRecoveredStructuredTuiPtyProcess extends OrcaRu
   }
 
   protected issueStructuredTuiPtyHandle(pty: RuntimePtyWorktreeRecord): string {
+    assertOutgoingPtyRegistrationAllowed(this, pty.ptyId)
     const existingHandle = this.findHandleForPtyRecord(pty.ptyId)
     if (existingHandle) {
       this.handleByPtyId.set(pty.ptyId, existingHandle)

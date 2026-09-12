@@ -193,7 +193,7 @@ export function writeOffLostRendererDelivery(
       session.pendingOverflowMarkedPtys.delete(id)
       session.updateProducerFlowControl(id)
     }
-    const markerSeq = session.runtime?.getPtyOutputSequence(id)
+    const markerSeq = session.runtime?.getPtyOutputSequence?.(id)
     writtenOff.push({
       id,
       ...(typeof markerSeq === 'number' ? { markerSeq } : {}),

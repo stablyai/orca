@@ -213,6 +213,7 @@ export const TERMINAL_SEND_METHODS = [
           ? await runtime.sendTerminalAgentPrompt(params.terminal, params.text!, {
               beforeWrite,
               signal,
+              ...(params.operationId ? { operationId: params.operationId } : {}),
               ...(orchestrationMutation
                 ? {
                     acceptQueued: true,
@@ -235,6 +236,7 @@ export const TERMINAL_SEND_METHODS = [
               {
                 beforeWrite,
                 signal,
+                ...(params.operationId ? { operationId: params.operationId } : {}),
                 ...(reserveWrite ? { reserveWrite } : {}),
                 ...(params.inputKind !== 'query-reply' && mobileFloorClientId
                   ? { afterWrite: () => commitMobileInputFloorClaim(mobileFloorClaim) }

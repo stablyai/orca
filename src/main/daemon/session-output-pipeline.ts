@@ -1,6 +1,7 @@
 import { SessionOutputPlane } from './session-output-plane'
 import { TerminalShellRecoveryBarrier } from './terminal-shell-recovery-barrier'
 import type { SubprocessHandle } from './session-subprocess-handle'
+import type { PtyIncarnationId } from '../../shared/pty-incarnation'
 
 /** The session's ordered output pipeline: the recovery barrier feeding the
  *  output plane. Built together because the barrier's owner is what the
@@ -11,6 +12,7 @@ export function createSessionOutputPipeline(opts: {
   scrollback?: number | undefined
   wslDistro?: string | undefined
   historySeedChunks?: readonly string[] | undefined
+  incarnationId?: PtyIncarnationId | undefined
   subprocess: SubprocessHandle
   isAlive: () => boolean
 }): { output: SessionOutputPlane; recoveryBarrier: TerminalShellRecoveryBarrier } {
@@ -21,6 +23,7 @@ export function createSessionOutputPipeline(opts: {
     scrollback: opts.scrollback,
     wslDistro: opts.wslDistro,
     historySeedChunks: opts.historySeedChunks,
+    incarnationId: opts.incarnationId,
     getTerminalOwner: () => barrier?.getOwner()
   })
   const recoveryBarrier = new TerminalShellRecoveryBarrier({

@@ -25,6 +25,8 @@ vi.mock('../ssh/ssh-port-scanner', () => mocks.sshPortScanner)
 import { getActiveMultiplexer } from './ssh'
 import type { SshConnectionState, SshTarget } from '../../shared/ssh-types'
 import { createSshIpcHarness } from './ssh-ipc-test-harness'
+import * as resetAdmission from './ssh-reset-production-state'
+import { getSshProviderAuthority } from '../ssh/ssh-provider-authority'
 
 const {
   mockSshStore,
@@ -39,6 +41,28 @@ describe('SSH IPC handlers', () => {
   const { handlers, mockStore, createRelayLaunchResult } = harness
 
   beforeEach(harness.reset)
+
+  it.each(['ssh:connect', 'ssh:disconnect', 'ssh:testConnection'])(
+    '%s refuses retained reset before touching transport or provider authority',
+    async (channel) => {
+      const authority = getSshProviderAuthority('ssh-1')
+      const guard = vi
+        .spyOn(resetAdmission, 'assertSshResetAdmissionAllowed')
+        .mockImplementation(() => {
+          throw new Error('ssh_reset_operation_reconciliation_required')
+        })
+      try {
+        await expect(handlers.get(channel)!(null, { targetId: 'ssh-1' })).rejects.toThrow(
+          'reconciliation_required'
+        )
+        expect(getSshProviderAuthority('ssh-1')).toBe(authority)
+        expect(mockConnectionManager.connect).not.toHaveBeenCalled()
+        expect(mockConnectionManager.disconnect).not.toHaveBeenCalled()
+      } finally {
+        guard.mockRestore()
+      }
+    }
+  )
 
   it('ssh:disconnect calls connection manager', async () => {
     mockConnectionManager.disconnect.mockResolvedValue(undefined)

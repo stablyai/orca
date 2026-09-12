@@ -10,8 +10,8 @@ vi.mock('./ssh-relay-gc-claim', () => ({
   releaseRelayGcClaimWithRetry: vi.fn().mockResolvedValue('released'),
   tryAcquireRelayGcClaim: vi.fn().mockResolvedValue('token')
 }))
-vi.mock('./ssh-relay-gc-tombstone', () => ({
-  cleanupRelayGcTombstones: vi.fn().mockResolvedValue(undefined)
+vi.mock('./remote-install-gc-tombstone', () => ({
+  cleanupRemoteInstallGcTombstones: vi.fn().mockResolvedValue(undefined)
 }))
 vi.mock('./ssh-relay-install-lock', () => ({
   RELAY_INSTALL_LOCK_NAME: '.install-lock',

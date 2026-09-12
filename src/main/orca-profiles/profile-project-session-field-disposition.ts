@@ -61,7 +61,10 @@ export const WORKSPACE_SESSION_FIELD_DISPOSITION = {
   },
   openFilesByWorktree: { onRepoRemoval: 'prunedByOwnerKey', onTransfer: 'copiedByBespokeRule' },
   activeFileIdByWorktree: { onRepoRemoval: 'prunedByOwnerKey', onTransfer: 'copiedByOwnerKey' },
-  markdownFrontmatterVisible: { onRepoRemoval: 'notRepoScoped', onTransfer: 'notTransferred' },
+  markdownFrontmatterVisible: {
+    onRepoRemoval: 'prunedByBespokeRule',
+    onTransfer: 'copiedByBespokeRule'
+  },
   browserTabsByWorktree: {
     onRepoRemoval: 'prunedByBespokeRule',
     onTransfer: 'copiedByBespokeRule'
@@ -75,13 +78,11 @@ export const WORKSPACE_SESSION_FIELD_DISPOSITION = {
     onRepoRemoval: 'prunedByOwnerKey',
     onTransfer: 'copiedByOwnerKey'
   },
-  // Why not transferred: each row names a paired device and a browser profile that only the source
-  // profile can resolve, and the payload carries neither -- the same reason a transferred browser
-  // workspace gives up its sessionProfileId. A copied row would restore as a held tab no device can
-  // ever reclaim, which is exactly the stuck "unavailable" state persistence exists to prevent.
+  // Rows contain only durable page identity, profile, and paired-device data. Live placement and
+  // route authority are deliberately absent, so a destination can rehydrate them as held pages.
   clientHostedBrowserPagesByWorktree: {
     onRepoRemoval: 'prunedByOwnerKey',
-    onTransfer: 'notTransferred'
+    onTransfer: 'copiedByBespokeRule'
   },
   // Keyed by runtime environment, not by worktree: this client's debt to environments that outlive
   // any one repo.

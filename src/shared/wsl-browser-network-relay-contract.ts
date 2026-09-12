@@ -1,5 +1,7 @@
 export const WSL_BROWSER_NETWORK_RELAY_BUNDLE_NAME = 'wsl-browser-network-relay.js'
 export const WSL_BROWSER_NETWORK_RELAY_VERSION_FILE = '.browser-network-version'
+/** Present in release bundles whose guest launcher must never use host Node. */
+export const WSL_BROWSER_NETWORK_RELAY_BUN_REQUIRED_FILE = '.bun-required'
 export const WSL_BROWSER_NETWORK_RELAY_DIR = '.orca-wsl/browser-network'
 export const WSL_BROWSER_NETWORK_RELAY_SENTINEL = 'ORCA-WSL-BROWSER-NETWORK v1 READY\n'
 export const WSL_BROWSER_NETWORK_RELAY_STALE_EXIT_CODE = 72

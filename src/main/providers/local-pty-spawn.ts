@@ -1,6 +1,5 @@
 import { randomUUID } from 'node:crypto'
 import { win32 as pathWin32 } from 'node:path'
-import * as pty from 'node-pty'
 import { SessionNotFoundError } from '../daemon/daemon-errors'
 import { prepareMacosTccLoginShell } from './macos-tcc-login-shell'
 import { finalizeLocalPtySpawnEnvironment } from './local-pty-finalize-environment'
@@ -68,6 +67,7 @@ export async function spawnLocalPty(
   if (concurrentWinner) {
     return concurrentWinner
   }
+  const ptySpawn = getOptions().ptySpawn ?? (await import('node-pty')).spawn
   const spawnResult = spawnShellWithFallback({
     shellPath: plan.shellPath,
     shellArgs: plan.shellArgs,
@@ -76,7 +76,7 @@ export async function spawnLocalPty(
     cwd: plan.effectiveCwd,
     env: finalEnv,
     termName: finalEnv.TERM,
-    ptySpawn: pty.spawn,
+    ptySpawn,
     getShellReadyConfig: plan.getFallbackShellReadyConfig,
     launchEnvKeys: plan.primaryLaunchEnvKeys,
     // Why: on zsh→bash fallback HISTFILE still points to zsh_history; update before spawn so the child inherits it (design doc §8).

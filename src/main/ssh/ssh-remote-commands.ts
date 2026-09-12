@@ -165,7 +165,9 @@ export function listRemoteInstallBaseDirsCommand(
     return [
       `base=${shellEscape(baseDir)}; [ -d "$base" ] || exit 0;`,
       `{ find "$base" -mindepth 1 -maxdepth 1 -type d -name '${model.dirPrefix}-*' -print; status=$?; printf '\n${statusPrefix}%s\n' "$status"; } |`,
-      String.raw`awk 'BEGIN { count=0; status=-1 } /^${statusPrefix}[0-9]+$/ { status=substr($0, ${statusPrefix.length + 1}); next } { name=$0; sub(/^.*\//, "", name); if (name ~ /${namePattern}/ && count < ${MAX_RELAY_GC_LISTING_ENTRIES}) { entries[count++]=name } } END { if (status != 0) exit 1; for (i=0; i<count; i++) print entries[i] }'`
+      // Upload stages carry a SemVer-looking prefix but are owned by the staged-upload
+      // protocol, not versioned-install GC. Exclude them before the bounded admission.
+      String.raw`awk 'BEGIN { count=0; status=-1 } /^${statusPrefix}[0-9]+$/ { status=substr($0, ${statusPrefix.length + 1}); next } { name=$0; sub(/^.*\//, "", name); if (name !~ /\.upload-/ && name ~ /${namePattern}/ && count < ${MAX_RELAY_GC_LISTING_ENTRIES}) { entries[count++]=name } } END { if (status != 0) exit 1; for (i=0; i<count; i++) print entries[i] }'`
     ].join(' ')
   }
   return powerShellCommand(
@@ -175,7 +177,7 @@ export function listRemoteInstallBaseDirsCommand(
       'if (Test-Path -LiteralPath $base -PathType Container) {',
       // Why the pattern goes in verbatim: a single-quoted PowerShell string is already
       // literal, so `\.` reaches `-match` as the regex escape it is meant to be.
-      `Get-ChildItem -LiteralPath $base -Directory -Filter '${model.dirPrefix}-*' -ErrorAction Stop | Where-Object { $_.Name -match '${namePattern}' } | Select-Object -First ` +
+      `Get-ChildItem -LiteralPath $base -Directory -Filter '${model.dirPrefix}-*' -ErrorAction Stop | Where-Object { $_.Name -notmatch '\\.upload-' -and $_.Name -match '${namePattern}' } | Select-Object -First ` +
         `${MAX_RELAY_GC_LISTING_ENTRIES} | ForEach-Object { $_.Name }`,
       '}'
     ].join('\n')
@@ -201,7 +203,11 @@ export function probeFileExistsCommand(host: RemoteHostPlatform, remotePath: str
 }
 
 type WindowsRelayLivenessOptions = {
-  nodePath: string
+  /** Runtime executable used for the probe (Bun in strict mode, Node otherwise). */
+  runtimePath?: string
+  runtimeKind?: 'bun' | 'node'
+  /** @deprecated Use runtimePath. */
+  nodePath?: string
   pipePaths: string[]
 }
 
@@ -219,6 +225,12 @@ export function relayLivenessProbeCommand(
   }
   if (!windowsOptions) {
     return powerShellCommand("'ALIVE'")
+  }
+  const runtimePath = windowsOptions.runtimePath ?? windowsOptions.nodePath
+  if (!runtimePath) {
+    // An absent executable cannot prove liveness; callers should treat the
+    // non-READY result as inconclusive and retain the directory.
+    return powerShellCommand("'WAITING'")
   }
   const js = [
     'const fs=require("fs"),path=require("path"),net=require("net");',
@@ -251,10 +263,10 @@ export function relayLivenessProbeCommand(
   ].join('')
   return commandWithNodePath(
     host,
-    windowsOptions.nodePath,
+    runtimePath,
     dir,
     [
-      `& ${powerShellLiteral(windowsOptions.nodePath)}`,
+      `& ${powerShellLiteral(runtimePath)}`,
       '-e',
       powerShellNativeArg(js),
       powerShellNativeArg(dir),

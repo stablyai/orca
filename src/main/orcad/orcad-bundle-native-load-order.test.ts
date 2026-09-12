@@ -25,7 +25,7 @@ import { runProcessSync } from '../../shared/child-process/run-process'
  */
 const REPO_ROOT = join(__dirname, '..', '..', '..')
 const BUNDLE = join(REPO_ROOT, 'out', 'orcad', 'orcad.js')
-const BUILD_SCRIPT = join(REPO_ROOT, 'config', 'scripts', 'build-orcad.mjs')
+const BUILD_SCRIPT = join(REPO_ROOT, 'config', 'scripts', 'build-orcad-bun.mjs')
 
 /**
  * Why it throws rather than skipping when the build fails: a bundle that cannot be built

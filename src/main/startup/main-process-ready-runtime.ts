@@ -45,7 +45,7 @@ export async function initializeReadyRuntimeServices(): Promise<void> {
   }
   initializeMainProcessObservers()
   initializeMainProcessAccountServices()
-  const runtime = initializeMainProcessRuntime()
+  const runtime = await initializeMainProcessRuntime()
   initializeMainProcessAutomations()
   configureRuntimeServices(runtime)
   await initializeMainProcessPlugins(runtime)

@@ -10,13 +10,48 @@
  * It lives beside the version dirs (`~/.orca-remote/orcad-active.json`), not inside one,
  * because it has to outlive whichever version GC removes.
  */
-import { remoteInstallDirName, ORCAD_INSTALL_MODEL } from './remote-install-model'
+import {
+  isRemoteInstallVersion,
+  remoteInstallDirName,
+  ORCAD_INSTALL_MODEL
+} from './remote-install-model'
+import { z } from 'zod'
 
 export const ORCAD_ACTIVATION_FILENAME = 'orcad-active.json'
 export const ORCAD_ACTIVATION_SCHEMA_VERSION = 1
 
 /** Where a pre-activation copy of the shared data root lives, relative to `.orca-remote/`. */
 export const ORCAD_STATE_SNAPSHOT_DIR = 'orcad-state-snapshots'
+
+const SafeRecordSegmentSchema = z
+  .string()
+  .min(1)
+  .max(255)
+  .regex(/^[A-Za-z0-9][A-Za-z0-9.+-]*$/u)
+const RemoteInstallVersionSchema = z
+  .string()
+  .refine(isRemoteInstallVersion, 'Expected a safe remote install version')
+const RecordTimestampSchema = z.iso.datetime({ offset: true })
+const OrcadStateSnapshotSchema = z.object({
+  dirName: SafeRecordSegmentSchema,
+  takenBeforeVersion: RemoteInstallVersionSchema,
+  readableByVersion: RemoteInstallVersionSchema.nullable(),
+  takenAt: RecordTimestampSchema
+})
+const OrcadActivationRecordSchema = z.object({
+  schemaVersion: z.literal(ORCAD_ACTIVATION_SCHEMA_VERSION),
+  active: RemoteInstallVersionSchema.nullable(),
+  previous: RemoteInstallVersionSchema.nullable(),
+  activatedAt: RecordTimestampSchema.nullable(),
+  snapshot: OrcadStateSnapshotSchema.nullable(),
+  decommissioning: z
+    .object({
+      version: RemoteInstallVersionSchema,
+      acceptedAt: RecordTimestampSchema
+    })
+    .nullable()
+    .default(null)
+})
 
 export type OrcadStateSnapshot = {
   /** Directory name under `ORCAD_STATE_SNAPSHOT_DIR`. */
@@ -36,6 +71,8 @@ export type OrcadActivationRecord = {
   previous: string | null
   activatedAt: string | null
   snapshot: OrcadStateSnapshot | null
+  /** Durable proof that the active runtime accepted atomic idle decommission. */
+  decommissioning?: { version: string; acceptedAt: string } | null
 }
 
 export function emptyOrcadActivationRecord(): OrcadActivationRecord {
@@ -44,7 +81,8 @@ export function emptyOrcadActivationRecord(): OrcadActivationRecord {
     active: null,
     previous: null,
     activatedAt: null,
-    snapshot: null
+    snapshot: null,
+    decommissioning: null
   }
 }
 
@@ -73,44 +111,31 @@ export function parseOrcadActivationRecord(raw: string | null): OrcadActivationR
       reason: `activation record is not JSON: ${error instanceof Error ? error.message : String(error)}`
     }
   }
-  if (typeof parsed !== 'object' || parsed === null) {
-    return { state: 'unreadable', reason: 'activation record is not an object' }
-  }
-  const record = parsed as Partial<OrcadActivationRecord>
-  if (record.schemaVersion !== ORCAD_ACTIVATION_SCHEMA_VERSION) {
+  if (
+    typeof parsed === 'object' &&
+    parsed !== null &&
+    'schemaVersion' in parsed &&
+    parsed.schemaVersion !== ORCAD_ACTIVATION_SCHEMA_VERSION
+  ) {
     return {
       state: 'unreadable',
       reason:
-        `activation record schemaVersion ${String(record.schemaVersion)} is not ` +
+        `activation record schemaVersion ${String(parsed.schemaVersion)} is not ` +
         `${ORCAD_ACTIVATION_SCHEMA_VERSION}; this client cannot safely interpret it`
+    }
+  }
+  const record = OrcadActivationRecordSchema.safeParse(parsed)
+  if (!record.success) {
+    const issue = record.error.issues[0]
+    const path = issue?.path.length ? issue.path.join('.') : 'record'
+    return {
+      state: 'unreadable',
+      reason: `activation record ${path} is invalid: ${issue?.message ?? 'unknown shape'}`
     }
   }
   return {
     state: 'ok',
-    record: {
-      schemaVersion: ORCAD_ACTIVATION_SCHEMA_VERSION,
-      active: typeof record.active === 'string' ? record.active : null,
-      previous: typeof record.previous === 'string' ? record.previous : null,
-      activatedAt: typeof record.activatedAt === 'string' ? record.activatedAt : null,
-      snapshot: parseSnapshot(record.snapshot)
-    }
-  }
-}
-
-function parseSnapshot(value: unknown): OrcadStateSnapshot | null {
-  if (typeof value !== 'object' || value === null) {
-    return null
-  }
-  const snapshot = value as Partial<OrcadStateSnapshot>
-  if (typeof snapshot.dirName !== 'string' || typeof snapshot.takenBeforeVersion !== 'string') {
-    return null
-  }
-  return {
-    dirName: snapshot.dirName,
-    takenBeforeVersion: snapshot.takenBeforeVersion,
-    readableByVersion:
-      typeof snapshot.readableByVersion === 'string' ? snapshot.readableByVersion : null,
-    takenAt: typeof snapshot.takenAt === 'string' ? snapshot.takenAt : ''
+    record: record.data
   }
 }
 
@@ -133,7 +158,33 @@ export function withActivatedVersion(
     // target by naming the active version as its own predecessor.
     previous: record.active === version ? record.previous : record.active,
     activatedAt: now.toISOString(),
-    snapshot: record.active === version ? record.snapshot : snapshot
+    snapshot: record.active === version ? record.snapshot : snapshot,
+    decommissioning: null
+  }
+}
+
+export function withDecommissioningVersion(
+  record: OrcadActivationRecord,
+  now: Date
+): OrcadActivationRecord {
+  if (!record.active) {
+    throw new Error('Cannot mark decommissioning without an active orcad version')
+  }
+  return {
+    ...record,
+    decommissioning: { version: record.active, acceptedAt: now.toISOString() }
+  }
+}
+
+/** The record left after the active runtime positively exits during managed unlink. */
+export function withDeactivatedVersion(record: OrcadActivationRecord): OrcadActivationRecord {
+  return {
+    schemaVersion: ORCAD_ACTIVATION_SCHEMA_VERSION,
+    active: null,
+    previous: record.active,
+    activatedAt: null,
+    snapshot: null,
+    decommissioning: null
   }
 }
 
@@ -150,7 +201,8 @@ export function withRolledBackVersion(
     previous: null,
     activatedAt: now.toISOString(),
     // The snapshot was taken before `active` ran; once restored it has been consumed.
-    snapshot: null
+    snapshot: null,
+    decommissioning: null
   }
 }
 

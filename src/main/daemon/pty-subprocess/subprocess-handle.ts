@@ -10,7 +10,10 @@ import type { SubprocessHandle } from '../session-subprocess-handle'
 import { createPtyForegroundProcessTracker } from './foreground-process-tracker'
 import { PtyPreListenerEvents } from './pre-listener-events'
 
-type DisposableNativePty = pty.IPty & { destroy?: () => void }
+type DisposableNativePty = pty.IPty & {
+  destroy?: () => void
+  signalProcess?: (signal: string) => void
+}
 
 export function createDaemonPtySubprocessHandle(args: {
   process: pty.IPty
@@ -61,6 +64,46 @@ export function createDaemonPtySubprocessHandle(args: {
   })
 
   const slavePath = readPtySlavePath(proc)
+  const producerFlowControl =
+    typeof proc.pause === 'function' && typeof proc.resume === 'function'
+      ? {
+          pause: () => {
+            if (dead) {
+              return
+            }
+            try {
+              proc.pause()
+            } catch {
+              // Native handle already torn down; flow control is best-effort.
+            }
+          },
+          resume: () => {
+            if (dead) {
+              return
+            }
+            try {
+              proc.resume()
+            } catch {
+              // Native handle already torn down; flow control is best-effort.
+            }
+          }
+        }
+      : {}
+  const clearCapability =
+    typeof proc.clear === 'function'
+      ? {
+          clear: () => {
+            if (dead || ioFailed) {
+              return
+            }
+            try {
+              proc.clear()
+            } catch {
+              // A clear on a just-exited PTY is best-effort.
+            }
+          }
+        }
+      : {}
   return {
     pid: proc.pid,
     shellPath: args.shellPath,
@@ -93,37 +136,9 @@ export function createDaemonPtySubprocessHandle(args: {
         ioFailed = true
       }
     },
-    // WindowsTerminal also wires _socket to the ConPTY conout pipe, so pausing backpressures the child.
-    pause: () => {
-      if (dead) {
-        return
-      }
-      try {
-        proc.pause()
-      } catch {
-        // Native handle already torn down; flow control is best-effort.
-      }
-    },
-    resume: () => {
-      if (dead) {
-        return
-      }
-      try {
-        proc.resume()
-      } catch {
-        // Native handle already torn down; flow control is best-effort.
-      }
-    },
-    clear: () => {
-      if (dead || ioFailed) {
-        return
-      }
-      try {
-        proc.clear()
-      } catch {
-        // A clear on a just-exited PTY is best-effort.
-      }
-    },
+    // WindowsTerminal wires _socket to the ConPTY output pipe; Bun adds POSIX group suspension.
+    ...producerFlowControl,
+    ...clearCapability,
     kill: () => {
       if (dead) {
         return
@@ -163,6 +178,14 @@ export function createDaemonPtySubprocessHandle(args: {
     },
     signal: (sig) => {
       if (dead) {
+        return
+      }
+      if (typeof nativeProc.signalProcess === 'function') {
+        try {
+          nativeProc.signalProcess(sig)
+        } catch {
+          // Process may already be dead.
+        }
         return
       }
       const signalRootPid = (): void => {

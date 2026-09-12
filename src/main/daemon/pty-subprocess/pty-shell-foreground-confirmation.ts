@@ -1,6 +1,7 @@
 import type * as pty from 'node-pty'
 import { confirmShellForegroundProcess } from '../../providers/agent-foreground-process'
 import { readWindowsPtyJobProcessIds } from '../../providers/windows-pty-job-membership'
+import { ptyJobRootProcessIsWrapper } from '../../windows/windows-pty-job'
 
 /** Fresh execution-host proof that the spawned shell owns the PTY foreground:
  *  a post-request process inspection (POSIX `ps`, Windows job membership),
@@ -17,7 +18,10 @@ export async function confirmPtyShellForeground(args: {
     args.process.pid,
     args.shellPath,
     process.platform === 'win32'
-      ? { readWindowsPtyJobProcessIds: () => readWindowsPtyJobProcessIds(args.process) }
+      ? {
+          jobRootProcessIsWrapper: ptyJobRootProcessIsWrapper(args.process),
+          readWindowsPtyJobProcessIds: () => readWindowsPtyJobProcessIds(args.process)
+        }
       : {}
   )
   return !args.isDead() && confirmed

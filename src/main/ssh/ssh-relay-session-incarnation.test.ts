@@ -100,6 +100,46 @@ describe('SSH relay PTY incarnation exits', () => {
     vi.mocked(isCurrentPtyExit).mockReturnValue(true)
   })
 
+  it('preserves preparation-fenced ownership when the relay cannot reattach its terminal', () => {
+    const { mockStore, mockPortForward, getMainWindow, mockWindow } = createMockDeps()
+    const runtime = { onPtyExit: vi.fn() }
+    const session = new SshRelaySession(
+      'target-1',
+      getMainWindow,
+      mockStore,
+      mockPortForward,
+      runtime as never
+    )
+    const waiter = vi.fn()
+    const pending = {
+      mux: { isPtyPreparationFenced: vi.fn(() => true) },
+      recoveryWaiters: new Set([waiter]),
+      restoreRequired: undefined as string | undefined
+    }
+    const handle = session as unknown as {
+      handlePtyReattachFailure: (
+        id: string,
+        appId: string,
+        pending: unknown,
+        error: unknown
+      ) => void
+    }
+    handle.handlePtyReattachFailure(
+      'pty-pending',
+      'ssh:target-1@@pty-pending',
+      pending,
+      new Error('PTY "pty-pending" not found')
+    )
+    expect(pending.mux.isPtyPreparationFenced).toHaveBeenCalledWith('pty-pending')
+    expect(pending.restoreRequired).toBe('reattachAttemptsExhausted')
+    expect(waiter).toHaveBeenCalledOnce()
+    expect(clearProviderPtyState).not.toHaveBeenCalled()
+    expect(deletePtyOwnership).not.toHaveBeenCalled()
+    expect(mockStore.markSshRemotePtyLease).not.toHaveBeenCalled()
+    expect(runtime.onPtyExit).not.toHaveBeenCalled()
+    expect(mockWindow.webContents.send).not.toHaveBeenCalledWith('pty:exit', expect.anything())
+  })
+
   it('drops a stale exit before ownership cleanup and propagates a current incarnation', async () => {
     const { mockConn, mockStore, mockPortForward, getMainWindow, mockWindow } = createMockDeps()
     const runtime = { onPtyData: vi.fn(), onPtyExit: vi.fn() }

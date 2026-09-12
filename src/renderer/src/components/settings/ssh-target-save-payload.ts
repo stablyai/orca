@@ -11,7 +11,7 @@ import {
 } from './ssh-target-draft'
 import { translate } from '../../i18n/i18n'
 
-type SshTargetSavePayload = {
+export type SshTargetSavePayload = {
   target: SshTargetCreateInput
   updates: SshTargetUpdateInput
 }

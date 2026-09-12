@@ -56,6 +56,12 @@ export function collectDeregisteredRepoIds(state: PersistedState): Set<string> {
       retainOwner(getWorktreeIdFromHostIdentity(alias))
     }
   }
+  // A staged catalog owns recovery rows before its repositories become registered.
+  for (const staged of state.orcadMigrationStagedCatalogs ?? []) {
+    for (const repo of staged.manifest.payload.repositories) {
+      liveRepoIds.add(repo.id)
+    }
+  }
   const orphanRepoIds = new Set<string>()
   // Only a full `<repoId>::<path>` locator seeds the set. A bare key -- a folder workspace id, a
   // repo-keyed topology revision, a test-shaped locator -- cannot be told apart from a repo id, and

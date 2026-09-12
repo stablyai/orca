@@ -69,11 +69,13 @@ function wrapConnectedSocket(
   swapDelivery: (next: (bytes: Buffer) => void) => Buffer[]
 ): Duplex {
   const duplex = new Duplex({
+    allowHalfOpen: true,
+    autoDestroy: false,
     read: () => {
       socket.resume()
     },
     write: (chunk: Buffer, _encoding, callback) => {
-      socket.write(chunk, () => callback())
+      socket.write(chunk, callback)
     },
     final: (callback) => {
       socket.end()
@@ -84,6 +86,10 @@ function wrapConnectedSocket(
       callback(error)
     }
   })
+  const settleRead = socket.settleRead?.bind(socket)
+  if (settleRead) {
+    Object.assign(duplex, { settleRead })
+  }
   const buffered = swapDelivery((bytes) => {
     if (!duplex.push(bytes)) {
       socket.pause()

@@ -14,6 +14,13 @@ import type { FolderWorkspace, WorkspaceKey } from './folder-workspace-types'
 import type { GlobalSettings } from './global-settings-types'
 import type { IssueInfo, PRInfo } from './github/pull-request-types'
 import type { OnboardingState } from './onboarding-state-types'
+import type {
+  OrcadMigrationImportReceipt,
+  OrcadMigrationStagedCatalog
+} from './orcad-migration-manifest'
+import type { OrcadMigrationSourceCutover } from './orcad-migration-source-cutover'
+import type { OrcadLiveRetirementMarker } from './orcad-live-retirement-marker'
+import type { PtyOwnershipTransferJournal } from './pty-ownership-transfer-journal'
 import type { PersistedUIState } from './persisted-ui-state-types'
 import type { ProjectGroup } from './project-group-types'
 import type { Project, ProjectHostSetup } from './project-types'
@@ -114,4 +121,14 @@ export type PersistedState = {
   featureInteractionTelemetryBuckets?: FeatureInteractionTelemetryBucketState
   /** Main-owned reset mutation journal. Never expose this through renderer settings APIs. */
   codexResetCreditAttemptLedger?: CodexResetCreditAttemptLedger
+  /** Bounded host receipts for idempotent direct-SSH catalog imports. */
+  orcadMigrationImportReceipts?: OrcadMigrationImportReceipt[]
+  /** Bounded dormant catalogs awaiting a source-authorized ownership commit. */
+  orcadMigrationStagedCatalogs?: OrcadMigrationStagedCatalog[]
+  /** Bounded source-side ownership fences for interrupted direct-SSH catalog cutovers. */
+  orcadMigrationSourceCutovers?: OrcadMigrationSourceCutover[]
+  /** Main-owned installation evidence; retain malformed input for fail-closed recovery parsing. */
+  orcadLiveRetirementMarkers?: OrcadLiveRetirementMarker[]
+  /** Bounded metadata-only live PTY ownership journals; output bytes remain source-ledger owned. */
+  ptyOwnershipTransferJournals?: PtyOwnershipTransferJournal[]
 }

@@ -3,6 +3,12 @@ import type { SshRemotePtyLease } from '../../../shared/ssh-types'
 import { normalizeFeatureInteractionTelemetryBuckets } from '../../../shared/feature-interactions'
 import { normalizeFolderWorkspaceDiffComments } from '../../folder-workspace-diff-comments'
 import { normalizeFolderWorkspaces } from '../../../shared/folder-workspaces'
+import {
+  normalizeOrcadMigrationImportReceipts,
+  normalizeOrcadMigrationStagedCatalogs
+} from '../../../shared/orcad-migration-manifest'
+import { normalizeOrcadMigrationSourceCutovers } from '../../../shared/orcad-migration-source-cutover'
+import { normalizePtyOwnershipTransferJournals } from '../../../shared/pty-ownership-transfer-journal'
 import { normalizeWorkspaceLineageByChildKey } from '../applying-settings/ui-interaction-merge'
 import {
   normalizeSshRemotePtyLease,
@@ -106,6 +112,18 @@ export function normalizeLoadedProfileState(
     legacyPaneKeyAliasEntries: normalizeLegacyPaneKeyAliasEntries(parsed.legacyPaneKeyAliasEntries),
     automations: Array.isArray(parsed.automations) ? parsed.automations : [],
     automationRuns: normalizeLoadedAutomationRuns(parsed, markNeedsSave),
+    orcadMigrationImportReceipts: normalizeOrcadMigrationImportReceipts(
+      parsed.orcadMigrationImportReceipts
+    ),
+    orcadMigrationStagedCatalogs: normalizeOrcadMigrationStagedCatalogs(
+      parsed.orcadMigrationStagedCatalogs
+    ),
+    orcadMigrationSourceCutovers: normalizeOrcadMigrationSourceCutovers(
+      parsed.orcadMigrationSourceCutovers
+    ),
+    ptyOwnershipTransferJournals: normalizePtyOwnershipTransferJournals(
+      parsed.ptyOwnershipTransferJournals
+    ),
     onboarding: normalizedOnboarding
   }
 }

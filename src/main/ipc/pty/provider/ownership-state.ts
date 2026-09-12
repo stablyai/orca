@@ -1,4 +1,5 @@
 import { isPtyIncarnationId } from '../../../../shared/pty-incarnation'
+import { assertPtyRouteAdmissionAllowed } from './pty-route-refusal'
 
 // Why: post-spawn write/resize/kill calls carry only the PTY ID; map it to its connectionId so ops route to the right provider.
 export const ptyOwnership = new Map<string, string | null>()
@@ -14,10 +15,12 @@ export function deletePtyOwnership(id: string): void {
 }
 
 export function setPtyOwnership(id: string, connectionId: string | null): void {
+  assertPtyRouteAdmissionAllowed(id)
   ptyOwnership.set(id, connectionId)
 }
 
 export function restorePtyIncarnation(id: string, incarnationId: string): void {
+  assertPtyRouteAdmissionAllowed(id)
   if (!isPtyIncarnationId(incarnationId)) {
     throw new Error('Invalid PTY incarnation')
   }

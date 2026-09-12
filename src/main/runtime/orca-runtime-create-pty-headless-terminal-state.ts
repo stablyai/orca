@@ -6,6 +6,7 @@ import { shouldForwardHeadlessTerminalQueryReply } from './headless-terminal-que
 import { isNativeWindowsConptyPty } from './terminal-model-query-authority'
 import { getTerminalViewAttributes } from './terminal-view-attribute-store'
 import { PtyShellOwnershipMirror } from './pty-shell-ownership-mirror'
+import { assertOutgoingPtyModelMutationAllowed } from './outgoing-pty-registration-fence'
 
 export class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends OrcaRuntimeWithMaybeHydrateHeadlessFromRenderer {
   /** Shared factory for the per-PTY runtime emulators (seed, hydration, and
@@ -15,6 +16,7 @@ export class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends OrcaRuntimeWi
     ptyId: string,
     dims: { cols: number; rows: number }
   ): RuntimeHeadlessTerminal {
+    assertOutgoingPtyModelMutationAllowed(this, ptyId)
     let state: RuntimeHeadlessTerminal | null = null
     const pathFlavor = this.pathFlavorForPty(this.ptysById.get(ptyId))
     const emulator = new HeadlessEmulator({
@@ -105,6 +107,7 @@ export class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends OrcaRuntimeWi
   }
 
   protected replaceHeadlessTerminalAfterExecutionContextChange(ptyId: string): void {
+    assertOutgoingPtyModelMutationAllowed(this, ptyId)
     this.disposeHeadlessTerminal(ptyId)
     this.providerSnapshotPreferredPtys.add(ptyId)
     const dims = this.getTerminalSize(ptyId) ?? { cols: 80, rows: 24 }
@@ -146,6 +149,7 @@ export class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends OrcaRuntimeWi
   }
 
   protected resizeHeadlessTerminal(ptyId: string, cols: number, rows: number): void {
+    assertOutgoingPtyModelMutationAllowed(this, ptyId)
     const state = this.headlessTerminals.get(ptyId)
     if (!state) {
       return
@@ -177,6 +181,7 @@ export class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends OrcaRuntimeWi
   // Public: desktop-initiated clears (ipc/pty.ts) must also drop this mobile
   // mirror or a resubscribing mobile client resurrects the cleared scrollback.
   async clearHeadlessTerminalBuffer(ptyId: string): Promise<void> {
+    assertOutgoingPtyModelMutationAllowed(this, ptyId)
     const state = this.headlessTerminals.get(ptyId)
     if (!state) {
       return

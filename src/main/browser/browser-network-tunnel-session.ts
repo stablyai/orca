@@ -17,12 +17,19 @@ import { BrowserNetworkTunnelFrameSender } from './browser-network-tunnel-frame-
 import { handleBrowserNetworkTunnelHeartbeat } from './browser-network-tunnel-heartbeat'
 import { createBrowserNetworkTunnelResourceBudget } from './browser-network-tunnel-resource-budget'
 import {
-  BROWSER_NETWORK_TUNNEL_INITIAL_WINDOW_BYTES,
   validateBrowserNetworkTunnelGeneration,
   type BrowserNetworkTunnelSessionOptions,
   type BrowserNetworkTunnelStream
 } from './browser-network-tunnel-stream-state'
-import { retireBrowserNetworkTunnelStream } from './browser-network-tunnel-stream-lifecycle'
+import {
+  markBrowserNetworkTunnelConnected,
+  markBrowserNetworkTunnelDestinationEnd,
+  retireBrowserNetworkTunnelStream
+} from './browser-network-tunnel-stream-lifecycle'
+import {
+  BrowserNetworkTunnelDrainState,
+  type BrowserNetworkTunnelPublicationDrain
+} from './browser-network-tunnel-drain-state'
 
 export class BrowserNetworkTunnelSession {
   private readonly tunnelGeneration: number
@@ -32,6 +39,7 @@ export class BrowserNetworkTunnelSession {
   private readonly resourceBudget: ReturnType<typeof createBrowserNetworkTunnelResourceBudget>
   private readonly streams = new Map<number, BrowserNetworkTunnelStream>()
   private readonly openedStreamIds = new Set<number>()
+  private readonly drainState = new BrowserNetworkTunnelDrainState(() => this.streams.size === 0)
   private closed = false
 
   constructor(options: BrowserNetworkTunnelSessionOptions) {
@@ -63,11 +71,16 @@ export class BrowserNetworkTunnelSession {
     this.handleFrame(frame)
   }
 
+  fenceForDrain(publication: BrowserNetworkTunnelPublicationDrain) {
+    return this.drainState.fence(publication, this.closed)
+  }
+
   close(): void {
     if (this.closed) {
       return
     }
     this.closed = true
+    this.drainState.fail(new Error('browser_tunnel_closed_during_drain'))
     for (const stream of this.streams.values()) {
       this.retireStream(stream)
     }
@@ -104,6 +117,9 @@ export class BrowserNetworkTunnelSession {
       frame.opcode === BrowserNetworkTunnelOpcode.Close ||
       frame.opcode === BrowserNetworkTunnelOpcode.Error
     ) {
+      if (frame.opcode === BrowserNetworkTunnelOpcode.Error) {
+        this.drainState.fail(new Error('browser_tunnel_peer_stream_error'))
+      }
       this.deleteStream(stream)
     } else {
       this.failProtocolStream(stream, 'invalid_stream_transition')
@@ -112,10 +128,11 @@ export class BrowserNetworkTunnelSession {
 
   private openStream(frame: BrowserNetworkTunnelFrame): void {
     const stream = admitBrowserNetworkTunnelOpen(frame, {
+      admissionClosed: this.drainState.admissionClosed,
       openedStreamIds: this.openedStreamIds,
       streamCount: this.streams.size,
       resourceBudget: this.resourceBudget,
-      connect: this.connect,
+      connect: (target) => this.drainState.openSocket(() => this.connect(target)),
       sendError: (streamId, code) => this.frameSender.sendError(streamId, code),
       closeSession: () => this.close(),
       onConnectTimeout: (pendingStream) =>
@@ -128,26 +145,15 @@ export class BrowserNetworkTunnelSession {
     this.streams.set(stream.id, stream)
     socket.setNoDelay(true)
     socket.pause()
-    socket.on('connect', () => this.onDestinationConnected(stream))
+    socket.on('connect', () => {
+      if (this.isCurrent(stream)) {
+        markBrowserNetworkTunnelConnected(stream, this.frameSender)
+      }
+    })
     socket.on('data', (data) => this.onDestinationData(stream, data))
     socket.on('end', () => this.onDestinationEnd(stream))
     socket.on('close', () => this.onDestinationClose(stream))
     socket.on('error', () => this.failStream(stream, 'destination_error'))
-  }
-
-  private onDestinationConnected(stream: BrowserNetworkTunnelStream): void {
-    if (!this.isCurrent(stream) || stream.connected) {
-      return
-    }
-    stream.connected = true
-    stream.releasePendingOpen()
-    clearTimeout(stream.connectTimeout)
-    this.frameSender.send(BrowserNetworkTunnelOpcode.Opened, stream.id)
-    this.frameSender.send(
-      BrowserNetworkTunnelOpcode.WindowUpdate,
-      stream.id,
-      encodeBrowserNetworkTunnelWindowUpdate(BROWSER_NETWORK_TUNNEL_INITIAL_WINDOW_BYTES)
-    )
   }
 
   private writeToDestination(
@@ -167,22 +173,21 @@ export class BrowserNetworkTunnelSession {
           stream.id,
           encodeBrowserNetworkTunnelWindowUpdate(bytes)
         )
+        if (stream.destinationClosed && stream.pendingToClient.length === 0) {
+          this.finalizeDestinationClose(stream)
+        }
       },
-      (bytes) => this.resourceBudget.claimRetainedBytes(bytes)
+      (bytes) => this.resourceBudget.claimRetainedBytes(bytes),
+      () => this.drainState.track(),
+      () => this.failStream(stream, 'destination_write_failed')
     )
     if (error) {
-      this.failDestinationFlow(stream, error)
+      if (error === BROWSER_NETWORK_TUNNEL_ROUTE_BUFFER_OVERFLOW) {
+        this.failStream(stream, error)
+      } else {
+        this.failProtocolStream(stream, error)
+      }
     }
-  }
-
-  // The host grants more credit than the retained pool can hold (128 streams x 256 KB vs 8 MB),
-  // so a budget miss is reachable by a fully conforming peer and must not fence the tunnel.
-  private failDestinationFlow(stream: BrowserNetworkTunnelStream, code: string): void {
-    if (code === BROWSER_NETWORK_TUNNEL_ROUTE_BUFFER_OVERFLOW) {
-      this.failStream(stream, code)
-      return
-    }
-    this.failProtocolStream(stream, code)
   }
 
   private grantDestinationCredit(
@@ -231,15 +236,11 @@ export class BrowserNetworkTunnelSession {
     if (!this.isCurrent(stream)) {
       return
     }
-    if (!stream.connected) {
-      this.failStream(stream, 'destination_closed_before_connect')
+    const error = markBrowserNetworkTunnelDestinationEnd(stream)
+    if (error) {
+      this.failStream(stream, error)
       return
     }
-    if (stream.destinationEnded) {
-      this.failStream(stream, 'duplicate_destination_half_close')
-      return
-    }
-    stream.destinationEnded = true
     if (stream.pendingToClient.length === 0) {
       this.sendDestinationHalfClose(stream)
     }
@@ -249,8 +250,7 @@ export class BrowserNetworkTunnelSession {
     if (!this.isCurrent(stream)) {
       return
     }
-    // The client has never seen Opened for this stream, so HalfClose/Close would read as a
-    // protocol violation and fence the whole tunnel; fail just this stream instead.
+    // Before Opened, Close would incorrectly fence the whole client tunnel.
     if (!stream.connected) {
       this.failStream(stream, 'destination_closed_before_connect')
       return
@@ -265,6 +265,7 @@ export class BrowserNetworkTunnelSession {
     if (!this.isCurrent(stream)) {
       return
     }
+    this.drainState.fail(new Error(code))
     this.frameSender.sendError(stream.id, code)
     this.deleteStream(stream)
   }
@@ -273,6 +274,7 @@ export class BrowserNetworkTunnelSession {
     if (!this.isCurrent(stream)) {
       return
     }
+    this.drainState.fail(new Error(code))
     this.frameSender.sendError(stream.id, code)
     this.close()
   }
@@ -286,6 +288,9 @@ export class BrowserNetworkTunnelSession {
   }
 
   private finalizeDestinationClose(stream: BrowserNetworkTunnelStream): void {
+    if (stream.pendingDestinationWriteReleases.size > 0 || stream.unsettledDestinationBytes > 0) {
+      return
+    }
     this.frameSender.send(BrowserNetworkTunnelOpcode.Close, stream.id)
     this.deleteStream(stream)
   }
@@ -296,11 +301,14 @@ export class BrowserNetworkTunnelSession {
     }
     this.streams.delete(stream.id)
     this.retireStream(stream)
+    this.drainState.changed()
   }
 
   private retireStream(stream: BrowserNetworkTunnelStream): void {
-    retireBrowserNetworkTunnelStream(stream, (bytes) =>
-      this.resourceBudget.releaseRetainedBytes(bytes)
+    retireBrowserNetworkTunnelStream(
+      stream,
+      (bytes) => this.resourceBudget.releaseRetainedBytes(bytes),
+      () => this.drainState.fail(new Error('browser_tunnel_retired_unsettled_data'))
     )
   }
 

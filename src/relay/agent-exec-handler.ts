@@ -1,4 +1,5 @@
 import { spawn, type ChildProcess } from 'node:child_process'
+import { RelayAgentProcessLifetime } from './relay-agent-process-lifetime'
 import { existsSync } from 'node:fs'
 import { delimiter, join } from 'node:path'
 import type { RelayDispatcher, RequestContext } from './dispatcher'
@@ -108,6 +109,7 @@ type ExecResult = {
  * and a clean exit code instead of an interactive session.
  */
 export class AgentExecHandler {
+  private readonly processLifetime = new RelayAgentProcessLifetime()
   // Why: commit-message and PR-field generation can run together for one cwd;
   // operation lanes let cancel target only the user-visible job that stopped.
   private inFlightByLane = new Map<string, InFlightExec>()
@@ -123,6 +125,10 @@ export class AgentExecHandler {
     dispatcher.onRequest('agent.cancelExec', (p) => this.cancel(p as CancelParams))
   }
 
+  dispose(): Promise<void> {
+    return this.processLifetime.dispose()
+  }
+
   private async cancel(params: CancelParams): Promise<{ canceled: boolean }> {
     const cwd = typeof params.cwd === 'string' ? params.cwd : ''
     const entry = this.inFlightByLane.get(this.laneKey(cwd, params.operation))
@@ -134,6 +140,7 @@ export class AgentExecHandler {
   }
 
   private async exec(params: ExecParams, context?: RequestContext): Promise<ExecResult> {
+    this.processLifetime.assertAdmission()
     const binary = typeof params.binary === 'string' ? params.binary : ''
     if (!binary) {
       throw new Error('agent.execNonInteractive: binary is required')
@@ -180,6 +187,7 @@ export class AgentExecHandler {
         return
       }
 
+      this.processLifetime.track(child)
       let stdout = ''
       let stderr = ''
       let stdoutBytes = 0

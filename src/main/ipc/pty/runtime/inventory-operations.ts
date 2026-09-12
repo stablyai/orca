@@ -1,5 +1,13 @@
 import { ptyOwnership } from '../provider/ownership-state'
-import { getProvider, localProvider, registeredPtyProviders } from '../provider/registry'
+import {
+  getProvider,
+  registeredPtyProviders,
+  type RegisteredPtyProvider
+} from '../provider/registry'
+import {
+  readRegisteredPtyProviderInventory,
+  assertRegisteredPtyInventoryCurrent
+} from '../provider/registered-provider-inventory'
 import {
   LOCAL_EXECUTION_HOST_ID,
   toSshExecutionHostId,
@@ -7,6 +15,24 @@ import {
 } from '../../../../shared/execution-host'
 import type { PtyProcessInfo } from '../../../providers/pty-process-info'
 import type { PtyRuntimeControllerDeps } from './controller-deps'
+
+async function readRuntimeProviderInventory(
+  deps: PtyRuntimeControllerDeps,
+  entry: RegisteredPtyProvider,
+  opts: Parameters<typeof readRegisteredPtyProviderInventory>[1]
+) {
+  try {
+    return await readRegisteredPtyProviderInventory(entry, opts)
+  } catch (error) {
+    if (entry.delegatedIdentity && entry.isCurrent?.() !== false) {
+      deps.runtime?.markPtyLivenessUnverifiable?.(
+        entry.delegatedIdentity.terminalId,
+        'delegated_pty_inventory_unverifiable'
+      )
+    }
+    throw error
+  }
+}
 
 function markSshInventoryUnverifiable(
   runtime: PtyRuntimeControllerDeps['runtime'],
@@ -25,14 +51,16 @@ export async function listProcessesWithHostScopeFromRuntimeController(
   deps: PtyRuntimeControllerDeps,
   opts?: { deadlineMs?: number; includeForegroundProcessEvidence?: boolean }
 ): Promise<{ processes: PtyProcessInfo[]; hostIds: ExecutionHostId[] }> {
+  const entries = registeredPtyProviders()
   const providerSessions = await Promise.all(
-    registeredPtyProviders().map(async ({ provider, connectionId }) => {
+    entries.map(async (entry) => {
+      const { connectionId } = entry
       const hostId: ExecutionHostId = connectionId
         ? toSshExecutionHostId(connectionId)
         : LOCAL_EXECUTION_HOST_ID
       try {
         return {
-          processes: await (connectionId ? provider.listProcesses(opts) : provider.listProcesses()),
+          processes: await readRuntimeProviderInventory(deps, entry, opts),
           hostId
         }
       } catch (error) {
@@ -44,10 +72,11 @@ export async function listProcessesWithHostScopeFromRuntimeController(
       }
     })
   )
+  assertRegisteredPtyInventoryCurrent(entries)
   const respondingSessions = providerSessions.filter((session) => session !== null)
   return {
     processes: respondingSessions.flatMap((session) => session.processes),
-    hostIds: respondingSessions.map((session) => session.hostId)
+    hostIds: [...new Set(respondingSessions.map((session) => session.hostId))]
   }
 }
 
@@ -57,7 +86,12 @@ export async function listProcessesFromRuntimeController(
   opts?: { deadlineMs?: number; includeForegroundProcessEvidence?: boolean }
 ) {
   if (connectionId === null) {
-    return localProvider.listProcesses()
+    const entries = registeredPtyProviders().filter((entry) => entry.connectionId === null)
+    const sessions = await Promise.all(
+      entries.map((entry) => readRuntimeProviderInventory(deps, entry, opts))
+    )
+    assertRegisteredPtyInventoryCurrent(entries)
+    return sessions.flat()
   }
   if (connectionId !== undefined) {
     try {

@@ -36,9 +36,7 @@ export function useTerminalPaneReconciliation(controller: TerminalPaneCloseContr
     restoredLayout,
     tabId
   } = controller
-  // Leaves the last host-authoritative layout named, and the ones it has since
-  // dropped whose panes are still mounted; a removal needs the host to have
-  // named the leaf before it dropped it, and may have to wait for the PTY exit.
+  // Retain host-removed leaves until their transports clear or the host reintroduces them.
   const hostLayoutLeafIdsRef = useRef<ReadonlySet<string>>(new Set())
   const retiredLeafIdsRef = useRef<ReadonlySet<string>>(new Set())
 
@@ -106,13 +104,7 @@ export function useTerminalPaneReconciliation(controller: TerminalPaneCloseContr
         appliedInsertion = true
       }
     }
-    // Why: the host retired these leaves (its PTY for them ended), so their panes
-    // would otherwise outlive the layout as blank ghosts and take the tab's next
-    // close for themselves. selectRetiredPaneIds closes only a pane whose PTY has
-    // already cleared, so this never kills a still-live remote terminal; a leaf
-    // whose PTY is still ending is kept retired and removed on the re-run the
-    // transport's recovery-state change (ptyRecoveryStatesByPaneId) triggers.
-    // executeClosePane runs the same cleanup a user close does.
+    // A cleared transport alone is insufficient: the accepted host layout must also remove the leaf.
     const retiredPaneIds = selectRetiredPaneIds(removals, {
       paneCount: manager.getPanes().length,
       paneIdForLeaf: (leafId) => manager.getNumericIdForLeaf(leafId),
@@ -132,9 +124,7 @@ export function useTerminalPaneReconciliation(controller: TerminalPaneCloseContr
     if (nextActivePaneId !== null) {
       manager.setActivePane(nextActivePaneId, { focus: isActive })
     }
-    // Why ptyRecoveryStatesByPaneId: a host-retired pane whose PTY has not yet
-    // finished ending is kept until this re-run, when its transport reports a new
-    // recovery state and its PTY has cleared.
+    // Recovery-state changes retry deferred removals after their PTYs clear.
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.
   }, [
     executeClosePane,

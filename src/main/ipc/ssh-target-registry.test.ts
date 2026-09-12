@@ -88,7 +88,8 @@ describe('SSH IPC handlers', () => {
       host: 'new.example.com',
       port: 22,
       username: 'deploy',
-      generation: 999
+      generation: 999,
+      orcadProvisioning: { requestId: 'forged', name: 'forged' }
     }
     mockSshStore.addTarget.mockReturnValue({ ...target, id: 'ssh-new', generation: 7 })
 
@@ -105,7 +106,11 @@ describe('SSH IPC handlers', () => {
   it('ssh:updateTarget strips a renderer-supplied registration generation', async () => {
     await handlers.get('ssh:updateTarget')!(null, {
       id: 'ssh-1',
-      updates: { label: 'Renamed', generation: 999 }
+      updates: {
+        label: 'Renamed',
+        generation: 999,
+        orcadProvisioning: { requestId: 'forged', name: 'forged' }
+      }
     })
 
     expect(mockSshStore.updateTarget).toHaveBeenCalledWith('ssh-1', { label: 'Renamed' })
@@ -135,6 +140,21 @@ describe('SSH IPC handlers', () => {
   it('ssh:removeTarget calls store.removeTarget', async () => {
     await handlers.get('ssh:removeTarget')!(null, { id: 'ssh-1' })
     expect(mockSshStore.removeTarget).toHaveBeenCalledWith('ssh-1')
+  })
+
+  it('never connects a pending managed provisioning target through a relay', async () => {
+    mockSshStore.getTarget.mockReturnValue({
+      id: 'ssh-pending',
+      label: 'Pending',
+      host: 'builder',
+      port: 22,
+      username: 'dev',
+      orcadProvisioning: { requestId: 'request-1', name: 'Pending' }
+    })
+    await expect(handlers.get('ssh:connect')!(null, { targetId: 'ssh-pending' })).rejects.toThrow(
+      'reserved'
+    )
+    expect(mockConnectionManager.connect).not.toHaveBeenCalled()
   })
 
   it('ssh:removeTarget removes metadata when disconnect fails', async () => {

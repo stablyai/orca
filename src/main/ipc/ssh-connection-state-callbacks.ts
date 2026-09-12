@@ -11,6 +11,7 @@ import {
 } from './ssh-connect-attempt-registry'
 import { connectionManager, getCurrentMainWindow } from './ssh-ipc-context'
 import { requestCredential } from './ssh-passphrase'
+import { isSshResetAdmissionBlocked } from './ssh-reset-production-state'
 import { clearRelayLostBackoff } from './ssh-relay-lost-backoff'
 import {
   broadcastSshState,
@@ -28,12 +29,16 @@ export function relayGracePeriodForTarget(
 // Why extracted from the callbacks object: an explicit connect pushes its own 'deploying-relay'
 // through this exact path, so both callers share one implementation.
 export function handleSshConnectionStateChange(targetId: string, state: SshConnectionState): void {
-  if (testingTargets.has(targetId)) {
+  if (testingTargets.has(targetId) || isSshResetAdmissionBlocked(targetId)) {
     return
   }
 
   // Why: an SSH reconnect must re-deploy the relay and rebuild providers; the guard below fires only for real reconnects, not an explicit connect's 'deploying'.
   const session = activeSessions.get(targetId)
+  // Reset owns expected transport loss; ordinary reconnect would deploy a replacement daemon.
+  if (session?.isResetRetirementPending?.()) {
+    return
+  }
   const sessionState = session?.getState()
   const transportReconnectStarted =
     state.status === 'reconnecting' &&

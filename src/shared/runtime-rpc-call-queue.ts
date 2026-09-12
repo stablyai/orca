@@ -16,6 +16,15 @@ export class RuntimeRpcCallQueueOverloadError extends Error {
   }
 }
 
+export class RuntimeRpcCallQueueBusyError extends Error {
+  readonly code = 'runtime_rpc_queue_busy'
+
+  constructor() {
+    super('Runtime calls are active or their routing is changing; retry after they settle.')
+    this.name = 'RuntimeRpcCallQueueBusyError'
+  }
+}
+
 type QueuedRuntimeCall<T> = {
   background: boolean
   retainedBytes: number
@@ -53,6 +62,7 @@ export function isBackgroundRuntimeMethod(method: string): boolean {
 
 export class RuntimeRpcCallQueuePool {
   private readonly queues = new Map<string, RuntimeCallQueue>()
+  private readonly heldSelectors = new Set<string>()
   private queuedCallCount = 0
   private retainedCallBytes = 0
 
@@ -64,6 +74,27 @@ export class RuntimeRpcCallQueuePool {
     private readonly maxRetainedBytes = REMOTE_RUNTIME_MAX_PREPARED_RPC_BYTES
   ) {}
 
+  /** Acquires all idle selectors atomically; release never replays refused calls. */
+  holdIdleSelectors(selectors: readonly string[]): () => void {
+    const unique = [...new Set(selectors)]
+    if (unique.some((selector) => this.heldSelectors.has(selector) || this.queues.has(selector))) {
+      throw new RuntimeRpcCallQueueBusyError()
+    }
+    for (const selector of unique) {
+      this.heldSelectors.add(selector)
+    }
+    let released = false
+    return () => {
+      if (released) {
+        return
+      }
+      released = true
+      for (const selector of unique) {
+        this.heldSelectors.delete(selector)
+      }
+    }
+  }
+
   enqueue<T>(
     selector: string,
     method: string,
@@ -73,6 +104,9 @@ export class RuntimeRpcCallQueuePool {
   ): Promise<T> {
     if (signal?.aborted) {
       return Promise.reject(abortSignalReason(signal))
+    }
+    if (this.heldSelectors.has(selector)) {
+      return Promise.reject(new RuntimeRpcCallQueueBusyError())
     }
     if (this.queuedCallCount >= this.maxQueuedTotal) {
       return Promise.reject(new RuntimeRpcCallQueueOverloadError('global'))

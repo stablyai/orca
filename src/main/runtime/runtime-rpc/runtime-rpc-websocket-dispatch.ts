@@ -136,6 +136,7 @@ export class RuntimeRpcWebSocketDispatch extends RuntimeRpcRequestAdmission {
         // Why: the validated credential preserves existing federation ownership without trusting request fields.
         authenticatedCallerFingerprint: fingerprintAuthenticatedPairingCredential(token),
         connectionId,
+        transportGeneration: authenticatedSocket?.connectionGeneration,
         clientId: token,
         pairedDeviceId: device.deviceId,
         // Why: gates the mobile-only payload diet so full-screen web/desktop clients aren't truncated.

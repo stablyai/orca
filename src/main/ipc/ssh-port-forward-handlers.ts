@@ -12,6 +12,7 @@ import {
 } from './ssh-ipc-context'
 import { persistPortForwards } from './ssh-port-forward-persistence'
 import { broadcastPortForwards, enrichDetected } from './ssh-renderer-broadcast'
+import { assertSshResetAdmissionAllowed } from './ssh-reset-production-state'
 
 export function registerSshPortForwardHandlers(): void {
   ipcMain.handle(
@@ -26,6 +27,7 @@ export function registerSshPortForwardHandlers(): void {
         label?: string
       }
     ) => {
+      assertSshResetAdmissionAllowed(args.targetId)
       const conn = connectionManager!.getConnection(args.targetId)
       if (!conn) {
         throw new Error(`SSH connection "${args.targetId}" not found`)
@@ -38,6 +40,7 @@ export function registerSshPortForwardHandlers(): void {
         args.remotePort,
         args.label
       )
+      assertSshResetAdmissionAllowed(args.targetId)
       persistPortForwards(args.targetId)
       broadcastPortForwards(getCurrentMainWindow, args.targetId)
       return entry
@@ -57,6 +60,14 @@ export function registerSshPortForwardHandlers(): void {
         label?: string
       }
     ) => {
+      const existing = portForwardManager!.listForwards().find((entry) => entry.id === args.id)
+      if (!existing) {
+        throw new Error(`Port forward "${args.id}" not found`)
+      }
+      assertSshResetAdmissionAllowed(existing.connectionId)
+      if (existing.connectionId !== args.targetId) {
+        throw new Error('SSH port forward target mismatch')
+      }
       const conn = connectionManager!.getConnection(args.targetId)
       if (!conn) {
         throw new Error(`SSH connection "${args.targetId}" not found`)
@@ -70,10 +81,12 @@ export function registerSshPortForwardHandlers(): void {
           args.remotePort,
           args.label
         )
+        assertSshResetAdmissionAllowed(entry.connectionId)
         persistPortForwards(entry.connectionId)
         broadcastPortForwards(getCurrentMainWindow, entry.connectionId)
         return entry
       } catch (err) {
+        assertSshResetAdmissionAllowed(existing.connectionId)
         // Why: edit/rollback may have failed, so resync renderer to actual runtime state.
         persistPortForwards(args.targetId)
         broadcastPortForwards(getCurrentMainWindow, args.targetId)
@@ -83,8 +96,14 @@ export function registerSshPortForwardHandlers(): void {
   )
 
   ipcMain.handle('ssh:removePortForward', async (_event, args: { id: string }) => {
+    const existing = portForwardManager!.listForwards().find((entry) => entry.id === args.id)
+    if (!existing) {
+      return null
+    }
+    assertSshResetAdmissionAllowed(existing.connectionId)
     const removed = await portForwardManager!.removeForwardAndWait(args.id)
     if (removed) {
+      assertSshResetAdmissionAllowed(removed.connectionId)
       persistPortForwards(removed.connectionId)
       broadcastPortForwards(getCurrentMainWindow, removed.connectionId)
     }

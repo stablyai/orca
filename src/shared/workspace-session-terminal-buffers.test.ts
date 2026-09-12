@@ -186,6 +186,24 @@ describe('pruneLocalTerminalScrollbackBuffers', () => {
     })
   })
 
+  it('preserves dormant local scrollback when no daemon PTY owns its history', () => {
+    const session = makeSession()
+    const localTab = session.tabsByWorktree['local-repo::/local/worktree'][0]
+    session.tabsByWorktree['local-repo::/local/worktree'] = [{ ...localTab, ptyId: null }]
+
+    const result = pruneLocalTerminalScrollbackBuffers(session, [
+      { id: 'local-repo', connectionId: null },
+      { id: 'remote-repo', connectionId: 'ssh-target-1' }
+    ])
+
+    expect(result.terminalLayoutsByTabId['local-tab'].buffersByLeafId).toEqual({
+      'pane:1': 'local-scrollback'
+    })
+    expect(result.terminalLayoutsByTabId['local-tab'].scrollbackRefsByLeafId).toEqual({
+      'pane:1': 'v1-local'
+    })
+  })
+
   it('caps preserved SSH buffers so session JSON cannot scale with raw scrollback', () => {
     const hugeScrollback = `start-${'x'.repeat(TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT + 10)}`
     const result = pruneLocalTerminalScrollbackBuffers(

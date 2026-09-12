@@ -21,6 +21,7 @@ export class DaemonPtyAdapter extends DaemonPtyDaemonRecovery implements IPtyPro
           listener({
             id: event.sessionId,
             data: event.payload.data,
+            ...(event.payload.incarnationId ? { incarnationId: event.payload.incarnationId } : {}),
             ...((event.payload.rawLength ?? event.payload.sequenceChars) === undefined
               ? {}
               : { sequenceChars: event.payload.rawLength ?? event.payload.sequenceChars }),

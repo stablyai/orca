@@ -1,6 +1,6 @@
 import { once } from 'node:events'
 import { createServer, type AddressInfo, type Socket } from 'node:net'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { SystemSshSocksClientSocket } from './system-ssh-socks-client-socket'
 
 const servers: ReturnType<typeof createServer>[] = []
@@ -12,6 +12,36 @@ afterEach(async () => {
 })
 
 describe('SystemSshSocksClientSocket', () => {
+  it('does not report destination readiness merely because its local TCP connection opened', async () => {
+    const requested = Promise.withResolvers<Socket>()
+    const server = createServer((peer) => {
+      peer.once('data', () => {
+        peer.write(Buffer.from([5, 0]))
+        peer.once('data', () => requested.resolve(peer))
+      })
+    })
+    servers.push(server)
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve))
+    const socket = new SystemSshSocksClientSocket((server.address() as AddressInfo).port, {
+      host: 'client-first.internal',
+      port: 443
+    })
+    const connected = vi.fn()
+    socket.on('connect', connected)
+    socket.on('error', () => {})
+    const peer = await requested.promise
+    try {
+      expect(connected).not.toHaveBeenCalled()
+      const ready = once(socket, 'connect')
+      peer.write(Buffer.from([5, 0, 0, 1, 0, 0, 0, 0, 0, 0]))
+      await ready
+      expect(connected).toHaveBeenCalledOnce()
+    } finally {
+      socket.destroy()
+      peer.destroy()
+    }
+  })
+
   it('carries the exact destination domain through the internal SOCKS handshake', async () => {
     let accepted: Socket | undefined
     let request: Buffer | undefined

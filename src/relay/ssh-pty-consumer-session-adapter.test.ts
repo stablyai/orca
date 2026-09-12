@@ -61,6 +61,60 @@ describe('SshPtyConsumerSessionAdapter', () => {
     vi.useRealTimers()
   })
 
+  it('rolls back replacement ownership when response callback registration throws', async () => {
+    const writes: Buffer[] = []
+    dispatcher = new RelayDispatcher(
+      (data, onSettled) => {
+        writes.push(Buffer.from(data))
+        onSettled({ ok: true })
+        return true
+      },
+      { supportsWriteCallback: true },
+      endpointIdentity
+    )
+    const registration = vi.spyOn(dispatcher, 'onRequest')
+    const adapter = new SshPtyConsumerSessionAdapter(dispatcher, 'build-a')
+    const openClient = registration.mock.calls.find(([method]) => method === 'pty.openClient')![1]
+    registration.mockRestore()
+    dispatcher.feed(openFrame(1))
+    await flushRequests()
+    const grant = responseResult(writes[0])
+    const incumbent = adapter.activeSessionOwner(1)
+    expect(incumbent).not.toBeNull()
+    const replacement = dispatcher.attachClient(() => true, {}, endpointIdentity)
+    const closeIncumbent = vi.spyOn(dispatcher, 'releaseDisplacedClient')
+    const params = {
+      protocolVersion: 1,
+      clientInstanceId: 'client-1',
+      requestedRole: 'session-owner',
+      resume: { ownerGeneration: grant.ownerGeneration, ownerLease: grant.ownerLease }
+    }
+    await expect(
+      openClient(params, {
+        clientId: replacement,
+        isStale: () => false,
+        sessionIdentity: endpointIdentity,
+        onResponseSettled: () => {
+          throw new Error('registration failed')
+        }
+      })
+    ).rejects.toThrow('registration failed')
+    expect(() => adapter.assertOwnerPublicationSettled()).not.toThrow()
+    expect(adapter.activeSessionOwner(1)).toEqual(incumbent)
+    expect(adapter.activeSessionOwner(replacement)).toBeNull()
+    expect(closeIncumbent).not.toHaveBeenCalled()
+    await openClient(params, {
+      clientId: replacement,
+      isStale: () => false,
+      sessionIdentity: endpointIdentity,
+      onResponseSettled: (settle) => settle({ ok: false, error: new Error('cancel retry') })
+    })
+    expect(() => adapter.assertOwnerPublicationSettled()).not.toThrow()
+    expect(adapter.activeSessionOwner(1)).toEqual(incumbent)
+    expect(closeIncumbent).not.toHaveBeenCalled()
+    closeIncumbent.mockRestore()
+  })
+
   it('does not activate owner authority until the grant write settles', async () => {
     const firstWrites: Buffer[] = []
     const firstSettlements: ((result: { ok: true } | { ok: false; error: Error }) => void)[] = []
@@ -73,10 +127,13 @@ describe('SshPtyConsumerSessionAdapter', () => {
       { supportsWriteCallback: true },
       endpointIdentity
     )
-    new SshPtyConsumerSessionAdapter(dispatcher, 'build-a')
+    const adapter = new SshPtyConsumerSessionAdapter(dispatcher, 'build-a')
 
     dispatcher.feed(openFrame(1))
     await flushRequests()
+    expect(() => adapter.assertOwnerPublicationSettled()).toThrow(
+      'pty_consumer_owner_publication_pending'
+    )
 
     const secondWrites: Buffer[] = []
     const secondId = dispatcher.attachClient(
@@ -102,6 +159,7 @@ describe('SshPtyConsumerSessionAdapter', () => {
       code: PTY_CONSUMER_OWNER_RECOVERY_PENDING_ERROR
     })
     firstSettlements[0]({ ok: true })
+    expect(() => adapter.assertOwnerPublicationSettled()).not.toThrow()
   })
 
   it('rolls back owner election when the grant write fails', async () => {
@@ -113,9 +171,10 @@ describe('SshPtyConsumerSessionAdapter', () => {
       { supportsWriteCallback: true },
       endpointIdentity
     )
-    new SshPtyConsumerSessionAdapter(dispatcher, 'build-a')
+    const adapter = new SshPtyConsumerSessionAdapter(dispatcher, 'build-a')
     dispatcher.feed(openFrame(1))
     await flushRequests()
+    expect(() => adapter.assertOwnerPublicationSettled()).not.toThrow()
 
     const retryWrites: Buffer[] = []
     const retryId = dispatcher.attachClient(

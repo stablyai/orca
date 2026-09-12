@@ -215,6 +215,7 @@ export function waitForSentinel(
           pendingAfterSentinel = afterSentinel
         }
         const transport: MultiplexerTransport = {
+          sourceChannel: channel,
           write: (buf: Buffer, onSettled) => {
             return channel.stdin.write(buf, (error?: Error | null) => {
               onSettled?.(error ? { ok: false, error } : { ok: true })

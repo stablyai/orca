@@ -135,8 +135,12 @@ test('removes the pane a paired remote host retired instead of leaving a dead gh
     expect(exitedLeafId).toBeTruthy()
     // The pane that survives is the one the host still names.
     await expect(hostLayoutLeafIds(client.page, webTabId)).resolves.toEqual([afterExit[0]?.leafId])
+    await client.page.screenshot({ path: testInfo.outputPath('surviving-remote-split.png') })
   } finally {
-    await client?.dispose()
-    await host.dispose()
+    try {
+      await client?.dispose()
+    } finally {
+      await host.dispose()
+    }
   }
 })

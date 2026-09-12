@@ -18,7 +18,10 @@ vi.mock('./system-ssh-forward-process', () => ({
   waitForSystemSshForwardStop: waitForStopMock
 }))
 
-import { startSystemSshDynamicForwardProcess } from './system-ssh-dynamic-forward-process'
+import {
+  startSystemSshDynamicForwardProcess,
+  SystemSshDynamicForwardStartupRetiredError
+} from './system-ssh-dynamic-forward-process'
 
 function fakeServer() {
   const server = new EventEmitter() as EventEmitter & {
@@ -54,7 +57,7 @@ function fakeProbe(connects: boolean) {
     destroy: ReturnType<typeof vi.fn>
     removeAllListeners: EventEmitter['removeAllListeners']
   }
-  socket.destroy = vi.fn()
+  socket.destroy = vi.fn(() => queueMicrotask(() => socket.emit('close')))
   if (connects) {
     queueMicrotask(() => socket.emit('connect'))
   }
@@ -117,8 +120,56 @@ describe('system SSH dynamic forward process', () => {
     controller.abort()
 
     await expect(starting).rejects.toThrow('system_ssh_dynamic_forward_aborted')
+    await expect(starting).rejects.toBeInstanceOf(SystemSshDynamicForwardStartupRetiredError)
     expect(process.kill).toHaveBeenCalledWith('SIGTERM')
     expect(probe.destroy).toHaveBeenCalledOnce()
     expect(waitForStopMock).toHaveBeenCalledOnce()
+  })
+
+  it('waits for probe close even after the failed startup process is stopped', async () => {
+    const probe = fakeProbe(false)
+    probe.destroy.mockImplementation(() => {})
+    connectMock.mockReturnValue(probe)
+    const controller = new AbortController()
+    const starting = startSystemSshDynamicForwardProcess(target, undefined, controller.signal)
+    const settled = vi.fn()
+    void starting.then(settled, settled)
+    await vi.waitFor(() => expect(connectMock).toHaveBeenCalledOnce())
+    controller.abort()
+    await vi.waitFor(() => expect(waitForStopMock).toHaveBeenCalledOnce())
+    expect(settled).not.toHaveBeenCalled()
+    probe.emit('error', new Error('late error during close'))
+    probe.emit('close')
+    await expect(starting).rejects.toBeInstanceOf(SystemSshDynamicForwardStartupRetiredError)
+  })
+
+  it('does not certify cleanup when process stop fails', async () => {
+    connectMock.mockImplementation(() => fakeProbe(false))
+    const controller = new AbortController()
+    const starting = startSystemSshDynamicForwardProcess(target, undefined, controller.signal)
+    await vi.waitFor(() => expect(connectMock).toHaveBeenCalledOnce())
+    const failure = new Error('stop unconfirmed')
+    waitForStopMock.mockRejectedValueOnce(failure)
+    controller.abort()
+    await expect(starting).rejects.toBe(failure)
+  })
+
+  it('does not publish readiness until earlier failed probes have closed', async () => {
+    vi.useFakeTimers()
+    const earlier = fakeProbe(false)
+    earlier.destroy.mockImplementation(() => {})
+    connectMock.mockReturnValueOnce(earlier).mockImplementation(() => fakeProbe(true))
+    const starting = startSystemSshDynamicForwardProcess(target)
+    const ready = vi.fn()
+    void starting.then(ready)
+    await vi.advanceTimersByTimeAsync(0)
+    earlier.emit('error', new Error('refused'))
+    await vi.advanceTimersByTimeAsync(50)
+    expect(connectMock).toHaveBeenCalledTimes(2)
+    expect(ready).not.toHaveBeenCalled()
+    earlier.emit('close')
+    const result = await starting
+    expect(ready).toHaveBeenCalledOnce()
+    await result.close()
   })
 })

@@ -286,6 +286,21 @@ describe('createPtySubprocess', () => {
     killSpy.mockRestore()
   })
 
+  it('uses a backend-owned signal target when the PTY root is only a wrapper', async () => {
+    const proc = mockPtyProcess(99)
+    const signalProcess = vi.fn()
+    Object.assign(proc, { signalProcess })
+    spawnMock.mockReturnValue(proc)
+    const killSpy = vi.spyOn(process, 'kill').mockReturnValue(true)
+
+    const handle = await createPtySubprocess({ sessionId: 'test', cols: 80, rows: 24 })
+    handle.signal('SIGINT')
+
+    expect(signalProcess).toHaveBeenCalledWith('SIGINT')
+    expect(killSpy).not.toHaveBeenCalled()
+    killSpy.mockRestore()
+  })
+
   // Why: node-pty's UnixTerminal.destroy() registers _socket.once('close', () =>
   // this.kill('SIGHUP')), and the socket 'close' event can fire concurrently
   // with onExit. If kill is not neutralized by the time close fires, SIGHUP

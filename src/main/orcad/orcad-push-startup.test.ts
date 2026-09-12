@@ -22,16 +22,43 @@ vi.mock('./orcad-app-paths', () => ({
 }))
 vi.mock('./orcad-browser-provider', () => ({ resolveOrcadBrowserProvider: async () => null }))
 vi.mock('./orcad-instance-lock', () => ({ acquireOrcadInstanceLock: () => ({ release() {} }) }))
+vi.mock('../ssh/profile-lifetime-admission', () => ({ initializeProfileLifetimeAdmission() {} }))
+vi.mock('./orcad-profile-daemon-startup', () => ({
+  startOrcadProfileDaemon: async () => 'headless-runtime',
+  captureOrcadManagedStopContext: () => [undefined, undefined]
+}))
 vi.mock('./orcad-daemon-supervision', () => ({
   startOrcadDaemon: async () => {},
-  stopOrcadDaemon: async () => {}
+  stopOrcadDaemon: async () => {},
+  decommissionOrcadDaemonIfIdle: vi.fn()
+}))
+vi.mock('../agent-hooks/server', () => ({
+  agentHookServer: {
+    subscribeEnrichedStatus: () => () => {},
+    start: async () => {},
+    stop() {}
+  }
+}))
+vi.mock('../agent-hooks/managed-agent-hook-controls', () => ({
+  isAgentStatusHooksEnabled: () => false
+}))
+vi.mock('../agent-hooks/hook-status-session-tabs-republish', () => ({
+  installHookStatusSessionTabsRepublish: () => () => {}
+}))
+vi.mock('../providers/runtime-pty-ownership-transfer-read-only-source', () => ({
+  RuntimePtyOwnershipTransferReadOnlySource: class {},
+  createReconciledRuntimePtyOwnershipTransferReadOnlySource: async () => ({
+    source: { dispose() {} },
+    unsubscribe() {}
+  })
 }))
 vi.mock('./orcad-health', () => ({ collectOrcadHealth: async () => ({}) }))
 vi.mock('../daemon/daemon-init', () => ({ daemonOwnsFreshPersistentPtys: () => false }))
 vi.mock('../ipc/pty', () => ({
   registerHeadlessPtyRuntime: async () => {},
   getLocalPtyProvider: () => null,
-  getSshPtyProvider: () => null
+  getSshPtyProvider: () => null,
+  subscribeLocalPtyProviderChanges: () => () => {}
 }))
 vi.mock('../persistence/loading-store/store', () => ({
   Store: class {
@@ -42,7 +69,10 @@ vi.mock('../persistence/loading-store/store', () => ({
 }))
 vi.mock('../orca-profiles/profile-index-store', () => ({
   initOrcaProfilePaths() {},
-  ensureActiveOrcaProfile: () => ({ dataFile: join(state.root, 'profile.json') })
+  ensureActiveOrcaProfile: () => ({
+    dataFile: join(state.root, 'profile.json'),
+    profileDirectory: state.root
+  })
 }))
 vi.mock('../ssh/ssh-host-key-store', () => ({ initSshHostKeyStoreFile() {} }))
 vi.mock('../server/serve-readiness', () => ({
@@ -56,8 +86,14 @@ vi.mock('../runtime/orca-runtime', () => ({
       return 'headless-runtime'
     }
     rehydrateClientHostedBrowserPages() {}
+    installPtyOwnershipTransferDestinationOutputBridge() {}
+    recoverPtyOwnershipTransferDestinations() {}
+    getPtyOwnershipTransferDestinationRegistry() {
+      return null
+    }
     async refreshRestoredOrchestrationAuthority() {}
     async reconcileLegacyWorkerTerminals() {}
+    async stopLegacyWorkerTerminalRecovery() {}
     setMobilePushRegistrar(
       registrar: Parameters<RuntimeMobileNotificationController['setPushRegistrar']>[0]
     ) {

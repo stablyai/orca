@@ -8,6 +8,7 @@ import type {
   RuntimeSyncedLeaf
 } from '../../shared/runtime-types'
 import { retireTerminalSurfacesFromSnapshot } from './mobile-session-terminal-retirement'
+import { isOutgoingMobileSnapshotPublicationFenced } from './outgoing-mobile-snapshot-admission'
 
 export class OrcaRuntimeWithTouchMobileSessionTabsForWorktree extends OrcaRuntimeWithPublishPtyBackedMobileSessionTerminal {
   /** Bump the snapshot version and emit, coalesced unless `immediate`.
@@ -18,7 +19,7 @@ export class OrcaRuntimeWithTouchMobileSessionTabsForWorktree extends OrcaRuntim
     options: { immediate?: boolean } = {}
   ): void {
     const snapshot = this.mobileSessionTabsByWorktree.get(worktreeId)
-    if (!snapshot) {
+    if (!snapshot || isOutgoingMobileSnapshotPublicationFenced(this, [snapshot])) {
       return
     }
     this.mobileSessionTabsAgentStatusHeartbeat.observeWorktreeRefresh(worktreeId)

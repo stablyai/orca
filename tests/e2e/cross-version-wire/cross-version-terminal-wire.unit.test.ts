@@ -1,4 +1,4 @@
-import { afterEach, beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
 import { comparePublishedFieldOccurrences, publishedFieldNames } from './published-field-shape'
 import { resolveBaselineReleaseRef, selectLatestStableReleaseTag } from './release-checkout'
 import {
@@ -48,6 +48,15 @@ const SNAPSHOT_START_OCCURRENCES = ['initial', 'reveal', 'reconnect'] as const
 let baselineRef: string
 let current: TerminalWireBuild
 let baseline: TerminalWireBuild
+const originalWindowDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'window')
+
+function restoreOriginalWindow(): void {
+  if (originalWindowDescriptor) {
+    Object.defineProperty(globalThis, 'window', originalWindowDescriptor)
+    return
+  }
+  Reflect.deleteProperty(globalThis, 'window')
+}
 /** What a current host publishes to a client of its own version. */
 let currentReference: JourneyRecord
 /** What the baseline host publishes to a client of its own version. */
@@ -55,23 +64,29 @@ let baselineReference: JourneyRecord
 let legacyTerminalModeMetadata: TerminalWireBuild
 
 beforeAll(async () => {
-  baselineRef = resolveBaselineReleaseRef()
-  const [workingTree, baselineRelease, legacyRelease] = await Promise.all([
-    loadTerminalWireBuild(WORKING_TREE),
-    loadTerminalWireBuild(baselineRef),
-    loadTerminalWireBuild(TERMINAL_MODE_METADATA_LEGACY_REF)
-  ])
-  current = workingTree
-  baseline = baselineRelease
-  legacyTerminalModeMetadata = legacyRelease
+  try {
+    baselineRef = resolveBaselineReleaseRef()
+    const [workingTree, baselineRelease, legacyRelease] = await Promise.all([
+      loadTerminalWireBuild(WORKING_TREE),
+      loadTerminalWireBuild(baselineRef),
+      loadTerminalWireBuild(TERMINAL_MODE_METADATA_LEGACY_REF)
+    ])
+    current = workingTree
+    baseline = baselineRelease
+    legacyTerminalModeMetadata = legacyRelease
+  } finally {
+    restoreOriginalWindow()
+  }
   currentReference = await runTerminalSkewJourney({ hostBuild: current, clientBuild: current })
   baselineReference = await runTerminalSkewJourney({ hostBuild: baseline, clientBuild: baseline })
 }, SUITE_TIMEOUT_MS)
 
 afterEach(() => {
   // Each journey installs and removes its own window stub; fail loudly if one leaked.
-  expect(typeof globalThis.window).toBe('undefined')
+  expect(Object.getOwnPropertyDescriptor(globalThis, 'window')).toEqual(originalWindowDescriptor)
 })
+
+afterAll(restoreOriginalWindow)
 
 function expectJourneyActuallyRan(record: JourneyRecord): void {
   // The anti-vacuous-pass oracle. A harness that connects and then does nothing

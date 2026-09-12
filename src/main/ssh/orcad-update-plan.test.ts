@@ -26,6 +26,24 @@ function record(overrides: Partial<OrcadActivationRecord> = {}): OrcadActivation
 }
 
 describe('planOrcadUpdate', () => {
+  it('defers while an accepted managed stop is still durable on the host', () => {
+    const plan = planOrcadUpdate({
+      record: record({
+        decommissioning: {
+          version: '0.2.0+bb01',
+          acceptedAt: '2026-01-01T00:00:02.000Z'
+        }
+      }),
+      candidateVersion: '0.3.0+cc01',
+      census: { liveSessions: 0, startedSinceActivation: 0 },
+      force: true
+    })
+    expect(plan).toMatchObject({
+      action: 'defer',
+      code: 'orcad_update_decommission_pending'
+    })
+  })
+
   it('does nothing when the candidate is already active', () => {
     const plan = planOrcadUpdate({
       record: record(),
@@ -88,6 +106,24 @@ describe('planOrcadUpdate', () => {
 })
 
 describe('assessOrcadRollback', () => {
+  it('refuses while an accepted managed stop is still durable on the host', () => {
+    const safety = assessOrcadRollback({
+      record: record({
+        decommissioning: {
+          version: '0.2.0+bb01',
+          acceptedAt: '2026-01-01T00:00:02.000Z'
+        }
+      }),
+      snapshotPresent: true,
+      census: { liveSessions: 0, startedSinceActivation: 0 },
+      stateWritesSinceActivation: false
+    })
+    expect(safety).toMatchObject({
+      safety: 'unsafe',
+      code: 'orcad_rollback_decommission_pending'
+    })
+  })
+
   it('is clean when the snapshot is intact and nothing happened since activation', () => {
     const safety = assessOrcadRollback({
       record: record(),
@@ -143,6 +179,19 @@ describe('assessOrcadRollback', () => {
     })
     expect(safety).toMatchObject({ safety: 'unsafe', code: 'orcad_rollback_snapshot_missing' })
     expect(safety.safety === 'unsafe' && safety.reason).toContain('no schema version')
+  })
+
+  it('distinguishes an unverifiable snapshot probe from an absent snapshot', () => {
+    const safety = assessOrcadRollback({
+      record: record(),
+      snapshotPresent: null,
+      census: { liveSessions: 0, startedSinceActivation: 0 },
+      stateWritesSinceActivation: null
+    })
+    expect(safety).toMatchObject({
+      safety: 'unsafe',
+      code: 'orcad_rollback_snapshot_unverifiable'
+    })
   })
 
   it('refuses when no snapshot was ever recorded', () => {

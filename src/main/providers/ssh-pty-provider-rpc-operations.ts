@@ -1,3 +1,5 @@
+import { parsePtyOwnershipBridgeCapabilities } from '../../shared/pty-ownership-bridge'
+import type { PtyOwnershipBridgeCapabilities } from '../../shared/pty-ownership-bridge-contract'
 import type { SshChannelMultiplexer } from '../ssh/ssh-channel-multiplexer'
 import type { PtyProcessInspection } from './pty-process-inspection'
 import { writeToSshPty, writeToSshPtyWithSettlement } from './ssh-pty-write'
@@ -11,6 +13,20 @@ type SshPtyProviderRpcContext = {
 /** RPC leaves that only need the SSH mux and relay-id mapping. */
 export function createSshPtyProviderRpcOperations({ mux, toRelayPtyId }: SshPtyProviderRpcContext) {
   return {
+    getOwnershipBridgeCapabilities: async (
+      options: { signal?: AbortSignal } = {}
+    ): Promise<PtyOwnershipBridgeCapabilities | null> => {
+      try {
+        return parsePtyOwnershipBridgeCapabilities(
+          await mux.request('pty.getOwnershipBridgeCapabilities', undefined, {
+            signal: options.signal,
+            timeoutMs: 5_000
+          })
+        )
+      } catch {
+        return null
+      }
+    },
     deleteWorktreeHistory: async (worktreeId: string): Promise<void> => {
       await mux.request('pty.deleteWorktreeHistory', { worktreeId })
     },

@@ -28,6 +28,7 @@ import {
 import type {
   IpcPtyTransportOptions,
   PtyConnectResult,
+  PtyInputOperationOptions,
   PtyTransport,
   PtyTransportRecoveryState
 } from './pty-transport-types'
@@ -82,6 +83,7 @@ import {
   ptyShutdownLifecycleHandlers
 } from './pty-shutdown-data-suspension'
 import { getRuntimeEnvironmentRevision } from '@/runtime/runtime-environment-revision'
+import { recordE2eTransportInputDisposition } from './pty-connection/e2e-terminal-pty-harness'
 
 const REMOTE_TERMINAL_INPUT_FLUSH_MS = 8
 const REMOTE_TERMINAL_VIEWPORT_FLUSH_MS = 33
@@ -273,7 +275,11 @@ export function createRemoteRuntimePtyTransport(
   })
   let lastRecoveryStateKey = ''
   let pendingViewportClaim = false
-  let pendingClaimInput: { text: string; queryReply: boolean }[] = []
+  let pendingClaimInput: {
+    text: string
+    queryReply: boolean
+    options?: PtyInputOperationOptions
+  }[] = []
   let pendingClaimQueryReplyCount = 0
   let terminalCreateRetryWait: {
     timer: ReturnType<typeof setTimeout>
@@ -353,6 +359,9 @@ export function createRemoteRuntimePtyTransport(
   }
   const viewportClaimReadyWaiters = new Set<(ready: boolean) => void>()
   const clearPendingViewportClaim = (): void => {
+    for (const segment of pendingClaimInput) {
+      recordE2eTransportInputDisposition(remotePtyId, 'claim-cleared', segment.text.length)
+    }
     pendingViewportClaim = false
     pendingClaimInput = []
     pendingClaimQueryReplyCount = 0
@@ -361,7 +370,11 @@ export function createRemoteRuntimePtyTransport(
     }
     viewportClaimReadyWaiters.clear()
   }
-  const queuePendingClaimInput = (text: string, queryReply: boolean): void => {
+  const queuePendingClaimInput = (
+    text: string,
+    queryReply: boolean,
+    options?: PtyInputOperationOptions
+  ): void => {
     if (queryReply && pendingClaimQueryReplyCount >= REMOTE_RUNTIME_MAX_PENDING_QUERY_REPLIES) {
       const oldestReply = pendingClaimInput.findIndex((segment) => segment.queryReply)
       if (oldestReply !== -1) {
@@ -369,18 +382,31 @@ export function createRemoteRuntimePtyTransport(
         pendingClaimQueryReplyCount -= 1
         const left = pendingClaimInput[oldestReply - 1]
         const right = pendingClaimInput[oldestReply]
-        if (left && right && !left.queryReply && !right.queryReply) {
+        if (
+          left &&
+          right &&
+          !left.queryReply &&
+          !right.queryReply &&
+          !left.options?.operationId &&
+          !right.options?.operationId
+        ) {
           left.text += right.text
           pendingClaimInput.splice(oldestReply, 1)
         }
       }
     }
     const tail = pendingClaimInput.at(-1)
-    if (!queryReply && tail && !tail.queryReply) {
+    if (
+      !queryReply &&
+      !options?.operationId &&
+      tail &&
+      !tail.queryReply &&
+      !tail.options?.operationId
+    ) {
       tail.text += text
       return
     }
-    pendingClaimInput.push({ text, queryReply })
+    pendingClaimInput.push({ text, queryReply, ...(options ? { options } : {}) })
     if (queryReply) {
       pendingClaimQueryReplyCount += 1
     }
@@ -392,7 +418,16 @@ export function createRemoteRuntimePtyTransport(
     pendingClaimInput = []
     pendingClaimQueryReplyCount = 0
     for (const segment of queued) {
-      stream.sendInput(segment.text)
+      if (segment.options?.operationId) {
+        sendUnacknowledgedInput(segment.text, segment.queryReply, segment.options)
+      } else {
+        const submitted = stream.sendInput(segment.text)
+        recordE2eTransportInputDisposition(
+          remotePtyId,
+          submitted ? 'claim-submitted' : 'claim-rejected',
+          segment.text.length
+        )
+      }
     }
     for (const resolve of viewportClaimReadyWaiters) {
       resolve(true)
@@ -1375,7 +1410,10 @@ export function createRemoteRuntimePtyTransport(
     return recovery.isActive || recovery.currentPhase === 'disconnected'
   }
 
-  async function sendInputAcceptedToRuntime(data: string): Promise<boolean> {
+  async function sendInputAcceptedToRuntime(
+    data: string,
+    options?: PtyInputOperationOptions
+  ): Promise<boolean> {
     const targetHandle = handle
     if (!connected || !targetHandle || recoveryBlocksIo()) {
       return false
@@ -1396,7 +1434,16 @@ export function createRemoteRuntimePtyTransport(
       }
     }
     // Why: normal sendInput may be awaiting size validation; drain it before acknowledged writes so terminal bytes stay ordered.
-    const text = `${inputBatcher.takePending()}${data}`
+    const pendingText = inputBatcher.takePending()
+    if (pendingText && options?.operationId) {
+      // The stable ID identifies only the caller's payload. Flush older
+      // debounced bytes separately so a retry cannot suppress them as a
+      // duplicate of this operation.
+      if (!(await sendInputAcceptedToRuntime(pendingText))) {
+        return false
+      }
+    }
+    const text = options?.operationId ? data : `${pendingText}${data}`
     try {
       const tooLarge = isTerminalInputTooLargeWithDeferredMeasurement(text)
       if (typeof tooLarge === 'boolean' ? tooLarge : await tooLarge) {
@@ -1406,20 +1453,26 @@ export function createRemoteRuntimePtyTransport(
       return false
     }
     try {
+      let chunkIndex = 0
       for (const chunk of iterateTerminalInputChunks(text)) {
         if (!connected || handle !== targetHandle || recoveryBlocksIo()) {
           return false
         }
         // Why: acknowledged sends order behind pending debounce text but must not collapse large paste back into one remote RPC.
+        const operationId = options?.operationId
+          ? operationIdForChunk(options.operationId, chunkIndex)
+          : undefined
         const result = await callRuntime<{ send: RuntimeTerminalSend }>('terminal.send', {
           terminal: targetHandle,
           text: chunk,
           client: { id: clientId, type: 'desktop' },
+          ...(operationId ? { operationId } : {}),
           ...(desiredViewport ? { viewport: desiredViewport, claimViewport: true as const } : {})
         })
         if (result.send.accepted !== true) {
           return false
         }
+        chunkIndex += 1
       }
       return true
     } catch (error) {
@@ -1437,28 +1490,46 @@ export function createRemoteRuntimePtyTransport(
     }
   }
 
-  const sendUnacknowledgedInput = (text: string, queryReply = false): boolean => {
+  const sendUnacknowledgedInput = (
+    text: string,
+    queryReply = false,
+    options?: PtyInputOperationOptions
+  ): boolean => {
     const targetHandle = handle
     const targetLifecycleEpoch = lifecycleEpoch
+    const probePtyId = remotePtyId
+    recordE2eTransportInputDisposition(probePtyId, 'transport-flush', text.length)
     if (!connected || !targetHandle || recoveryBlocksIo()) {
+      recordE2eTransportInputDisposition(probePtyId, 'transport-unavailable', text.length)
       return false
     }
     const stream = getCurrentMultiplexedStream(targetHandle)
-    if (stream?.sendInput(text)) {
+    // Stable IDs cannot travel over the legacy binary stream. Force the
+    // additive unary terminal.send fallback so the host can deduplicate them.
+    if (!options?.operationId && stream?.sendInput(text)) {
+      recordE2eTransportInputDisposition(probePtyId, 'stream-submitted', text.length)
       return true
     }
     if (pendingViewportClaim) {
       // Why: a claim during subscribe/reconnect has no stream record yet; hold its input so the stream emits claim+input in one order.
       queuePendingClaimInput(text, queryReply)
+      recordE2eTransportInputDisposition(probePtyId, 'claim-queued', text.length)
       return true
     }
+    recordE2eTransportInputDisposition(probePtyId, 'unary-submitted', text.length)
     void callRuntime<{ send: RuntimeTerminalSend }>('terminal.send', {
       terminal: targetHandle,
       text,
       client: { id: clientId, type: 'desktop' },
+      ...(options?.operationId ? { operationId: options.operationId } : {}),
       ...(desiredViewport ? { viewport: desiredViewport, claimViewport: true as const } : {})
     })
       .then((result) => {
+        recordE2eTransportInputDisposition(
+          probePtyId,
+          result.send.accepted === true ? 'unary-accepted' : 'unary-rejected',
+          text.length
+        )
         if (
           connected &&
           lifecycleEpoch === targetLifecycleEpoch &&
@@ -1469,6 +1540,7 @@ export function createRemoteRuntimePtyTransport(
         }
       })
       .catch((error) => {
+        recordE2eTransportInputDisposition(probePtyId, 'unary-error', text.length)
         if (lifecycleEpoch !== targetLifecycleEpoch || handle !== targetHandle) {
           return
         }
@@ -2564,19 +2636,25 @@ export function createRemoteRuntimePtyTransport(
       storedCallbacks = {}
     },
 
-    sendInput(data: string): boolean {
+    sendInput(data: string, options?: PtyInputOperationOptions): boolean {
       if (!connected || !handle || recoveryBlocksIo()) {
         return false
       }
       if (!data) {
         return true
       }
+      if (options?.operationId) {
+        // Flush ordinary debounced text before bypassing the binary stream so
+        // an operation-aware write cannot overtake earlier input.
+        inputBatcher.flush()
+        return sendUnacknowledgedInput(data, false, options)
+      }
       // Why: literal LF bytes from paste/programmatic input must survive; callers use \r or the enter flag for semantic Enter.
       return inputBatcher.push(data)
     },
 
     // Why: query replies (CPR/DSR/DA/OSC) are read in raw mode with a short timeout; the 8ms debounce would miss it and echo the reply onto the prompt (#7329).
-    sendInputImmediate(data: string): boolean {
+    sendInputImmediate(data: string, options?: PtyInputOperationOptions): boolean {
       const targetHandle = handle
       const targetLifecycleEpoch = lifecycleEpoch
       if (!connected || !targetHandle || recoveryBlocksIo()) {
@@ -2600,7 +2678,7 @@ export function createRemoteRuntimePtyTransport(
           if (pending) {
             sendUnacknowledgedInput(pending)
           }
-          sendUnacknowledgedInput(data, true)
+          sendUnacknowledgedInput(data, true, options)
         })
         return true
       }
@@ -2608,7 +2686,7 @@ export function createRemoteRuntimePtyTransport(
       if (pending && !sendUnacknowledgedInput(pending)) {
         return false
       }
-      return sendUnacknowledgedInput(data, true)
+      return sendUnacknowledgedInput(data, true, options)
     },
 
     sendInputAccepted: sendInputAcceptedToRuntime,
@@ -2780,4 +2858,8 @@ export function createRemoteRuntimePtyTransport(
     }
   }
   return transport
+}
+
+function operationIdForChunk(operationId: string, index: number): string {
+  return index === 0 ? operationId : `${operationId}:chunk:${index}`
 }

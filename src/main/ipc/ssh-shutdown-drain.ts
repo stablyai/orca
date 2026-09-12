@@ -7,6 +7,10 @@ import {
 } from './ssh-connect-attempt-registry'
 import { connectionManager } from './ssh-ipc-context'
 import { teardownActiveSshSession } from './ssh-session-teardown'
+import {
+  getRetainedSshResetTargetIds,
+  isSshResetAdmissionBlocked
+} from './ssh-reset-production-state'
 
 // Why one budget for the whole sequence rather than one per phase: an invalidated connect only
 // observes its cancellation at the next checkpoint, and one blocked in the transport handshake can
@@ -14,7 +18,7 @@ import { teardownActiveSshSession } from './ssh-session-teardown'
 // quit deadline; a shared absolute deadline cannot.
 export const SSH_SHUTDOWN_BUDGET_MS = 6_000
 
-export type SshShutdownPhase = 'drain' | 'in-flight-join' | 'final-drain'
+export type SshShutdownPhase = 'drain' | 'in-flight-join' | 'final-drain' | 'reset-reconciliation'
 export type SshShutdownUnfinished = { targetId: string; phase: SshShutdownPhase }
 export type SshShutdownResult = {
   unfinished: readonly SshShutdownUnfinished[]
@@ -61,22 +65,36 @@ async function settleTasksWithinMs(
   return { timedOut: [...pending], errors }
 }
 
-function sshShutdownTasks(targetIds: readonly string[]): SshShutdownTask[] {
+function sshShutdownTasks(
+  targetIds: readonly string[],
+  mayDetach: (targetId: string) => boolean
+): SshShutdownTask[] {
   return [
     ...targetIds
       .filter((targetId) => activeSessions.has(targetId))
-      .map((targetId) => ({
-        targetId,
-        promise: teardownActiveSshSession(targetId, (session) => session.detachAndPersist())
-      })),
-    { targetId: '*transports', promise: connectionManager?.disconnectAll() ?? Promise.resolve() }
+      .flatMap((targetId) =>
+        mayDetach(targetId)
+          ? [
+              {
+                targetId,
+                promise: teardownActiveSshSession(targetId, (session) => session.detachAndPersist())
+              }
+            ]
+          : []
+      ),
+    {
+      targetId: '*transports',
+      promise: connectionManager?.disconnectAll(mayDetach) ?? Promise.resolve()
+    }
   ]
 }
 
 async function drainSshShutdown(
   targetIds: readonly string[],
   inFlight: readonly SshShutdownTask[],
-  detachErrors: readonly unknown[] = []
+  detachErrors: readonly unknown[],
+  protectedTargets: Set<string>,
+  mayDetach: (targetId: string) => boolean
 ): Promise<SshShutdownResult> {
   const deadline = Date.now() + SSH_SHUTDOWN_BUDGET_MS
   const unfinished: SshShutdownUnfinished[] = []
@@ -96,12 +114,18 @@ async function drainSshShutdown(
     return settled.timedOut.length === 0
   }
 
-  await runPhase('drain', sshShutdownTasks(targetIds))
+  await runPhase('drain', sshShutdownTasks(targetIds, mayDetach))
   // Why a second drain after the join: a connect paused in old-session teardown still publishes its
   // replacement session and opens a transport before it reaches the cancellation checkpoint, so the
   // first drain can miss both.
   if (await runPhase('in-flight-join', inFlight)) {
-    await runPhase('final-drain', sshShutdownTasks([...activeSessions.keys()]))
+    await runPhase('final-drain', sshShutdownTasks([...activeSessions.keys()], mayDetach))
+  }
+
+  for (const targetId of new Set([...protectedTargets, ...getRetainedSshResetTargetIds()])) {
+    if (isSshResetAdmissionBlocked(targetId)) {
+      unfinished.push({ targetId, phase: 'reset-reconciliation' })
+    }
   }
 
   if (errors.length > 0 || unfinished.length > 0) {
@@ -127,6 +151,14 @@ export function beginSshShutdown(): Promise<SshShutdownResult> {
   if (sshShutdownDrain) {
     return sshShutdownDrain
   }
+  const protectedTargets = new Set(getRetainedSshResetTargetIds())
+  const mayDetach = (targetId: string) => {
+    if (isSshResetAdmissionBlocked(targetId)) {
+      protectedTargets.add(targetId)
+      return false
+    }
+    return true
+  }
   const inFlight: SshShutdownTask[] = [
     ...[...connectInFlight.entries()].map(([targetId, attempt]) => ({
       targetId,
@@ -136,13 +168,18 @@ export function beginSshShutdown(): Promise<SshShutdownResult> {
     ...[...testConnectionProbes].map((promise) => ({ targetId: '*probe', promise }))
   ]
   for (const targetId of Array.from(connectInFlight.keys())) {
-    invalidateConnectAttempt(targetId)
+    if (mayDetach(targetId)) {
+      invalidateConnectAttempt(targetId)
+    }
   }
   const targetIds = [...activeSessions.keys()]
   // Why before any await: this is the whole point of the split. Each session marks its recovery lease
   // detached in memory now, and the final flush persists it — the remote PTYs keep running.
   const detachErrors: unknown[] = []
-  for (const session of activeSessions.values()) {
+  for (const [targetId, session] of activeSessions) {
+    if (!mayDetach(targetId)) {
+      continue
+    }
     // Why per-session: this runs synchronously inside a non-async will-quit listener, so one throw
     // (teardownProviders -> webContents.send on a destroyed renderer, routine on quit) would escape
     // it and skip every later session, the drain assignment, and the store flush that persists all
@@ -153,6 +190,12 @@ export function beginSshShutdown(): Promise<SshShutdownResult> {
       detachErrors.push(error)
     }
   }
-  sshShutdownDrain = drainSshShutdown(targetIds, inFlight, detachErrors)
+  sshShutdownDrain = drainSshShutdown(
+    targetIds,
+    inFlight,
+    detachErrors,
+    protectedTargets,
+    mayDetach
+  )
   return sshShutdownDrain
 }

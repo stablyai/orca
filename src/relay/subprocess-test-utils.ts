@@ -10,6 +10,19 @@ import {
   type JsonRpcNotification
 } from './protocol'
 
+export function waitForChildExit(
+  proc: ChildProcess,
+  timeoutMs = 5000
+): Promise<{ code: number | null; signal: NodeJS.Signals | null }> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('Timed out waiting for child exit')), timeoutMs)
+    proc.once('exit', (code, signal) => {
+      clearTimeout(timer)
+      resolve({ code, signal })
+    })
+  })
+}
+
 export type RelayProcess = {
   proc: ChildProcess
   responses: (JsonRpcResponse | JsonRpcNotification)[]
@@ -25,11 +38,12 @@ export type RelayProcess = {
 export function spawnRelay(
   entryPath: string,
   args: string[] = [],
-  options: Pick<SpawnOptions, 'cwd' | 'env'> = {}
+  options: Pick<SpawnOptions, 'cwd' | 'env'> & { runtime?: string } = {}
 ): RelayProcess {
-  const proc = spawn('node', [entryPath, ...args], {
+  const { runtime = 'node', ...spawnOptions } = options
+  const proc = spawn(runtime, [entryPath, ...args], {
     stdio: ['pipe', 'pipe', 'pipe'],
-    ...options
+    ...spawnOptions
   })
 
   const responses: (JsonRpcResponse | JsonRpcNotification)[] = []

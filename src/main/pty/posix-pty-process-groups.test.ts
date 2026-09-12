@@ -9,7 +9,8 @@ vi.mock('../crash-reporting/self-initiated-tree-kill-log', () => ({
 
 import {
   forceKillPosixPtyProcessGroups,
-  getPosixPtyProcessGroups
+  getPosixPtyProcessGroups,
+  signalPosixPtyProcessGroups
 } from './posix-pty-process-groups'
 
 beforeEach(() => {
@@ -41,6 +42,21 @@ describe('POSIX PTY process-group termination', () => {
     const signalProcessGroup = vi.fn()
 
     forceKillPosixPtyProcessGroups(100, fallback, {
+      platform: 'darwin',
+      currentPid: 999,
+      readProcessTable: () => TABLE,
+      signalProcessGroup
+    })
+
+    expect(signalProcessGroup.mock.calls.map(([pgid]) => pgid)).toEqual([101, 103, 100])
+    expect(fallback).not.toHaveBeenCalled()
+  })
+
+  it('signals every attached group for producer pause and resume', () => {
+    const fallback = vi.fn()
+    const signalProcessGroup = vi.fn()
+
+    signalPosixPtyProcessGroups(100, 'SIGSTOP', fallback, {
       platform: 'darwin',
       currentPid: 999,
       readProcessTable: () => TABLE,

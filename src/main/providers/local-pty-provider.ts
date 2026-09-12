@@ -1,4 +1,10 @@
 import type * as pty from 'node-pty'
+import {
+  PTY_OWNERSHIP_BRIDGE_DEFAULT_INPUT_IDS,
+  PTY_OWNERSHIP_BRIDGE_DEFAULT_REPLAY_BYTES,
+  PTY_OWNERSHIP_BRIDGE_PROTOCOL_VERSION,
+  type PtyOwnershipBridgeCapabilities
+} from '../../shared/pty-ownership-bridge-contract'
 import type { IPtyProvider, PtyProcessInfo, PtySpawnOptions, PtySpawnResult } from './types'
 import {
   WRITE_ACCEPTED,
@@ -17,6 +23,7 @@ import {
   clearPtyState,
   pendingLocalPtySpawns,
   ptyProcesses,
+  ownershipTransferInputFences,
   resetLoadGeneration,
   type DataCallback,
   type ExitCallback
@@ -50,6 +57,18 @@ export {
 } from './local-pty-termination'
 
 export class LocalPtyProvider implements IPtyProvider {
+  async getOwnershipBridgeCapabilities(): Promise<PtyOwnershipBridgeCapabilities> {
+    return {
+      protocolVersions: [PTY_OWNERSHIP_BRIDGE_PROTOCOL_VERSION],
+      maxReplayBytes: PTY_OWNERSHIP_BRIDGE_DEFAULT_REPLAY_BYTES,
+      maxInputIds: PTY_OWNERSHIP_BRIDGE_DEFAULT_INPUT_IDS,
+      inputDeduplication: true,
+      rollback: true,
+      // Local PTYs remain desktop-owned until a transport adapter exists.
+      liveTransfer: false
+    }
+  }
+
   private opts: LocalPtyProviderOptions
 
   constructor(opts: LocalPtyProviderOptions = {}) {
@@ -75,12 +94,27 @@ export class LocalPtyProvider implements IPtyProvider {
   hasPty(id: string): boolean {
     return ptyProcesses.has(id)
   }
+  setInputFenced(id: string, fenced: boolean): void {
+    if (!fenced) {
+      ownershipTransferInputFences.delete(id)
+      return
+    }
+    if (ptyProcesses.has(id)) {
+      ownershipTransferInputFences.add(id)
+    }
+  }
   write(id: string, data: string): boolean {
-    return writeLocalPty(id, data)
+    return !ownershipTransferInputFences.has(id) && writeLocalPty(id, data)
+  }
+  writeOwnershipTransferInput(id: string, data: string): boolean {
+    return ownershipTransferInputFences.has(id) && writeLocalPty(id, data)
   }
 
   // In-process node-pty is its own sole owner, so its synchronous answer is the settlement.
   writeWithSettlement(id: string, data: string): WriteSettlement {
+    if (ownershipTransferInputFences.has(id)) {
+      return writeRefused('write_gate_denied')
+    }
     return writeLocalPty(id, data) ? WRITE_ACCEPTED : writeRefused('provider_refused_write')
   }
   resize(id: string, cols: number, rows: number): void {

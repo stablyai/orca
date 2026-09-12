@@ -37,6 +37,7 @@ type RuntimeServersConnectSectionProps = {
   onConnect: (environment: PublicKnownRuntimeEnvironment) => void
   onDisconnect: (environment: PublicKnownRuntimeEnvironment) => void
   onRemove: (environment: PublicKnownRuntimeEnvironment) => void
+  onSshAccessChanged?: () => Promise<void>
 }
 
 export function RuntimeServersConnectSection({
@@ -65,7 +66,8 @@ export function RuntimeServersConnectSection({
   refreshRemoteServerUpdates,
   onConnect,
   onDisconnect,
-  onRemove
+  onRemove,
+  onSshAccessChanged
 }: RuntimeServersConnectSectionProps): React.JSX.Element {
   const updateCheckHint = getUpdateCheckHint()
   return (
@@ -177,6 +179,7 @@ export function RuntimeServersConnectSection({
                 onConnect={onConnect}
                 onDisconnect={onDisconnect}
                 onRemove={onRemove}
+                onSshAccessChanged={onSshAccessChanged}
               />
             ))}
           </div>

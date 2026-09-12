@@ -172,23 +172,32 @@ export class DaemonTerminalAdmission {
     clientId: string,
     sessionId: () => string
   ): CreateOrAttachOptions['streamClient'] {
+    const onData = (
+      data: string,
+      rawLength = data.length,
+      transformed = false,
+      seq?: number,
+      incarnationId?: string
+    ): void => {
+      const routedSessionId = sessionId()
+      this.options.transientFactRelay.onSessionData(routedSessionId, data)
+      const lastInputAt = this.options.attachments.lastInputAt(routedSessionId)
+      const isInteractiveOutput =
+        data.length <= DaemonTerminalAdmission.INTERACTIVE_OUTPUT_MAX_CHARS &&
+        lastInputAt !== undefined &&
+        performance.now() - lastInputAt <= DaemonTerminalAdmission.INTERACTIVE_OUTPUT_WINDOW_MS
+      this.options.streamDataBatcher.enqueue(clientId, routedSessionId, data, {
+        flushImmediately: isInteractiveOutput,
+        flushMaxChars: DaemonTerminalAdmission.INTERACTIVE_OUTPUT_MAX_CHARS,
+        rawLength,
+        transformed,
+        seq,
+        ...(incarnationId === undefined ? {} : { incarnationId })
+      })
+    }
     return {
-      onData: (data, rawLength = data.length, transformed = false, seq) => {
-        const routedSessionId = sessionId()
-        this.options.transientFactRelay.onSessionData(routedSessionId, data)
-        const lastInputAt = this.options.attachments.lastInputAt(routedSessionId)
-        const isInteractiveOutput =
-          data.length <= DaemonTerminalAdmission.INTERACTIVE_OUTPUT_MAX_CHARS &&
-          lastInputAt !== undefined &&
-          performance.now() - lastInputAt <= DaemonTerminalAdmission.INTERACTIVE_OUTPUT_WINDOW_MS
-        this.options.streamDataBatcher.enqueue(clientId, routedSessionId, data, {
-          flushImmediately: isInteractiveOutput,
-          flushMaxChars: DaemonTerminalAdmission.INTERACTIVE_OUTPUT_MAX_CHARS,
-          rawLength,
-          transformed,
-          seq
-        })
-      },
+      onData,
+      onDataWithIncarnation: onData,
       onExit: (code, incarnationId, cause) => {
         const routedSessionId = sessionId()
         this.options.log.log('session-exited', {

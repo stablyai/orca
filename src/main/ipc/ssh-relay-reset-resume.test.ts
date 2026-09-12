@@ -30,6 +30,8 @@ import {
 import { clearProviderPtyState, deletePtyOwnership, getPtyIdsForConnection } from './pty'
 import { quitTeardownStartGate } from '../quit-teardown-start-gate'
 import { createSshIpcHarness } from './ssh-ipc-test-harness'
+import { runTargetLifecycle } from './ssh-target-lifecycle-queue'
+import { OrcadOutgoingPreparationStore } from '../ssh/orcad-outgoing-preparation-store'
 
 const {
   powerMonitorOnMock,
@@ -45,6 +47,97 @@ describe('SSH IPC handlers', () => {
   const { handlers, mockStore } = harness
 
   beforeEach(harness.reset)
+
+  it.each(['ssh:resetRelay', 'ssh:terminateSessions', 'ssh:removeTarget'])(
+    '%s preserves transport and leases when durable migration discovery fails',
+    async (channel) => {
+      mockSshStore.getTarget.mockReturnValue({
+        id: 'ssh-1',
+        label: 'Source',
+        host: 'example.com',
+        port: 22,
+        username: 'deploy'
+      })
+      const discovery = vi
+        .spyOn(OrcadOutgoingPreparationStore.prototype, 'list')
+        .mockImplementation(() => {
+          throw new Error('migration evidence unreadable')
+        })
+      try {
+        await expect(async () =>
+          handlers.get(channel)!(null, {
+            targetId: 'ssh-1',
+            id: 'ssh-1'
+          })
+        ).rejects.toThrow('migration evidence unreadable')
+        expect(mockForceStopRelayForTarget).not.toHaveBeenCalled()
+        expect(mockConnectionManager.connect).not.toHaveBeenCalled()
+        expect(mockConnectionManager.disconnect).not.toHaveBeenCalled()
+        expect(mockStore.removeSshRemotePtyLeases).not.toHaveBeenCalled()
+      } finally {
+        discovery.mockRestore()
+      }
+    }
+  )
+
+  it.each(['ssh:resetRelay', 'ssh:terminateSessions', 'ssh:removeTarget'])(
+    '%s rechecks ownership after waiting in the target lifecycle queue',
+    async (channel) => {
+      const target: SshTarget = {
+        id: 'ssh-1',
+        label: 'Source',
+        host: 'example.com',
+        port: 22,
+        username: 'deploy'
+      }
+      mockSshStore.getTarget.mockReturnValue(target)
+      let release!: () => void
+      const barrier = runTargetLifecycle(
+        'ssh-1',
+        () =>
+          new Promise<void>((resolve) => {
+            release = resolve
+          })
+      )
+      const operation = handlers.get(channel)!(null, { targetId: 'ssh-1', id: 'ssh-1' })
+      const refused = expect(operation).rejects.toThrow('runtime')
+      mockSshStore.getTarget.mockReturnValue({
+        ...target,
+        owner: { type: 'on-demand-runtime', runtimeId: 'managed-orcad:environment-1' }
+      })
+      release()
+      await barrier
+      await refused
+      expect(mockForceStopRelayForTarget).not.toHaveBeenCalled()
+      expect(mockConnectionManager.connect).not.toHaveBeenCalled()
+      expect(mockConnectionManager.disconnect).not.toHaveBeenCalled()
+      expect(mockStore.removeSshRemotePtyLeases).not.toHaveBeenCalled()
+    }
+  )
+
+  it.each(['ssh:resetRelay', 'ssh:terminateSessions', 'ssh:removeTarget'])(
+    '%s refuses a runtime-owned target before changing transport or recovery state',
+    async (channel) => {
+      mockSshStore.getTarget.mockReturnValue({
+        id: 'ssh-1',
+        label: 'Managed',
+        host: 'example.com',
+        port: 22,
+        username: 'deploy',
+        owner: { type: 'on-demand-runtime', runtimeId: 'managed-orcad:environment-1' }
+      })
+      await expect(async () =>
+        handlers.get(channel)!(null, {
+          targetId: 'ssh-1',
+          id: 'ssh-1'
+        })
+      ).rejects.toThrow('runtime')
+      expect(mockForceStopRelayForTarget).not.toHaveBeenCalled()
+      expect(mockConnectionManager.connect).not.toHaveBeenCalled()
+      expect(mockConnectionManager.disconnect).not.toHaveBeenCalled()
+      expect(mockStore.removeSshRemotePtyLeases).not.toHaveBeenCalled()
+    }
+  )
 
   it('ssh:resetRelay force-stops the remote relay and expires tracked leases', async () => {
     const target: SshTarget = {

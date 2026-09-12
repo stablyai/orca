@@ -56,12 +56,16 @@ describe('SshConnection', () => {
       await connect
       expect(channel.close).toHaveBeenCalled()
       expect(channel.listenerCount('data')).toBe(0)
-      expect(channel.listenerCount('error')).toBe(1)
-      expect(channel.listenerCount('close')).toBe(1)
+      // Lifetime observers remain until physical close, even after the probe timed out.
+      expect(channel.listenerCount('error')).toBe(2)
+      expect(channel.listenerCount('close')).toBe(2)
       expect(channel.stderr.listenerCount('data')).toBe(0)
       expect(
         (conn as unknown as { systemCommandChannels: Set<unknown> }).systemCommandChannels.size
       ).toBe(0)
+      channel.emit('close', 0)
+      expect(channel.listenerCount('close')).toBe(0)
+      expect(channel.listenerCount('error')).toBe(1)
     } finally {
       vi.useRealTimers()
     }

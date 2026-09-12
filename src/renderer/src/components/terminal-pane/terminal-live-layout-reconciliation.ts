@@ -86,12 +86,7 @@ function mountedLeafIdsIn(
   ]
 }
 
-/**
- * Mounted leaves the host layout no longer names. The host retires a leaf when
- * its PTY ends, so a pane still mounted for it is a ghost: it renders nothing
- * and, once it is the only pane left, absorbs the tab's next close. An empty
- * layout plans nothing — absence of a tree is not evidence about any pane.
- */
+/** Missing layouts are not retirement evidence. */
 export function planTerminalLiveLayoutRemovals(
   root: TerminalPaneLayoutNode | null | undefined,
   currentLeafIds: Iterable<string>,
@@ -101,14 +96,11 @@ export function planTerminalLiveLayoutRemovals(
     return []
   }
   const layoutLeafIds = new Set(collectLeafIds(root))
-  // Why: a mounted leaf the layout stopped naming is a removal only once the
-  // host is known to have retired it (trackRetiredLeafIds). A snapshot landing
-  // while the client is still starting a pane must not read as a retirement.
+  // Never treat a client-starting leaf the host has not yet named as retired.
   return [...currentLeafIds].filter(
     (leafId) => !layoutLeafIds.has(leafId) && retiredLeafIds.has(leafId)
   )
 }
-
 export function planTerminalLiveLayoutInsertions(
   root: TerminalPaneLayoutNode | null | undefined,
   currentLeafIds: Iterable<string>
@@ -181,10 +173,7 @@ export function planTerminalLiveLayoutInsertions(
   return insertions
 }
 
-/** Panes to close for leaves the host retired. Only a pane whose transport has
- *  no PTY any more is a ghost; a pane with no transport yet, or still bound to
- *  a PTY, may simply not be named by a stale snapshot. The last pane on the tab
- *  is never removed. */
+/** Host-retired leaves still require a cleared transport; preserve the last pane. */
 export function selectRetiredPaneIds(
   retiredLeafIds: readonly string[],
   view: {
@@ -207,13 +196,7 @@ export function selectRetiredPaneIds(
   return paneIds
 }
 
-/**
- * Leaves the host dropped from its layout whose panes are still mounted. Only a
- * leaf the host named before can be retired: a leaf it has never named belongs
- * to a pane the client is still starting. A retired leaf stays retired until
- * its pane is gone or the host names it again, so a removal skipped while the
- * transport still held its PTY is planned again once that PTY clears.
- */
+/** Retain deferred removals until unmount or reintroduction by an accepted host layout. */
 export function trackRetiredLeafIds(args: {
   retiredLeafIds: ReadonlySet<string>
   previousLayoutLeafIds: ReadonlySet<string>

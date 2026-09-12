@@ -129,7 +129,7 @@ export type RemoteRuntimeSnapshotOutcome = {
 
 export type RemoteRuntimeMultiplexedTerminal = {
   streamId: number
-  sendInput: (text: string) => boolean
+  sendInput: (text: string, options?: { operationId?: string }) => boolean
   resize: (cols: number, rows: number) => boolean
   claimViewport: (cols: number, rows: number) => boolean
   setOutputPaused: (paused: boolean) => boolean

@@ -38,31 +38,40 @@ export const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]
 // Why: typing-latency specs must type into xterm's helper textarea, not the
 // page body — keyboard.type only reaches the PTY when that textarea has focus.
 export async function focusActiveTerminalInput(page: Page): Promise<void> {
-  await page.evaluate(() => {
-    const state = window.__store?.getState()
-    const worktreeId = state?.activeWorktreeId
-    const tabId =
-      state?.activeTabType === 'terminal'
-        ? state.activeTabId
-        : worktreeId
-          ? (state?.activeTabIdByWorktree?.[worktreeId] ?? null)
-          : null
-    const manager = tabId ? window.__paneManagers?.get(tabId) : null
-    const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0] ?? null
-    if (!state || !tabId || !pane) {
-      throw new Error('No active terminal pane to focus')
-    }
-    state.setActiveTab(tabId)
-    state.setActiveTabType('terminal')
-    pane.terminal.focus()
-    const textarea = pane.container.querySelector(
-      '.xterm-helper-textarea'
-    ) as HTMLTextAreaElement | null
-    if (!textarea) {
-      throw new Error('Active terminal has no xterm helper textarea')
-    }
-    textarea.focus()
-  })
+  await expect
+    .poll(
+      async () => {
+        const tabId = await resolveActiveTabId(page)
+        if (!tabId) {
+          return false
+        }
+        return page.evaluate((tabId) => {
+          const state = window.__store?.getState()
+          const owner = state?.activeWorktreeId
+          if (
+            !owner ||
+            state.activeTabType !== 'terminal' ||
+            state.activeTabId !== tabId ||
+            !state.tabsByWorktree[owner]?.some((tab) => tab.id === tabId)
+          ) {
+            return false
+          }
+          const manager = window.__paneManagers?.get(tabId)
+          const pane = manager?.getActivePane?.() ?? manager?.getPanes?.()[0]
+          const textarea = pane?.container.querySelector(
+            '.xterm-helper-textarea'
+          ) as HTMLTextAreaElement | null
+          if (!pane?.container.isConnected || !textarea?.checkVisibility()) {
+            return false
+          }
+          pane.terminal.focus()
+          textarea.focus()
+          return document.activeElement === textarea
+        }, tabId)
+      },
+      { timeout: 15_000, message: 'Active workspace terminal did not become focusable' }
+    )
+    .toBe(true)
 }
 
 export async function waitForActivePanePtyId(page: Page, timeoutMs = 15_000): Promise<string> {

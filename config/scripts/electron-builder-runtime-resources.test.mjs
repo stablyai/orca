@@ -4,6 +4,7 @@ import { createRequire } from 'node:module'
 import { tmpdir } from 'node:os'
 import { delimiter, dirname, join, relative, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import { writeOrcadTemplateTestFixture } from './orcad-template-test-fixture.mjs'
 
 const require = createRequire(import.meta.url)
 const projectRoot = resolve(import.meta.dirname, '..', '..')
@@ -414,6 +415,7 @@ describe('packaged runtime resources', () => {
         await mkdir(join(unpackedCliDir, 'handlers'), { recursive: true })
         await writeFile(join(unpackedCliDir, 'handlers', 'skills.js'), '', 'utf8')
         await writeFile(join(unpackedCliDir, 'index.js'), '', 'utf8')
+        await writeOrcadTemplateTestFixture(resourcesDir)
 
         const target =
           process.arch === 'x64'
@@ -495,6 +497,7 @@ describe('packaged runtime resources', () => {
           'utf8'
         )
         await writeFile(launcherPath, '#!/usr/bin/env bash\n', { encoding: 'utf8', mode: 0o644 })
+        await writeOrcadTemplateTestFixture(resourcesDir)
 
         await electronBuilderConfig.afterPack({
           appOutDir: join(root, 'linux-unpacked'),
@@ -533,7 +536,8 @@ function collectLazyRequireSpecifiers(directory, found = new Map()) {
       continue
     }
     for (const match of source.matchAll(/\brequire[A-Za-z0-9_]*\(\s*'([^']+)'\s*\)/g)) {
-      if (isPackagedExternalSpecifier(match[1])) {
+      // This source scan includes Bun-only workers; bun:ffi is supplied by their runtime.
+      if (match[1] !== 'bun:ffi' && isPackagedExternalSpecifier(match[1])) {
         found.set(match[1], relative(projectRoot, entryPath).replaceAll('\\', '/'))
       }
     }

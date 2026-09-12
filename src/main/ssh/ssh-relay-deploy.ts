@@ -1,6 +1,6 @@
 import { join } from 'node:path'
 /* eslint-disable max-lines -- Why: one cohesive contract (version detect, install-locked deploy, native-deps probe, launch, GC); splitting risks install/GC drift. */
-import { existsSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { app } from 'electron'
 import type { SshConnection } from './ssh-connection'
 import { RELAY_REMOTE_DIR, type RelayPlatform } from './relay-protocol'
@@ -113,6 +113,20 @@ import {
   MAX_SSH_RELAY_GRACE_PERIOD_SECONDS,
   MIN_SSH_RELAY_GRACE_PERIOD_SECONDS
 } from '../../shared/ssh-types'
+import { isPtyOwnershipTransferMutationEnabled } from '../../shared/pty-ownership-transfer-release-gate'
+import {
+  RELAY_BUN_GLIBC_RUNTIME_FILENAME,
+  RELAY_BUN_MUSL_RUNTIME_FILENAME,
+  RELAY_BUN_REQUIRED_FILENAME,
+  RELAY_BUN_RUNTIME_FILENAME,
+  relayBunRuntimeFilename
+} from '../../shared/relay-artifacts'
+import { ORCAD_BUN_VERSION, type OrcadBunTarget } from '../../shared/orcad-bun-runtime'
+import { detectRemoteOrcadTarget } from './orcad-remote-target-detection'
+import {
+  posixRelayRuntimeExpression,
+  windowsRelayRuntimeSelection
+} from './ssh-relay-runtime-selection'
 
 export type RelayDeployResult = {
   transport: MultiplexerTransport
@@ -121,10 +135,21 @@ export type RelayDeployResult = {
   hostPlatform?: RemoteHostPlatform
   remoteHome?: string
   remoteRelayDir?: string
+  /** Executable used for relay and remote CLI operations. */
+  runtimePath?: string
+  /** Runtime identity corresponding to runtimePath. */
+  runtimeKind?: 'bun' | 'node'
+  /** @deprecated Legacy Node-only field; undefined for strict Bun deployments. */
   nodePath?: string
   sockPath?: string
   credentialFile?: string
 }
+
+const OWNERSHIP_TRANSFER_CANARY_FLAGS = [
+  '--enable-ownership-transfer-mutation',
+  '--enable-delegated-ownership-capture',
+  '--enable-source-delivery-retirement'
+] as const
 
 class RelayDirectoryGcConflictError extends Error {
   constructor(
@@ -156,7 +181,8 @@ export async function deployAndLaunchRelay(
   conn: SshConnection,
   onProgress?: (status: string) => void,
   graceTimeSeconds?: number,
-  relayInstanceId?: string
+  relayInstanceId?: string,
+  options?: { enableOwnershipTransferMutation?: boolean }
 ): Promise<RelayDeployResult> {
   let timeoutHandle: ReturnType<typeof setTimeout>
   const deployAbortController = new AbortController()
@@ -166,7 +192,8 @@ export async function deployAndLaunchRelay(
     onProgress,
     graceTimeSeconds,
     relayInstanceId,
-    deployAbortController.signal
+    deployAbortController.signal,
+    options?.enableOwnershipTransferMutation ?? isPtyOwnershipTransferMutationEnabled()
   ).then(
     (result) => ({ status: 'fulfilled' as const, result }),
     (error: unknown) => ({ status: 'rejected' as const, error })
@@ -273,28 +300,143 @@ type RelayBootstrapState = {
   remoteHome: string
   remoteRelayDir: string
   alreadyInstalled: boolean
-  nodePath: string
+  /** Runtime executable used for relay and remote CLI commands (Bun in strict mode, Node for legacy slots). */
+  nodePath?: string
+  /** Runtime used for every relay operation (Bun in strict mode, Node otherwise). */
+  runtimePath: string
+  runtimeKind: 'bun' | 'node'
+  /** Strict Bun means no remote Node/npm probing or repair is permitted. */
+  requiresBundledBun: boolean
+}
+
+type RelayBundledRuntime = {
+  filename: string
+  localPath: string
+  target: OrcadBunTarget
+}
+
+function relayBundledRuntimeForTarget(
+  localRelayDir: string,
+  target?: OrcadBunTarget
+): RelayBundledRuntime | null {
+  if (!target) {
+    return null
+  }
+  const filename = relayBunRuntimeFilename(target)
+  const localPath = join(localRelayDir, filename)
+  return existsSync(localPath) ? { filename, localPath, target } : null
+}
+
+/**
+ * Determine whether this packaged relay has a runtime native to the remote host.
+ * libc probing is only needed when the local package actually carries a Linux
+ * Bun companion; legacy Node-only packages retain the existing Node resolver.
+ */
+async function resolveRelayRuntimeCandidate(
+  conn: SshConnection,
+  hostPlatform: RemoteHostPlatform,
+  localRelayDir: string,
+  signal?: AbortSignal
+): Promise<{ bundled?: RelayBundledRuntime; requiresBundledBun: boolean }> {
+  // Only release-marked packages are strict. Development and legacy bundles
+  // may contain optional Bun files, but retain the Node compatibility path and
+  // must not add a libc probe to every SSH connection.
+  const strictBundle =
+    existsSync(join(localRelayDir, RELAY_BUN_REQUIRED_FILENAME)) &&
+    readFileSync(join(localRelayDir, RELAY_BUN_REQUIRED_FILENAME), 'utf8').trim() === 'bun'
+  if (!strictBundle) {
+    return { requiresBundledBun: false }
+  }
+  const hasGenericBun = existsSync(join(localRelayDir, relayBunRuntimeFilename(hostPlatform.os)))
+  const hasLibcSpecificBun =
+    existsSync(join(localRelayDir, RELAY_BUN_GLIBC_RUNTIME_FILENAME)) ||
+    existsSync(join(localRelayDir, RELAY_BUN_MUSL_RUNTIME_FILENAME))
+  if (!hasGenericBun && !hasLibcSpecificBun) {
+    throw new Error('Strict relay package is missing its bundled Bun runtime.')
+  }
+  const target = await detectRemoteOrcadTarget(conn, hostPlatform, { signal })
+  const bundled = relayBundledRuntimeForTarget(localRelayDir, target)
+  if (bundled) {
+    return { bundled, requiresBundledBun: true }
+  }
+  // A libc-specific companion identifies a strict package. Falling back to
+  // host Node here would make a partial or wrong-target release appear to
+  // work, reintroducing the host prerequisite this bundle is meant to remove.
+  if (hasLibcSpecificBun) {
+    throw new Error(
+      `Relay package has no Bun runtime for remote target ${target}; refusing host Node fallback.`
+    )
+  }
+  // Generic companions predate the target/libc split and remain legacy,
+  // Node-compatible packages. They may still use the normal Node path.
+  return { requiresBundledBun: false }
+}
+
+/** Probe only the bundled Bun executable. This intentionally never invokes host
+ * Node or npm; a missing/corrupt runtime forces a complete upload. */
+async function probeBundledRelayRuntime(
+  conn: SshConnection,
+  hostPlatform: RemoteHostPlatform,
+  remoteDir: string,
+  filename: string,
+  signal?: AbortSignal
+): Promise<boolean> {
+  const runtimePath = joinRemotePath(hostPlatform, remoteDir, filename)
+  const command = isWindowsRemoteHost(hostPlatform)
+    ? powerShellCommand(
+        `if (Test-Path -LiteralPath ${powerShellLiteral(runtimePath)} -PathType Leaf) { try { $version = (& ${powerShellLiteral(runtimePath)} --version 2> $null | Out-String).Trim(); if ($LASTEXITCODE -eq 0 -and $version -eq ${powerShellLiteral(ORCAD_BUN_VERSION)}) { 'READY' } else { 'WAITING' } } catch { 'WAITING' } } else { 'WAITING' }`
+      )
+    : `if [ -x ${shellEscape(runtimePath)} ] && [ "$( ${shellEscape(runtimePath)} --version 2>/dev/null )" = ${shellEscape(ORCAD_BUN_VERSION)} ]; then echo READY; else echo WAITING; fi`
+  try {
+    const output = await execHostCommand(conn, hostPlatform, command, { signal })
+    return output.trim() === 'READY'
+  } catch {
+    signal?.throwIfAborted()
+    return false
+  }
 }
 
 async function resolveRelayBootstrapStateSequentially(
   conn: SshConnection,
   hostPlatform: RemoteHostPlatform,
   fullVersion: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  skipNodeResolution = false
 ): Promise<RelayBootstrapState> {
   const installState = await resolveRemoteInstallState(conn, hostPlatform, fullVersion, { signal })
+  if (skipNodeResolution) {
+    return {
+      ...installState,
+      runtimePath: '',
+      runtimeKind: 'bun',
+      requiresBundledBun: true
+    }
+  }
   const nodePath = await resolveRemoteNodePath(conn, hostPlatform, { signal })
-  return { ...installState, nodePath }
+  return {
+    ...installState,
+    nodePath,
+    runtimePath: nodePath,
+    runtimeKind: 'node',
+    requiresBundledBun: false
+  }
 }
 
 async function resolveRelayBootstrapState(
   conn: SshConnection,
   hostPlatform: RemoteHostPlatform,
   fullVersion: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  skipNodeResolution = false
 ): Promise<RelayBootstrapState> {
   if (!conn.canRunConcurrentExecCommands()) {
-    return resolveRelayBootstrapStateSequentially(conn, hostPlatform, fullVersion, signal)
+    return resolveRelayBootstrapStateSequentially(
+      conn,
+      hostPlatform,
+      fullVersion,
+      signal,
+      skipNodeResolution
+    )
   }
   const abortController = new AbortController()
   const abortForDeploy = (): void => abortController.abort()
@@ -306,14 +448,33 @@ async function resolveRelayBootstrapState(
     rethrowSessionLimitErrors: true,
     signal: abortController.signal
   })
-  const nodePathPromise = resolveRemoteNodePath(conn, hostPlatform, {
-    rethrowSessionLimitErrors: true,
-    signal: abortController.signal
-  })
+  const nodePathPromise = skipNodeResolution
+    ? Promise.resolve<string | undefined>(undefined)
+    : resolveRemoteNodePath(conn, hostPlatform, {
+        rethrowSessionLimitErrors: true,
+        signal: abortController.signal
+      })
   try {
     const [installState, nodePath] = await Promise.all([installStatePromise, nodePathPromise])
     signal?.throwIfAborted()
-    return { ...installState, nodePath }
+    if (skipNodeResolution) {
+      return {
+        ...installState,
+        runtimePath: '',
+        runtimeKind: 'bun',
+        requiresBundledBun: true
+      }
+    }
+    if (!nodePath) {
+      throw new Error('Remote Node path resolution returned no executable')
+    }
+    return {
+      ...installState,
+      nodePath,
+      runtimePath: nodePath,
+      runtimeKind: 'node',
+      requiresBundledBun: false
+    }
   } catch (err) {
     abortController.abort()
     const settled = await Promise.allSettled([installStatePromise, nodePathPromise])
@@ -333,7 +494,13 @@ async function resolveRelayBootstrapState(
     console.warn(
       '[ssh-relay] Concurrent bootstrap probes hit the remote SSH session limit; retrying sequentially.'
     )
-    return resolveRelayBootstrapStateSequentially(conn, hostPlatform, fullVersion, signal)
+    return resolveRelayBootstrapStateSequentially(
+      conn,
+      hostPlatform,
+      fullVersion,
+      signal,
+      skipNodeResolution
+    )
   } finally {
     signal?.removeEventListener('abort', abortForDeploy)
   }
@@ -352,7 +519,8 @@ async function deployAndLaunchRelayInner(
   onProgress?: (status: string) => void,
   graceTimeSeconds?: number,
   relayInstanceId?: string,
-  deploySignal?: AbortSignal
+  deploySignal?: AbortSignal,
+  enableOwnershipTransferMutation = false
 ): Promise<RelayDeployResult> {
   while (true) {
     deploySignal?.throwIfAborted()
@@ -362,7 +530,8 @@ async function deployAndLaunchRelayInner(
         onProgress,
         graceTimeSeconds,
         relayInstanceId,
-        deploySignal
+        deploySignal,
+        enableOwnershipTransferMutation
       )
     } catch (err) {
       if (!(err instanceof RelayDirectoryGcConflictError)) {
@@ -379,7 +548,8 @@ async function deployAndLaunchRelayAttempt(
   onProgress?: (status: string) => void,
   graceTimeSeconds?: number,
   relayInstanceId?: string,
-  deploySignal?: AbortSignal
+  deploySignal?: AbortSignal,
+  enableOwnershipTransferMutation = false
 ): Promise<RelayDeployResult> {
   onProgress?.('Detecting remote platform...')
   console.log('[ssh-relay] Detecting remote platform...')
@@ -402,10 +572,48 @@ async function deployAndLaunchRelayAttempt(
   // Why: content-hashed version doubles as remote dir name and wire-handshake version; throws on missing rather than falling back (see docs/ssh-relay-versioned-install-dirs.md).
   const fullVersion = readLocalFullVersion(localRelayDir)
 
+  // A relay package carrying a target-native Bun companion enters strict mode:
+  // host Node/npm are not touched, including on reconnect. Legacy packages with
+  // no matching companion continue through the existing Node compatibility path.
+  const runtimeCandidate = await resolveRelayRuntimeCandidate(
+    conn,
+    hostPlatform,
+    localRelayDir,
+    deploySignal
+  )
+
   onProgress?.('Checking existing relay...')
   // Why: install-check and node resolution are independent; run concurrently to save a round trip, with sequential fallback for restrictive SSH servers.
-  const { remoteHome, remoteRelayDir, alreadyInstalled, nodePath } =
-    await resolveRelayBootstrapState(conn, hostPlatform, fullVersion, deploySignal)
+  const bootstrapState = await resolveRelayBootstrapState(
+    conn,
+    hostPlatform,
+    fullVersion,
+    deploySignal,
+    runtimeCandidate.requiresBundledBun
+  )
+  const { remoteHome, remoteRelayDir, nodePath } = bootstrapState
+  let alreadyInstalled = bootstrapState.alreadyInstalled
+  if (runtimeCandidate.bundled) {
+    // Optional Bun companions are not part of the legacy install sentinel. A
+    // strict deploy therefore verifies the exact target runtime and repairs a
+    // stale install by re-uploading the immutable relay directory.
+    const runtimeReady = await probeBundledRelayRuntime(
+      conn,
+      hostPlatform,
+      remoteRelayDir,
+      runtimeCandidate.bundled.filename,
+      deploySignal
+    )
+    if (!runtimeReady) {
+      alreadyInstalled = false
+    }
+  }
+  const runtimePath = runtimeCandidate.bundled
+    ? joinRemotePath(hostPlatform, remoteRelayDir, runtimeCandidate.bundled.filename)
+    : nodePath
+  if (!runtimePath) {
+    throw new Error('Relay runtime resolution returned no executable')
+  }
   console.log(`[ssh-relay] Remote dir: ${remoteRelayDir}`)
   console.log(`[ssh-relay] Already installed at ${fullVersion}: ${alreadyInstalled}`)
 
@@ -423,15 +631,17 @@ async function deployAndLaunchRelayAttempt(
   let launchGcClaimToken: string | undefined
   let launchNamespace: RelayInstallNamespace | undefined
   if (alreadyInstalled) {
-    const launchFence = await repairInstalledNativeDeps(
-      conn,
-      remoteRelayDir,
-      platform,
-      hostPlatform,
-      nodePath,
-      homeRelativeRelayDir,
-      deploySignal
-    )
+    const launchFence = runtimeCandidate.requiresBundledBun
+      ? { ownsInstallLock: false as const }
+      : await repairInstalledNativeDeps(
+          conn,
+          remoteRelayDir,
+          platform,
+          hostPlatform,
+          nodePath!,
+          homeRelativeRelayDir,
+          deploySignal
+        )
     ownsInstallLock = launchFence.ownsInstallLock
     launchGcClaimToken = launchFence.gcClaimToken
     launchNamespace = launchFence.sftpNamespace
@@ -478,7 +688,8 @@ async function deployAndLaunchRelayAttempt(
           fullVersion,
           hostPlatform,
           deploySignal,
-          { rootDir: uploadStage.slotDir, namespace: uploadStageSftpNamespace }
+          { rootDir: uploadStage.slotDir, namespace: uploadStageSftpNamespace },
+          runtimeCandidate.requiresBundledBun
         )
       } catch (err) {
         if (isUnconfirmedSshCommandTermination(err)) {
@@ -533,20 +744,22 @@ async function deployAndLaunchRelayAttempt(
           }
           console.log('[ssh-relay] Upload complete')
 
-          onProgress?.('Installing native dependencies...')
-          console.log('[ssh-relay] Installing native dependencies...')
-          await installNativeDeps(
-            conn,
-            remoteRelayDir,
-            platform,
-            hostPlatform,
-            nodePath,
-            deploySignal,
-            [],
-            launchNamespace,
-            remoteHome
-          )
-          console.log('[ssh-relay] Native deps installed')
+          if (!runtimeCandidate.requiresBundledBun) {
+            onProgress?.('Installing native dependencies...')
+            console.log('[ssh-relay] Installing native dependencies...')
+            await installNativeDeps(
+              conn,
+              remoteRelayDir,
+              platform,
+              hostPlatform,
+              nodePath!,
+              deploySignal,
+              [],
+              launchNamespace,
+              remoteHome
+            )
+            console.log('[ssh-relay] Native deps installed')
+          }
 
           // Why: mark complete but retain the lock until launch makes daemon liveness observable to cross-version GC.
           await finalizeInstall(conn, remoteRelayDir, hostPlatform, {
@@ -572,6 +785,10 @@ async function deployAndLaunchRelayAttempt(
     }
   }
 
+  if (runtimeCandidate.requiresBundledBun) {
+    await verifyRemoteBundledRuntime(conn, hostPlatform, runtimePath, deploySignal)
+  }
+
   let launched: Awaited<ReturnType<typeof launchRelay>>
   let launchLivenessObserved = false
   try {
@@ -582,10 +799,11 @@ async function deployAndLaunchRelayAttempt(
       conn,
       remoteRelayDir,
       hostPlatform,
-      nodePath,
+      runtimePath,
       graceTimeSeconds,
       relayInstanceId,
-      deploySignal
+      deploySignal,
+      enableOwnershipTransferMutation
     )
     launchLivenessObserved = true
   } finally {
@@ -626,17 +844,20 @@ async function deployAndLaunchRelayAttempt(
     .catch(() => {})
     .then(() =>
       gcOldRelayVersions(conn, remoteHome, remoteRelayDir, hostPlatform, {
-        windowsNodePath: launched.nodePath,
+        windowsRuntimePath: runtimePath,
+        windowsRuntimeKind: runtimeCandidate.bundled ? 'bun' : 'node',
         windowsSockNames: [relaySocketNameForInstanceId(relayInstanceId)],
         // Why pin rather than rely on the symlink alone: a deploy that fell back to a
         // per-directory install has no reference to show, and its key must still survive.
-        nativeDepsCacheKeys: [
-          resolveRelayNativeDepsCacheKey({
-            platform,
-            localRelayDir,
-            deps: RELAY_NATIVE_DEPS
-          })
-        ].filter((key): key is string => key !== null)
+        nativeDepsCacheKeys: runtimeCandidate.requiresBundledBun
+          ? []
+          : [
+              resolveRelayNativeDepsCacheKey({
+                platform,
+                localRelayDir,
+                deps: RELAY_NATIVE_DEPS
+              })
+            ].filter((key): key is string => key !== null)
       })
     )
     .catch(() => {})
@@ -648,9 +869,37 @@ async function deployAndLaunchRelayAttempt(
     hostPlatform,
     remoteHome,
     remoteRelayDir,
-    nodePath: launched.nodePath,
+    // Keep runtime identity separate from the legacy Node-only field. Strict
+    // Bun deployments intentionally leave nodePath undefined so consumers do
+    // not accidentally probe or report Bun as host Node.
+    runtimePath,
+    runtimeKind: runtimeCandidate.bundled ? 'bun' : 'node',
+    ...(runtimeCandidate.bundled ? {} : { nodePath: launched.nodePath }),
     sockPath: launched.sockPath,
     credentialFile: launched.credentialFile
+  }
+}
+
+/** Fail closed when a strict install is missing or carries the wrong Bun build. */
+async function verifyRemoteBundledRuntime(
+  conn: SshConnection,
+  hostPlatform: RemoteHostPlatform,
+  runtimePath: string,
+  signal?: AbortSignal
+): Promise<void> {
+  const command = isWindowsRemoteHost(hostPlatform)
+    ? powerShellCommand(
+        `if (!(Test-Path -LiteralPath ${powerShellLiteral(runtimePath)} -PathType Leaf)) { throw 'bundled Bun runtime is missing' }; $v = (& ${powerShellLiteral(runtimePath)} --version 2> $null | Out-String).Trim(); if ($LASTEXITCODE -ne 0 -or $v -ne ${powerShellLiteral(ORCAD_BUN_VERSION)}) { throw 'bundled Bun runtime version mismatch: ' + $v }`
+      )
+    : `test -x ${shellEscape(runtimePath)} && test "$( ${shellEscape(runtimePath)} --version 2>/dev/null )" = ${shellEscape(ORCAD_BUN_VERSION)}`
+  try {
+    await execHostCommand(conn, hostPlatform, command, { signal })
+  } catch (error) {
+    signal?.throwIfAborted()
+    throw new Error(
+      `Strict Bun relay install is incomplete at ${runtimePath}; refusing to fall back to host Node.`,
+      { cause: error }
+    )
   }
 }
 
@@ -661,7 +910,8 @@ async function uploadRelay(
   fullVersion: string,
   hostPlatform: RemoteHostPlatform,
   signal?: AbortSignal,
-  stage?: { rootDir: string; namespace?: RelayUploadStageNamespace }
+  stage?: { rootDir: string; namespace?: RelayUploadStageNamespace },
+  strictBun = false
 ): Promise<void> {
   const localRelayDir = getLocalRelayPath(platform)
   if (!localRelayDir || !existsSync(localRelayDir)) {
@@ -688,12 +938,24 @@ async function uploadRelay(
   })
 
   if (!isWindowsRemoteHost(hostPlatform)) {
-    await execHostCommand(
-      conn,
-      hostPlatform,
-      makeRemoteExecutableCommand(hostPlatform, joinRemotePath(hostPlatform, remoteDir, 'node')),
-      { signal }
-    )
+    // SFTP does not preserve execute bits. Legacy relay packages carried a
+    // `node` companion; current packages carry target-native Bun names.
+    const executableNames = [
+      'node',
+      RELAY_BUN_RUNTIME_FILENAME,
+      ...(strictBun ? [RELAY_BUN_GLIBC_RUNTIME_FILENAME, RELAY_BUN_MUSL_RUNTIME_FILENAME] : [])
+    ].filter((name) => existsSync(join(localRelayDir, name)))
+    for (const executableName of executableNames) {
+      await execHostCommand(
+        conn,
+        hostPlatform,
+        makeRemoteExecutableCommand(
+          hostPlatform,
+          joinRemotePath(hostPlatform, remoteDir, executableName)
+        ),
+        { signal }
+      )
+    }
   }
 
   // Why: write .version via SFTP not shell to avoid quoting content-hashed versions; the daemon reads it to validate the wire handshake.
@@ -1675,7 +1937,8 @@ async function launchRelay(
   nodePath: string,
   graceTimeSeconds?: number,
   relayInstanceId?: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  enableOwnershipTransferMutation = false
 ): Promise<{
   transport: MultiplexerTransport
   nodePath: string
@@ -1728,12 +1991,15 @@ async function launchRelay(
         graceTime,
         activePipeMarkerPath,
         reconnectFallback: fallbackEndpoint,
-        credentialFile
+        credentialFile,
+        enableOwnershipTransferMutation
       },
       signal
     )
     return { ...launched, credentialFile }
   }
+
+  const relayRuntime = posixRelayRuntimeExpression(hostPlatform, remoteDir, nodePath)
 
   // Why: after a restart the relay may still be alive in its grace period; --connect to its socket preserves PTY state and scrollback.
   try {
@@ -1747,7 +2013,7 @@ async function launchRelay(
       console.log('[ssh-relay] Existing relay socket found, attempting reconnect...')
       try {
         const channel = await conn.exec(
-          `cd ${escapedDir} && ${escapedNode} relay.js --connect --sock-path ${shellEscape(sockFile)} --credential-file ${shellEscape(credentialFile)}`,
+          `cd ${escapedDir} && "${relayRuntime}" relay.js --connect --sock-path ${shellEscape(sockFile)} --credential-file ${shellEscape(credentialFile)}`,
           { signal }
         )
         const transport = await waitForSentinel(channel, signal)
@@ -1793,7 +2059,10 @@ async function launchRelay(
   // Why: the relay derives its hook endpoint dir from the socket path; pin it back under the relay dir when the socket moved to /tmp.
   const endpointDirArg =
     sockFile === defaultSockFile ? '' : ` --endpoint-dir ${shellEscape(endpointDir)}`
-  const launchCmd = `cd ${escapedDir} && nohup ${escapedNode} relay.js --detached --grace-time ${graceTime} --sock-path ${shellEscape(sockFile)}${endpointDirArg} --credential-file ${shellEscape(credentialFile)} --log-file ${shellEscape(logFile)} > ${shellEscape(logFile)} 2>&1 </dev/null &`
+  const ownershipTransferFlag = enableOwnershipTransferMutation
+    ? ` ${OWNERSHIP_TRANSFER_CANARY_FLAGS.join(' ')}`
+    : ''
+  const launchCmd = `cd ${escapedDir} && nohup "${relayRuntime}" relay.js --detached --grace-time ${graceTime} --sock-path ${shellEscape(sockFile)}${endpointDirArg} --credential-file ${shellEscape(credentialFile)}${ownershipTransferFlag} --log-file ${shellEscape(logFile)} > ${shellEscape(logFile)} 2>&1 </dev/null &`
   const launchChannel = await conn.exec(launchCmd, { signal })
   launchChannel.on('data', () => {})
   launchChannel.on('error', () => {})
@@ -1811,7 +2080,9 @@ async function launchRelay(
   try {
     while (Date.now() - pollStart < POLL_TIMEOUT_MS) {
       try {
-        // Why: probe via node (guaranteed present) not python3/socat/perl; pass the socket path as argv[1] to dodge -e quoting issues.
+        // Why: probe via the selected relay runtime (Bun in strict mode,
+        // Node for legacy installs) rather than python3/socat/perl; pass the
+        // socket path as argv[1] to dodge -e quoting issues.
         const result = await execCommand(
           conn,
           `${escapedNode} -e 'var s=require("net").connect(process.argv[1]);s.on("connect",function(){s.destroy();process.stdout.write("READY")});s.on("error",function(){process.stdout.write("WAITING")})' ${shellEscape(sockFile)} 2>/dev/null || (test -S ${shellEscape(sockFile)} && echo READY || echo WAITING)`,
@@ -1843,7 +2114,7 @@ async function launchRelay(
 
   // Why: backgrounded relay's stdout goes to a log file, not the exec channel; --connect bridges this channel to its Unix socket.
   const channel = await conn.exec(
-    `cd ${escapedDir} && ${escapedNode} relay.js --connect --sock-path ${shellEscape(sockFile)} --credential-file ${shellEscape(credentialFile)}`,
+    `cd ${escapedDir} && "${relayRuntime}" relay.js --connect --sock-path ${shellEscape(sockFile)} --credential-file ${shellEscape(credentialFile)}`,
     { signal }
   )
   return {
@@ -1985,6 +2256,7 @@ type WindowsRelayLaunchOptions = {
   graceTime: number
   activePipeMarkerPath: string
   credentialFile: string
+  enableOwnershipTransferMutation: boolean
 } & WindowsRelayEndpoint & {
     reconnectFallback?: WindowsRelayEndpoint
   }
@@ -2067,7 +2339,8 @@ async function launchWindowsRelay(
       launchOpts.graceTime,
       logFile,
       errFile,
-      launchOpts.credentialFile
+      launchOpts.credentialFile,
+      launchOpts.enableOwnershipTransferMutation
     ),
     { signal }
   )
@@ -2146,7 +2419,7 @@ function windowsRelayConnectCommand(
     hostPlatform,
     nodePath,
     remoteDir,
-    `& ${powerShellLiteral(nodePath)} relay.js --connect --sock-path ${powerShellLiteral(sockPath)} --credential-file ${powerShellLiteral(credentialFile)}`
+    `${windowsRelayRuntimeSelection(hostPlatform, remoteDir, nodePath)}; & $runtime relay.js --connect --sock-path ${powerShellLiteral(sockPath)} --credential-file ${powerShellLiteral(credentialFile)}`
   )
 }
 
@@ -2159,36 +2432,43 @@ function windowsRelayLaunchCommand(
   graceTime: number,
   logFile: string,
   errFile: string,
-  credentialFile: string
+  credentialFile: string,
+  enableOwnershipTransferMutation: boolean
 ): string {
   const relayScript = joinRemotePath(hostPlatform, remoteDir, 'relay.js')
   // Why: Windows sshd kills the exec channel's process tree on close; WMI re-parents the detached relay to survive.
-  const quoted = (value: string): string => `"${value.replace(/"/g, '\\"')}"`
-  const relayCommandLine = [
-    quoted(nodePath),
-    quoted(relayScript),
-    '--detached',
-    '--grace-time',
-    String(graceTime),
-    '--sock-path',
-    quoted(sockPath),
-    '--credential-file',
-    quoted(credentialFile),
-    '--endpoint-dir',
-    quoted(endpointDir),
-    // Why: --log-file owns rotation; shell redirects still capture pre-JS boot/crash output.
-    '--log-file',
-    quoted(logFile),
-    `1>${quoted(logFile)}`,
-    `2>${quoted(errFile)}`
-  ].join(' ')
-  const wmiCommandLine = `cmd.exe /d /s /c "${relayCommandLine}"`
+  // The command line is assembled after runtime selection so a bundled Bun
+  // executable can own PTYs while legacy slots continue under host Node.
+  const relayCommandLineParts = [
+    `('"' + $runtime + '"')`,
+    powerShellLiteral(`"${relayScript}"`),
+    powerShellLiteral('--detached'),
+    powerShellLiteral('--grace-time'),
+    powerShellLiteral(String(graceTime)),
+    powerShellLiteral('--sock-path'),
+    powerShellLiteral(`"${sockPath}"`),
+    powerShellLiteral('--credential-file'),
+    powerShellLiteral(`"${credentialFile}"`),
+    ...(enableOwnershipTransferMutation
+      ? OWNERSHIP_TRANSFER_CANARY_FLAGS.map(powerShellLiteral)
+      : []),
+    powerShellLiteral('--endpoint-dir'),
+    powerShellLiteral(`"${endpointDir}"`),
+    powerShellLiteral('--log-file'),
+    powerShellLiteral(`"${logFile}"`),
+    powerShellLiteral(`1>"${logFile}"`),
+    powerShellLiteral(`2>"${errFile}"`)
+  ]
+  const relayCommandLine = `$relayCommandLine = @(${relayCommandLineParts.join(', ')}) -join ' '`
+  const wmiCommandLine = `'cmd.exe /d /s /c "' + $relayCommandLine + '"'`
   return commandWithNodePath(
     hostPlatform,
     nodePath,
     remoteDir,
     [
-      `$result = Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{ CommandLine = ${powerShellLiteral(wmiCommandLine)}; CurrentDirectory = ${powerShellLiteral(remoteDir)} }`,
+      windowsRelayRuntimeSelection(hostPlatform, remoteDir, nodePath),
+      relayCommandLine,
+      `$result = Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{ CommandLine = ${wmiCommandLine}; CurrentDirectory = ${powerShellLiteral(remoteDir)} }`,
       `if ($result.ReturnValue -ne 0) { throw "Win32_Process.Create failed with $($result.ReturnValue)" }`
     ].join('; ')
   )

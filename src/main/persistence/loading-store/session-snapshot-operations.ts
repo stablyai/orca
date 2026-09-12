@@ -15,10 +15,15 @@ import type { TerminalBindingRecoveryOperations } from './terminal-binding-recov
 import type { WriteSchedulingOperations } from './write-scheduling'
 import { resolveHostId, setHostWorkspaceSession } from './session-host-partitions'
 import { scheduleSave } from './write-scheduling'
+import { reconcileOrcadRetirementSessionWrite } from './orcad-retirement-session-write'
 
 type SessionSnapshotOperationsRuntime = Pick<
   StoreRuntimeState,
-  'pendingSnapshotFileWork' | 'state' | 'terminalScrollbackSnapshotStorage'
+  | 'pendingSnapshotFileWork'
+  | 'state'
+  | 'terminalScrollbackSnapshotStorage'
+  | 'transferSnapshotHistory'
+  | 'orcadRetirementSessionPublication'
 >
 
 const sessionSnapshotOperationsContext = Symbol('SessionSnapshotOperations')
@@ -73,6 +78,11 @@ export class SessionSnapshotOperations {
       this.setWorkspaceSession(next, resolved)
       return
     }
+    next = reconcileOrcadRetirementSessionWrite(
+      this[sessionSnapshotOperationsContext].runtime,
+      next,
+      resolved
+    )
     if (Object.hasOwn(patch, 'browserUrlHistory')) {
       next = pruneWorkspaceSessionBrowserHistory(next)
     }

@@ -102,18 +102,3 @@ export function readSshRemoteOnlyRequests(target: DockerSshRelayTarget): SshRemo
     .filter((line) => line.trim().length > 0)
     .map((line) => JSON.parse(line) as SshRemoteOnlyRequest)
 }
-
-/**
- * Kills the container's established SSH sessions without touching the listener, so the
- * transport really dies and the same target can be reconnected.
- *
- * `pgrep -f '^sshd: '` matches only accepted-connection processes: the daemon's own command
- * line is `/usr/sbin/sshd -D -e`, and the shell running this command starts with `bash`.
- */
-export function killSshRelayTargetTransport(target: DockerSshRelayTarget): number {
-  const killed = execDockerSshRelayTargetControlCommand(
-    target,
-    "pids=$(pgrep -f '^sshd: ' || true); for pid in $pids; do kill -9 $pid || true; done; printf '%s' \"$(printf '%s\\n' $pids | grep -c . || true)\""
-  )
-  return Number(killed.trim() || '0')
-}

@@ -19,6 +19,7 @@ import { getRemoteHostPlatform } from './ssh-remote-platform'
 
 describe('acquireInstallLock', () => {
   afterEach(() => {
+    vi.useRealTimers()
     vi.resetAllMocks()
   })
 
@@ -45,5 +46,30 @@ describe('acquireInstallLock', () => {
         { signal: controller.signal }
       )
     ).rejects.toBe(termination)
+  })
+
+  it('does not steal a stale state-transaction fence when takeover is disabled', async () => {
+    vi.useFakeTimers()
+    const controller = new AbortController()
+    vi.mocked(execCommand).mockImplementation(async (_conn, command) => {
+      if (command.startsWith('mkdir -p')) {
+        return ''
+      }
+      return command.includes('.install-lock') ? 'BUSY' : ''
+    })
+
+    const pending = acquireInstallLock(
+      {} as SshConnection,
+      '/home/u/.orca-remote/.orcad-activation-transaction',
+      getRemoteHostPlatform('linux-x64'),
+      { signal: controller.signal, allowStaleTakeover: false }
+    )
+    await vi.advanceTimersByTimeAsync(1_000)
+    controller.abort()
+
+    await expect(pending).rejects.toMatchObject({ name: 'AbortError' })
+    expect(vi.mocked(execCommand).mock.calls.map(([, command]) => command)).not.toEqual(
+      expect.arrayContaining([expect.stringContaining('lock_tombstone')])
+    )
   })
 })

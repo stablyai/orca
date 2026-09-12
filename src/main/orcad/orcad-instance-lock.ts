@@ -15,8 +15,12 @@
 import { randomUUID } from 'node:crypto'
 import {
   chmodSync,
+  closeSync,
+  fstatSync,
+  linkSync,
   mkdirSync,
-  readFileSync,
+  openSync,
+  readSync,
   renameSync,
   statSync,
   unlinkSync,
@@ -25,9 +29,11 @@ import {
 import { userInfo } from 'node:os'
 import { join } from 'node:path'
 import process from 'node:process'
+import { z } from 'zod'
 import { getProcessStartedAtMs, startTimeMatches } from '../daemon/daemon-process-start-time'
 
 export const ORCAD_LOCK_FILE_NAME = 'orcad.lock'
+const MAX_ORCAD_LOCK_BYTES = 64 * 1024
 
 export type OrcadInstanceLockCode =
   | 'orcad_data_root_unusable'
@@ -35,6 +41,7 @@ export type OrcadInstanceLockCode =
   | 'orcad_data_root_shared'
   | 'orcad_instance_lock_held'
   | 'orcad_instance_lock_foreign_identity'
+  | 'orcad_instance_lock_unreadable'
 
 export class OrcadInstanceLockError extends Error {
   constructor(
@@ -46,22 +53,28 @@ export class OrcadInstanceLockError extends Error {
   }
 }
 
-export type OrcadLockRecord = {
-  pid: number
+const OrcadLockRecordSchema = z.object({
+  pid: z.number().int().positive().max(Number.MAX_SAFE_INTEGER),
   /** Null where the platform cannot read it; PID alone is then the (weaker) fence. */
-  startedAtMs: number | null
+  startedAtMs: z.number().finite().nonnegative().nullable(),
   /** POSIX uid, or the Windows username. Compared as an opaque string. */
-  identity: string
-  version: string
-  acquiredAt: string
+  identity: z.string().min(1).max(1_024),
+  version: z.string().min(1).max(255),
+  acquiredAt: z.iso.datetime({ offset: true }),
   /** Distinguishes our record from a replacement written after we lost the race. */
-  nonce: string
-}
+  nonce: z.string().min(1).max(255)
+})
+
+export type OrcadLockRecord = z.infer<typeof OrcadLockRecordSchema>
 
 export type OrcadInstanceLock = {
   readonly path: string
   readonly record: OrcadLockRecord
   release(): void
+}
+
+export function readOrcadInstanceLockRecord(path: string): OrcadLockRecord | null {
+  return parseLockRecord(readBoundedLockFile(path) ?? '')
 }
 
 export type OrcadInstanceLockHooks = {
@@ -98,21 +111,8 @@ function isErrorCode(error: unknown, code: string): boolean {
 function parseLockRecord(content: string): OrcadLockRecord | null {
   try {
     const parsed: unknown = JSON.parse(content)
-    if (!parsed || typeof parsed !== 'object') {
-      return null
-    }
-    const record = parsed as Partial<OrcadLockRecord>
-    if (typeof record.pid !== 'number' || typeof record.identity !== 'string') {
-      return null
-    }
-    return {
-      pid: record.pid,
-      startedAtMs: typeof record.startedAtMs === 'number' ? record.startedAtMs : null,
-      identity: record.identity,
-      version: typeof record.version === 'string' ? record.version : 'unknown',
-      acquiredAt: typeof record.acquiredAt === 'string' ? record.acquiredAt : '',
-      nonce: typeof record.nonce === 'string' ? record.nonce : ''
-    }
+    const result = OrcadLockRecordSchema.safeParse(parsed)
+    return result.success ? result.data : null
   } catch {
     return null
   }
@@ -232,7 +232,15 @@ export function acquireOrcadInstanceLock(
     return makeLock(lockPath, record)
   }
 
-  const existing = parseLockRecord(safeRead(lockPath) ?? '')
+  const existing = parseLockRecord(readBoundedLockFile(lockPath) ?? '')
+  if (!existing) {
+    throw new OrcadInstanceLockError(
+      'orcad_instance_lock_unreadable',
+      `The orcad instance lock at ${lockPath} is unreadable, malformed, or larger than ` +
+        `${MAX_ORCAD_LOCK_BYTES} bytes. Refusing to reclaim it without proof that its holder ` +
+        'has exited. Stop orcad and remove the stale lock manually.'
+    )
+  }
   if (existing && existing.identity !== identity) {
     throw new OrcadInstanceLockError(
       'orcad_instance_lock_foreign_identity',
@@ -249,13 +257,6 @@ export function acquireOrcadInstanceLock(
         'ORCA_USER_DATA.'
     )
   }
-  if (!existing) {
-    console.warn(
-      `[orcad] The instance lock at ${lockPath} is unreadable; reclaiming it. If another orcad ` +
-        'is running on this data root, stop it now.'
-    )
-  }
-
   // Why rename-and-then-publish rather than unlink-and-write: rename claims one exact
   // directory entry, so a replacement written between our read and our write stays at the
   // canonical path and wins — we never delete a record we did not inspect.
@@ -267,6 +268,33 @@ export function acquireOrcadInstanceLock(
       'orcad_instance_lock_held',
       `Could not reclaim the stale orcad instance lock at ${lockPath}; another process is ` +
         'holding it. Retry, or stop the other orcad.'
+    )
+  }
+  // The canonical entry may have been replaced after the liveness check but before
+  // renameSync. Never publish over a newer record: inspect the claimed bytes first.
+  const claimedContents = readBoundedLockFile(claimPath)
+  const claimed = parseLockRecord(claimedContents ?? '')
+  if (!claimed || claimed.nonce !== existing.nonce) {
+    // Restore the displaced record only when the canonical path is still absent. A
+    // no-clobber hard link keeps a third contender's newer record authoritative.
+    try {
+      linkSync(claimPath, lockPath)
+      unlinkSync(claimPath)
+    } catch {
+      // Filesystems without hard-link support still get a no-clobber restore.
+      // EEXIST means a newer contender already won and must remain authoritative.
+      if (claimedContents !== null) {
+        try {
+          writeFileSync(lockPath, claimedContents, { flag: 'wx', mode: 0o600 })
+          unlinkSync(claimPath)
+        } catch {
+          // Either a newer contender won, or restoration is unavailable; fail closed.
+        }
+      }
+    }
+    throw new OrcadInstanceLockError(
+      'orcad_instance_lock_held',
+      `The orcad instance lock at ${lockPath} changed while reclaiming a stale record.`
     )
   }
   if (!publish()) {
@@ -289,11 +317,34 @@ export function acquireOrcadInstanceLock(
   return makeLock(lockPath, record)
 }
 
-function safeRead(path: string): string | null {
+function readBoundedLockFile(path: string): string | null {
+  let descriptor: number | undefined
   try {
-    return readFileSync(path, 'utf8')
+    descriptor = openSync(path, 'r')
+    const stats = fstatSync(descriptor)
+    if (!stats.isFile() || stats.size > MAX_ORCAD_LOCK_BYTES) {
+      return null
+    }
+    const buffer = Buffer.allocUnsafe(MAX_ORCAD_LOCK_BYTES + 1)
+    let bytesRead = 0
+    while (bytesRead < buffer.length) {
+      const count = readSync(descriptor, buffer, bytesRead, buffer.length - bytesRead, null)
+      if (count === 0) {
+        break
+      }
+      bytesRead += count
+    }
+    return bytesRead <= MAX_ORCAD_LOCK_BYTES ? buffer.toString('utf8', 0, bytesRead) : null
   } catch {
     return null
+  } finally {
+    if (descriptor !== undefined) {
+      try {
+        closeSync(descriptor)
+      } catch {
+        // A read-only descriptor can be left for process teardown if close itself fails.
+      }
+    }
   }
 }
 
@@ -310,7 +361,7 @@ function makeLock(lockPath: string, record: OrcadLockRecord): OrcadInstanceLock 
       // Why re-read before unlinking: a reclaim by a later orcad (after, say, a SIGKILL that
       // this process somehow survived enough to run handlers) leaves a record that is not
       // ours. Deleting it would unlock a live runtime.
-      const current = parseLockRecord(safeRead(lockPath) ?? '')
+      const current = parseLockRecord(readBoundedLockFile(lockPath) ?? '')
       if (!current || current.nonce !== record.nonce) {
         return
       }

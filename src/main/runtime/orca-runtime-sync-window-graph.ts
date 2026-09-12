@@ -9,6 +9,9 @@ import type {
 } from '../../shared/runtime-types'
 import { HEADLESS_RUNTIME_WINDOW_ID } from '../../shared/runtime-types'
 import type { RuntimeLeafRecord } from './runtime-terminal-state-records'
+import { assertOutgoingPtyGraphPublicationAllowed } from './outgoing-pty-registration-fence'
+import { retainUnchangedGraphRecord } from './runtime-graph-record-republication'
+import { assertOutgoingMobileSnapshotPublicationAllowed } from './outgoing-mobile-snapshot-admission'
 
 /** The runtime indexes graph tabs by bare id, so duplicate ids cannot be routed safely. */
 function assertUniqueRuntimeGraphTabIds(tabs: readonly RuntimeSyncedTab[]): void {
@@ -34,6 +37,16 @@ export class OrcaRuntimeWithSyncWindowGraph extends OrcaRuntimeWithAttachWindow 
     // malformed persisted/mirrored graphs before authority or graph state is
     // changed; choosing a winner would route PTYs to the wrong worktree.
     assertUniqueRuntimeGraphTabIds(graph.tabs)
+    // A whole-graph replacement can remove held source leaves as well as recreate them.
+    assertOutgoingPtyGraphPublicationAllowed(this, this.leaves.values())
+    assertOutgoingPtyGraphPublicationAllowed(this, graph.leaves)
+    if (graph.mobileSessionTabs !== undefined) {
+      assertOutgoingMobileSnapshotPublicationAllowed(
+        this,
+        this.mobileSessionTabsByWorktree.values()
+      )
+      assertOutgoingMobileSnapshotPublicationAllowed(this, graph.mobileSessionTabs)
+    }
     if (
       windowId !== HEADLESS_RUNTIME_WINDOW_ID &&
       this.authoritativeWindowId === HEADLESS_RUNTIME_WINDOW_ID &&
@@ -109,34 +122,38 @@ export class OrcaRuntimeWithSyncWindowGraph extends OrcaRuntimeWithAttachWindow 
       const existingPty = ptyId ? this.ptysById.get(ptyId) : undefined
       const tailSource = existing?.ptyId === ptyId ? existing : existingPty
 
-      nextLeaves.set(leafKey, {
-        ...leaf,
-        ptyId,
-        ptyGeneration,
-        connected: ptyId !== null,
-        writable: this.graphStatus === 'ready' && ptyId !== null,
-        lastOutputAt: tailSource?.lastOutputAt ?? null,
-        lastExitCode: tailSource?.lastExitCode ?? null,
-        lastExitCause: tailSource?.lastExitCause ?? null,
-        tailBuffer: tailSource?.tailBuffer ?? [],
-        tailTranscriptBuffer: tailSource?.tailTranscriptBuffer ?? [],
-        tailTranscriptChars: tailSource?.tailTranscriptChars ?? 0,
-        tailPartialLine: tailSource?.tailPartialLine ?? '',
-        tailPendingAnsi: tailSource?.tailPendingAnsi ?? '',
-        tailRedrawCursor: tailSource?.tailRedrawCursor ?? null,
-        tailTruncated: tailSource?.tailTruncated ?? false,
-        tailLinesTotal: tailSource?.tailLinesTotal ?? 0,
-        preview: tailSource?.preview ?? '',
-        waitBlockedAt: tailSource?.waitBlockedAt ?? null,
-        lastAgentStatus: tailSource?.lastAgentStatus ?? null,
-        lastAgentStatusObservedLive: tailSource?.lastAgentStatusObservedLive ?? false,
-        lastOscTitle: tailSource?.lastOscTitle ?? null,
-        lastOscTitleAt: tailSource?.lastOscTitleAt ?? null,
-        paneTitleUpdatedAt:
-          existing?.ptyId === ptyId && existing.paneTitle === leaf.paneTitle
-            ? existing.paneTitleUpdatedAt
-            : graphSyncedAt
-      })
+      nextLeaves.set(
+        leafKey,
+        retainUnchangedGraphRecord(existing, {
+          ...leaf,
+          ptyId,
+          ptyGeneration,
+          connected: ptyId !== null,
+          writable: this.graphStatus === 'ready' && ptyId !== null,
+          lastOutputAt: tailSource?.lastOutputAt ?? null,
+          lastExitCode: tailSource?.lastExitCode ?? null,
+          lastExitCause: tailSource?.lastExitCause ?? null,
+          tailBuffer: tailSource?.tailBuffer ?? [],
+          tailTranscriptBuffer: tailSource?.tailTranscriptBuffer ?? [],
+          tailTranscriptChars: tailSource?.tailTranscriptChars ?? 0,
+          tailPartialLine: tailSource?.tailPartialLine ?? '',
+          tailPendingAnsi: tailSource?.tailPendingAnsi ?? '',
+          tailRedrawCursor: tailSource?.tailRedrawCursor ?? null,
+          tailTruncated: tailSource?.tailTruncated ?? false,
+          tailLinesTotal: tailSource?.tailLinesTotal ?? 0,
+          preview: tailSource?.preview ?? '',
+          waitBlockedAt: tailSource?.waitBlockedAt ?? null,
+          tailWaitState: tailSource?.tailWaitState,
+          lastAgentStatus: tailSource?.lastAgentStatus ?? null,
+          lastAgentStatusObservedLive: tailSource?.lastAgentStatusObservedLive ?? false,
+          lastOscTitle: tailSource?.lastOscTitle ?? null,
+          lastOscTitleAt: tailSource?.lastOscTitleAt ?? null,
+          paneTitleUpdatedAt:
+            existing?.ptyId === ptyId && existing.paneTitle === leaf.paneTitle
+              ? existing.paneTitleUpdatedAt
+              : graphSyncedAt
+        })
+      )
 
       if (leaf.ptyId) {
         this.recordPtyWorktree(leaf.ptyId, leaf.worktreeId, {

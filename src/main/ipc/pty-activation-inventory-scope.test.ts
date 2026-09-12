@@ -3,6 +3,11 @@ import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import { registerSshPtyProvider, getLocalPtyProvider } from './pty'
 import { installPtyInspectIpcHandlers } from './pty/ipc/inspect'
 import { ptyOwnership } from './pty/provider/ownership-state'
+import {
+  bindDelegatedPtyProviderRoute,
+  retireDelegatedPtyProviderRoute
+} from './pty/provider/delegated-provider-routes'
+import { identity as delegatedIdentity } from '../../relay/relay-pty-ownership-transfer-delegation-test-fixture'
 
 vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
 vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
@@ -135,5 +140,60 @@ describe('scoped activation PTY inventory', () => {
     expect(await list()).toHaveLength(50)
     expect(localList).toHaveBeenCalledOnce()
     expect(remoteLists.every((mock) => mock.mock.calls.length === 1)).toBe(true)
+  })
+
+  it('includes delegated ownership in a local scope without admitting the old native row', async () => {
+    const { list, localList, remoteLists } = install()
+    const identity = { ...delegatedIdentity, terminalId: 'scoped-delegated' }
+    const claim = { generation: 1, claimId: 'scoped-current' }
+    localList.mockResolvedValue([{ id: identity.terminalId, cwd: '/old', title: 'old native' }])
+    const delegatedList = vi.fn(async () => [
+      {
+        id: identity.terminalId,
+        incarnationId: identity.incarnationId,
+        cwd: '/delegated',
+        title: 'current owner',
+        worktreeId: 'folder-workspace'
+      }
+    ])
+    bindDelegatedPtyProviderRoute(identity, claim, {
+      ...getLocalPtyProvider(),
+      listProcesses: delegatedList
+    })
+    try {
+      await expect(list({ connectionId: null })).resolves.toEqual([
+        {
+          id: identity.terminalId,
+          cwd: '/delegated',
+          title: 'current owner',
+          worktreeId: 'folder-workspace',
+          agentOwnership: 'unknown'
+        }
+      ])
+      expect(delegatedList).toHaveBeenCalledOnce()
+      expect(remoteLists.every((mock) => mock.mock.calls.length === 0)).toBe(true)
+    } finally {
+      retireDelegatedPtyProviderRoute(identity, claim)
+    }
+  })
+
+  it('rejects local-scope inventory when its delegated owner changes during the read', async () => {
+    const { list } = install()
+    const identity = { ...delegatedIdentity, terminalId: 'scoped-replaced-delegated' }
+    const claim = { generation: 1, claimId: 'first' }
+    const pending = Promise.withResolvers<never[]>()
+    const disconnect = bindDelegatedPtyProviderRoute(identity, claim, {
+      ...getLocalPtyProvider(),
+      listProcesses: vi.fn(() => pending.promise)
+    })
+    try {
+      const inventory = list({ connectionId: null })
+      await Promise.resolve()
+      disconnect()
+      pending.resolve([])
+      await expect(inventory).rejects.toThrow('delegated_pty_inventory_superseded')
+    } finally {
+      retireDelegatedPtyProviderRoute(identity, claim)
+    }
   })
 })

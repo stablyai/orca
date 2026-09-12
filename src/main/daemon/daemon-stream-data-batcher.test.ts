@@ -94,6 +94,20 @@ describe('DaemonStreamDataBatcher', () => {
     })
   })
 
+  it('preserves PTY incarnation identity through stream serialization', () => {
+    const { batcher, streamSocket } = createBatcher()
+
+    batcher.enqueue('client-1', 'session-1', 'output', {
+      flushImmediately: true,
+      incarnationId: 'incarnation-1'
+    })
+
+    expect(JSON.parse(String(streamSocket.write.mock.calls[0]?.[0]))).toMatchObject({
+      event: 'data',
+      payload: { data: 'output', incarnationId: 'incarnation-1' }
+    })
+  })
+
   it('keeps large pending output batched even when an interactive redraw follows', () => {
     vi.useFakeTimers()
     try {

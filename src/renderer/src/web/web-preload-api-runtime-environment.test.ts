@@ -17,6 +17,44 @@ describe('web runtime environment identity', () => {
     vi.doUnmock('./web-runtime-client')
   })
 
+  it('refuses desktop reconciliation without changing the web host registry', async () => {
+    const globals = installBrowserGlobals('Linux')
+    writeStoredRuntimeEnvironment(globals.storage, 'web-server-a')
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+    const before = await globals.window.api.runtimeEnvironments.list()
+    await expect(
+      globals.window.api.runtimeEnvironments.reconcile({
+        action: 'activate',
+        environmentId: 'web-server-a',
+        requestId: 'request'
+      })
+    ).rejects.toThrow(/desktop/i)
+    await expect(globals.window.api.runtimeEnvironments.list()).resolves.toEqual(before)
+  })
+
+  it('refuses desktop outgoing preparation without changing the web host registry', async () => {
+    const globals = installBrowserGlobals('Linux')
+    writeStoredRuntimeEnvironment(globals.storage, 'web-server-a')
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+    const before = await globals.window.api.runtimeEnvironments.list()
+    await expect(
+      globals.window.api.runtimeEnvironments.prepareOrcadOutgoingTerminal({
+        selector: 'web-server-a',
+        ptyId: 'ssh:source@@pty',
+        surfaceBinding: {
+          executionHostId: 'local',
+          workspaceKey: 'folder:folder',
+          tabId: 'tab',
+          leafId: '11111111-1111-4111-8111-111111111111',
+          ptyId: 'pty'
+        }
+      })
+    ).rejects.toThrow(/desktop/i)
+    await expect(globals.window.api.runtimeEnvironments.list()).resolves.toEqual(before)
+  })
+
   it('does not resolve an old server selector through a differently keyed server', async () => {
     const globals = installBrowserGlobals('Linux')
     writeStoredRuntimeEnvironment(globals.storage, 'web-server-a')

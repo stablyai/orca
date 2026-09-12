@@ -1,4 +1,5 @@
 import type { SshPtyDataCallback } from './ssh-pty-provider-contract'
+import { parsePtyOwnershipTransferOutputEnvelope } from '../../shared/pty-ownership-transfer-output-envelope'
 
 export type SshPtySourceFrame = NonNullable<Parameters<SshPtyDataCallback>[0]['source']>
 
@@ -8,7 +9,8 @@ const SOURCE_KEYS = [
   'ownerGeneration',
   'sourceEndSu',
   'sourceLengthSu',
-  'ptyIncarnation'
+  'ptyIncarnation',
+  'ownershipTransfer'
 ] as const
 
 export function parseSshPtySourceFrame(
@@ -41,6 +43,20 @@ export function parseSshPtySourceFrame(
     return Object.freeze({ malformed: true })
   }
   const sourceStartSu = sourceEndSu - sourceLengthSu
+  let ownershipTransfer
+  try {
+    ownershipTransfer = parsePtyOwnershipTransferOutputEnvelope(params.ownershipTransfer, data)
+  } catch {
+    return Object.freeze({ malformed: true })
+  }
+  if (
+    ownershipTransfer &&
+    (ownershipTransfer.terminalId !== relayPtyId ||
+      ownershipTransfer.incarnationId !== params.ptyIncarnation ||
+      ownershipTransfer.sourceOwnerGeneration !== params.ownerGeneration)
+  ) {
+    return Object.freeze({ malformed: true })
+  }
   return Object.freeze({
     malformed: false,
     source: Object.freeze({
@@ -50,7 +66,8 @@ export function parseSshPtySourceFrame(
       ownerGeneration: params.ownerGeneration,
       deliveryToken: params.deliveryToken,
       sourceStartSu,
-      sourceEndSu
+      sourceEndSu,
+      ...(ownershipTransfer ? { ownershipTransfer } : {})
     })
   })
 }

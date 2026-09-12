@@ -21,6 +21,7 @@ export type SharedControlTestServer = {
 
 type ServerOptions = {
   resultForRequest?: (method: string) => unknown
+  acceptedDeviceTokens?: ReadonlySet<string>
   delaySubscriptionReady?: boolean
   sendKeepaliveBeforeResponse?: boolean
   keepaliveDelayMs?: number
@@ -34,6 +35,7 @@ type ServerOptions = {
   disableAutoPong?: boolean
   delayedMethods?: string[]
   silentMethods?: string[]
+  responseResult?: (request: SharedControlTestServer['requests'][number]) => unknown
 }
 
 const servers: WebSocketServer[] = []
@@ -98,7 +100,16 @@ export async function createSharedControlTestServer(
         return
       }
       if (!authenticated) {
-        auths.push(JSON.parse(plaintext))
+        const auth = JSON.parse(plaintext)
+        auths.push(auth)
+        if (
+          options.acceptedDeviceTokens &&
+          (auth?.type !== 'e2ee_auth' || !options.acceptedDeviceTokens.has(auth.deviceToken))
+        ) {
+          sendEncrypted(ws, sharedKey, { error: { code: 'unauthorized' } })
+          ws.close()
+          return
+        }
         authenticated = true
         sendEncrypted(ws, sharedKey, { type: 'e2ee_authenticated' })
         if (options.sendBinaryAfterAuth) {
@@ -175,7 +186,8 @@ function handleRequest(
   const streaming = isStreamingMethod(request.method)
   const result = streaming
     ? { type: 'ready', subscriptionId: `${request.method}:subscription` }
-    : (options.resultForRequest?.(request.method) ?? { method: request.method })
+    : (options.responseResult?.(request) ??
+      options.resultForRequest?.(request.method) ?? { method: request.method })
   const sendResponse = (): void => {
     if (options.sendUnknownResponseBeforeResponse) {
       sendEncrypted(ws, sharedKey, {

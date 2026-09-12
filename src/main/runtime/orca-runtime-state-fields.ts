@@ -1,4 +1,13 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
+import {
+  PtyOwnershipTransferOrchestrator,
+  type RuntimeOwnedPtyOwnershipTransferReadOnlySource
+} from './pty-ownership-transfer-orchestration'
+import type { PtyOwnershipTransferDestinationRuntimeOptions } from '../persistence/pty-ownership-transfer/pty-ownership-transfer-destination-runtime'
+import type { PtyOwnershipTransferDestinationAdapterOptions } from '../../shared/pty-ownership-transfer-destination-adapter'
+import type { RuntimePtyOwnershipTransferSourceAdapter } from '../providers/runtime-pty-ownership-transfer-source-adapter'
+import type { SubscribePairedRuntimePtyOwnershipTransfer } from './paired-runtime-pty-ownership-transfer-rpc'
+import { createPtyOwnershipTransferDestinationRegistry } from './runtime-ownership-transfer-contracts'
 import { OrcaRuntimeWithLinearCommands } from './orca-runtime-linear-commands'
 import type { RuntimeStore } from './runtime-store-contract'
 import type { StatsCollector } from '../stats/collector'
@@ -41,6 +50,7 @@ export class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCommands {
     store: RuntimeStore | null = null,
     stats?: StatsCollector,
     deps?: {
+      runtimeId?: string
       getLocalProvider?: () => IPtyProvider
       getSshProvider?: (connectionId: string) => IPtyProvider | undefined
       onPtyStopped?: (ptyId: string) => void
@@ -88,12 +98,31 @@ export class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCommands {
       }) => string | null | Promise<string | null>
       buildAgentHookPtyEnv?: () => Record<string, string>
       getDesktopWindowStatus?: () => RuntimeDesktopWindowStatus
+      /** Destination-owned durable sink for frames emitted after source commit. */
+      publishPtyOwnershipTransferPostCommitOutput?: PtyOwnershipTransferDestinationAdapterOptions['publishPostCommitOutput']
+      /** Strict destination acknowledgement for post-commit frames. */
+      publishPtyOwnershipTransferPostCommitOutputAcknowledged?: PtyOwnershipTransferDestinationRuntimeOptions['publishPostCommitOutputAcknowledged']
+      /** Test/release-canary opt-in; production leaves this unset. */
+      ptyOwnershipTransferMutationEnabled?: () => boolean
+      /** Host-local durable source status; deliberately excludes mutation methods. */
+      getLocalPtyOwnershipTransferReadOnlySource?: () => RuntimeOwnedPtyOwnershipTransferReadOnlySource | null
+      /** Authenticated paired-runtime source bridge; mutation remains gate-controlled. */
+      getLocalPtyOwnershipTransferSource?: () => RuntimePtyOwnershipTransferSourceAdapter | null
+      subscribePairedRuntimePtyOwnershipTransfer?: SubscribePairedRuntimePtyOwnershipTransfer
+      /** Read-only probe bridge for PTYs owned by an independently paired runtime. */
+      callPairedRuntimePtyOwnershipTransferRpc?: (
+        environmentId: string,
+        method: string,
+        params: unknown,
+        options?: { timeoutMs?: number; signal?: AbortSignal }
+      ) => Promise<unknown>
       agentSessionClaimSigner?: AgentSessionClaimSigner
       skillTransactionRecovery?: Promise<unknown>
       orchestrationEnvironmentTransport?: OrchestrationEnvironmentTransport
     }
   ) {
     super()
+    this.runtimeId = deps?.runtimeId ?? this.runtimeId
     this.store = store
     store?.onSettingsChanged?.((updates) => {
       if ('experimentalStructuredNativeChat' in updates) {
@@ -224,6 +253,41 @@ export class OrcaRuntimeWithStateFields extends OrcaRuntimeWithLinearCommands {
     // provider (design §4.3 wire-up).
     this.getLocalProviderFn = deps?.getLocalProvider ?? null
     this.getSshProviderFn = deps?.getSshProvider ?? null
+    this.ptyOwnershipTransferMutationEnabled =
+      deps?.ptyOwnershipTransferMutationEnabled ?? (() => false)
+    this.getLocalPtyOwnershipTransferSourceFn = deps?.getLocalPtyOwnershipTransferSource ?? null
+    this.getLocalPtyOwnershipTransferReadOnlySourceFn =
+      deps?.getLocalPtyOwnershipTransferReadOnlySource ?? null
+    this.subscribePairedRuntimePtyOwnershipTransferFn =
+      deps?.subscribePairedRuntimePtyOwnershipTransfer ?? null
+    this.callPairedRuntimePtyOwnershipTransferRpcFn =
+      deps?.callPairedRuntimePtyOwnershipTransferRpc ?? null
+    this.ptyOwnershipTransferDestinationRegistry = createPtyOwnershipTransferDestinationRegistry(
+      store,
+      this.runtimeId,
+      deps?.publishPtyOwnershipTransferPostCommitOutput,
+      deps?.publishPtyOwnershipTransferPostCommitOutputAcknowledged
+    )
+    try {
+      this.ptyOwnershipTransferDestinationRegistry?.recoverPersistedAdapters()
+    } catch (error) {
+      // Keep malformed or prior-runtime journals durable and leave ownership unverifiable.
+      console.warn('[pty-ownership-transfer] destination recovery hydration unavailable:', error)
+    }
+    this.ptyOwnershipTransferOrchestrator = new PtyOwnershipTransferOrchestrator({
+      runtimeId: this.runtimeId,
+      getSshProvider: (connectionId) => this.getSshProviderFn?.(connectionId),
+      getLocalProvider: () => this.getLocalProvider(),
+      getLocalReadOnlySource: () => this.getLocalPtyOwnershipTransferReadOnlySourceFn?.() ?? null,
+      hasDestinationAdapter: () => this.ptyOwnershipTransferDestinationRegistry !== null,
+      // Production mutation gate stays closed until end-to-end recovery evidence exists.
+      mutationEnabled: () => this.ptyOwnershipTransferMutationEnabled(),
+      callPairedRuntimeRpc: deps?.callPairedRuntimePtyOwnershipTransferRpc,
+      inspectPty: (ptyId) => {
+        const pty = this.ptysById.get(ptyId)
+        return pty ? { connectionId: pty.connectionId, incarnationId: pty.incarnationId } : null
+      }
+    })
     this.onPtyStopped = deps?.onPtyStopped ?? null
     this.onTerminalAgentStatus = deps?.onTerminalAgentStatus ?? null
     this.buildAgentHookPtyEnv = deps?.buildAgentHookPtyEnv ?? null

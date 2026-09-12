@@ -4,6 +4,7 @@ import { FLOATING_TERMINAL_WORKTREE_ID } from '../../shared/constants'
 import { isTerminalLeafId, makePaneKey } from '../../shared/stable-pane-id'
 import type { RuntimeLeafRecord, RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
 import { DISCONNECTED_PTY_RECORD_MAX } from './orca-runtime-postlude'
+import { isOutgoingPtyRegistrationFenced } from './outgoing-pty-registration-fence'
 
 export class OrcaRuntimeWithRefreshFloatingWorkspacePtyLiveness extends OrcaRuntimeWithRefreshPtyWorktreeRecordsWithControllerInventory {
   protected refreshFloatingWorkspacePtyLiveness(): Set<string> | null {
@@ -47,6 +48,9 @@ export class OrcaRuntimeWithRefreshFloatingWorkspacePtyLiveness extends OrcaRunt
     }
 
     const liveness = new Map<string, boolean>()
+    if ([...knownPtyIds].some((id) => isOutgoingPtyRegistrationFenced(this, id))) {
+      return null
+    }
     try {
       for (const ptyId of knownPtyIds) {
         const live = controller.hasPty(ptyId)
@@ -108,7 +112,12 @@ export class OrcaRuntimeWithRefreshFloatingWorkspacePtyLiveness extends OrcaRunt
 
   protected pruneDisconnectedPtyRecords(): void {
     const retained = [...this.ptysById.values()]
-      .filter((pty) => !pty.connected && !this.leafExistsForPty(pty.ptyId))
+      .filter(
+        (pty) =>
+          !isOutgoingPtyRegistrationFenced(this, pty.ptyId) &&
+          !pty.connected &&
+          !this.leafExistsForPty(pty.ptyId)
+      )
       .sort((a, b) => (a.disconnectedAt ?? 0) - (b.disconnectedAt ?? 0))
     const staleCount = Math.max(0, retained.length - DISCONNECTED_PTY_RECORD_MAX)
     for (const stale of retained.slice(0, staleCount)) {

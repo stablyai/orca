@@ -76,7 +76,8 @@ describe('SSH PTY intake to relay ACK contract', () => {
       })
       expect(intake.getDebugSnapshot().source).toEqual({
         openedTokens: 0,
-        ptyIdentities: 0
+        ptyIdentities: 0,
+        pendingOwnershipTransferSettlements: 0
       })
     } finally {
       intake.dispose()

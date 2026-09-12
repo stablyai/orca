@@ -192,6 +192,9 @@ describe('cross-platform browser provider paths', () => {
   it('uses platform-specific bundled agent-browser names', () => {
     expect(orcadAgentBrowserNativeName('darwin', 'arm64')).toBe('agent-browser-darwin-arm64')
     expect(orcadAgentBrowserNativeName('linux', 'x64')).toBe('agent-browser-linux-x64')
+    expect(orcadAgentBrowserNativeName('linux', 'arm64', 'musl')).toBe(
+      'agent-browser-linux-musl-arm64'
+    )
     expect(orcadAgentBrowserNativeName('win32', 'x64')).toBe('agent-browser-win32-x64.exe')
   })
 })
