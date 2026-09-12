@@ -64,6 +64,7 @@ import { KimiHookService } from '../kimi/hook-service'
 import { openClaudeHookService } from '../openclaude/hook-service'
 import { wrapPosixHookCommand, wrapWindowsHookCommand } from './installer-utils'
 import {
+  POSIX_HOOK_JSON_STDIN_READER,
   POSIX_HOOK_STDIN_READER,
   WINDOWS_POWERSHELL_HOOK_ENVIRONMENT_GUARD
 } from './hook-stdin-contract'
@@ -561,7 +562,10 @@ describe.skipIf(process.platform === 'win32')('managed hook stdin lifecycle', ()
   it('captures stdin before every possible whole-script success exit', async () => {
     const scripts = await generatePosixScripts()
     for (const [agent, script] of scripts) {
-      const captureIndex = script.indexOf(`payload=$(${POSIX_HOOK_STDIN_READER})`)
+      const captureIndex = Math.max(
+        script.indexOf(`payload=$(${POSIX_HOOK_STDIN_READER})`),
+        script.indexOf(`payload=$(${POSIX_HOOK_JSON_STDIN_READER})`)
+      )
       const firstExitIndex = script.indexOf('exit 0')
       expect(captureIndex, `${agent} payload capture`).toBeGreaterThanOrEqual(0)
       expect(firstExitIndex, `${agent} first success exit`).toBeGreaterThan(captureIndex)

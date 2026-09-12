@@ -7,19 +7,24 @@ export type PosixHookEmptyPayloadPolicy = 'exit' | 'empty-object'
 export const POSIX_HOOK_STDIN_READER = '{ command -p cat 2>/dev/null || cat; }'
 export const POSIX_HOOK_STDIN_DRAIN_COMMAND = `${POSIX_HOOK_STDIN_READER} >/dev/null 2>&1 || :`
 
+// Why: Grok SessionStart writes one JSON object and then waits for the hook to
+// exit without closing stdin. `cat` waits for EOF → 10s timeout. `raw_decode`
+// returns as soon as the object is complete. Trailing-EOF / non-JSON still
+// falls through so lifecycle tests that close stdin keep working.
+const POSIX_HOOK_JSON_STDIN_PYTHON =
+  'import json,os,select,sys;d=sys.stdin.buffer;b=b""\nwhile 1:\n r,_,_=select.select([d],[],[],1.5)\n if not r:break\n c=os.read(d.fileno(),65536)\n if not c:break\n b+=c\n try:\n  o,_=json.JSONDecoder().raw_decode(b.decode());json.dump(o,sys.stdout,separators=(",",":"));raise SystemExit\n except json.JSONDecodeError:pass\nsys.stdout.write(b.decode("utf-8","replace"))'
+
+export const POSIX_HOOK_JSON_STDIN_READER = `command -p python3 -c '${POSIX_HOOK_JSON_STDIN_PYTHON}' 2>/dev/null || command -p python -c '${POSIX_HOOK_JSON_STDIN_PYTHON}' 2>/dev/null || ${POSIX_HOOK_STDIN_READER}`
+
 // Why: every POSIX hook must own stdin before any no-op exit; sharing this
 // prelude prevents agent templates from inventing different drain semantics.
 export function buildPosixHookPayloadCapture(
-  emptyPayloadPolicy: PosixHookEmptyPayloadPolicy = 'exit'
+  emptyPayloadPolicy: PosixHookEmptyPayloadPolicy = 'exit',
+  stdinReader: string = POSIX_HOOK_STDIN_READER
 ): string[] {
   const emptyPayloadLines =
     emptyPayloadPolicy === 'empty-object' ? ["  payload='{}'"] : ['  exit 0']
-  return [
-    `payload=$(${POSIX_HOOK_STDIN_READER})`,
-    'if [ -z "$payload" ]; then',
-    ...emptyPayloadLines,
-    'fi'
-  ]
+  return [`payload=$(${stdinReader})`, 'if [ -z "$payload" ]; then', ...emptyPayloadLines, 'fi']
 }
 
 /** Shell-side durable fallback shared by every POSIX managed hook.
