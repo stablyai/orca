@@ -8,7 +8,11 @@ import type { OpenFile } from '@/store/slices/editor'
 import type { Repo } from '../../../../shared/repo-types'
 import type { FileExplorerRowProjection } from './file-explorer-row-projection'
 import type { TreeNode } from './file-explorer-types'
-import { buildFolderStatusMap, buildStatusMap } from './status-display'
+import {
+  buildFolderStatusMap,
+  buildStatusMap,
+  mergeBranchAndWorktreeEntries
+} from './status-display'
 import { useFileDeletion } from './useFileDeletion'
 import { useFileExplorerDragDrop } from './useFileExplorerDragDrop'
 import { useFileExplorerHandlers } from './useFileExplorerHandlers'
@@ -120,6 +124,10 @@ export function useFileExplorerTreePaneState({
   const openFile = useAppStore((s) => s.openFile)
   const makePreviewFilePermanent = useAppStore((s) => s.makePreviewFilePermanent)
   const gitStatusByWorktree = useAppStore((s) => s.gitStatusByWorktree)
+  const gitBranchChangesByWorktree = useAppStore((s) => s.gitBranchChangesByWorktree)
+  const changedLineHighlightsEnabled = useAppStore(
+    (s) => s.settings?.editorChangedLineHighlightsEnabled ?? true
+  )
   const closeFile = useAppStore((s) => s.closeFile)
 
   const runtimeDownloadContext = useMemo(
@@ -140,8 +148,22 @@ export function useFileExplorerTreePaneState({
     () => (activeWorktreeId ? (gitStatusByWorktree[activeWorktreeId] ?? []) : []),
     [activeWorktreeId, gitStatusByWorktree]
   )
-  const statusByRelativePath = useMemo(() => buildStatusMap(entries), [entries])
-  const folderStatusByRelativePath = useMemo(() => buildFolderStatusMap(entries), [entries])
+  const branchEntries = useMemo(
+    () => (activeWorktreeId ? (gitBranchChangesByWorktree[activeWorktreeId] ?? []) : []),
+    [activeWorktreeId, gitBranchChangesByWorktree]
+  )
+  const decoratedEntries = useMemo(
+    () =>
+      changedLineHighlightsEnabled
+        ? mergeBranchAndWorktreeEntries(branchEntries, entries)
+        : entries,
+    [branchEntries, changedLineHighlightsEnabled, entries]
+  )
+  const statusByRelativePath = useMemo(() => buildStatusMap(decoratedEntries), [decoratedEntries])
+  const folderStatusByRelativePath = useMemo(
+    () => buildFolderStatusMap(decoratedEntries),
+    [decoratedEntries]
+  )
 
   const deletion = useFileDeletion({
     activeWorktreeId,

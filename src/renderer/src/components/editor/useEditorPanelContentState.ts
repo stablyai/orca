@@ -14,6 +14,12 @@ import { useEditorPanelActiveTabContentLoad } from './useEditorPanelActiveTabCon
 import { useEditorPanelContentReloadTriggers } from './useEditorPanelContentReloadTriggers'
 
 type GitStatusByWorktree = ReturnType<typeof useAppStore.getState>['gitStatusByWorktree']
+type GitBranchChangesByWorktree = ReturnType<
+  typeof useAppStore.getState
+>['gitBranchChangesByWorktree']
+type GitBranchCompareSummaryByWorktree = ReturnType<
+  typeof useAppStore.getState
+>['gitBranchCompareSummaryByWorktree']
 type EditorViewModeByFile = ReturnType<typeof useAppStore.getState>['editorViewMode']
 
 type UseEditorPanelContentStateParams = {
@@ -22,6 +28,9 @@ type UseEditorPanelContentStateParams = {
   isChangesMode: boolean
   openFiles: OpenFile[]
   gitStatusEntries: GitStatusByWorktree[string] | undefined
+  gitBranchEntries: GitBranchChangesByWorktree[string] | undefined
+  gitBranchCompareSummary: GitBranchCompareSummaryByWorktree[string] | undefined
+  changedLineHighlightsEnabled: boolean
   editorViewMode: EditorViewModeByFile
 }
 
@@ -37,6 +46,9 @@ export function useEditorPanelContentState({
   isChangesMode,
   openFiles,
   gitStatusEntries,
+  gitBranchEntries,
+  gitBranchCompareSummary,
+  changedLineHighlightsEnabled,
   editorViewMode
 }: UseEditorPanelContentStateParams): UseEditorPanelContentStateResult {
   const [fileContents, setFileContents] = useState<Record<string, FileContent>>({})
@@ -178,6 +190,9 @@ export function useEditorPanelContentState({
     isVisible,
     isChangesMode,
     gitStatusEntries,
+    gitBranchEntries,
+    gitBranchCompareSummary,
+    changedLineHighlightsEnabled,
     fileContents,
     diffContents,
     fileReadGenerationRef,
@@ -200,6 +215,9 @@ export function useEditorPanelContentState({
   useEditorPanelContentReloadTriggers({
     activeFile,
     gitStatusEntries,
+    gitBranchEntries,
+    gitBranchCompareSummary,
+    changedLineHighlightsEnabled,
     isChangesMode,
     diffContentsRef,
     isVisibleRef,

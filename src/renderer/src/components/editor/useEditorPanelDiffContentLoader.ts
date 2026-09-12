@@ -72,9 +72,14 @@ export function useEditorPanelDiffContentLoader({
         const activeSettings = useAppStore.getState().settings
         const fileSettings = settingsForRuntimeOwner(activeSettings, file.runtimeEnvironmentId)
         const gitScope = getRuntimeGitScope(fileSettings, connectionId)
-        const effectiveDiffSource: typeof file.diffSource =
-          file.mode === 'edit' ? 'unstaged' : file.diffSource
-        const compareAgainstHead = file.mode === 'edit'
+        const useEditBranchCompare =
+          file.mode === 'edit' && file.diffSource === 'branch' && branchCompare !== null
+        const effectiveDiffSource: typeof file.diffSource = useEditBranchCompare
+          ? 'branch'
+          : file.mode === 'edit'
+            ? 'unstaged'
+            : file.diffSource
+        const compareAgainstHead = file.mode === 'edit' && !useEditBranchCompare
         const key = inFlightDiffKey(
           { ...file, diffSource: effectiveDiffSource },
           gitScope ?? undefined,

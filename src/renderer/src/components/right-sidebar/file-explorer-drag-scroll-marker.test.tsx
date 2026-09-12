@@ -8,6 +8,7 @@ import { useFileExplorerHandlers } from './useFileExplorerHandlers'
 import { createFileExplorerRowProjection } from './file-explorer-row-projection'
 import { FILE_EXPLORER_DRAGGABLE_SELECTOR } from './file-explorer-drag-scroll-marker'
 import type { TreeNode } from './file-explorer-types'
+import type { GitFileStatus } from '../../../../shared/git-status-types'
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
@@ -47,7 +48,13 @@ const directoryNode: TreeNode = {
   depth: 0
 }
 
-function virtualRowsElement(nodes: TreeNode[]): React.JSX.Element {
+function virtualRowsElement(
+  nodes: TreeNode[],
+  options: {
+    statusByRelativePath?: Map<string, GitFileStatus>
+    folderStatusByRelativePath?: Map<string, GitFileStatus | null>
+  } = {}
+): React.JSX.Element {
   return FileExplorerVirtualRows({
     virtualizer: {
       getTotalSize: () => nodes.length * 26,
@@ -60,8 +67,8 @@ function virtualRowsElement(nodes: TreeNode[]): React.JSX.Element {
     inlineInput: null,
     handleInlineSubmit: vi.fn(),
     dismissInlineInput: vi.fn(),
-    folderStatusByRelativePath: new Map(),
-    statusByRelativePath: new Map(),
+    folderStatusByRelativePath: options.folderStatusByRelativePath ?? new Map(),
+    statusByRelativePath: options.statusByRelativePath ?? new Map(),
     ignoredByRelativePath: new Set(),
     expanded: new Set(),
     loadingDirPaths: new Set<string>(),
@@ -106,6 +113,21 @@ describe('file explorer draggable rows carry the wheel-scroll marker', () => {
     draggableButtons.forEach((button) => {
       expect(button.matches(FILE_EXPLORER_DRAGGABLE_SELECTOR)).toBe(true)
     })
+  })
+
+  it('colors changed files and folders with git status accents', async () => {
+    const container = await renderToBody(
+      virtualRowsElement([directoryNode, fileNode], {
+        folderStatusByRelativePath: new Map([['src', 'modified']]),
+        statusByRelativePath: new Map([['src/index.ts', 'modified']])
+      })
+    )
+
+    expect(container.textContent).toContain('src')
+    expect(container.textContent).toContain('index.ts')
+    expect(container.querySelectorAll('svg[style*="var(--git-decoration-modified)"]').length).toBe(
+      2
+    )
   })
 })
 

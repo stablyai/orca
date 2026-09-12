@@ -61,6 +61,9 @@ function EditorPanelInner({
   const gitBranchEntries = useAppStore((s) =>
     selectEditorPanelGitBranchEntries(s, activeWorktreeId)
   )
+  const gitBranchCompareSummary = useAppStore((s) =>
+    activeWorktreeId ? s.gitBranchCompareSummaryByWorktree[activeWorktreeId] : undefined
+  )
   const markdownViewMode = useAppStore((s) => s.markdownViewMode)
   const setMarkdownViewMode = useAppStore((s) => s.setMarkdownViewMode)
   const markdownRichModeSizeOverridden = useAppStore(
@@ -126,6 +129,9 @@ function EditorPanelInner({
     isChangesMode: requestedChangesMode,
     openFiles,
     gitStatusEntries,
+    gitBranchEntries,
+    gitBranchCompareSummary,
+    changedLineHighlightsEnabled: settings?.editorChangedLineHighlightsEnabled ?? true,
     editorViewMode,
     isVisible
   })

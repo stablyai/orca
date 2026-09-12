@@ -99,6 +99,9 @@ function Probe({
     activeFile,
     editorViewMode,
     gitStatusEntries,
+    gitBranchEntries: undefined,
+    gitBranchCompareSummary: undefined,
+    changedLineHighlightsEnabled: true,
     isChangesMode,
     isVisible,
     openFiles: panelOpenFiles
