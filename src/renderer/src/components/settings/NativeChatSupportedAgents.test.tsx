@@ -82,12 +82,14 @@ describe('NativeChatSupportedAgents', () => {
     expect(value).toBe('Supported agents:')
   })
 
-  it('renders the English fallback when the active locale lacks the label key', async () => {
+  it('renders the Spanish label when the active locale provides it', async () => {
     await i18n.changeLanguage('es')
-    expect(i18n.getResource('es', 'translation', SUPPORTED_AGENTS_LABEL_KEY)).toBeUndefined()
+    expect(i18n.getResource('es', 'translation', SUPPORTED_AGENTS_LABEL_KEY)).toBe(
+      'Agentes compatibles:'
+    )
 
     const markup = renderToStaticMarkup(<NativeChatSupportedAgents />)
 
-    expect(markup).toContain('Supported agents:')
+    expect(markup).toContain('Agentes compatibles:')
   })
 })
