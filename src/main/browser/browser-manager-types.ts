@@ -169,6 +169,7 @@ export const SAFE_POPUP_WINDOW_OPTIONS = {
 } satisfies Electron.BrowserWindowConstructorOptions
 
 export type ActiveDownload = {
+  captureFinished?: (event: BrowserDownloadFinishedEvent) => void
   downloadId: string
   guestWebContentsId: number
   browserTabId: string | null

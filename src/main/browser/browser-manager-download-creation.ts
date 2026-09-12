@@ -52,7 +52,16 @@ export abstract class BrowserManagerDownloadCreation extends BrowserManagerQueri
       guestWebContentsId: ownerContext?.rootGuestWebContentsId ?? guestWebContentsId
     })
     const clientRoute = decision.kind === 'remote' ? decision.route : null
+    const capture =
+      ownerContext && decision.kind === 'local'
+        ? this.downloadCapture.claim(ownerContext.browserTabId, () =>
+            this.cancelDownloadInternal(downloadId, 'Download capture canceled.')
+          )
+        : undefined
     const destination = (() => {
+      if (capture) {
+        return capture.destination
+      }
       if (clientRoute) {
         return {
           filename: requestedFilename,
@@ -76,6 +85,7 @@ export abstract class BrowserManagerDownloadCreation extends BrowserManagerQueri
     const fallbackSavePath = destination?.savePath ?? ''
 
     const download: ActiveDownload = {
+      captureFinished: capture?.finish,
       downloadId,
       guestWebContentsId,
       browserTabId: null,

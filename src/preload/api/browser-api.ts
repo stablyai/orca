@@ -1,3 +1,4 @@
+import type { BrowserOpenLinkEvent } from '../../shared/browser-open-link-event'
 import type { BrowserSetAnnotationViewportBridgeArgs } from '../../shared/browser-annotation-viewport-bridge'
 import type {
   BrowserClientPageMetadataParams,
@@ -118,9 +119,7 @@ export type BrowserApi = {
   onPaneFocus: (
     callback: (data: { worktreeId: string | null; browserPageId: string }) => void
   ) => () => void
-  onOpenLinkInOrcaTab: (
-    callback: (event: { browserPageId: string; url: string; activate?: boolean }) => void
-  ) => () => void
+  onOpenLinkInOrcaTab: (callback: (event: BrowserOpenLinkEvent) => void) => () => void
   cancelDownload: (args: { downloadId: string }) => Promise<boolean>
   setGrabMode: (args: BrowserSetGrabModeArgs) => Promise<BrowserSetGrabModeResult>
   awaitGrabSelection: (args: BrowserAwaitGrabSelectionArgs) => Promise<BrowserGrabResult>

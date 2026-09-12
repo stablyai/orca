@@ -26,8 +26,10 @@ import type {
 } from '../../shared/browser-guest-events'
 import type { BrowserGrabCancelReason } from '../../shared/browser-grab-types'
 import { BrowserManagerViewportScrollState } from './browser-manager-viewport-scroll-state'
+import { BrowserDownloadCapture } from './browser-download-capture'
 
 export abstract class BrowserManagerState extends BrowserManagerViewportScrollState {
+  readonly downloadCapture = new BrowserDownloadCapture()
   protected abstract attachGuestPolicies(
     guest: Electron.WebContents,
     inheritedOwnerContext?: PopupOwnerContext | null,

@@ -76,6 +76,13 @@ export abstract class BrowserManagerRegistration extends BrowserManagerGuestPoli
     this.flushPendingPermissionEvents(browserTabId, webContentsId)
     this.flushPendingPopupEvents(browserTabId, webContentsId)
     this.flushPendingDownloadRequests(browserTabId, webContentsId)
+    const capturedLinkUrl = this.downloadCapture.takeNavigation(browserTabId)
+    if (capturedLinkUrl) {
+      // Register ownership before an attachment can emit will-download.
+      void guest
+        .loadURL(capturedLinkUrl)
+        .catch((error) => this.downloadCapture.failNavigation(browserTabId, error))
+    }
     return true
   }
 
@@ -190,6 +197,7 @@ export abstract class BrowserManagerRegistration extends BrowserManagerGuestPoli
   }
 
   unregisterAll(): void {
+    this.downloadCapture.cancelAll()
     // Cancel all active grab ops before tearing down registrations
     this.grabSessionController.cancelAll('evicted')
     for (const downloadId of this.downloadsById.keys()) {

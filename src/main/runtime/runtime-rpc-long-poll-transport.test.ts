@@ -33,6 +33,12 @@ vi.mock('../git/worktree', () => {
 })
 
 describe('OrcaRuntimeRpcServer', () => {
+  it('keeps native download completion observable without changing ordinary browser calls', () => {
+    const request = { id: 'download', authToken: 'token', method: 'browser.download', params: {} }
+    expect(classifyRuntimeLongPoll(request)).toBe('wait')
+    expect(classifyRuntimeLongPoll({ ...request, method: 'browser.click' })).toBeNull()
+  })
+
   it('classifies worker-start as a keepalive-backed long poll', () => {
     expect(
       classifyRuntimeLongPoll({

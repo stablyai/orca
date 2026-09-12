@@ -3,6 +3,7 @@ import { assertClipboardTextWriteWithinLimitWithYield } from '../../shared/clipb
 import { AGENT_BROWSER_CLIPBOARD_WRITE_MAX_BYTES } from './agent-browser-bridge-types'
 import type { BrowserBackResult, BrowserReloadResult } from '../../shared/runtime-types'
 import { AgentBrowserBridgeMouseCommands } from './agent-browser-bridge-mouse-commands'
+import { BROWSER_DOWNLOAD_TIMEOUT_MS } from './browser-download-capture'
 
 export abstract class AgentBrowserBridgeUtilityCommands extends AgentBrowserBridgeMouseCommands {
   // ── Clipboard commands ──
@@ -108,8 +109,24 @@ export abstract class AgentBrowserBridgeUtilityCommands extends AgentBrowserBrid
     worktreeId?: string,
     browserPageId?: string
   ): Promise<unknown> {
-    return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName) => {
-      return await this.execAgentBrowser(sessionName, ['download', selector, path])
+    return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName, target) => {
+      const capture = this.browserManager.downloadCapture.begin(target.browserPageId, path)
+      try {
+        const [receipt] = await Promise.all([
+          capture.result,
+          this.execAgentBrowser(sessionName, ['click', selector], {
+            timeoutMs: BROWSER_DOWNLOAD_TIMEOUT_MS,
+            timeoutError: new BrowserError(
+              'browser_download_timeout',
+              'Download click did not complete within 60 seconds.'
+            )
+          })
+        ])
+        return receipt
+      } catch (error) {
+        capture.cancel(error instanceof Error ? error : new Error(String(error)))
+        throw error
+      }
     })
   }
 

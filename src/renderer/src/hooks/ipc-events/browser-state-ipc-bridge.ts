@@ -1,4 +1,7 @@
+import { toast } from 'sonner'
+import type { BrowserOpenLinkEvent } from '../../../../shared/browser-open-link-event'
 import { rememberLiveBrowserUrl } from '@/components/browser-pane/describe-page/live-browser-url-registry'
+import { getBrowserPageRuntimeEnvironmentId } from '@/components/browser-pane/describe-page/browser-page-url-display'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { redactKagiSessionToken } from '../../../../shared/browser-url'
 import { useAppStore } from '../../store'
@@ -81,29 +84,68 @@ export function registerBrowserStateIpcBridge(
     })
   )
   unsubs.push(
-    window.api.browser.onOpenLinkInOrcaTab(({ browserPageId, url, activate }) => {
-      const store = useAppStore.getState()
-      const sourcePage = Object.values(store.browserPagesByWorkspace)
-        .flat()
-        .find((page) => page.id === browserPageId)
-      if (!sourcePage || getRuntimeEnvironmentIdForWorktree(store, sourcePage.worktreeId)) {
-        return
-      }
-      // Why: the link inherits the opener's cookie jar. Falling back to the default profile would let
-      // a page in an isolated session hand its links to the default one, silently crossing profiles.
-      const sourceTab = (store.browserTabsByWorktree[sourcePage.worktreeId] ?? []).find(
-        (tab) => tab.id === sourcePage.workspaceId
+    window.api.browser.onOpenLinkInOrcaTab((event) => {
+      void openBrowserLink(event).catch((error) =>
+        toast.error(error instanceof Error ? error.message : String(error))
       )
-      store.createBrowserTab(sourcePage.worktreeId, url, {
-        title: url,
-        activate: activate ?? true,
-        ...(sourceTab
-          ? {
-              sessionProfileId: sourceTab.sessionProfileId,
-              sessionPartition: sourceTab.sessionPartition
-            }
-          : {})
-      })
     })
   )
+}
+
+async function openBrowserLink({
+  browserPageId,
+  url,
+  activate,
+  owner,
+  childBrowserPageId
+}: BrowserOpenLinkEvent): Promise<void> {
+  const store = useAppStore.getState()
+  const sourcePage = Object.values(store.browserPagesByWorkspace)
+    .flat()
+    .find((page) => page.id === browserPageId)
+  const worktreeId = owner?.worktreeId ?? sourcePage?.worktreeId
+  if (!worktreeId) {
+    throw new Error('The browser link owner is no longer available.')
+  }
+  const workspaceId = owner?.workspaceId ?? sourcePage?.workspaceId
+  const sourceTab = (store.browserTabsByWorktree[worktreeId] ?? []).find(
+    (tab) => tab.id === workspaceId
+  )
+  const sessionProfileId = owner ? owner.sessionProfileId : sourceTab?.sessionProfileId
+  if (sessionProfileId === undefined) {
+    throw new Error('The browser link profile is no longer available.')
+  }
+  const environmentId =
+    store.remoteBrowserPageHandlesByPageId?.[browserPageId]?.environmentId ??
+    (sourcePage
+      ? getBrowserPageRuntimeEnvironmentId(
+          sourcePage,
+          getRuntimeEnvironmentIdForWorktree(store, worktreeId)
+        )
+      : getRuntimeEnvironmentIdForWorktree(store, worktreeId))
+  if (environmentId) {
+    const { createWebRuntimeSessionBrowserTab } = await import('@/runtime/web-runtime-session')
+    const created = await createWebRuntimeSessionBrowserTab({
+      worktreeId,
+      environmentId,
+      url,
+      profileId: sessionProfileId,
+      focusOnCreate: activate ?? true,
+      selectWorktree: false,
+      placementPreference: 'auto'
+    })
+    if (!created) {
+      throw new Error('The owning runtime could not open the browser link.')
+    }
+    return
+  }
+  store.createBrowserTab(worktreeId, childBrowserPageId ? 'about:blank' : url, {
+    title: url,
+    activate: activate ?? true,
+    browserPageId: childBrowserPageId,
+    sessionProfileId,
+    ...(sourceTab?.sessionProfileId === sessionProfileId
+      ? { sessionPartition: sourceTab.sessionPartition }
+      : {})
+  })
 }

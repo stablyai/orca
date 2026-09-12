@@ -1,4 +1,4 @@
-import { existsSync } from 'node:fs'
+import { existsSync, mkdirSync } from 'node:fs'
 import path from 'node:path'
 
 import { app } from 'electron'
@@ -68,6 +68,17 @@ export class BrowserDownloadDestinationReservations {
       return
     }
     this.reservedPathKeys.delete(reservationKey)
+  }
+
+  reserveRequestedPath(requestedPath: string): BrowserDownloadDestination {
+    const savePath = path.resolve(requestedPath)
+    const reservationKey = normalizeReservationKey(savePath, this.platform)
+    if (this.reservedPathKeys.has(reservationKey) || this.pathExists(savePath)) {
+      throw new Error('The requested download path already exists or is in use.')
+    }
+    mkdirSync(path.dirname(savePath), { recursive: true })
+    this.reservedPathKeys.add(reservationKey)
+    return { filename: path.basename(savePath), savePath, reservationKey }
   }
 
   clear(): void {

@@ -201,6 +201,7 @@ export abstract class BrowserManagerDownloadLifecycle extends BrowserManagerDown
       error
     }
     download.terminalEvent = event
+    download.captureFinished?.(event)
     if (download.browserTabId) {
       this.sendDownloadStarted(downloadId)
       this.sendDownloadFinished(download.browserTabId, event)
