@@ -44,7 +44,7 @@ export function formatCliError(error: unknown, context: CliErrorContext = {}): s
     )
   }
   if (error instanceof RuntimeClientError && error.code === 'runtime_unavailable') {
-    if (hasOrchestrationRequestId(error.data)) {
+    if (hasOrchestrationRequestId(error.data) || hasRuntimeObservation(error.data)) {
       return message
     }
     return `${message}\nOrca is not running. Run 'orca open' first.`
@@ -77,6 +77,14 @@ export function formatCliError(error: unknown, context: CliErrorContext = {}): s
     return formatMessageWithNextSteps(message, nextStepsFromData(error.response.error.data))
   }
   return message
+}
+
+function hasRuntimeObservation(data: unknown): boolean {
+  return (
+    data !== null &&
+    typeof data === 'object' &&
+    ('statusObservation' in data || 'transportFailure' in data)
+  )
 }
 
 function hasOrchestrationRequestId(data: unknown): boolean {

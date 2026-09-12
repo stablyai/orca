@@ -10,6 +10,7 @@ import {
 } from '../../shared/orchestration-rpc-contract'
 import type { PairingOffer } from '../../shared/pairing'
 import { launchOrcaApp } from './launch'
+import { isStatusObservationError } from './status-observation'
 import { getDefaultUserDataPath, readMetadata } from './metadata'
 import { getCliStatus, projectRemoteAppStatus } from './status'
 import { sendRequest } from './transport'
@@ -281,8 +282,21 @@ export class RuntimeClient {
     }
 
     const startedAt = Date.now()
+    let observationFailure: RuntimeClientError | undefined
     while (Date.now() - startedAt < timeoutMs) {
-      const status = await this.getCliStatus()
+      let status: RuntimeRpcSuccess<CliStatusResult>
+      try {
+        status = await this.getCliStatus()
+        observationFailure = undefined
+      } catch (error) {
+        if (!isStatusObservationError(error)) {
+          throw error
+        }
+        // Only this invocation's launch authorizes a bounded startup wait.
+        observationFailure = error
+        await delay(250)
+        continue
+      }
       if (status.result.app.desktopWindowStatus === 'blocked') {
         throwDesktopActivationBlocked()
       }
@@ -292,6 +306,9 @@ export class RuntimeClient {
       await delay(250)
     }
 
+    if (observationFailure) {
+      throw observationFailure
+    }
     throw new RuntimeClientError(
       'runtime_open_timeout',
       'Timed out waiting for an Orca desktop window. The runtime may still be running headlessly.'
