@@ -34,14 +34,17 @@ function joinLogExcerptWithByteCap(prefixLines: string[], recentLines: string[])
 
 function collectEarlierErrorLineIndexes(lines: string[], recentStart: number): number[] {
   const indexes = new Set<number>()
-  for (let index = 0; index < recentStart; index += 1) {
+  for (let index = recentStart - 1; index >= 0; index -= 1) {
     if (!ERROR_LINE_PATTERN.test(lines[index] ?? '')) {
       continue
     }
     const contextStart = Math.max(0, index - PR_CHECK_LOG_TAIL_ERROR_CONTEXT_LINES)
     const contextEnd = Math.min(recentStart - 1, index + PR_CHECK_LOG_TAIL_ERROR_CONTEXT_LINES)
-    for (let contextIndex = contextStart; contextIndex <= contextEnd; contextIndex += 1) {
+    for (let contextIndex = contextEnd; contextIndex >= contextStart; contextIndex -= 1) {
       indexes.add(contextIndex)
+      if (indexes.size === PR_CHECK_LOG_TAIL_MAX_EARLIER_LINES) {
+        return [...indexes].sort((left, right) => left - right)
+      }
     }
   }
   return [...indexes].sort((left, right) => left - right)
