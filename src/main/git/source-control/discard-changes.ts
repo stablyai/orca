@@ -7,7 +7,8 @@ import type { GitRuntimeOptions } from '../git-runtime-options'
 import { gitOptionsForWorktree } from '../git-runtime-options'
 import { gitExecFileAsync } from '../runner'
 import { invalidateGitReadCaches } from './git-read-cache-invalidation'
-import { bulkPathspecCommands, isTrackedPathSpec, literalPathspec } from './git-pathspec'
+import { partitionTrackedPathSpecs } from '../../../shared/git-tracked-pathspecs'
+import { bulkPathspecCommands, literalPathspec } from './git-pathspec'
 
 /**
  * Discard working tree changes for a file.
@@ -117,12 +118,7 @@ export async function bulkDiscardChanges(
     }
 
     const trackedPathSpecs = await listTrackedPathSpecs(worktreePath, filePaths, options)
-    const trackedPaths = filePaths.filter((filePath) =>
-      isTrackedPathSpec(filePath, trackedPathSpecs)
-    )
-    const untrackedPaths = filePaths.filter(
-      (filePath) => !isTrackedPathSpec(filePath, trackedPathSpecs)
-    )
+    const { trackedPaths, untrackedPaths } = partitionTrackedPathSpecs(filePaths, trackedPathSpecs)
     await removeSafeUntrackedDiscardTargets(
       worktreePath,
       untrackedPaths,
