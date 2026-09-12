@@ -12902,6 +12902,14 @@
           "ac31d2cd60": "行",
           "a233d55b77": "空文件"
         },
+        "SpreadsheetFileSurface": {
+          "readFailed": "无法将该文件读取为电子表格。",
+          "save": "保存",
+          "saveFailed": "保存电子表格失败，请重试。",
+          "saving": "保存中…"
+        },
+        "OfficeDocumentViewer": { "loading": "正在加载文档…", "readFailed": "无法显示该文档。" },
+
         "DiffNotesSendMenu": {
           "f1aa04b5cf": "这个文件",
           "8b87612461": "所有未发送的笔记"

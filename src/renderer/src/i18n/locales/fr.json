@@ -14070,6 +14070,17 @@
           "ac31d2cd60": "lignes",
           "a233d55b77": "Fichier vide"
         },
+        "SpreadsheetFileSurface": {
+          "readFailed": "Impossible de lire le fichier comme une feuille de calcul.",
+          "save": "Enregistrer",
+          "saveFailed": "Échec de l'enregistrement de la feuille de calcul. Veuillez réessayer.",
+          "saving": "Enregistrement…"
+        },
+        "OfficeDocumentViewer": {
+          "loading": "Chargement du document…",
+          "readFailed": "Impossible d'afficher le document."
+        },
+
         "DiffNotesSendMenu": {
           "f1aa04b5cf": "Ce fichier",
           "8b87612461": "Toutes les notes non envoyées"

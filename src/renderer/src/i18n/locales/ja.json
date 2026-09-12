@@ -12824,6 +12824,17 @@
           "ac31d2cd60": "行",
           "a233d55b77": "空のファイル"
         },
+        "SpreadsheetFileSurface": {
+          "readFailed": "ファイルをスプレッドシートとして読み込めませんでした。",
+          "save": "保存",
+          "saveFailed": "スプレッドシートの保存に失敗しました。もう一度お試しください。",
+          "saving": "保存中…"
+        },
+        "OfficeDocumentViewer": {
+          "loading": "ドキュメントを読み込んでいます…",
+          "readFailed": "ドキュメントを表示できませんでした。"
+        },
+
         "DiffNotesSendMenu": {
           "f1aa04b5cf": "このファイル",
           "8b87612461": "すべての未送信のメモ"

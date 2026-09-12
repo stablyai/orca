@@ -5,11 +5,12 @@ import type { GitStatusEntry } from '../../../../shared/git-status-types'
 import { ChangesModeView } from './ChangesModeView'
 import { ConflictBanner, ConflictPlaceholderView } from './ConflictComponents'
 import {
-  CsvViewer,
   ImageViewer,
   IpynbViewer,
   MermaidViewer,
-  MonacoEditor
+  MonacoEditor,
+  OfficeDocumentViewer,
+  SpreadsheetFileSurface
 } from './editor-lazy-views'
 import type { EditorConflictNavigation } from './useEditorConflictNavigation'
 import { EditorFileLoadErrorView } from './EditorFileLoadErrorView'
@@ -105,6 +106,43 @@ export function EditorEditFileSurface({
       />
     )
   }
+  const currentContent = editBuffer ?? fileContent.content
+  const externalChangeBanner =
+    activeFile.externalMutation === 'changed' ? (
+      <ExternalFileChangeBanner
+        file={activeFile}
+        currentContent={currentContent}
+        reloadContent={reloadContent}
+      />
+    ) : null
+
+  if (fileContent.isSpreadsheet === true) {
+    const spreadsheetSurface = (
+      <SpreadsheetFileSurface
+        fileId={activeFile.id}
+        filePath={activeFile.filePath}
+        kind="xlsx"
+        content={fileContent.content}
+        readOnly={activeFile.readOnly === true}
+        onCsvChange={noopEditorContentChange}
+        onDirty={handleDirtyStateHint}
+      />
+    )
+    // Why: an editable workbook must still warn (and let the user choose) when
+    // the file changed on disk, like every other editor surface.
+    if (!externalChangeBanner) {
+      return spreadsheetSurface
+    }
+    return (
+      <div className="flex flex-1 min-h-0 flex-col">
+        {externalChangeBanner}
+        <div className="min-h-0 flex-1">{spreadsheetSurface}</div>
+      </div>
+    )
+  }
+  if (fileContent.isOfficeDocument === true) {
+    return <OfficeDocumentViewer content={fileContent.content} filePath={activeFile.filePath} />
+  }
   if (fileContent.isBinary) {
     if (fileContent.isImage) {
       return (
@@ -125,16 +163,6 @@ export function EditorEditFileSurface({
       </div>
     )
   }
-
-  const currentContent = editBuffer ?? fileContent.content
-  const externalChangeBanner =
-    activeFile.externalMutation === 'changed' ? (
-      <ExternalFileChangeBanner
-        file={activeFile}
-        currentContent={currentContent}
-        reloadContent={reloadContent}
-      />
-    ) : null
 
   if (isChangesMode) {
     const changesView = (
@@ -227,7 +255,16 @@ export function EditorEditFileSurface({
   ) : isMermaid && mdViewMode === 'rich' ? (
     <MermaidViewer key={activeFile.id} content={currentContent} filePath={activeFile.filePath} />
   ) : isCsv && mdViewMode === 'rich' ? (
-    <CsvViewer key={activeFile.id} content={currentContent} filePath={activeFile.filePath} />
+    <SpreadsheetFileSurface
+      key={activeFile.id}
+      fileId={activeFile.id}
+      filePath={activeFile.filePath}
+      kind="csv"
+      content={currentContent}
+      readOnly={activeFile.readOnly === true}
+      onCsvChange={handleContentChange}
+      onDirty={handleDirtyStateHint}
+    />
   ) : isNotebook && mdViewMode === 'rich' ? (
     <IpynbViewer
       key={activeFile.id}

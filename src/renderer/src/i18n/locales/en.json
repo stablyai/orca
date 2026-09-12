@@ -14631,6 +14631,17 @@
           "ac31d2cd60": "rows",
           "a233d55b77": "Empty file"
         },
+        "SpreadsheetFileSurface": {
+          "readFailed": "The file could not be read as a spreadsheet.",
+          "save": "Save",
+          "saveFailed": "Failed to save the spreadsheet. Please try again.",
+          "saving": "Saving…"
+        },
+        "OfficeDocumentViewer": {
+          "loading": "Loading document…",
+          "readFailed": "The document could not be displayed."
+        },
+
         "DiffNotesSendMenu": {
           "f1aa04b5cf": "This file",
           "8b87612461": "All unsent notes"

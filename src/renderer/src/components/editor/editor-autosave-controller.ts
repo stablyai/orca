@@ -76,13 +76,18 @@ export function attachEditorAutosaveController(store: AppStoreApi): () => void {
 
       flushPendingEditorChange(file.id)
 
-      const content = store.getState().editorDrafts[file.id] ?? detail.fallbackContent
+      // Why: a binary workbook save isn't a text draft — the encoded content and
+      // encoding travel with the save target instead of an editorDrafts entry.
+      const content =
+        detail.encoding === 'base64'
+          ? detail.fallbackContent
+          : (store.getState().editorDrafts[file.id] ?? detail.fallbackContent)
       if (content === undefined) {
         detail.resolve()
         return
       }
 
-      await queueSave(file, content)
+      await queueSave(file, content, 'user', detail.encoding)
       detail.resolve()
     } catch (error) {
       detail.reject(String((error as Error)?.message ?? error))

@@ -12891,6 +12891,17 @@
           "ac31d2cd60": "행",
           "a233d55b77": "빈 파일"
         },
+        "SpreadsheetFileSurface": {
+          "readFailed": "파일을 스프레드시트로 읽을 수 없습니다.",
+          "save": "저장",
+          "saveFailed": "스프레드시트를 저장하지 못했습니다. 다시 시도해 주세요.",
+          "saving": "저장 중…"
+        },
+        "OfficeDocumentViewer": {
+          "loading": "문서를 불러오는 중…",
+          "readFailed": "문서를 표시할 수 없습니다."
+        },
+
         "DiffNotesSendMenu": {
           "f1aa04b5cf": "이 파일",
           "8b87612461": "보내지 않은 모든 메모"

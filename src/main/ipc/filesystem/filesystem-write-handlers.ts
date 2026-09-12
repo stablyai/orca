@@ -16,7 +16,12 @@ export function registerFilesystemWriteHandlers(context: FilesystemHandlerContex
     'fs:writeFile',
     async (
       _event,
-      args: { filePath: string; content: string; connectionId?: string } & SshMutationExpectation
+      args: {
+        filePath: string
+        content: string
+        connectionId?: string
+        encoding?: 'utf-8' | 'base64'
+      } & SshMutationExpectation
     ): Promise<void> => {
       assertSshMutationExpectation(
         args.connectionId,
@@ -26,6 +31,11 @@ export function registerFilesystemWriteHandlers(context: FilesystemHandlerContex
       )
       if (args.connectionId) {
         const provider = requireSshFilesystemProvider(args.connectionId)
+        // Why: the relay fs.writeFile channel is text-only, so binary content
+        // (xlsx write-back) goes through the dedicated SFTP base64 path.
+        if (args.encoding === 'base64') {
+          return provider.writeFileBase64(args.filePath, args.content)
+        }
         return provider.writeFile(args.filePath, args.content)
       }
       const filePath = await resolveAuthorizedPath(args.filePath, store)
@@ -38,6 +48,10 @@ export function registerFilesystemWriteHandlers(context: FilesystemHandlerContex
         if (!isENOENT(error)) {
           throw error
         }
+      }
+      if (args.encoding === 'base64') {
+        await writeFile(filePath, Buffer.from(args.content, 'base64'))
+        return
       }
       await writeFile(filePath, args.content, 'utf-8')
     }

@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import { readRelayFileRange } from './fs-handler-file-range'
-import { readFullStreamChunk } from './fs-handler-file-read'
+import { readFullStreamChunk } from './fs-handler-stream-chunk'
 import {
   FileRangeReadRequestError,
   MAX_FILE_RANGE_READ_BYTES,
