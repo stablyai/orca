@@ -53,7 +53,14 @@ function drainParkedWaiters(matches: (waiter: ParkedMirrorWaiter) => boolean): v
     const waiter = parkedWaitersByWorktree.get(key)
     if (waiter) {
       parkedWaitersByWorktree.delete(key)
-      waiter.run()
+      try {
+        waiter.run()
+      } catch (error) {
+        // Why: one settle drains every waiter the environment holds, and they are strangers to each
+        // other and to the frame apply that called it. An unguarded throw strands every waiter
+        // queued behind this one and surfaces in the caller applying the frame.
+        console.warn('[host-session-mirror-hydration] parked replay failed:', error)
+      }
     }
   }
 }
