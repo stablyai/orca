@@ -30,7 +30,6 @@ export type PluginCommandRegistration = {
 
 type CommandOwner = {
   pluginKey: string
-  context: PluginCommandKeybinding['when']
   key: string
 }
 
@@ -82,7 +81,6 @@ export class PluginCommandRegistry {
           const owners = chordOwners.get(identity) ?? []
           owners.push({
             pluginKey: plugin.pluginKey,
-            context: keybinding.when,
             key: keybinding.key
           })
           chordOwners.set(identity, owners)
@@ -92,24 +90,16 @@ export class PluginCommandRegistry {
 
     const conflicted = new Set<string>()
     for (const owners of chordOwners.values()) {
-      for (let index = 0; index < owners.length; index += 1) {
-        for (let compared = index + 1; compared < owners.length; compared += 1) {
-          const first = owners[index]!
-          const second = owners[compared]!
-          if (!contextsOverlap(first.context, second.context)) {
-            continue
-          }
-          conflicted.add(first.pluginKey)
-          conflicted.add(second.pluginKey)
-          this.errors.set(
-            first.pluginKey,
-            `plugin keybinding ${first.key} conflicts with another plugin`
-          )
-          this.errors.set(
-            second.pluginKey,
-            `plugin keybinding ${second.key} conflicts with another plugin`
-          )
-        }
+      // Global/worktree are the only contexts, so all owners of the same chord overlap.
+      if (owners.length < 2) {
+        continue
+      }
+      for (const owner of owners) {
+        conflicted.add(owner.pluginKey)
+        this.errors.set(
+          owner.pluginKey,
+          `plugin keybinding ${owner.key} conflicts with another plugin`
+        )
       }
     }
 
@@ -165,11 +155,4 @@ function keybindingsForCommand(
     key: keybinding.key,
     when: keybinding.when ?? command.context ?? 'global'
   }))
-}
-
-function contextsOverlap(
-  first: PluginCommandKeybinding['when'],
-  second: PluginCommandKeybinding['when']
-): boolean {
-  return first === 'global' || second === 'global' || first === second
 }
