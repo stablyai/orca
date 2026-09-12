@@ -28,6 +28,8 @@ export type PtySubprocessOptions = {
   launchAgent?: TuiAgent
   /** Explicit shell executable path/basename requested by the renderer. */
   shellOverride?: string
+  /** Current pane explicitly selected the local host instead of its project runtime. */
+  forceHostRuntime?: boolean
   terminalWindowsWslDistro?: string | null
   terminalWindowsPowerShellImplementation?: 'auto' | 'powershell.exe' | 'pwsh.exe'
   isCanceled?: () => boolean

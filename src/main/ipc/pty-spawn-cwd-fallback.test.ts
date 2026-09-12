@@ -167,6 +167,87 @@ describe('registerPtyHandlers', () => {
     expect(options.cwd).toBe(worktreePath)
     expect(result.startupCwdFallback).toEqual({ kind: 'worktree', cwd: worktreePath })
   })
+  it('threads forced-host authority without allowing a missing-cwd fallback', async () => {
+    const providerSpawn = vi.fn().mockResolvedValue({ id: 'pty-forced-host' })
+    installDaemonTestProvider({ spawn: providerSpawn })
+    registerPtyHandlers(mainWindow as never)
+    const missingCwd = 'C:\\Users\\alice\\repo\\deleted-folder'
+    statSyncMock.mockImplementation((target: string) => {
+      if (target === missingCwd) {
+        throw Object.assign(new Error('ENOENT'), { code: 'ENOENT' })
+      }
+      return { isDirectory: () => true, mode: 0o755 }
+    })
+
+    const result = (await handlers.get('pty:spawn')!(null, {
+      cols: 80,
+      rows: 24,
+      cwd: missingCwd,
+      cwdFallback: 'worktree',
+      forceHostRuntime: true,
+      worktreeId: 'repo-1::\\\\wsl.localhost\\Ubuntu\\home\\alice\\repo'
+    })) as { startupCwdFallback?: { kind: string; cwd: string } }
+
+    expect(providerSpawn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        cwd: 'C:/Users/alice/repo/deleted-folder',
+        forceHostRuntime: true
+      })
+    )
+    expect(result.startupCwdFallback).toBeUndefined()
+  })
+
+  it('does not treat a truthy non-boolean IPC value as forced-host authority', async () => {
+    const providerSpawn = vi.fn().mockResolvedValue({ id: 'pty-not-forced-host' })
+    installDaemonTestProvider({ spawn: providerSpawn })
+    registerPtyHandlers(mainWindow as never)
+
+    await handlers.get('pty:spawn')!(null, {
+      cols: 80,
+      rows: 24,
+      cwd: 'C:\\Users\\alice\\repo',
+      forceHostRuntime: 'false'
+    } as never)
+
+    const spawnArgs = providerSpawn.mock.calls.at(-1)?.[0]
+    expect(spawnArgs).not.toHaveProperty('forceHostRuntime')
+  })
+
+  it('does not let a project WSL runtime override forced-host authority', async () => {
+    const originalPlatform = process.platform
+    const providerSpawn = vi.fn().mockResolvedValue({ id: 'pty-forced-host-runtime' })
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+
+    try {
+      installDaemonTestProvider({ spawn: providerSpawn })
+      registerPtyHandlers(mainWindow as never)
+      await handlers.get('pty:spawn')!(null, {
+        cols: 80,
+        rows: 24,
+        cwd: 'C:\\Users\\alice\\repo',
+        forceHostRuntime: true,
+        projectRuntime: {
+          status: 'resolved',
+          runtime: {
+            kind: 'wsl',
+            hostPlatform: 'wsl',
+            projectId: 'repo-1',
+            distro: 'Ubuntu-24.04',
+            reason: 'project-override',
+            cacheKey: 'repo-1:wsl'
+          }
+        }
+      })
+    } finally {
+      Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
+    }
+
+    const spawnArgs = providerSpawn.mock.calls.at(-1)?.[0]
+    expect(spawnArgs?.forceHostRuntime).toBe(true)
+    expect(spawnArgs?.shellOverride).not.toBe('wsl.exe')
+    expect(spawnArgs?.terminalWindowsWslDistro).toBeNull()
+  })
+
   it.each(['/home/alice/repo', '/a', '/c'])(
     'keeps an existing POSIX startup cwd for the selected WSL runtime (%s)',
     async (startupCwd) => {

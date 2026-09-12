@@ -582,6 +582,76 @@ describe('LocalPtyProvider', () => {
       )
     })
 
+    it('keeps a native Windows cwd on the requested host shell when worktree context is WSL', async () => {
+      const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+      Object.defineProperty(process, 'platform', { value: 'win32' })
+
+      try {
+        await provider.spawn({
+          cols: 80,
+          rows: 24,
+          cwd: 'C:\\Users\\jin\\repo',
+          shellOverride: 'cmd.exe',
+          forceHostRuntime: true,
+          worktreeId: 'repo::\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo'
+        })
+      } finally {
+        if (platform) {
+          Object.defineProperty(process, 'platform', platform)
+        }
+      }
+
+      const [shellPath, , spawnOptions] = spawnMock.mock.calls.at(-1) ?? []
+      expect(shellPath).toBe('cmd.exe')
+      expect(spawnOptions).toEqual(expect.objectContaining({ cwd: 'C:\\Users\\jin\\repo' }))
+    })
+
+    it('keeps a forced-host spawn on the host shell when cwd is omitted', async () => {
+      const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+      Object.defineProperty(process, 'platform', { value: 'win32' })
+
+      try {
+        await provider.spawn({
+          cols: 80,
+          rows: 24,
+          shellOverride: 'cmd.exe',
+          forceHostRuntime: true,
+          worktreeId: 'repo::\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo'
+        })
+      } finally {
+        if (platform) {
+          Object.defineProperty(process, 'platform', platform)
+        }
+      }
+
+      const [shellPath] = spawnMock.mock.calls.at(-1) ?? []
+      expect(shellPath).toBe('cmd.exe')
+    })
+
+    it('keeps an MSYS cwd on the host shell when worktree context is WSL', async () => {
+      const platform = Object.getOwnPropertyDescriptor(process, 'platform')
+      Object.defineProperty(process, 'platform', { value: 'win32' })
+
+      try {
+        await provider.spawn({
+          cols: 80,
+          rows: 24,
+          cwd: '/c/Users/jin/repo',
+          shellOverride: 'cmd.exe',
+          forceHostRuntime: true,
+          worktreeId: 'repo::\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo'
+        })
+      } finally {
+        if (platform) {
+          Object.defineProperty(process, 'platform', platform)
+        }
+      }
+
+      const [shellPath, , spawnOptions] = spawnMock.mock.calls.at(-1) ?? []
+      expect(shellPath).toBe('cmd.exe')
+      expect(spawnOptions).toEqual(expect.objectContaining({ cwd: 'C:\\Users\\jin\\repo' }))
+    })
+
     it('resolves the Git Bash default shell and preserves the requested cwd', async () => {
       const platform = Object.getOwnPropertyDescriptor(process, 'platform')
       const originalProgramFiles = process.env.ProgramFiles

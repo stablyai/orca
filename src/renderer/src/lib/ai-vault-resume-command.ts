@@ -21,6 +21,7 @@ import type { AiVaultSessionDragPayload } from '@/lib/ai-vault-session-drag'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import { CLIENT_PLATFORM } from '@/lib/new-workspace'
 import { buildAgentResumeStartupPlan } from '@/lib/tui-agent-startup'
+import { AGENT_RESUME_ARGV_ENV } from '../../../shared/agent-resume-launch-command'
 import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { LOCAL_EXECUTION_HOST_ID, parseExecutionHostId } from '../../../shared/execution-host'
 import {
@@ -62,7 +63,9 @@ type AiVaultResumeWorktreeArgs = {
   commandOverride?: string | null
 }
 
-export function buildAiVaultResumeCopyCommandForWorktree(args: AiVaultResumeWorktreeArgs): string {
+export function buildAiVaultResumeCopyCommandForWorktree(
+  args: AiVaultResumeWorktreeArgs
+): string | null {
   // Why an `env -u` prefix on the agent rather than a preceding clear statement:
   // this text is COPIED, so it runs in a shell Orca never spawned and cannot
   // seed. A clear statement has to test `$fish_pid`, an unbound expansion that
@@ -72,7 +75,8 @@ export function buildAiVaultResumeCopyCommandForWorktree(args: AiVaultResumeWork
     args.session.agent === 'codex' && args.session.codexHome === null
       ? (['CODEX_HOME', 'ORCA_CODEX_HOME'] as const)
       : undefined
-  return buildAiVaultResumeForWorktree(args, true, clearEnvNames).command
+  const startup = buildAiVaultResumeForWorktree(args, true, clearEnvNames)
+  return startup.env?.[AGENT_RESUME_ARGV_ENV] ? null : startup.command
 }
 
 export function buildAiVaultResumeStartupForWorktree(
@@ -181,27 +185,14 @@ function buildAiVaultResumeForWorktree(
     })
     if (startupPlan) {
       return {
-        command:
-          args.session.agent === 'omp'
-            ? buildAiVaultResumeCommand({
-                agent: args.session.agent,
-                sessionId: args.session.sessionId,
-                resumeFilePath,
-                cwd,
-                platform,
-                commandOverride: startupPlan.launchConfig.agentCommand,
-                codexHome,
-                shell: liveShell,
-                clearEnvNames
-              })
-            : buildAiVaultResumeShellCommand({
-                resumeCommand: startupPlan.launchCommand,
-                cwd,
-                platform,
-                codexHome,
-                shell: liveShell,
-                clearEnvNames
-              }),
+        command: buildAiVaultResumeShellCommand({
+          resumeCommand: startupPlan.launchCommand,
+          cwd,
+          platform,
+          codexHome,
+          shell: liveShell,
+          clearEnvNames
+        }),
         ...(startupPlan.env ? { env: startupPlan.env } : {}),
         ...realHomeCodexResumeEnvDeletion(args.session),
         ...startupCwd,
@@ -209,6 +200,7 @@ function buildAiVaultResumeForWorktree(
         providerSession
       }
     }
+    throw new Error('Could not safely prepare this session for resume.')
   }
 
   return {

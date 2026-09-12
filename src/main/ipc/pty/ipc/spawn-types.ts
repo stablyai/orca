@@ -27,6 +27,8 @@ export type PtySpawnIpcArgs = {
   cwd?: string
   // Why: fresh local spawns opt into recovering a saved cwd whose dir was deleted (#7239); reattach/remote need exact cwd, so the flag alone isn't sufficient.
   cwdFallback?: 'worktree'
+  /** Current pane explicitly selected the local host instead of its project runtime. */
+  forceHostRuntime?: boolean
   env?: Record<string, string>
   envToDelete?: string[]
   command?: string

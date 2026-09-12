@@ -208,6 +208,21 @@ describe('createIpcPtyTransport', () => {
     transport.disconnect()
   })
 
+  it('threads forced-host authority without allowing a worktree cwd fallback', async () => {
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    const spawn = window.api.pty.spawn as unknown as ReturnType<typeof vi.fn>
+
+    const transport = createIpcPtyTransport({
+      cwdFallback: 'worktree',
+      forceHostRuntime: true
+    })
+    await transport.connect({ url: '', callbacks: {} })
+
+    expect(spawn).toHaveBeenCalledWith(expect.objectContaining({ forceHostRuntime: true }))
+    expect(spawn).toHaveBeenCalledWith(expect.not.objectContaining({ cwdFallback: 'worktree' }))
+    transport.disconnect()
+  })
+
   it('omits the missing-cwd fallback flag when the IPC transport is SSH-tagged', async () => {
     const { createIpcPtyTransport } = await import('./pty-transport')
     const spawn = window.api.pty.spawn as unknown as ReturnType<typeof vi.fn>

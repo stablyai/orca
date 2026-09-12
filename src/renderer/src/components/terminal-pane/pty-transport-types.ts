@@ -244,6 +244,8 @@ export type IpcPtyTransportOptions = {
   /** Records newly retained input against a remount-safe deferred split handoff. */
   onPreconnectInput?: (input: PtyPreconnectInputEntry) => void
   cwdFallback?: 'worktree'
+  /** Current pane explicitly selected the local host instead of its project runtime. */
+  forceHostRuntime?: boolean
   env?: Record<string, string>
   envToDelete?: string[]
   command?: string

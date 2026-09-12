@@ -39,7 +39,7 @@ describe('AI Vault OMP cold resume', () => {
     })
 
     expect(startup).toMatchObject({
-      command: "omp '--model' 'custom' --resume '/custom/omp-sessions/project/session.jsonl'",
+      command: "omp '--model' 'custom' '--resume' '/custom/omp-sessions/project/session.jsonl'",
       cwd: '/repo',
       env: { OMP_PROFILE: 'custom' },
       launchConfig: {

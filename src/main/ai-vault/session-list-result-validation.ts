@@ -6,6 +6,7 @@ import {
   type AiVaultScanIssue,
   type AiVaultSession
 } from '../../shared/ai-vault-types'
+import { hasUnsafeProviderSessionIdChars } from '../../shared/agent-session-resume'
 import { normalizeExecutionHostId } from '../../shared/execution-host'
 
 const aiVaultAgentSet = new Set<string>(AI_VAULT_AGENTS)
@@ -37,6 +38,10 @@ const executionHostIdSchema = z.string().transform((value, ctx) => {
   return z.NEVER
 })
 
+const safeResumeStringSchema = z
+  .string()
+  .refine((value) => !hasUnsafeProviderSessionIdChars(value), 'Unsafe resume value')
+
 const sessionPreviewMessageSchema = z.object({
   role: z.enum(['user', 'assistant', 'system', 'tool', 'unknown']),
   text: z.string(),
@@ -48,12 +53,12 @@ const aiVaultSessionSchema = z.object({
   executionHostId: executionHostIdSchema,
   executionHostPlatform: nodePlatformSchema.nullable().optional(),
   agent: z.string().min(1),
-  sessionId: z.string(),
+  sessionId: safeResumeStringSchema,
   title: z.string(),
   cwd: z.string().nullable(),
   branch: z.string().nullable(),
   model: z.string().nullable(),
-  filePath: z.string(),
+  filePath: safeResumeStringSchema,
   codexHome: z.string().nullable(),
   createdAt: z.string().nullable(),
   updatedAt: z.string().nullable(),
@@ -66,7 +71,7 @@ const aiVaultSessionSchema = z.object({
   lastUserPrompt: z.string().nullable().optional(),
   queuedMessageCount: z.number().default(0),
   subagentTranscriptCount: z.number().default(0),
-  resumeCommand: z.string(),
+  resumeCommand: safeResumeStringSchema,
   structuredSession: z
     .object({
       sessionId: z.string().min(1).max(512),

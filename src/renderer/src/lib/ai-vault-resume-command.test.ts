@@ -188,7 +188,9 @@ describe('ai vault resume command runtime', () => {
       }
     })
 
-    expect(command).toBe("omp --resume 'C:\\Users\\alice\\.omp\\agent\\sessions\\repo\\sess.jsonl'")
+    expect(command).toBe(
+      "omp '--resume' 'C:\\Users\\alice\\.omp\\agent\\sessions\\repo\\sess.jsonl'"
+    )
     expect(command).not.toContain('019f27cd-4268-7000-96e7-62f42a55c144')
   })
 
@@ -210,7 +212,69 @@ describe('ai vault resume command runtime', () => {
           codexHome: null
         }
       })
-    ).toBe('omp --resume "C:\\Users\\alice\\.omp\\agent\\sessions\\repo\\sess.jsonl"')
+    ).toBe('omp "--resume" "C:\\Users\\alice\\.omp\\agent\\sessions\\repo\\sess.jsonl"')
+  })
+
+  it('keeps the env-backed OMP launch for cmd-unsafe transcript paths', () => {
+    const transcriptPath = 'C:\\Users\\alice\\.omp\\sessions\\100% real!\\sess.jsonl'
+    const state = makeState({
+      worktreePath: 'C:\\Users\\alice\\repo',
+      terminalWindowsShell: 'cmd.exe'
+    })
+
+    const startup = buildAiVaultResumeStartupForWorktree({
+      state,
+      worktreeId: 'repo-1::worktree-1',
+      session: {
+        agent: 'omp',
+        sessionId: '019f27cd-4268-7000-96e7-62f42a55c144',
+        filePath: transcriptPath,
+        cwd: 'C:\\Users\\alice\\repo',
+        codexHome: null
+      }
+    })
+
+    expect(startup.command).toBe('orca agent resume-env')
+    expect(startup.env).toEqual(
+      expect.objectContaining({
+        ORCA_AGENT_RESUME_COMMAND: 'omp',
+        ORCA_AGENT_RESUME_ARGV: JSON.stringify(['--resume', transcriptPath])
+      })
+    )
+    expect(
+      buildAiVaultResumeCopyCommandForWorktree({
+        state,
+        worktreeId: 'repo-1::worktree-1',
+        session: {
+          agent: 'omp',
+          sessionId: '019f27cd-4268-7000-96e7-62f42a55c144',
+          filePath: transcriptPath,
+          cwd: 'C:\\Users\\alice\\repo',
+          codexHome: null
+        }
+      })
+    ).toBeNull()
+  })
+
+  it('does not downgrade rejected resumable metadata to a legacy command', () => {
+    const state = makeState({
+      worktreePath: 'C:\\Users\\alice\\repo',
+      terminalWindowsShell: 'cmd.exe'
+    })
+
+    expect(() =>
+      buildAiVaultResumeStartupForWorktree({
+        state,
+        worktreeId: 'repo-1::worktree-1',
+        session: {
+          agent: 'omp',
+          sessionId: '019f27cd-4268-7000-96e7-62f42a55c144',
+          filePath: 'C:\\Users\\alice\\.omp\\session.jsonl\nwhoami',
+          cwd: 'C:\\Users\\alice\\repo',
+          codexHome: null
+        }
+      })
+    ).toThrow('Could not safely prepare this session for resume.')
   })
 
   it('copies syntax that matches the configured cmd shell', () => {
@@ -509,7 +573,7 @@ describe('ai vault resume command runtime', () => {
           codexHome: null
         }
       })
-    ).toBe("omp --resume '/home/alice/.omp/agent/sessions/repo/sess.jsonl'")
+    ).toBe("omp '--resume' '/home/alice/.omp/agent/sessions/repo/sess.jsonl'")
   })
 
   it('deletes inherited Codex homes when resuming a real-home session', () => {

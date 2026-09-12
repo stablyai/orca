@@ -23,6 +23,11 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
     load: async () => (await import('./handlers/account.js')).ACCOUNT_HANDLERS
   },
   {
+    name: 'agent-resume',
+    keys: ['agent resume-env'],
+    load: async () => (await import('./handlers/agent-resume.js')).AGENT_RESUME_HANDLERS
+  },
+  {
     name: 'artifacts',
     keys: [
       'artifacts list',
