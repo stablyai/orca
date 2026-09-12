@@ -193,4 +193,101 @@ describe('buildSnapshot', () => {
     expect(result.snapshot).toContain('[Footer]')
     expect(result.snapshot).toContain('heading "Dashboard"')
   })
+
+  it('routes same-named elements with overlapping node IDs to their own iframe sessions', async () => {
+    const nodes = [
+      node('1', 'WebArea', 'page', { childIds: ['2', '3'] }),
+      node('2', 'button', 'Submit', { backendDOMNodeId: 10 }),
+      node('3', 'heading', 'Section')
+    ]
+    const result = await buildSnapshot(
+      makeSender(nodes),
+      new Map([
+        ['frame-a', 'session-a'],
+        ['frame-b', 'session-b']
+      ]),
+      () => makeSender(nodes)
+    )
+
+    expect(result.refs).toEqual([
+      { ref: '@e1', role: 'button', name: 'Submit' },
+      { ref: '@e2', role: 'button', name: 'Submit (2nd)' },
+      { ref: '@e3', role: 'button', name: 'Submit (3rd)' }
+    ])
+    expect([...result.refMap.values()]).toEqual(
+      [undefined, 'session-a', 'session-b'].map((sessionId, index) => ({
+        backendDOMNodeId: 10,
+        role: 'button',
+        name: 'Submit',
+        sessionId,
+        nth: index + 1
+      }))
+    )
+    expect(result.snapshot).toBe(
+      [
+        '[@e1] button "Submit"',
+        'heading "Section"',
+        '  [@e2] button "Submit (2nd)"',
+        '  heading "Section"',
+        '  [@e3] button "Submit (3rd)"',
+        '  heading "Section"'
+      ].join('\n')
+    )
+  })
+
+  it('skips unavailable iframe trees and keeps session associations local to each snapshot', async () => {
+    const nodes = [node('1', 'button', 'Submit', { backendDOMNodeId: 10 })]
+    const result = await buildSnapshot(
+      makeSender(nodes),
+      new Map([
+        ['empty', 'empty'],
+        ['stale', 'stale'],
+        ['ready', 'ready']
+      ]),
+      (sessionId) => {
+        if (sessionId === 'stale') {
+          throw new Error('Detached iframe')
+        }
+        return makeSender(sessionId === 'empty' ? [] : nodes)
+      }
+    )
+    expect([...result.refMap].map(([ref, entry]) => [ref, entry.sessionId])).toEqual([
+      ['@e1', undefined],
+      ['@e2', 'ready']
+    ])
+
+    const next = await buildSnapshot(makeSender(nodes))
+    expect([...next.refMap].map(([ref, entry]) => [ref, entry.sessionId])).toEqual([
+      ['@e1', undefined]
+    ])
+  })
+
+  it('keeps array-search visits linear when a snapshot contains many iframe references', async () => {
+    const children = Array.from({ length: 400 }, (_, index) => String(index + 2))
+    const nodes = [
+      node('1', 'WebArea', 'page', { childIds: children }),
+      ...children.map((id) => node(id, 'button', `Button ${id}`))
+    ]
+    const originalFind = Array.prototype.find
+    let visits = 0
+    const find = vi
+      .spyOn(Array.prototype, 'find')
+      .mockImplementation(function (this: unknown[], predicate, thisArg) {
+        return originalFind.call(this, (value, index, array) => {
+          visits += 1
+          return predicate.call(thisArg, value, index, array)
+        })
+      })
+    let result: Awaited<ReturnType<typeof buildSnapshot>>
+    try {
+      result = await buildSnapshot(makeSender(nodes), new Map([['frame', 'session']]), () =>
+        makeSender(nodes)
+      )
+    } finally {
+      find.mockRestore()
+    }
+    expect(result.refs).toHaveLength(800)
+    expect(result.refMap.get('@e800')?.sessionId).toBe('session')
+    expect(visits).toBeLessThanOrEqual(result.refs.length * 2)
+  })
 })
