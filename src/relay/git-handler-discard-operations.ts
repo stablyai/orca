@@ -4,23 +4,12 @@ import {
   removeSafeUntrackedDiscardTarget,
   removeSafeUntrackedDiscardTargets
 } from '../shared/git-discard-path-safety'
+import { partitionTrackedPathSpecs } from '../shared/git-tracked-pathspecs'
 import { detectConflictOperation } from './git-handler-status-ops'
 
 const BULK_CHUNK_SIZE = GIT_BULK_CHUNK_SIZE
 
 export class GitHandlerDiscardOperations extends GitHandlerOperationContext {
-  private normalizeGitPathForCompare(filePath: string): string {
-    return filePath.replace(/\\/g, '/').replace(/\/+$/, '')
-  }
-
-  private isTrackedPathSpec(filePath: string, trackedPaths: readonly string[]): boolean {
-    const normalized = this.normalizeGitPathForCompare(filePath)
-    return trackedPaths.some((trackedPath) => {
-      const normalizedTracked = this.normalizeGitPathForCompare(trackedPath)
-      return normalizedTracked === normalized || normalizedTracked.startsWith(`${normalized}/`)
-    })
-  }
-
   private assertInWorktree(worktreePath: string, filePath: string): string {
     const resolved = path.resolve(worktreePath, filePath)
     const rel = path.relative(path.resolve(worktreePath), resolved)
@@ -98,11 +87,9 @@ export class GitHandlerDiscardOperations extends GitHandlerOperationContext {
         }
       }
 
-      const trackedPaths = filePaths.filter((filePath) =>
-        this.isTrackedPathSpec(filePath, trackedPathSpecs)
-      )
-      const untrackedPaths = filePaths.filter(
-        (filePath) => !this.isTrackedPathSpec(filePath, trackedPathSpecs)
+      const { trackedPaths, untrackedPaths } = partitionTrackedPathSpecs(
+        filePaths,
+        trackedPathSpecs
       )
       await removeSafeUntrackedDiscardTargets(
         worktreePath,
