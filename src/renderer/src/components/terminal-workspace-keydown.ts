@@ -10,7 +10,8 @@ import {
   createFloatingWorkspaceTerminalTab,
   handleEmptyFloatingWorkspacePanelCloseShortcut,
   isEventTargetInsideFloatingWorkspacePanel,
-  isFloatingWorkspacePanelFocused
+  isFloatingWorkspacePanelFocused,
+  launchFloatingWorkspaceAgentTab
 } from '@/lib/floating-workspace-terminal-actions'
 import { showTerminalShortcutCaptureNotification } from '@/lib/terminal-shortcut-capture-notification'
 import {
@@ -75,6 +76,7 @@ export function handleTerminalWorkspaceKeyDown(
   if (!event.repeat) {
     const agentShortcut = resolveTerminalAgentTabShortcut({
       activeWorktreeId,
+      floatingWorkspaceFocused,
       keybindings,
       matchShortcut
     })
@@ -82,7 +84,11 @@ export function handleTerminalWorkspaceKeyDown(
       event.preventDefault()
       notifyTerminalCapture(agentShortcut.actionId)
       if (agentShortcut.agent) {
-        handleNewAgentTab(agentShortcut.agent)
+        if (floatingWorkspaceFocused) {
+          launchFloatingWorkspaceAgentTab(useAppStore.getState(), agentShortcut.agent)
+        } else {
+          handleNewAgentTab(agentShortcut.agent)
+        }
       } else {
         toast.message(
           translate(
