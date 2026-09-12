@@ -2,7 +2,7 @@
 import { parentPort, workerData } from 'node:worker_threads'
 import { resampleToRate } from './stt-audio-resample'
 import { OfflineAudioChunker } from './stt-offline-audio-chunker'
-import { buildHotwordsConfig, resolveFile, resolveTokens } from './stt-worker-model-config'
+import { buildRecognizerConfig } from './stt-worker-model-config'
 
 type WorkerMessage =
   | {
@@ -43,125 +43,16 @@ function handleInit(msg: Extract<WorkerMessage, { type: 'init' }>): void {
   try {
     sherpa = loadSherpa()
 
-    const { modelDir, modelType, streaming, sampleRate, files } = msg
+    const { streaming, sampleRate } = msg
     isStreaming = streaming
     offlineChunker = streaming ? null : new OfflineAudioChunker(sampleRate)
     offlineSampleRate = sampleRate
 
-    const tokens = resolveTokens(files, modelDir)
-    const hotwords = buildHotwordsConfig(msg)
-
-    if (streaming && modelType === 'transducer') {
-      const config = {
-        featConfig: { sampleRate, featureDim: 80 },
-        modelConfig: {
-          transducer: {
-            encoder: resolveFile(files, 'encoder', modelDir),
-            decoder: resolveFile(files, 'decoder', modelDir),
-            joiner: resolveFile(files, 'joiner', modelDir)
-          },
-          tokens,
-          numThreads: 1,
-          provider: 'cpu',
-          debug: 0
-        },
-        ...hotwords,
-        enableEndpoint: 1,
-        rule1MinTrailingSilence: 2.4,
-        rule2MinTrailingSilence: 1.2,
-        rule3MinUtteranceLength: 20
-      }
+    const { online, config } = buildRecognizerConfig(msg)
+    if (online) {
       recognizer = sherpa.createOnlineRecognizer(config)
       stream = sherpa.createOnlineStream(recognizer)
-    } else if (streaming && modelType === 'paraformer') {
-      const config = {
-        featConfig: { sampleRate, featureDim: 80 },
-        modelConfig: {
-          paraformer: {
-            encoder: resolveFile(files, 'encoder', modelDir),
-            decoder: resolveFile(files, 'decoder', modelDir)
-          },
-          tokens,
-          numThreads: 1,
-          provider: 'cpu',
-          debug: 0
-        },
-        decodingMethod: 'greedy_search',
-        enableEndpoint: 1,
-        rule1MinTrailingSilence: 2.4,
-        rule2MinTrailingSilence: 1.2,
-        rule3MinUtteranceLength: 20
-      }
-      recognizer = sherpa.createOnlineRecognizer(config)
-      stream = sherpa.createOnlineStream(recognizer)
-    } else if (modelType === 'whisper') {
-      const config = {
-        featConfig: { sampleRate, featureDim: 80 },
-        modelConfig: {
-          whisper: {
-            encoder: resolveFile(files, 'encoder', modelDir),
-            decoder: resolveFile(files, 'decoder', modelDir)
-          },
-          tokens,
-          numThreads: 2,
-          provider: 'cpu',
-          debug: 0
-        },
-        decodingMethod: 'greedy_search'
-      }
-      recognizer = sherpa.createOfflineRecognizer(config)
-      stream = sherpa.createOfflineStream(recognizer)
-    } else if (modelType === 'nemo-ctc') {
-      const config = {
-        featConfig: { sampleRate, featureDim: 80 },
-        modelConfig: {
-          nemoCtc: {
-            model: resolveFile(files, 'model', modelDir)
-          },
-          tokens,
-          numThreads: 2,
-          provider: 'cpu',
-          debug: 0
-        },
-        decodingMethod: 'greedy_search'
-      }
-      recognizer = sherpa.createOfflineRecognizer(config)
-      stream = sherpa.createOfflineStream(recognizer)
-    } else if (modelType === 'senseVoice') {
-      const config = {
-        featConfig: { sampleRate, featureDim: 80 },
-        modelConfig: {
-          senseVoice: {
-            model: resolveFile(files, 'model', modelDir),
-            // Empty string = auto-detect language (supports zh/en/ja/ko/yue).
-            language: '',
-            useInverseTextNormalization: 1
-          },
-          tokens,
-          numThreads: 2,
-          provider: 'cpu',
-          debug: 0
-        },
-        decodingMethod: 'greedy_search'
-      }
-      recognizer = sherpa.createOfflineRecognizer(config)
-      stream = sherpa.createOfflineStream(recognizer)
     } else {
-      const config = {
-        featConfig: { sampleRate, featureDim: 80 },
-        modelConfig: {
-          transducer: {
-            encoder: resolveFile(files, 'encoder', modelDir),
-            decoder: resolveFile(files, 'decoder', modelDir),
-            joiner: resolveFile(files, 'joiner', modelDir)
-          },
-          tokens,
-          numThreads: 2,
-          provider: 'cpu',
-          debug: 0
-        },
-        ...hotwords
-      }
       recognizer = sherpa.createOfflineRecognizer(config)
       stream = sherpa.createOfflineStream(recognizer)
     }
