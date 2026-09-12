@@ -2,12 +2,17 @@ import {
   normalizeBrowserNavigationUrl,
   toSecureCertificateEndpoint
 } from '../../shared/browser-url'
+import { classifyExternalAppUrl } from '../../shared/external-app-url'
 import { isChromiumInternalErrorUrl } from './browser-manager-types'
+import { originFromNavigationEvent } from './external-app-request-origin'
 import { BrowserManagerGuestPopupPolicy } from './browser-manager-guest-popup-policy'
 
 export abstract class BrowserManagerGuestNavigationPolicy extends BrowserManagerGuestPopupPolicy {
   protected installGuestNavigationPolicy(guest: Electron.WebContents): () => void {
-    const navigationGuard = (event: Electron.Event, url: string): boolean => {
+    const navigationGuard = (
+      event: Electron.Event & { initiator?: Electron.WebFrameMain | null },
+      url: string
+    ): boolean => {
       // Why: Turnstile loads challenge resources via blob:; blocking them trips error 600010. Allow only http(s) blobs, not opaque ones.
       if (url.startsWith('blob:https://') || url.startsWith('blob:http://')) {
         return true
@@ -16,6 +21,16 @@ export abstract class BrowserManagerGuestNavigationPolicy extends BrowserManager
       if (url.startsWith('file:')) {
         event.preventDefault()
         return false
+      }
+      // Why: chrome-error:// is Chromium's failure document, not an OS app scheme.
+      if (!isChromiumInternalErrorUrl(url)) {
+        const customApp = classifyExternalAppUrl(url)
+        if (customApp.ok && customApp.kind === 'custom') {
+          // Why: will-navigate is sync; deny in-guest load then prompt for OS handoff (#12719).
+          event.preventDefault()
+          void this.promptOpenExternalAppScheme(guest, url, originFromNavigationEvent(event))
+          return false
+        }
       }
       if (!normalizeBrowserNavigationUrl(url)) {
         // Why: will-attach-webview only validates the initial src; keep enforcing the allowlist on later navs.
@@ -26,7 +41,7 @@ export abstract class BrowserManagerGuestNavigationPolicy extends BrowserManager
     }
 
     const willRedirectHandler = (
-      event: Electron.Event,
+      event: Electron.Event & { initiator?: Electron.WebFrameMain | null },
       url: string,
       _isInPlace: boolean,
       isMainFrame: boolean
