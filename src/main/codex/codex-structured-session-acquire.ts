@@ -19,10 +19,7 @@ import {
   closeCodexPublishedSession,
   handleCodexSessionExit
 } from './codex-structured-session-close'
-import {
-  reportedCodexThreadOptions,
-  restoredCodexSessionOptions
-} from './codex-structured-session-options'
+import { resolveCodexAcquiredSessionOptions } from './codex-structured-model-restoration'
 import {
   codexSessionLifecycle,
   mintCodexAcquisitionGeneration,
@@ -169,6 +166,13 @@ export async function acquireCodexStructuredSession(input: {
     acquisitions.assertCurrent(sessionId, attempt)
     const opened = await openCodexThread(connection, launch, deps.requestTimeoutMs)
     acquisitions.assertCurrent(sessionId, attempt)
+    const resolvedOptions = await resolveCodexAcquiredSessionOptions({
+      connection,
+      options: acquireInput.options,
+      opened,
+      timeoutMs: deps.requestTimeoutMs
+    })
+    acquisitions.assertCurrent(sessionId, attempt)
     primaryThreadId = opened.threadId
     const restoreAdmission = translator?.restoreThread(opened.threadId, opened.thread ?? {})
     if (restoreAdmission && !restoreAdmission.accepted) {
@@ -205,8 +209,8 @@ export async function acquireCodexStructuredSession(input: {
       historyMode: opened.historyMode,
       activeTurnIds: new Set(),
       prompts: acquisition.prompts,
-      options: restoredCodexSessionOptions(acquireInput.options),
-      reportedOptions: reportedCodexThreadOptions(opened),
+      options: resolvedOptions.options,
+      reportedOptions: resolvedOptions.reportedOptions,
       turnIdWaiters: [],
       translator,
       backgroundTasks: new CodexBackgroundTaskTracker(opened.threadId, subagentExecutions),
@@ -221,6 +225,16 @@ export async function acquireCodexStructuredSession(input: {
     }
     turnCancellation.register(session)
     sessions.set(sessionId, session)
+    if (resolvedOptions.notice && acquireInput.events) {
+      acquireInput.events.appendItem(
+        {
+          provider: 'orca',
+          clientMessageId: `codex-model-restoration:${acquired.acquisitionGeneration}`
+        },
+        { kind: 'status', text: resolvedOptions.notice, tone: 'warning' }
+      )
+      acquireInput.events.publish()
+    }
     for (const event of acquisition.drain()) {
       event()
     }
