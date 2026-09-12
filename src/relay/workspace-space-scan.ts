@@ -1,15 +1,17 @@
-import { execFile } from 'node:child_process'
 import type { Dirent } from 'node:fs'
 import { lstat, opendir } from 'node:fs/promises'
 import { basename, join } from 'node:path'
 import { platform } from 'node:process'
-import { promisify } from 'node:util'
 import type {
   WorkspaceSpaceDirectoryScanResult,
   WorkspaceSpaceItem
 } from '../shared/workspace-space-types'
 import { compactWorkspaceSpaceItems } from '../shared/workspace-space-compaction'
 import { mapWithConcurrency } from '../shared/map-with-concurrency'
+import {
+  readWorkspaceSpaceDuDepthOne,
+  WORKSPACE_SPACE_DU_TIMEOUT_MS
+} from '../shared/workspace-space-du-stream'
 import {
   scanWorkspaceSpaceEntryTree,
   type WorkspaceSpaceEntryScan
@@ -22,9 +24,6 @@ import {
 import type { RequestContext } from './dispatcher'
 
 const RELAY_FS_CONCURRENCY = 48
-const DU_TIMEOUT_MS = 120_000
-const DU_MAX_BUFFER_BYTES = 16 * 1024 * 1024
-const execFileAsync = promisify(execFile)
 
 type ScanStats = WorkspaceSpaceEntryScan
 
@@ -32,6 +31,13 @@ class RelayWorkspaceSpaceScanCancelledError extends Error {
   constructor() {
     super('Workspace space scan cancelled')
     this.name = 'RelayWorkspaceSpaceScanCancelledError'
+  }
+}
+
+class RelayWorkspaceSpaceDuTimeoutError extends Error {
+  constructor() {
+    super(`du timed out after ${WORKSPACE_SPACE_DU_TIMEOUT_MS}ms`)
+    this.name = 'RelayWorkspaceSpaceDuTimeoutError'
   }
 }
 
@@ -46,35 +52,18 @@ function normalizeDuPath(pathValue: string): string {
   return trimmed.length > 0 ? trimmed : pathValue
 }
 
-function parseDuDepthOneOutput(stdout: string): Map<string, number> {
-  const sizes = new Map<string, number>()
-  for (const line of stdout.split('\n')) {
-    const normalizedLine = line.endsWith('\r') ? line.slice(0, -1) : line
-    if (!normalizedLine) {
-      continue
-    }
-    const match = /^(\d+)\s+(.+)$/.exec(normalizedLine)
-    if (!match) {
-      continue
-    }
-    sizes.set(normalizeDuPath(match[2]), Number(match[1]) * 1024)
-  }
-  return sizes
-}
-
 async function readDuDepthOne(
   rootPath: string,
   context: RequestContext
 ): Promise<Map<string, number>> {
   throwIfCancelled(context)
-  const { stdout } = await execFileAsync('du', ['-k', '-d', '1', rootPath], {
-    encoding: 'utf8',
-    maxBuffer: DU_MAX_BUFFER_BYTES,
+  return readWorkspaceSpaceDuDepthOne(rootPath, {
     signal: context.signal,
-    timeout: DU_TIMEOUT_MS
+    isCancelled: () => context.isStale() || Boolean(context.signal?.aborted),
+    normalizePath: normalizeDuPath,
+    createTimeoutError: () => new RelayWorkspaceSpaceDuTimeoutError(),
+    createCancelledError: () => new RelayWorkspaceSpaceScanCancelledError()
   })
-  throwIfCancelled(context)
-  return parseDuDepthOneOutput(stdout)
 }
 
 function toWorkspaceSpaceItem(stats: ScanStats): WorkspaceSpaceItem {
@@ -165,19 +154,16 @@ async function scanDirectoryWithDu(
     return scanDirectoryWithNode(rootPath, context)
   }
 
-  const [entries, duSizes] = await Promise.all([
-    opendir(rootPath).then(async (directory) => {
-      const admission = await collectWorkspaceSpaceDirectoryEntries(
-        directory,
-        rootPath,
-        (entry) => entry.name,
-        createWorkspaceSpaceScanBudget(),
-        () => throwIfCancelled(context)
-      )
-      return admission.entries
-    }),
-    readDuDepthOne(rootPath, context)
-  ])
+  const directory = await opendir(rootPath)
+  const admission = await collectWorkspaceSpaceDirectoryEntries(
+    directory,
+    rootPath,
+    (entry) => entry.name,
+    createWorkspaceSpaceScanBudget(),
+    () => throwIfCancelled(context)
+  )
+  const entries = admission.entries
+  const duSizes = await readDuDepthOne(rootPath, context)
   throwIfCancelled(context)
   const childStats = await mapWithConcurrency(
     entries,
@@ -235,6 +221,7 @@ export async function scanWorkspaceSpaceDirectory(
     } catch (error) {
       if (
         error instanceof RelayWorkspaceSpaceScanCancelledError ||
+        error instanceof RelayWorkspaceSpaceDuTimeoutError ||
         error instanceof WorkspaceSpaceScanCapacityError
       ) {
         throw error
