@@ -33,6 +33,20 @@ export const getOpenInAppPresets = createLocalizedCatalog(() => [
     faviconDomain: 'zed.dev',
     // Why: Zed's favicon is a black transparent mark, which disappears on dark menus.
     iconClassName: 'dark:invert'
+  },
+  {
+    id: 'windsurf',
+    label: translate('settings.openInApp.preset.windsurf', 'Windsurf'),
+    command: 'windsurf',
+    faviconDomain: 'windsurf.com'
+  },
+  {
+    id: 'devin-desktop',
+    label: translate('settings.openInApp.preset.devinDesktop', 'Devin Desktop'),
+    command: 'devin',
+    faviconDomain: 'devin.ai',
+    // Why: Devin's favicon is a black transparent mark, like Zed's.
+    iconClassName: 'dark:invert'
   }
 ])
 
