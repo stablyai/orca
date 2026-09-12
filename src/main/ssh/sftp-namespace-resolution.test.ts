@@ -1,7 +1,7 @@
 // Why: picking the wrong SFTP path silently installs the relay somewhere the shell
 // will never launch it, so every discovery outcome needs a pinned decision.
 
-import type { SFTPWrapper } from 'ssh2'
+import type { FileEntryWithStats, SFTPWrapper } from 'ssh2'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   resolveSftpTransferPath,
@@ -35,13 +35,34 @@ const MARKER_STATS = {
   size: 0
 }
 
-function makeSftp(options: { startPath?: unknown; lstat?: (path: string) => LstatOutcome }): {
+type DirEntry = { filename: string; kind?: 'file' | 'link' }
+
+function entries(...listing: (string | DirEntry)[]): FileEntryWithStats[] {
+  return listing
+    .map((entry) => (typeof entry === 'string' ? { filename: entry } : entry))
+    .map(({ filename, kind }) => ({
+      filename,
+      longname: filename,
+      attrs: {
+        isDirectory: () => kind === undefined,
+        isSymbolicLink: () => kind === 'link'
+      }
+    })) as unknown as FileEntryWithStats[]
+}
+
+function makeSftp(options: {
+  startPath?: unknown
+  lstat?: (path: string) => LstatOutcome
+  readdir?: FileEntryWithStats[] | Error
+}): {
   sftp: SFTPWrapper
   realpathCalls: string[]
   lstatCalls: string[]
+  readdirCalls: string[]
 } {
   const realpathCalls: string[] = []
   const lstatCalls: string[] = []
+  const readdirCalls: string[] = []
   const sftp = {
     realpath: vi.fn((path: string, cb: (err: Error | null, resolved?: unknown) => void) => {
       realpathCalls.push(path)
@@ -59,9 +80,20 @@ function makeSftp(options: { startPath?: unknown; lstat?: (path: string) => Lsta
         return
       }
       cb('code' in outcome ? statusError(outcome.code) : new Error(outcome.message))
-    })
+    }),
+    readdir: vi.fn(
+      (path: string, cb: (err: Error | undefined, list?: FileEntryWithStats[]) => void) => {
+        readdirCalls.push(path)
+        const listing = options.readdir ?? []
+        if (listing instanceof Error) {
+          cb(listing)
+          return
+        }
+        cb(undefined, listing)
+      }
+    )
   }
-  return { sftp: sftp as unknown as SFTPWrapper, realpathCalls, lstatCalls }
+  return { sftp: sftp as unknown as SFTPWrapper, realpathCalls, lstatCalls, readdirCalls }
 }
 
 // The marker lives under the SFTP start directory but not under the shell path.
@@ -141,13 +173,134 @@ describe('resolveSftpTransferPath', () => {
     expect(resolved).toBe(`/homes/alice/${RELAY_DIR}/package.json`)
   })
 
+  // Why: Synology DSM opens SFTP on the shared-folder list, so the session's home sits
+  // below the start directory instead of at it, and the shell home is unreachable (#12868).
+  describe('when the start directory is an ancestor of the SFTP-visible home', () => {
+    it('redirects to the shell home suffix the chroot re-exposes', async () => {
+      const { sftp, readdirCalls } = makeSftp({
+        startPath: '/',
+        lstat: divergentLstat('/homes/alice')
+      })
+
+      const resolved = await resolveSftpTransferPath(sftp, `${SHELL_HOME}/${RELAY_DIR}`, mapping)
+
+      expect(resolved).toBe(`/homes/alice/${RELAY_DIR}`)
+      expect(readdirCalls).toEqual([])
+    })
+
+    it('redirects to a start-directory child that carries the marker', async () => {
+      const { sftp, readdirCalls } = makeSftp({
+        startPath: '/',
+        lstat: divergentLstat('/home'),
+        readdir: entries('Documents', 'docker', 'home', 'homes')
+      })
+
+      const resolved = await resolveSftpTransferPath(sftp, `${SHELL_HOME}/${RELAY_DIR}`, mapping)
+
+      expect(resolved).toBe(`/home/${RELAY_DIR}`)
+      expect(readdirCalls).toEqual(['/'])
+    })
+
+    it('probes no entry that cannot hold the marker', async () => {
+      const { sftp, lstatCalls } = makeSftp({
+        startPath: '/',
+        lstat: divergentLstat('/home'),
+        readdir: entries({ filename: 'notes.txt', kind: 'file' }, '..', 'a/b', 'home')
+      })
+
+      const resolved = await resolveSftpTransferPath(sftp, `${SHELL_HOME}/${RELAY_DIR}`, mapping)
+
+      expect(resolved).toBe(`/home/${RELAY_DIR}`)
+      expect(lstatCalls).not.toContain(`/notes.txt/${RELAY_DIR}/${MARKER}`)
+      expect(lstatCalls).not.toContain(`/../${RELAY_DIR}/${MARKER}`)
+      expect(lstatCalls).not.toContain(`/a/b/${RELAY_DIR}/${MARKER}`)
+    })
+
+    it('follows a symlinked share', async () => {
+      const { sftp } = makeSftp({
+        startPath: '/',
+        lstat: divergentLstat('/home'),
+        readdir: entries({ filename: 'home', kind: 'link' })
+      })
+
+      const resolved = await resolveSftpTransferPath(sftp, `${SHELL_HOME}/${RELAY_DIR}`, mapping)
+
+      expect(resolved).toBe(`/home/${RELAY_DIR}`)
+    })
+
+    it('stops scanning after a bounded number of entries', async () => {
+      const listing = Array.from({ length: 80 }, (_entry, index) => `share-${index}`)
+      const { sftp, lstatCalls } = makeSftp({
+        startPath: '/',
+        lstat: divergentLstat('/share-70'),
+        readdir: entries(...listing)
+      })
+
+      const resolved = await resolveSftpTransferPath(sftp, `${SHELL_HOME}/${RELAY_DIR}`, mapping)
+
+      expect(resolved).toBe(`${SHELL_HOME}/${RELAY_DIR}`)
+      expect(lstatCalls).toContain(`/share-63/${RELAY_DIR}/${MARKER}`)
+      expect(lstatCalls).not.toContain(`/share-64/${RELAY_DIR}/${MARKER}`)
+    })
+
+    // Why: a home the account cannot stat is common on DSM, where /homes is admin-only.
+    it('keeps searching past a candidate whose probe is inconclusive', async () => {
+      const { sftp } = makeSftp({
+        startPath: '/',
+        lstat: (path) => {
+          if (path === `/homes/alice/${RELAY_DIR}/${MARKER}`) {
+            return { code: 3 }
+          }
+          return path === `/home/${RELAY_DIR}/${MARKER}` ? 'present' : { code: 2 }
+        },
+        readdir: entries('home', 'homes')
+      })
+
+      const resolved = await resolveSftpTransferPath(sftp, `${SHELL_HOME}/${RELAY_DIR}`, mapping)
+
+      expect(resolved).toBe(`/home/${RELAY_DIR}`)
+    })
+
+    it('keeps the shell path when the start directory cannot be listed', async () => {
+      const { sftp } = makeSftp({ startPath: '/', readdir: new Error('permission denied') })
+
+      const resolved = await resolveSftpTransferPath(sftp, `${SHELL_HOME}/${RELAY_DIR}`, mapping)
+
+      expect(resolved).toBe(`${SHELL_HOME}/${RELAY_DIR}`)
+      expect(console.warn).toHaveBeenCalledWith(expect.stringContaining('READDIR failed'))
+    })
+
+    it('keeps the shell path when the session has no readdir', async () => {
+      const { sftp } = makeSftp({ startPath: '/' })
+      Reflect.deleteProperty(sftp, 'readdir')
+
+      const resolved = await resolveSftpTransferPath(sftp, `${SHELL_HOME}/${RELAY_DIR}`, mapping)
+
+      expect(resolved).toBe(`${SHELL_HOME}/${RELAY_DIR}`)
+      expect(console.warn).toHaveBeenCalledWith(expect.stringContaining('READDIR failed'))
+    })
+
+    it('keeps the shell path when no reachable namespace carries the marker', async () => {
+      const { sftp, readdirCalls } = makeSftp({
+        startPath: '/',
+        readdir: entries('Documents', 'home', 'homes')
+      })
+
+      const resolved = await resolveSftpTransferPath(sftp, `${SHELL_HOME}/${RELAY_DIR}`, mapping)
+
+      expect(resolved).toBe(`${SHELL_HOME}/${RELAY_DIR}`)
+      expect(readdirCalls).toEqual(['/'])
+    })
+  })
+
   it('refuses an unrelated same-version directory that lacks our marker', async () => {
     const { sftp, lstatCalls } = makeSftp({ startPath: '/homes/alice' })
 
     const resolved = await resolveSftpTransferPath(sftp, `${SHELL_HOME}/${RELAY_DIR}`, mapping)
 
     expect(resolved).toBe(`${SHELL_HOME}/${RELAY_DIR}`)
-    expect(lstatCalls).toHaveLength(2)
+    expect(lstatCalls[0]).toBe(mapping.shellProbePath)
+    expect(lstatCalls).toContain(`/homes/alice/${RELAY_DIR}/${MARKER}`)
   })
 
   it('keeps the shell path when the marker is already visible there', async () => {
