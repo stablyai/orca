@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from '../dispatcher'
 import type { RpcRequest } from '../core'
 import type { OrcaRuntimeService } from '../../orca-runtime'
@@ -31,6 +31,10 @@ function makeRequest(method: string, params?: unknown): RpcRequest {
 }
 
 describe('preflight RPC methods', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+  })
+
   it('runs the server-side preflight check through runtime RPC', async () => {
     const status = {
       git: { installed: true },
@@ -63,13 +67,49 @@ describe('preflight RPC methods', () => {
     const detected = await dispatcher.dispatch(makeRequest('preflight.detectAgents'))
     const refreshed = await dispatcher.dispatch(makeRequest('preflight.refreshAgents'))
 
-    expect(detectInstalledAgentsWithShellPathHydrationMock).toHaveBeenCalled()
-    expect(refreshShellPathAndDetectAgentsMock).toHaveBeenCalled()
+    expect(detectInstalledAgentsWithShellPathHydrationMock).toHaveBeenCalledWith(undefined)
+    expect(refreshShellPathAndDetectAgentsMock).toHaveBeenCalledWith(undefined)
     expect(detected).toMatchObject({ ok: true, result: ['codex'] })
     expect(refreshed).toMatchObject({
       ok: true,
       result: { agents: ['codex', 'claude'], shellHydrationOk: true }
     })
+  })
+
+  it('detects agents inside the WSL distro the request names', async () => {
+    detectInstalledAgentsWithShellPathHydrationMock.mockResolvedValueOnce(['claude'])
+    refreshShellPathAndDetectAgentsMock.mockResolvedValueOnce({
+      agents: ['claude'],
+      addedPathSegments: [],
+      shellHydrationOk: true,
+      pathSource: 'shell_hydrate',
+      pathFailureReason: 'none'
+    })
+    const runtime = { getRuntimeId: () => 'test-runtime' } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: PREFLIGHT_METHODS })
+
+    const detected = await dispatcher.dispatch(
+      makeRequest('preflight.detectAgents', { wslDistro: 'Ubuntu-24.04' })
+    )
+    await dispatcher.dispatch(makeRequest('preflight.refreshAgents', { wslDefault: true }))
+
+    expect(detectInstalledAgentsWithShellPathHydrationMock).toHaveBeenCalledWith({
+      wslDistro: 'Ubuntu-24.04'
+    })
+    expect(refreshShellPathAndDetectAgentsMock).toHaveBeenCalledWith({ wslDefault: true })
+    expect(detected).toMatchObject({ ok: true, result: ['claude'] })
+  })
+
+  it('rejects a malformed WSL target instead of probing with it', async () => {
+    const runtime = { getRuntimeId: () => 'test-runtime' } as unknown as OrcaRuntimeService
+    const dispatcher = new RpcDispatcher({ runtime, methods: PREFLIGHT_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('preflight.detectAgents', { wslDistro: '' })
+    )
+
+    expect(response).toMatchObject({ ok: false })
+    expect(detectInstalledAgentsWithShellPathHydrationMock).not.toHaveBeenCalled()
   })
 
   it('detects agents on remote SSH connections through runtime RPC', async () => {

@@ -1,7 +1,11 @@
 import type { RpcClient } from '../transport/rpc-client'
 import type { RpcFailure, RpcSuccess } from '../transport/types'
+import { parseWslUncPath } from '../../../src/shared/wsl-paths'
 import { isFloatingWorkspaceWorktreeId } from './floating-workspace'
-import { getRepoIdFromMobileWorktreeId } from './mobile-session-route-helpers'
+import {
+  getRepoIdFromMobileWorktreeId,
+  getWorktreePathFromMobileWorktreeId
+} from './mobile-session-route-helpers'
 import {
   buildMobileNewTabAgentOptions,
   type MobileNewTabAgentOption,
@@ -56,7 +60,18 @@ async function loadWorkspaceDetectedAgents(client: RpcClient, worktreeId: string
     throw new Error('worktree_repo_not_found')
   }
   const connectionId = repo.connectionId?.trim() || null
-  return connectionId
-    ? client.sendRequest('preflight.detectRemoteAgents', { connectionId })
-    : client.sendRequest('preflight.detectAgents')
+  if (connectionId) {
+    return client.sendRequest('preflight.detectRemoteAgents', { connectionId })
+  }
+  // Why: a Windows host answers from its own PATH unless the request names a distro, so a
+  // workspace under \\wsl.localhost\<distro> would list the agents of the wrong machine --
+  // usually none, because such a user installs them inside the distro. Hosts that predate
+  // the parameter ignore it and keep answering host-local.
+  const wslDistro = getWorktreeWslDistro(worktreeId)
+  return client.sendRequest('preflight.detectAgents', wslDistro ? { wslDistro } : undefined)
+}
+
+function getWorktreeWslDistro(worktreeId: string): string | null {
+  const worktreePath = getWorktreePathFromMobileWorktreeId(worktreeId)
+  return worktreePath ? (parseWslUncPath(worktreePath)?.distro ?? null) : null
 }
