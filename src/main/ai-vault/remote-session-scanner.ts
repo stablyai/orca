@@ -160,8 +160,11 @@ async function parseRemoteSessionCandidates(args: {
       batch.map((candidate) => parseRemoteSessionCandidate(candidate, args.context, args.issues))
     )
     sessions.push(...results.filter(isAiVaultSession))
-    const uniqueSessions = dedupeCodexSessionsBySessionId(sessions)
-    sessions.splice(0, sessions.length, ...uniqueSessions)
+    // Unlimited scans deduplicate once at the result boundary; only capped scans need a running count.
+    if (Number.isFinite(args.limit)) {
+      const uniqueSessions = dedupeCodexSessionsBySessionId(sessions)
+      sessions.splice(0, sessions.length, ...uniqueSessions)
+    }
     index += batchSize
     await yieldToEventLoop()
   }

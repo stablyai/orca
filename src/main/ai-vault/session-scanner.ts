@@ -245,10 +245,11 @@ async function parseSessionCandidates(args: {
       }
     }
 
-    // Why: cross-volume backfill copies have no shared inode, so collapse
-    // parsed aliases before they can crowd the unique-session parse budget.
-    const uniqueSessions = dedupeCodexSessionsBySessionId(sessions)
-    sessions.splice(0, sessions.length, ...uniqueSessions)
+    // Unlimited scans deduplicate once at the result boundary; only capped scans need a running count.
+    if (Number.isFinite(args.limit)) {
+      const uniqueSessions = dedupeCodexSessionsBySessionId(sessions)
+      sessions.splice(0, sessions.length, ...uniqueSessions)
+    }
 
     index += batchSize
   }
