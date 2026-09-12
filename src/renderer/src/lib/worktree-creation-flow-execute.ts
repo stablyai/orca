@@ -208,10 +208,10 @@ export async function executeWorktreeCreation(
             result.setup,
             preparedRequest.issueCommand,
             result.defaultTabs,
-            {
-              ...(preparedRequest.agent !== null ? { callerProvidesSurface: true } : {}),
-              ...(backendSpawned ? { backendStartupTerminalSpawned: true } : {})
-            }
+            // No callerProvidesSurface here: activation is what would have provided it and it
+            // threw, so an agent create with no startup plan must still get a real terminal
+            // rather than the zero-tab pre-seed branch.
+            backendSpawned ? { backendStartupTerminalSpawned: true } : {}
           )
         } catch (recoveryError) {
           console.error(
