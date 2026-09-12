@@ -83,12 +83,18 @@ export function isDangerousWorktreeRemovalPath(worktreePath: string, repoPath: s
     return true
   }
 
-  const homePath = homedir()
-  if (!!homePath && containsPath(resolvedWorktreePath, pathOps.resolve(homePath), pathOps)) {
-    return true
+  // Why: client homedir is the wrong host when path syntax does not match process.platform.
+  if ((process.platform === 'win32') === (pathOps === win32)) {
+    const homePath = homedir()
+    if (!!homePath && containsPath(resolvedWorktreePath, pathOps.resolve(homePath), pathOps)) {
+      return true
+    }
   }
 
-  return isLikelyPosixHomeDirectory(resolvedWorktreePath, pathOps)
+  return (
+    isLikelyPosixHomeDirectory(resolvedWorktreePath, pathOps) ||
+    isLikelyWindowsUserProfileDirectory(resolvedWorktreePath, pathOps)
+  )
 }
 
 function isLikelyPosixHomeDirectory(resolvedWorktreePath: string, pathOps: PathOps): boolean {
@@ -100,6 +106,24 @@ function isLikelyPosixHomeDirectory(resolvedWorktreePath: string, pathOps: PathO
     resolvedWorktreePath === '/root' ||
     /^\/home\/[^/]+$/.test(resolvedWorktreePath) ||
     /^\/Users\/[^/]+$/.test(resolvedWorktreePath)
+  )
+}
+
+function isLikelyWindowsUserProfileDirectory(
+  resolvedWorktreePath: string,
+  pathOps: PathOps
+): boolean {
+  const rootPath = pathOps === win32 ? pathOps.parse(resolvedWorktreePath).root : ''
+  if (!rootPath) {
+    return false
+  }
+  const relativeProfile = pathOps.relative(pathOps.join(rootPath, 'Users'), resolvedWorktreePath)
+  return (
+    relativeProfile === '' ||
+    (!!relativeProfile &&
+      relativeProfile !== '..' &&
+      !relativeProfile.includes(pathOps.sep) &&
+      !pathOps.isAbsolute(relativeProfile))
   )
 }
 
