@@ -32,17 +32,9 @@ export type WorktreeActivationOptions = WorktreeActivationSurfaceSelection & {
   clearSidebarFilters?: boolean
 }
 
+/** Create-time only: an agent selection suppresses the shell its own surface will replace. */
 export function activationProvidesInitialSurface(
   selection?: WorktreeActivationSurfaceSelection
 ): boolean {
   return selection?.providesInitialSurface === true || selection?.agent != null
-}
-
-export type GatedEmptyWorkspaceReseedPolicy = 'reseed' | 'caller-provides-surface'
-
-/** An empty gate invalidates agent selection; only an explicit caller surface suppresses reseeding. */
-export function gatedEmptyWorkspaceReseedPolicy(
-  selection?: WorktreeActivationSurfaceSelection
-): GatedEmptyWorkspaceReseedPolicy {
-  return selection?.providesInitialSurface === true ? 'caller-provides-surface' : 'reseed'
 }

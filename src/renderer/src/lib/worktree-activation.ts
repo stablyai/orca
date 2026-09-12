@@ -7,10 +7,7 @@ import {
   isWebRuntimeSessionActive
 } from '@/runtime/web-runtime-session'
 import { registerWorktreeActivation } from '@/lib/worktree-activation-nav-registration'
-import {
-  gateWorktreeAgentActivation,
-  workspaceHasSleepingAgentSessions
-} from '@/lib/worktree-agent-activation-gate'
+import { workspaceHasSleepingAgentSessions } from '@/lib/worktree-agent-activation-gate'
 import { resumeSleepingAgentSessionsForWorktree } from '@/lib/resume-sleeping-agent-session'
 import { shouldAutoCreateInitialTerminal } from '@/components/terminal/initial-terminal'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
@@ -25,18 +22,15 @@ import { isDetachedHeadWorkspace } from '@/components/sidebar/visible-worktrees'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import { findFolderWorkspaceOwner } from './folder-workspace-runtime-owner'
 import type { WorktreeStartupPayload } from '@/lib/worktree-startup-payload'
-import {
-  ensureWorktreeHasInitialTerminal,
-  reseedGatedEmptyWorkspace
-} from '@/lib/worktree-initial-terminal-seeding'
+import { ensureWorktreeHasInitialTerminal } from '@/lib/worktree-initial-terminal-seeding'
 import { ensureWebRuntimeWorktreeTerminalAfterWake } from '@/lib/web-runtime-worktree-terminal-after-wake'
 import { applyWorktreeNavViewEntry } from '@/lib/worktree-nav-view-history-replay'
 import {
   activationProvidesInitialSurface,
-  gatedEmptyWorkspaceReseedPolicy,
   type WorktreeActivationOptions,
   type WorktreeActivationSurfaceSelection
 } from './worktree-activation-surface-selection'
+import { gateAndReseedEmptyWorkspace } from './worktree-activation-gated-empty-reseed'
 
 /**
  * Shared activation sequence used by the worktree palette and add-repo/worktree dialogs.
@@ -149,11 +143,7 @@ export function activateAndRevealFolderWorkspace(
     resumeSleepingAgentSessionsForWorktree(workspaceKey)
   }
   if (shouldGateAgentActivation) {
-    void gateWorktreeAgentActivation(workspaceKey).then((outcome) => {
-      if (outcome === 'empty' && gatedEmptyWorkspaceReseedPolicy(opts) === 'reseed') {
-        reseedGatedEmptyWorkspace(workspaceKey, false)
-      }
-    })
+    gateAndReseedEmptyWorkspace(workspaceKey, opts)
   }
   const primaryTabId = shouldGateAgentActivation
     ? null
@@ -248,11 +238,7 @@ export function activateAndRevealWorktree(
     resumeSleepingAgentSessionsForWorktree(worktreeId)
   }
   if (shouldGateAgentActivation) {
-    void gateWorktreeAgentActivation(worktreeId).then((outcome) => {
-      if (outcome === 'empty' && gatedEmptyWorkspaceReseedPolicy(opts) === 'reseed') {
-        reseedGatedEmptyWorkspace(worktreeId, false)
-      }
-    })
+    gateAndReseedEmptyWorkspace(worktreeId, opts)
   }
 
   // 4. Ensure a focusable surface exists for externally-created worktrees
