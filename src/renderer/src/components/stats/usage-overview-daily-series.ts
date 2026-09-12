@@ -8,7 +8,8 @@ export function getClaudeDailyTotal(entry: ClaudeUsageDailyPoint): number {
 type UsageIntensity = 0 | 1 | 2 | 3 | 4
 
 /**
- * Rank-based intensity: each non-zero level holds a quarter of the active days.
+ * Rank-based intensity: each non-zero level holds a quarter of the active days
+ * among `totals`, so callers rank exactly the set of days they render.
  *
  * Why: daily volume spans orders of magnitude across providers, so a linear
  * ramp against the single best day left most active days at the faintest
@@ -18,15 +19,17 @@ type UsageIntensity = 0 | 1 | 2 | 3 | 4
  */
 export function rankUsageIntensities(totals: number[]): UsageIntensity[] {
   const active = totals.filter((total) => total > 0).sort((left, right) => left - right)
+  // Why: a value -> cumulative-count map keeps each lookup O(1); ties share the
+  // higher rank (the last index written) so equal days never render differently.
+  const countAtOrBelow = new Map<number, number>()
+  for (let index = 0; index < active.length; index += 1) {
+    countAtOrBelow.set(active[index], index + 1)
+  }
   return totals.map((total) => {
     if (total <= 0) {
       return 0
     }
-    // Ties share the higher rank so equal days never render differently.
-    let atOrBelow = active.length
-    while (atOrBelow > 0 && active[atOrBelow - 1] > total) {
-      atOrBelow -= 1
-    }
+    const atOrBelow = countAtOrBelow.get(total) ?? 0
     return Math.max(1, Math.ceil((atOrBelow / active.length) * 4)) as UsageIntensity
   })
 }
