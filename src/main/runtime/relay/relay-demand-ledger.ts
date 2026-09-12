@@ -13,6 +13,25 @@ type RelayDemandLedgerOptions = {
 
 type TransientRef = { deviceId: string; count: number }
 
+/**
+ * Run a demand refresh as the wake signal it is.
+ *
+ * A refresh reaches the device registry (`nextPendingExpiry` -> `listDevices`) and the settings
+ * store (`hasDemand` -> the host pairing mode), so it can fail on its own. Bare, it failed the
+ * caller it was waking for: before an operation it threw with a transient ref already acquired —
+ * and those have no expiry, so the ref held relay demand for the rest of the process — and after
+ * one it replaced the operation's own result, turning a named mint failure into an unrelated
+ * message and a successful mint into a rejection. A lost wake signal is recoverable; the liveness
+ * tick and the next refresh both re-ask.
+ */
+export function refreshRelayDemandBestEffort(refresh: () => void): void {
+  try {
+    refresh()
+  } catch (error) {
+    console.warn('[relay] demand refresh failed:', error)
+  }
+}
+
 export class RelayDemandLedger {
   private readonly options: RelayDemandLedgerOptions
   private readonly transientRefs = new Map<string, TransientRef>()
