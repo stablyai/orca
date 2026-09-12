@@ -29,6 +29,7 @@ export const MOBILE_AGENT_ICON_ASSETS: Partial<Record<TuiAgent, ImageSourcePropT
   autohand: require('../../../src/shared/agent-icons/autohand.png'),
   cline: require('../../../src/shared/agent-icons/cline.png'),
   codebuff: require('../../../src/shared/agent-icons/codebuff.png'),
+  freebuff: require('../../../src/shared/agent-icons/freebuff.png'),
   'command-code': require('../../../src/shared/agent-icons/command-code.png'),
   continue: require('../../../src/shared/agent-icons/continue.png'),
   cursor: require('../../../src/shared/agent-icons/cursor.png'),

@@ -3,7 +3,7 @@ import {
   resolveAgentSessionOptionLaunch
 } from './agent-session-option-launch'
 import type { SessionOptionValue } from './native-chat-session-options'
-import { getTuiAgentLaunchCommand, TUI_AGENT_CONFIG } from './tui-agent-config'
+import { TUI_AGENT_CONFIG, type TuiAgentConfig } from './tui-agent-config'
 import {
   planAgentCliArgsSuffix,
   quoteStartupArg,
@@ -20,6 +20,18 @@ export type ResolvedAgentLaunchCommand =
       appliedSessionOptions: Record<string, SessionOptionValue>
     }
   | { ok: false; error: string }
+
+export function getTuiAgentLaunchCommand(
+  config: TuiAgentConfig,
+  platform: NodeJS.Platform,
+  opts?: { isRemote?: boolean }
+): string {
+  // Why: local-only orca-ide rename (avoids GNOME Orca clash) must not leak to Linux remotes, whose relay shim is always `orca`.
+  if (opts?.isRemote && platform === 'linux') {
+    return config.launchCmd
+  }
+  return config.launchCmdByPlatform?.[platform] ?? config.launchCmd
+}
 
 export function resolveAgentLaunchCommand(args: {
   agent: TuiAgent
