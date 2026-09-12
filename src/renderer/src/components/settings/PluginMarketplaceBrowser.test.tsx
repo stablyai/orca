@@ -9,6 +9,9 @@ import type {
   PluginMarketplaceHostListing,
   PluginMarketplaceHostSourceState
 } from '../../../../preload/api-types'
+import { PLUGIN_READ_MANDATORY_DENIED_PATH_LABELS } from '../../../../shared/plugins/plugin-read-confinement'
+import { i18n } from '../../i18n/i18n'
+import { PSEUDO_LOCALIZATION_LOCALE } from '../../i18n/pseudo-localization'
 import { PluginMarketplaceBrowser } from './PluginMarketplaceBrowser'
 
 function deferred<T>(): {
@@ -74,7 +77,7 @@ const preview: PluginMarketplaceHostInstallPreview = {
       vmRecipes: [],
       agents: []
     },
-    capabilities: [{ kind: 'workspace:read' }]
+    capabilities: [{ kind: 'files:read', paths: ['src/**/*.ts', '**', 'docs/[draft].md'] }]
   }
 }
 
@@ -163,11 +166,21 @@ function button(label: string): HTMLButtonElement {
   return match
 }
 
+function listItems(label: string): string[] {
+  const list = document.querySelector(`ul[aria-label="${label}"]`)
+  if (!list) {
+    throw new Error(`missing ${label} list`)
+  }
+  return Array.from(list.querySelectorAll('li'), (item) => item.textContent ?? '')
+}
+
 beforeEach(() => installApi())
 
-afterEach(() => {
+afterEach(async () => {
   document.body.innerHTML = ''
   vi.restoreAllMocks()
+  await i18n.changeLanguage('en')
+  i18n.removeResourceBundle(PSEUDO_LOCALIZATION_LOCALE, 'translation')
 })
 
 describe('PluginMarketplaceBrowser', () => {
@@ -189,9 +202,10 @@ describe('PluginMarketplaceBrowser', () => {
         (candidate) => candidate.textContent?.trim() === 'Source'
       )
     ).toBe(true)
-    expect(document.body.textContent).toContain(
-      'Read the name, branch, and terminal list of your focused worktree'
-    )
+    expect(document.body.textContent).toContain('Read files in your worktrees')
+    expect(listItems('Whole worktree')).toEqual(['src/**/*.ts', '**', 'docs/[draft].md'])
+    expect(listItems('Always blocked')).toEqual(PLUGIN_READ_MANDATORY_DENIED_PATH_LABELS)
+    expect(button('Cancel installation').disabled).toBe(false)
     expect(document.body.textContent).toContain('full access to your files, network')
     expect(document.querySelector('[role="dialog"]')?.classList).toContain('plugin-security-chrome')
 
@@ -204,6 +218,112 @@ describe('PluginMarketplaceBrowser', () => {
       resolvedCommit: PLUGIN_COMMIT
     })
     expect(onInstalled).toHaveBeenCalledWith(listing.pluginKey)
+    act(() => root.unmount())
+  })
+
+  it('describes workspace listing access in the marketplace consent flow', async () => {
+    installApi({
+      previewMarketplacePlugin: vi.fn().mockResolvedValue({
+        ...preview,
+        manifest: {
+          ...preview.manifest,
+          capabilities: [{ kind: 'workspace:list' }]
+        }
+      })
+    })
+    const { root } = await renderBrowser()
+
+    await act(async () => button('Install').click())
+
+    expect(document.body.textContent).toContain(
+      'Read the name, branch, and host of all your worktrees (workspace:list)'
+    )
+    act(() => root.unmount())
+  })
+
+  it('shows the same exact scope and update-specific cancellation before updating', async () => {
+    const { root } = await renderBrowser([installedPlugin()])
+
+    await act(async () => button('Check for update').click())
+
+    expect(window.api.plugins.previewMarketplaceUpdate).toHaveBeenCalledWith({
+      pluginKey: listing.pluginKey
+    })
+    expect(listItems('Whole worktree')).toEqual(['src/**/*.ts', '**', 'docs/[draft].md'])
+    expect(listItems('Always blocked')).toHaveLength(9)
+
+    await act(async () => button('Cancel update').click())
+
+    expect(document.querySelector('[role="dialog"]')).toBeNull()
+    expect(window.api.plugins.installMarketplacePlugin).not.toHaveBeenCalled()
+    act(() => root.unmount())
+  })
+
+  it('keeps expanded localized prose inside the marketplace dialog scroll contract', async () => {
+    const doubled = 'Read files in your worktrees that match these patterns '.repeat(2).trim()
+    i18n.addResourceBundle(
+      PSEUDO_LOCALIZATION_LOCALE,
+      'translation',
+      {
+        auto: {
+          components: {
+            settings: {
+              PluginConsentDialog: { capability: { filesRead: doubled } }
+            }
+          }
+        }
+      },
+      true,
+      true
+    )
+    await i18n.changeLanguage(PSEUDO_LOCALIZATION_LOCALE)
+    const { root } = await renderBrowser()
+
+    await act(async () => button('[Install]').click())
+
+    const dialog = document.querySelector('[role="dialog"]')
+    expect(dialog?.textContent).toContain(doubled)
+    expect(dialog?.classList).toContain('max-h-[calc(100vh-3rem)]')
+    expect(dialog?.classList).toContain('overflow-y-auto')
+    expect(dialog?.classList).toContain('scrollbar-sleek')
+    expect(dialog?.querySelectorAll('[class*="overflow-y"]')).toHaveLength(0)
+    expect(listItems('[Whole worktree]')).toEqual(['src/**/*.ts', '**', 'docs/[draft].md'])
+    expect(dialog?.querySelector('ul li')?.classList).toContain('break-all')
+    expect(
+      dialog?.querySelector('ul')?.closest('.min-w-0')?.querySelectorAll('button, a')
+    ).toHaveLength(0)
+    act(() => root.unmount())
+  })
+
+  it('locks preview dismissal and confirmation immediately while installation is pending', async () => {
+    const installation = deferred<{
+      ok: true
+      pluginKey: string
+      version: string
+      contentHash: string
+      consentFingerprint: string
+      resolvedCommit: string
+    }>()
+    installApi({ installMarketplacePlugin: vi.fn().mockReturnValue(installation.promise) })
+    const { root } = await renderBrowser()
+
+    await act(async () => button('Install').click())
+    await act(async () => button('Install plugin').click())
+
+    expect(button('Cancel installation').disabled).toBe(true)
+    expect(button('Install plugin').disabled).toBe(true)
+    expect(window.api.plugins.installMarketplacePlugin).toHaveBeenCalledTimes(1)
+
+    await act(async () =>
+      installation.resolve({
+        ok: true,
+        pluginKey: listing.pluginKey,
+        version: preview.manifest.version,
+        contentHash: preview.contentHash,
+        consentFingerprint: preview.consentFingerprint,
+        resolvedCommit: preview.resolvedCommit
+      })
+    )
     act(() => root.unmount())
   })
 

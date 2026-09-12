@@ -1,5 +1,5 @@
 import { getPluginHostMethodSpec, isPluginPanelAction } from './plugin-host-api'
-import type { PluginCapabilityKind } from './plugin-capabilities'
+import type { PluginCapability } from './plugin-capabilities'
 
 /**
  * The capability gate — pure, electron-free, shared by the Electron main
@@ -19,13 +19,13 @@ export type PluginGateErrorCode =
   | 'panel_forbidden'
 
 export type PluginGateDecision =
-  | { granted: true }
+  | { granted: true; grant: PluginCapability }
   | { granted: false; code: PluginGateErrorCode; error: string }
 
 export type PluginGateSubject = {
   /** Capability kinds from the manifest the user consented to; null when the
    *  plugin is unknown, invalid, disabled, or consent is missing/stale. */
-  grantedCapabilities: readonly PluginCapabilityKind[] | null
+  grantedCapabilities: readonly PluginCapability[] | null
   /** True when the call arrives over the sandboxed panel bridge (narrower
    *  method surface than workers). */
   viaPanel: boolean
@@ -52,12 +52,15 @@ export function gatePluginHostCall(subject: PluginGateSubject, method: string): 
       error: 'plugin is not enabled with current consent'
     }
   }
-  if (!subject.grantedCapabilities.includes(spec.capability)) {
+  const grant = subject.grantedCapabilities.find(
+    (capability) => capability.kind === spec.capability
+  )
+  if (!grant) {
     return {
       granted: false,
       code: 'capability_denied',
       error: `plugin does not have the "${spec.capability}" capability`
     }
   }
-  return { granted: true }
+  return { granted: true, grant }
 }

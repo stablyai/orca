@@ -2,6 +2,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { emptyPluginLockfile } from '../../shared/plugins/plugin-install-lockfile'
+import { PLUGIN_CAPABILITY_DESCRIPTIONS } from '../../shared/plugins/plugin-capabilities'
 import { pluginManifestSchema } from '../../shared/plugins/plugin-manifest'
 import type { InvalidDiscoveredPlugin, ValidDiscoveredPlugin } from './plugin-discovery'
 import { buildPluginList } from './plugin-list-projection'
@@ -220,5 +221,39 @@ describe('buildPluginList consent identity', () => {
         keybindings: [{ key: 'Mod+Alt+T', when: 'worktree' }]
       }
     ])
+  })
+
+  it('projects a plain-language description for the scoped and unscoped new kinds', async () => {
+    const scopedManifest = pluginManifestSchema.parse({
+      ...manifest,
+      capabilities: [{ kind: 'files:read', paths: ['.planning/**'] }, { kind: 'workspace:list' }]
+    })
+    const plugin: ValidDiscoveredPlugin = {
+      pluginKey: 'orca-samples.demo',
+      rootDir: join(tmpdir(), 'plugins', 'demo'),
+      manifest: scopedManifest,
+      consentFingerprint: 'sha256-current',
+      contentHash: null,
+      isDev: true
+    }
+
+    const capabilities =
+      (await buildPluginList(serviceWith(plugin), emptyPluginLockfile()))[0]?.capabilities ?? []
+
+    expect(capabilities.map((entry) => entry.kind)).toEqual(['files:read', 'workspace:list'])
+    for (const entry of capabilities) {
+      expect(entry.description.length).toBeGreaterThan(0)
+      expect(entry.description).not.toBe(entry.kind)
+    }
+    expect(capabilities[0]).toEqual({
+      kind: 'files:read',
+      paths: ['.planning/**'],
+      description: PLUGIN_CAPABILITY_DESCRIPTIONS['files:read']
+    })
+    expect(capabilities[1]).toEqual({
+      kind: 'workspace:list',
+      description: PLUGIN_CAPABILITY_DESCRIPTIONS['workspace:list']
+    })
+    expect(capabilities[1]).not.toHaveProperty('paths')
   })
 })

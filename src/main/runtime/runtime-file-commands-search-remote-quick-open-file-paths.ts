@@ -6,8 +6,90 @@ import {
   QUICK_OPEN_LEGACY_REMOTE_RESULT_LIMIT
 } from './runtime-file-commands-mobile-file-list-limit'
 import { QuickOpenPathRanker } from '../../shared/quick-open-path-search'
+import type { PluginReadGrant } from '../../shared/plugins/plugin-read-confinement'
+import { isPluginReadAllowed } from '../../shared/plugins/plugin-read-confinement'
+import { isMobileBinaryPath, isSafeMobileRelativePath } from './runtime-file-command-host'
+import { readLocalMobileFile } from './runtime-file-commands-terminal-file-paths'
+import { truncateMobileFilePreview } from './runtime-file-commands-terminal-artifact-access'
+import { resolveAuthorizedPath } from '../ipc/filesystem-auth'
+import { readdir, stat } from 'node:fs/promises'
+import { isRuntimeDirectoryEntry } from './runtime-file-command-host'
+import { sortDirEntries } from '../../shared/file-name-sort'
+import { runtimeFileRouteForTarget } from './runtime-file-command-target'
+
+export type PluginFileMethod = 'files.read' | 'files.stat' | 'files.readDir'
+
+export type PluginFileExecutionResult = { authorized: false } | { authorized: true; value: unknown }
 
 export class RuntimeFileCommandsWithSearchRemoteQuickOpenFilePaths extends RuntimeFileCommandsWithSearchLocalRuntimeFiles {
+  async executePluginFileMethod(
+    method: PluginFileMethod,
+    worktreeSelector: string,
+    relativePath: string,
+    grant: PluginReadGrant
+  ): Promise<PluginFileExecutionResult> {
+    const target = await this.resolveFileExplorerPath(worktreeSelector, relativePath)
+    const route = runtimeFileRouteForTarget(target)
+    const provider = route.kind === 'ssh' ? route.provider : null
+    if (route.kind === 'ssh' && !provider) {
+      return { authorized: false }
+    }
+    const store = this.host.requireStore()
+    const [canonicalRoot, canonicalTarget] = provider
+      ? await Promise.all([provider.realpath(target.worktree.path), provider.realpath(target.path)])
+      : await Promise.all([
+          resolveAuthorizedPath(target.worktree.path, store),
+          resolveAuthorizedPath(target.path, store)
+        ])
+    if (!isPluginReadAllowed(canonicalRoot, canonicalTarget, grant)) {
+      return { authorized: false }
+    }
+    if (method === 'files.read') {
+      if (!isSafeMobileRelativePath(relativePath)) {
+        throw new Error('invalid_relative_path')
+      }
+      if (isMobileBinaryPath(relativePath)) {
+        throw new Error('binary_file')
+      }
+      const content = provider
+        ? await this.readRemoteMobileFile(canonicalTarget, provider)
+        : await readLocalMobileFile(canonicalTarget, store)
+      return {
+        authorized: true,
+        value: { content: truncateMobileFilePreview(content).content, encoding: 'utf8' as const }
+      }
+    }
+    if (method === 'files.stat') {
+      const fileStat = provider ? await provider.stat(canonicalTarget) : await stat(canonicalTarget)
+      return {
+        authorized: true,
+        value: {
+          size: fileStat.size,
+          isDirectory: provider ? fileStat.type === 'directory' : fileStat.isDirectory(),
+          mtime: provider ? fileStat.mtime : fileStat.mtimeMs
+        }
+      }
+    }
+    const entries = provider
+      ? sortDirEntries(
+          (await provider.readDir(canonicalTarget)).map((entry) => ({
+            ...entry,
+            isDirectory: entry.isDirectory && !entry.isSymlink
+          }))
+        )
+      : sortDirEntries(
+          (await readdir(canonicalTarget, { withFileTypes: true })).map((entry) => ({
+            name: entry.name,
+            isDirectory: isRuntimeDirectoryEntry(entry),
+            isSymlink: entry.isSymbolicLink()
+          }))
+        )
+    return {
+      authorized: true,
+      value: { entries: entries.map(({ name, isDirectory }) => ({ name, isDirectory })) }
+    }
+  }
+
   protected async searchRemoteQuickOpenFilePaths(
     rootPath: string,
     // `null` is "remote and currently unreachable": quick open reports no matches rather than
