@@ -47,6 +47,47 @@ export function cloneWorkspaceSessionState(session: WorkspaceSessionState): Work
   return structuredClone(session)
 }
 
+const WORKSPACE_SESSION_OWNER_RECORD_KEYS = [
+  'tabsByWorktree',
+  'openFilesByWorktree',
+  'activeFileIdByWorktree',
+  'browserTabsByWorktree',
+  'activeBrowserTabIdByWorktree',
+  'activeTabTypeByWorktree',
+  'activeTabIdByWorktree',
+  'unifiedTabs',
+  'tabGroups',
+  'tabGroupLayouts',
+  'activeGroupIdByWorktree',
+  'lastVisitedAtByWorktreeId',
+  'defaultTerminalTabsAppliedByWorktreeId'
+] as const satisfies readonly (keyof WorkspaceSessionState)[]
+
+export function collectWorkspaceSessionOwnerKeys(session: WorkspaceSessionState): Set<string> {
+  const ownerKeys = new Set<string>()
+  for (const recordKey of WORKSPACE_SESSION_OWNER_RECORD_KEYS) {
+    for (const ownerKey of Object.keys(session[recordKey] ?? {})) {
+      ownerKeys.add(ownerKey)
+    }
+  }
+  if (session.activeWorkspaceKey) {
+    ownerKeys.add(session.activeWorkspaceKey)
+  }
+  if (session.activeWorktreeId) {
+    ownerKeys.add(session.activeWorktreeId)
+  }
+  for (const worktreeId of session.activeWorktreeIdsOnShutdown ?? []) {
+    ownerKeys.add(worktreeId)
+  }
+  for (const record of Object.values(session.sleepingAgentSessionsByPaneKey ?? {})) {
+    ownerKeys.add(record.worktreeId)
+  }
+  for (const tombstone of Object.values(session.terminalSurfaceTombstonesByPaneKey ?? {})) {
+    ownerKeys.add(tombstone.worktreeId)
+  }
+  return ownerKeys
+}
+
 // Owner-keyed deletes only; pane-key-scanned collections live in deleteScannedSessionFieldsForOwners so a batch prune scans each once.
 export function deleteOwnerKeyedSessionFields(
   next: WorkspaceSessionState,
@@ -63,6 +104,9 @@ export function deleteOwnerKeyedSessionFields(
     delete next.terminalLayoutsByTabId[tab.id]
     if (next.activeTabId === tab.id) {
       next.activeTabId = null
+    }
+    if (next.remoteSessionIdsByTabId) {
+      delete next.remoteSessionIdsByTabId[tab.id]
     }
   }
   if (options.advanceTerminalTopologyRevision) {

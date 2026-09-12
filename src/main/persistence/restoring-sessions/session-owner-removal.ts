@@ -4,7 +4,7 @@ import {
   parseExecutionHostId,
   type ExecutionHostId
 } from '../../../shared/execution-host'
-import { cloneWorkspaceSessionState, deleteOwnerKeyedSessionFields } from './session-owner-fields'
+import { cloneWorkspaceSessionState, collectWorkspaceSessionOwnerKeys, deleteOwnerKeyedSessionFields } from './session-owner-fields'
 
 // Scans the pane-key-keyed maps and the shutdown list once, removing every entry
 // owned by a key matched by `isRemovedOwner` (or, for pty incarnations, whose tab
@@ -95,4 +95,21 @@ export function removeWorkspaceSessionOwners(
     ownerKeys.has(worktreeId)
   )
   return next
+}
+
+export function gcOrphanedWorkspaceSessionOwners(
+  session: WorkspaceSessionState,
+  liveOwnerIds: ReadonlySet<string>,
+  isOrphanKey: (key: string) => boolean
+): { session: WorkspaceSessionState; removed: number } {
+  const orphanOwnerKeys = new Set(
+    [...collectWorkspaceSessionOwnerKeys(session)].filter(isOrphanKey)
+  )
+  let removed = orphanOwnerKeys.size
+  const next = removeWorkspaceSessionOwners(session, orphanOwnerKeys) ?? session
+  if (next.activeRepoId && !liveOwnerIds.has(next.activeRepoId)) {
+    next.activeRepoId = null
+    removed++
+  }
+  return { session: next, removed }
 }
