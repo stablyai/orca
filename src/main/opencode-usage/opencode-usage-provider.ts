@@ -6,8 +6,9 @@ import type {
   OpenCodeUsageSession
 } from './types'
 
-// Why: v2 adds per-database session ownership (stale sibling-copy dedupe).
-// Older caches were built without it and can carry doubled sessions (#8006).
+// Why: v2 added per-database session ownership (stale sibling-copy dedupe, #8006);
+// v3 counts cache.read + cache.write in input, so v2 snapshots under-count
+// OpenCode tokens and are rebuilt.
 export const OPENCODE_USAGE_SCHEMA_VERSION = 3
 
 export const openCodeUsageProvider = {
