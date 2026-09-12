@@ -182,7 +182,7 @@ export type UISlicePersistence = {
   /** Dev-only channel override; null follows the running build's own channel. */
   releaseChannelOverride: ReleaseChannel | null
   setReleaseChannelOverride: (channel: ReleaseChannel | null) => void
-  // Why: ephemeral, renderer-only — never persisted; resets each session and on every phase transition (see setUpdateStatus).
+  // Ephemeral disclosure state; setUpdateStatus initializes it when the phase or error actionability changes.
   updateCardCollapsed: boolean
   setUpdateCardCollapsed: (collapsed: boolean) => void
   updateReassuranceSeen: boolean
