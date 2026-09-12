@@ -110,8 +110,10 @@ export function PierreDiffSurface({
   )
   const containerRef = useRef<HTMLDivElement | null>(null)
   const editorRef = useRef<Editor<'file-diff', PierreDiffAnnotationData, undefined> | null>(null)
+  // Why no reassignment: useRef captures the first render's values and the effect below runs once
+  // per mount, so those are exactly the values it needs. Writing during render is impure -- React
+  // can discard a render, and the mutation would leak from UI that never commits.
   const autoFocusContextRef = useRef({ worktreeId, activeGroupId })
-  autoFocusContextRef.current = { worktreeId, activeGroupId }
   // Why: Monaco focused the single-file DiffEditor on mount so Cmd+F/F7 worked
   // without a click. Combined DiffSectionItem did not — do not steal there.
   // Skip when the user already moved to a terminal/input or another tab group;
