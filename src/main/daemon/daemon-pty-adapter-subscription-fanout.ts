@@ -1,4 +1,5 @@
 import type { PtyBackgroundStreamEvent } from '../providers/types'
+import { addRemovableListener } from './add-removable-listener'
 import { combineUnsubscribes } from './combine-unsubscribes'
 import type { DaemonPtyAdapter } from './daemon-pty-adapter'
 import type { DaemonPtyRouterDataEvent, DaemonPtyRouterExitEvent } from './daemon-pty-router-events'
@@ -34,13 +35,7 @@ export class DaemonPtyAdapterSubscriptionFanout {
   }
 
   onData(callback: (payload: DaemonPtyRouterDataEvent) => void): () => void {
-    this.dataListeners.push(callback)
-    return () => {
-      const index = this.dataListeners.indexOf(callback)
-      if (index !== -1) {
-        this.dataListeners.splice(index, 1)
-      }
-    }
+    return addRemovableListener(this.dataListeners, callback)
   }
 
   onBackgroundStreamEvent(callback: (payload: PtyBackgroundStreamEvent) => void): () => void {
@@ -60,13 +55,7 @@ export class DaemonPtyAdapterSubscriptionFanout {
   }
 
   onExit(callback: (payload: DaemonPtyRouterExitEvent) => void): () => void {
-    this.exitListeners.push(callback)
-    return () => {
-      const index = this.exitListeners.indexOf(callback)
-      if (index !== -1) {
-        this.exitListeners.splice(index, 1)
-      }
-    }
+    return addRemovableListener(this.exitListeners, callback)
   }
 
   dispose(): void {
