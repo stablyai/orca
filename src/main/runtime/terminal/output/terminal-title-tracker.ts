@@ -214,7 +214,10 @@ export abstract class OrcaRuntimeWithGetUnpersistedTrackedTitleForPty extends Or
         : null,
       programActivity: null,
       // The persisted title is already normalized, so it stands for both forms.
-      lastTitle: initialTitle !== null ? { raw: initialTitle, normalized: initialTitle } : null
+      lastTitle: initialTitle !== null ? { raw: initialTitle, normalized: initialTitle } : null,
+      // Why unconditional: unlike commandCodeDetector, this drives agent status (worktree ps,
+      // mobile, notifications), not a renderer-only side-effect fact, so headless serve needs it too.
+      bobApprovalDetector: this.createTerminalSideEffectBobApprovalDetector(ptyId)
     }
     this.ptyTitleTrackersByPtyId.set(ptyId, entry)
     return entry
