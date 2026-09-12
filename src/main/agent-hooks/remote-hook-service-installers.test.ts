@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { parse as parseJsonc } from 'jsonc-parser'
 import type { SFTPWrapper } from 'ssh2'
+import { posixHookInnerCommand } from './posix-hook-exec-command.test-fixture'
 
 vi.mock('electron', () => ({
   app: {
@@ -349,24 +350,32 @@ describe('remote hook service installers', () => {
       >
     }
     for (const eventName of ['PreInvocation', 'PostInvocation', 'Stop']) {
-      const command = antigravityConfig['orca-status'][eventName]?.[0]?.command
+      // Why: the remote install path shares getPosixManagedCommand, so it is wrapped for exec too (#16087).
+      const command = posixHookInnerCommand(
+        antigravityConfig['orca-status'][eventName]?.[0]?.command ?? ''
+      )
       expect(command).toContain('/home/dev/.orca/agent-hooks/antigravity-hook.sh')
       expect(command).toContain(`ORCA_ANTIGRAVITY_EVENT='${eventName}'`)
     }
     for (const eventName of ['PreToolUse', 'PostToolUse']) {
       const definition = antigravityConfig['orca-status'][eventName]?.[0]
-      const command = definition?.hooks?.[0]?.command
+      const command = posixHookInnerCommand(definition?.hooks?.[0]?.command ?? '')
       expect(definition?.matcher).toBe('*')
       expect(command).toContain('/home/dev/.orca/agent-hooks/antigravity-hook.sh')
       expect(command).toContain(`ORCA_ANTIGRAVITY_EVENT='${eventName}'`)
     }
     // Why: #2426 was an SSH report — a remote host missing the script must still answer the gate, not deny every tool.
-    expect(antigravityConfig['orca-status'].PreToolUse[0].hooks?.[0]?.command).toContain(
-      `printf '%s\\n' '{"decision":"ask"}'`
-    )
-    expect(antigravityConfig['orca-status'].PostToolUse[0].hooks?.[0]?.command).not.toContain(
-      '{"decision"'
-    )
+    expect(
+      posixHookInnerCommand(
+        antigravityConfig['orca-status'].PreToolUse[0].hooks?.[0]?.command ?? ''
+      )
+    ).toContain(`printf '%s\\n' '{"decision":"ask"}'`)
+    // Why: unwrap here too — asserting against the escaped form would pass even if the decision leaked in.
+    expect(
+      posixHookInnerCommand(
+        antigravityConfig['orca-status'].PostToolUse[0].hooks?.[0]?.command ?? ''
+      )
+    ).not.toContain('{"decision"')
 
     const ampPlugin = amp.fs.files.get('/home/dev/.config/amp/plugins/orca-agent-status.ts')
     expect(ampPlugin).toContain('/hook/amp')
