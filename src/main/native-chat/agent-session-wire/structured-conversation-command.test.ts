@@ -247,8 +247,8 @@ describe('host conversation commands', () => {
   })
 
   it('reconstructs a committed replacement after the ledger settlement is lost', async () => {
-    const persist = store.recordOperationOutcome.bind(store)
-    vi.spyOn(store, 'recordOperationOutcome').mockImplementation(async (input) => {
+    const persist = store.recordOperationOutcomeIfCurrent.bind(store)
+    vi.spyOn(store, 'recordOperationOutcomeIfCurrent').mockImplementation(async (input) => {
       if (input.outcome.status === 'succeeded' && input.outcome.conversationCommand) {
         throw new Error('crash')
       }
