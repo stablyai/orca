@@ -7,7 +7,8 @@ import {
   projectRemoteAppStatus,
   resolveDesktopWindowStatus
 } from '../../shared/cli-app-status-projection'
-import { RuntimeRpcFailureError, type RuntimeRpcSuccess } from './types'
+import { RuntimeClientError, RuntimeRpcFailureError, type RuntimeRpcSuccess } from './types'
+import { isRuntimePermissionError, RuntimeAccessError } from './runtime-access-error'
 
 export { projectRemoteAppStatus, resolveDesktopWindowStatus }
 
@@ -68,7 +69,10 @@ export async function getCliStatus(
         state: graphState
       }
     })
-  } catch {
+  } catch (error) {
+    if (error instanceof RuntimeAccessError) {
+      throw error
+    }
     const running = isProcessRunning(metadata.pid)
     return buildCliStatusResponse({
       app: {
@@ -106,7 +110,17 @@ function isProcessRunning(pid: number | null | undefined): boolean {
   try {
     process.kill(pid, 0)
     return true
-  } catch {
-    return false
+  } catch (error) {
+    if (isRuntimePermissionError(error)) {
+      throw new RuntimeAccessError('probe_process', error.code)
+    }
+    if ((error as NodeJS.ErrnoException | null)?.code === 'ESRCH') {
+      return false
+    }
+    throw new RuntimeClientError(
+      'runtime_unavailable',
+      'Could not verify the Orca runtime process. The app running state is unverifiable.',
+      { operation: 'probe_process', processState: 'unverifiable' }
+    )
   }
 }
