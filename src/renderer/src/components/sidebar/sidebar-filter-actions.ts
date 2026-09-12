@@ -13,6 +13,8 @@ export function sidebarHasActiveFilters(state: SidebarFilterState): boolean {
   return (
     state.showSleepingWorkspaces !== DEFAULT_SHOW_SLEEPING_WORKSPACES ||
     state.filterRepoIds.length > 0 ||
+    // Why: outside repo grouping there is no project-header placeholder, so hiding
+    // the only default-branch row would strand the user with no Clear Filters path.
     state.hideDefaultBranchWorkspace ||
     state.hideAutomationGeneratedWorkspaces ||
     state.hideCliCreatedWorkspaces ||

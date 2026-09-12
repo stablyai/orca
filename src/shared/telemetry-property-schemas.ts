@@ -101,7 +101,8 @@ export const addRepoDefaultCheckoutHandoffReasonSchema = z.enum([
   'show_detected_linked_failed',
   'authoritative_refresh_failed',
   'linked_external_refresh_failed',
-  'refreshed_default_missing'
+  'refreshed_default_missing',
+  'default_checkout_hidden'
 ])
 
 export const setupScriptImportProviderSchema = z.enum(SETUP_SCRIPT_IMPORT_PROVIDERS)

@@ -18,7 +18,6 @@ const mocks = vi.hoisted(() => ({
     openModal: vi.fn(),
     addRepoPath: vi.fn(),
     fetchWorktrees: vi.fn(),
-    setHideDefaultBranchWorkspace: vi.fn(),
     clearOrcaHookTrustForRepo: vi.fn(),
     repos: [] as Repo[]
   },
@@ -162,8 +161,7 @@ describe('AddProjectFromFolderDialog', () => {
       source: 'local_folder_picker',
       selectedPath: '/projects/child',
       executionHostId: 'local',
-      closeModal: mocks.state.closeModal,
-      setHideDefaultBranchWorkspace: mocks.state.setHideDefaultBranchWorkspace
+      closeModal: mocks.state.closeModal
     })
     expect(mocks.state.openModal).not.toHaveBeenCalledWith(
       'confirm-non-git-folder',
@@ -214,8 +212,7 @@ describe('AddProjectFromFolderDialog', () => {
       source: 'runtime_server_path',
       selectedPath: '/srv/projects/child',
       executionHostId: 'runtime:runtime-a',
-      closeModal: mocks.state.closeModal,
-      setHideDefaultBranchWorkspace: mocks.state.setHideDefaultBranchWorkspace
+      closeModal: mocks.state.closeModal
     })
   })
 
@@ -245,8 +242,7 @@ describe('AddProjectFromFolderDialog', () => {
       source: 'ssh_remote_path',
       selectedPath: '/srv/projects/child',
       executionHostId: 'ssh:ssh-target-1',
-      closeModal: mocks.state.closeModal,
-      setHideDefaultBranchWorkspace: mocks.state.setHideDefaultBranchWorkspace
+      closeModal: mocks.state.closeModal
     })
     expect(mocks.toastSuccess).toHaveBeenCalledWith('Project added on SSH host', {
       description: repo.displayName
@@ -271,8 +267,7 @@ describe('AddProjectFromFolderDialog', () => {
       source: 'local_folder_picker',
       selectedPath: '/projects/child',
       executionHostId: 'local',
-      closeModal: mocks.state.closeModal,
-      setHideDefaultBranchWorkspace: mocks.state.setHideDefaultBranchWorkspace
+      closeModal: mocks.state.closeModal
     })
   })
 
