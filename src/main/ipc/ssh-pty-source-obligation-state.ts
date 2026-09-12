@@ -133,7 +133,21 @@ export function snapshotSourceToken(token: TokenRecord): SshPtySourceTokenSnapsh
 
 export function advanceSourceTerminalEnd(token: TokenRecord): void {
   let endSu = token.obligationsTerminalEndSu
-  for (const record of token.spans) {
+  let low = 0
+  let high = token.spans.length
+  // Committed spans are contiguous; skip the terminal prefix retained until ACK publication.
+  if (token.spans[0]?.span.sourceEndSu <= endSu) {
+    while (low < high) {
+      const middle = low + Math.floor((high - low) / 2)
+      if (token.spans[middle]!.span.sourceEndSu <= endSu) {
+        low = middle + 1
+      } else {
+        high = middle
+      }
+    }
+  }
+  for (let index = low; index < token.spans.length; index += 1) {
+    const record = token.spans[index]!
     if (record.span.sourceEndSu <= endSu) {
       continue
     }
