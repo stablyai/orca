@@ -57,7 +57,9 @@ const COMMAND_SCOPED_FLAG_HELP: Record<string, Record<string, string>> = {
   },
   'worktree set': {
     unread: '--unread               Mark the workspace unread in the sidebar',
-    read: '--read                 Mark the workspace read, clearing the unread dot'
+    read: '--read                 Mark the workspace read, clearing the unread dot',
+    pin: '--pin                  Pin the workspace to the sidebar Pinned section',
+    unpin: '--unpin                Remove the workspace from the Pinned section'
   },
   search: {
     query: '--query <text>         Search text; also accepted as the positional argument',
