@@ -990,14 +990,14 @@
       "useComposerState": {
         "7eb3f44ff7": "Selected agent is disabled. Choose an enabled agent before creating.",
         "b2ead86962": "Failed to resolve PR base.",
+        "a9ff236145": "Some attachments could not be uploaded.",
         "3db83fc58a": "No project path is available on this host for attachments.",
         "ba6cb77082": "Failed to connect to project.",
         "chooseOrAddProjectBeforeWorkspace": "Choose or add a project before creating a workspace.",
         "folderWorkspaceCreateFailedTitle": "Folder workspace creation failed",
         "folderWorkspaceCreateFailedMessage": "The folder workspace could not be created. Check the error details above, then try again.",
         "setupAgentStartupPolicySaveFailed": "Failed to save setup startup behavior.",
-        "5f3d2c8a1b": "Failed to resolve MR base.",
-        "a9ff236145": "Some attachments could not be uploaded."
+        "5f3d2c8a1b": "Failed to resolve MR base."
       },
       "useGlobalFileDrop": {
         "38c9f034ff": "Failed to upload dropped files.",
@@ -12367,9 +12367,7 @@
             "a4e93c21d7": "Current branch: {{value0}}",
             "c7d4e2f801": "Change base ref: {{value0}}",
             "f3a1b8c204": "upstream",
-            "createPrIntentGenerateDetailsFailed": "Could not generate review details. Retry Create PR.",
-            "entryDeleteFailed": "Failed to delete “{{value0}}”",
-            "entryFailedInWorkspace": "{{value0}} in {{value1}}"
+            "createPrIntentGenerateDetailsFailed": "Could not generate review details. Retry Create PR."
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "Could not start the selected agent.",
