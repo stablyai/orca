@@ -3,9 +3,9 @@ import type { AppState } from '@/store/types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import {
   deleteHoveredWorkspaceImmediately,
-  getHoveredWorkspaceIdentity,
   resolveHoveredWorkspaceDeleteTarget
 } from './hovered-workspace-delete'
+import { getHoveredWorkspaceIdentity } from './hovered-sidebar-workspace-identity'
 
 function worktree(overrides: Partial<Worktree> = {}): Worktree {
   return {
