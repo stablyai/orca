@@ -32,6 +32,12 @@ const BOOLEAN_FLAGS = new Set([
 ])
 
 const EFFORT_FLAGS = new Set(['--effort', '--reasoning-effort'])
+const PERMISSION_CONFIG_KEYS = new Map([
+  ['-a', 'approval_policy'],
+  ['--ask-for-approval', 'approval_policy'],
+  ['-s', 'sandbox_mode'],
+  ['--sandbox', 'sandbox_mode']
+])
 
 function configuredArgsError(detail: string): Error {
   return new Error(
@@ -63,6 +69,11 @@ export function resolveCodexStructuredAppServerArgs(
   for (let index = 0; index < parsed.tokens.length; index += 1) {
     const token = parsed.tokens[index]
     const { flag, inlineValue } = splitOption(token)
+    // Codex accepts the TUI bypass flag before app-server but does not apply it.
+    if (flag === '--dangerously-bypass-approvals-and-sandbox' && inlineValue === undefined) {
+      result.push('-c', 'approval_policy="never"', '-c', 'sandbox_mode="danger-full-access"')
+      continue
+    }
     if (BOOLEAN_FLAGS.has(flag) && inlineValue === undefined) {
       result.push(flag)
       continue
@@ -74,7 +85,10 @@ export function resolveCodexStructuredAppServerArgs(
     if (value === undefined || value.length === 0) {
       throw configuredArgsError(`${flag} requires a value`)
     }
-    if (EFFORT_FLAGS.has(flag)) {
+    const permissionKey = PERMISSION_CONFIG_KEYS.get(flag)
+    if (permissionKey) {
+      result.push('-c', `${permissionKey}=${JSON.stringify(value)}`)
+    } else if (EFFORT_FLAGS.has(flag)) {
       result.push('-c', `model_reasoning_effort=${value}`)
     } else {
       result.push(flag, value)
