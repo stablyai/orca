@@ -61,6 +61,20 @@ export function buildAgentResumeStartupPlan(args: {
   return {
     agent: args.agent,
     launchCommand,
+    ...(args.platform === 'win32' && !args.isRemote
+      ? {
+          agentResume: {
+            agent: args.agent,
+            providerSession: args.providerSession,
+            cmdOverrides: args.cmdOverrides,
+            agentArgs: args.agentArgs,
+            agentCommand: args.agentCommand,
+            ompResumeFilePath: args.ompResumeFilePath,
+            sessionOptions: args.sessionOptions,
+            sessionOptionsOverrideAgentArgs: args.sessionOptionsOverrideAgentArgs
+          }
+        }
+      : {}),
     expectedProcess: TUI_AGENT_CONFIG[args.agent].expectedProcess,
     followupPrompt: null,
     launchConfig,

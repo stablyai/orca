@@ -1,3 +1,4 @@
+import type { AgentResumeCommand } from '../../../../shared/agent-resume-command'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import type {
   AgentProviderSessionMetadata,
@@ -30,6 +31,7 @@ export type PtySpawnIpcArgs = {
   env?: Record<string, string>
   envToDelete?: string[]
   command?: string
+  agentResume?: AgentResumeCommand
   commandDelivery?: 'renderer' | 'provider'
   launchConfig?: SleepingAgentLaunchConfig
   resumeProviderSession?: AgentProviderSessionMetadata

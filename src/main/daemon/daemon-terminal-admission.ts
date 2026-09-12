@@ -1,3 +1,4 @@
+import { agentResumeCommandSchema } from '../../shared/agent-resume-command'
 import { performance } from 'node:perf_hooks'
 import type { BackgroundTransientFactRelay } from './daemon-background-transient-facts'
 import type { DaemonClientConnections } from './daemon-client-connections'
@@ -101,6 +102,9 @@ export class DaemonTerminalAdmission {
         env: payload.env,
         envToDelete: payload.envToDelete,
         command: payload.command,
+        ...(payload.agentResume !== undefined
+          ? { agentResume: agentResumeCommandSchema.parse(payload.agentResume) }
+          : {}),
         startupCommandDelivery: payload.startupCommandDelivery,
         ...(attachOnly ? { attachOnly: true } : {}),
         ...(isTuiAgent(payload.launchAgent) ? { launchAgent: payload.launchAgent } : {}),

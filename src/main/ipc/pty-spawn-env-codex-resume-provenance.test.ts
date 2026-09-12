@@ -113,6 +113,15 @@ describe('registerPtyHandlers', () => {
           command: overrides.command ?? `codex 'resume' '${RESUME_SESSION_ID}'`,
           ...(overrides.env ? { env: overrides.env } : {}),
           launchAgent: 'codex',
+          agentResume: {
+            agent: 'codex',
+            cmdOverrides: {},
+            providerSession: {
+              key: 'session_id',
+              id: RESUME_SESSION_ID,
+              ...(transcriptPath ? { transcriptPath } : {})
+            }
+          },
           resumeProviderSession: {
             key: 'session_id',
             id: RESUME_SESSION_ID,
@@ -184,6 +193,21 @@ describe('registerPtyHandlers', () => {
           }
         }
       )
+      it('does not restore structured resume after auth provenance drops it', async () => {
+        const platform = Object.getOwnPropertyDescriptor(process, 'platform')!
+        Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+        try {
+          registerWithTrustedHomes([OTHER_HOME], OTHER_HOME)
+          const daemonSpawn = setupResumeDaemonProvider()
+          const result = await spawnCodexResume(ORIGIN_ROLLOUT)
+          expect(result.agentResumeUnavailable).toBe(true)
+          expect(daemonSpawn).toHaveBeenCalledWith(expect.objectContaining({ command: 'codex' }))
+          expect(daemonSpawn.mock.calls[0][0]).not.toHaveProperty('agentResume')
+        } finally {
+          Object.defineProperty(process, 'platform', platform)
+        }
+      })
+
       it('reports the dropped resume so the pane can say it started fresh', async () => {
         registerWithTrustedHomes([OTHER_HOME], OTHER_HOME)
         const spawned = await spawnCodexResume(ORIGIN_ROLLOUT)

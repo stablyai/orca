@@ -1,3 +1,4 @@
+import type { AgentResumeCommand } from '../../../shared/agent-resume-command'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import type { EventProps } from '../../../shared/telemetry-events'
 import type { StartupCommandDelivery } from '../../../shared/codex-startup-delivery'
@@ -14,6 +15,7 @@ export type AgentStartedTelemetry = EventProps<'agent_started'>
 /** Startup command threaded onto a worktree's first terminal at activation. */
 export type WorktreeStartupPayload = {
   command: string
+  agentResume?: AgentResumeCommand
   env?: Record<string, string>
   launchConfig?: SleepingAgentLaunchConfig
   resumeProviderSession?: AgentProviderSessionMetadata

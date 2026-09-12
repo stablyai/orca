@@ -160,6 +160,41 @@ describe('LocalPtyProvider', () => {
   })
 
   describe('spawn', () => {
+    it.each(['cmd.exe', 'pwsh.exe'])(
+      'uses the winning shell for structured resume (%s)',
+      async (preferred) => {
+        Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+        provider.configure({ getWindowsShell: () => preferred })
+        spawnMock.mockImplementation((shell) => {
+          if (shell !== CMD_ABS && shell !== 'cmd.exe') {
+            throw new Error('Cannot create process, error code: 5')
+          }
+          return mockProc
+        })
+        await provider.spawn({
+          cols: 80,
+          rows: 24,
+          cwd: 'C:\\repo',
+          command: "codex 'resume' 'wrong-preview'",
+          // Why: the Codex preflight rebuilds cmd.exe argv late and once embedded
+          // the renderer's wrongly-quoted preview command there (masking stdin delivery).
+          env: { ORCA_CODEX_LAUNCH_PREFLIGHT: CODEX_LAUNCH_PREFLIGHT },
+          agentResume: {
+            agent: 'codex',
+            providerSession: { key: 'session_id', id: 'session-1' },
+            cmdOverrides: {}
+          }
+        })
+        await vi.waitFor(() => expect(mockProc.write).toHaveBeenCalled())
+        const written = mockProc.write.mock.calls.map((call) => call[0]).join('')
+        expect(written).toContain('"resume" "session-1"')
+        expect(written).not.toContain('wrong-preview')
+        expect(written.match(/session-1/g)).toHaveLength(1)
+        const spawnedArgs = (spawnMock.mock.calls.at(-1)?.[1] ?? []) as string[]
+        expect(spawnedArgs.join(' ')).not.toContain('wrong-preview')
+      }
+    )
+
     it('does not pass a Windows Codex home into WSL terminals', async () => {
       Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
       provider.configure({

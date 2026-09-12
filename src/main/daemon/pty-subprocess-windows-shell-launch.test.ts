@@ -89,6 +89,43 @@ describe('createPtySubprocess', () => {
     validateWorkingDirectoryMock
   })
 
+  it.each([false, true])(
+    'rebuilds structured resume after PowerShell failure (long=%s)',
+    async (long) => {
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+      const proc = mockPtyProcess()
+      spawnMock.mockImplementation((shell) => {
+        if (shell !== CMD_ABS) {
+          throw new Error('Cannot create process, error code: 5')
+        }
+        return proc
+      })
+      const value = long ? 'x'.repeat(7000) : 'C:\\a^b\\'
+      const handle = await createPtySubprocess({
+        sessionId: 'resume-test',
+        cols: 80,
+        rows: 24,
+        shellOverride: 'pwsh.exe',
+        command: "codex 'resume' 'wrong-preview'",
+        agentResume: {
+          agent: 'codex',
+          providerSession: { key: 'session_id', id: 'session-1' },
+          cmdOverrides: {},
+          agentArgs: `--add-dir '${value}'`
+        }
+      })
+      expect(spawnMock.mock.calls.map((call) => call[0])).toEqual([
+        PWSH7_ABS,
+        WINDOWS_POWERSHELL_ABS,
+        CMD_ABS
+      ])
+      expect(handle.startupCommand).toBe(
+        `"codex" "--add-dir" "${long ? value : 'C:\\a^b\\\\'}" "resume" "session-1"`
+      )
+      expect(handle.startupCommandDeliveredInShellArgs).not.toBe(true)
+    }
+  )
+
   it('keeps powershell.exe when the inbox PowerShell implementation is selected on Windows', async () => {
     const proc = mockPtyProcess()
     spawnMock.mockReturnValue(proc)

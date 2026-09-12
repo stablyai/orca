@@ -218,6 +218,7 @@ const WINDOWS_PACKAGE_TESTS = [
   'src/main/providers/windows-conpty-wide-char-duplication.node-pty.test.ts',
   'src/main/providers/pty-repaint-wide-char-buffer.node-pty.test.ts',
   'src/shared/child-process/windows-command-line.win32.test.ts',
+  'src/shared/agent-resume-quoting.win32.test.ts',
   'src/shared/child-process/windows-cmd-shim-resolution.test.ts',
   'src/shared/child-process/windows-cmd-shim-resolution.win32.test.ts',
   'src/main/agent-hooks/windows-hook-payload-delivery.test.ts',

@@ -150,6 +150,9 @@ describe('launchAgentInNewTab Windows shell quoting', () => {
   it('uses the explicit startup shell platform when building draft launch commands', async () => {
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
+    // Pin the shell so this asserts launchPlatform resolution, not the unset-shell
+    // fallback (which mirrors %COMSPEC% = cmd.exe; see windows-terminal-shell.test.ts).
+    store.settings.terminalWindowsShell = 'powershell.exe'
     launchAgentInNewTab({
       agent: 'claude',
       worktreeId: 'wt-1',

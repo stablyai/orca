@@ -68,15 +68,16 @@ export function launchSleepingAgentSession(
 ): boolean {
   const state = useAppStore.getState()
   const launchConfig = record.launchConfig
+  const effectiveAgentArgs =
+    launchConfig !== undefined
+      ? launchConfig.agentArgs
+      : resolveTuiAgentLaunchArgs(record.agent, state.settings?.agentDefaultArgs)
   const resumeTarget = getResumeLaunchTarget(record.worktreeId)
   const startupPlan = buildAgentResumeStartupPlan({
     agent: record.agent,
     providerSession: record.providerSession,
     cmdOverrides: state.settings?.agentCmdOverrides ?? {},
-    agentArgs:
-      launchConfig !== undefined
-        ? launchConfig.agentArgs
-        : resolveTuiAgentLaunchArgs(record.agent, state.settings?.agentDefaultArgs),
+    agentArgs: effectiveAgentArgs,
     agentEnv:
       launchConfig !== undefined
         ? launchConfig.agentEnv
@@ -105,6 +106,7 @@ export function launchSleepingAgentSession(
       ...(startupPlan.env ? { env: startupPlan.env } : {}),
       launchConfig: startupPlan.launchConfig,
       resumeProviderSession: record.providerSession,
+      agentResume: startupPlan.agentResume,
       launchAgent: record.agent,
       ...(launchConfig ? { agentArgsOverride: launchConfig.agentArgs } : {}),
       ...(startupPlan.startupCommandDelivery

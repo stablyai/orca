@@ -54,7 +54,10 @@ export function startDeferredSessionReattach(
       : {}),
     ...(coldRestoreStartup?.launchConfig ? { launchConfig: coldRestoreStartup.launchConfig } : {}),
     ...(coldRestoreStartup?.resumeProviderSession
-      ? { resumeProviderSession: coldRestoreStartup.resumeProviderSession }
+      ? {
+          resumeProviderSession: coldRestoreStartup.resumeProviderSession,
+          agentResume: coldRestoreStartup.agentResume
+        }
       : {}),
     ...(coldRestoreStartup?.launchToken ? { launchToken: coldRestoreStartup.launchToken } : {}),
     ...(coldRestoreStartup?.agent ? { launchAgent: coldRestoreStartup.agent } : {}),

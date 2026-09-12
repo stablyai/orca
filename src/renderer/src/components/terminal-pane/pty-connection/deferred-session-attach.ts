@@ -173,7 +173,10 @@ export function runDeferredSessionAttach(session: ConnectPanePtySession): void {
               ? { launchConfig: coldRestoreStartup.launchConfig }
               : {}),
             ...(coldRestoreStartup?.resumeProviderSession
-              ? { resumeProviderSession: coldRestoreStartup.resumeProviderSession }
+              ? {
+                  resumeProviderSession: coldRestoreStartup.resumeProviderSession,
+                  agentResume: coldRestoreStartup.agentResume
+                }
               : {}),
             ...(coldRestoreStartup?.launchToken
               ? { launchToken: coldRestoreStartup.launchToken }

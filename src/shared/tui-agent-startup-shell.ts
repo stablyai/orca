@@ -1,3 +1,4 @@
+import { quoteWindowsCmdArgument } from './child-process/windows-command-line'
 import { tokenizeCustomCommandTemplate, type CommandTokenSpan } from './commit-message-prompt'
 
 /**
@@ -220,7 +221,7 @@ export function quoteStartupArg(value: string, shell: AgentStartupShell): string
     return `'${value.replace(/'/g, "''")}'`
   }
   if (shell === 'cmd') {
-    return `"${value.replace(/([\^&|<>()%!"])/g, '^$1')}"`
+    return quoteWindowsCmdArgument(value)
   }
   return quotePortableUnixArg(value)
 }

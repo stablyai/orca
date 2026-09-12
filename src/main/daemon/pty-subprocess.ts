@@ -1,3 +1,5 @@
+import { resolveAgentResumeDeliveryCommand } from '../../shared/agent-resume-command'
+import type { AgentResumeCommand } from '../../shared/agent-resume-command'
 import type { SubprocessHandle } from './session-subprocess-handle'
 import { normalizePtySize } from './daemon-pty-size'
 import { TerminalAttachCanceledError } from './daemon-errors'
@@ -24,6 +26,7 @@ export type PtySubprocessOptions = {
   env?: Record<string, string>
   envToDelete?: string[]
   command?: string
+  agentResume?: AgentResumeCommand
   startupCommandDelivery?: StartupCommandDelivery
   launchAgent?: TuiAgent
   /** Explicit shell executable path/basename requested by the renderer. */
@@ -66,6 +69,7 @@ export async function checkPtySpawnHealth(): Promise<void> {
  * The handle then owns all event buffering, foreground identity, and teardown.
  */
 export async function createPtySubprocess(opts: PtySubprocessOptions): Promise<SubprocessHandle> {
+  opts = { ...opts }
   const size = normalizePtySize(opts.cols, opts.rows)
   const env = createDaemonPtyEnvironment(opts)
   const launch = createPtyShellLaunchPlan(opts, env)
@@ -99,7 +103,7 @@ export async function createPtySubprocess(opts: PtySubprocessOptions): Promise<S
     throw error
   }
 
-  return createDaemonPtySubprocessHandle({
+  const handle = createDaemonPtySubprocessHandle({
     process: spawned.process,
     shellPath: spawned.shellPath,
     spawnCwd: spawned.spawnCwd,
@@ -111,4 +115,12 @@ export async function createPtySubprocess(opts: PtySubprocessOptions): Promise<S
     sessionId: opts.sessionId,
     startupAgentRecognition: launch.startupAgentRecognition
   })
+  if (process.platform === 'win32' && opts.agentResume) {
+    handle.startupCommand = resolveAgentResumeDeliveryCommand(
+      opts.agentResume,
+      spawned.shellPath,
+      opts.command
+    )
+  }
+  return handle
 }

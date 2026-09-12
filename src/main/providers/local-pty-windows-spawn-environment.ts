@@ -75,13 +75,16 @@ export function finalizeWindowsLocalPtySpawnEnvironment(args: {
       // Why: node-pty backslash-escapes argv quotes; expand the quote inside cmd.exe instead.
       env[ORCA_CODEX_LAUNCH_PREFLIGHT_CMD_QUOTE_ENV] = '"'
     }
+    // Why agentResume: this re-resolve can embed the startup command in cmd argv,
+    // so it must build the resume for this shell, not echo the renderer's guess.
     const resolved = resolveWindowsShellLaunchArgs(
       plan.shellPath,
       plan.cwd,
       plan.defaultCwd,
       plan.launchWslContext,
       spawn.command,
-      codexLaunchPreflightCommand
+      codexLaunchPreflightCommand,
+      spawn.agentResume
     )
     plan.shellArgs = resolved.shellArgs
     plan.effectiveCwd = resolved.effectiveCwd

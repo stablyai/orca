@@ -1,3 +1,7 @@
+import {
+  resolveAgentResumeCommand,
+  type AgentResumeCommand
+} from '../../shared/agent-resume-command'
 import { win32 as pathWin32 } from 'node:path'
 import { isWindowsGitBashShellPath } from '../git-bash'
 import { parseWslPath, toLinuxPath, toWindowsWslPath } from '../wsl'
@@ -179,8 +183,10 @@ export function resolveWindowsShellLaunchArgs(
   defaultCwd: string,
   wslContext?: WindowsShellWslContext,
   startupCommand?: string,
-  codexLaunchPreflightCommand?: string
+  codexLaunchPreflightCommand?: string,
+  agentResume?: AgentResumeCommand
 ): WindowsShellLaunchArgs {
+  startupCommand = resolveAgentResumeCommand(agentResume, shellPath, startupCommand)
   const shellBasename = pathWin32.basename(shellPath).toLowerCase()
   const nativeCwd = normalizeWindowsTerminalCwd(cwd)
 

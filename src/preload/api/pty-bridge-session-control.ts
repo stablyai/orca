@@ -1,3 +1,4 @@
+import type { AgentResumeCommand } from '../../shared/agent-resume-command'
 import { ipcRenderer } from 'electron'
 import type { AgentSessionPtyWriteRefusal } from '../../shared/agent-session-pty-write-admission'
 import type { ProjectExecutionRuntimeResolution } from '../../shared/project-execution-runtime'
@@ -26,6 +27,7 @@ export const ptySessionControlApi = {
     env?: Record<string, string>
     envToDelete?: string[]
     command?: string
+    agentResume?: AgentResumeCommand
     commandDelivery?: 'renderer' | 'provider'
     launchConfig?: SleepingAgentLaunchConfig
     resumeProviderSession?: AgentProviderSessionMetadata

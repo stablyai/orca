@@ -78,9 +78,9 @@ const record: SleepingAgentSessionRecord = {
   updatedAt: 1
 }
 
-async function launch(): Promise<string | undefined> {
+async function launch(session = record): Promise<string | undefined> {
   const { launchSleepingAgentSession } = await import('./sleeping-agent-session-launch')
-  launchSleepingAgentSession(record)
+  launchSleepingAgentSession(session)
   const options = mockCreateTab.mock.calls.at(-1)?.[3] as
     | { pendingStartup?: { command: string } }
     | undefined
@@ -115,6 +115,35 @@ describe('launchSleepingAgentSession Windows shell quoting', () => {
 
     await expect(launch()).resolves.toBe(
       `codex "--dangerously-bypass-approvals-and-sandbox" "resume" "${SESSION_ID}"`
+    )
+  })
+
+  it('preserves a caret path when the shell setting is unavailable', async () => {
+    await expect(
+      launch({ ...record, launchConfig: { agentArgs: '--add-dir C:\\work\\a^b', agentEnv: {} } })
+    ).resolves.toBe(`codex '--add-dir' 'C:\\work\\a^b' 'resume' '${SESSION_ID}'`)
+  })
+
+  it.each([
+    "claude --resume 'old-session'",
+    "claude '--model' 'sonnet' --continue",
+    "& claude --resume 'old-session'"
+  ])('retains selector cleanup during missing-settings fallback: %s', async (agentCommand) => {
+    const command = await launch({
+      ...record,
+      agent: 'claude',
+      launchConfig: { agentCommand, agentArgs: '', agentEnv: {} }
+    })
+    expect(command).not.toContain('old-session')
+    expect(command).not.toContain('--continue')
+    expect(command?.match(/--resume/g)).toHaveLength(1)
+    expect(command).toContain(`'--resume' '${SESSION_ID}'`)
+    expect(mockCreateTab.mock.calls.at(-1)?.[3]?.pendingStartup.agentResume).toEqual(
+      expect.objectContaining({
+        agent: 'claude',
+        agentCommand,
+        providerSession: record.providerSession
+      })
     )
   })
 

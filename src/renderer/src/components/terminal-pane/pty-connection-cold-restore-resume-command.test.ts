@@ -342,8 +342,9 @@ describe('connectPanePty', () => {
   // Regression (#12320): a cold restore after reboot typed PowerShell single quotes into
   // cmd.exe tabs, so the agent CLI rejected the resume argv ("unexpected argument").
   async function runWindowsColdRestoreResume(args: {
-    terminalWindowsShell: string
+    terminalWindowsShell?: string
     tabShellOverride?: string
+    agentCommand?: string
   }): Promise<string | undefined> {
     const restoreNavigator = temporarilySetNavigatorUserAgent(
       'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
@@ -397,14 +398,19 @@ describe('connectPanePty', () => {
         settings: {
           ...mockStoreState.settings,
           agentCmdOverrides: {},
-          terminalWindowsShell: args.terminalWindowsShell
+          // Why: omitting the shell models the post-restart window where the store
+          // has not hydrated `settings` yet, so terminalWindowsShell is undefined.
+          ...(args.terminalWindowsShell !== undefined
+            ? { terminalWindowsShell: args.terminalWindowsShell }
+            : {})
         },
         sleepingAgentSessionsByPaneKey: {
           [paneKey]: {
             paneKey,
             tabId: 'tab-1',
             worktreeId: 'wt-1',
-            agent: 'codex',
+            agent: args.agentCommand ? 'claude' : 'codex',
+            ...(args.agentCommand ? { launchConfig: { agentCommand: args.agentCommand } } : {}),
             providerSession: { key: 'session_id', id: 'codex-session-1' },
             prompt: 'finish the task',
             state: 'done',
@@ -429,7 +435,16 @@ describe('connectPanePty', () => {
       }
       await flushAsyncTicks(10)
 
-      return (transport.connect.mock.calls.at(-1)?.[0] as { command?: string } | undefined)?.command
+      const finalOptions = transport.connect.mock.calls.at(-1)?.[0] as
+        | { command?: string; agentResume?: unknown }
+        | undefined
+      expect(finalOptions?.agentResume).toEqual(
+        expect.objectContaining({
+          providerSession: { key: 'session_id', id: 'codex-session-1' },
+          ...(args.agentCommand ? { agentCommand: args.agentCommand } : {})
+        })
+      )
+      return finalOptions?.command
     } finally {
       globalThis.setTimeout = originalSetTimeout
       restoreNavigator()
@@ -455,6 +470,20 @@ describe('connectPanePty', () => {
     await expect(
       runWindowsColdRestoreResume({ terminalWindowsShell: 'powershell.exe' })
     ).resolves.toBe("codex '--dangerously-bypass-approvals-and-sandbox' 'resume' 'codex-session-1'")
+  })
+
+  it('preserves the persisted Claude command in structured cold restore', async () => {
+    await expect(
+      runWindowsColdRestoreResume({
+        agentCommand: "& claude '--model' 'sonnet' --resume 'old-session'"
+      })
+    ).resolves.toContain("'codex-session-1'")
+  })
+
+  it('passes structured resume inputs when settings have not hydrated', async () => {
+    await expect(runWindowsColdRestoreResume({})).resolves.toBe(
+      "codex '--dangerously-bypass-approvals-and-sandbox' 'resume' 'codex-session-1'"
+    )
   })
 
   it('keeps a contentless reattach when the sleeping record represents a live session', async () => {
