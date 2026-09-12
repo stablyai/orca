@@ -1,13 +1,21 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { childSpawnMock, resolveCodexCommandMock, ptySpawnMock } = vi.hoisted(() => ({
+const { childSpawnMock, readFileMock, resolveCodexCommandMock, ptySpawnMock } = vi.hoisted(() => ({
   childSpawnMock: vi.fn(),
+  readFileMock: vi.fn(),
   resolveCodexCommandMock: vi.fn(),
   ptySpawnMock: vi.fn()
 }))
 
 vi.mock('node:child_process', () => ({
   spawn: childSpawnMock
+}))
+
+// Why: without this the fetcher reads the developer's real ~/.codex/auth.json,
+// reaches the backend with that token and returns live quota data instead of
+// the panel these tests inject. Mirrors the sibling codex-fetcher specs.
+vi.mock('node:fs/promises', () => ({
+  readFile: readFileMock
 }))
 
 vi.mock('../codex-cli/command', () => ({
@@ -33,6 +41,7 @@ describe('fetchCodexRateLimits PTY settle timers', () => {
   beforeEach(() => {
     vi.useFakeTimers()
     vi.clearAllMocks()
+    readFileMock.mockRejectedValue(new Error('no auth fixture'))
     resolveCodexCommandMock.mockReturnValue('codex')
   })
 
