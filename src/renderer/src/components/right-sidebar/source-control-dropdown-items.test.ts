@@ -162,6 +162,30 @@ describe('resolveDropdownItems', () => {
     expect(byKind.commit_sync.disabled).toBe(false)
   })
 
+  it('disables push on a diverged linked worktree without patch-equivalence', () => {
+    const items = resolveDropdownItems(
+      inputs({
+        stagedCount: 1,
+        hasMessage: true,
+        upstreamStatus: { hasUpstream: true, ahead: 2, behind: 3 },
+        isSubjectLinkedWorktree: true
+      })
+    )
+    const byKind = Object.fromEntries(
+      items.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
+    )
+
+    expect(byKind.push.disabled).toBe(true)
+    expect(byKind.push.title).toBe(
+      'Diverged from remote. Push is not available on a linked worktree — reconcile on the main checkout.'
+    )
+    expect(byKind.commit_push.disabled).toBe(true)
+    expect(byKind.commit_push.title).toBe(
+      'Diverged from remote. Push is not available on a linked worktree — reconcile on the main checkout.'
+    )
+    expect(byKind.force_push.disabled).toBe(false)
+  })
+
   it('offers force-push-with-lease when remote-only commits are patch-equivalent', () => {
     const items = resolveDropdownItems(
       inputs({
@@ -659,6 +683,46 @@ describe('resolveDropdownItems', () => {
     expect(divergedByKind.fast_forward.title).toBe(
       'Try a fast-forward pull; git may reject local commits'
     )
+  })
+
+  it('disables pull, fast-forward, and sync on a linked worktree while keeping push enabled', () => {
+    const items = resolveDropdownItems(
+      inputs({
+        // Why: ahead-only (behind 0) so push is a fast-forward and stays available; a diverged
+        // linked worktree (ahead>0 && behind>0) is covered by the dedicated gating test above.
+        upstreamStatus: { hasUpstream: true, ahead: 2, behind: 0 },
+        isSubjectLinkedWorktree: true
+      })
+    )
+    const byKind = Object.fromEntries(
+      items.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
+    )
+    expect(byKind.pull.disabled).toBe(true)
+    expect(byKind.pull.title).toBe('Pull is not available on a linked worktree')
+    expect(byKind.fast_forward.disabled).toBe(true)
+    expect(byKind.fast_forward.title).toBe('Fast-forward is not available on a linked worktree')
+    expect(byKind.sync.disabled).toBe(true)
+    expect(byKind.sync.title).toBe('Sync is not available on a linked worktree')
+    // Why: push stays available on a worktree so the branch can be published.
+    expect(byKind.push.disabled).toBe(false)
+    expect(byKind.force_push.disabled).toBe(false)
+    expect(byKind.fetch.disabled).toBe(false)
+  })
+
+  it('keeps Publish Branch available on a linked worktree with no upstream', () => {
+    const items = resolveDropdownItems(
+      inputs({
+        upstreamStatus: { hasUpstream: false, ahead: 0, behind: 0 },
+        isSubjectLinkedWorktree: true
+      })
+    )
+    const byKind = Object.fromEntries(
+      items.filter((e) => e.kind !== 'separator').map((e) => [e.kind, e])
+    )
+    expect(byKind.publish.disabled).toBe(false)
+    expect(byKind.publish.title).toBe('Publish this branch to origin')
+    expect(byKind.push.disabled).toBe(false)
+    expect(byKind.fetch.disabled).toBe(false)
   })
 })
 

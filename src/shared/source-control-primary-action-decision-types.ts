@@ -47,6 +47,8 @@ export type SourceControlPrimaryActionTitleIntent =
   | 'create_review'
   | 'nothing_to_commit_up_to_date'
   | 'checking_review_creation'
+  | 'pull_unavailable_on_worktree'
+  | 'push_unavailable_on_worktree'
 
 export type SourceControlPrimaryActionDecision = {
   kind: SourceControlPrimaryActionKind
@@ -94,4 +96,7 @@ export type SourceControlPrimaryActionDecisionInputs = {
   canPushLinkedReviewWithoutUpstream?: boolean
   isPrIntentInFlight?: boolean
   isHostedReviewCreationLoading?: boolean
+  /** True when the Source Control subject is a git linked worktree (not the main checkout).
+   *  Pushing stays available, but pull/sync merge into the local branch and are not offered. */
+  isSubjectLinkedWorktree?: boolean
 }

@@ -104,7 +104,8 @@ export function useSourceControlPanelModel() {
     hostedReviewReviewLabel: hostedReviewCreateCopy.reviewLabel,
     hasSuppressedGitHubPRState: suppressedGitHubPRState !== null,
     conflictOperation,
-    effectiveBaseRef
+    effectiveBaseRef,
+    isSubjectLinkedWorktree: activeWorktree ? !activeWorktree.isMainWorktree : false
   })
   const handleRelinkSuppressedGitHubPR = useCallback(() => {
     if (!activeWorktree || !activeWorktreeId || suppressedGitHubPRState?.status !== 'matched') {

@@ -6,12 +6,29 @@ import {
   hasDismissedHugeRepoWarning,
   markHugeRepoWarningDismissed
 } from '@/lib/source-control-huge-repo-warning-dismissals'
+import { isWindowVisible } from '@/lib/window-visibility-interval'
+import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { translate } from '@/i18n/i18n'
 import type { RuntimeGitContext } from '@/runtime/runtime-git-client'
 import { useAppStore } from '@/store'
 import type { GitPushTarget } from '../../../../../../shared/worktree/types'
 import type { PullRequestGenerationContext } from '@/store/slices/pull-request-generation'
+import {
+  ORCA_TERMINAL_COMMAND_FINISHED_EVENT,
+  type TerminalCommandFinishedEventDetail
+} from '@/hooks/terminal-command-finished-event'
+import {
+  ORCA_WORKTREE_FILE_CHANGE_EVENT,
+  type WorktreeFileChangeEventDetail
+} from '@/hooks/worktree-file-change-event'
+import { shouldRefreshGitStatusForFileChange } from '../../git-status-file-watch-refresh'
 import { refreshGitStatusForWorktree } from '../../git-status-refresh'
+
+// Why: the global status poller only refreshes the app-active worktree, so a viewed non-active
+// worktree needs its own cadence to keep panel state current while it stays pinned.
+const VIEWED_WORKTREE_POLL_INTERVAL_MS = 60_000
+// Why: file watchers deliver atomic writes as bursts; coalesce them like the app-active lane does.
+const VIEWED_WORKTREE_SIGNAL_DEBOUNCE_MS = 125
 
 export type SourceControlStatusRefresh = {
   refreshActiveGitStatus: (signal?: AbortSignal) => Promise<void>
@@ -46,6 +63,10 @@ export function useSourceControlStatusRefresh({
   const updateWorktreeGitIdentity = useAppStore((s) => s.updateWorktreeGitIdentity)
   const setUpstreamStatus = useAppStore((s) => s.setUpstreamStatus)
   const fetchUpstreamStatus = useAppStore((s) => s.fetchUpstreamStatus)
+  const appActiveWorktreeId = useAppStore((s) => s.activeWorktreeId)
+  const viewedWorktreeRuntimeEnvironmentId = useAppStore((s) =>
+    getRuntimeEnvironmentIdForWorktree(s, activeWorktreeId)
+  )
   const refreshActiveGitStatus = useCallback(
     async (signal?: AbortSignal): Promise<void> => {
       if (!activeWorktreeId || !worktreePath || isFolder) {
@@ -87,6 +108,89 @@ export function useSourceControlStatusRefresh({
       console.warn('[SourceControl] post-mutation git status refresh failed', error)
     }
   }, [refreshActiveGitStatus])
+
+  // Why: the global status poller only refreshes the app-active worktree; a viewed non-active
+  // worktree keeps its own cadence so its panel state stays current while it is pinned.
+  useEffect(() => {
+    if (
+      !activeWorktreeId ||
+      !worktreePath ||
+      isFolder ||
+      activeWorktreeId === appActiveWorktreeId
+    ) {
+      return
+    }
+    void refreshActiveGitStatus()
+
+    let intervalId: number | null = null
+    let refreshTimer: ReturnType<typeof setTimeout> | null = null
+
+    const scheduleRefresh = (): void => {
+      if (!isWindowVisible()) {
+        return
+      }
+      if (refreshTimer) {
+        clearTimeout(refreshTimer)
+      }
+      // Why: file watchers deliver atomic writes as bursts; coalesce them like the app-active lane does.
+      refreshTimer = setTimeout(() => {
+        refreshTimer = null
+        if (!isWindowVisible()) {
+          return
+        }
+        void refreshActiveGitStatus()
+      }, VIEWED_WORKTREE_SIGNAL_DEBOUNCE_MS)
+    }
+
+    intervalId = window.setInterval(() => {
+      if (isWindowVisible()) {
+        void refreshActiveGitStatus()
+      }
+    }, VIEWED_WORKTREE_POLL_INTERVAL_MS)
+
+    const handleCommandFinished = (event: Event): void => {
+      const detail = (event as CustomEvent<TerminalCommandFinishedEventDetail>).detail
+      if (detail?.worktreeId !== activeWorktreeId) {
+        return
+      }
+      scheduleRefresh()
+    }
+    window.addEventListener(ORCA_TERMINAL_COMMAND_FINISHED_EVENT, handleCommandFinished)
+
+    const handleWorktreeFileChange = (event: Event): void => {
+      const detail = (event as CustomEvent<WorktreeFileChangeEventDetail>).detail
+      if (!detail) {
+        return
+      }
+      if (
+        (detail.runtimeEnvironmentId ?? null) !== (viewedWorktreeRuntimeEnvironmentId ?? null)
+      ) {
+        return
+      }
+      if (shouldRefreshGitStatusForFileChange(detail.payload, worktreePath)) {
+        scheduleRefresh()
+      }
+    }
+    window.addEventListener(ORCA_WORKTREE_FILE_CHANGE_EVENT, handleWorktreeFileChange)
+
+    return () => {
+      if (intervalId) {
+        window.clearInterval(intervalId)
+      }
+      if (refreshTimer) {
+        clearTimeout(refreshTimer)
+      }
+      window.removeEventListener(ORCA_TERMINAL_COMMAND_FINISHED_EVENT, handleCommandFinished)
+      window.removeEventListener(ORCA_WORKTREE_FILE_CHANGE_EVENT, handleWorktreeFileChange)
+    }
+  }, [
+    activeWorktreeId,
+    appActiveWorktreeId,
+    isFolder,
+    refreshActiveGitStatus,
+    viewedWorktreeRuntimeEnvironmentId,
+    worktreePath
+  ])
 
   // Why: when status is truncated, offer once per worktree to .gitignore the flooding folder; local-only since the SSH huge-folder write path isn't wired.
   useEffect(() => {

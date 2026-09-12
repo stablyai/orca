@@ -3,6 +3,10 @@ import { SourceControlHeaderToolbar } from './header-toolbar'
 import { SourceControlNotesShelf } from '../notes/notes-shelf'
 import { SourceControlPanelContent } from './panel-content'
 import { SourceControlPanelDialogs } from './panel-dialogs'
+import {
+  shouldShowSourceControlNonActiveWorktreeNotice,
+  SourceControlNonActiveWorktreeNotice
+} from './worktree-picker'
 import type { SourceControlPanelReadyProps } from './panel-props'
 
 /** The panel chrome: toolbar, notes shelf, the scrolling file surface, bulk bar and dialog layer. */
@@ -10,7 +14,9 @@ export function SourceControlPanelReady(props: SourceControlPanelReadyProps) {
   const { model, worktreePath } = props
   const {
     activeGroupId,
+    activeWorktree,
     activeWorktreeId,
+    appActiveWorktreeId,
     branchLineTotal,
     branchSummary,
     bulkStagePaths,
@@ -49,10 +55,12 @@ export function SourceControlPanelReady(props: SourceControlPanelReadyProps) {
     setFilterQuery,
     setPendingDiffCommentsClear,
     setSourceControlRoot,
+    setViewWorktreeId,
     settings,
     sourceControlViewMode,
     suppressedGitHubPRState,
-    visibleCreatePrHeaderAction
+    visibleCreatePrHeaderAction,
+    worktreeList
   } = model
 
   return (
@@ -67,6 +75,10 @@ export function SourceControlPanelReady(props: SourceControlPanelReadyProps) {
           filterExpanded={filterExpanded}
           onFilterQueryChange={setFilterQuery}
           onFilterExpandedChange={setFilterExpanded}
+          worktreeList={worktreeList}
+          selectedWorktreeId={activeWorktreeId}
+          appActiveWorktreeId={appActiveWorktreeId}
+          onSelectWorktree={setViewWorktreeId}
           visibleCreatePrHeaderAction={visibleCreatePrHeaderAction}
           hostedReview={hostedReview}
           isCreatePrIntentInFlight={isCreatePrIntentInFlight}
@@ -91,6 +103,14 @@ export function SourceControlPanelReady(props: SourceControlPanelReadyProps) {
           headDisplay={gitIdentityDisplay}
           manualReviewUrl={manualReviewUrl}
         />
+
+        {/* Why: a viewed non-active worktree means every action below targets another worktree; keep that visible at all times. */}
+        {shouldShowSourceControlNonActiveWorktreeNotice(
+          activeWorktreeId ?? '',
+          appActiveWorktreeId ?? ''
+        ) && (
+          <SourceControlNonActiveWorktreeNotice displayName={activeWorktree?.displayName ?? ''} />
+        )}
 
         {/* Why: hidden when count is 0 — notes are created from the diff view, so an empty Notes shelf here is pure chrome. */}
         {activeWorktreeId && worktreePath && diffCommentCount > 0 && (
