@@ -1,3 +1,4 @@
+import { getAgentHookConfigLocations } from '../../../../shared/agent-hook-config-locations'
 import { describe, expect, it } from 'vitest'
 import { AGENT_HOOK_TARGETS } from '../../../../shared/agent-hook-types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
@@ -45,5 +46,24 @@ describe('buildAgentStatusHookAffectedRows', () => {
     )
 
     expect(rows.map((row) => row.agent)).toEqual([...expected])
+  })
+})
+
+describe('getAgentHookConfigLocations', () => {
+  // Why pinned: devin's real resolver branches on platform (getDevinConfigPath), and a disclosure
+  // surface that shows a Windows user the POSIX path is the wrong answer.
+  it('shows devin the Windows config path on win32', () => {
+    expect(getAgentHookConfigLocations('win32').devin).toBe('%APPDATA%\\devin\\config.json')
+  })
+
+  it('shows devin the POSIX config path elsewhere', () => {
+    expect(getAgentHookConfigLocations('darwin').devin).toBe('~/.config/devin/config.json')
+    expect(getAgentHookConfigLocations('linux').devin).toBe('~/.config/devin/config.json')
+  })
+
+  it('leaves the platform-independent targets alone', () => {
+    expect(getAgentHookConfigLocations('win32').claude).toBe(
+      getAgentHookConfigLocations('darwin').claude
+    )
   })
 })

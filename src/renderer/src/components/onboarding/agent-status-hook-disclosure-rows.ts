@@ -1,5 +1,6 @@
 import { getAgentCatalog } from '@/lib/agent-catalog'
-import { AGENT_HOOK_CONFIG_LOCATIONS } from '../../../../shared/agent-hook-config-locations'
+import { getRendererAppPlatform } from '@/lib/renderer-app-platform'
+import { getAgentHookConfigLocations } from '../../../../shared/agent-hook-config-locations'
 import { AGENT_HOOK_TARGETS, type AgentHookTarget } from '../../../../shared/agent-hook-types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import {
@@ -21,6 +22,8 @@ export function buildAgentStatusHookAffectedRows(input: {
   const detected = new Set(input.detectedAgentIds)
   const disabled = normalizeDisabledTuiAgents(input.disabledTuiAgents)
   const catalog = getAgentCatalog()
+  // Why resolved here: devin's real config path branches on platform, so the disclosure must too.
+  const locations = getAgentHookConfigLocations(getRendererAppPlatform())
   const rows: AgentStatusHookAffectedRow[] = []
   // Why AGENT_HOOK_TARGETS and not the detection order: detection resolves concurrently, so its
   // order is not stable between renders.
@@ -31,7 +34,7 @@ export function buildAgentStatusHookAffectedRows(input: {
     rows.push({
       agent,
       name: catalog.find((entry) => entry.id === agent)?.label ?? agent,
-      location: AGENT_HOOK_CONFIG_LOCATIONS[agent]
+      location: locations[agent]
     })
   }
   return rows

@@ -4,7 +4,7 @@ import '@testing-library/jest-dom/vitest'
 import { cleanup, render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { AGENT_HOOK_CONFIG_LOCATIONS } from '../../../../shared/agent-hook-config-locations'
+import { getAgentHookConfigLocations } from '../../../../shared/agent-hook-config-locations'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { AgentStep } from './AgentStep'
@@ -67,7 +67,7 @@ describe('AgentStatusHooksControl', () => {
     const rows = within(list).getAllByRole('listitem')
     expect(rows).toHaveLength(1)
     expect(rows[0]).toHaveTextContent('Claude')
-    expect(rows[0]).toHaveTextContent(AGENT_HOOK_CONFIG_LOCATIONS.claude)
+    expect(rows[0]).toHaveTextContent(getAgentHookConfigLocations('darwin').claude)
     expect(within(list).queryByText('Cursor')).not.toBeInTheDocument()
     expect(within(list).queryByText('OpenCode')).not.toBeInTheDocument()
   })
