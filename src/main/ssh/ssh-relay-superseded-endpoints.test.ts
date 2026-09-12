@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest'
 
 const execCommand = vi.fn()
 vi.mock('./ssh-relay-deploy-helpers', () => ({
@@ -41,6 +41,13 @@ function incumbent(lines: string[]): ReturnType<typeof parseRelayEndpointIncumbe
 
 function issuedCommands(): string[] {
   return execCommand.mock.calls.map((call) => String(call[1]))
+}
+
+/** The `beforeEach` spy is reinstalled, not reset, so its calls survive the previous test. */
+function warnSpy(): MockInstance<typeof console.warn> {
+  const spy = vi.spyOn(console, 'warn')
+  spy.mockClear()
+  return spy
 }
 
 beforeEach(() => {
@@ -157,8 +164,21 @@ describe('sweepSupersededRelayEndpoints', () => {
     await expect(sweepSupersededRelayEndpoints(CONN, HOST, SWEEP)).resolves.toEqual([])
   })
 
+  it('records the abandoned pass when the listing fails, so it reads apart from an empty host', async () => {
+    const warn = warnSpy()
+    execCommand.mockRejectedValueOnce(new Error('exec failed'))
+    await sweepSupersededRelayEndpoints(CONN, HOST, SWEEP)
+    expect(warn.mock.calls.flat().join('\n')).toContain('no pass ran: exec failed')
+  })
+
   it('does not run against Windows hosts, whose endpoints are named pipes', async () => {
+    const warn = warnSpy()
     await expect(sweepSupersededRelayEndpoints(CONN, WINDOWS_HOST, SWEEP)).resolves.toEqual([])
     expect(execCommand).not.toHaveBeenCalled()
+    // The skip has to leave a trace: a Windows orphan is never listed and never reclaimed, and
+    // an empty return is otherwise indistinguishable from a host that had nothing to sweep.
+    const logged = warn.mock.calls.flat().join('\n')
+    expect(logged).toContain('Superseded relay sweep did not run')
+    expect(logged).toContain(CURRENT_DIR)
   })
 })
