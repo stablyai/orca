@@ -36,6 +36,9 @@ export function transitionOpenSourceObligation(
     return false
   }
   span.obligations.set(consumer, next)
+  if (next.state === 'canceled') {
+    token.canceledObligations = true
+  }
   advanceSourceTerminalEnd(token)
   return true
 }
@@ -69,6 +72,7 @@ export function cancelSourceObligationTransfer(
     return false
   }
   span.obligations.set(consumer, Object.freeze({ state: 'canceled', reason }))
+  token.canceledObligations = true
   advanceSourceTerminalEnd(token)
   return true
 }

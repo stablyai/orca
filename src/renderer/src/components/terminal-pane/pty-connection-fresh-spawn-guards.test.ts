@@ -432,8 +432,7 @@ describe('connectPanePty', () => {
     )
   })
 
-  it('drops keystrokes while the replay guard is engaged, then forwards once it releases', async () => {
-    // Regression (cold-restore reattach lockout): a stuck replay guard dropped every keystroke ("can't type after reconnecting"); engaged guard suppresses input, released forwards it.
+  it('keeps the replay guard for input without verified user provenance', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const pane = createPane(1)
     const transport = createMockTransport('ssh:ssh-1@@pty-1')
@@ -455,83 +454,49 @@ describe('connectPanePty', () => {
     expect(transport.sendInput).toHaveBeenCalledWith('echo hi\r')
   })
 
-  it('preserves classified user input during replay while suppressing synthetic replies', async () => {
+  it('preserves deferred user input through replay but discards deferred replay replies', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const pane = createPane(1)
-    const userInputListeners = new Set<() => void>()
-    Object.assign(pane.terminal, {
-      _core: {
-        coreService: {
-          onUserInput: (listener: () => void) => {
-            userInputListeners.add(listener)
-            return { dispose: () => userInputListeners.delete(listener) }
-          }
-        }
-      }
-    })
+    const core = { orcaDataEventIsUserInput: false }
+    Object.assign(pane.terminal, { _core: { coreService: core } })
     const transport = createMockTransport('ssh:ssh-1@@pty-1')
     transportFactoryQueue.push(transport)
-    const deps = createDeps()
-    const deferred: (() => void)[] = []
-    Object.assign(deps, {
-      deferPtyInput: (_paneId: number, data: string, forward: (data: string) => void) => {
-        deferred.push(() => forward(data))
+    const pending: (() => void)[] = []
+    const deps = createDeps({
+      deferPtyInput: (_id: number, data: string, forward: (data: string) => void) => {
+        pending.push(() => forward(data))
       }
     })
     connectPanePty(pane as never, createManager(1, 1) as never, deps as never)
     await flushAsyncTicks()
     transport.sendInput.mockClear()
-    deps.replayingPanesRef.current.set(pane.id, 1)
-    for (const listener of userInputListeners) {
-      listener()
-    }
-    sendTerminalInputThroughPane(pane, 'input_under_flood\r')
-    sendTerminalInputThroughPane(pane, '\x1b[?1;2c')
-    // A click on replayed scrollback that still has mouse tracking armed is user input to xterm, but must not reach the shell.
-    for (const listener of userInputListeners) {
-      listener()
-    }
+    deps.replayingPanesRef.current.set(pane.id, 3)
+    core.orcaDataEventIsUserInput = true
+    sendTerminalInputThroughPane(pane, 'echo preserved\r')
+    sendTerminalInputThroughPane(pane, '\x1b[1;2R')
+    core.orcaDataEventIsUserInput = false
+    sendTerminalInputThroughPane(pane, '\x1b[1;2R')
+    pending.shift()!()
+    pending.shift()!()
+    core.orcaDataEventIsUserInput = true
     sendTerminalInputThroughPane(pane, '\x1b[<0;12;4M')
-    for (const forward of deferred.splice(0)) {
-      forward()
-    }
-    expect(transport.sendInput).toHaveBeenCalledExactlyOnceWith('input_under_flood\r')
-
-    // A wheel over a replayed alt-screen frame becomes cursor keys; the fresh shell must not recall history from them.
     pane.terminal.buffer.active.type = 'alternate'
-    for (const listener of userInputListeners) {
-      listener()
-    }
     sendTerminalInputThroughPane(pane, '\x1b[B')
-    for (const forward of deferred.splice(0)) {
-      forward()
-    }
-    expect(transport.sendInput).toHaveBeenCalledExactlyOnceWith('input_under_flood\r')
-
-    // The same bytes on the normal buffer can only be a keyboard arrow, which survives replay.
     pane.terminal.buffer.active.type = 'normal'
-    for (const listener of userInputListeners) {
-      listener()
-    }
     sendTerminalInputThroughPane(pane, '\x1b[B')
-    for (const forward of deferred.splice(0)) {
-      forward()
-    }
-    expect(transport.sendInput).toHaveBeenCalledTimes(2)
-    expect(transport.sendInput).toHaveBeenLastCalledWith('\x1b[B')
-
-    // Once the guard releases, the same mouse report is ordinary input again.
     deps.replayingPanesRef.current.delete(pane.id)
-    for (const listener of userInputListeners) {
-      listener()
-    }
-    sendTerminalInputThroughPane(pane, '\x1b[<0;12;4M')
-    for (const forward of deferred.splice(0)) {
+    for (const forward of pending.splice(0)) {
       forward()
     }
+    expect(transport.sendInput.mock.calls).toEqual([
+      ['echo preserved\r'],
+      ['\x1b[1;2R'],
+      ['\x1b[B']
+    ])
+    sendTerminalInputThroughPane(pane, '\x1b[<0;12;4M')
+    pending.shift()!()
     expect(transport.sendInput).toHaveBeenLastCalledWith('\x1b[<0;12;4M')
   })
-
   it('settles a queued startup only after the pane binds its spawned PTY', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport('pty-resume')

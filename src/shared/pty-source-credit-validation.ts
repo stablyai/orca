@@ -3,6 +3,7 @@ import type {
   PtySourceDeliveryIdentity,
   PtySourceSpan
 } from './pty-source-credit-contract'
+import { assertPtyOwnershipTransferOutputEnvelope } from './pty-ownership-transfer-output-envelope'
 
 export function assertPositiveSafeInteger(value: number, name: string): void {
   if (!Number.isSafeInteger(value) || value <= 0) {
@@ -50,6 +51,16 @@ export function assertPtySourceSpan(span: PtySourceSpan): void {
     span.splittable === span.indivisible
   ) {
     throw new Error('PTY source span split metadata is contradictory')
+  }
+  if (span.ownershipTransfer) {
+    assertPtyOwnershipTransferOutputEnvelope(span.ownershipTransfer, span.data)
+    if (
+      span.ownershipTransfer.terminalId !== span.id ||
+      span.ownershipTransfer.incarnationId !== span.ptyIncarnation ||
+      span.ownershipTransfer.sourceOwnerGeneration !== span.ownerGeneration
+    ) {
+      throw new Error('PTY source span ownership-transfer identity is invalid')
+    }
   }
 }
 

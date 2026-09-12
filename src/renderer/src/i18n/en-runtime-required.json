@@ -1463,7 +1463,8 @@
         },
         "SshPane": {
           "94c5284560": "Targets",
-          "a7d28dff81": "Add a remote host to connect to it in Orca."
+          "a7d28dff81": "Add a remote host to connect to it in Orca.",
+          "f602009125": "Target added"
         },
         "SshTargetCard": {
           "47e94bd6ba": "connected",
@@ -1474,6 +1475,8 @@
           "29af933cd5": "New SSH Target",
           "4a342f44c1": "Advanced Connection",
           "92f80edbfd": "Remote Terminal Persistence",
+          "9518545cb6": "Add Target",
+          "addDescription": "Add a persistent machine you can log into over SSH.",
           "e9609ddca6": "Proxy, jump host, and connection reuse",
           "f2331ce599": "Edit SSH Target"
         },
@@ -1808,7 +1811,9 @@
           "serverName": "Server name",
           "sshConfigPickerBulkHint": "Bulk sync stays in Settings → SSH",
           "sshConfigPickerDescription": "Pick a host to fill the form. Nothing is saved until you click Save.",
-          "sshPersistenceDefault": "Remote terminals on this host stay alive until you end them or reset the relay."
+          "sshDescription": "Add a persistent machine you can log into over SSH.",
+          "sshPersistenceDefault": "Remote terminals on this host stay alive until you end them or reset the relay.",
+          "sshSaved": "SSH host added."
         },
         "AddRepoHostSelector": {
           "addRemoteHostTooltip": "Choose SSH for a machine you can log into, or remote server for an Orca server.",

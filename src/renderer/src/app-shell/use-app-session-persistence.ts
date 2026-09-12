@@ -102,11 +102,11 @@ export function useAppSessionPersistence(): void {
       store: useAppStore,
       shouldSchedulePersist: () => !isDirectSshRemoteWorkspaceApplyInProgress(),
       subscribeToPersistGateOpen: onDirectSshRemoteWorkspaceApplyWindowClosed,
+      onPersistError: (error) => console.warn('[session] Local session patch failed:', error),
       persist: ({ patch }) => {
         const state = useAppStore.getState()
         // Why: route each host's worktree-scoped slice to its own partition; return the local write so the remote-workspace upload chain below keeps its ordering.
         const localWrite = patchWorkspaceSessionByHost(window.api.session, patch, state)
-        void localWrite
         const uploadAuthorities = captureRemoteWorkspaceUploadAuthorities(state)
         if (uploadAuthorities.length > 0) {
           void (async () => {
@@ -164,6 +164,7 @@ export function useAppSessionPersistence(): void {
             }
           })()
         }
+        return localWrite
       }
     })
   }, [])

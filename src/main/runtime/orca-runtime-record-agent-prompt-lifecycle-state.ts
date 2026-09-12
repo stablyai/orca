@@ -97,6 +97,8 @@ export class OrcaRuntimeWithRecordAgentPromptLifecycleState extends OrcaRuntimeW
     this.providerBufferAcquisitionsByPtyId.delete(ptyId)
     this.providerVisibleStateByPtyId.delete(ptyId)
     this.providerVisibleRetryAtByPtyId.delete(ptyId)
+    this.terminalSendOperationsByPtyId.delete(ptyId)
+    this.terminalSendOperationsInFlightByPtyId.delete(ptyId)
   }
 
   synchronizePtyOutputSequenceFromProvider(

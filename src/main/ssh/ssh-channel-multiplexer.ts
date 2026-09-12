@@ -22,8 +22,23 @@ import {
 } from './ssh-multiplexer-transport-writer'
 
 export type { MultiplexerTransport, MultiplexerWriteSettlement }
+import { SshMultiplexerSettlementBarrier } from './ssh-multiplexer-settlement-barrier'
+import {
+  RELAY_OWNER_RESET_METHOD,
+  RELAY_PREPARED_RESET_RECOVERY_METHOD,
+  parseRelayOwnerResetRequest,
+  parseRelayOwnerResetAcknowledgment,
+  type RelayOwnerResetRequest,
+  type RelayOwnerResetAcknowledgment
+} from '../../shared/relay-owner-reset-contract'
+import { SshPtyPreparationAdmission } from './ssh-pty-preparation-admission'
+import { SshMultiplexerIncomingRequests } from './ssh-multiplexer-incoming-requests'
+import { RELAY_NETWORK_TUNNEL_FRAME_METHOD } from '../../shared/relay-network-tunnel-contract'
 
 type PendingRequest = {
+  resetRequest?: RelayOwnerResetRequest
+  method: string
+  token: object
   resolve: (result: unknown) => void
   reject: (error: Error) => void
   beforeResolve?: (result: unknown) => void
@@ -99,6 +114,16 @@ export class SshChannelMultiplexer {
   private highestAckedBySelf = 0
   private lastReceivedAt = Date.now()
   private pendingRequests = new Map<number, PendingRequest>()
+  private readonly requestBarrier = new SshMultiplexerSettlementBarrier()
+  private resetAcknowledgmentContext:
+    | {
+        token: object
+        request?: RelayOwnerResetRequest
+        acknowledgment?: Readonly<RelayOwnerResetAcknowledgment>
+      }
+    | undefined
+  private readonly incomingRequests = new SshMultiplexerIncomingRequests()
+  private readonly preparationAdmission = new SshPtyPreparationAdmission()
   private notificationHandlers: NotificationHandler[] = []
   private requestHandlers = new Map<string, RequestHandler>()
   // Why: per-method dispatch map keeps streaming consumers (fs.streamChunk,
@@ -239,15 +264,37 @@ export class SshChannelMultiplexer {
     }
 
     const id = this.nextRequestId++
+    const controlId = this.preparationAdmission.admit(method, params)
+    let resetRequest: RelayOwnerResetRequest | undefined
+    if (method === RELAY_OWNER_RESET_METHOD || method === RELAY_PREPARED_RESET_RECOVERY_METHOD) {
+      try {
+        resetRequest = parseRelayOwnerResetRequest(params)
+      } catch {
+        // Malformed legacy calls still reach the host, but cannot mint identity-bound proof.
+      }
+    }
     const msg: JsonRpcRequest = {
       jsonrpc: '2.0',
       id,
       method,
-      ...(params !== undefined ? { params } : {})
+      ...(params !== undefined
+        ? { params: resetRequest ? { ...params, ...resetRequest } : params }
+        : {})
     }
     const timeoutMs = options?.timeoutMs ?? REQUEST_TIMEOUT_MS
 
-    return new Promise((resolve, reject) => {
+    return new Promise((resolveRequest, rejectRequest) => {
+      const token = {}
+      this.requestBarrier.retain(token)
+      const resolve = (result: unknown) => {
+        this.requestBarrier.settle(token, { ok: true })
+        resolveRequest(result)
+      }
+      const reject = (error: Error) => {
+        this.preparationAdmission.recordFailure(controlId)
+        this.requestBarrier.settle(token, { ok: false, error })
+        rejectRequest(error)
+      }
       let timer: ReturnType<typeof setTimeout>
       const cleanup = (): void => {
         clearTimeout(timer)
@@ -285,20 +332,132 @@ export class SshChannelMultiplexer {
         options.signal.addEventListener('abort', onAbort, { once: true })
       }
       this.pendingRequests.set(id, {
+        resetRequest,
+        method,
+        token,
         resolve,
         reject,
         beforeResolve: options?.beforeResolve,
         timer,
         cleanup
       })
-      this.sendMessage(msg)
+      try {
+        this.sendMessage(msg)
+      } catch (error) {
+        cleanup()
+        this.pendingRequests.delete(id)
+        reject(error instanceof Error ? error : new Error(String(error)))
+      }
     })
+  }
+
+  /** Caller fences new mutations; this snapshots earlier writes and outstanding RPC responses. */
+  async waitForPendingOperations(signal: AbortSignal): Promise<void> {
+    signal.throwIfAborted()
+    if (this.disposed) {
+      throw this.disposedError()
+    }
+    const observer = new AbortController()
+    const onAbort = () => observer.abort(signal.reason)
+    signal.addEventListener('abort', onAbort, { once: true })
+    try {
+      await Promise.all([
+        this.writer.waitForPendingWrites(observer.signal),
+        this.requestBarrier.wait(observer.signal)
+      ])
+      signal.throwIfAborted()
+      if (this.disposed) {
+        throw this.disposedError()
+      }
+    } finally {
+      signal.removeEventListener('abort', onAbort)
+      observer.abort()
+    }
+  }
+
+  async fencePtyControlsAndDrain(id: string, signal: AbortSignal): Promise<void> {
+    signal.throwIfAborted()
+    this.preparationAdmission.close(id)
+    await this.waitForPendingOperations(signal)
+    this.preparationAdmission.assertSettled(id)
+  }
+
+  /** Permanent per transport; callers separately drain earlier operations before reset. */
+  fenceForRelayReset(): void {
+    this.preparationAdmission.closeForRelayReset()
+    this.requestBarrier.retainFailureEvidence()
+    this.writer.fenceForReset()
+    this.incomingRequests.fenceForReset()
+  }
+
+  /** Only the exact reset response callback may exempt its own unsettled request. */
+  assertRelayResetAcknowledgmentDrained(expected?: RelayOwnerResetRequest): void {
+    const context = this.resetAcknowledgmentContext
+    if (!context || !this.preparationAdmission.isRelayResetClosed) {
+      throw new Error('ssh_mux_reset_acknowledgment_context_unproven')
+    }
+    if (expected !== undefined) {
+      const request = parseRelayOwnerResetRequest(expected)
+      if (
+        !context.request ||
+        Object.entries(request).some(
+          ([key, value]) => context.request![key as keyof RelayOwnerResetRequest] !== value
+        )
+      ) {
+        throw new Error('ssh_mux_reset_acknowledgment_request_mismatch')
+      }
+      parseRelayOwnerResetAcknowledgment(context.acknowledgment, request)
+    }
+    this.assertWriteSettlement()
+    this.writer.assertPendingWritesSettled()
+    this.requestBarrier.assertSettled(context.token)
+    this.incomingRequests.assertResetDrained()
+  }
+
+  async waitForRelayResetDrain(signal: AbortSignal): Promise<void> {
+    signal.throwIfAborted()
+    const observer = new AbortController()
+    const onAbort = () => observer.abort(signal.reason)
+    signal.addEventListener('abort', onAbort, { once: true })
+    try {
+      await Promise.all([
+        this.waitForPendingOperations(observer.signal),
+        this.incomingRequests.waitForReset(observer.signal)
+      ])
+      signal.throwIfAborted()
+      if (this.disposed) {
+        throw this.disposedError()
+      }
+    } finally {
+      signal.removeEventListener('abort', onAbort)
+      observer.abort()
+    }
+  }
+
+  isPtyPreparationFenced(id: string): boolean {
+    return this.preparationAdmission.isClosed(id)
+  }
+
+  fencePtyPreparationSurface(surface: unknown): void {
+    this.preparationAdmission.closeSurface(surface)
+  }
+
+  fencePtyCatalogCreation(): void {
+    this.preparationAdmission.closeCatalogCreation()
+  }
+
+  async drainPtyCatalogCreation(signal: AbortSignal): Promise<void> {
+    this.fencePtyCatalogCreation()
+    await this.waitForPendingOperations(signal)
+    this.preparationAdmission.assertCatalogCreationSettled()
   }
 
   /**
    * Send a JSON-RPC notification (no response expected).
    */
   notify(method: string, params?: Record<string, unknown>): void {
+    this.preparationAdmission.admit(method, params, true)
+    this.preparationAdmission.recordUnacknowledgedCreation(method)
     if (this.disposed) {
       return
     }
@@ -315,8 +474,16 @@ export class SshChannelMultiplexer {
   notifyWithSettlement(
     method: string,
     params: Record<string, unknown> | undefined,
-    onSettled: (result: MultiplexerWriteSettlement) => void
+    onSettled: (result: MultiplexerWriteSettlement) => void,
+    isStillAdmitted?: () => boolean
   ): void {
+    try {
+      this.preparationAdmission.admit(method, params, true)
+      this.preparationAdmission.recordUnacknowledgedCreation(method)
+    } catch (error) {
+      onSettled({ outcome: 'refused', reason: 'write_gate_denied', error: error as Error })
+      return
+    }
     if (this.disposed) {
       onSettled({
         outcome: 'refused',
@@ -331,7 +498,8 @@ export class SshChannelMultiplexer {
         method,
         ...(params !== undefined ? { params } : {})
       },
-      onSettled
+      onSettled,
+      isStillAdmitted
     )
   }
 
@@ -389,6 +557,7 @@ export class SshChannelMultiplexer {
     }
 
     this.writer.dispose(this.disposedError())
+    this.incomingRequests.dispose(this.disposedError())
     this.unackedTimestamps.clear()
     // Why: relay teardown can race with late provider registration; disposed
     // muxes must not retain provider/session closures through subscribers.
@@ -411,6 +580,19 @@ export class SshChannelMultiplexer {
     return this.disposed
   }
 
+  assertWriteSettlement(): void {
+    if (this.disposed) {
+      throw this.disposedError()
+    }
+    if (this.transport.supportsWriteSettlement !== true) {
+      throw new Error('ssh_mux_write_settlement_required')
+    }
+  }
+
+  getSourceChannel(): object | undefined {
+    return this.transport.sourceChannel
+  }
+
   // ── Private ───────────────────────────────────────────────────────
 
   private disposedError(): Error & { code: string } {
@@ -419,12 +601,19 @@ export class SshChannelMultiplexer {
 
   private sendMessage(
     msg: JsonRpcMessage,
-    onSettled?: (result: MultiplexerWriteSettlement) => void
+    onSettled?: (result: MultiplexerWriteSettlement) => void,
+    isStillAdmitted?: () => boolean
   ): void {
     const seq = this.nextOutgoingSeq++
     const frame = encodeJsonRpcFrame(msg, seq, this.highestReceivedSeq)
     this.trackOutgoingTimestamp(seq, false)
-    this.writer.enqueue(frame, messageLane(msg), onSettled)
+    this.writer.enqueue(
+      frame,
+      messageLane(msg),
+      onSettled,
+      isStillAdmitted,
+      'method' in msg && msg.method === RELAY_NETWORK_TUNNEL_FRAME_METHOD
+    )
   }
 
   private sendKeepAlive(): void {
@@ -433,7 +622,7 @@ export class SshChannelMultiplexer {
     }
     const seq = this.nextOutgoingSeq
     const frame = encodeKeepAliveFrame(seq, this.highestReceivedSeq)
-    if (!this.writer.enqueue(frame, 'liveness')) {
+    if (!this.writer.enqueue(frame, 'liveness') || this.disposed) {
       return
     }
     this.nextOutgoingSeq++
@@ -489,33 +678,11 @@ export class SshChannelMultiplexer {
   }
 
   private async handleRequest(msg: JsonRpcRequest): Promise<void> {
-    const handler = this.requestHandlers.get(msg.method)
-    if (!handler) {
-      this.sendMessage({
-        jsonrpc: '2.0',
-        id: msg.id,
-        error: { code: -32601, message: `Method not found: ${msg.method}` }
-      })
-      return
-    }
-
-    try {
-      const result = await handler(msg.params ?? {})
-      this.sendMessage({
-        jsonrpc: '2.0',
-        id: msg.id,
-        result: result ?? null
-      })
-    } catch (err) {
-      this.sendMessage({
-        jsonrpc: '2.0',
-        id: msg.id,
-        error: {
-          code: (err as { code?: number }).code ?? -32000,
-          message: err instanceof Error ? err.message : String(err)
-        }
-      })
-    }
+    await this.incomingRequests.dispatch(
+      msg,
+      this.requestHandlers.get(msg.method),
+      (response, settled) => this.sendMessage(response, settled)
+    )
   }
 
   private handleResponse(msg: JsonRpcResponse): void {
@@ -533,11 +700,30 @@ export class SshChannelMultiplexer {
       Object.defineProperty(err, 'data', { value: msg.error.data })
       pending.reject(err)
     } else {
+      const previousContext = this.resetAcknowledgmentContext
       try {
+        this.resetAcknowledgmentContext =
+          pending.method === RELAY_OWNER_RESET_METHOD ||
+          pending.method === RELAY_PREPARED_RESET_RECOVERY_METHOD
+            ? { token: pending.token, request: pending.resetRequest }
+            : undefined
+        if (this.resetAcknowledgmentContext && pending.resetRequest) {
+          try {
+            this.resetAcknowledgmentContext.acknowledgment = Object.freeze(
+              parseRelayOwnerResetAcknowledgment(msg.result, pending.resetRequest)
+            )
+          } catch {
+            // Preserve ordinary response handling; the identity-bound gate refuses invalid ACKs.
+          }
+        }
         pending.beforeResolve?.(msg.result)
+        this.resetAcknowledgmentContext = previousContext
         pending.resolve(msg.result)
       } catch (error) {
+        this.resetAcknowledgmentContext = previousContext
         pending.reject(error instanceof Error ? error : new Error(String(error)))
+      } finally {
+        this.resetAcknowledgmentContext = previousContext
       }
     }
   }
@@ -680,5 +866,8 @@ export class SshChannelMultiplexer {
 }
 
 function messageLane(msg: JsonRpcMessage): MultiplexerWriterLane {
-  return 'method' in msg && msg.method === 'pty.data' ? 'ordinary' : 'control'
+  return 'method' in msg &&
+    (msg.method === 'pty.data' || msg.method === RELAY_NETWORK_TUNNEL_FRAME_METHOD)
+    ? 'ordinary'
+    : 'control'
 }

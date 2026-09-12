@@ -82,6 +82,26 @@ describe('sftp-upload', () => {
     })
   })
 
+  it('canonicalizes a symlinked upload root before enforcing containment', async () => {
+    const fixtureRoot = await mkdtemp(join(tmpdir(), 'orca-sftp-upload-root-'))
+    const sourceDir = join(fixtureRoot, 'source')
+    const linkedDir = join(fixtureRoot, 'linked')
+    await mkdir(sourceDir)
+    await writeFile(join(sourceDir, 'asset.txt'), 'asset')
+    await symlink(sourceDir, linkedDir, process.platform === 'win32' ? 'junction' : 'dir')
+    const sftp = createSftpMock()
+
+    try {
+      await uploadDirectory(sftp, linkedDir, '/remote/assets', linkedDir, { exclusive: true })
+
+      expect(sftp.createWriteStream).toHaveBeenCalledWith('/remote/assets/asset.txt', {
+        flags: 'wx'
+      })
+    } finally {
+      await rm(fixtureRoot, { recursive: true, force: true })
+    }
+  })
+
   it('rejects sibling directories outside the upload root', async () => {
     const localDir = await mkdtemp(join(tmpdir(), 'orca-sftp-upload-'))
     const escapedDir = `${localDir}-sibling`

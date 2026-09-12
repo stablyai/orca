@@ -7,7 +7,6 @@ import {
   type ExecutionHostId
 } from '../../../shared/execution-host'
 import { getDefaultWorkspaceSession } from '../../../shared/constants'
-import { pruneLocalTerminalScrollbackBuffers } from '../../../shared/workspace-session-terminal-buffers'
 import { pruneWorkspaceSessionBrowserHistory } from '../../../shared/workspace-session-browser-history'
 import { withoutRedundantGlobalFields } from '../../../shared/workspace-session-host-field-ownership'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
@@ -23,6 +22,7 @@ import {
 import type { StoreRuntimeState } from './store-runtime-state'
 import type { WriteSchedulingOperations } from './write-scheduling'
 import { scheduleSave } from './write-scheduling'
+import { reconcileOrcadRetirementSessionWrite } from './orcad-retirement-session-write'
 import {
   preserveMissingWorkspaceSessionTerminalBindings,
   sshTargetIdForWorkspaceSessionHost
@@ -31,7 +31,10 @@ import type { TerminalBindingRecoveryOperations } from './terminal-binding-recov
 
 type SessionHostPartitionOperationsRuntime = Pick<
   StoreRuntimeState,
-  'state' | 'terminalScrollbackSnapshotStorage'
+  | 'state'
+  | 'terminalScrollbackSnapshotStorage'
+  | 'transferSnapshotHistory'
+  | 'orcadRetirementSessionPublication'
 >
 
 const sessionHostPartitionOperationsContext = Symbol('SessionHostPartitionOperations')
@@ -175,6 +178,11 @@ export function setHostWorkspaceSession(
   hostId: ExecutionHostId,
   session: WorkspaceSessionState
 ): void {
+  session = reconcileOrcadRetirementSessionWrite(
+    owner[sessionHostPartitionOperationsContext].runtime,
+    session,
+    hostId
+  )
   const prior =
     owner[sessionHostPartitionOperationsContext].runtime.state.workspaceSessionsByHostId?.[hostId]
   // Why here and not at the callers: the before-unload stage path writes the renderer's payload
@@ -195,9 +203,11 @@ export function setHostWorkspaceSession(
   // or runtime payload that still carries local's globals would re-inject them into this partition.
   const pruned = withoutRedundantGlobalFields(
     pruneWorkspaceSessionBrowserHistory(
-      pruneLocalTerminalScrollbackBuffers(
+      owner[sessionHostPartitionOperationsContext].runtime.transferSnapshotHistory.prune(
         session,
-        owner[sessionHostPartitionOperationsContext].runtime.state.repos
+        owner[sessionHostPartitionOperationsContext].runtime.state.repos,
+        prior,
+        hostId
       )
     ),
     owner[sessionHostPartitionOperationsContext].runtime.state.workspaceSession

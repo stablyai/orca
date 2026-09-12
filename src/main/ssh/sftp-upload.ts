@@ -222,6 +222,18 @@ export async function uploadDirectory(
   options?: { exclusive?: boolean; signal?: AbortSignal }
 ): Promise<void> {
   options?.signal?.throwIfAborted()
+  const resolvedRoot = await realpath(rootRealPath)
+  await uploadDirectoryInsideRoot(sftp, localDir, remoteDir, resolvedRoot, options)
+}
+
+async function uploadDirectoryInsideRoot(
+  sftp: SFTPWrapper,
+  localDir: string,
+  remoteDir: string,
+  rootRealPath: string,
+  options?: { exclusive?: boolean; signal?: AbortSignal }
+): Promise<void> {
+  options?.signal?.throwIfAborted()
   await assertLocalUploadPathInsideRoot(rootRealPath, localDir)
   const entries = await readdir(localDir, { withFileTypes: true })
   for (const entry of entries) {
@@ -241,7 +253,7 @@ export async function uploadDirectory(
 
     if (statResult.isDirectory()) {
       await mkdirSftp(sftp, remotePath, { allowExisting: !options?.exclusive })
-      await uploadDirectory(sftp, localPath, remotePath, rootRealPath, options)
+      await uploadDirectoryInsideRoot(sftp, localPath, remotePath, rootRealPath, options)
     } else {
       await uploadFile(sftp, localPath, remotePath, options)
     }

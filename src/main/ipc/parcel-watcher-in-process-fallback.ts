@@ -1,6 +1,7 @@
 import type * as ParcelWatcher from '@parcel/watcher'
 import { createWatcherProcessEventDeliveryQueue } from './parcel-watcher-event-delivery'
 import { WatcherProcessFailure } from './parcel-watcher-process-failure'
+import { loadParcelWatcher } from './parcel-watcher-module-loader'
 import type {
   WatcherProcessCallback,
   WatcherProcessHooks,
@@ -64,7 +65,7 @@ export async function subscribeWithInProcessWatcher(
   try {
     // Why: setup ownership starts before module loading; an abort or timeout
     // during the import must settle the caller just like one during the crawl.
-    watcher = await Promise.race([import('@parcel/watcher'), cancellation])
+    watcher = await Promise.race([loadParcelWatcher(), cancellation])
   } catch (error) {
     clearPendingControls()
     throw error

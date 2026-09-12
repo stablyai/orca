@@ -1,4 +1,4 @@
-import * as pty from 'node-pty'
+import type * as pty from 'node-pty'
 import { statSync } from 'node:fs'
 import { release } from 'node:os'
 import {
@@ -10,8 +10,13 @@ import {
 import { resolveSafePtyDefaultCwd } from '../../providers/pty-default-cwd'
 import { TerminalAttachCanceledError } from '../daemon-errors'
 import { DaemonProtocolError } from '../types'
+import { canUseBunPty, spawnBunPty } from './bun-pty-process'
 
 const PTY_SPAWN_HEALTH_TIMEOUT_MS = 4_000
+
+async function loadNodePty(): Promise<typeof pty> {
+  return import('node-pty')
+}
 
 function daemonEnvironmentDiagSuffix(): string {
   const orca = process.env.ORCA_APP_VERSION?.trim() || '0.0.0-dev'
@@ -79,7 +84,7 @@ function preflightDaemonCwd(): void {
 }
 
 function preflightMacNodePtySpawnEnvironment(): void {
-  if (process.platform !== 'darwin') {
+  if (process.platform !== 'darwin' || canUseBunPty()) {
     return
   }
   let candidates: string[]
@@ -119,7 +124,9 @@ export async function preflightPtySpawn(args: {
   sessionId: string
   signal?: AbortSignal
 }): Promise<void> {
-  ensureNodePtySpawnHelperExecutable()
+  if (!canUseBunPty()) {
+    ensureNodePtySpawnHelperExecutable()
+  }
   preflightUnixPtySpawnEnvironment()
   try {
     if (process.platform === 'win32') {
@@ -154,21 +161,28 @@ export function formatPtySpawnError(err: unknown, shellPath: string, spawnCwd: s
   return formatted
 }
 
-export function runPtySpawnHealthProbe(): Promise<void> {
+export async function runPtySpawnHealthProbe(): Promise<void> {
   const cwd = isExistingDirectory(process.env.ORCA_USER_DATA_PATH)
     ? process.env.ORCA_USER_DATA_PATH
     : resolveSafePtyDefaultCwd()
+  const command =
+    process.platform === 'win32'
+      ? { file: process.execPath, args: ['-e', 'process.exit(0)'] }
+      : { file: '/bin/sh', args: ['-c', 'exit 0'] }
   let proc: pty.IPty
   try {
-    proc = pty.spawn('/bin/sh', ['-c', 'exit 0'], {
-      name: 'xterm-256color',
-      cols: 2,
-      rows: 1,
-      cwd,
-      env: { ...process.env, TERM: 'xterm-256color' }
-    })
+    const env = { ...process.env, TERM: 'xterm-256color' } as Record<string, string>
+    proc = canUseBunPty()
+      ? spawnBunPty({ ...command, cols: 2, rows: 1, cwd, env })
+      : (await loadNodePty()).spawn(command.file, command.args, {
+          name: 'xterm-256color',
+          cols: 2,
+          rows: 1,
+          cwd,
+          env
+        })
   } catch (err) {
-    throw formatPtySpawnError(err, '/bin/sh', cwd)
+    throw formatPtySpawnError(err, command.file, cwd)
   }
 
   return new Promise<void>((resolve, reject) => {
@@ -210,10 +224,7 @@ export function runPtySpawnHealthProbe(): Promise<void> {
 }
 
 export function preflightPtySpawnHealth(): boolean {
-  if (process.platform === 'win32') {
-    return false
-  }
-  if (process.platform === 'darwin') {
+  if (!canUseBunPty()) {
     ensureNodePtySpawnHelperExecutable()
   }
   preflightUnixPtySpawnEnvironment()

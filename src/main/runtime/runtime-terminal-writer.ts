@@ -1,3 +1,5 @@
+import type { PtyProviderOperationRetry } from '../providers/pty-provider-contract'
+import { operationIdForChunk } from './runtime-ownership-transfer-contracts'
 import { getAgentPromptSubmitDelayMs } from '../../shared/agent-prompt-injection'
 import { iterateTerminalInputChunks } from '../../shared/terminal-input'
 import {
@@ -6,6 +8,7 @@ import {
 } from './agent-session-pty-write-gate'
 
 export type RuntimeTerminalWriteOptions = {
+  operationId?: string
   signal?: AbortSignal
   beforeWrite?: (ptyId: string) => void | Promise<void>
   reserveWrite?: (ptyId: string) => void
@@ -15,7 +18,11 @@ export type RuntimeTerminalWriteOptions = {
 
 export class RuntimeTerminalWriter {
   constructor(
-    private readonly write: (ptyId: string, data: string) => boolean,
+    private readonly write: (
+      ptyId: string,
+      data: string,
+      retry?: PtyProviderOperationRetry
+    ) => boolean,
     private readonly getWriteHostPlatform: (ptyId: string) => NodeJS.Platform = () =>
       process.platform
   ) {}
@@ -62,7 +69,11 @@ export class RuntimeTerminalWriter {
       }
       agentSessionPtyWriteGate.assertReadmitted(ptyId, admitted)
       options.reserveWrite?.(ptyId)
-      if (!this.write(ptyId, suffix)) {
+      if (
+        !(options.operationId
+          ? this.write(ptyId, suffix, { operationId: `${options.operationId}:suffix` })
+          : this.write(ptyId, suffix))
+      ) {
         throw new Error(options.suffixFailureError ?? 'terminal_not_writable')
       }
       await options.afterWrite?.(ptyId)
@@ -74,7 +85,11 @@ export class RuntimeTerminalWriter {
     await options.beforeWrite?.(ptyId)
     agentSessionPtyWriteGate.assertReadmitted(ptyId, admitted)
     options.reserveWrite?.(ptyId)
-    if (!this.write(ptyId, payload)) {
+    if (
+      !(options.operationId
+        ? this.write(ptyId, payload, { operationId: options.operationId })
+        : this.write(ptyId, payload))
+    ) {
       throw new Error('terminal_not_writable')
     }
     await options.afterWrite?.(ptyId)
@@ -88,6 +103,7 @@ export class RuntimeTerminalWriter {
   ): Promise<void> {
     const chunks = iterateTerminalInputChunks(text)
     let chunk = chunks.next()
+    let chunkIndex = 0
     let firstChunk = true
     while (!chunk.done) {
       if (!firstChunk) {
@@ -97,10 +113,17 @@ export class RuntimeTerminalWriter {
       await options.beforeWrite?.(ptyId)
       agentSessionPtyWriteGate.assertReadmitted(ptyId, admitted)
       options.reserveWrite?.(ptyId)
-      if (!this.write(ptyId, chunk.value)) {
+      if (
+        !(options.operationId
+          ? this.write(ptyId, chunk.value, {
+              operationId: operationIdForChunk(options.operationId, chunkIndex)
+            })
+          : this.write(ptyId, chunk.value))
+      ) {
         throw new Error('terminal_not_writable')
       }
       await options.afterWrite?.(ptyId)
+      chunkIndex += 1
       chunk = chunks.next()
       if (!chunk.done) {
         await yieldBetweenTerminalInputChunks()

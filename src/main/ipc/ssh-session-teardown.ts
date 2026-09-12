@@ -7,12 +7,16 @@ import { connectionManager, persistedStore, portForwardManager } from './ssh-ipc
 import { clearRelayLostBackoff } from './ssh-relay-lost-backoff'
 import { clearRelayStateOverride } from './ssh-renderer-broadcast'
 import { runTargetLifecycle } from './ssh-target-lifecycle-queue'
+import { assertManualSshTargetDestructionAllowed } from './ssh-target-destruction-admission'
+import { assertSshResetAdmissionAllowed } from './ssh-reset-production-state'
 
 export async function disconnectRegisteredSshTarget(targetId: string): Promise<void> {
+  assertSshResetAdmissionAllowed(targetId)
   invalidateConnectAttempt(targetId)
-  await runTargetLifecycle(targetId, () =>
-    teardownSshTargetTransport(targetId, (session) => session.detachAndPersist())
-  )
+  await runTargetLifecycle(targetId, () => {
+    assertSshResetAdmissionAllowed(targetId)
+    return teardownSshTargetTransport(targetId, (session) => session.detachAndPersist())
+  })
 }
 
 export async function removeRegisteredSshTarget(targetId: string): Promise<void> {
@@ -20,8 +24,10 @@ export async function removeRegisteredSshTarget(targetId: string): Promise<void>
   if (!store) {
     return
   }
+  assertManualSshTargetDestructionAllowed(targetId)
   invalidateConnectAttempt(targetId)
   await runTargetLifecycle(targetId, async () => {
+    assertManualSshTargetDestructionAllowed(targetId)
     try {
       // Why: removal is destructive; dispose so remote PTYs cannot reattach to a deleted target.
       await teardownSshTargetTransport(targetId, (session) => session.disposeAndPersist())

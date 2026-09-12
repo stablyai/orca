@@ -47,6 +47,13 @@ describe('readWindowsPtyJobProcessIds', () => {
     expect(membership?.size).toBe(3)
   })
 
+  it('normalizes a Bun launch gate away from the user-shell membership', () => {
+    const proc = { ...pty(100), jobRootProcessIsWrapper: true } as unknown as IPty
+
+    expect(readWindowsPtyJobProcessIds(proc, () => [100, 200])).toEqual(new Set([200]))
+    expect(readWindowsPtyJobProcessIds(proc, () => [100])).toBeNull()
+  })
+
   it.each([
     ['no job support or an untracked tree', null],
     ['an empty job, which is not the shell-alone case', []]

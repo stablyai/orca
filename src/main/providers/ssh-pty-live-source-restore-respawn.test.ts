@@ -28,6 +28,22 @@ function providerWithAttachReplies(replies: unknown[]): {
 }
 
 describe('a live PTY whose source delivery needs restoring', () => {
+  it('refuses automatic pane restoration for a preparation-fenced source before host contact', async () => {
+    const request = vi.fn()
+    const fenced = vi.fn(() => true)
+    const provider = new SshPtyProvider('conn-1', {
+      request,
+      notify: vi.fn(),
+      onNotification: vi.fn().mockReturnValue(vi.fn()),
+      isPtyPreparationFenced: fenced
+    } as never)
+    await expect(
+      provider.spawn({ cols: 80, rows: 24, sessionId: 'ssh:conn-1@@pty-1' })
+    ).rejects.toThrow(SSH_PTY_SOURCE_RESTORE_REQUIRED_ERROR)
+    expect(fenced).toHaveBeenCalledWith('pty-1')
+    expect(request).not.toHaveBeenCalled()
+    provider.dispose()
+  })
   // The relay only reaches a restoreRequired reply after finding the managed PTY and confirming its
   // process is alive, so the reply is evidence of liveness. `SSH_SESSION_EXPIRED` is the token every
   // caller uses to retire the pane binding and cold-restore the agent — emitting it here put a

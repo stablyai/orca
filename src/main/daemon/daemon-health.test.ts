@@ -10,6 +10,7 @@ import { getDaemonPidPath, serializeDaemonPidFile } from './daemon-spawner'
 import type { SocketProbeOutcome } from './daemon-endpoint-probe'
 import {
   checkDaemonHealth,
+  checkDaemonHealthWithCoverage,
   E2E_FORCE_DAEMON_HEALTH_UNREACHABLE_ENV,
   healthCheckDaemon
 } from './daemon-health'
@@ -104,9 +105,56 @@ describe('daemon health', () => {
     try {
       await expect(checkDaemonHealth(socketPath, tokenPath)).resolves.toBe('healthy')
       await expect(healthCheckDaemon(socketPath, tokenPath)).resolves.toBe(true)
-      expect(ptySpawnHealthCheck).toHaveBeenCalledTimes(2)
+      await expect(checkDaemonHealthWithCoverage(socketPath, tokenPath)).resolves.toMatchObject({
+        verdict: 'healthy',
+        coverage: 'pty-spawn',
+        runtimeKind: 'node',
+        ptyBackend: 'node-pty'
+      })
+      expect(ptySpawnHealthCheck).toHaveBeenCalledTimes(3)
     } finally {
       await server.shutdown()
+    }
+  })
+
+  it('treats missing coverage from a legacy Windows daemon as handshake-only', async () => {
+    writeFileSync(tokenPath, 'legacy-token')
+    const server = createServer((socket) => {
+      let pending = ''
+      socket.on('data', (chunk) => {
+        pending += chunk.toString()
+        for (;;) {
+          const newline = pending.indexOf('\n')
+          if (newline === -1) {
+            return
+          }
+          const message = JSON.parse(pending.slice(0, newline)) as { type?: string }
+          pending = pending.slice(newline + 1)
+          if (message.type === 'hello') {
+            socket.write(`${JSON.stringify({ type: 'hello', ok: true })}\n`)
+          } else if (message.type === 'ptySpawnHealth') {
+            socket.write(
+              `${JSON.stringify({ id: 'health-1', ok: true, payload: { healthy: true } })}\n`
+            )
+          }
+        }
+      })
+    })
+    await new Promise<void>((resolve, reject) => {
+      server.once('error', reject)
+      server.listen(socketPath, resolve)
+    })
+
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')!
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    try {
+      await expect(checkDaemonHealthWithCoverage(socketPath, tokenPath)).resolves.toEqual({
+        verdict: 'healthy',
+        coverage: 'handshake'
+      })
+    } finally {
+      Object.defineProperty(process, 'platform', platform)
+      await closeServer(server)
     }
   })
 

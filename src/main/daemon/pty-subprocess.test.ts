@@ -603,8 +603,7 @@ describe('checkPtySpawnHealth (retry on transient failure)', () => {
   })
 
   // Why: a busy machine right after an upgrade can make one probe fail; the
-  // retry must keep a genuinely healthy daemon out of degraded mode. Windows
-  // short-circuits checkPtySpawnHealth, so this is a POSIX-only behavior.
+  // retry must keep a genuinely healthy daemon out of degraded mode.
   itOnPosixHost(
     'retries once and resolves when the first probe fails but the second succeeds',
     async () => {
@@ -639,5 +638,27 @@ describe('checkPtySpawnHealth (retry on transient failure)', () => {
     await expect(checkPtySpawnHealth()).rejects.toThrow(/exited with code 1/)
     expect(spawnMock).toHaveBeenCalledTimes(2)
     warn.mockRestore()
+  })
+
+  it('spawns the exact runtime in a Windows PTY instead of accepting a handshake-only probe', async () => {
+    const platform = Object.getOwnPropertyDescriptor(process, 'platform')!
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    const proc = mockPtyProcess()
+    spawnMock.mockImplementation(() => {
+      queueMicrotask(() => proc._simulateExit(0))
+      return proc
+    })
+
+    try {
+      await expect(checkPtySpawnHealth()).resolves.toBeUndefined()
+    } finally {
+      Object.defineProperty(process, 'platform', platform)
+    }
+
+    expect(spawnMock).toHaveBeenCalledWith(
+      process.execPath,
+      ['-e', 'process.exit(0)'],
+      expect.objectContaining({ cols: 2, rows: 1 })
+    )
   })
 })

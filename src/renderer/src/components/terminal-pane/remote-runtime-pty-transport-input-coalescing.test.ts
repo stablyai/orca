@@ -423,6 +423,87 @@ describe('createRemoteRuntimePtyTransport', () => {
     expect(sendCalls[1]?.[0].params.text).toBe('tail')
   })
 
+  it('threads stable operation IDs through acknowledged terminal.send chunks', async () => {
+    runtimeCall.mockImplementation((args) => {
+      if (args.method === 'terminal.create') {
+        return Promise.resolve({ ok: true, result: { terminal: { handle: 'terminal-1' } } })
+      }
+      if (args.method === 'terminal.send') {
+        return Promise.resolve({
+          ok: true,
+          result: {
+            send: {
+              handle: 'terminal-1',
+              accepted: true,
+              bytesWritten: args.params.text.length
+            }
+          }
+        })
+      }
+      return Promise.resolve({ ok: true, result: {} })
+    })
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const transport = createRemoteRuntimePtyTransport('env-1', {
+      worktreeId: 'wt-1',
+      tabId: 'tab-1',
+      leafId: 'pane:1'
+    })
+
+    await transport.connect({ url: '', callbacks: {} })
+
+    const chunk = 'x'.repeat(TERMINAL_INPUT_CHUNK_MAX_BYTES)
+    await expect(
+      transport.sendInputAccepted?.(`${chunk}tail`, { operationId: 'paste-op-2' })
+    ).resolves.toBe(true)
+
+    const sendCalls = runtimeCall.mock.calls.filter((call) => call[0].method === 'terminal.send')
+    expect(sendCalls.map((call) => call[0].params.operationId)).toEqual([
+      'paste-op-2',
+      'paste-op-2:chunk:1'
+    ])
+  })
+
+  it('does not attach a stable operation ID to earlier debounced input', async () => {
+    runtimeCall.mockImplementation((args) => {
+      if (args.method === 'terminal.create') {
+        return Promise.resolve({ ok: true, result: { terminal: { handle: 'terminal-1' } } })
+      }
+      if (args.method === 'terminal.send') {
+        return Promise.resolve({
+          ok: true,
+          result: {
+            send: {
+              handle: 'terminal-1',
+              accepted: true,
+              bytesWritten: args.params.text.length
+            }
+          }
+        })
+      }
+      return Promise.resolve({ ok: true, result: {} })
+    })
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const transport = createRemoteRuntimePtyTransport('env-1', {
+      worktreeId: 'wt-1',
+      tabId: 'tab-1',
+      leafId: 'pane:1'
+    })
+
+    await transport.connect({ url: '', callbacks: {} })
+    runtimeCall.mockClear()
+
+    expect(transport.sendInput('prior')).toBe(true)
+    await expect(
+      transport.sendInputAccepted?.('stable', { operationId: 'paste-op-3' })
+    ).resolves.toBe(true)
+
+    const sendCalls = runtimeCall.mock.calls.filter((call) => call[0].method === 'terminal.send')
+    expect(sendCalls.map((call) => [call[0].params.text, call[0].params.operationId])).toEqual([
+      ['prior', undefined],
+      ['stable', 'paste-op-3']
+    ])
+  })
+
   it('yields while validating accepted large acknowledged remote input before terminal.send RPCs', async () => {
     vi.useFakeTimers()
     try {

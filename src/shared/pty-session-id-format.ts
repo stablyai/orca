@@ -1,3 +1,5 @@
+import { parseWorkspaceKey } from './workspace-scope'
+
 /**
  * Shared helpers for the minted PTY session id format.
  *
@@ -20,7 +22,7 @@ export const WORKTREE_ID_SEPARATOR = '::'
  * Why stricter than `lastIndexOf('@@')`: callers that drive memory
  * attribution must not synthesize a worktreeId for a sessionId that was
  * not minted by us — e.g. a bare UUID. Requiring both the `@@` separator
- * AND the `${repoId}::${path}` shape rejects those imposters cleanly.
+ * AND a git-worktree or folder-workspace key rejects those imposters cleanly.
  * Returns `{ worktreeId: null }` when the id does not match the minted
  * format.
  */
@@ -30,6 +32,10 @@ export function parsePtySessionId(sessionId: string): { worktreeId: string | nul
     return { worktreeId: null }
   }
   const candidate = sessionId.slice(0, idx)
+  // Folder terminals use their catalog identity, not a repository/path pair.
+  if (parseWorkspaceKey(candidate)?.type === 'folder') {
+    return { worktreeId: candidate }
+  }
   // Why: require non-empty halves on both sides of `::` so degenerate
   // ids like `::@@…`, `repo::@@…`, or `::path@@…` don't synthesize a
   // phantom worktreeId for memory attribution.

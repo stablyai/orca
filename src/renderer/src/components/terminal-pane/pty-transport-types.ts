@@ -66,6 +66,9 @@ export type PtyReplayDataMeta = {
   snapshotRows?: number
 }
 
+/** Stable identity used when a caller may replay one PTY operation after a lost response. */
+export type PtyInputOperationOptions = Readonly<{ operationId: string }>
+
 export type LocalPtySessionMetadata = {
   cwd?: string
   shellOverride?: string
@@ -178,15 +181,17 @@ export type PtyTransport = {
     callbacks: PtyCallbacks
   }) => void
   disconnect: () => void
-  sendInput: (data: string) => boolean
+  sendInput: (data: string, options?: PtyInputOperationOptions) => boolean
   // Why: latency-critical terminal query replies (CPR/DSR/DA/OSC color/pixel
   // size) must skip input coalescing — a querying program reads them in raw
   // mode with a short timeout, so a debounced reply lands on the shell prompt
   // and corrupts input (#7329). Local transports already write promptly, so
   // this is `sendInput` for them; the remote transport flushes pending input
   // (preserving order) and sends the reply immediately.
-  sendInputImmediate: (data: string) => boolean
-  sendInputAccepted?: (data: string) => Promise<boolean>
+  sendInputImmediate: (data: string, options?: PtyInputOperationOptions) => boolean
+  sendInputAccepted?: (data: string, options?: PtyInputOperationOptions) => Promise<boolean>
+  /** Explicitly retires a retry-aware SSH input after its caller has settled it. */
+  retireInputOperation?: (operationId: string) => Promise<boolean>
   /** Settles retained pre-connect input when a deferred spawn is abandoned before connect. */
   abandonPreconnectInput?: () => void
   claimViewport?: (cols: number, rows: number) => boolean

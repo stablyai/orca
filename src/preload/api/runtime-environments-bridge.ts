@@ -28,6 +28,7 @@ export const runtimeEnvironmentsApi = {
   },
   list: (): Promise<PublicKnownRuntimeEnvironment[]> =>
     ipcRenderer.invoke('runtimeEnvironments:list'),
+  reconcile: (args) => ipcRenderer.invoke('runtimeEnvironments:reconcile', args),
   addFromPairingCode: (args: {
     name: string
     pairingCode: string
@@ -41,6 +42,37 @@ export const runtimeEnvironmentsApi = {
     ipcRenderer.invoke('runtimeEnvironments:verifyAndAddFromPairingCode', args),
   resolve: (args: { selector: string }): Promise<PublicKnownRuntimeEnvironment> =>
     ipcRenderer.invoke('runtimeEnvironments:resolve', args),
+  listPendingOrcadMigrations: () =>
+    ipcRenderer.invoke('runtimeEnvironments:listPendingOrcadMigrations'),
+  createOrcadSshHost: (args) => ipcRenderer.invoke('runtimeEnvironments:createOrcadSshHost', args),
+  linkSshAccess: (args) => ipcRenderer.invoke('runtimeEnvironments:linkSshAccess', args),
+  unlinkSshAccess: (args) => ipcRenderer.invoke('runtimeEnvironments:unlinkSshAccess', args),
+  resumeOrcadSshHost: (args) => ipcRenderer.invoke('runtimeEnvironments:resumeOrcadSshHost', args),
+  listPendingOrcadSshProvisioning: () =>
+    ipcRenderer.invoke('runtimeEnvironments:listPendingOrcadSshProvisioning'),
+  preflightOrcadTarget: (args) =>
+    ipcRenderer.invoke('runtimeEnvironments:preflightOrcadTarget', args),
+  deployOrcad: (args) => ipcRenderer.invoke('runtimeEnvironments:deployOrcad', args),
+  updateOrcad: (args) => ipcRenderer.invoke('runtimeEnvironments:updateOrcad', args),
+  getOrcadStatus: (args) => ipcRenderer.invoke('runtimeEnvironments:getOrcadStatus', args),
+  rollbackOrcad: (args) => ipcRenderer.invoke('runtimeEnvironments:rollbackOrcad', args),
+  recoverOrcad: (args) => ipcRenderer.invoke('runtimeEnvironments:recoverOrcad', args),
+  listOrcadLiveMigrations: (args) =>
+    ipcRenderer.invoke('runtimeEnvironments:listOrcadLiveMigrations', args),
+  getOrcadLiveMigrationRendererPlan: (args) =>
+    ipcRenderer.invoke('runtimeEnvironments:getOrcadLiveMigrationRendererPlan', args),
+  startOrcadLiveMigration: (args) =>
+    ipcRenderer.invoke('runtimeEnvironments:startOrcadLiveMigration', args),
+  resumeOrcadLiveMigration: (args) =>
+    ipcRenderer.invoke('runtimeEnvironments:resumeOrcadLiveMigration', args),
+  listOrcadOutgoingCaptures: (args) =>
+    ipcRenderer.invoke('runtimeEnvironments:listOrcadOutgoingCaptures', args),
+  recoverOrcadOutgoingCapture: (args) =>
+    ipcRenderer.invoke('runtimeEnvironments:recoverOrcadOutgoingCapture', args),
+  prepareOrcadOutgoingTerminal: (args) =>
+    ipcRenderer.invoke('runtimeEnvironments:prepareOrcadOutgoingTerminal', args),
+  cancelOrcadStop: (args) => ipcRenderer.invoke('runtimeEnvironments:cancelOrcadStop', args),
+  stopOrcad: (args) => ipcRenderer.invoke('runtimeEnvironments:stopOrcad', args),
   remove: (args: { selector: string }): Promise<{ removed: PublicKnownRuntimeEnvironment }> =>
     ipcRenderer.invoke('runtimeEnvironments:remove', args),
   disconnect: (args: {

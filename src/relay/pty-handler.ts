@@ -1,15 +1,27 @@
 /* oxlint-disable max-lines */
 import type { IPty } from 'node-pty'
+import type { RelayPtyRawEmissionSlice as RelayPtyIngressSlice } from './relay-pty-raw-emission-checkpoint'
+import {
+  PtyOwnershipCaptureIngressFence,
+  type PtyOwnershipCaptureIngressLease
+} from './pty-ownership-capture-ingress-fence'
+import type { PtyOwnershipTransferTerminalInfo } from '../shared/pty-ownership-transfer-terminal-info'
 import type * as NodePty from 'node-pty'
 import { existsSync } from 'node:fs'
 import { basename, join } from 'node:path'
 import { randomUUID } from 'node:crypto'
+import { getUtf8ChunkEndIndex } from '../shared/utf8-byte-limits'
 import { resolveWindowsGitBashShellPath } from '../main/git-bash'
 import { WINDOWS_GIT_BASH_SHELL } from '../shared/windows-terminal-shell'
 import type { RelayDispatcher, RequestContext } from './dispatcher'
 import {
+  inspectPtyCreateOperation,
+  AGENT_SESSION_CREATE_OPERATION_ID_PATTERN
+} from './pty-create-operation-inspection'
+import {
   resolveDefaultShell,
   resolveProcessCwd,
+  probeProcessCwd,
   getForegroundProcessName,
   isProcessAlive,
   listShellProfiles
@@ -89,6 +101,19 @@ import {
   ClaimedAgentPtyOwnerRegistry
 } from '../shared/claimed-agent-pty-owner'
 import type { RelayPtySourceOutput } from './relay-pty-source-output'
+import {
+  loadRelayPtyRuntime,
+  type RelayPtyBackend,
+  type RelayPtyModule,
+  type RelayPtyRuntimeKind
+} from './relay-pty-runtime'
+import type { PtyOwnershipTransferOutputFragment } from '../shared/pty-ownership-transfer-output-envelope'
+import type { PtyOwnershipTransferControl } from '../shared/pty-ownership-transfer-control-wire'
+import {
+  PTY_OWNERSHIP_BRIDGE_DEFAULT_INPUT_IDS,
+  PTY_OWNERSHIP_BRIDGE_DEFAULT_REPLAY_BYTES,
+  PTY_OWNERSHIP_BRIDGE_PROTOCOL_VERSION
+} from '../shared/pty-ownership-bridge-contract'
 import { signalPosixPtyForegroundGroup } from '../main/pty/posix-pty-foreground-group'
 import { readPtsName } from '../main/pty/node-pty-pts-name'
 import type { RelayPtySourcePublication } from './relay-pty-source-publication'
@@ -239,6 +264,7 @@ type ManagedPty = {
   forceKillSent?: boolean
   gracefulKillSent?: boolean
   startupIngress?: PtyStartupIngress
+  captureIngress?: PtyOwnershipCaptureIngressFence
   startupIngressIntent?: ReturnType<typeof parsePtyStartupIngressIntent>
   ownerBackend: PtyOwnerBackend
   agentSessionOwners?: AgentSessionOwnerBinding[]
@@ -260,14 +286,19 @@ type RelayAgentSessionCreateResult = {
   shellReadyArmed?: boolean
 }
 
-const AGENT_SESSION_CREATE_OPERATION_ID_PATTERN = /^[A-Za-z0-9_-]{43}$/
 const AGENT_SESSION_CREATE_OPERATION_RETENTION_MS = 24 * 60 * 60 * 1000
 const AGENT_SESSION_CREATE_OPERATION_LIMIT = 4_096
 
 type PendingPtyOutput = RelayPtySourceOutput & {
+  ownershipTransferIngressSlice?: RelayPtyIngressSlice
   data: string
   interactive?: boolean
   sourceChunk?: RelayPtySourceOutput
+  ownershipTransferRetry?: boolean
+  ownershipTransferEmissionKey?: string
+  ownershipTransferIncarnationId?: string
+  ownershipTransferObservationOffset?: number
+  ownershipTransferObservationLimit?: number
   /** Cached producer-retention charge; kept off the wire and refreshed on data mutations. */
   producerChargeBytes?: number
 }
@@ -508,6 +539,30 @@ export type RelayPtyWorktreeRemovalCoordinator = {
   beginWorktreePtySpawn(operationPath: string): () => void
 }
 
+/** Captures the relay's post-ingress PTY bytes for a dormant ownership-transfer adapter. */
+export type PtyOwnershipTransferOutputObserver = {
+  supportsSourceDeliveryRetirement?: () => boolean
+  supportsSuccessorSourceRetirement?: () => boolean
+  ownsOutputPublication?: (terminalId: string) => boolean
+  fencesLegacyAttachment?: (terminalId: string) => boolean
+  getPreparedOutputByteLimit?: (terminalId: string) => number | undefined
+  observeOutput: (
+    terminalId: string,
+    data: string,
+    emissionKey?: string,
+    admittedIncarnationId?: string,
+    ingressSlice?: RelayPtyIngressSlice
+  ) => readonly PtyOwnershipTransferOutputFragment[] | undefined
+  removeTerminal?: (terminalId: string) => void
+  observeExit?: (event: { terminalId: string; incarnationId: string; code?: number }) => void
+}
+
+export type PtyOwnershipTransferTerminalSource = Readonly<{
+  terminalId: string
+  incarnationId: string
+  terminalInfo?: PtyOwnershipTransferTerminalInfo
+}>
+
 export class PtyHandler {
   private ptys = new Map<string, ManagedPty>()
   private readonly ptyIdMintEpoch: string
@@ -537,8 +592,8 @@ export class PtyHandler {
   private pendingCreationDrainResolvers = new Set<() => void>()
   private worktreeRemovalCoordinator: RelayPtyWorktreeRemovalCoordinator | null = null
   private disposePromise: Promise<void> | null = null
-  private ptyModule: typeof NodePty | null = null
-  private ptyModuleLoadPromise: Promise<typeof NodePty | null> | null = null
+  private ptyModule: RelayPtyModule | null = null
+  private ptyModuleLoadPromise: Promise<RelayPtyModule | null> | null = null
   private reloadPtyModuleFromDisk = false
   /** The last thing `require('node-pty')` threw, kept because it is the only cause anyone has. */
   private lastPtyLoadError: unknown = null
@@ -555,6 +610,15 @@ export class PtyHandler {
     string,
     Promise<RelayAgentSessionCreateResult>
   >()
+  private ownershipTransferObserver: PtyOwnershipTransferOutputObserver | null = null
+  private readonly ownershipTransferInputFencedPtys = new Set<string>()
+  private ownershipTransferMutationEnabled = false
+  private ownershipTransferGraceGuardEnabled = false
+  private ownershipTransferDelegationEnabled = false
+  private ownershipTransferCaptureEnabled = false
+  private ownershipTransferCaptureSelectionEnabled = false
+  private ownershipTransferCaptureRecoveryEnabled = false
+  private outputFlushDepth = 0
 
   constructor(
     dispatcher: RelayDispatcher,
@@ -583,12 +647,238 @@ export class PtyHandler {
     this.sourcePublication = publication
   }
 
+  /** Attach a source-side output observer without changing publication or flow-control semantics. */
+  setOwnershipTransferOutputObserver(observer: PtyOwnershipTransferOutputObserver | null): void {
+    this.ownershipTransferObserver = observer
+  }
+
+  /** Advertise mutating ownership-transfer routes only when the runtime has opted in. */
+  setOwnershipTransferMutationEnabled(enabled: boolean): void {
+    this.ownershipTransferMutationEnabled = enabled
+  }
+
+  setOwnershipTransferCaptureEnabled(
+    enabled: boolean,
+    selectionEnabled = false,
+    recoveryEnabled = false
+  ): void {
+    this.ownershipTransferCaptureEnabled = enabled
+    this.ownershipTransferCaptureSelectionEnabled = enabled && selectionEnabled
+    this.ownershipTransferCaptureRecoveryEnabled = enabled && selectionEnabled && recoveryEnabled
+  }
+
+  setOwnershipTransferDelegationEnabled(enabled: boolean): void {
+    this.ownershipTransferDelegationEnabled = enabled
+  }
+
+  resolveOwnershipTransferTerminal(
+    terminalId: string,
+    includeInfo = false
+  ): PtyOwnershipTransferTerminalSource | null {
+    const managed = this.ptys.get(terminalId)
+    if (!managed || managed.disposed) {
+      return null
+    }
+    return Object.freeze({
+      terminalId,
+      incarnationId: managed.incarnationId,
+      ...(includeInfo
+        ? {
+            terminalInfo: {
+              pid: managed.pty.pid,
+              cols: managed.pty.cols,
+              rows: managed.pty.rows,
+              initialCwd: managed.initialCwd,
+              ...(managed.terminalHandle ? { terminalHandle: managed.terminalHandle } : {})
+            }
+          }
+        : {})
+    })
+  }
+
+  hasPendingOwnershipTransferOutput(terminalId: string): boolean {
+    return (
+      this.pendingOutputByPty.get(terminalId)?.some((output) => output.ownershipTransferRetry) ??
+      false
+    )
+  }
+
+  beginOwnershipTransferCaptureIngress(
+    terminalId: string,
+    incarnationId: string,
+    isAuthorized: () => boolean
+  ): PtyOwnershipCaptureIngressLease & {
+    isDrained: () => boolean
+    inspectRawCursor?: () => number | null
+  } {
+    const managed = this.ptys.get(terminalId)
+    const current = () =>
+      !!managed &&
+      this.ptys.get(terminalId) === managed &&
+      !managed.disposed &&
+      managed.incarnationId === incarnationId &&
+      isAuthorized()
+    if (!current() || !managed?.captureIngress) {
+      throw new Error('pty_ownership_transfer_capture_ingress_unavailable')
+    }
+    managed.startupIngress?.snapshotBarrier()
+    const lease = managed.captureIngress.begin(current)
+    const isDrained = () =>
+      lease.isCurrent() &&
+      this.outputFlushDepth === 0 &&
+      (this.pendingOutputByPty.get(terminalId)?.length ?? 0) === 0 &&
+      this.pendingProducerBytes(terminalId) === 0 &&
+      !this.pendingExitByPty.has(terminalId)
+    return Object.freeze({
+      ...lease,
+      isDrained,
+      inspectRawCursor: () =>
+        isDrained() ? (managed.startupIngress?.acceptedRawSequence ?? null) : null
+    })
+  }
+
+  async inspectOwnershipTransferCwd(
+    terminalId: string,
+    incarnationId: string,
+    isAuthorized: () => boolean
+  ): Promise<string | null> {
+    return this.inspectOwnershipTransferTerminal(
+      terminalId,
+      incarnationId,
+      isAuthorized,
+      (managed) => probeProcessCwd(managed.pty.pid)
+    )
+  }
+
+  async inspectOwnershipTransferProcess(
+    terminalId: string,
+    incarnationId: string,
+    isAuthorized: () => boolean
+  ) {
+    return this.inspectOwnershipTransferTerminal(terminalId, incarnationId, isAuthorized, () =>
+      this.inspectProcess({ id: terminalId, expectedIncarnationId: incarnationId })
+    )
+  }
+
+  private async inspectOwnershipTransferTerminal<T>(
+    terminalId: string,
+    incarnationId: string,
+    isAuthorized: () => boolean,
+    inspect: (managed: ManagedPty) => Promise<T>
+  ): Promise<T> {
+    const managed = this.ptys.get(terminalId)
+    const assertCurrent = () => {
+      if (
+        !isAuthorized() ||
+        !managed ||
+        managed.disposed ||
+        this.ptys.get(terminalId) !== managed ||
+        managed.incarnationId !== incarnationId
+      ) {
+        throw new Error('pty_ownership_transfer_terminal_inspection_unverifiable')
+      }
+    }
+    assertCurrent()
+    const result = await inspect(managed!)
+    assertCurrent()
+    return result
+  }
+
+  get hasLiveOwnershipTransferFence(): boolean {
+    for (const id of this.ownershipTransferInputFencedPtys) {
+      const managed = this.ptys.get(id)
+      if (managed && !managed.disposed) {
+        return true
+      }
+    }
+    return false
+  }
+
+  setOwnershipTransferGraceGuardEnabled(enabled: boolean): void {
+    this.ownershipTransferGraceGuardEnabled = enabled
+  }
+
+  setOwnershipTransferInputFenced(terminalId: string, fenced: boolean): void {
+    if (fenced) {
+      const managed = this.ptys.get(terminalId)
+      if (!managed || managed.disposed) {
+        throw new Error('pty_ownership_transfer_source_terminal_gone')
+      }
+      // A settled shutdown RPC can leave an irreversible signal or delayed kill behind.
+      if (
+        !this.ownershipTransferInputFencedPtys.has(terminalId) &&
+        (this.creationFenced ||
+          managed.gracefulKillSent ||
+          managed.forceKillSent ||
+          managed.killTimer ||
+          managed.reapTimer)
+      ) {
+        throw new Error('pty_ownership_transfer_source_shutdown_pending')
+      }
+      this.ownershipTransferInputFencedPtys.add(terminalId)
+      return
+    }
+    this.ownershipTransferInputFencedPtys.delete(terminalId)
+  }
+
+  /** Writes destination-tagged input after the source owner has been fenced. */
+  writeOwnershipTransferInput(terminalId: string, data: string): boolean {
+    const managed = this.ptys.get(terminalId)
+    if (!managed || managed.disposed || !this.ownershipTransferInputFencedPtys.has(terminalId)) {
+      return false
+    }
+    this.writePtyInput(managed, data)
+    return true
+  }
+
+  async applyOwnershipTransferControl(
+    terminalId: string,
+    incarnationId: string,
+    control: PtyOwnershipTransferControl,
+    isAuthorized?: () => boolean
+  ): Promise<'applied'> {
+    const managed = this.requireOwnershipTransferManagedPty(terminalId, incarnationId)
+    if (isAuthorized && !isAuthorized()) {
+      throw new Error('pty_ownership_transfer_destination_control_unauthorized')
+    }
+    switch (control.kind) {
+      case 'resize':
+        this.resizeManagedPty(managed, control.cols, control.rows)
+        break
+      case 'sendSignal':
+        this.signalManagedPty(managed, control.signal)
+        break
+      case 'clearBuffer':
+        this.clearManagedPtyBuffer(managed)
+        break
+      case 'shutdown':
+        await this.shutdownManagedPty(managed, control.immediate)
+        break
+    }
+    return 'applied'
+  }
+
+  private requireOwnershipTransferManagedPty(
+    terminalId: string,
+    incarnationId: string
+  ): ManagedPty {
+    const managed = this.ptys.get(terminalId)
+    if (
+      !managed ||
+      managed.disposed ||
+      managed.incarnationId !== incarnationId ||
+      !this.ownershipTransferInputFencedPtys.has(terminalId)
+    ) {
+      throw new Error('pty_ownership_transfer_source_terminal_unverifiable')
+    }
+    return managed
+  }
+
   /** Supplies the authenticated client identity behind a transport connection, so a spawn can be
    *  attributed to the consumer session that requested it. */
   setConsumerIdentityResolver(resolve: ((clientId: number) => string | null) | null): void {
     this.consumerIdentityResolver = resolve
   }
-
   handleSourceCreditAvailable(id: string): void {
     this.sourcePublication?.onCreditAvailable(id)
   }
@@ -601,7 +891,7 @@ export class PtyHandler {
     this.publishPendingExit(id)
   }
 
-  private async loadPty(): Promise<typeof NodePty | null> {
+  private async loadPty(): Promise<RelayPtyModule | null> {
     if (this.ptyModule) {
       return this.ptyModule
     }
@@ -616,26 +906,37 @@ export class PtyHandler {
     }
   }
 
-  private async loadPtyUncached(): Promise<typeof NodePty | null> {
-    if (!this.reloadPtyModuleFromDisk) {
-      try {
-        this.ptyModule = await import('node-pty')
-        return this.ptyModule
-      } catch (error) {
-        // Why keep it: this is the only place the load error exists. Discarding it here is
-        // what left the relay able to say "unavailable" and never why.
+  private async loadPtyUncached(): Promise<RelayPtyModule | null> {
+    // Bun owns its PTY backend and does not need node-pty or a remote native addon.
+    const runtime = await loadRelayPtyRuntime({
+      skipNode: this.reloadPtyModuleFromDisk,
+      onNodeLoadError: (error) => {
         this.lastPtyLoadError = error
         this.reloadPtyModuleFromDisk = true
       }
+    })
+    if (runtime?.runtimeKind === 'bun') {
+      this.ptyModule = runtime
+      return runtime
     }
-    // Why: tie module resolution to the deployed bundle dir, not cwd.
+    if (!this.reloadPtyModuleFromDisk && runtime) {
+      this.ptyModule = runtime
+      return runtime
+    }
+    // Why: tie module resolution to the deployed bundle dir, not cwd. This is the
+    // fallback for a Node relay whose bundled module resolver cannot see its slot.
     const moduleEntry = join(this.relayNodePtyDir(), 'lib', 'index.js')
     if (!existsSync(moduleEntry)) {
       this.lastPtyLoadError = this.lastPtyLoadError ?? new Error(`no node-pty at ${moduleEntry}`)
       return null
     }
     try {
-      this.ptyModule = require(moduleEntry) as typeof NodePty
+      const nodePty = require(moduleEntry) as typeof NodePty
+      this.ptyModule = {
+        runtimeKind: 'node',
+        ptyBackend: 'node-pty',
+        spawn: (shell, args, options) => nodePty.spawn(shell, args, options)
+      }
       return this.ptyModule
     } catch (error) {
       this.lastPtyLoadError = error
@@ -676,6 +977,20 @@ export class PtyHandler {
         delete require.cache[cachedPath]
       }
     }
+  }
+
+  getPtyRuntimeIdentity(): {
+    runtimeKind: RelayPtyRuntimeKind
+    ptyBackend: RelayPtyBackend
+  } {
+    const runtime = this.ptyModule
+    if (runtime) {
+      return { runtimeKind: runtime.runtimeKind, ptyBackend: runtime.ptyBackend }
+    }
+    const bun = (globalThis as typeof globalThis & { Bun?: { Terminal?: unknown } }).Bun
+    return typeof bun?.Terminal === 'function'
+      ? { runtimeKind: 'bun', ptyBackend: 'bun-terminal' }
+      : { runtimeKind: 'node', ptyBackend: 'node-pty' }
   }
 
   // Why: this value never reaches the grace *timer* — startGraceTimer's only caller always passes an
@@ -767,6 +1082,10 @@ export class PtyHandler {
 
   // Why: the sole removal path, so the three exit routes can't drift on who announces an empty pool.
   private removePty(id: string): void {
+    if (!this.pendingOutputByPty.has(id) && !this.pendingExitByPty.has(id)) {
+      this.removeOwnershipTransferTerminal(id)
+    }
+    this.ownershipTransferInputFencedPtys.delete(id)
     this.ptys.delete(id)
     if (this.ptys.size > 0) {
       return
@@ -951,16 +1270,65 @@ export class PtyHandler {
     // Why: a second announce covers any store whose admission window has already closed.
     this.notifyPoolListener(this.ptyPoolActiveListener, 'pty-pool-active')
     const emitIngressData = (emission: PtyIngressEmission): void => {
+      managed.captureIngress?.observeEmission()
       const rawLength = emission.rawEndSeq - emission.rawStartSeq
+      const ingressSlice = Object.freeze({
+        emissionId: `${emission.rawStartSeq}:${emission.rawEndSeq}`,
+        rawStartSu: emission.rawStartSeq,
+        rawEndSu: emission.rawEndSeq,
+        displayStartSu: 0,
+        displayEndSu: emission.data.length,
+        displayLengthSu: emission.data.length
+      })
       this.appendReplayBuffer(managed, emission.data)
-      this.enqueuePtyOutput(
-        managed.id,
-        emission.data,
-        emission.transformed || rawLength !== emission.data.length
-          ? { rawLength, seq: emission.rawEndSeq, transformed: true }
-          : {}
-      )
+      const ownershipTransferEmissionKey = `${emission.rawStartSeq}:${emission.rawEndSeq}`
+      // In-flight output must not overtake an emission awaiting durable observation.
+      const retryPending = this.pendingOutputByPty
+        .get(managed.id)
+        ?.some((pending) => pending.ownershipTransferRetry)
+      const observation = retryPending
+        ? { failed: true, fragments: undefined }
+        : this.observeOwnershipTransferOutput(
+            managed.id,
+            emission.data,
+            ownershipTransferEmissionKey,
+            undefined,
+            ingressSlice
+          )
+      if (!observation.failed && 'ownsPublication' in observation && observation.ownsPublication) {
+        return
+      }
+      if (observation.failed) {
+        this.enqueuePtyOutput(managed.id, emission.data, {
+          ...(emission.transformed || rawLength !== emission.data.length
+            ? { rawLength, seq: emission.rawEndSeq, transformed: true }
+            : {}),
+          ownershipTransferRetry: true,
+          ownershipTransferEmissionKey,
+          ownershipTransferIngressSlice: ingressSlice,
+          ownershipTransferIncarnationId: managed.incarnationId
+        })
+        this.pausePtyOutput(managed.id)
+      } else if (observation.fragments && observation.fragments.length > 0) {
+        for (const fragment of observation.fragments) {
+          this.enqueuePtyOutput(managed.id, fragment.data, {
+            ownershipTransfer: fragment.ownershipTransfer
+          })
+        }
+      } else {
+        this.enqueuePtyOutput(
+          managed.id,
+          emission.data,
+          emission.transformed || rawLength !== emission.data.length
+            ? { rawLength, seq: emission.rawEndSeq, transformed: true }
+            : {}
+        )
+      }
     }
+    managed.captureIngress = new PtyOwnershipCaptureIngressFence(
+      () => this.pausePtyOutput(managed.id),
+      () => this.maybeResumePtyOutput(managed.id)
+    )
     managed.startupIngress ??= new PtyStartupIngress({
       ...(managed.startupIngressIntent ? { intent: managed.startupIngressIntent } : {}),
       ownerBackend: managed.ownerBackend,
@@ -985,6 +1353,9 @@ export class PtyHandler {
       })
     }
     managed.pty.onData((data: string) => {
+      if (data.length > 0) {
+        managed.captureIngress?.observeEmission()
+      }
       const startup = managed.startupCommand
       if (startup?.waitForShellReady && startup.outputScanState && !startup.delivered) {
         const scanned = scanShellStartupOutput(startup.outputScanState, data)
@@ -1006,6 +1377,7 @@ export class PtyHandler {
       }
     })
     managed.pty.onExit(({ exitCode }: { exitCode: number }) => {
+      managed.captureIngress?.dispose()
       managed.physicalExit?.markExited()
       if (managed.disposed) {
         return
@@ -1046,7 +1418,78 @@ export class PtyHandler {
     })
   }
 
+  private observeOwnershipTransferOutput(
+    id: string,
+    data: string,
+    emissionKey?: string,
+    admittedIncarnationId?: string,
+    ingressSlice?: RelayPtyIngressSlice
+  ): Readonly<{
+    fragments: readonly PtyOwnershipTransferOutputFragment[] | undefined
+    failed: boolean
+    ownsPublication?: boolean
+  }> {
+    try {
+      return {
+        fragments: this.ownershipTransferObserver?.observeOutput(
+          id,
+          data,
+          emissionKey,
+          admittedIncarnationId,
+          ingressSlice
+        ),
+        ownsPublication: this.ownershipTransferObserver?.ownsOutputPublication?.(id) === true,
+        failed: false
+      }
+    } catch (error) {
+      process.stderr.write(
+        `[pty-handler] ownership transfer output observer failed for ${id}: ${
+          error instanceof Error ? error.message : String(error)
+        }\n`
+      )
+      return { fragments: undefined, failed: true }
+    }
+  }
+
+  private removeOwnershipTransferTerminal(id: string): void {
+    try {
+      const observer = this.ownershipTransferObserver
+      const removeTerminal = observer?.removeTerminal
+      if (removeTerminal) {
+        removeTerminal.call(observer, id)
+      }
+    } catch (error) {
+      process.stderr.write(
+        `[pty-handler] ownership transfer terminal observer failed for ${id}: ${
+          error instanceof Error ? error.message : String(error)
+        }\n`
+      )
+    }
+  }
+
+  private observeOwnershipTransferExit(
+    id: string,
+    incarnationId: string,
+    code?: number
+  ): boolean | 'delegated' {
+    try {
+      this.ownershipTransferObserver?.observeExit?.({ terminalId: id, incarnationId, code })
+      if (this.ownershipTransferObserver?.ownsOutputPublication?.(id)) {
+        return 'delegated'
+      }
+      return true
+    } catch (error) {
+      process.stderr.write(
+        `[pty-handler] ownership transfer exit observer failed for ${id}: ${
+          error instanceof Error ? error.message : String(error)
+        }\n`
+      )
+      return false
+    }
+  }
+
   private releaseRelayIngress(managed: ManagedPty): void {
+    managed.captureIngress?.dispose()
     const startupCommand = managed.startupCommand
     if (startupCommand) {
       this.clearStartupCommandTimer(managed)
@@ -1087,12 +1530,56 @@ export class PtyHandler {
     this.dispatcher.onRequest('pty.getForegroundProcess', (p) => this.getForegroundProcess(p))
     this.dispatcher.onRequest('pty.inspectProcess', (p) => this.inspectProcess(p))
     this.dispatcher.onRequest('pty.getCapabilities', async () => ({
+      agentSessionCreateOperationInspectionVersion: 1,
       startupIngressVersion: PTY_STARTUP_INGRESS_VERSION,
       agentSessionClaimVersion: AGENT_SESSION_EXECUTION_OWNER_PROTOCOL_VERSION,
       agentSessionCreateOperationVersion: AGENT_SESSION_CREATE_OPERATION_PROTOCOL_VERSION,
       // Additive capability: clients may request the no-process-table inventory
       // projection and consume fenced inspect evidence on this host.
       foregroundProcessEvidenceVersion: 1
+    }))
+    this.dispatcher.onRequest('pty.inspectCreateOperation', (params) =>
+      inspectPtyCreateOperation(params, this.agentSessionCreateOperations)
+    )
+    this.dispatcher.onRequest('pty.getOwnershipBridgeCapabilities', async () => ({
+      protocolVersions: [PTY_OWNERSHIP_BRIDGE_PROTOCOL_VERSION],
+      maxReplayBytes: PTY_OWNERSHIP_BRIDGE_DEFAULT_REPLAY_BYTES,
+      maxInputIds: PTY_OWNERSHIP_BRIDGE_DEFAULT_INPUT_IDS,
+      inputDeduplication: true,
+      rollback: true,
+      liveTransfer: this.ownershipTransferMutationEnabled,
+      ...(this.ownershipTransferMutationEnabled ? { preparationShutdownGuardVersion: 1 } : {}),
+      ...(this.ownershipTransferMutationEnabled && this.ownershipTransferGraceGuardEnabled
+        ? { transferGraceGuardVersion: 1, transferLifecycleGuardVersion: 1 }
+        : {}),
+      statusQuery: true,
+      destinationOutput: this.ownershipTransferMutationEnabled,
+      destinationControl: this.ownershipTransferMutationEnabled,
+      authoritativeExit: this.ownershipTransferMutationEnabled,
+      postCommitReplay: this.ownershipTransferMutationEnabled,
+      reconnectRekey: this.ownershipTransferMutationEnabled,
+      ...(this.ownershipTransferMutationEnabled && this.ownershipTransferDelegationEnabled
+        ? { destinationDelegationVersion: 1 }
+        : {}),
+      ...(this.ownershipTransferMutationEnabled &&
+      this.ownershipTransferDelegationEnabled &&
+      this.ownershipTransferObserver?.supportsSourceDeliveryRetirement?.() === true
+        ? {
+            sourceRetirementVersion: 1,
+            sourceRetirementBoundaryVersion: 1,
+            sourceRetirementRecoveryVersion: 1
+          }
+        : {}),
+      ...(this.ownershipTransferMutationEnabled &&
+      this.ownershipTransferDelegationEnabled &&
+      this.ownershipTransferObserver?.supportsSuccessorSourceRetirement?.() === true
+        ? { sourceSuccessorRetirementVersion: 1 }
+        : {}),
+      ...(this.ownershipTransferCaptureEnabled ? { captureBoundaryVersion: 1 } : {}),
+      ...(this.ownershipTransferCaptureSelectionEnabled ? { captureSelectionVersion: 1 } : {}),
+      ...(this.ownershipTransferCaptureRecoveryEnabled
+        ? { captureSelectionRecoveryVersion: 1 }
+        : {})
     }))
     this.dispatcher.onRequest('pty.listProcesses', (params) => this.listProcesses(params))
     this.dispatcher.onRequest('pty.getDefaultShell', async () => resolveDefaultShell())
@@ -1155,15 +1642,28 @@ export class PtyHandler {
   private enqueuePtyOutput(
     id: string,
     data: string,
-    meta: { rawLength?: number; transformed?: boolean; seq?: number } = {}
+    meta: {
+      rawLength?: number
+      transformed?: boolean
+      seq?: number
+      ownershipTransfer?: PtyOwnershipTransferOutputFragment['ownershipTransfer']
+      ownershipTransferRetry?: boolean
+      ownershipTransferEmissionKey?: string
+      ownershipTransferIncarnationId?: string
+      ownershipTransferIngressSlice?: RelayPtyIngressSlice
+    } = {}
   ): void {
     const queue = this.pendingOutputByPty.get(id) ?? []
-    if (this.sourcePublication?.accepts(id)) {
+    if (meta.ownershipTransferRetry || this.sourcePublication?.accepts(id)) {
       const pending = this.initializePendingProducerCharge({ data, ...meta })
       queue.push(pending)
       this.pendingOutputByPty.set(id, queue)
       this.addPendingProducerBytes(id, pending)
-      if (queue.length === 1 && this.shouldSendInteractiveOutputNow(id, data)) {
+      if (
+        !meta.ownershipTransferRetry &&
+        queue.length === 1 &&
+        this.shouldSendInteractiveOutputNow(id, data)
+      ) {
         queue[0].interactive = true
         if (this.flushPtyOutput(id)) {
           return
@@ -1200,9 +1700,14 @@ export class PtyHandler {
       this.pausePtyOutput(id)
       return
     }
-    const pending: PendingPtyOutput = existing && !existing.transformed ? existing : { data: '' }
-    const previousCharge =
-      existing && !existing.transformed ? this.pendingProducerChargeForEntry(pending) : 0
+    const canCoalesce =
+      existing &&
+      !existing.transformed &&
+      !existing.ownershipTransfer &&
+      !existing.ownershipTransferRetry &&
+      !meta.ownershipTransfer
+    const pending: PendingPtyOutput = canCoalesce ? existing : { data: '', ...meta }
+    const previousCharge = canCoalesce ? this.pendingProducerChargeForEntry(pending) : 0
     const previousLength = pending.data.length
     pending.data += data
     if (pending.rawLength !== undefined || meta.rawLength !== undefined) {
@@ -1211,7 +1716,7 @@ export class PtyHandler {
     if (meta.seq !== undefined) {
       pending.seq = meta.seq
     }
-    if (!existing || existing.transformed) {
+    if (!canCoalesce) {
       this.initializePendingProducerCharge(pending)
       queue.push(pending)
       this.addPendingProducerBytes(id, pending)
@@ -1267,9 +1772,25 @@ export class PtyHandler {
       // Why: yield between slices of a large chunk so client input and control frames can interleave.
       this.scheduleOutputFlush(PTY_OUTPUT_DRAIN_CONTINUE_MS)
     }
+    for (const id of this.pendingExitByPty.keys()) {
+      this.publishPendingExit(id)
+    }
   }
 
   private flushPtyOutput(
+    id: string,
+    capturedQueue?: PendingPtyOutput[],
+    capturedProducerBytes?: number
+  ): boolean {
+    this.outputFlushDepth++
+    try {
+      return this.flushPtyOutputBatch(id, capturedQueue, capturedProducerBytes)
+    } finally {
+      this.outputFlushDepth--
+    }
+  }
+
+  private flushPtyOutputBatch(
     id: string,
     capturedQueue?: PendingPtyOutput[],
     capturedProducerBytes?: number
@@ -1284,6 +1805,70 @@ export class PtyHandler {
     const capturedQueueBytes = queueWasCaptured
       ? (capturedProducerBytes ?? this.pendingProducerChargeForEntry(pending))
       : (this.pendingProducerBytesByPty.get(id) ?? this.pendingProducerChargeForEntry(pending))
+    if (pending.ownershipTransferRetry) {
+      pending.ownershipTransferObservationLimit ??=
+        this.ownershipTransferObserver?.getPreparedOutputByteLimit?.(id)
+      const offset = pending.ownershipTransferObservationOffset ?? 0
+      const limit = pending.ownershipTransferObservationLimit
+      const end =
+        limit === undefined
+          ? pending.data.length
+          : getUtf8ChunkEndIndex(pending.data, offset, limit)
+      const observation = this.observeOwnershipTransferOutput(
+        id,
+        pending.data.slice(offset, end),
+        limit === undefined
+          ? pending.ownershipTransferEmissionKey
+          : `${pending.ownershipTransferEmissionKey}:${offset}:${end}`,
+        pending.ownershipTransferIncarnationId,
+        pending.ownershipTransferIngressSlice
+          ? {
+              ...pending.ownershipTransferIngressSlice,
+              displayStartSu: offset,
+              displayEndSu: end
+            }
+          : undefined
+      )
+      if (observation.failed) {
+        this.restorePendingOutputAfterFlush(id, queue, capturedQueueBytes, queueWasCaptured)
+        this.pausePtyOutput(id)
+        this.scheduleOutputFlush(PTY_OUTPUT_BATCH_INTERVAL_MS)
+        return false
+      }
+      if (end < pending.data.length) {
+        // Keep original raw metadata until every bounded journal slice has been accepted.
+        pending.ownershipTransferObservationOffset = end
+        this.restorePendingOutputAfterFlush(id, queue, capturedQueueBytes, queueWasCaptured)
+        this.pausePtyOutput(id)
+        this.scheduleOutputFlush(PTY_OUTPUT_BATCH_INTERVAL_MS)
+        return false
+      }
+      pending.ownershipTransferRetry = false
+      if (observation.ownsPublication) {
+        const nextQueueBytes = capturedQueueBytes - this.pendingProducerChargeForEntry(pending)
+        queue.shift()
+        this.replacePendingOutputQueue(id, queue, nextQueueBytes)
+        this.publishPendingExit(id)
+        this.maybeResumePtyOutput(id)
+        this.clearOutputFlushTimerIfIdle()
+        return true
+      }
+      if (observation.fragments && observation.fragments.length > 0) {
+        let nextQueueBytes = capturedQueueBytes - this.pendingProducerChargeForEntry(pending)
+        queue.shift()
+        for (let index = observation.fragments.length - 1; index >= 0; index--) {
+          const fragment = observation.fragments[index]
+          const replacement = this.initializePendingProducerCharge({
+            data: fragment.data,
+            ownershipTransfer: fragment.ownershipTransfer
+          })
+          queue.unshift(replacement)
+          nextQueueBytes += this.pendingProducerChargeForEntry(replacement)
+        }
+        this.replacePendingOutputQueue(id, queue, nextQueueBytes)
+        return this.flushPtyOutput(id, queue, nextQueueBytes)
+      }
+    }
     const desiredChars = pending.transformed
       ? pending.data.length
       : Math.min(pending.data.length, PTY_OUTPUT_FLUSH_CHUNK_CHARS)
@@ -1293,7 +1878,8 @@ export class PtyHandler {
       id,
       ...(pending.seq === undefined ? {} : { seq: pending.seq }),
       ...(pending.rawLength === undefined ? {} : { rawLength: pending.rawLength }),
-      ...(pending.transformed ? { transformed: true } : {})
+      ...(pending.transformed ? { transformed: true } : {}),
+      ...(pending.ownershipTransfer ? { ownershipTransfer: pending.ownershipTransfer } : {})
     }
     // Why: a failed publish may already have reserved this exact span (source-ledger append,
     // partial legacy fan-out), so a retry must resend it verbatim and slice the remainder at
@@ -1335,7 +1921,15 @@ export class PtyHandler {
         data: chunk,
         ...(chunkSeq === undefined ? {} : { seq: chunkSeq }),
         ...(chunkRawLength === undefined ? {} : { rawLength: chunkRawLength }),
-        ...(pending.transformed ? { transformed: true } : {})
+        ...(pending.transformed ? { transformed: true } : {}),
+        ...(pending.ownershipTransfer
+          ? {
+              ownershipTransfer: Object.freeze({
+                ...pending.ownershipTransfer,
+                fragmentEndSu: pending.ownershipTransfer.fragmentStartSu + chunk.length
+              })
+            }
+          : {})
       } satisfies RelayPtySourceOutput)
     pending.sourceChunk = sourceChunk
     const published = this.publishPtyOutput(id, sourceChunk, pending.interactive === true)
@@ -1359,7 +1953,16 @@ export class PtyHandler {
         data: remaining,
         ...(pending.transformed ? { transformed: true } : {}),
         ...(pending.rawLength === undefined ? {} : { rawLength: remainingRawLength }),
-        seq: pending.seq
+        seq: pending.seq,
+        ...(pending.ownershipTransfer
+          ? {
+              ownershipTransfer: Object.freeze({
+                ...pending.ownershipTransfer,
+                fragmentStartSu: pending.ownershipTransfer.fragmentStartSu + chunk.length,
+                fragmentEndSu: pending.ownershipTransfer.fragmentEndSu
+              })
+            }
+          : {})
       })
       queue[0] = remainder
       const nextQueueBytes =
@@ -1383,16 +1986,22 @@ export class PtyHandler {
   }
 
   private clearOutputFlushTimerIfIdle(): void {
-    if (this.pendingOutputByPty.size > 0 || this.outputFlushTimer === null) {
+    if (
+      this.pendingOutputByPty.size > 0 ||
+      this.pendingExitByPty.size > 0 ||
+      this.outputFlushTimer === null
+    ) {
       return
     }
     clearTimeout(this.outputFlushTimer)
     this.outputFlushTimer = null
   }
 
-  private clearPtyFlowState(id: string): void {
-    this.deletePendingOutput(id)
-    this.pendingExitByPty.delete(id)
+  private clearPtyFlowState(id: string, preservePendingPublication = false): void {
+    if (!preservePendingPublication) {
+      this.deletePendingOutput(id)
+      this.pendingExitByPty.delete(id)
+    }
     this.pausedOutputPtys.delete(id)
     this.consumerPausedOutputPtys.delete(id)
     this.clearPtyInputState(id)
@@ -1402,6 +2011,7 @@ export class PtyHandler {
   private clearPtyInputState(id: string): void {
     this.lastInputAtByPty.delete(id)
     this.interactiveOutputCharsByPty.delete(id)
+    this.ownershipTransferInputFencedPtys.delete(id)
   }
 
   private publishPtyOutput(
@@ -1419,7 +2029,8 @@ export class PtyHandler {
           data: output.data,
           ...(output.seq === undefined ? {} : { seq: output.seq }),
           ...(output.rawLength === undefined ? {} : { rawLength: output.rawLength }),
-          ...(output.transformed ? { transformed: true } : {})
+          ...(output.transformed ? { transformed: true } : {}),
+          ...(output.ownershipTransfer ? { ownershipTransfer: output.ownershipTransfer } : {})
         },
         { interactive }
       )
@@ -1429,7 +2040,8 @@ export class PtyHandler {
       data: output.data,
       ...(output.seq === undefined ? {} : { seq: output.seq }),
       ...(output.rawLength === undefined ? {} : { rawLength: output.rawLength }),
-      ...(output.transformed ? { transformed: true } : {})
+      ...(output.transformed ? { transformed: true } : {}),
+      ...(output.ownershipTransfer ? { ownershipTransfer: output.ownershipTransfer } : {})
     })
     return true
   }
@@ -1440,6 +2052,15 @@ export class PtyHandler {
     }
     const exit = this.pendingExitByPty.get(id)
     if (!exit) {
+      return
+    }
+    const observed = this.observeOwnershipTransferExit(id, exit.incarnationId, exit.code)
+    if (!observed) {
+      this.scheduleOutputFlush(PTY_OUTPUT_BATCH_INTERVAL_MS)
+      return
+    }
+    if (observed === 'delegated') {
+      this.pendingExitByPty.delete(id)
       return
     }
     if (this.sourcePublication?.accepts(id)) {
@@ -1581,6 +2202,8 @@ export class PtyHandler {
   private maybeResumePtyOutput(id: string): void {
     if (
       !this.pausedOutputPtys.has(id) ||
+      this.ptys.get(id)?.captureIngress?.held ||
+      this.hasPendingOwnershipTransferOutput(id) ||
       this.consumerPausedOutputPtys.has(id) ||
       this.pendingProducerBytes(id) > PTY_OUTPUT_PRODUCER_LOW_BYTES ||
       this.dispatcher.legacyRetentionBelowLowWater === false
@@ -2069,7 +2692,6 @@ export class PtyHandler {
     if (!managed || managed.disposed) {
       throw new Error(`PTY "${id}" not found`)
     }
-
     // Why: verify liveness because shells can exit without node-pty onExit.
     if (this.reapPtyProvenExited(managed)) {
       // Why the marker: this is the ONLY not-found answer backed by a liveness check. The unmarked
@@ -2078,6 +2700,7 @@ export class PtyHandler {
       // (docs/reference/ssh-execution-boundary.md).
       throw new Error(`PTY "${id}" not found (${PTY_ATTACH_PROVEN_EXITED_MARKER})`)
     }
+    this.assertLegacyAttachmentAllowed(id)
 
     // Why: legacy `pty-N` ids repeated across relay generations; reject conflicting identities.
     const mismatch = attachIdentityMismatches(
@@ -2108,6 +2731,7 @@ export class PtyHandler {
     ) {
       sourceRecovery = Object.freeze({ status: 'checkpointUnavailable' })
     }
+    this.assertLegacyAttachmentAllowed(id)
     const activation = this.sourcePublication?.activate(
       id,
       managed.incarnationId,
@@ -2169,6 +2793,12 @@ export class PtyHandler {
     }
   }
 
+  private assertLegacyAttachmentAllowed(id: string): void {
+    if (this.ownershipTransferObserver?.fencesLegacyAttachment?.(id)) {
+      throw new Error('pty_ownership_transfer_legacy_attachment_fenced')
+    }
+  }
+
   private writeData(params: Record<string, unknown>): void {
     const id = params.id as string
     const data = params.data as string
@@ -2176,55 +2806,50 @@ export class PtyHandler {
       return
     }
     const managed = this.ptys.get(id)
-    if (managed && !managed.disposed) {
-      this.lastInputAtByPty.set(id, performance.now())
-      this.interactiveOutputCharsByPty.set(id, 0)
-      // Relay PTYs need the local provider's cooked-echo containment (#13137).
-      // DA1/CPR stay immediate unless an echo-risk reply is already held (#13892, #15559).
-      if (managed.startupIngress?.answerLiveQueryReply(data)) {
-        return
-      }
-      managed.pty.write(data)
+    if (managed && !managed.disposed && !this.ownershipTransferInputFencedPtys.has(id)) {
+      this.writePtyInput(managed, data)
     }
+  }
+
+  private writePtyInput(managed: ManagedPty, data: string): void {
+    this.lastInputAtByPty.set(managed.id, performance.now())
+    this.interactiveOutputCharsByPty.set(managed.id, 0)
+    // Relay PTYs need the local provider's cooked-echo containment (#13137).
+    // DA1/CPR stay immediate unless an echo-risk reply is already held (#13892, #15559).
+    if (managed.startupIngress?.answerLiveQueryReply(data)) {
+      return
+    }
+    managed.pty.write(data)
   }
 
   private resize(params: Record<string, unknown>): void {
     const id = params.id as string
-    const cols = Math.max(1, Math.min(500, Math.floor(Number(params.cols) || 80)))
-    const rows = Math.max(1, Math.min(500, Math.floor(Number(params.rows) || 24)))
-    const managed = this.ptys.get(id)
-    if (!managed || managed.disposed) {
+    if (this.ownershipTransferInputFencedPtys.has(id)) {
       return
     }
-    // Why probe (same probe attach() and listProcesses() run): a shell that
-    // exited without node-pty's `onExit` leaves an undisposed entry behind, and
-    // while it stays the relay keeps advertising a dead shell and keeps holding
-    // `activePtyCount` above zero, which is what stops a relay with
-    // `relayGracePeriodSeconds: 0` from ever reaching its idle-no-ptys exit
-    // (#12423). This is retirement, not ioctl safety: only ESRCH from the host
-    // that owns the pid is evidence of `exited`.
+    const managed = this.ptys.get(id)
+    if (managed && !managed.disposed) {
+      this.resizeManagedPty(managed, Number(params.cols), Number(params.rows))
+    }
+  }
+
+  private resizeManagedPty(managed: ManagedPty, cols: number, rows: number): void {
+    managed.captureIngress?.observeEmission()
     if (this.reapPtyProvenExited(managed)) {
       return
     }
-    // The patched node-pty retires `_fd` in the same block that gives up the
-    // master (config/patches/node-pty@1.1.0.patch), which makes a resize past
-    // that point a no-op rather than a TIOCSWINSZ aimed at a reused descriptor.
-    // That covers only part of the window and does not cover this process at
-    // all: libuv closes the fd synchronously inside `uv_close`, before the JS
-    // `'close'` that runs `_close()`, and a relay host installs node-pty from
-    // npm, where the patch is not applied. So the catch below stays.
     try {
-      managed.pty.resize(cols, rows)
-    } catch (err) {
-      // A failed ioctl observed the handle, not the host's process table, so on
-      // its own it is `unverifiable`. Re-probe: a now-absent pid retires the
-      // entry, anything else keeps it and is contained here rather than
-      // escaping as a parse error on every later resize.
+      managed.pty.resize(
+        Math.max(1, Math.min(500, Math.floor(cols) || 80)),
+        Math.max(1, Math.min(500, Math.floor(rows) || 24))
+      )
+    } catch (error) {
+      // A failed ioctl is not evidence of process death; only the host probe can retire it.
       if (this.reapPtyProvenExited(managed)) {
         return
       }
       process.stderr.write(
-        `[pty-handler] resize failed for PTY ${id} whose process is still live or unverifiable: ${err instanceof Error ? err.message : String(err)}\n`
+        `[pty-handler] resize failed for PTY ${managed.id} whose process is still live or unverifiable: ${error instanceof Error ? error.message : String(error)}\n`
       )
     }
   }
@@ -2241,7 +2866,9 @@ export class PtyHandler {
 
   private async shutdown(params: Record<string, unknown>, context?: RequestContext): Promise<void> {
     const id = params.id as string
-    const immediate = params.immediate as boolean
+    if (this.ownershipTransferInputFencedPtys.has(id)) {
+      throw new Error('pty_ownership_transfer_source_shutdown_fenced')
+    }
     const expectedIncarnationId = params.expectedIncarnationId
     if (
       expectedIncarnationId !== undefined &&
@@ -2278,10 +2905,13 @@ export class PtyHandler {
     if (this.retirePaneSurface(managed)) {
       this.armShutdownReapSweep(managed, SHUTDOWN_REAP_MAX_SWEEPS)
     }
+    await this.shutdownManagedPty(managed, params.immediate as boolean)
+  }
 
+  private async shutdownManagedPty(managed: ManagedPty, immediate: boolean): Promise<void> {
     if (immediate) {
       this.releaseStartupCommand(managed)
-      this.flushPtyOutput(id)
+      this.flushPtyOutput(managed.id)
       this.requestForceKill(managed)
       // Why: preserve timed-out entries so onExit/retry owns native handles.
       await this.waitForPhysicalExit(managed, IMMEDIATE_PTY_EXIT_TIMEOUT_MS)
@@ -2418,7 +3048,7 @@ export class PtyHandler {
     pruneRetiredPtyIncarnations(this.retiredIncarnations)
     disposeManagedPty(managed)
     this.removePty(managed.id)
-    this.clearPtyFlowState(managed.id)
+    this.clearPtyFlowState(managed.id, true)
   }
 
   /**
@@ -2471,13 +3101,20 @@ export class PtyHandler {
   private async sendSignal(params: Record<string, unknown>): Promise<void> {
     const id = params.id as string
     const signal = params.signal as string
-    if (!ALLOWED_SIGNALS.has(signal)) {
-      throw new Error(`Signal not allowed: ${signal}`)
-    }
     const managed = this.ptys.get(id)
     // Why: dispose neutralizes pty.kill on POSIX; treat disposed as not-found so signals don't silently no-op.
     if (!managed || managed.disposed) {
       throw new Error(`PTY "${id}" not found`)
+    }
+    if (this.ownershipTransferInputFencedPtys.has(id)) {
+      return
+    }
+    this.signalManagedPty(managed, signal)
+  }
+
+  private signalManagedPty(managed: ManagedPty, signal: string): void {
+    if (!ALLOWED_SIGNALS.has(signal)) {
+      throw new Error(`Signal not allowed: ${signal}`)
     }
     // Why only SIGWINCH: a real resize reaches the tty's foreground process group,
     // and node-pty's kill targets the root pid, which the shell setpgid's away from.
@@ -2593,11 +3230,19 @@ export class PtyHandler {
 
   private async clearBuffer(params: Record<string, unknown>): Promise<void> {
     const id = params.id as string
+    if (this.ownershipTransferInputFencedPtys.has(id)) {
+      return
+    }
     const managed = this.ptys.get(id)
     if (managed && !managed.disposed) {
-      managed.startupIngress?.snapshotBarrier()
-      managed.pty.clear()
+      this.clearManagedPtyBuffer(managed)
     }
+  }
+
+  private clearManagedPtyBuffer(managed: ManagedPty): void {
+    managed.captureIngress?.observeEmission()
+    managed.startupIngress?.snapshotBarrier()
+    managed.pty.clear()
   }
 
   private async hasChildProcesses(params: Record<string, unknown>): Promise<boolean> {
@@ -3121,9 +3766,19 @@ export class PtyHandler {
     }
   }
 
-  dispose(options: { waitForPhysicalExit?: boolean } = {}): Promise<void> {
-    // Why: fence synchronously before the first await so a spawn/revive can't slip past disposal and escape exit.
+  fenceCreationForShutdown(): void {
+    if (this.hasLiveOwnershipTransferFence) {
+      throw new Error('pty_ownership_transfer_source_shutdown_fenced')
+    }
     this.creationFenced = true
+  }
+
+  dispose(options: { waitForPhysicalExit?: boolean } = {}): Promise<void> {
+    try {
+      this.fenceCreationForShutdown()
+    } catch (error) {
+      return Promise.reject(error)
+    }
     if (this.disposePromise) {
       return this.disposePromise
     }

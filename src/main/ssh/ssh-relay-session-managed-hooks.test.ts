@@ -6,6 +6,7 @@ import {
 import { SshRelaySession } from './ssh-relay-session'
 import type { SshConnection } from './ssh-connection'
 import { createMockDeps, mockDeploySuccess } from './ssh-relay-session-test-fixtures'
+import * as preparationStartup from './orcad-outgoing-preparation-startup'
 
 const { muxRequestMock, openConsumerSessionMock } = vi.hoisted(() => ({
   muxRequestMock: vi.fn(),
@@ -85,6 +86,10 @@ describe('SshRelaySession managed hooks', () => {
   })
 
   it('installs only detected hooks without blocking provider registration', async () => {
+    const gate = Promise.withResolvers<void>()
+    const admission = vi
+      .spyOn(preparationStartup, 'restoreOutgoingOrcadPreparationAdmission')
+      .mockImplementationOnce(() => gate.promise)
     muxRequestMock.mockImplementation(async (method: string) => {
       if (method === 'preflight.detectAgents') {
         return { agents: ['codex'] }
@@ -101,7 +106,12 @@ describe('SshRelaySession managed hooks', () => {
     } as unknown as SshConnection
     const session = new SshRelaySession('target-1', getMainWindow, mockStore, mockPortForward)
 
-    await session.establish(connection)
+    const establishing = session.establish(connection)
+    await vi.waitFor(() => expect(admission).toHaveBeenCalledOnce())
+    expect(registerSshPtyProvider).not.toHaveBeenCalled()
+    gate.resolve()
+    await establishing
+    admission.mockRestore()
     await vi.waitFor(() =>
       expect(muxRequestMock).toHaveBeenCalledWith(AGENT_HOOK_INSTALL_MANAGED_HOOKS_METHOD, {
         hostKeyFingerprint: 'SHA256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA',

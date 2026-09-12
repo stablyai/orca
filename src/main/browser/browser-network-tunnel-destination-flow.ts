@@ -35,7 +35,9 @@ export function writeBrowserNetworkDestination(
   stream: BrowserNetworkTunnelStream,
   payload: Uint8Array<ArrayBufferLike>,
   onSettled: (bytes: number) => void,
-  claimRetainedBytes: (bytes: number) => (() => void) | null
+  claimRetainedBytes: (bytes: number) => (() => void) | null,
+  beginWrite: () => (error?: Error | null) => void,
+  onWriteError: (error: Error) => void
 ): string | null {
   if (!stream.connected || stream.clientEnded) {
     return 'invalid_client_data'
@@ -67,10 +69,23 @@ export function writeBrowserNetworkDestination(
     releaseClaim()
   }
   stream.pendingDestinationWriteReleases.add(release)
-  stream.socket.write(bytes, () => {
+  const settleWrite = beginWrite()
+  try {
+    stream.socket.write(bytes, (error) => {
+      release()
+      settleWrite(error)
+      if (error) {
+        onWriteError(error)
+      } else {
+        onSettled(bytes.byteLength)
+      }
+    })
+  } catch (error) {
+    const failure = error instanceof Error ? error : new Error(String(error))
     release()
-    onSettled(bytes.byteLength)
-  })
+    settleWrite(failure)
+    onWriteError(failure)
+  }
   return null
 }
 
@@ -85,7 +100,25 @@ export function grantBrowserNetworkDestinationCredit(
   if (!credit || stream.sendCredit + credit > BROWSER_NETWORK_TUNNEL_INITIAL_WINDOW_BYTES) {
     return 'send_window_overflow'
   }
+  const initial = !stream.initialClientCreditReceived
+  if (
+    stream.socket.settleRead &&
+    (initial
+      ? credit !== BROWSER_NETWORK_TUNNEL_INITIAL_WINDOW_BYTES
+      : credit > stream.unsettledDestinationBytes)
+  ) {
+    return 'destination_consumption_credit_unproven'
+  }
+  stream.initialClientCreditReceived = true
   stream.sendCredit += credit
+  if (stream.socket.settleRead && !initial) {
+    stream.unsettledDestinationBytes -= credit
+    try {
+      stream.socket.settleRead(credit)
+    } catch {
+      return 'destination_consumption_settlement_failed'
+    }
+  }
   return null
 }
 
@@ -112,6 +145,21 @@ export function flushBrowserNetworkDestination(
   stream: BrowserNetworkTunnelStream,
   actions: BrowserNetworkTunnelDestinationFlowActions
 ): void {
+  if (stream.flushingToClient) {
+    return
+  }
+  stream.flushingToClient = true
+  try {
+    flushDestinationData(stream, actions)
+  } finally {
+    stream.flushingToClient = false
+  }
+}
+
+function flushDestinationData(
+  stream: BrowserNetworkTunnelStream,
+  actions: BrowserNetworkTunnelDestinationFlowActions
+): void {
   while (stream.sendCredit > 0 && stream.pendingToClient.length > 0 && actions.isCurrent()) {
     const next = stream.pendingToClient[0]!
     const length = Math.min(
@@ -119,12 +167,6 @@ export function flushBrowserNetworkDestination(
       stream.sendCredit,
       BROWSER_NETWORK_TUNNEL_MAX_DATA_BYTES
     )
-    if (!actions.sendData(next.subarray(0, length))) {
-      return
-    }
-    if (!actions.isCurrent()) {
-      return
-    }
     stream.sendCredit -= length
     stream.pendingToClientBytes -= length
     actions.releaseRetainedBytes(length)
@@ -132,6 +174,13 @@ export function flushBrowserNetworkDestination(
       stream.pendingToClient.shift()
     } else {
       stream.pendingToClient[0] = next.slice(length)
+    }
+    if (stream.socket.settleRead) {
+      stream.unsettledDestinationBytes += length
+    }
+    // Account before publication: a synchronous peer may immediately acknowledge these bytes.
+    if (!actions.sendData(next.subarray(0, length)) || !actions.isCurrent()) {
+      return
     }
   }
   if (!actions.isCurrent()) {

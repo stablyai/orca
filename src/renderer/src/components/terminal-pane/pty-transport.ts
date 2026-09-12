@@ -3,8 +3,12 @@ import { connectIpcPty } from './ipc-pty-connect'
 import { createIpcPtySessionHandlers } from './ipc-pty-session-handlers'
 import { createPtyInputWriteQueue } from './pty-input-write-queue'
 import { createPtyOutputProcessor } from './pty-output-processor'
+import type {
+  IpcPtyTransportOptions,
+  PtyInputOperationOptions,
+  PtyTransport
+} from './pty-transport-types'
 import { createPtyPreconnectInputBuffer } from './pty-preconnect-input-buffer'
-import type { IpcPtyTransportOptions, PtyTransport } from './pty-transport-types'
 
 export {
   ensurePtyDispatcher,
@@ -56,8 +60,12 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
 
   const inputWriteQueue = createPtyInputWriteQueue({
     isWritable: (id) => !destroyed && connected && ptyId === id,
-    write: (id, data) => window.api.pty.write(id, data),
-    writeAccepted: (id, data) => window.api.pty.writeAccepted(id, data),
+    write: (id, data, options) =>
+      options ? window.api.pty.write(id, data, options) : window.api.pty.write(id, data),
+    writeAccepted: (id, data, options) =>
+      options
+        ? window.api.pty.writeAccepted(id, data, options)
+        : window.api.pty.writeAccepted(id, data),
     onDrainFailure: (id) => {
       if (ptyId === id) {
         storedCallbacks.onWriteUnavailable?.()
@@ -114,12 +122,13 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
     }
     await preconnectInputBuffer.flush({
       isCurrent: () => !destroyed && connected && ptyId === id,
-      sendInput: (data) => inputWriteQueue.enqueue(id, data),
-      sendInputImmediate: (data) => inputWriteQueue.enqueueQueryReply(id, data),
+      sendInput: (data, options) => inputWriteQueue.enqueue(id, data, options),
+      sendInputImmediate: (data, options) => inputWriteQueue.enqueueQueryReply(id, data, options),
       ...(connectionId
         ? {}
         : {
-            sendInputAccepted: (data: string) => inputWriteQueue.enqueueAccepted(id, data)
+            sendInputAccepted: (data: string, options?: PtyInputOperationOptions) =>
+              inputWriteQueue.enqueueAccepted(id, data, options)
           })
     })
   }
@@ -210,35 +219,47 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
       storedCallbacks = {}
     },
 
-    sendInput(data) {
+    sendInput(data, options) {
       if (!destroyed && preconnectInputBuffer?.isBuffering()) {
-        return preconnectInputBuffer.enqueue(data, 'ordinary', opts.onPreconnectInput)
-      }
-      return !destroyed && connected && ptyId ? inputWriteQueue.enqueue(ptyId, data) : false
-    },
-
-    sendInputImmediate(data) {
-      if (!destroyed && preconnectInputBuffer?.isBuffering()) {
-        return preconnectInputBuffer.enqueue(data, 'immediate', opts.onPreconnectInput)
+        return preconnectInputBuffer.enqueue(data, 'ordinary', opts.onPreconnectInput, options)
       }
       return !destroyed && connected && ptyId
-        ? inputWriteQueue.enqueueQueryReply(ptyId, data)
+        ? inputWriteQueue.enqueue(ptyId, data, options)
+        : false
+    },
+
+    sendInputImmediate(data, options) {
+      if (!destroyed && preconnectInputBuffer?.isBuffering()) {
+        return preconnectInputBuffer.enqueue(data, 'immediate', opts.onPreconnectInput, options)
+      }
+      return !destroyed && connected && ptyId
+        ? inputWriteQueue.enqueueQueryReply(ptyId, data, options)
         : false
     },
 
     ...(connectionId
       ? {}
       : {
-          async sendInputAccepted(data: string): Promise<boolean> {
+          async sendInputAccepted(
+            data: string,
+            options?: PtyInputOperationOptions
+          ): Promise<boolean> {
             if (!destroyed && preconnectInputBuffer?.isBuffering()) {
-              return preconnectInputBuffer.enqueueAccepted(data, opts.onPreconnectInput)
+              return preconnectInputBuffer.enqueueAccepted(data, opts.onPreconnectInput, options)
             }
             if (destroyed || !connected || !ptyId) {
               return false
             }
-            return inputWriteQueue.enqueueAccepted(ptyId, data)
+            return inputWriteQueue.enqueueAccepted(ptyId, data, options)
           }
         }),
+
+    async retireInputOperation(operationId: string): Promise<boolean> {
+      if (!connected || !ptyId) {
+        return false
+      }
+      return window.api.pty.retireWriteOperation?.(ptyId, operationId) ?? false
+    },
 
     claimViewport(cols, rows) {
       if (!connected || !ptyId) {

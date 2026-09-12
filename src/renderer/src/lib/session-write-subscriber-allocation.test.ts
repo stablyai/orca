@@ -50,7 +50,9 @@ function createHarness() {
       },
       getState: () => state
     },
-    persist: (payload) => persisted.push(payload)
+    persist: (payload) => {
+      persisted.push(payload)
+    }
   })
   return {
     dispose,
@@ -174,7 +176,9 @@ describe('session write subscriber allocation', () => {
         },
         getState: () => state
       },
-      persist: (payload) => persisted.push(payload),
+      persist: (payload) => {
+        persisted.push(payload)
+      },
       shouldSchedulePersist: () => gateOpen,
       subscribeToPersistGateOpen: () => () => {}
     })

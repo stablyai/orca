@@ -44,7 +44,16 @@ import { UPDATER_METHODS } from './updater'
 import { AGENT_SESSION_METHODS } from './agent-session'
 import { STRUCTURED_AGENT_SESSION_METHODS } from './structured-agent-session'
 import { ARTIFACT_METHODS } from './artifacts'
+import { ORCAD_MIGRATION_METHODS } from './orcad-migration'
+import { PTY_OWNERSHIP_TRANSFER_METHODS } from './pty-ownership-transfer'
+import {
+  PREPARE_CAPTURED_PTY_DESTINATION_METHOD,
+  CAPTURED_PTY_DESTINATION_CAPABILITIES_METHOD
+} from './pty-captured-destination'
 import { AGENT_HOOK_METHODS } from './agent-hooks'
+import { INSPECT_CAPTURED_CATALOG_ACTIVATION_METHOD } from './pty-catalog-activation'
+import { INSPECT_CAPTURED_CATALOG_OUTPUT_COVERAGE_METHOD } from './pty-catalog-output-coverage'
+import { RETIRE_CAPTURED_SOURCE_DELIVERY_METHOD } from './pty-captured-source-retirement'
 
 // Why: a flat manifest keeps registration order explicit and provides one
 // grep-point for "what methods does the RPC server expose?" — useful when
@@ -54,6 +63,13 @@ export const ALL_RPC_METHODS = [
   ...AGENT_HOOK_METHODS,
   ...AI_VAULT_METHODS,
   ...ARTIFACT_METHODS,
+  ...ORCAD_MIGRATION_METHODS,
+  ...PTY_OWNERSHIP_TRANSFER_METHODS,
+  PREPARE_CAPTURED_PTY_DESTINATION_METHOD,
+  CAPTURED_PTY_DESTINATION_CAPABILITIES_METHOD,
+  INSPECT_CAPTURED_CATALOG_ACTIVATION_METHOD,
+  INSPECT_CAPTURED_CATALOG_OUTPUT_COVERAGE_METHOD,
+  RETIRE_CAPTURED_SOURCE_DELIVERY_METHOD,
   ...AUTOMATION_METHODS,
   ...REPO_METHODS,
   ...WORKTREE_METHODS,

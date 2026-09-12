@@ -216,6 +216,7 @@ export class OrcaRuntimeWithCloseMobileSessionTab extends OrcaRuntimeWithRefuseU
           this.closeHeadlessMobileTerminalTab(worktreeId, remainingSnapshot, remainingTab, {
             // Why: the renderer may already have durably removed the tab before acknowledging.
             allowMissingPersistedTab: true,
+            killPtys: !options.localPtyTeardownOwnedExternally,
             force: options.force,
             ...(remainingPtyCloseAuthority ? { authorizedPty: remainingPtyCloseAuthority.pty } : {})
           })
@@ -229,6 +230,7 @@ export class OrcaRuntimeWithCloseMobileSessionTab extends OrcaRuntimeWithRefuseU
       if (closingWholeParent && this.isRuntimeOwnedHeadlessMobileTab(worktreeId, tab)) {
         this.closeHeadlessMobileTerminalTab(worktreeId, snapshot, tab, {
           force: options.force,
+          killPtys: !options.localPtyTeardownOwnedExternally,
           ...(ptyCloseAuthority ? { authorizedPty: ptyCloseAuthority.pty } : {})
         })
         this.notifyRendererOfHeadlessTerminalClose(tab.parentTabId)
@@ -237,6 +239,7 @@ export class OrcaRuntimeWithCloseMobileSessionTab extends OrcaRuntimeWithRefuseU
       if (!this.notifier?.closeTerminal) {
         this.closeHeadlessMobileTerminalTab(worktreeId, snapshot, tab, {
           force: options.force,
+          killPtys: !options.localPtyTeardownOwnedExternally,
           ...(ptyCloseAuthority ? { authorizedPty: ptyCloseAuthority.pty } : {})
         })
         return finishCommittedClose()
@@ -244,7 +247,10 @@ export class OrcaRuntimeWithCloseMobileSessionTab extends OrcaRuntimeWithRefuseU
       if (tab.id === tabId) {
         const pty = this.findPtyForMobileTerminalTab(worktreeId, tab)
         if (pty) {
-          if (this.ptyController?.kill(pty.ptyId) !== true) {
+          if (
+            !options.localPtyTeardownOwnedExternally &&
+            this.ptyController?.kill(pty.ptyId) !== true
+          ) {
             throw new Error('terminal_close_failed')
           }
           return finishCommittedClose()

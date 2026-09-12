@@ -1225,3 +1225,30 @@ index 8a10076e3963e33b4a7d1e4602333eb3f4772dc9..c6dcf18b762e3c56fe22e9c2d49b8e55
        this._flushDeletedTask.flush();
      }
    }
+diff --git a/src/common/services/CoreService.ts b/src/common/services/CoreService.ts
+index b3e04ebe6f27e7941a2808f96d10fb2700f7b735..5ef3b52dbbd5ee2dc57938e12f57fc13aec66c69 100644
+--- a/src/common/services/CoreService.ts
++++ b/src/common/services/CoreService.ts
+@@ -46,6 +46,7 @@ export class CoreService extends Disposable implements ICoreService {
+ 
+   private readonly _onData = this._register(new Emitter<string>());
+   public readonly onData = this._onData.event;
++  public orcaDataEventIsUserInput: boolean = false;
+   private readonly _onUserInput = this._register(new Emitter<void>());
+   public readonly onUserInput = this._onUserInput.event;
+   private readonly _onBinary = this._register(new Emitter<string>());
+@@ -91,7 +92,13 @@ export class CoreService extends Disposable implements ICoreService {
+     // Fire onData API
+     this._logService.debug(`sending data "${data}"`);
+     this._logService.trace(`sending data (codes)`, () => data.split('').map(e => e.charCodeAt(0)));
+-    this._onData.fire(data);
++    const previousUserInput = this.orcaDataEventIsUserInput;
++    this.orcaDataEventIsUserInput = wasUserInput;
++    try {
++      this._onData.fire(data);
++    } finally {
++      this.orcaDataEventIsUserInput = previousUserInput;
++    }
+   }
+ 
+   public triggerBinaryEvent(data: string): void {

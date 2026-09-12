@@ -2,6 +2,7 @@ import type { SshConnectionStore } from './ssh-connection-store'
 import type { SshChannelMultiplexer } from './ssh-channel-multiplexer'
 import type { SshConnectionManager } from './ssh-connection-manager'
 import type { SshConnectionState, SshTarget } from '../../shared/ssh-types'
+import type { SshRelaySession } from './ssh-relay-session'
 
 /**
  * The SSH target/state registry, split out of `ipc/ssh.ts`.
@@ -90,6 +91,7 @@ export function getActiveMultiplexer(connectionId: string): SshChannelMultiplexe
 }
 
 let registeredGetSshConnectionManager: (() => SshConnectionManager | null) | null = null
+let registeredHasDirectSshAuthority: ((targetId: string) => boolean) | null = null
 
 export function setSshConnectionManagerResolver(
   resolve: (() => SshConnectionManager | null) | null
@@ -107,4 +109,35 @@ export function setSshConnectionManagerResolver(
  */
 export function getSshConnectionManager(): SshConnectionManager | null {
   return registeredGetSshConnectionManager?.() ?? null
+}
+
+export function setDirectSshAuthorityResolver(
+  resolve: ((targetId: string) => boolean) | null
+): void {
+  registeredHasDirectSshAuthority = resolve
+}
+
+export function hasRegisteredDirectSshAuthority(targetId: string): boolean {
+  return registeredHasDirectSshAuthority?.(targetId) ?? false
+}
+
+type NetworkTunnelOpener = (
+  targetId: string,
+  options?: Parameters<SshRelaySession['openNetworkTunnel']>[0]
+) => ReturnType<SshRelaySession['openNetworkTunnel']>
+
+let registeredOpenNetworkTunnel: NetworkTunnelOpener | null = null
+
+export function setSshNetworkTunnelResolver(resolve: NetworkTunnelOpener | null): void {
+  registeredOpenNetworkTunnel = resolve
+}
+
+export function openRegisteredSshNetworkTunnel(
+  targetId: string,
+  options?: Parameters<SshRelaySession['openNetworkTunnel']>[0]
+): ReturnType<SshRelaySession['openNetworkTunnel']> {
+  if (!registeredOpenNetworkTunnel) {
+    throw new Error('ssh_network_tunnel_resolver_not_installed')
+  }
+  return registeredOpenNetworkTunnel(targetId, options)
 }

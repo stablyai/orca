@@ -6903,7 +6903,7 @@
       "invariant": "After a TUI exits or is killed, reveal, reattach, snapshot replay, or renderer remount must not deliver terminal-owned mouse or alternate-screen protocol bytes to the surviving shell. Recovery is an ordered output barrier in the daemon session data path: an OSC 133;D completing while the alternate screen is still active pauses the stream at that exact byte boundary, a fresh execution-host process inspection proves shell ownership, and on proof a mode reset is injected as in-stream output so every consumer converges by parsing the same bytes and the queued post-boundary shell output (the prompt) lands on the normal buffer. Snapshots are pure reads. Any failure — refuted proof, timeout, queue overflow, session death, disposal — flushes the queue unmodified, preserving incumbent behavior; later command or mode bytes revoke proof. Clean alternate-screen exits prove ownership asynchronously without pausing.",
       "oracle": "Run one fixed child-TUI journey for normal exit and cleanup-free SIGKILL. Assert renderer and host normal-buffer/non-mouse state, host snapshot terminalOwner metadata, exact PTY writes with no post-exit mouse report, unrelated-pane survival, post-boundary prompt output preserved (normal exit), ordered proof invalidation, bounded settlement and bail-out flush, one inspection per unclean episode with zero scans for ordinary output, split-escape safety at every chunk boundary, and old/new client-host fallback parity.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/daemon/terminal-shell-lifecycle-scanner.test.ts src/main/daemon/terminal-shell-recovery-barrier.test.ts src/main/daemon/session-shell-recovery.test.ts src/main/daemon/session.test.ts src/main/daemon/terminal-host-concurrent-create.test.ts src/main/daemon/daemon-pty-adapter.test.ts src/main/daemon/daemon-restore-scrollback-depth.test.ts src/main/daemon/terminal-checkpoint-serializer.test.ts src/main/providers/agent-foreground-process.test.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/mobile-subscribe-integration.test.ts src/main/runtime/rpc/terminal-multiplex-escape-tail.test.ts src/renderer/src/components/terminal-pane/pty-connection-hidden-codex-queries.test.ts src/renderer/src/components/terminal-pane/pty-connection-reattach-mode-reset.test.ts src/renderer/src/components/terminal-pane/pty-connection-daemon-snapshot-replay.test.ts src/renderer/src/components/terminal-pane/remote-runtime-pty-snapshot-escape-tail.test.ts src/shared/terminal-partial-escape-tail.test.ts src/shared/terminal-partial-escape-tail.fuzz.test.ts --reporter=dot",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/daemon/terminal-shell-lifecycle-scanner.test.ts src/main/daemon/terminal-shell-recovery-barrier.test.ts src/main/daemon/session-shell-recovery.test.ts src/main/daemon/session.test.ts src/main/daemon/terminal-host-concurrent-create.test.ts src/main/daemon/daemon-pty-adapter.test.ts src/main/daemon/daemon-restore-scrollback-depth.test.ts src/main/daemon/terminal-checkpoint-serializer.test.ts src/main/providers/agent-foreground-process.test.ts src/main/providers/agent-foreground-bun-wrapper.test.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/mobile-subscribe-integration.test.ts src/main/runtime/rpc/terminal-multiplex-escape-tail.test.ts src/renderer/src/components/terminal-pane/pty-connection-hidden-codex-queries.test.ts src/renderer/src/components/terminal-pane/pty-connection-reattach-mode-reset.test.ts src/renderer/src/components/terminal-pane/pty-connection-daemon-snapshot-replay.test.ts src/renderer/src/components/terminal-pane/remote-runtime-pty-snapshot-escape-tail.test.ts src/shared/terminal-partial-escape-tail.test.ts src/shared/terminal-partial-escape-tail.fuzz.test.ts --reporter=dot",
         "pnpm exec vitest run --config config/vitest.config.ts tests/e2e/cross-version-wire/cross-version-terminal-wire.unit.test.ts --reporter=dot",
         "pnpm exec electron-vite build --mode e2e",
         "SKIP_BUILD=1 pnpm exec playwright test tests/e2e/terminal-hidden-child-tui-kill-mode-reset.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1"
@@ -6918,6 +6918,7 @@
         "src/main/daemon/daemon-restore-scrollback-depth.test.ts",
         "src/main/daemon/terminal-checkpoint-serializer.test.ts",
         "src/main/providers/agent-foreground-process.test.ts",
+        "src/main/providers/agent-foreground-bun-wrapper.test.ts",
         "src/main/runtime/orca-runtime.test.ts",
         "src/main/runtime/mobile-subscribe-integration.test.ts",
         "src/main/runtime/rpc/terminal-multiplex-escape-tail.test.ts",
@@ -11151,18 +11152,24 @@
         "pnpm exec vitest run --config config/vitest.config.ts src/main/providers/ssh-pty-provider.test.ts src/main/providers/ssh-pty-source-delivery-ledger.test.ts src/main/ssh/ssh-pty-retired-source-deliveries.test.ts src/main/ssh/ssh-relay-session.test.ts src/main/ssh/ssh-relay-session-data-delivery.test.ts src/main/ssh/ssh-relay-session-recovery-races.test.ts src/main/ssh/ssh-relay-session-incarnation.test.ts src/main/ssh/ssh-relay-session-reconnect-incarnation.test.ts src/main/ssh/ssh-relay-session-terminal-error.test.ts src/main/ssh/ssh-pty-recovery-retention-budget.test.ts src/main/ssh/relay-protocol-backpressure.test.ts src/relay/protocol-backpressure.test.ts src/relay/pty-source-credit-ledger.test.ts src/relay/pty-source-credit-scheduler.test.ts src/relay/relay-pty-source-publication.test.ts src/relay/ssh-pty-source-credit-adapter.test.ts --reporter=dot",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/ssh-pty-model-admission.test.ts src/main/ipc/ssh-pty-output-model-migration.test.ts src/main/ssh/ssh-relay-session-model-migration.test.ts --reporter=dot",
         "pnpm exec vitest run --config config/vitest.config.ts src/relay/git-response-stream-ownership.test.ts src/relay/pty-handler-output-streaming.test.ts --reporter=dot",
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/providers/ssh-pty-notification-routing.test.ts src/main/providers/ssh-pty-provider-agent-session-create-operation.test.ts src/main/providers/ssh-pty-provider-exit-race.test.ts src/main/providers/ssh-pty-provider-reattach-incarnation.test.ts --reporter=dot",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/providers/ssh-pty-notification-routing.test.ts src/main/providers/ssh-pty-notification-recovery-activation.test.ts src/main/providers/ssh-pty-provider-agent-session-create-operation.test.ts src/main/providers/ssh-pty-provider-exit-race.test.ts src/main/providers/ssh-pty-provider-reattach-incarnation.test.ts --reporter=dot",
         "pnpm exec vitest run --config config/vitest.config.ts src/relay/relay-pty-source-recovery-interleavings.test.ts src/relay/relay-pty-source-recovery-completion.test.ts src/relay/relay-pty-source-restore-retry.test.ts --reporter=dot",
         "pnpm exec vitest run --config config/vitest.config.ts src/relay/dispatcher.test.ts src/relay/pty-handler-source-publication.test.ts --reporter=dot",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/ssh/ssh-relay-session-recovery-races.test.ts --reporter=dot",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/ssh-pty-legacy-projection.test.ts --reporter=dot",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/ssh-pty-remote-source-range-consumers.test.ts src/main/runtime/rpc/terminal-source-range-ledger.test.ts src/main/runtime/rpc/terminal-multiplex-source-range-admission.test.ts --reporter=dot",
-        "pnpm exec vitest run --config config/vitest.config.ts src/shared/pty-consumer-session.test.ts src/main/ipc/ssh-pty-output-intake.test.ts src/main/ipc/ssh-pty-output-exit-deadline.test.ts src/main/ipc/ssh-pty-remote-source-range-consumers.test.ts src/main/runtime/rpc/terminal-multiplex-source-range-admission.test.ts src/main/ssh/ssh-multiplexer-transport-writer.test.ts src/main/ssh/ssh-channel-multiplexer.test.ts src/main/ssh/ssh-relay-deploy.test.ts src/relay/dispatcher-client-writer.test.ts --reporter=dot",
-        "pnpm exec vitest run --config config/vitest.config.ts src/shared/pty-consumer-session.test.ts src/main/ipc/ssh-pty-output-intake.test.ts src/main/ipc/ssh-pty-output-generation-guard.test.ts src/main/ipc/ssh-pty-output-exit-deadline.test.ts src/main/ipc/ssh-pty-remote-source-range-consumers.test.ts src/main/runtime/rpc/terminal-multiplex-source-range-admission.test.ts src/main/ssh/ssh-multiplexer-transport-writer.test.ts src/main/ssh/ssh-channel-multiplexer.test.ts src/main/ssh/ssh-channel-multiplexer-backpressure.test.ts src/main/ssh/ssh-relay-deploy.test.ts src/relay/dispatcher-client-writer.test.ts --reporter=dot",
+        "pnpm exec vitest run --config config/vitest.config.ts src/shared/pty-consumer-session.test.ts src/main/ipc/ssh-pty-output-intake.test.ts src/main/ipc/ssh-pty-output-exit-deadline.test.ts src/main/ipc/ssh-pty-remote-source-range-consumers.test.ts src/main/runtime/rpc/terminal-multiplex-source-range-admission.test.ts src/main/ssh/ssh-multiplexer-transport-writer.test.ts src/main/ssh/ssh-channel-multiplexer.test.ts src/main/ssh/ssh-relay-deploy.test.ts src/main/ssh/ssh-relay-deploy-windows.test.ts src/relay/dispatcher-client-writer.test.ts --reporter=dot",
+        "pnpm exec vitest run --config config/vitest.config.ts src/shared/pty-consumer-session.test.ts src/main/ipc/ssh-pty-output-intake.test.ts src/main/ipc/ssh-pty-output-generation-guard.test.ts src/main/ipc/ssh-pty-output-exit-deadline.test.ts src/main/ipc/ssh-pty-remote-source-range-consumers.test.ts src/main/runtime/rpc/terminal-multiplex-source-range-admission.test.ts src/main/ssh/ssh-multiplexer-transport-writer.test.ts src/main/ssh/ssh-channel-multiplexer.test.ts src/main/ssh/ssh-channel-multiplexer-backpressure.test.ts src/main/ssh/ssh-relay-deploy.test.ts src/main/ssh/ssh-relay-deploy-windows.test.ts src/relay/dispatcher-client-writer.test.ts --reporter=dot",
         "pnpm exec vitest run --config config/vitest.config.ts src/relay/relay-pty-source-restore-retry.test.ts src/main/ssh/ssh-relay-session-recovery-races.test.ts src/main/runtime/rpc/terminal-source-range-ledger.test.ts src/main/runtime/rpc/terminal-multiplex-source-range-admission.test.ts src/main/ssh/ssh-multiplexer-transport-writer.test.ts src/main/ssh/ssh-channel-multiplexer-backpressure.test.ts src/main/providers/ssh-pty-notification-routing.test.ts src/main/providers/ssh-pty-source-delivery-ledger.test.ts src/main/ssh/ssh-pty-retired-source-deliveries.test.ts src/main/providers/ssh-pty-provider-agent-session-create-operation.test.ts src/main/providers/ssh-pty-provider-exit-race.test.ts src/main/ipc/ssh-pty-output-exit-deadline.test.ts src/main/ipc/ssh-pty-remote-source-range-consumers.test.ts --reporter=dot",
+        "pnpm exec vitest run --config config/vitest.config.ts src/relay/relay-pty-source-restore-retry.test.ts src/main/ssh/ssh-relay-session-recovery-races.test.ts src/main/runtime/rpc/terminal-source-range-ledger.test.ts src/main/runtime/rpc/terminal-multiplex-source-range-admission.test.ts src/main/ssh/ssh-multiplexer-transport-writer.test.ts src/main/ssh/ssh-channel-multiplexer-backpressure.test.ts src/main/providers/ssh-pty-notification-routing.test.ts src/main/providers/ssh-pty-notification-recovery-activation.test.ts src/main/providers/ssh-pty-source-delivery-ledger.test.ts src/main/ssh/ssh-pty-retired-source-deliveries.test.ts src/main/providers/ssh-pty-provider-agent-session-create-operation.test.ts src/main/providers/ssh-pty-provider-exit-race.test.ts src/main/ipc/ssh-pty-output-exit-deadline.test.ts src/main/ipc/ssh-pty-remote-source-range-consumers.test.ts --reporter=dot",
         "pnpm exec vitest run src/main/providers/ssh-pty-notification-routing.test.ts src/main/providers/ssh-pty-provider-exit-race.test.ts src/main/ssh/ssh-relay-session-data-delivery.test.ts src/main/ssh/ssh-relay-session-recovery-races.test.ts src/main/ssh/ssh-relay-session-reconnect-incarnation.test.ts src/main/ssh/ssh-relay-session-incarnation.test.ts src/main/ssh/ssh-relay-session.test.ts --reporter=dot",
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/ssh/ssh-relay-session.test.ts src/main/ssh/ssh-relay-session-data-delivery.test.ts src/main/ssh/ssh-relay-session-reconnect-incarnation.test.ts src/main/ssh/ssh-relay-deploy.test.ts src/relay/ssh-pty-consumer-session-adapter.test.ts src/main/persistence-ssh-targets-and-pane-keys.test.ts --reporter=dot",
+        "pnpm exec vitest run src/main/providers/ssh-pty-notification-routing.test.ts src/main/providers/ssh-pty-notification-recovery-activation.test.ts src/main/providers/ssh-pty-provider-exit-race.test.ts src/main/ssh/ssh-relay-session-data-delivery.test.ts src/main/ssh/ssh-relay-session-recovery-races.test.ts src/main/ssh/ssh-relay-session-reconnect-incarnation.test.ts src/main/ssh/ssh-relay-session-incarnation.test.ts src/main/ssh/ssh-relay-session.test.ts --reporter=dot",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/ssh/ssh-relay-session.test.ts src/main/ssh/ssh-relay-session-data-delivery.test.ts src/main/ssh/ssh-relay-session-reconnect-incarnation.test.ts src/main/ssh/ssh-relay-deploy.test.ts src/main/ssh/ssh-relay-deploy-windows.test.ts src/relay/ssh-pty-consumer-session-adapter.test.ts src/main/persistence-ssh-targets-and-pane-keys.test.ts --reporter=dot",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/providers/ssh-pty-notification-routing.test.ts src/main/providers/ssh-pty-provider-reattach-incarnation.test.ts src/relay/relay-pty-source-recovery-interleavings.test.ts src/main/ssh/ssh-relay-deploy.test.ts src/main/ssh/ssh-relay-deploy-windows.test.ts src/main/ssh/ssh-relay-session-data-delivery.test.ts --reporter=dot",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/providers/ssh-pty-notification-routing.test.ts src/main/providers/ssh-pty-notification-recovery-activation.test.ts src/main/providers/ssh-pty-provider-reattach-incarnation.test.ts src/relay/relay-pty-source-recovery-interleavings.test.ts src/main/ssh/ssh-relay-deploy.test.ts src/main/ssh/ssh-relay-deploy-windows.test.ts src/main/ssh/ssh-relay-session-data-delivery.test.ts --reporter=dot",
+        // Preserve the historical five-file run; it did not exercise Windows deploy contracts.
         "pnpm exec vitest run --config config/vitest.config.ts src/main/providers/ssh-pty-notification-routing.test.ts src/main/providers/ssh-pty-provider-reattach-incarnation.test.ts src/relay/relay-pty-source-recovery-interleavings.test.ts src/main/ssh/ssh-relay-deploy.test.ts src/main/ssh/ssh-relay-session-data-delivery.test.ts --reporter=dot",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/providers/ssh-pty-notification-routing.test.ts src/main/providers/ssh-pty-notification-recovery-activation.test.ts src/main/providers/ssh-pty-provider-reattach-incarnation.test.ts src/relay/relay-pty-source-recovery-interleavings.test.ts src/main/ssh/ssh-relay-deploy.test.ts src/main/ssh/ssh-relay-session-data-delivery.test.ts --reporter=dot",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/agent-hooks/wsl-hook-relay-sentinel.test.ts --reporter=dot",
         "ORCA_E2E_SSH_DOCKER=1 SKIP_BUILD=1 pnpm exec playwright test tests/e2e/ssh-docker-relay-perf.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
         "ORCA_E2E_SSH_DOCKER=1 pnpm exec playwright test tests/e2e/ssh-docker-relay-perf.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
@@ -11182,6 +11189,7 @@
         "src/main/runtime/orca-runtime-tail-wait-memo.test.ts",
         "src/main/providers/ssh-pty-provider.test.ts",
         "src/main/providers/ssh-pty-notification-routing.test.ts",
+        "src/main/providers/ssh-pty-notification-recovery-activation.test.ts",
         "src/main/providers/ssh-pty-source-delivery-ledger.test.ts",
         "src/main/providers/ssh-pty-provider-agent-session-create-operation.test.ts",
         "src/main/providers/ssh-pty-provider-exit-race.test.ts",
@@ -11221,6 +11229,7 @@
         "src/main/ssh/ssh-channel-multiplexer.test.ts",
         "src/main/ssh/ssh-channel-multiplexer-backpressure.test.ts",
         "src/main/ssh/ssh-relay-deploy.test.ts",
+        "src/main/ssh/ssh-relay-deploy-windows.test.ts",
         "src/main/persistence-ssh-targets-and-pane-keys.test.ts",
         "src/relay/dispatcher-client-writer.test.ts",
         "src/main/agent-hooks/wsl-hook-relay-sentinel.test.ts",
@@ -11286,9 +11295,14 @@
         {
           "file": "src/main/providers/ssh-pty-notification-routing.test.ts",
           "assertions": [
+            "exact source frames use their immutable incarnation without invoking or mutating the legacy incarnation resolver"
+          ]
+        },
+        {
+          "file": "src/main/providers/ssh-pty-notification-recovery-activation.test.ts",
+          "assertions": [
             "provisional source frames remain unprojected and are discarded on rollback",
             "held and later recovery frames route only to the private sink until final commit, without ordinary listeners or live PTY publication",
-            "exact source frames use their immutable incarnation without invoking or mutating the legacy incarnation resolver",
             "exit during private recovery retires the activation ledger at final commit and rejects late same-token frames",
             "private recovery retirement restores the exact predecessor without issuing a second cancellation",
             "older rollback cancels only its exact token without replacing a newer activation"
@@ -11656,6 +11670,15 @@
           "result": "passed",
           "durationSeconds": 1.63,
           "summary": "Five deterministic provider, relay, deploy, and session files passed 70 tests after red seams proved that source frames mutated legacy incarnation state and generic restore-required reattach returned an outputless live PTY. The candidate keeps exact source identity side-effect free, fails generic restore-required reattach as expired, offers V1 through reconnect, and proves a failed recovery activation stays private and exact-retryable until successful response settlement; no live topology was exercised."
+        },
+        {
+          "date": "2026-09-08",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/providers/ssh-pty-notification-routing.test.ts src/main/providers/ssh-pty-provider-reattach-incarnation.test.ts src/relay/relay-pty-source-recovery-interleavings.test.ts src/main/ssh/ssh-relay-deploy.test.ts src/main/ssh/ssh-relay-deploy-windows.test.ts src/main/ssh/ssh-relay-session-data-delivery.test.ts --reporter=dot",
+          "result": "passed",
+          "durationSeconds": 3.78,
+          "summary": "Current branch: 77 tests passed across six files, including simulated Windows deployment contracts on macOS. No live Windows or remote-host coverage claimed by this run."
         },
         {
           "date": "2026-07-28",
@@ -12084,6 +12107,13 @@
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/hooks/remote-workspace-target-sync.test.ts src/renderer/src/app-shell/remote-workspace-unplaced-upload-suppression.test.tsx --reporter=dot",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/remote-workspace-cache.test.ts src/main/ipc/remote-workspace.test.ts src/main/ipc/remote-workspace-patch-queue.test.ts --reporter=dot",
         "pnpm exec vitest run --config config/vitest.config.ts src/main/ipc/repos-remote.test.ts src/main/ipc/ssh.test.ts src/main/ipc/worktrees-ssh-repo-owner-resolution.test.ts src/main/ipc/worktrees-lineage-hydration.test.ts src/main/runtime/public-ssh-state.test.ts src/main/ssh/ssh-connection-manager.test.ts src/main/ssh/ssh-connection.test.ts src/main/ssh/ssh-provider-authority.test.ts src/preload/ssh-authority-forwarding.test.ts src/renderer/src/runtime/runtime-client-events.test.ts src/renderer/src/runtime/runtime-environment-ssh-state.test.ts src/shared/ssh-retained-payload-admission.test.ts src/shared/ssh-types.test.ts --reporter=dot",
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/ssh/ssh-connection-transport-closure.test.ts src/main/ssh/ssh-connection-manager-closure.test.ts src/main/ssh/ssh-connection-disconnect-drain.test.ts src/main/ssh/ssh-connection-manager-exclusive.test.ts src/main/ssh/ssh-transport-close-ledger.test.ts --reporter=dot",
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/ssh/orcad-live-successor-readiness.test.ts src/main/ssh/orcad-live-successor-control-absence.test.ts src/main/ssh/orcad-live-applied-coverage-evidence.test.ts --reporter=dot",
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/ssh/orcad-live-successor-completion-records.test.ts src/main/ssh/orcad-live-successor-route-preparation.test.ts --reporter=dot",
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/ssh/orcad-live-successor-migration-completion.test.ts src/main/ssh/orcad-live-successor-readiness.test.ts src/main/ssh/orcad-live-migration-resume.test.ts --reporter=dot",
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/ssh/orcad-live-resume-authority-selection.test.ts src/main/ssh/orcad-live-successor-migration-resume.test.ts --reporter=dot",
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/outgoing-pty-model-disposal.test.ts src/main/runtime/outgoing-pty-model-disposal-missing.test.ts src/main/runtime/orca-runtime-outgoing-graph-model-cleanup.test.ts src/main/ssh/orcad-live-successor-runtime-cleanup.test.ts src/main/ssh/orcad-live-successor-runtime-cleanup.integration.test.ts --reporter=dot",
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm exec vitest run --config config/vitest.config.ts src/main/ssh/orcad-live-completed-journal.test.ts src/main/ssh/orcad-live-successor-completed-recovery.test.ts src/main/ssh/orcad-committed-successor-profile-authority.test.ts src/main/ssh/orcad-committed-profile-version-admission.test.ts --reporter=dot",
         "pnpm exec electron-vite build --mode e2e",
         "pnpm run build:web-from-renderer",
         "SKIP_BUILD=1 pnpm exec playwright test tests/e2e/paired-remote-terminal-materialization-reconnect.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
@@ -12147,6 +12177,28 @@
         "src/main/ipc/worktrees-lineage-hydration.test.ts",
         "src/main/runtime/public-ssh-state.test.ts",
         "src/main/ssh/ssh-connection-manager.test.ts",
+        "src/main/ssh/ssh-connection-transport-closure.test.ts",
+        "src/main/ssh/ssh-connection-manager-closure.test.ts",
+        "src/main/ssh/ssh-connection-disconnect-drain.test.ts",
+        "src/main/ssh/ssh-connection-manager-exclusive.test.ts",
+        "src/main/ssh/ssh-transport-close-ledger.test.ts",
+        "src/main/ssh/orcad-live-successor-readiness.test.ts",
+        "src/main/ssh/orcad-live-successor-completion-records.test.ts",
+        "src/main/ssh/orcad-live-successor-route-preparation.test.ts",
+        "src/main/ssh/orcad-live-successor-migration-completion.test.ts",
+        "src/main/ssh/orcad-live-resume-authority-selection.test.ts",
+        "src/main/ssh/orcad-live-successor-migration-resume.test.ts",
+        "src/main/runtime/outgoing-pty-model-disposal.test.ts",
+        "src/main/runtime/outgoing-pty-model-disposal-missing.test.ts",
+        "src/main/runtime/orca-runtime-outgoing-graph-model-cleanup.test.ts",
+        "src/main/ssh/orcad-live-successor-runtime-cleanup.test.ts",
+        "src/main/ssh/orcad-live-successor-runtime-cleanup.integration.test.ts",
+        "src/main/ssh/orcad-live-completed-journal.test.ts",
+        "src/main/ssh/orcad-live-successor-completed-recovery.test.ts",
+        "src/main/ssh/orcad-committed-successor-profile-authority.test.ts",
+        "src/main/ssh/orcad-committed-profile-version-admission.test.ts",
+        "src/main/ssh/orcad-live-successor-control-absence.test.ts",
+        "src/main/ssh/orcad-live-applied-coverage-evidence.test.ts",
         "src/main/ssh/ssh-connection.test.ts",
         "src/main/ssh/ssh-provider-authority.test.ts",
         "src/preload/ssh-authority-forwarding.test.ts",
@@ -13514,6 +13566,7 @@
       "oracle": "Renderer tests assert exact bytes across client/PTY-host combinations, including Kitty keyboard protocol active and inactive on Windows and non-Windows hosts, and prove SSH identity, the environment encoded in an active remote-runtime PTY id, and live local-session identity outrank current worktree ownership, while unavailable platform metadata falls back to the client. A live linux-arm64 SSH PTY independently captured Esc+CR with KKP inactive and CSI-u with KKP active. Fresh Windows process evidence authorizes Droid bytes only after a recognized global candidate is intersected with the exact ConPTY console process list; detached descendants, helper failure/timeout/root-only fallback, stale PTY exit/rebind results, typed text, and hook/OSC output fail closed. A new OSC 133;C immediately publishes a routing-neutral generation, including during D-to-C races. In cmd.exe/Git Bash/custom shells without OSC 133, accepted inferred commands start the same fresh generation; accepted submit/interrupt, title exit, focus, and visibility revoke trusted Droid bytes while one bounded confirmation runs. Detach preserves the live PTY's source shell override so WSL/native classification cannot change with the current default. Ordinary fast shell commands use cached/no-scan paths; routing-relevant confirmation bypasses cached process snapshots and keeps the bounded three-read ladder. Daemon protocol v21 persists only an allowlisted launchAgent; warm reattach uses it as a display/confirmation hint and restores routing only after current process proof. The Windows Electron test focuses the real xterm textarea and records exact renderer-to-main PTY writes.",
       "commands": [
         "pnpm exec vitest run --config config/vitest.config.ts src/main/daemon/daemon-foreground-confirmation-protocol.test.ts src/main/daemon/daemon-pty-adapter.test.ts src/main/daemon/daemon-pty-router.test.ts src/main/daemon/daemon-server.test.ts src/main/daemon/degraded-daemon-pty-provider.test.ts src/main/daemon/pty-subprocess-foreground-scan-cadence.test.ts src/main/daemon/pty-subprocess.test.ts src/main/ipc/pty-runtime-kill-and-exit.test.ts src/main/providers/agent-foreground-process.test.ts src/main/providers/local-pty-provider-foreground-process.test.ts src/main/daemon/pty-subprocess-foreground-degraded-scan.test.ts src/main/providers/windows-console-attached-processes.test.ts src/main/providers/windows-pty-job-membership.test.ts src/renderer/src/components/terminal-pane/pane-foreground-agent-tracker.test.ts src/renderer/src/components/terminal-pane/pty-connection-command-finished-cleanup.test.ts src/renderer/src/components/terminal-pane/pty-connection-foreground-agent-routing.test.ts src/renderer/src/components/terminal-pane/pty-connection-foreground-agent-sampling.test.ts src/renderer/src/components/terminal-pane/pty-transport-reattach-admission.test.ts src/renderer/src/components/terminal-pane/terminal-pane-tab-detach.test.ts src/renderer/src/components/terminal-pane/terminal-shortcut-policy.test.ts src/renderer/src/components/terminal-pane/terminal-windows-shift-enter.test.ts src/renderer/src/store/slices/store-active-worktree-terminal-creation.test.ts src/renderer/src/store/slices/terminal-pane-detach-agent-identity.test.ts src/shared/agent-process-recognition.test.ts src/shared/process-table-snapshot.test.ts tests/e2e/terminal-foreground-confirmation.unit.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/daemon/daemon-foreground-confirmation-protocol.test.ts src/main/daemon/daemon-pty-adapter.test.ts src/main/daemon/daemon-pty-router.test.ts src/main/daemon/daemon-server.test.ts src/main/daemon/degraded-daemon-pty-provider.test.ts src/main/daemon/pty-subprocess-foreground-scan-cadence.test.ts src/main/daemon/pty-subprocess.test.ts src/main/ipc/pty-runtime-kill-and-exit.test.ts src/main/providers/agent-foreground-process.test.ts src/main/providers/agent-foreground-bun-wrapper.test.ts src/main/providers/local-pty-provider-foreground-process.test.ts src/main/daemon/pty-subprocess-foreground-degraded-scan.test.ts src/main/providers/windows-console-attached-processes.test.ts src/main/providers/windows-pty-job-membership.test.ts src/renderer/src/components/terminal-pane/pane-foreground-agent-tracker.test.ts src/renderer/src/components/terminal-pane/pty-connection-command-finished-cleanup.test.ts src/renderer/src/components/terminal-pane/pty-connection-foreground-agent-routing.test.ts src/renderer/src/components/terminal-pane/pty-connection-foreground-agent-sampling.test.ts src/renderer/src/components/terminal-pane/pty-transport-reattach-admission.test.ts src/renderer/src/components/terminal-pane/terminal-pane-tab-detach.test.ts src/renderer/src/components/terminal-pane/terminal-shortcut-policy.test.ts src/renderer/src/components/terminal-pane/terminal-windows-shift-enter.test.ts src/renderer/src/store/slices/store-active-worktree-terminal-creation.test.ts src/renderer/src/store/slices/terminal-pane-detach-agent-identity.test.ts src/shared/agent-process-recognition.test.ts src/shared/process-table-snapshot.test.ts tests/e2e/terminal-foreground-confirmation.unit.test.ts",
         "pnpm run test:e2e -- tests/e2e/terminal-shortcuts.spec.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/terminal-pane/keyboard-handlers.test.ts src/renderer/src/components/terminal-pane/remote-runtime-pty-transport-pane-handle-resolution.test.ts src/renderer/src/components/terminal-pane/terminal-input-host-platform.test.ts"
       ],
@@ -13527,6 +13580,7 @@
         "src/main/daemon/pty-subprocess.test.ts",
         "src/main/ipc/pty-runtime-kill-and-exit.test.ts",
         "src/main/providers/agent-foreground-process.test.ts",
+        "src/main/providers/agent-foreground-bun-wrapper.test.ts",
         "src/main/providers/local-pty-provider-foreground-process.test.ts",
         "src/main/daemon/pty-subprocess-foreground-degraded-scan.test.ts",
         "src/main/providers/windows-console-attached-processes.test.ts",
@@ -13805,7 +13859,8 @@
       "oracle": "A quarter-circle Claude task title authorizes without a provider lookup only on the exact PTY incarnation carrying verified managed-Claude launch identity; the same title in a bare pane, with an unverified launch hint, or after PTY incarnation replacement is refused while current Claude activity remains a working signal. Fresh explicit state plus ordinary PowerShell plus confirmed recognized agent is sendable on the same PTY. Confirmed shell/non-agent, unavailable confirmation, PTY exit, handle rebind, or a callback PTY mismatch returns a refusal or not-writable result and writes zero bytes.",
       "commands": [
         "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/quarter-circle-title-send-authorization.test.ts",
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/terminal-send.test.ts src/main/ipc/pty-runtime-kill-and-exit.test.ts src/main/providers/agent-foreground-process.test.ts src/main/providers/local-pty-provider-foreground-process.test.ts src/main/daemon/pty-subprocess-foreground-degraded-scan.test.ts src/main/providers/windows-console-attached-processes.test.ts src/main/providers/windows-pty-job-membership.test.ts src/main/daemon/daemon-foreground-confirmation-protocol.test.ts src/main/daemon/pty-subprocess.test.ts src/renderer/src/lib/active-agent-note-send-explicit-target.test.ts src/renderer/src/components/browser-pane/annotate/BrowserAnnotationSendMenuContent.test.tsx"
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/terminal-send.test.ts src/main/ipc/pty-runtime-kill-and-exit.test.ts src/main/providers/agent-foreground-process.test.ts src/main/providers/local-pty-provider-foreground-process.test.ts src/main/daemon/pty-subprocess-foreground-degraded-scan.test.ts src/main/providers/windows-console-attached-processes.test.ts src/main/providers/windows-pty-job-membership.test.ts src/main/daemon/daemon-foreground-confirmation-protocol.test.ts src/main/daemon/pty-subprocess.test.ts src/renderer/src/lib/active-agent-note-send-explicit-target.test.ts src/renderer/src/components/browser-pane/annotate/BrowserAnnotationSendMenuContent.test.tsx",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/orca-runtime.test.ts src/main/runtime/rpc/terminal-send.test.ts src/main/ipc/pty-runtime-kill-and-exit.test.ts src/main/providers/agent-foreground-process.test.ts src/main/providers/agent-foreground-bun-wrapper.test.ts src/main/providers/local-pty-provider-foreground-process.test.ts src/main/daemon/pty-subprocess-foreground-degraded-scan.test.ts src/main/providers/windows-console-attached-processes.test.ts src/main/providers/windows-pty-job-membership.test.ts src/main/daemon/daemon-foreground-confirmation-protocol.test.ts src/main/daemon/pty-subprocess.test.ts src/renderer/src/lib/active-agent-note-send-explicit-target.test.ts src/renderer/src/components/browser-pane/annotate/BrowserAnnotationSendMenuContent.test.tsx"
       ],
       "testFiles": [
         "src/main/runtime/quarter-circle-title-send-authorization.test.ts",
@@ -13813,6 +13868,7 @@
         "src/main/runtime/rpc/terminal-send.test.ts",
         "src/main/ipc/pty-runtime-kill-and-exit.test.ts",
         "src/main/providers/agent-foreground-process.test.ts",
+        "src/main/providers/agent-foreground-bun-wrapper.test.ts",
         "src/main/providers/local-pty-provider-foreground-process.test.ts",
         "src/main/daemon/pty-subprocess-foreground-degraded-scan.test.ts",
         "src/main/providers/windows-console-attached-processes.test.ts",
@@ -17067,8 +17123,9 @@
         "node config/scripts/runtime-file-watcher-resource-probe.mjs",
         "node config/scripts/runtime-file-watcher-fault-harness.mjs",
         "ELECTRON_RUN_AS_NODE=1 pnpm exec electron config/scripts/runtime-file-watcher-fault-harness.mjs",
-        "pnpm exec vitest run --config config/vitest.config.ts src/relay/relay-watcher-setup-wait.test.ts src/relay/relay-filesystem-watch-registry.test.ts src/relay/fs-handler.test.ts src/relay/git-handler.test.ts src/relay/subprocess.test.ts src/main/ssh/ssh-relay-versioned-install.test.ts config/scripts/package-electron-runtime-contract.test.mjs",
+        "pnpm exec vitest run --config config/vitest.config.ts src/relay/relay-watcher-setup-wait.test.ts src/relay/relay-filesystem-watch-registry.test.ts src/relay/fs-handler.test.ts src/relay/git-handler.test.ts src/relay/subprocess.test.ts src/main/ssh/ssh-relay-versioned-install.test.ts config/scripts/package-electron-runtime-contract.test.mjs config/scripts/orcad-bun-pr-workflow.test.mjs",
         "pnpm exec vitest run --config config/vitest.config.ts src/relay/relay-filesystem-watch-registry.test.ts src/relay/fs-handler.test.ts src/relay/git-handler.test.ts src/relay/subprocess.test.ts src/main/ssh/ssh-relay-versioned-install.test.ts config/scripts/package-electron-runtime-contract.test.mjs",
+        "pnpm exec vitest run --config config/vitest.config.ts src/relay/relay-filesystem-watch-registry.test.ts src/relay/fs-handler.test.ts src/relay/git-handler.test.ts src/relay/subprocess.test.ts src/main/ssh/ssh-relay-versioned-install.test.ts config/scripts/package-electron-runtime-contract.test.mjs config/scripts/orcad-bun-pr-workflow.test.mjs",
         "pnpm run build:relay",
         "node config/scripts/relay-watcher-fault-harness.mjs"
       ],
@@ -17133,6 +17190,7 @@
         "src/relay/subprocess.test.ts",
         "src/main/ssh/ssh-relay-versioned-install.test.ts",
         "config/scripts/package-electron-runtime-contract.test.mjs",
+        "config/scripts/orcad-bun-pr-workflow.test.mjs",
         "config/scripts/relay-watcher-fault-harness.mjs"
       ],
       "assertionRefs": [
@@ -18509,7 +18567,7 @@
       ],
       "platforms": ["macos", "linux", "windows"],
       "providers": ["ssh"],
-      "coveredPlatforms": ["macos"],
+      "coveredPlatforms": ["macos", "linux"],
       "coveredProviders": ["ssh"],
       "coverageNotes": "A real Node 18 process loads every platform's built companion and runs the bundled Codex and Claude installers against an isolated temporary home. The six artifacts share one platform-neutral source bundle; live SSH transport and physical remote hosts remain uncollected.",
       "motivatingLinks": ["https://github.com/stablyai/orca/pull/12617"],
@@ -19398,6 +19456,1026 @@
         "The sentinel changes a pane title within an existing layout; concurrent split and close conflicts remain separate coverage."
       ],
       "demotionRule": "Demote if a failed push suppresses an identical retry, a successful equal write resumes redundant churn, or the routed observer journey flakes without a diagnosed cause."
+    },
+    {
+      "id": "orcad-bun.websocket-resource-bounds",
+      "title": "Bun orcad WebSockets retain bounded admission and shutdown ownership",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "runtime-transport",
+      "layer": "bun-websocket-transport-lifecycle",
+      "surfaces": [
+        "orcad pairing WebSocket",
+        "mobile runtime connection",
+        "static web client endpoint",
+        "runtime shutdown"
+      ],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local", "remote-runtime"],
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": ["local", "remote-runtime"],
+      "coverageNotes": "Deterministic contracts cover the Bun loopback listener, one-MiB payload cap, 32-MiB native send-backpressure cap with close-on-overflow, 128 upgraded-client cap, 256 raw-TCP cap, ten-second unauthenticated and idle-socket bounds, consecutive-miss heartbeat reaping, exact upgrade forwarding, forced over-capacity termination, and shutdown of pending proxy pairs. The proxy contract executes under Node with mocked loopback connect; the exact bundled Bun server remains part of the release smoke.",
+      "motivatingLinks": ["docs/design/orcad-bun-runtime.md", "https://bun.com/docs/api/http"],
+      "invariant": "The public orcad endpoint admits at most 256 raw TCP sockets and 128 upgraded clients, accepts no message above one MiB, closes a Bun socket before native send buffering exceeds 32 MiB, reaps unauthenticated or persistently silent clients on bounded deadlines, and destroys every outer/inner proxy socket during shutdown.",
+      "oracle": "Start both transport adapters with controlled sockets. Require the caps to be installed before public listen, forward the exact HTTP upgrade line, raw headers, and buffered head only after loopback connect, and destroy both sides on error or stop. Overfill or silence accepted sockets and require short forced termination plus one close callback. Exercise consecutive heartbeat misses without charging suspended event-loop time, then stop with active and half-open clients and require no retained proxy pair.",
+      "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/bun-websocket-upgrade-proxy.test.ts src/main/runtime/rpc/bun-websocket-transport.test.ts src/main/runtime/rpc/ws-transport.test.ts src/main/runtime/rpc/remote-runtime-server-heartbeat.test.ts src/main/runtime/rpc/remote-runtime-server-heartbeat-missed-probe-tolerance.test.ts --reporter=dot"
+      ],
+      "testFiles": [
+        "src/main/runtime/rpc/bun-websocket-upgrade-proxy.test.ts",
+        "src/main/runtime/rpc/bun-websocket-transport.test.ts",
+        "src/main/runtime/rpc/ws-transport.test.ts",
+        "src/main/runtime/rpc/remote-runtime-server-heartbeat.test.ts",
+        "src/main/runtime/rpc/remote-runtime-server-heartbeat-missed-probe-tolerance.test.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/main/runtime/rpc/bun-websocket-upgrade-proxy.test.ts",
+          "assertions": [
+            "the proxy forwards exact upgrade bytes only after loopback connect",
+            "stop destroys pending upstream and downstream sockets and rejects later upgrades"
+          ]
+        },
+        {
+          "file": "src/main/runtime/rpc/bun-websocket-transport.test.ts",
+          "assertions": [
+            "Bun.serve receives payload and backpressure caps on a loopback-only listener",
+            "socket errors and native stop rejection still finalize each accepted client once"
+          ]
+        },
+        {
+          "file": "src/main/runtime/rpc/ws-transport.test.ts",
+          "assertions": [
+            "raw TCP admission is bounded above the upgraded-client budget",
+            "over-capacity and unauthenticated clients are forcibly reaped",
+            "stop does not wait for an unresponsive close handshake"
+          ]
+        },
+        {
+          "file": "src/main/runtime/rpc/remote-runtime-server-heartbeat-missed-probe-tolerance.test.ts",
+          "assertions": [
+            "only consecutive unanswered probes reap a client and event-loop suspension adds no synthetic miss"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-08-29",
+          "runner": "local",
+          "platform": "macos",
+          "result": "passed",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/rpc/bun-websocket-upgrade-proxy.test.ts src/main/runtime/rpc/bun-websocket-transport.test.ts src/main/runtime/rpc/ws-transport.test.ts src/main/runtime/rpc/remote-runtime-server-heartbeat.test.ts src/main/runtime/rpc/remote-runtime-server-heartbeat-missed-probe-tolerance.test.ts --reporter=dot",
+          "durationSeconds": 0.92,
+          "summary": "Five focused files passed 41 admission, proxy, payload, backpressure, heartbeat, authentication-deadline, and shutdown contracts."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 3,
+        "scope": "five deterministic transport lifecycle files plus the separate bundled-Bun release smoke"
+      },
+      "flakeHistory": {
+        "status": "not-started",
+        "evidence": "The Bun-specific proxy and listener contracts are new and have one local run."
+      },
+      "redGreenEvidence": {
+        "status": "partial",
+        "evidence": "The resource caps and proxy cleanup encode defects found during the readiness audit, but a byte-identical reverted control has not been recorded."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "Admission and memory are constant-bounded: 256 raw sockets, 128 upgraded clients, one MiB per inbound message, 32 MiB native send backpressure, one pre-auth timer per unauthenticated client, and one heartbeat timer for the transport. There is no polling beyond the existing heartbeat cadence."
+      },
+      "promotionCriteria": [
+        "Run the exact bundled Bun WebSocket smoke on each supported operating-system family.",
+        "Collect 100 consecutive routed CI passes or 14 days without an unexplained flake.",
+        "Keep raw admission, native payload/backpressure, pre-auth, heartbeat, and shutdown assertions green."
+      ],
+      "knownGaps": [
+        "The direct proxy contract mocks loopback connect and does not execute Bun.serve.",
+        "Physical Linux and Windows WebSocket resource evidence is not recorded.",
+        "The bundled runtime soak now forces native send backpressure repeatedly on macOS; physical Linux/Windows and routed history remain under orcad-bun.runtime-soak."
+      ],
+      "demotionRule": "Demote if raw or upgraded admission becomes unbounded, an oversized or backpressured socket stays open, authentication or heartbeat cleanup loses its deadline, or stop retains either side of an upgrade proxy pair."
+    },
+    {
+      "id": "orcad-bun.pty-job-ownership",
+      "title": "Bun terminal trees preserve flow control and exact Windows ownership",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "terminal-daemon",
+      "layer": "bun-terminal-native-lifecycle",
+      "surfaces": [
+        "daemon PTY spawn",
+        "terminal output pause and resume",
+        "Windows ConPTY clear and resize",
+        "recursive termination",
+        "daemon crash cleanup"
+      ],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local", "ssh", "remote-runtime"],
+      "coveredPlatforms": ["macos", "linux"],
+      "coveredProviders": ["local", "ssh", "remote-runtime"],
+      "coverageNotes": "Deterministic contracts cover split UTF-8, input, resize, clear dispatch, current and late exit listeners, POSIX process-group stop/continue, shutdown resume, the Windows host kill-on-close job, gated wrapper assignment before user command release, hostile Unicode argv, exact per-PTY membership, multi-pass suspension, resume retry, fail-closed flooding, explicit tree termination, normal-exit job close, and wrapper-root membership normalization. Exact final artifacts separately passed bundled-daemon input, output, restart, reattach, and scrollback on physical darwin-arm64 and Linux x64 glibc; the matching adapter source passed direct resize and bounded pause/resume under each artifact's Bun runtime. Win32 kernel calls are injected fakes on macOS; real bun:ffi layouts and ConPTY behavior remain physical release gates.",
+      "motivatingLinks": [
+        "docs/design/orcad-bun-runtime.md",
+        "https://bun.com/blog/bun-v1.3.14#bunterminal-on-windows-via-conpty"
+      ],
+      "invariant": "Every Bun PTY delivers output and exit exactly once, applies negotiated pause without unbounded buffering, resumes before graceful shutdown, and on Windows releases the user command only after exact nested-job ownership exists. A Windows tree that cannot be fully suspended fails closed, explicit termination reaches the whole owned job, daemon death reaps all inherited trees, and normal shell exit does not kill background descendants.",
+      "oracle": "Drive split UTF-8, input, resize, pause/resume, clear, kill, destroy, and late-exit listeners through the adapter. On POSIX require one process-group SIGSTOP/SIGCONT pair and resume-before-signal. On Windows gate a hostile Unicode command behind job assignment, enumerate children appearing during suspension, verify each opened handle still belongs to the job, retry failed resume handles, terminate on incomplete suspension, close all native handles, and normalize the wrapper out of foreground membership. Repeat the FFI layout, ConPTY IO/resize/clear, crash cleanup, recursive termination, normal-exit descendant survival, and flood paths on physical x64 and arm64 Windows.",
+      "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/daemon/pty-subprocess/bun-pty-process.test.ts src/main/daemon/pty-subprocess/windows-bun-pty-job.test.ts src/main/daemon/pty-subprocess/windows-bun-pty-launch.test.ts src/main/providers/windows-pty-job-membership.test.ts src/main/windows/windows-pty-job.test.ts --reporter=dot"
+      ],
+      "testFiles": [
+        "src/main/daemon/pty-subprocess/bun-pty-process.test.ts",
+        "src/main/daemon/pty-subprocess/windows-bun-pty-job.test.ts",
+        "src/main/daemon/pty-subprocess/windows-bun-pty-launch.test.ts",
+        "src/main/providers/windows-pty-job-membership.test.ts",
+        "src/main/windows/windows-pty-job.test.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/main/daemon/pty-subprocess/bun-pty-process.test.ts",
+          "assertions": [
+            "split UTF-8 and exit reach current and late listeners exactly once",
+            "POSIX pause resumes before shutdown and Windows suspension failure terminates the owned tree",
+            "Windows cleanup failures cannot suppress exit delivery"
+          ]
+        },
+        {
+          "file": "src/main/daemon/pty-subprocess/windows-bun-pty-job.test.ts",
+          "assertions": [
+            "the daemon enters one kill-on-close host job before PTY spawn",
+            "newly appearing owned processes are suspended through a bounded multi-pass fence",
+            "failed resume handles remain exact and close terminates rather than abandons a suspended tree"
+          ]
+        },
+        {
+          "file": "src/main/daemon/pty-subprocess/windows-bun-pty-launch.test.ts",
+          "assertions": [
+            "hostile Unicode argv stays in the UTF-16 environment and the ASCII wrapper releases only through its gate"
+          ]
+        },
+        {
+          "file": "src/main/providers/windows-pty-job-membership.test.ts",
+          "assertions": [
+            "the ownership wrapper is removed without turning missing root membership into false exit evidence"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-08-29",
+          "runner": "local",
+          "platform": "macos",
+          "result": "passed",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/daemon/pty-subprocess/bun-pty-process.test.ts src/main/daemon/pty-subprocess/windows-bun-pty-job.test.ts src/main/daemon/pty-subprocess/windows-bun-pty-launch.test.ts src/main/providers/windows-pty-job-membership.test.ts src/main/windows/windows-pty-job.test.ts --reporter=dot",
+          "durationSeconds": 0.14,
+          "summary": "Five focused files passed 48 Bun PTY adapter, process-group flow-control, Windows launch gate, job ownership, exact membership, termination, and cleanup contracts."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 3,
+        "scope": "five deterministic adapter and ownership files plus required physical-host lifecycle runs"
+      },
+      "flakeHistory": {
+        "status": "not-started",
+        "evidence": "The Bun and Windows job-specific contracts are new and have local deterministic evidence only."
+      },
+      "redGreenEvidence": {
+        "status": "partial",
+        "evidence": "Focused regressions caught missing flow control, unavailable exact job ownership, and cleanup-before-exit behavior during development; a complete byte-identical reverted-control run is not recorded."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "POSIX flow control sends one signal per transition. Windows suspension performs at most eight process-list passes, caps one query at 16,384 PIDs, retains one native handle per suspended owned process only until resume/termination, and fails closed instead of buffering producer output."
+      },
+      "promotionCriteria": [
+        "Pass bun:ffi layout/signature, extensionless runtime launch, ConPTY IO/resize/clear, hostile argv, flood, recursive termination, normal-exit descendant, crash cleanup, and restart/reattach oracles on physical Windows x64 and arm64.",
+        "Repeat exact-content PTY lifecycle and restart/reattach evidence on physical macOS and Linux.",
+        "Collect 100 consecutive routed CI passes or 14 days without an unexplained flake."
+      ],
+      "knownGaps": [
+        "Windows kernel32 and ntdll calls are mocked; bun:ffi signatures, pointer widths, and structure offsets have no physical proof.",
+        "The extensionless PE runtime, ConPTY clear/wrap behavior, host job inheritance, recursive termination, and flood recovery are unverified on physical Windows x64 and arm64.",
+        "The direct macOS and Linux flow-control probes run the matching adapter source under each final artifact's Bun runtime; exact final artifacts separately cover the bundled daemon's input, output, restart, reattach, and scrollback paths."
+      ],
+      "demotionRule": "Demote if a PTY can buffer without a bounded producer stop, exit cleanup suppresses delivery, Windows releases a command before exact job assignment, an incomplete suspension does not fail closed, explicit termination misses an owned descendant, or normal shell exit starts killing background descendants."
+    },
+    {
+      "id": "orcad-bun.artifact-matrix",
+      "title": "Every Bun orcad artifact matches its declared native target",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "runtime-packaging",
+      "layer": "bundled-bun-artifact-matrix",
+      "surfaces": [
+        "Bun runtime packaging",
+        "parcel watcher native addon",
+        "agent-browser sidecar",
+        "managed SSH upload inventory",
+        "content-addressed runtime version"
+      ],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local", "ssh", "remote-runtime"],
+      "coveredPlatforms": ["macos", "linux", "windows"],
+      "coveredProviders": ["local", "ssh", "remote-runtime"],
+      "coverageNotes": "One current-source build produces all eight declared targets. The verifier independently checks exact non-empty inventory, the content-derived version, the pinned Bun executable checksum, Mach-O/ELF/PE architecture, glibc versus musl interpreter, watcher architecture, and target-specific browser inclusion. The darwin-arm64 artifact additionally passes native package loading, PTY flow control, and the complete bundled lifecycle with daemon restart, reattach, and scrollback. Cross-format inspection is complete; physical execution remains separate host evidence.",
+      "motivatingLinks": [
+        "docs/design/orcad-bun-handoff.md",
+        "docs/design/orcad-bun-runtime.md",
+        "docs/reference/orcad-operations.md"
+      ],
+      "invariant": "A matrix build emits exactly one complete content-addressed artifact for every declared Bun target. Its runtime and native watcher match that target's operating-system format and architecture, Linux runtime loaders match the declared libc, optional browser presence matches the installed target sidecar, and no recorded version can describe different artifact bytes.",
+      "oracle": "Build all declared targets from one source checkout. Reject missing, empty, or unexpected files; independently stream every declared artifact into the version digest; compare the bundled runtime to its pinned SHA-256; parse Mach-O, ELF, and PE headers without executing foreign binaries; require exact architecture and Linux interpreter family; then execute the host-native artifact through native-package, PTY, restart, daemon-reattach, and scrollback probes.",
+      "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts config/scripts/native-executable-format.test.mjs config/scripts/verify-orcad-bun-matrix.test.mjs --reporter=dot",
+        "pnpm run build:orcad-matrix",
+        "pnpm run verify:orcad-bun-matrix",
+        "node config/scripts/orcad-bun-lifecycle-e2e.mjs --artifact-dir out/orcad-matrix/darwin-arm64"
+      ],
+      "testFiles": [
+        "config/scripts/native-executable-format.test.mjs",
+        "config/scripts/verify-orcad-bun-matrix.test.mjs"
+      ],
+      "assertionRefs": [
+        {
+          "file": "config/scripts/native-executable-format.test.mjs",
+          "assertions": [
+            "ELF64 architecture and glibc or musl interpreter are parsed exactly",
+            "thin 64-bit Mach-O and PE x64 or arm64 identities are parsed exactly",
+            "unknown and truncated native headers fail closed"
+          ]
+        },
+        {
+          "file": "config/scripts/verify-orcad-bun-matrix.test.mjs",
+          "assertions": [
+            "artifact content versions are recomputed in the build's declared byte order"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-08-30",
+          "runner": "local",
+          "platform": "macos",
+          "result": "passed",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts config/scripts/native-executable-format.test.mjs config/scripts/verify-orcad-bun-matrix.test.mjs --reporter=dot",
+          "durationSeconds": 0.12,
+          "summary": "Two focused files passed five independent ELF, Mach-O, PE, malformed-header, and content-version contracts."
+        },
+        {
+          "date": "2026-08-30",
+          "runner": "local",
+          "platform": "macos",
+          "result": "passed",
+          "command": "pnpm run verify:orcad-bun-matrix",
+          "durationSeconds": 1.7,
+          "summary": "All eight current-source artifacts passed exact inventory, independent version, pinned runtime checksum, native architecture, Linux loader, watcher, and browser-sidecar verification."
+        },
+        {
+          "date": "2026-08-30",
+          "runner": "local",
+          "platform": "macos",
+          "result": "passed",
+          "command": "node config/scripts/orcad-bun-lifecycle-e2e.mjs --artifact-dir out/orcad-matrix/darwin-arm64",
+          "durationSeconds": 4.9,
+          "summary": "The exact darwin-arm64 matrix artifact passed readiness, repository and worktree RPC, PTY output, daemon survival, restart adoption, reattach, and scrollback replay."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 600,
+        "scope": "one sequential eight-target build, format verification, and one host-native lifecycle probe"
+      },
+      "flakeHistory": {
+        "status": "not-started",
+        "evidence": "The current-source matrix has two successful local builds and one recorded verification/lifecycle pass; routed CI history has not started."
+      },
+      "redGreenEvidence": {
+        "status": "partial",
+        "evidence": "Malformed native-header fixtures and independent version recomputation fail closed, but a complete byte-identical reverted packaging control is not recorded."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "The builder runs one bounded child per eight declared targets, with no polling or retained artifact buffering. Verification streams content hashes and reads only bounded native headers; foreign binaries are never executed on the build host."
+      },
+      "promotionCriteria": [
+        "Run the exact source-identical artifacts on physical macOS, Linux glibc and musl, and Windows x64 and arm64 hosts.",
+        "Route build plus verification in release CI and collect 100 consecutive passes or 14 days without an unexplained flake.",
+        "Keep exact inventory, content version, pinned runtime, native identity, loader, watcher, and browser-sidecar assertions green."
+      ],
+      "knownGaps": [
+        "Mach-O, ELF, and PE identity proves artifact format, not operating-system execution.",
+        "The exact matrix lifecycle is recorded on darwin-arm64 only; physical Windows x64 and arm64 execution remains unverifiable.",
+        "The win32-arm64 agent-browser sidecar is absent from its installed dependency package and remains an explicitly supported degradation."
+      ],
+      "demotionRule": "Demote if any target is absent, empty, incorrectly addressed, content-version divergent, checksum divergent, wrong-format, wrong-architecture, wrong-libc, or carries an unexpected sidecar; or if the host-native exact artifact cannot start, restart, and reattach its daemon-owned terminal."
+    },
+    {
+      "id": "orcad-bun.runtime-soak",
+      "title": "Bundled Bun terminal and WebSocket lifecycles remain bounded under repetition",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "runtime-transport",
+      "layer": "bundled-bun-runtime-soak",
+      "surfaces": [
+        "Bun terminal input and resize",
+        "PTY producer pause and resume",
+        "Bun WebSocket admission and heartbeat",
+        "native WebSocket send backpressure",
+        "repeated runtime resource teardown"
+      ],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local", "ssh", "remote-runtime"],
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": ["remote-runtime"],
+      "coverageNotes": "The checksum-pinned bundled Bun runtime repeats real PTY input, resize, output flood, process-group pause/resume, and process exit in one process, then repeatedly starts and stops the production WebSocket transport. A paused raw WebSocket client forces more than 32 MiB of native sends so Bun must close on its configured backpressure limit. Each probe forces GC after a warm cycle and bounds retained RSS, heap, and POSIX descriptor growth. The strongest recorded macOS arm64 run completed 100 cycles per probe; Linux, Windows, SSH network disruption, and routed history remain gaps.",
+      "motivatingLinks": ["docs/design/orcad-bun-runtime.md", "docs/design/orcad-bun-handoff.md"],
+      "invariant": "Repeated bundled-Bun PTY and WebSocket lifecycles preserve input, resize, exit, producer pause/resume, heartbeat, payload rejection, and exactly-once close behavior without accumulating processes, sockets, descriptors, heap, or RSS. A client that stops reading must cross the native 32 MiB send-backpressure limit and close instead of retaining unbounded output.",
+      "oracle": "Build one source-identical orcad artifact and run both probes repeatedly under its bundled Bun. On every PTY cycle require a fresh marker, 80x24 to 97x31 resize, bounded paused growth, resumed output, and positive exit. On every WebSocket cycle require authenticated round-trip, heartbeat survival, oversized-input rejection, then pause a raw upgraded client while issuing 48 one-MiB replies and require exactly one close callback. After a warm cycle force GC, sample resources after every teardown, and fail above 96 MiB retained RSS, 32 MiB heap, or four additional POSIX descriptors.",
+      "commands": [
+        "pnpm exec vitest run --config config/vitest.config.ts config/scripts/orcad-bun-soak-budget.test.mjs --reporter=dot",
+        "pnpm run soak:orcad-bun -- --cycles 25",
+        "pnpm run soak:orcad-bun -- --cycles 100"
+      ],
+      "testFiles": ["config/scripts/orcad-bun-soak-budget.test.mjs"],
+      "assertionRefs": [
+        {
+          "file": "config/scripts/orcad-bun-soak-budget.test.mjs",
+          "assertions": [
+            "direct, equals, environment, and pnpm-separator cycle forms select a bounded run",
+            "RSS, heap, and descriptor growth fail independently while descriptor-less platforms remain supported"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-08-30",
+          "runner": "soak",
+          "platform": "macos",
+          "result": "passed",
+          "command": "pnpm run soak:orcad-bun -- --cycles 25",
+          "durationSeconds": 21.48,
+          "summary": "The bundled Bun 1.4.0 artifact passed 25 PTY and 25 WebSocket cycles. PTY retained-RSS growth was 6.2 MiB with one descriptor of warmup variance; WebSocket growth was 22.7 MiB with zero descriptor growth. All 1,200 one-MiB native send attempts closed at the backpressure boundary with no functional or resource-budget failure."
+        },
+        {
+          "date": "2026-08-30",
+          "runner": "soak",
+          "platform": "macos",
+          "result": "passed",
+          "command": "pnpm run soak:orcad-bun -- --cycles 100",
+          "durationSeconds": 84.53,
+          "summary": "The bundled Bun 1.4.0 artifact passed 100 PTY and 100 WebSocket cycles. PTY retained-RSS growth was 6.8 MiB with one descriptor of warmup variance; WebSocket growth was 33.3 MiB with zero descriptor growth. All 4,800 one-MiB native send attempts closed at the backpressure boundary with no functional or resource-budget failure."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 120,
+        "scope": "one local artifact build plus 100 physical bundled-Bun PTY cycles and 100 WebSocket/backpressure cycles"
+      },
+      "flakeHistory": {
+        "status": "not-started",
+        "evidence": "Local macOS arm64 runs at 25 and 100 cycles per probe are recorded; routed CI and multi-day history have not started."
+      },
+      "redGreenEvidence": {
+        "status": "partial",
+        "evidence": "Synthetic budget tests prove each resource ceiling fails independently, and the physical oracle now covers the previously absent native send-backpressure path. A byte-identical reverted production control is not recorded."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "The 100+100 cycle run completed in 84.53 seconds. Post-warmup PTY RSS grew 6.8 MiB and heap 0.4 MiB; WebSocket RSS grew 33.3 MiB and heap 0.4 MiB. Descriptor growth was one and zero respectively. The harness caps retained RSS at 96 MiB, heap at 32 MiB, and enumerable descriptor growth at four."
+      },
+      "promotionCriteria": [
+        "Run the source-identical bundled-Bun soak on physical macOS, Linux, Windows x64, and Windows arm64.",
+        "Route the soak in CI and collect 100 consecutive passes or 14 days without an unexplained flake.",
+        "Keep PTY identity, flow control, native WebSocket backpressure, exactly-once close, and resource ceilings green."
+      ],
+      "knownGaps": [
+        "The first physical soak is macOS arm64 only; Linux and Windows physical runs are not recorded.",
+        "The WebSocket probe restarts the production transport, not the entire orcad process or an SSH tunnel, on each cycle.",
+        "Local multi-cycle runs are not independent routed CI promotion history, and Windows does not expose the POSIX descriptor-count oracle."
+      ],
+      "demotionRule": "Demote if any repeated cycle loses input, resize, resumed output, exit, heartbeat, payload rejection, or exactly-once close; if native backpressure does not close; or if retained RSS, heap, descriptors, processes, or sockets exceed the recorded bounds without a diagnosed harness cause."
+    },
+    {
+      "id": "orcad-bun.migration-claim-fence",
+      "title": "Managed orcad conversion fences and reconciles direct-SSH catalog ownership",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "ssh-managed-runtime",
+      "layer": "managed-orcad-migration-admission",
+      "surfaces": [
+        "managed orcad SSH target selection",
+        "direct-SSH repository and folder ownership",
+        "remote PTY lease ownership",
+        "saved port forwards",
+        "managed runtime target claim",
+        "versioned static catalog export and authenticated durable import",
+        "transactional dormant metadata, lineage, preset, and retirement transfer",
+        "bounded scrollback snapshot and reference transfer",
+        "destination-local dormant sleeping-agent resume authority",
+        "disabled automation and final run-history transfer",
+        "representable mobile selection and client routing transfer",
+        "durable source fence and lost-response reconciliation",
+        "exact dependent-state census and static source retirement",
+        "product environment registration and restart-visible recovery"
+      ],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["ssh"],
+      "coveredPlatforms": ["macos", "linux"],
+      "coveredProviders": ["ssh"],
+      "coverageNotes": "One structured local preflight enumerates exact repository, folder-workspace, non-final PTY-lease, saved-forward, and hidden dependent-state identities for the selected target. Attached and detached leases remain live-or-unverifiable; terminated and expired leases do not block. Product deployment allocates one environment identity, durably fences the source before SSH contact, assigns and flushes the target generation behind that fence, deploys and registers the managed runtime, commits the dormant destination catalog with an exact receipt, and only then retires source rows. The optional bounded manifest extension transfers exact worktree metadata, in-scope worktree/workspace lineage, sparse presets, repo retired-name registries, destination-rekeyed retirement namespace registries, inactive owner-scoped session/layout rows, bounded scrollback snapshots and references, destination-local sleeping-agent resume records, disabled SSH-owned automations whose entire retained run history is final, and representable mobile selections/client routing. Saved forwards remain durably owned by the fenced source target without creating a destination listener. Session projection reuses the profile-transfer machinery and merges into the destination-local partition only without ID conflicts. Scrollback transfer caps count and bytes, resumes exact acknowledged offsets, rejects drift or destination conflicts, durably publishes bytes before the receipt, and deletes source files only after exact committed evidence. Sleeping-agent projection retains provider resume identity and same-host transcript paths while rekeying worktree and connection authority locally; cross-target, orchestration-fenced, or missing-pane records remain blockers. Any PTY ID, browser profile, external runtime/file route, active selection, or main-owned live recovery remains on the source and blocks. Automation projection rekeys execution, scheduler, workspace, and context ownership to the destination-local authority while preserving final history, terminal identity, and bounded output snapshots. Enabled, in-flight, duplicate, cross-host, malformed, or externally routed automation records remain blockers. Stage detects identity conflicts without publication; commit persists catalog, dormant rows, snapshot references, sleeping records, client state, and receipt together; source retirement removes only captured keys after an exact receipt and leaves shared source namespace tombstones intact. Drift, cross-scope lineage, projected-identity collisions, oversize payloads, crash-before-flush, lost commit or chunk responses, namespace merge/cap behavior, session/snapshot/sleeping-record/client-state collision, automation conflict/in-flight refusal, and post-fence drift are deterministic contracts. Existing environments and restart-visible journals resume the incomplete upload, commit, or retirement phase. A rendered Electron/OpenSSH journey migrated an exact direct-SSH repository, nested groups, and folder workspace, retired only the source rows, and retained the durable receipt through update, rollback, activation recovery, live refusal, Active Server race, and clean unlink. New fences use the older client-recognized on-demand-runtime owner shape with a managed-orcad marker, so a downgrade keeps the target hidden; current code also reads the earlier draft owner shape and does not treat managed owners as ephemeral VMs. An exact origin/main source oracle rewrites both the profile and environment stores at all four journal phases, strips the new deployment field, and proves re-upgrade restores the link only from the retained environment ID, loopback endpoint, target owner, and generation. The product still blocks live PTYs and every unrepresented main-owned recovery, active/in-flight/external automation, lease, or unsupported client-state dependency.",
+      "motivatingLinks": [
+        "docs/design/orcad-bun-handoff.md",
+        "docs/design/orcad-bun-runtime.md",
+        "docs/reference/ssh-execution-boundary.md"
+      ],
+      "invariant": "A direct-SSH target cannot begin catalog transfer while another runtime owns its registration, any attached or detached relay PTY lease remains, or any target-scoped persisted dependency is outside the bounded catalog/dormant manifest. Saved forwards must be captured byte-for-byte and remain owned by the fenced source target without creating a destination listener. Representable mobile selections and client routing must rekey transactionally and conflict before publication; unsupported projections remain blockers. Inactive session rows are representable only without process, main-owned recovery, browser-profile, external-routing, or active-selection authority. Scrollback bytes and references must commit together through bounded content-addressed files, exact offset acknowledgements, durable publication, and receipt-gated deletion. Dormant sleeping-agent records are representable only when their provider resume target stays on the same host, their pane identity is valid, and their authority can rekey locally without an orchestration fence. Automations are representable only when disabled, SSH-owned by the exact source, fully in scope, and every retained run is final; destination ownership must be local and conflicts must refuse before publication. The exact source catalog, projected dormant rows, snapshot descriptors, and target generation are fenced and durably journaled before destination mutation. Destination stage publishes no rows; commit publishes catalog, dormant state, snapshot references, and receipt only after bytes and state are durable. Lost responses are reconciled from exact destination status, source rows and snapshot files remain authoritative until committed host evidence is durably recorded, and abort never rolls back committed state. Source retirement requires that exact receipt plus unchanged catalog and dormant projections and an empty untransferred-dependency census, removes only captured source keys and unshared snapshot files, preserves unrelated host rows, shared groups, shared snapshot references, saved forwards, and shared source namespace tombstones, retains the target fence, and is durably idempotent. Loss of contact remains unverifiable and never authorizes source release.",
+      "oracle": "Populate one SSH target with unrelated and target-owned repositories, a folder workspace, inline and stored scrollback, eligible and cross-target sleeping-agent records, disabled and enabled automations, final and in-flight runs, mobile selections, UI routing, detached and terminated PTY leases, and a saved forward. Require preflight to retain exact identities and source fencing to reject every non-final lease, main-owned recovery, unsafe sleeping record, enabled automation, in-flight or cross-host run, and unsupported client-state projection. Export only the target catalog plus referenced group ancestry, bounded content-addressed scrollback descriptors, eligible destination-local sleeping-agent resume state, eligible settled automation history, representable client state, and the exact saved-forward intent, then hash it deterministically. Require source fence plus journal to survive reload before any remote mutation; stage to publish nothing; resume chunk upload from durable exact byte length; reconcile a lost chunk response; reject source drift, noncanonical bytes, bad offsets, incomplete digests, duplicate refs, duplicate forward ports, and destination conflicts; commit bytes, references, dormant state, client state, and exact receipt; preserve the saved forward on the fenced source target without opening a destination listener; and require malformed, stripped-extension, tampered, conflicting, or unpaired requests to fail closed. Census every session, PTY-recovery, worktree, lineage, preset, retired-name, automation, run, mobile-selection, UI-routing, lease, and forward owner for the exact host while excluding another target. Lose stage, commit, and abort responses and reconcile exact absent, staged, or committed status without deleting source rows or bytes. Require old-host method-not-found to release only an untouched source-fenced transaction, committed abort to refuse, catalog, snapshot, sleeping-agent, automation, client-state, or dependency drift to retain the fence, and every failed profile or destination flush to remain retryable without early acknowledgement. After exact commit evidence, retire only manifest rows and unshared snapshot files owned by the source host, preserve same-ID rows on another host, shared snapshot files, saved forwards, and shared group ancestry, fail closed if source rows reappear, and persist retirement idempotently across restart.",
+      "commands": [
+        "node config/scripts/run-orcad-managed-environment-cross-version.mjs config/scripts/orcad-managed-environment-cross-version.test.ts",
+        "ORCA_BACKGROUND_LAUNCH=1 ORCA_TEST_MOCK_KEYCHAIN=1 SKIP_BUILD=1 ORCA_E2E_SSH_DOCKER=1 ORCA_E2E_SSH_DOCKER_IMAGE=orca-orcad-desktop-migration:e2e ORCA_REVIEW_ORCAD_DESKTOP_MIGRATION=1 ORCA_REVIEW_ORCAD_TARGET=linux-arm64-glibc pnpm exec playwright test tests/e2e/orcad-live-catalog-desktop-migration.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1 --repeat-each=3 --trace=on",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/ssh/orcad-live-migration-renderer-plan.test.ts src/main/ssh/orcad-live-migration-renderer-plan-evidence.test.ts src/renderer/src/runtime/orcad-migration-renderer-refresh.test.ts src/renderer/src/runtime/orcad-migration-mirror-cohort.test.ts src/main/runtime/runtime-mobile-session-incarnation-projection.test.ts src/main/runtime/session-tabs-inventory-publication.test.ts",
+        "pnpm run smoke:orcad-ssh-ui -- tests/e2e/orcad-managed-ssh-lifecycle.spec.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/ssh/ssh-connection-store.test.ts src/main/ipc/orcad-runtime-lifecycle-handlers.test.ts src/renderer/src/components/settings/use-managed-orcad-servers.test.tsx src/renderer/src/components/settings/ManagedOrcadDeploymentForm.test.tsx",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/ssh/ssh-connection-store.test.ts src/main/ssh/ssh-connection-store-orcad-claims.test.ts src/main/ipc/orcad-runtime-lifecycle-handlers.test.ts src/renderer/src/components/settings/use-managed-orcad-servers.test.tsx src/renderer/src/components/settings/ManagedOrcadDeploymentForm.test.tsx",
+        "pnpm exec vitest run --config config/vitest.config.ts src/shared/orcad-migration-manifest.test.ts src/shared/orcad-migration-source-cutover.test.ts src/main/ssh/orcad-migration-manifest-export.test.ts src/main/persistence-orcad-migration-catalog.test.ts src/main/persistence-orcad-migration-source-cutover.test.ts src/main/persistence/migrating-orcad-catalog/orcad-source-dependency-census.test.ts src/main/runtime/orcad-migration-catalog-import.test.ts src/main/runtime/rpc/methods/orcad-migration.test.ts src/main/ssh/orcad-migration-catalog-client.test.ts src/main/ssh/orcad-migration-cutover-coordinator.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/shared/runtime-environment-store.test.ts src/shared/managed-orcad-ssh-owner.test.ts src/main/ssh/orcad-runtime-lifecycle.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/shared/managed-orcad-ssh-owner.test.ts src/main/ssh/ssh-connection-store.test.ts src/main/ssh/orcad-runtime-lifecycle.test.ts src/main/ipc/orcad-runtime-lifecycle-handlers.test.ts src/renderer/src/components/settings/use-managed-orcad-servers.test.tsx src/renderer/src/components/settings/ManagedOrcadDeploymentForm.test.tsx src/shared/orcad-migration-manifest.test.ts src/shared/orcad-migration-source-cutover.test.ts src/main/ssh/orcad-migration-manifest-export.test.ts src/main/persistence-orcad-migration-catalog.test.ts src/main/persistence-orcad-migration-source-cutover.test.ts src/main/persistence/migrating-orcad-catalog/orcad-source-dependency-census.test.ts src/main/runtime/orcad-migration-catalog-import.test.ts src/main/runtime/rpc/methods/orcad-migration.test.ts src/main/ssh/orcad-migration-catalog-client.test.ts src/main/ssh/orcad-migration-cutover-coordinator.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/shared/managed-orcad-ssh-owner.test.ts src/main/ssh/ssh-connection-store.test.ts src/main/ssh/ssh-connection-store-orcad-claims.test.ts src/main/ssh/orcad-runtime-lifecycle.test.ts src/main/ipc/orcad-runtime-lifecycle-handlers.test.ts src/renderer/src/components/settings/use-managed-orcad-servers.test.tsx src/renderer/src/components/settings/ManagedOrcadDeploymentForm.test.tsx src/shared/orcad-migration-manifest.test.ts src/shared/orcad-migration-source-cutover.test.ts src/main/ssh/orcad-migration-manifest-export.test.ts src/main/persistence-orcad-migration-catalog.test.ts src/main/persistence-orcad-migration-source-cutover.test.ts src/main/persistence/migrating-orcad-catalog/orcad-source-dependency-census.test.ts src/main/runtime/orcad-migration-catalog-import.test.ts src/main/runtime/rpc/methods/orcad-migration.test.ts src/main/ssh/orcad-migration-catalog-client.test.ts src/main/ssh/orcad-migration-cutover-coordinator.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/shared/orcad-migration-scrollback.test.ts src/main/persistence/migrating-orcad-catalog/orcad-scrollback-snapshot-transfer.test.ts src/main/persistence-orcad-migration-scrollback-catalog.test.ts src/main/persistence-orcad-migration-source-scrollback.test.ts src/main/ssh/orcad-migration-snapshot-coordinator.test.ts src/main/persistence-orcad-migration-sleeping-agent.test.ts --reporter=dot",
+        "pnpm exec vitest run --config config/vitest.config.ts src/shared/automation-execution-target.test.ts src/shared/automation-owner-key.test.ts src/shared/automation-owner-precondition.test.ts src/shared/automation-run-retention.test.ts src/main/persistence-automations.test.ts src/main/automations/automation-owner-migration.test.ts src/main/automations/automation-owner-fencing.test.ts src/main/automations/automation-run-writer.test.ts src/main/orca-profiles/profile-project-session-state.test.ts src/main/orca-profiles/profile-project-session-field-disposition.test.ts src/main/persistence-workspace-session-scrollback.test.ts src/main/persistence/runtime-authored-workspace-session-fields.test.ts src/shared/workspace-session-schema.test.ts",
+        "Electron Playwright CDP restart and Resume setup journey",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/runtime/paired-runtime-pty-ownership-transfer-client.test.ts src/main/persistence/pty-ownership-transfer/pty-ownership-transfer-destination-output-admission.test.ts src/main/persistence/pty-ownership-transfer/pty-ownership-transfer-recovery.test.ts src/main/persistence/pty-ownership-transfer/pty-ownership-transfer-coordinator.test.ts src/main/persistence/pty-ownership-transfer/pty-ownership-transfer-destination-runtime.test.ts --reporter=dot --maxWorkers=1 --no-file-parallelism --pool=forks --no-isolate"
+      ],
+      "testFiles": [
+        "config/scripts/orcad-managed-environment-cross-version.test.ts",
+        "src/main/ssh/orcad-live-migration-renderer-plan.test.ts",
+        "src/main/ssh/orcad-live-migration-renderer-plan-evidence.test.ts",
+        "src/renderer/src/runtime/orcad-migration-renderer-refresh.test.ts",
+        "src/renderer/src/runtime/orcad-migration-mirror-cohort.test.ts",
+        "src/main/runtime/runtime-mobile-session-incarnation-projection.test.ts",
+        "src/main/runtime/session-tabs-inventory-publication.test.ts",
+        "tests/e2e/orcad-live-catalog-desktop-migration.spec.ts",
+        "config/scripts/run-orcad-managed-environment-cross-version.mjs",
+        "tests/e2e/orcad-managed-ssh-lifecycle.spec.ts",
+        "src/shared/runtime-environment-store.test.ts",
+        "src/shared/managed-orcad-ssh-owner.test.ts",
+        "src/main/ssh/ssh-connection-store.test.ts",
+        "src/main/ssh/ssh-connection-store-orcad-claims.test.ts",
+        "src/main/ssh/orcad-runtime-lifecycle.test.ts",
+        "src/main/ipc/orcad-runtime-lifecycle-handlers.test.ts",
+        "src/renderer/src/components/settings/use-managed-orcad-servers.test.tsx",
+        "src/renderer/src/components/settings/ManagedOrcadDeploymentForm.test.tsx",
+        "src/shared/orcad-migration-manifest.test.ts",
+        "src/shared/orcad-migration-source-cutover.test.ts",
+        "src/main/ssh/orcad-migration-manifest-export.test.ts",
+        "src/main/persistence-orcad-migration-catalog.test.ts",
+        "src/main/persistence-orcad-migration-source-cutover.test.ts",
+        "src/main/persistence/migrating-orcad-catalog/orcad-source-dependency-census.test.ts",
+        "src/main/runtime/orcad-migration-catalog-import.test.ts",
+        "src/main/runtime/rpc/methods/orcad-migration.test.ts",
+        "src/main/ssh/orcad-migration-catalog-client.test.ts",
+        "src/main/ssh/orcad-migration-cutover-coordinator.test.ts",
+        "src/shared/orcad-migration-scrollback.test.ts",
+        "src/main/persistence/migrating-orcad-catalog/orcad-scrollback-snapshot-transfer.test.ts",
+        "src/main/persistence-orcad-migration-scrollback-catalog.test.ts",
+        "src/main/persistence-orcad-migration-source-scrollback.test.ts",
+        "src/main/ssh/orcad-migration-snapshot-coordinator.test.ts",
+        "src/main/persistence-orcad-migration-sleeping-agent.test.ts",
+        "src/main/persistence/pty-ownership-transfer/pty-ownership-transfer-destination-output-admission.test.ts",
+        "src/main/persistence/pty-ownership-transfer/pty-ownership-transfer-recovery.test.ts",
+        "src/main/persistence/pty-ownership-transfer/pty-ownership-transfer-coordinator.test.ts",
+        "src/main/persistence/pty-ownership-transfer/pty-ownership-transfer-destination-runtime.test.ts",
+        "src/main/runtime/paired-runtime-pty-ownership-transfer-client.test.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "config/scripts/orcad-managed-environment-cross-version.test.ts",
+          "assertions": [
+            "the exact origin/main environment store strips orcadDeployment during a real lifecycle rewrite while retaining the loopback dependency",
+            "the exact origin/main profile store retains the managed target owner, target generation, and unknown source journal through a real target mutation and durable flush",
+            "current source restores the exact link without changing environment identity, credentials, timestamps, runtime identity, target fence, or journal phase",
+            "the source-fenced, destination-staged, destination-committed, and source-retired phases all survive downgrade and repair"
+          ]
+        },
+        {
+          "file": "src/shared/runtime-environment-store.test.ts",
+          "assertions": [
+            "managed link repair derives the local port only from the explicit preferred loopback endpoint and preserves every stable environment field",
+            "direct endpoints and conflicting target identities fail closed without changing the store"
+          ]
+        },
+        {
+          "file": "tests/e2e/orcad-managed-ssh-lifecycle.spec.ts",
+          "assertions": [
+            "rendered Settings migrates a direct-SSH repository, nested group ancestry, and folder workspace to the exact managed environment identity",
+            "the source catalog retires only after a durable destination receipt and clean unlink does not reappear as interrupted setup"
+          ]
+        },
+        {
+          "file": "src/main/ssh/ssh-connection-store-orcad-claims.test.ts",
+          "assertions": [
+            "one preflight returns exact target-owned repo, folder, live-or-unverifiable lease, and forward identities while excluding unrelated and final rows",
+            "missing targets return a stable blocker before dependent collections are scanned",
+            "same-environment claim stays idempotent and every blocker remains fail-closed"
+          ]
+        },
+        {
+          "file": "src/main/ipc/orcad-runtime-lifecycle-handlers.test.ts",
+          "assertions": [
+            "desktop IPC returns the structured inventory without starting lifecycle work"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/settings/use-managed-orcad-servers.test.tsx",
+          "assertions": [
+            "target selection requests preflight explicitly and a stale response cannot replace a newer target result"
+          ]
+        },
+        {
+          "file": "src/renderer/src/components/settings/ManagedOrcadDeploymentForm.test.tsx",
+          "assertions": [
+            "Settings renders exact repository and PTY identities and keeps Deploy disabled until claimable"
+          ]
+        },
+        {
+          "file": "src/shared/orcad-migration-manifest.test.ts",
+          "assertions": [
+            "manifest hashing uses locale-independent canonical key order",
+            "receipt normalization retains the newest bounded unique valid set and drops duplicate catalog identities",
+            "bounded inactive workspace sessions validate exact catalog scope and reject PTY-bearing state",
+            "only destination-local disabled automations with final run history and in-scope contexts validate"
+          ]
+        },
+        {
+          "file": "src/shared/orcad-migration-source-cutover.test.ts",
+          "assertions": [
+            "source journal parsing accepts only bounded unique target identities and exact committed receipts",
+            "malformed phases and timestamps cannot authorize recovery"
+          ]
+        },
+        {
+          "file": "src/main/ssh/orcad-migration-manifest-export.test.ts",
+          "assertions": [
+            "export selects only the exact target repositories and explicit or inherited folder workspaces plus referenced group ancestry",
+            "legacy target generation remains unchanged and is recorded as unknown"
+          ]
+        },
+        {
+          "file": "src/main/persistence-orcad-migration-catalog.test.ts",
+          "assertions": [
+            "dormant stage persists without publishing rows and exact commit atomically publishes catalog, metadata, inactive session state, settled automation state, and receipt",
+            "missing receipts are reconstructed without duplicate catalog or dormant-session rows while stale receipts cannot conceal divergence",
+            "digest, stripped automation extension, migration-ID reuse, row-ID, path, and reference conflicts reject before any manifest mutation",
+            "workspace-session and automation owner conflicts reject before publication, destination in-flight runs refuse, and abort can never roll back a committed catalog"
+          ]
+        },
+        {
+          "file": "src/main/persistence-orcad-migration-source-cutover.test.ts",
+          "assertions": [
+            "the exact source target and manifest fence survive profile reload before destination evidence",
+            "non-final PTY leases, catalog drift, and mismatched destination identity retain source rows and fail closed",
+            "committed destination evidence is durable and cannot be locally released",
+            "source retirement requires exact commit evidence plus an empty dependency census and survives a failed flush idempotently",
+            "inactive repository and folder session rows retire only after receipt while recoverable PTYs remain source blockers",
+            "disabled SSH automations and wholly final history rekey and retire only after receipt while enabled, in-flight, cross-host, or post-fence drift remains blocked",
+            "retirement preserves same-ID rows on another host and shared local group ancestry, while post-retirement source reappearance fails closed"
+          ]
+        },
+        {
+          "file": "src/shared/orcad-migration-scrollback.test.ts",
+          "assertions": [
+            "snapshot descriptors are bounded by count, per-file bytes, aggregate bytes, unique refs, and unique tab/leaf identity",
+            "chunk payloads require canonical base64 and stay within the exact transfer cap"
+          ]
+        },
+        {
+          "file": "src/main/persistence/migrating-orcad-catalog/orcad-scrollback-snapshot-transfer.test.ts",
+          "assertions": [
+            "durable staged length resumes upload and exact idempotent retries are accepted",
+            "incomplete, digest-mismatched, and conflicting destination bytes fail before publication",
+            "abort and pruning remove only the selected unjournaled staging trees"
+          ]
+        },
+        {
+          "file": "src/main/persistence-orcad-migration-scrollback-catalog.test.ts",
+          "assertions": [
+            "snapshot references publish only after complete durable bytes",
+            "materialized files recover a crash before the catalog receipt flush"
+          ]
+        },
+        {
+          "file": "src/main/persistence-orcad-migration-source-scrollback.test.ts",
+          "assertions": [
+            "inline and stored UTF-8 bytes project without changing the source session",
+            "source files delete only after receipt and remain while another session references them",
+            "source drift, missing files, and oversized snapshots keep ownership fenced"
+          ]
+        },
+        {
+          "file": "src/main/ssh/orcad-migration-snapshot-coordinator.test.ts",
+          "assertions": [
+            "transfer resumes from the observed offset and reconciles a lost chunk response",
+            "old-host omission, source length drift, and incomplete final evidence fail closed"
+          ]
+        },
+        {
+          "file": "src/main/persistence-orcad-migration-sleeping-agent.test.ts",
+          "assertions": [
+            "eligible resume identity rekeys locally, commits at the destination, and retires only after receipt",
+            "cross-target, orchestration-fenced, and missing-pane records retain the source fence",
+            "destination authority and pane-key conflicts reject before publication"
+          ]
+        },
+        {
+          "file": "src/main/persistence/pty-ownership-transfer/pty-ownership-transfer-destination-output-admission.test.ts",
+          "assertions": [
+            "multiple post-commit frames arriving during attachment recovery remain ordered and idempotent",
+            "identity conflicts, destination failures, explicit rejection, and bounded queue overflow reject every pending frame"
+          ]
+        },
+        {
+          "file": "src/main/persistence/pty-ownership-transfer/pty-ownership-transfer-recovery.test.ts",
+          "assertions": [
+            "recovery reinstalls attachment-scoped output, exit, and transport-loss watchers before readiness and reattach",
+            "watchers are disposed on attachment failure while a destination remains fenced",
+            "multiple out-of-order live frames and an exact duplicate drain once through the cumulative recovery barrier"
+          ]
+        },
+        {
+          "file": "src/main/runtime/paired-runtime-pty-ownership-transfer-client.test.ts",
+          "assertions": [
+            "paired output sequence gaps, conflicts, truncation, malformed frames, and transport loss invalidate liveness",
+            "exact duplicate frames are suppressed while one authenticated attachment stream is shared"
+          ]
+        },
+        {
+          "file": "src/main/persistence/pty-ownership-transfer/pty-ownership-transfer-destination-runtime.test.ts",
+          "assertions": [
+            "output arriving immediately after source attach is deferred until the exact destination reservation is accepted"
+          ]
+        },
+        {
+          "file": "src/main/persistence/migrating-orcad-catalog/orcad-source-dependency-census.test.ts",
+          "assertions": [
+            "the census detects every represented target-owned dependent-state family",
+            "folder workspaces and host-qualified repo owners map to the exact source manifest",
+            "rows and host partitions owned by another SSH target remain excluded"
+          ]
+        },
+        {
+          "file": "src/main/runtime/orcad-migration-catalog-import.test.ts",
+          "assertions": [
+            "a failed durable flush is not acknowledged or published and the idempotent retry can commit"
+          ]
+        },
+        {
+          "file": "src/main/runtime/rpc/methods/orcad-migration.test.ts",
+          "assertions": [
+            "stage, commit, abort, status, and legacy import accept only an authenticated paired runtime client",
+            "malformed and content-tampered manifests fail before reaching persistence"
+          ]
+        },
+        {
+          "file": "src/main/ssh/orcad-migration-catalog-client.test.ts",
+          "assertions": [
+            "remote catalog replies must carry the exact migration identity, valid timestamps, and exact committed receipt",
+            "method absence and malformed abort envelopes fail closed"
+          ]
+        },
+        {
+          "file": "src/main/ssh/orcad-migration-cutover-coordinator.test.ts",
+          "assertions": [
+            "profile flush failure is not acknowledged and retries the idempotent source fence",
+            "lost stage, commit, and abort responses reconcile durable destination status",
+            "dependent-state drift refuses remote mutation before contact",
+            "source retirement is not acknowledged before its exact profile generation flushes and does not recontact a committed destination",
+            "old-host method absence releases only an untouched fence while committed abort records evidence and refuses release"
+          ]
+        },
+        {
+          "file": "src/shared/managed-orcad-ssh-owner.test.ts",
+          "assertions": [
+            "new managed fences use the older-client-recognized internal owner shape while remaining distinct from ephemeral VMs",
+            "the earlier draft owner shape remains readable during local upgrade recovery"
+          ]
+        },
+        {
+          "file": "src/main/ssh/orcad-runtime-lifecycle.test.ts",
+          "assertions": [
+            "deployment durably fences and flushes generation before SSH contact, then receipt-gates source retirement",
+            "connection, deployment, environment-write, destination-commit, and generation-flush failures keep the source recoverable",
+            "retries reuse one environment identity and registered environments resume incomplete catalog commit and retirement",
+            "server-name collisions fail before fencing and legacy nameless journals remain restart-visible",
+            "a same-ID environment stripped by downgrade stays visibly resumable and repairs from every durable journal phase only after target ownership and generation are proved"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-08-30",
+          "runner": "local",
+          "platform": "macos",
+          "result": "passed",
+          "command": "node config/scripts/run-orcad-managed-environment-cross-version.mjs config/scripts/orcad-managed-environment-cross-version.test.ts",
+          "durationSeconds": 14.2,
+          "summary": "Twelve exact-source oracles passed: current write, origin/main profile plus environment rewrite, and current re-upgrade repair at source-fenced, destination-staged, destination-committed, and source-retired. Environment identity, endpoint credentials, timestamps, runtime ID, target owner/generation, and journal phase were retained."
+        },
+        {
+          "date": "2026-08-30",
+          "runner": "local",
+          "platform": "linux",
+          "result": "passed",
+          "command": "pnpm run smoke:orcad-ssh-ui -- tests/e2e/orcad-managed-ssh-lifecycle.spec.ts",
+          "durationSeconds": 22.5,
+          "summary": "Rendered Electron Settings migrated one direct-SSH repository, nested group ancestry, and folder workspace through exact-ID managed deployment, durable receipt, source retirement, update, rollback, activation recovery, live refusal, Active Server race, and clean unlink against disposable Linux OpenSSH."
+        },
+        {
+          "date": "2026-08-30",
+          "runner": "local",
+          "platform": "macos",
+          "result": "passed",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/ssh/ssh-connection-store.test.ts src/main/ipc/orcad-runtime-lifecycle-handlers.test.ts src/renderer/src/components/settings/use-managed-orcad-servers.test.tsx src/renderer/src/components/settings/ManagedOrcadDeploymentForm.test.tsx",
+          "durationSeconds": 0.88,
+          "summary": "Four focused files passed 62 claim, structured-inventory, additive IPC, stale-selection, exact-identity rendering, and disabled-submission assertions."
+        },
+        {
+          "date": "2026-08-30",
+          "runner": "local",
+          "platform": "macos",
+          "result": "passed",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/shared/orcad-migration-manifest.test.ts src/shared/orcad-migration-source-cutover.test.ts src/main/ssh/orcad-migration-manifest-export.test.ts src/main/persistence-orcad-migration-catalog.test.ts src/main/persistence-orcad-migration-source-cutover.test.ts src/main/persistence/migrating-orcad-catalog/orcad-source-dependency-census.test.ts src/main/runtime/orcad-migration-catalog-import.test.ts src/main/runtime/rpc/methods/orcad-migration.test.ts src/main/ssh/orcad-migration-catalog-client.test.ts src/main/ssh/orcad-migration-cutover-coordinator.test.ts",
+          "durationSeconds": 2.37,
+          "summary": "Ten focused files passed 64 deterministic manifest, exact dependency-census, dormant-stage, source-fence, static-retirement, lost-response recovery, conflict-before-mutation, durable persistence, idempotent retry, receipt-integrity, and authenticated RPC assertions."
+        },
+        {
+          "date": "2026-08-30",
+          "runner": "local",
+          "platform": "macos",
+          "result": "passed",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/shared/orcad-migration-manifest.test.ts src/shared/orcad-migration-source-cutover.test.ts src/main/ssh/orcad-migration-manifest-export.test.ts src/main/persistence-orcad-migration-catalog.test.ts src/main/persistence-orcad-migration-source-cutover.test.ts src/main/persistence/migrating-orcad-catalog/orcad-source-dependency-census.test.ts src/main/runtime/orcad-migration-catalog-import.test.ts src/main/runtime/rpc/methods/orcad-migration.test.ts src/main/ssh/orcad-migration-catalog-client.test.ts src/main/ssh/orcad-migration-cutover-coordinator.test.ts",
+          "durationSeconds": 3.82,
+          "summary": "Ten focused files passed 85 deterministic catalog, dormant metadata, inactive-session and settled-automation projection, destination merge/conflict, stripped-extension refusal, source-retirement, source-only scrollback, restart, receipt, and authenticated RPC assertions."
+        },
+        {
+          "date": "2026-08-30",
+          "runner": "local",
+          "platform": "macos",
+          "result": "passed",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/shared/managed-orcad-ssh-owner.test.ts src/main/ssh/ssh-connection-store.test.ts src/main/ssh/orcad-runtime-lifecycle.test.ts src/main/ipc/orcad-runtime-lifecycle-handlers.test.ts src/renderer/src/components/settings/use-managed-orcad-servers.test.tsx src/renderer/src/components/settings/ManagedOrcadDeploymentForm.test.tsx src/shared/orcad-migration-manifest.test.ts src/shared/orcad-migration-source-cutover.test.ts src/main/ssh/orcad-migration-manifest-export.test.ts src/main/persistence-orcad-migration-catalog.test.ts src/main/persistence-orcad-migration-source-cutover.test.ts src/main/persistence/migrating-orcad-catalog/orcad-source-dependency-census.test.ts src/main/runtime/orcad-migration-catalog-import.test.ts src/main/runtime/rpc/methods/orcad-migration.test.ts src/main/ssh/orcad-migration-catalog-client.test.ts src/main/ssh/orcad-migration-cutover-coordinator.test.ts",
+          "durationSeconds": 2.6,
+          "summary": "Sixteen focused files passed 158 deterministic ownership, product lifecycle, failure-injection, restart-recovery, manifest, census, catalog, persistence, and authenticated-RPC assertions."
+        },
+        {
+          "date": "2026-08-30",
+          "runner": "local",
+          "platform": "macos",
+          "result": "passed",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/shared/orcad-migration-scrollback.test.ts src/main/persistence/migrating-orcad-catalog/orcad-scrollback-snapshot-transfer.test.ts src/main/persistence-orcad-migration-scrollback-catalog.test.ts src/main/persistence-orcad-migration-source-scrollback.test.ts src/main/ssh/orcad-migration-snapshot-coordinator.test.ts src/main/persistence-orcad-migration-sleeping-agent.test.ts --reporter=dot",
+          "durationSeconds": 1.46,
+          "summary": "Six focused files passed 26 bounded scrollback descriptor/chunk, durable publication/restart, source drift/retirement, lost-response recovery, and sleeping-agent authority assertions."
+        },
+        {
+          "date": "2026-08-30",
+          "runner": "local",
+          "platform": "macos",
+          "result": "passed",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/shared/automation-execution-target.test.ts src/shared/automation-owner-key.test.ts src/shared/automation-owner-precondition.test.ts src/shared/automation-run-retention.test.ts src/main/persistence-automations.test.ts src/main/automations/automation-owner-migration.test.ts src/main/automations/automation-owner-fencing.test.ts src/main/automations/automation-run-writer.test.ts src/main/orca-profiles/profile-project-session-state.test.ts src/main/orca-profiles/profile-project-session-field-disposition.test.ts src/main/persistence-workspace-session-scrollback.test.ts src/main/persistence/runtime-authored-workspace-session-fields.test.ts src/shared/workspace-session-schema.test.ts",
+          "durationSeconds": 14.39,
+          "summary": "Thirteen automation/session ownership, retention, persistence, profile-transfer, and workspace-session files passed 208 assertions."
+        },
+        {
+          "date": "2026-08-30",
+          "runner": "manual",
+          "platform": "macos",
+          "result": "passed",
+          "command": "Electron Playwright CDP restart and Resume setup journey",
+          "durationSeconds": 180,
+          "summary": "The rendered Setup interrupted row survived a real app restart from the same profile. A fresh rebuild then read the earlier draft owner shape, and Resume setup failed against the intentionally unreachable SSH endpoint while retaining environment 2e8983d8-d4f6-41fe-8412-d725dd7c5018 and the same retryable source fence."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 30,
+        "scope": "exact four-phase origin/main downgrade oracle, rendered disposable-host cutover, and deterministic admission, ownership, lifecycle, transfer, recovery, persistence, RPC, and Settings files"
+      },
+      "flakeHistory": {
+        "status": "not-started",
+        "evidence": "The structured migration preflight and transactional static-transfer/retirement lower layer each have one local deterministic run."
+      },
+      "redGreenEvidence": {
+        "status": "partial",
+        "evidence": "The existing claim tests prove the refusal boundary and the new tests prove the shared inventory; a byte-identical reverted-control run is not recorded."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "Preflight runs only on explicit target selection and final deployment admission. It performs one linear in-memory pass over each persisted repo, folder, and target-scoped lease collection, copies only matching identity fields, and adds no polling, subprocesses, timers, or terminal inventory calls. Renderer request generations discard stale responses. The dormant transfer layer caps manifests at 768 KiB, repositories at 1,024, groups at 4,096, folder workspaces at 16,384, source journals and staged catalogs at 4, and receipts at 64; each phase uses bounded scans and one durable state flush. Snapshot transfer caps 512 files, 5 MiB per file, 256 MiB aggregate, and 128 KiB per chunk, retaining one staged file per descriptor without buffering an aggregate payload. Sleeping-agent rows remain inside the bounded workspace-session payload and add no polling or resume work during migration. The dependency census and source retirement run only at explicit cutover phases, scan bounded persisted collections in memory, and add no polling, timers, network calls, or subprocesses. Recovery performs bounded point RPCs only when explicitly invoked."
+      },
+      "promotionCriteria": [
+        "Keep the rendered disposable-host repository, group, folder-workspace, receipt, retirement, and unlink journey green.",
+        "Keep the exact origin/main profile/environment rewrite and fail-closed re-upgrade repair green at every journal phase.",
+        "Collect 100 consecutive routed CI passes or 14 days without an unexplained flake."
+      ],
+      "knownGaps": [
+        "The inventory is client-persisted state only; it does not ask the SSH execution host for a live, unverifiable, or exited verdict.",
+        "An active direct-SSH authority remains a separate final deployment refusal and is not inferred from persisted lease state.",
+        "A downgraded build keeps the target hidden through the backward-recognized owner marker but cannot itself resume the newer journal phases; current source repairs the stripped environment link after re-upgrade.",
+        "No packaged installer downgrade journey is recorded; the exact origin/main store implementations are executed in-process against candidate bytes.",
+        "Static catalog ownership plus bounded worktree metadata, in-scope lineage, presets, retirement registries, inactive session layouts, scrollback snapshots, eligible sleeping-agent resume records, disabled automations with wholly final retained history, representable client state, and saved-forward intent transfer. Main-owned terminal recovery, unsupported client projections, and relay PTYs still require further projections or a compatibility bridge.",
+        "Scrollback and sleeping-agent transfer have deterministic local evidence but are not yet exercised through the rendered disposable-host migration journey."
+      ],
+      "demotionRule": "Demote if preflight or the cutover census omits a target-owned dependency, includes another target's row, treats attached or detached as exited, allows Deploy before the current result is claimable, mutates source state while inspecting it, retires before exact commit evidence, removes a same-ID row owned by another host, hides a stripped-link recovery row, or repairs without exact endpoint, owner, and generation proof."
+    },
+    {
+      "id": "orcad-bun.managed-ssh-lifecycle",
+      "title": "Managed Bun orcad preserves live remote terminals across SSH lifecycle changes",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "ssh-managed-runtime",
+      "layer": "managed-orcad-remote-lifecycle",
+      "surfaces": [
+        "managed orcad SSH deployment",
+        "remote runtime tunnel",
+        "SSH transport reconnect",
+        "managed tunnel host-resume recovery",
+        "live terminal update admission",
+        "forced activation and rollback",
+        "guarded decommission",
+        "interrupted lifecycle recovery"
+      ],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["ssh", "remote-runtime"],
+      "coveredPlatforms": ["macos", "linux"],
+      "coveredProviders": ["ssh", "remote-runtime"],
+      "coverageNotes": "A macOS host builds a target-native Bun artifact and drives production ssh2, SFTP, managed-tunnel, deployment, terminal RPC, update, rollback, terminal-census, activation-record, decommission-transaction receipt, and stop-retry code against fresh Linux glibc Docker sshd hosts. A local TCP proxy blackholes one established SSH socket without closing it while allowing a replacement connection. One recorded run proves the production 15-second keepalive cadence reaches its real Keepalive timeout. The current driver invokes the production managed-tunnel post-wake recovery path: two bounded encrypted runtime probes fail, the same SSH connection reconnects on a newer transport generation, and the exact persisted tunnel port is rebuilt without changing the daemon or PTY. Electron power-monitor wiring invokes that recovery policy with the canonical user-data environment registry. The driver then repeatedly kills only the accepted sshd transports while orcad and its daemon stay live: once during ordinary use, after activation snapshot capture, after rollback state restoration, and after host-accepted decommission with the response discarded. Each mutation exercises the production reconnect ladder, exact-port tunnel reconstruction, retained fence, and phase-aware recovery before reusing the same terminal handle. A separate Electron Playwright journey clicks the rendered Settings deployment, force-update, rollback, live-refusal, interrupted local-cleanup, retry-unlink, and visible stale-activation Recover surfaces through the production lifecycle API. Deterministic contracts additionally drive a temporary ssh2 EAI_AGAIN resolution failure through the bounded ladder and require the same SshConnection owner to reconnect on a newer generation when resolution recovers. The current Docker architecture selects Linux arm64 or x64 automatically.",
+      "motivatingLinks": ["docs/design/orcad-bun-handoff.md", "docs/reference/orcad-operations.md"],
+      "invariant": "A managed Node-orcad or Bun-orcad host upgrades to the bundled Bun slot without losing its daemon-owned live terminals or scrollback. Losing and reconnecting the owning SSH transport rebuilds the exact persisted tunnel without replacing the daemon or terminal handle. Non-forced activation refuses while terminals are live, forced activation and rollback preserve the daemon and terminal census, decommission reports live until the host is idle, and a completed stop is locally retryable without contacting the stopped runtime. Every activation, rollback, or stop mutation remains durably phase-recoverable after contact loss; an unproved state remains fenced and unverifiable. A receipt-capable host persists the exact accepted stop transaction before acknowledging it.",
+      "oracle": "Provision a fresh SSH host through a controllable TCP proxy, upload and activate a target-native Bun artifact, create a real remote PTY, and record its daemon PID and output marker. Blackhole only the established SSH socket without closing it, invoke the production managed-tunnel post-wake recovery policy, require two bounded encrypted runtime probes before reconnect, reconnect on a newer transport generation through a replacement socket, reconstruct the exact persisted local port without a later ensure rescue, and prove the same daemon PID and terminal handle retain old scrollback and accept new input. Inject EAI_AGAIN into the first reconnect handshake, require reconnecting rather than error or reconnection-failed, restore resolution, and require the same connection owner to publish connected on a newer generation. Require a healthy first or second wake probe to avoid reconnect, concurrent resumes to coalesce, and environment close or ownership drift to prevent resurrection. Kill only the accepted sshd transports and require the same production recovery again. Drop transport after activation snapshot capture; require fail-closed delivery, reconnect, incumbent restoration, and the same PTY. Force-update, then drop transport after rollback state restoration; require an unverifiable stop verdict, retained fence, rescue restoration, incumbent restart, and the same PTY before rollback succeeds on retry. Require live decommission refusal, close the PTY, send a transaction ID, let the host durably accept it, discard the response while dropping transport, and require recovery to commit stop from the matching receipt without contacting the fenced runtime. Retry stop without calling the stopped runtime. Repeat the lossless lifecycle through rendered Settings controls, inject a stale prepared activation for the inactive candidate, require the exact operation/phase and Recover action to be visible, and reconcile it through the production recovery API. Change the Active Server after the host transaction begins, require the post-exit local-cleanup refusal to be visible, and complete unlink by retrying the already-deactivated host.",
+      "commands": [
+        "pnpm run smoke:orcad-ssh -- tests/e2e/orcad-remote-lifecycle.docker.unit.test.ts",
+        "pnpm run smoke:orcad-ssh tests/e2e/orcad-remote-lifecycle.docker.unit.test.ts",
+        "pnpm run smoke:orcad-ssh-ui -- tests/e2e/orcad-managed-ssh-lifecycle.spec.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/ssh/orcad-managed-tunnel.test.ts src/main/ipc/ssh-host-sleep-reconnect.test.ts config/scripts/orcad-bun-ssh-test-file.test.mjs",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/ssh/ssh-connection-reconnect-ladder.test.ts --reporter=dot"
+      ],
+      "testFiles": [
+        "tests/e2e/orcad-remote-lifecycle.docker.unit.test.ts",
+        "tests/e2e/orcad-managed-ssh-lifecycle.spec.ts",
+        "src/main/ssh/orcad-managed-tunnel.test.ts",
+        "src/main/ipc/ssh-host-sleep-reconnect.test.ts",
+        "src/main/ssh/ssh-connection-reconnect-ladder.test.ts",
+        "config/scripts/orcad-bun-ssh-test-file.test.mjs"
+      ],
+      "assertionRefs": [
+        {
+          "file": "tests/e2e/orcad-remote-lifecycle.docker.unit.test.ts",
+          "assertions": [
+            "an established SSH socket blackhole drives the production post-wake policy through two bounded application probes, reconnects on a newer transport generation, and reconstructs the exact persisted local tunnel port without an ensure rescue",
+            "a killed accepted-sshd transport reconnects on a newer production transport generation and reconstructs the exact persisted local tunnel port",
+            "the same Bun daemon PID and terminal handle retain pre-drop scrollback and accept new input after reconnect",
+            "a live remote terminal survives forced Bun update and rollback with the same daemon PID and scrollback marker",
+            "the host census proves the surviving terminal predates each activation",
+            "transport loss after activation snapshot capture recovers the incumbent without changing the daemon or terminal handle",
+            "transport loss after rollback state restoration fails closed, restores the rescue, and restarts the incumbent before a successful retry",
+            "decommission refuses with live, then accepts the exact durable transaction receipt after terminal close",
+            "a discarded accepted-decommission response recovers from the host receipt, and stop retries without runtime contact"
+          ]
+        },
+        {
+          "file": "tests/e2e/orcad-managed-ssh-lifecycle.spec.ts",
+          "assertions": [
+            "rendered Settings controls deploy and force-update a managed server after showing the live-terminal warning",
+            "rollback visibly restores the prior version while the same daemon PID and terminal marker survive",
+            "Stop and Unlink visibly refuses one live terminal",
+            "a stale prepared activation displays its exact operation and phase, replaces Stop with Recover, and reconciles through the production recovery API",
+            "an Active Server race after remote transaction admission returns exited and a rendered retry unlinks without restarting orcad"
+          ]
+        },
+        {
+          "file": "src/main/ssh/orcad-managed-tunnel.test.ts",
+          "assertions": [
+            "a healthy first or second wake probe does not reconnect or churn the tunnel",
+            "two failed probes reconnect once and rebuild the exact persisted port on the newer transport generation",
+            "concurrent resume recovery coalesces and an explicit close during the probe prevents resurrection"
+          ]
+        },
+        {
+          "file": "src/main/ipc/ssh-host-sleep-reconnect.test.ts",
+          "assertions": [
+            "Electron resume invokes managed recovery against the canonical environment registry with two five-second probes"
+          ]
+        },
+        {
+          "file": "src/main/ssh/ssh-connection-reconnect-ladder.test.ts",
+          "assertions": [
+            "a temporary EAI_AGAIN resolution failure remains reconnecting and the same owner reconnects on a newer generation when resolution recovers"
+          ]
+        },
+        {
+          "file": "config/scripts/orcad-bun-ssh-test-file.test.mjs",
+          "assertions": [
+            "both direct and pnpm-separator test-file arguments select the intended lifecycle instead of the full repository suite"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-08-30",
+          "runner": "local",
+          "platform": "linux",
+          "result": "passed",
+          "command": "pnpm run smoke:orcad-ssh -- tests/e2e/orcad-remote-lifecycle.docker.unit.test.ts",
+          "durationSeconds": 16.9,
+          "summary": "A fresh Linux arm64 glibc Docker sshd passed production SSH upload, activation, tunneled repo/worktree and PTY RPC, non-forced refusal, forced update, rollback, live decommission refusal, exact durable decommission-transaction receipt, successful idle stop, and idempotent stop retry."
+        },
+        {
+          "date": "2026-08-30",
+          "runner": "local",
+          "platform": "linux",
+          "result": "passed",
+          "command": "pnpm run smoke:orcad-ssh-ui -- tests/e2e/orcad-managed-ssh-lifecycle.spec.ts",
+          "durationSeconds": 17.3,
+          "summary": "Electron Playwright rendered the managed Settings lifecycle against a fresh Linux arm64 glibc Docker sshd: deploy, live-terminal force confirmation, lossless update, rollback, visible stale prepared-activation recovery, live unlink refusal, post-exit local-cleanup refusal after an Active Server race, and successful retry unlink all passed."
+        },
+        {
+          "date": "2026-08-30",
+          "runner": "local",
+          "platform": "linux",
+          "result": "passed",
+          "command": "pnpm run smoke:orcad-ssh -- tests/e2e/orcad-remote-lifecycle.docker.unit.test.ts",
+          "durationSeconds": 16.4,
+          "summary": "A fresh Linux arm64 glibc Docker sshd passed a real accepted-transport kill and automatic production reconnect. The connection stayed on the same SshConnection with a newer transport generation, the managed tunnel rebound its exact persisted local port, and the same Bun daemon PID and terminal handle retained pre-drop scrollback and accepted new input before update, rollback, receipt-backed decommission, and retry completed."
+        },
+        {
+          "date": "2026-08-30",
+          "runner": "local",
+          "platform": "linux",
+          "result": "passed",
+          "command": "pnpm run smoke:orcad-ssh -- tests/e2e/orcad-remote-lifecycle.docker.unit.test.ts",
+          "durationSeconds": 28.3,
+          "summary": "A fresh Linux arm64 glibc Docker sshd survived four accepted-transport losses on one managed lifecycle: ordinary reconnect, activation after snapshot capture, rollback after state restoration, and stop after host acceptance with the response discarded. Activation and rollback recovered the incumbent from their durable snapshots, stop committed from the matching host receipt without a second runtime request, and the same daemon PID, PTY handle, and scrollback survived until deliberate terminal close."
+        },
+        {
+          "date": "2026-08-30",
+          "runner": "local",
+          "platform": "linux",
+          "result": "passed",
+          "command": "pnpm run smoke:orcad-ssh -- tests/e2e/orcad-remote-lifecycle.docker.unit.test.ts",
+          "durationSeconds": 94.4,
+          "summary": "A fresh Linux arm64 glibc Docker sshd first survived a blackholed established TCP socket: production ssh2 keepalives reached Keepalive timeout, reconnected through a replacement socket on a newer transport generation, rebound the exact local tunnel port, and preserved the same Bun daemon PID, PTY handle, scrollback, and input. The same run then survived ordinary accepted-transport loss plus activation, rollback, and receipt-backed stop mutation drops."
+        },
+        {
+          "date": "2026-08-30",
+          "runner": "local",
+          "platform": "linux",
+          "result": "passed",
+          "command": "pnpm run smoke:orcad-ssh tests/e2e/orcad-remote-lifecycle.docker.unit.test.ts",
+          "durationSeconds": 40.0,
+          "summary": "A fresh Linux arm64 glibc Docker sshd drove the implemented production post-wake managed-tunnel path through a blackholed established socket. Two five-second encrypted runtime probes failed, the same SshConnection reconnected on a newer transport generation, the exact persisted local port was rebuilt without an ensure rescue, and the same Bun daemon PID and PTY handle retained scrollback and accepted new input before the ordinary and mutation-boundary loss journey completed."
+        },
+        {
+          "date": "2026-08-30",
+          "runner": "local",
+          "platform": "linux",
+          "result": "passed",
+          "command": "pnpm run smoke:orcad-ssh -- tests/e2e/orcad-remote-lifecycle.docker.unit.test.ts",
+          "durationSeconds": 40.0,
+          "summary": "The final real-SSH rerun retained the post-wake losslessness result after adding the newer-connected-generation gate and async ownership revalidation. It also proved the documented pnpm separator selects only the intended lifecycle file instead of the full repository suite."
+        },
+        {
+          "date": "2026-08-30",
+          "runner": "local",
+          "platform": "linux",
+          "result": "passed",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/ssh/ssh-connection-reconnect-ladder.test.ts --reporter=dot",
+          "durationSeconds": 0.26,
+          "summary": "Twelve reconnect-ladder contracts passed, including a temporary ssh2 EAI_AGAIN failure that remained reconnecting and recovered the same SshConnection owner on a newer transport generation without publishing error or reconnection-failed."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 180,
+        "scope": "one driver lifecycle and one rendered Electron lifecycle, each with a target-native Bun build and disposable Linux SSH host"
+      },
+      "flakeHistory": {
+        "status": "not-started",
+        "evidence": "The disposable real-SSH lifecycle gate has six local driver runs, including real half-open keepalive-timeout evidence, two production post-wake recovery runs, and repeated ordinary and mutation-boundary transport loss, plus one rendered lifecycle run. It has no routed CI soak history."
+      },
+      "redGreenEvidence": {
+        "status": "partial",
+        "evidence": "The oracle encodes the lifecycle and losslessness boundaries found during implementation, but a complete byte-identical reverted-control run is not recorded."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "The historical keepalive-timeout plus four-drop driver completed in 94.4 seconds, the current bounded post-wake recovery driver completed in 40.0 seconds, and the latest rendered lifecycle test completed in 17.3 seconds after build setup. All remain below the 180-second gate budget, add no production polling outside event-triggered bounded probes and existing readiness/reconnect/drain waits, and prove one daemon and PTY remain reusable instead of being duplicated during reconnect or recovery."
+      },
+      "promotionCriteria": [
+        "Route the disposable SSH lifecycle in CI and collect 100 consecutive passes or 14 days without an unexplained flake.",
+        "Repeat the lifecycle on physical Linux x64 and Windows x64/arm64 hosts."
+      ],
+      "knownGaps": [
+        "The passing target is a Linux arm64 glibc Docker container on a macOS host; physical Linux x64 and Windows host execution are not recorded.",
+        "The DNS ladder has deterministic EAI_AGAIN recovery, but routed resolver disruption and physical sleep/resume remain separate release evidence; the production post-wake handler and a real half-open transport are covered without claiming physical suspend.",
+        "Local runtime soak passes 100 PTY and 100 WebSocket cycles, but the managed SSH journey still lacks routed promotion history."
+      ],
+      "demotionRule": "Demote if activation loses a daemon-owned terminal or scrollback, non-forced update bypasses a live census, rollback changes daemon identity, an interrupted mutation bypasses its durable phase or retained fence, decommission converts loss of contact into exited, the host acknowledges a stop before persisting its matching receipt, or a completed stop cannot retry without the stopped runtime."
     },
     {
       "id": "ssh.docker-recovery-and-resource-lifecycle",

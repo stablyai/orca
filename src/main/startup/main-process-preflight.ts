@@ -64,6 +64,7 @@ import { setWorktreeWatcherRemoval } from '../ipc/worktree-watcher-removal'
 import { desktopWorktreeWatcherRemoval } from '../ipc/filesystem-watcher'
 import { setDefaultProxySessionResolver } from '../network/proxy-settings'
 import { initDataPath, getCanonicalUserDataPath } from '../persistence'
+import { initializeProfileLifetimeAdmission } from '../ssh/profile-lifetime-admission'
 import { applyMacPressAndHoldDefaultAtStartup } from '../macos-press-and-hold-default'
 import { initSessionParseCachePersistence } from '../ai-vault/session-parse-cache-persistence'
 import { initOrcaProfilePaths } from '../orca-profiles/profile-index-store'
@@ -222,6 +223,7 @@ export function runMainProcessPreflight(options: MainProcessPreflightOptions): b
   // installing here changes no timing, in particular not the pre-ready Keychain service-name
   // resolution. The app-environment port and the userData capture install earlier still, next to
   // the path decision they depend on.
+  initializeProfileLifetimeAdmission(getCanonicalUserDataPath())
   setSecretStore(new ElectronSecretStore())
   // Why at process level, not per-window: pty.ts registers against injected surfaces so
   // it can load without electron, and an Electron main process always has ipcMain —

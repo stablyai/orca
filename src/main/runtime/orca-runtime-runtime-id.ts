@@ -1,8 +1,20 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
+import type { PtyOwnershipTransferOrchestrator } from './pty-ownership-transfer-orchestration'
+import type { RuntimeOwnedPtyOwnershipTransferReadOnlySource } from './pty-ownership-transfer-orchestration'
+import type { PtyOwnershipTransferDestinationRuntimeRegistry } from '../persistence/pty-ownership-transfer/pty-ownership-transfer-destination-runtime'
+import type { PtyOwnershipTransferDestinationSnapshot } from '../../shared/pty-ownership-transfer-destination-adapter'
+import type { RuntimePtyOwnershipTransferSourceAdapter } from '../providers/runtime-pty-ownership-transfer-source-adapter'
+import type { SubscribePairedRuntimePtyOwnershipTransfer } from './paired-runtime-pty-ownership-transfer-rpc'
+import type {
+  PtyOwnershipTransferModelCheckpointFrame,
+  TerminalSendOperationRecord,
+  TerminalSendOperationInFlight
+} from './runtime-ownership-transfer-contracts'
 import { randomUUID } from 'node:crypto'
 import { preserveTerminalRetirementProofs } from './mobile-session-terminal-retirement-proof'
 import { getStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
 import { replaceConversationInSnapshot } from './structured-conversation-tab-replacement'
+import { assertOutgoingMobileSnapshotPublicationAllowed } from './outgoing-mobile-snapshot-admission'
 import type { RuntimeStore } from './runtime-store-contract'
 import type { RuntimeClientSettingsController } from './runtime-client-settings'
 import type { RuntimeAutomationController } from './runtime-automation-controller'
@@ -54,7 +66,51 @@ import { RuntimeTerminalWait as RuntimeTerminalWaitController } from './runtime-
 import type { PtyLivenessVerdict } from '../../shared/pty-liveness-verdict'
 
 export class OrcaRuntimeWithRuntimeId {
-  protected readonly runtimeId = randomUUID()
+  protected readonly terminalSendOperationsByPtyId = new Map<
+    string,
+    Map<string, TerminalSendOperationRecord>
+  >()
+
+  protected readonly terminalSendOperationsInFlightByPtyId = new Map<
+    string,
+    Map<string, TerminalSendOperationInFlight>
+  >()
+
+  protected readonly ptyOwnershipTransferMutationEnabled: () => boolean
+
+  protected readonly getLocalPtyOwnershipTransferSourceFn:
+    | (() => RuntimePtyOwnershipTransferSourceAdapter | null)
+    | null
+
+  protected readonly getLocalPtyOwnershipTransferReadOnlySourceFn:
+    | (() => RuntimeOwnedPtyOwnershipTransferReadOnlySource | null)
+    | null
+
+  protected readonly subscribePairedRuntimePtyOwnershipTransferFn: SubscribePairedRuntimePtyOwnershipTransfer | null
+
+  protected readonly callPairedRuntimePtyOwnershipTransferRpcFn:
+    | ((
+        environmentId: string,
+        method: string,
+        params: unknown,
+        options?: { timeoutMs?: number; signal?: AbortSignal }
+      ) => Promise<unknown>)
+    | null
+
+  protected readonly ptyOwnershipTransferOrchestrator: PtyOwnershipTransferOrchestrator
+
+  protected ptyOwnershipTransferDestinationRegistry: PtyOwnershipTransferDestinationRuntimeRegistry | null
+
+  protected readonly ptyOwnershipTransferModelCheckpointsByBridge = new Map<
+    string,
+    Map<number, PtyOwnershipTransferModelCheckpointFrame>
+  >()
+
+  protected readonly ptyOwnershipTransferRecoveryByConnection = new Map<
+    string,
+    Promise<readonly PtyOwnershipTransferDestinationSnapshot[]>
+  >()
+  protected runtimeId = randomUUID()
 
   protected readonly startedAt = Date.now()
 
@@ -102,12 +158,21 @@ export class OrcaRuntimeWithRuntimeId {
   /** Single host writer for mobile session snapshots; versions are total-order stamps. */
   protected storeMobileSessionSnapshot(
     worktreeId: string,
-    snapshot: RuntimeMobileSessionTabsSnapshot
+    snapshot: RuntimeMobileSessionTabsSnapshot,
+    cleanup?: { expected: RuntimeMobileSessionTabsSnapshot; assertAuthority: () => void }
   ): RuntimeMobileSessionTabsSnapshot {
+    cleanup?.assertAuthority()
     for (const replacement of getStructuredAgentSessionHost()?.conversationReplacements?.() ?? []) {
       snapshot = replaceConversationInSnapshot(snapshot, replacement)
     }
     const existing = this.mobileSessionTabsByWorktree.get(worktreeId)
+    if (cleanup && existing !== cleanup.expected) {
+      throw new Error('orcad_outgoing_source_mobile_snapshot_changed')
+    }
+    assertOutgoingMobileSnapshotPublicationAllowed(
+      this,
+      existing && !cleanup ? [existing, snapshot] : [snapshot]
+    )
     snapshot = preserveTerminalRetirementProofs(snapshot, existing)
     const snapshotVersion = existing
       ? Math.max(snapshot.snapshotVersion, existing.snapshotVersion + 1)
@@ -307,7 +372,10 @@ export class OrcaRuntimeWithRuntimeId {
   protected readonly terminalWaiters = new RuntimeTerminalWaiterRegistry()
 
   protected readonly terminalWriter = new RuntimeTerminalWriter(
-    (ptyId, data) => this.ptyController?.write(ptyId, data) ?? false,
+    (ptyId, data, retry) =>
+      (retry
+        ? this.ptyController?.write(ptyId, data, retry)
+        : this.ptyController?.write(ptyId, data)) ?? false,
     (ptyId) => this.getPtyWriteHostPlatform(ptyId)
   )
 

@@ -78,12 +78,12 @@ export function pruneLocalTerminalScrollbackBuffers(
   repos: readonly RepoConnection[]
 ): WorkspaceSessionState {
   const repoById = new Map(repos.map((repo) => [repo.id, repo] as const))
-  const worktreeIdByTabId = new Map<string, string>()
+  const tabById = new Map<string, { worktreeId: string; ptyId: string | null }>()
   const tabsByWorktree = session.tabsByWorktree ?? {}
   const terminalLayoutsByTabIdForRead = session.terminalLayoutsByTabId ?? {}
   for (const [worktreeId, tabs] of Object.entries(tabsByWorktree)) {
     for (const tab of tabs) {
-      worktreeIdByTabId.set(tab.id, worktreeId)
+      tabById.set(tab.id, { worktreeId, ptyId: tab.ptyId })
     }
   }
 
@@ -92,8 +92,11 @@ export function pruneLocalTerminalScrollbackBuffers(
     if (!layout.buffersByLeafId && !layout.scrollbackRefsByLeafId) {
       continue
     }
-    const worktreeId = worktreeIdByTabId.get(tabId)
-    if (shouldPreserveTerminalScrollbackBuffersForRepoMap(worktreeId, repoById)) {
+    const tab = tabById.get(tabId)
+    if (
+      tab?.ptyId === null ||
+      shouldPreserveTerminalScrollbackBuffersForRepoMap(tab?.worktreeId, repoById)
+    ) {
       const capped = capTerminalScrollbackLeafBuffers(layout.buffersByLeafId)
       if (capped.changed) {
         terminalLayoutsByTabId ??= { ...terminalLayoutsByTabIdForRead }

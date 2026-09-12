@@ -3,6 +3,7 @@ import type { SavedPortForward } from '../../shared/ssh-types'
 import { getSshTargetRegistryStore } from '../ssh/ssh-target-registry'
 import { connectionManager, portForwardManager } from './ssh-ipc-context'
 import { broadcastPortForwards } from './ssh-renderer-broadcast'
+import { assertSshResetAdmissionAllowed } from './ssh-reset-production-state'
 
 // Why: after user add/remove/update the runtime manager is the source of truth — persist exactly its entries (unrestored ones handled by a separate helper).
 export function persistPortForwards(targetId: string): void {
@@ -57,6 +58,12 @@ export async function restorePortForwards(
 
   // Why: keep failed restores in persisted state — a failure may be transient (port temporarily busy), so retry on next reconnect.
   for (const saved of target.portForwards) {
+    try {
+      assertSshResetAdmissionAllowed(targetId)
+    } catch {
+      // Retained resets own reconciliation; leave saved forwards untouched.
+      return
+    }
     // Why: a reconnect mid-loop swaps the connection object; bail on identity change so we don't add forwards to a stale conn (leaking listeners).
     if (connectionManager!.getConnection(targetId) !== conn) {
       return
@@ -77,6 +84,14 @@ export async function restorePortForwards(
     }
   }
 
+  try {
+    assertSshResetAdmissionAllowed(targetId)
+  } catch {
+    return
+  }
+  if (connectionManager!.getConnection(targetId) !== conn) {
+    return
+  }
   persistPortForwardsWithUnrestored(targetId)
   broadcastPortForwards(getMainWindow, targetId)
 }

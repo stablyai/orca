@@ -2,14 +2,16 @@
 
 ## Scope
 
-Orca ships `@xterm/xterm` with four source changes it needs and upstream has
+Orca ships `@xterm/xterm` with source changes it needs and upstream has
 not taken: the IME composition hooks, the `xterm-composition-*` custom events
 they raise, the `ICompositionHelper` surface those hooks widen, and a `SortedList`
-fix. pnpm applies them through `config/patches/@xterm__xterm@<version>.patch`.
+fix, plus dispatch-scoped input provenance used to distinguish user typing from
+replay-generated replies. pnpm applies them through `config/patches/@xterm__xterm@<version>.patch`.
 
-That patch touches eight files. Four are hand-authored source
+That patch touches nine files. Five are hand-authored source
 (`src/browser/CoreBrowserTerminal.ts`, `src/browser/Types.ts`,
-`src/browser/input/CompositionHelper.ts`, `src/common/SortedList.ts`) and four
+`src/browser/input/CompositionHelper.ts`, `src/common/SortedList.ts`,
+`src/common/services/CoreService.ts`) and four
 are the build output those sources produce (`lib/xterm.js`, `lib/xterm.mjs`,
 and both sourcemaps). The bundle half is 7.3 MB of minified code. It is
 generated, and this document exists so nobody edits it by hand.

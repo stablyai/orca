@@ -2,6 +2,7 @@ import type { Page } from '@stablyai/playwright-test'
 import { expect, test } from './helpers/orca-app'
 import {
   cleanupDockerSshRelayTarget,
+  killDockerSshRelayTargetTransports,
   startDockerSshRelayTarget,
   type DockerSshRelayTarget
 } from './helpers/docker-ssh-relay-target'
@@ -14,7 +15,6 @@ import {
 import { assertInteractiveTerminal } from './helpers/nested-runtime-ssh-client-route'
 import { readOwnedPageUrls } from './helpers/client-hosted-browser-observer'
 import {
-  killSshRelayTargetTransport,
   readSshRemoteOnlyRequests,
   startSshRemoteOnlyBrowserFixture,
   SSH_REMOTE_ONLY_COOKIE_NAME,
@@ -306,7 +306,7 @@ test('recovers client-hosted SSH-routed browser pages across a real SSH drop', a
 
     // (2) Kill the real SSH transport, then reconnect onto a new generation.
     expect(
-      killSshRelayTargetTransport(target),
+      killDockerSshRelayTargetTransports(target),
       'the container had no established SSH session to kill'
     ).toBeGreaterThan(0)
     const afterDrop = await reconnectHubSshTarget(orcaPage, remote.targetId)

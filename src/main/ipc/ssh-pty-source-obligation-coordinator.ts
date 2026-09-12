@@ -189,6 +189,10 @@ export class SshPtySourceObligationCoordinator {
     return this.ledger.modelAcceptedEnd(identity)
   }
 
+  requireLiveSettlement(identity: PtySourceDeliveryIdentity, expectedEndSu: number) {
+    return this.ledger.requireLiveSettlement(identity, expectedEndSu)
+  }
+
   obligation(spanId: string, consumer: SshPtySourceConsumerId): SshPtySourceObligationState {
     return this.ledger.obligation(spanId, consumer)
   }

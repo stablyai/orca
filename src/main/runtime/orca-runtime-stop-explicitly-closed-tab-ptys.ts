@@ -110,7 +110,7 @@ export class OrcaRuntimeWithStopExplicitlyClosedTabPtys extends OrcaRuntimeWithF
           if (!(error instanceof Error) || error.message !== 'workspace_session_unavailable') {
             throw error
           }
-          this.notifier.closeTerminal?.(tabId)
+          this.notifyRendererOfHeadlessTerminalClose(tabId)
         }
         const ptyKilled = await this.stopExplicitlyClosedTabPtys(ptyIdsToKill, pty.pty.ptyId)
         return this.describeTerminalClose(handle, tabId, pty.pty.ptyId, ptyKilled)
@@ -132,17 +132,29 @@ export class OrcaRuntimeWithStopExplicitlyClosedTabPtys extends OrcaRuntimeWithF
             throw error
           }
           const ptyKilled = await this.stopExplicitlyClosedTabPtys([pty.pty.ptyId], pty.pty.ptyId)
-          this.notifier?.closeTerminal(tabId)
+          this.notifyRendererOfHeadlessTerminalClose(tabId)
           return this.describeTerminalClose(handle, tabId, pty.pty.ptyId, ptyKilled)
         }
         const ptyKilled = await this.stopExplicitlyClosedTabPtys([pty.pty.ptyId], pty.pty.ptyId)
         return this.describeTerminalClose(handle, tabId, pty.pty.ptyId, ptyKilled)
       }
-      if (siblingCount <= 1 && !surface && pty.pty.tabId && this.notifier?.closeTerminalTab) {
+      if (
+        siblingCount <= 1 &&
+        !surface &&
+        pty.pty.tabId &&
+        this.tabs.has(tabId) &&
+        this.notifier?.closeTerminalTab
+      ) {
         const ptyIdsToKill = this.getPtyIdsForExplicitTabClose(pty.pty.worktreeId, tabId)
-        await this.notifier.closeTerminalTab(tabId, { localPtyTeardownOwnedExternally: true })
-        const ptyKilled = await this.stopExplicitlyClosedTabPtys(ptyIdsToKill, pty.pty.ptyId)
-        return this.describeTerminalClose(handle, tabId, pty.pty.ptyId, ptyKilled)
+        try {
+          await this.notifier.closeTerminalTab(tabId, { localPtyTeardownOwnedExternally: true })
+          const ptyKilled = await this.stopExplicitlyClosedTabPtys(ptyIdsToKill, pty.pty.ptyId)
+          return this.describeTerminalClose(handle, tabId, pty.pty.ptyId, ptyKilled)
+        } catch (error) {
+          if (!(error instanceof Error) || error.message !== 'tab_not_found') {
+            throw error
+          }
+        }
       }
       const ptyKilled = await this.stopExplicitlyClosedTabPtys([pty.pty.ptyId], pty.pty.ptyId)
       if (!ptyKilled || siblingCount <= 1) {
@@ -156,10 +168,10 @@ export class OrcaRuntimeWithStopExplicitlyClosedTabPtys extends OrcaRuntimeWithF
             if (!(error instanceof Error) || error.message !== 'workspace_session_unavailable') {
               throw error
             }
-            this.notifier?.closeTerminal(tabId)
+            this.notifyRendererOfHeadlessTerminalClose(tabId)
           }
         } else {
-          this.notifier?.closeTerminal(tabId)
+          this.notifyRendererOfHeadlessTerminalClose(tabId)
         }
       }
       return this.describeTerminalClose(handle, tabId, pty.pty.ptyId, ptyKilled)

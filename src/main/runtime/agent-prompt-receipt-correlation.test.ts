@@ -25,6 +25,47 @@ vi.mock('../git/worktree', () => ({
 describe('agent prompt receipt correlation', () => {
   afterEach(() => vi.useRealTimers())
 
+  it.each([false, true])(
+    'replays queued prompt metadata without another write (concurrent=%s)',
+    async (concurrent) => {
+      vi.useFakeTimers()
+      const { runtime, handle, writes } = await createAgentPromptSubmissionRuntime(
+        () => undefined,
+        'codex'
+      )
+      runtime.onPtyData('pty-prompt', '\x1b]0;Codex working\x07', Date.now())
+      const options = {
+        operationId: 'stable-input',
+        acceptQueued: true,
+        requestId: 'original-request',
+        observationTimeoutMs: 0
+      }
+      const firstPromise = runtime.sendTerminalAgentPrompt(handle, 'one prompt', options)
+      const concurrentPromise = concurrent
+        ? runtime.sendTerminalAgentPrompt(handle, 'one prompt', options)
+        : null
+      await vi.runAllTimersAsync()
+      const first = await firstPromise
+      expect(first.prompt).toMatchObject({
+        requestId: 'original-request',
+        stages: ['input_accepted']
+      })
+      const beforeReplay = writes.length
+      const replay = await (concurrentPromise ??
+        runtime.sendTerminalAgentPrompt(handle, 'one prompt', options))
+      expect(replay).toEqual(first)
+      expect(writes).toHaveLength(beforeReplay)
+      expect(writes).toHaveLength(2)
+
+      const originalPrompt = structuredClone(first.prompt)
+      first.prompt!.stages.push('turn_started')
+      first.prompt!.requestId = 'caller-mutated'
+      const later = await runtime.sendTerminalAgentPrompt(handle, 'one prompt', options)
+      expect(later.prompt).toEqual(originalPrompt)
+      expect(writes).toHaveLength(beforeReplay)
+    }
+  )
+
   it('assigns historical lifecycle edges to queued receipts in FIFO order', async () => {
     vi.useFakeTimers()
     const { runtime, handle, writes } = await createAgentPromptSubmissionRuntime(

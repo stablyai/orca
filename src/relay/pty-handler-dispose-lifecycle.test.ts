@@ -187,6 +187,50 @@ describe('PtyHandler', () => {
     expect(handler.activePtyCount).toBe(0)
   })
 
+  it('refuses disposal before mutating live transfer state and permits retry after release', async () => {
+    await dispatcher.callRequest('pty.spawn', {})
+    handler.setOwnershipTransferInputFenced(PTY_1, true)
+    try {
+      expect(() => handler.fenceCreationForShutdown()).toThrow('source_shutdown_fenced')
+      await expect(handler.dispose()).rejects.toThrow(
+        'pty_ownership_transfer_source_shutdown_fenced'
+      )
+      await expect(handler.dispose({ waitForPhysicalExit: false })).rejects.toThrow(
+        'pty_ownership_transfer_source_shutdown_fenced'
+      )
+      expect(mockPtyInstance.kill).not.toHaveBeenCalled()
+      expect(handler.activePtyCount).toBe(1)
+      expect(handler.hasLiveOwnershipTransferFence).toBe(true)
+      await dispatcher.callRequest('pty.spawn', {})
+      expect(handler.activePtyCount).toBe(2)
+    } finally {
+      handler.setOwnershipTransferInputFenced(PTY_1, false)
+    }
+    await handler.dispose({ waitForPhysicalExit: false })
+    expect(handler.activePtyCount).toBe(0)
+    expect(mockPtyInstance.kill).toHaveBeenCalledWith('SIGKILL')
+  })
+
+  it('fences new creation without killing existing destination processes', async () => {
+    await dispatcher.callRequest('pty.spawn', {})
+    handler.fenceCreationForShutdown()
+    await expect(dispatcher.callRequest('pty.spawn', {})).rejects.toThrow('shutting down')
+    expect(handler.activePtyCount).toBe(1)
+    expect(mockPtyInstance.kill).not.toHaveBeenCalled()
+    await handler.dispose({ waitForPhysicalExit: false })
+    expect(mockPtyInstance.kill).toHaveBeenCalledWith('SIGKILL')
+  })
+
+  it('refuses a new ownership fence once disposal is admitted', async () => {
+    await dispatcher.callRequest('pty.spawn', {})
+    const disposal = handler.dispose({ waitForPhysicalExit: false })
+    expect(() => handler.setOwnershipTransferInputFenced(PTY_1, true)).toThrow(
+      'pty_ownership_transfer_source_shutdown_pending'
+    )
+    await disposal
+    expect(handler.activePtyCount).toBe(0)
+  })
+
   it('fences late creation and drains an admitted spawn before the disposal snapshot', async () => {
     let onExitCb: ((evt: { exitCode: number }) => void) | undefined
     const mockKill = vi.fn()

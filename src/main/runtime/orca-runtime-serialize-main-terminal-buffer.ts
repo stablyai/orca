@@ -2,6 +2,7 @@
 import { OrcaRuntimeWithAttachRemoteTerminalSourceRangeConsumer } from './orca-runtime-attach-remote-terminal-source-range-consumer'
 import type { TerminalOscLinkRange } from '../../shared/terminal-osc-link-ranges'
 import type { HeadlessSeedMetadata } from './runtime-terminal-state-records'
+import { assertOutgoingPtyModelMutationAllowed } from './outgoing-pty-registration-fence'
 import {
   applyRestoredTerminalTailSeed,
   buildRestoredTerminalTailSeed,
@@ -70,6 +71,7 @@ export class OrcaRuntimeWithSerializeMainTerminalBuffer extends OrcaRuntimeWithA
     if (!leaf?.ptyId) {
       throw new Error('terminal_not_found')
     }
+    assertOutgoingPtyModelMutationAllowed(this, leaf.ptyId)
     // Why: clear is a terminal UI action (Cmd+K on desktop), not shell input.
     // Route through the controller so renderer-owned xterm buffers, daemon
     // sessions, and SSH relay sessions all drop scrollback before the next
@@ -114,21 +116,74 @@ export class OrcaRuntimeWithSerializeMainTerminalBuffer extends OrcaRuntimeWithA
     size?: { cols: number; rows: number },
     metadata: HeadlessSeedMetadata = {}
   ): void {
-    if (!data) {
-      return
+    void this.seedHeadlessTerminalInternal(ptyId, data, size, metadata)
+  }
+
+  restoreHeadlessTerminalModel(
+    ptyId: string,
+    snapshot: {
+      modelData: string
+      cols: number
+      rows: number
+      sequence: number
+      restoreMetadata?: HeadlessSeedMetadata
+      allowEmpty?: boolean
+    },
+    isCurrent: () => boolean
+  ): Promise<void> {
+    if (
+      typeof snapshot.modelData !== 'string' ||
+      (!snapshot.modelData && !snapshot.allowEmpty) ||
+      !Number.isSafeInteger(snapshot.sequence) ||
+      snapshot.sequence < 0 ||
+      !Number.isSafeInteger(snapshot.cols) ||
+      snapshot.cols <= 0 ||
+      snapshot.cols > 10_000 ||
+      !Number.isSafeInteger(snapshot.rows) ||
+      snapshot.rows <= 0 ||
+      snapshot.rows > 10_000
+    ) {
+      return Promise.reject(new Error('pty_model_restore_invalid'))
+    }
+    return this.seedHeadlessTerminalInternal(
+      ptyId,
+      snapshot.modelData,
+      snapshot,
+      snapshot.restoreMetadata ?? {},
+      {
+        sequence: snapshot.sequence,
+        isCurrent
+      }
+    )
+  }
+
+  private seedHeadlessTerminalInternal(
+    ptyId: string,
+    data: string,
+    size: { cols: number; rows: number } | undefined,
+    metadata: HeadlessSeedMetadata,
+    restore?: { sequence: number; isCurrent: () => boolean }
+  ): Promise<void> {
+    assertOutgoingPtyModelMutationAllowed(this, ptyId)
+    if (!data && !restore) {
+      return Promise.resolve()
     }
     const existing = this.headlessTerminals.get(ptyId)
+    if (restore && (existing || this.getPtyOutputSequence(ptyId) !== 0 || !restore.isCurrent())) {
+      return Promise.reject(new Error('pty_model_restore_conflict'))
+    }
     if (existing) {
       // Why: emulator already has live data — re-seeding would duplicate
       // every byte. The seed is only valid when the emulator is fresh.
       if (metadata.preferProviderIfExisting) {
         this.providerSnapshotPreferredPtys.add(ptyId)
       }
-      return
+      return Promise.resolve()
     }
     const dims = size ?? this.getTerminalSize(ptyId) ?? { cols: 80, rows: 24 }
     const state = this.createPtyHeadlessTerminalState(ptyId, dims)
     state.outputSequence = this.getPtyOutputSequence(ptyId)
+    state.restoringSnapshot = !!restore
     this.headlessTerminals.set(ptyId, state)
     this.recordOsc7MetadataForPty(ptyId, data)
     this.recordRecentPtyOutputForPathProvenance(ptyId, data)
@@ -147,6 +202,9 @@ export class OrcaRuntimeWithSerializeMainTerminalBuffer extends OrcaRuntimeWithA
         if (metadata.cwd !== undefined) {
           state.emulator.setCwd(metadata.cwd)
         }
+        if (metadata.lastTitle !== undefined) {
+          state.emulator.setLastTitle(metadata.lastTitle)
+        }
         if (metadata.oscLinks !== undefined) {
           state.emulator.setRestoredOscLinks(metadata.oscLinks)
         }
@@ -156,12 +214,31 @@ export class OrcaRuntimeWithSerializeMainTerminalBuffer extends OrcaRuntimeWithA
         state.ownership.seedOwner(metadata.terminalOwner, {
           alternateScreen: state.emulator.isAlternateScreen
         })
+        // A dangling escape must follow all synthetic mode-restoration sequences.
+        if (metadata.pendingEscapeTailAnsi) {
+          await state.emulator.write(metadata.pendingEscapeTailAnsi)
+        }
+        if (restore) {
+          if (this.headlessTerminals.get(ptyId) !== state || !restore.isCurrent()) {
+            throw new Error('pty_model_restore_superseded')
+          }
+          this.ptyOutputSequenceById.set(ptyId, restore.sequence)
+          state.outputSequence = restore.sequence
+          state.restoringSnapshot = false
+        }
         this.providerSnapshotPreferredPtys.delete(ptyId)
       })
-      .catch(() => {
+      .catch((error) => {
+        if (restore) {
+          if (this.headlessTerminals.get(ptyId) === state) {
+            this.disposeHeadlessTerminal(ptyId)
+          }
+          throw error
+        }
         // Seeding is best-effort; live data will continue to populate the
         // emulator even if the snapshot replay fails.
       })
+    return state.writeChain
   }
 
   // Why: reattach/cold-restore/replay payloads arrive as spawn RPC results and
@@ -171,6 +248,7 @@ export class OrcaRuntimeWithSerializeMainTerminalBuffer extends OrcaRuntimeWithA
   // waiters, no orchestration events, and no lastOutputAt, because restored
   // bytes are historical output, not fresh activity.
   seedTerminalRestoreTail(ptyId: string, restore: { text?: string; lastTitle?: string }): void {
+    assertOutgoingPtyModelMutationAllowed(this, ptyId)
     const seed = restore.text ? buildRestoredTerminalTailSeed(restore.text) : null
     if (seed) {
       const pty = this.getOrCreatePtyWorktreeRecord(ptyId)

@@ -4,6 +4,14 @@ import { join } from 'node:path'
 
 type ElectronAppPath = { getAppPath(): string; isPackaged(): boolean }
 
+export function watcherProcessEntryExists(entryPath: string): boolean {
+  if (existsSync(entryPath)) {
+    return true
+  }
+  console.error(`[parcel-watcher-process] entry not found at ${entryPath}; refusing fail-open`)
+  return false
+}
+
 // Why the port and not require('electron'): this module is reachable from plain-Node
 // fork entries, where the literal text require("electron") fails the build guard even
 // inside a try/catch. hasAppEnvironment() gives the same "no app root here" answer.

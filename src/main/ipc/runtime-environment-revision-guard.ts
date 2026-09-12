@@ -12,6 +12,13 @@ export function runtimeEnvironmentRevisionFailure(
   ) {
     return null
   }
+  return runtimeEnvironmentChangedFailure(environment, method)
+}
+
+export function runtimeEnvironmentChangedFailure(
+  environment: Pick<KnownRuntimeEnvironment, 'runtimeId'>,
+  method: string
+): RuntimeRpcResponse<never> {
   return {
     id: method,
     ok: false,

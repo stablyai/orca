@@ -19,12 +19,23 @@ export class RuntimeLegacyWorkerTerminalRecoveryController {
   private readonly retries = new Map<string, RecoveryRetry>()
   private readonly receiptEpochByPane = new Map<string, number>()
   private readonly recoveredPtys = new Set<string>()
+  private stopped = false
 
   constructor(private readonly ports: LegacyWorkerRecoveryPorts) {}
 
+  stop(): Promise<void> {
+    this.stopped = true
+    for (const scope of this.retries.keys()) {
+      this.cancelScope(scope)
+    }
+    return this.queue
+  }
   reconcile(
     options: LegacyWorkerRecoveryOptions = {}
   ): Promise<LegacyWorkerTerminalRecoveryResult> {
+    if (this.stopped) {
+      return Promise.reject(new Error('worker_terminal_recovery_stopped'))
+    }
     let resolveResult!: (result: LegacyWorkerTerminalRecoveryResult) => void
     let rejectResult!: (error: unknown) => void
     const result = new Promise<LegacyWorkerTerminalRecoveryResult>((resolve, reject) => {
@@ -33,6 +44,9 @@ export class RuntimeLegacyWorkerTerminalRecoveryController {
     })
     const run = this.queue.then(async () => {
       try {
+        if (this.stopped) {
+          throw new Error('worker_terminal_recovery_stopped')
+        }
         resolveResult(await runLegacyWorkerTerminalRecovery(this, this.ports, options))
       } catch (error) {
         rejectResult(error)
@@ -55,6 +69,9 @@ export class RuntimeLegacyWorkerTerminalRecoveryController {
     deferredDispatchIds: ReadonlySet<string>,
     options: LegacyWorkerRecoveryOptions
   ): void {
+    if (this.stopped) {
+      return
+    }
     const scopeKey = options.connectionId ? `ssh:${options.connectionId}` : 'local'
     const hasDeferredWorker = plan.candidates.some((candidate) => {
       const sshPty = parseAppSshPtyId(candidate.ptyId)
@@ -103,7 +120,7 @@ export class RuntimeLegacyWorkerTerminalRecoveryController {
   }
 
   private armRetry(scopeKey: string, retry: RecoveryRetry): void {
-    if (retry.timer) {
+    if (this.stopped || retry.timer) {
       return
     }
     const delayMs = Math.min(1_000 * 2 ** retry.attempt, 30_000)

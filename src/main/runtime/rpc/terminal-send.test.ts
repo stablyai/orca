@@ -181,6 +181,36 @@ describe('terminal send RPC', () => {
     expect(sendTerminal).toHaveBeenCalled()
   })
 
+  it('forwards an optional operation identity to the runtime write path', async () => {
+    const sendTerminal = vi.fn().mockResolvedValue({
+      handle: 'terminal-1',
+      accepted: true,
+      bytesWritten: 1
+    })
+    const runtime = stubRuntime({
+      resolveLiveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
+      getDriver: vi.fn().mockReturnValue({ kind: 'idle' }),
+      sendTerminal
+    })
+    const dispatcher = new RpcDispatcher({ runtime, methods: TERMINAL_METHODS })
+
+    const response = await dispatcher.dispatch(
+      makeRequest('terminal.send', {
+        terminal: 'terminal-1',
+        text: 'x',
+        operationId: 'paste-op-1',
+        client: { id: 'desktop-1', type: 'desktop' }
+      })
+    )
+
+    expect(response.ok).toBe(true)
+    expect(sendTerminal).toHaveBeenCalledWith(
+      'terminal-1',
+      { text: 'x', enter: false, interrupt: false },
+      expect.objectContaining({ operationId: 'paste-op-1' })
+    )
+  })
+
   it('accepts legacy clientless mobile input when the current driver is mobile', async () => {
     const write = vi.fn()
     const sendTerminal = vi.fn().mockImplementation(async (_handle, _action, options) => {

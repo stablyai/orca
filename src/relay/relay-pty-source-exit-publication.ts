@@ -9,6 +9,22 @@ import type { SshPtyConsumerSessionAdapter } from './ssh-pty-consumer-session-ad
 
 export type PtyExitParams = { id: string; code: number; incarnationId: string }
 
+export function settleTrackedPtySourceExit(
+  id: string,
+  deliveries: ReadonlyMap<string, RelayPtySourceDeliveryRecord>,
+  legacyExits: RelayPtySourceLegacyExitIndex,
+  sender: RelayPtySourceSendScheduler
+): boolean {
+  const record = deliveries.get(id)
+  if (!record || record.sourceExitState !== 'published') {
+    return false
+  }
+  // Both routes hold this exit; prevent later fallback republication.
+  legacyExits.forget(id)
+  sender.pruneClosed(id, record)
+  return true
+}
+
 type PtySourceExitOptions = {
   params: PtyExitParams
   record: RelayPtySourceDeliveryRecord

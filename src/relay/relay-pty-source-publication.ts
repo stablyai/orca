@@ -6,10 +6,10 @@ import type {
 import type { PtySourceReceivingActivation } from '../shared/pty-source-receiving-activation'
 import {
   createPtySourceReceivingActivation,
+  createPtySourceDeliveryRecord,
+  activePtySourceReceivingActivation,
   pendingPtySourceRecoveryResult,
   boundedPtyRecoveryEnd,
-  registerCanceledPtySourceRetirement,
-  registerPtySourceActivationSettlement,
   samePtySourceRecoveryRequest
 } from './relay-pty-source-activation'
 import {
@@ -18,8 +18,14 @@ import {
   type RelayPtySourcePublicationCounters
 } from './relay-pty-source-send-scheduler'
 import {
+  createActivationSettlementRegistrar,
+  publishPtySourceRestoreRequired,
+  requirePtySourceRestore
+} from './relay-pty-source-publication-recovery'
+import {
   RelayPtySourceLegacyExitIndex,
   sealAndPublishTrackedPtySourceExit,
+  settleTrackedPtySourceExit,
   type PtyExitParams
 } from './relay-pty-source-exit-publication'
 import type { RelayDispatcher, RequestContext } from './dispatcher'
@@ -30,6 +36,11 @@ import {
   type RelayPtySourceOutput
 } from './relay-pty-source-output'
 import type { SshPtyConsumerSessionAdapter } from './ssh-pty-consumer-session-adapter'
+import { RelayPtyOwnershipTransferSourceResolver } from './relay-pty-ownership-transfer-source-resolution'
+import {
+  bindRelayPtySourceDeliveryRetirement,
+  bindRelayPtyCoveredSourceRetirement
+} from './relay-pty-source-delivery-retirement'
 
 export class RelayPtySourcePublication {
   private readonly deliveries = new Map<string, RelayPtySourceDeliveryRecord>()
@@ -43,6 +54,13 @@ export class RelayPtySourcePublication {
     exitCommitted: 0,
     exitRolledBack: 0
   }
+  readonly ownershipTransfer: RelayPtyOwnershipTransferSourceResolver
+  readonly prepareOwnershipTransferRetirement: ReturnType<
+    typeof bindRelayPtySourceDeliveryRetirement
+  >
+  readonly prepareCoveredOwnershipTransferRetirement: ReturnType<
+    typeof bindRelayPtyCoveredSourceRetirement
+  >
 
   constructor(
     private readonly dispatcher: RelayDispatcher,
@@ -56,9 +74,31 @@ export class RelayPtySourcePublication {
       this.counters,
       onCapacity
     )
+    this.ownershipTransfer = new RelayPtyOwnershipTransferSourceResolver(
+      this.deliveries,
+      this.session
+    )
+    this.prepareOwnershipTransferRetirement = bindRelayPtySourceDeliveryRetirement(
+      this.deliveries,
+      this.session,
+      this.ownershipTransfer
+    )
+    this.prepareCoveredOwnershipTransferRetirement = bindRelayPtyCoveredSourceRetirement(
+      this.deliveries,
+      this.session,
+      this.ownershipTransfer
+    )
+    this.registerSettlement = createActivationSettlementRegistrar(
+      this.deliveries,
+      this.session,
+      this.sender,
+      this.onCapacity
+    )
   }
 
   private readonly sender: RelayPtySourceSendScheduler
+
+  private readonly registerSettlement: ReturnType<typeof createActivationSettlementRegistrar>
 
   activate(
     id: string,
@@ -67,7 +107,7 @@ export class RelayPtySourcePublication {
     recovery?: PtySourceRecoveryRequest
   ): false | 'opened' | 'rotated' | 'existing' | PtySourceRecoveryResult {
     let current = this.deliveries.get(id)
-    // Only release this caller's delivery; its replacement may still be rotating.
+    // A superseded request must neither release nor cancel its replacement's delivery.
     const owned = current?.clientId === context?.clientId ? current : undefined
     if (!context?.onResponseSettled) {
       this.sender.releaseRotationFence(owned)
@@ -103,9 +143,15 @@ export class RelayPtySourcePublication {
       this.sender.releaseRotationFence(current)
       if (current.activating && current.activationRecoveryRequest) {
         if (!samePtySourceRecoveryRequest(current.activationRecoveryRequest, recovery)) {
-          return this.publishRestoreRequired(id, context, 'checkpointUnavailable')
+          return publishPtySourceRestoreRequired({
+            id,
+            context,
+            reason: 'checkpointUnavailable',
+            dispatcher: this.dispatcher,
+            onCapacity: this.onCapacity
+          })
         }
-        this.registerActivationSettlement(id, current, context)
+        this.registerSettlement(id, current, context)
         return pendingPtySourceRecoveryResult(current)
       }
       return 'existing'
@@ -116,7 +162,13 @@ export class RelayPtySourcePublication {
     let recoveryEndSu: number | null = null
     let recoveryWasSealed = false
     if (!current && recovery) {
-      return this.publishRestoreRequired(id, context, 'deliveryUnavailable')
+      return publishPtySourceRestoreRequired({
+        id,
+        context,
+        reason: 'deliveryUnavailable',
+        dispatcher: this.dispatcher,
+        onCapacity: this.onCapacity
+      })
     }
     if (current) {
       try {
@@ -130,7 +182,17 @@ export class RelayPtySourcePublication {
           recovery.ownerGeneration !== current.identity.ownerGeneration ||
           recovery.ptyIncarnation !== current.identity.ptyIncarnation
         ) {
-          return this.requireRestore(id, current, context, 'checkpointUnavailable')
+          return requirePtySourceRestore({
+            id,
+            current,
+            context,
+            reason: 'checkpointUnavailable',
+            session: this.session,
+            sender: this.sender,
+            deliveries: this.deliveries,
+            dispatcher: this.dispatcher,
+            onCapacity: this.onCapacity
+          })
         }
         const rotation = this.session.rotateDelivery(
           current.identity,
@@ -144,12 +206,17 @@ export class RelayPtySourcePublication {
         recoveryWasSealed = snapshot.state === 'sealed-unsettled'
         this.counters.rotated++
       } catch (error) {
-        return this.requireRestore(
+        return requirePtySourceRestore({
           id,
           current,
           context,
-          error instanceof Error ? error.message : 'invalidCheckpoint'
-        )
+          reason: error instanceof Error ? error.message : 'invalidCheckpoint',
+          session: this.session,
+          sender: this.sender,
+          deliveries: this.deliveries,
+          dispatcher: this.dispatcher,
+          onCapacity: this.onCapacity
+        })
       }
     }
     identity ??= this.session.openDelivery(context.clientId, id, ptyIncarnation)
@@ -160,37 +227,23 @@ export class RelayPtySourcePublication {
       this.counters.opened++
     }
     const activationSnapshot = this.session.sourceDeliverySnapshot(identity)
-    const activationCheckpointSourceEndSu =
-      recoveryCheckpointSourceEndSu ?? activationSnapshot.sentEndSu
-    const activationRecoveryEndSu = recoveryEndSu ?? activationSnapshot.receivedEndSu
-    const record: RelayPtySourceDeliveryRecord = {
+    const record = createPtySourceDeliveryRecord({
       clientId: context.clientId,
       identity,
       sourceActivation: createPtySourceReceivingActivation(
         identity,
-        activationCheckpointSourceEndSu,
-        activationRecoveryEndSu
+        recoveryCheckpointSourceEndSu ?? activationSnapshot.sentEndSu,
+        recoveryEndSu ?? activationSnapshot.receivedEndSu
       ),
       displayEnd,
-      activating: true,
       activationRecoveryRequest:
         recovery?.status === 'checkpoint' ? Object.freeze({ ...recovery }) : null,
       sealed: recoveryWasSealed,
-      legacyExitAccepted: false,
-      sourceExitState: 'idle',
-      sending: false,
-      turnFrames: 0,
-      turnSourceSu: 0,
-      turnScheduled: false,
-      sendWaiters: new Set(),
       recoveryCheckpointSourceEndSu,
-      recoveryEndSu,
-      recoveryCompletionPending: false,
-      restoreRequired: false,
-      rotationPending: false
-    }
+      recoveryEndSu
+    })
     this.deliveries.set(id, record)
-    this.registerActivationSettlement(id, record, context)
+    this.registerSettlement(id, record, context)
     if (recoveryEndSu !== null && recoveryCheckpointSourceEndSu !== null) {
       return pendingPtySourceRecoveryResult(record)
     }
@@ -200,13 +253,10 @@ export class RelayPtySourcePublication {
   accepts = (id: string): boolean => this.deliveries.has(id)
 
   receivingActivation(id: string, clientId: number): PtySourceReceivingActivation | undefined {
-    const record = this.deliveries.get(id)
-    return record?.clientId === clientId && !record.restoreRequired
-      ? record.sourceActivation
-      : undefined
+    return activePtySourceReceivingActivation(this.deliveries.get(id), clientId)
   }
 
-  waitForPendingSend = (id: string, timeoutMs = 5_000): Promise<boolean> =>
+  waitForPendingSend = (id: string, timeoutMs?: number) =>
     this.sender.waitForPendingSend(id, timeoutMs)
 
   publish(id: string, output: RelayPtySourceOutput, interactive: boolean): boolean {
@@ -225,10 +275,7 @@ export class RelayPtySourcePublication {
       if (ptySourceDeliveryClosed(this.session, record.identity)) {
         this.sender.wakeSendWaiters(record)
         this.deliveries.delete(id)
-        // Why: deferred — publish() can run inside flushPendingOutput's captured-queue drain,
-        // where pendingOutputByPty is transiently empty; a synchronous capacity callback would
-        // publish pty.exit ahead of still-buffered output. By microtask time the failed chunk
-        // has been re-queued (flushPtyOutput re-sets the queue synchronously on failure).
+        // Defer until failed output is requeued, preventing exit from overtaking buffered data.
         queueMicrotask(() => this.onCapacity(id))
         return false
       }
@@ -260,15 +307,7 @@ export class RelayPtySourcePublication {
   onCreditAvailable = (id: string): void => this.sender.onCreditAvailable(id)
 
   exitPublicationSettled(id: string): boolean {
-    const record = this.deliveries.get(id)
-    if (!record || record.sourceExitState !== 'published') {
-      return false
-    }
-    // Why: owner and legacy subscribers both hold this exit now, so the index row would otherwise
-    // outlive the pty for the daemon's lifetime and re-publish on any later fallback.
-    this.legacyExits.forget(id)
-    this.sender.pruneClosed(id, record)
-    return true
+    return settleTrackedPtySourceExit(id, this.deliveries, this.legacyExits, this.sender)
   }
 
   getDebugSnapshot = () => this.sender.getDebugSnapshot()
@@ -276,50 +315,5 @@ export class RelayPtySourcePublication {
   dispose = (): void => {
     this.legacyExits.clear()
     this.sender.dispose()
-  }
-
-  private registerActivationSettlement(
-    id: string,
-    record: RelayPtySourceDeliveryRecord,
-    context: RequestContext
-  ): void {
-    registerPtySourceActivationSettlement({
-      id,
-      record,
-      context,
-      deliveries: this.deliveries,
-      session: this.session,
-      sender: this.sender,
-      onCapacity: this.onCapacity
-    })
-  }
-
-  private requireRestore(
-    id: string,
-    current: RelayPtySourceDeliveryRecord,
-    context: RequestContext,
-    reason: string
-  ): Readonly<{ status: 'restoreRequired'; reason: string }> {
-    this.session.cancelDelivery(current.identity, `recovery-${reason}`)
-    current.restoreRequired = true
-    current.activating = false
-    this.sender.wakeSendWaiters(current)
-    registerCanceledPtySourceRetirement(current, context, this.deliveries, this.onCapacity)
-    return this.publishRestoreRequired(id, context, reason)
-  }
-
-  private publishRestoreRequired(
-    id: string,
-    context: RequestContext,
-    reason: string
-  ): Readonly<{ status: 'restoreRequired'; reason: string }> {
-    const result = Object.freeze({ status: 'restoreRequired' as const, reason })
-    context.onResponseSettled?.((settlement) => {
-      if (settlement.ok) {
-        this.dispatcher.notifyClient(context.clientId, 'pty.restoreRequired', { id, reason })
-      }
-    })
-    this.onCapacity(id)
-    return result
   }
 }

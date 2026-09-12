@@ -12,7 +12,9 @@ vi.mock('electron', () => ({
 }))
 
 vi.mock('fs', () => ({
-  existsSync: vi.fn().mockReturnValue(true),
+  // This suite models the legacy Node-only relay package. Keep the optional
+  // Bun artifact absent so upload command counts remain representative.
+  existsSync: vi.fn((path: string) => !/[\\/]bun-runtime$/.test(path)),
   readFileSync: vi.fn().mockReturnValue('0.1.0+testhash')
 }))
 
@@ -316,7 +318,9 @@ describe('relay install writes on a split SFTP namespace', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
-    vi.mocked(execCommand).mockReset().mockResolvedValue('')
+    vi.mocked(execCommand)
+      .mockReset()
+      .mockImplementation(async () => '')
     vi.mocked(uploadDirectory).mockImplementation((_sftp, _local, remote: string) => {
       capture.uploadTargets.push(remote)
       return Promise.resolve()

@@ -14,6 +14,7 @@ import {
 const BROWSER_NETWORK_TUNNEL_MAX_STREAMS = 128
 
 type BrowserNetworkTunnelOpenAdmissionContext = {
+  admissionClosed?: boolean
   openedStreamIds: Set<number>
   streamCount: number
   resourceBudget: BrowserNetworkTunnelResourceBudget
@@ -32,6 +33,10 @@ export function admitBrowserNetworkTunnelOpen(
   if (identityError) {
     context.sendError(frame.streamId, identityError)
     context.closeSession()
+    return null
+  }
+  if (context.admissionClosed) {
+    context.sendError(frame.streamId, 'browser_tunnel_admission_closed')
     return null
   }
   if (!context.resourceBudget.admitOpenAttempt()) {

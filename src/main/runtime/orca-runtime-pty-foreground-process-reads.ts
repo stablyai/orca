@@ -65,6 +65,18 @@ export class OrcaRuntimeWithPtyForegroundProcessReads extends OrcaRuntimeWithSta
     try {
       const registry = getRuntimeBrowserPageRegistry(this)
       const liveRepoIds = new Set((this.store.getRepos?.() ?? []).map((repo) => repo.id))
+      const browserWorkspaceOwners = new Map<string, string | null>()
+      for (const session of this.listWorkspaceSessionPartitions()) {
+        for (const [ownerKey, workspaces] of Object.entries(session.browserTabsByWorktree ?? {})) {
+          for (const workspace of workspaces) {
+            const existingOwner = browserWorkspaceOwners.get(workspace.id)
+            browserWorkspaceOwners.set(
+              workspace.id,
+              existingOwner === undefined || existingOwner === ownerKey ? ownerKey : null
+            )
+          }
+        }
+      }
       rehydrateClientHostedBrowserPages(registry, {
         listWorkspaceSessions: () => this.listWorkspaceSessionPartitions(),
         // Why the same discriminant hydration uses: session keys are `${repoId}::${path}` and are
@@ -73,6 +85,16 @@ export class OrcaRuntimeWithPtyForegroundProcessReads extends OrcaRuntimeWithSta
         isKnownWorktree: (worktreeId) => {
           const ownerRepoId = splitWorktreeIdForFilesystem(worktreeId)?.repoId
           return !ownerRepoId || liveRepoIds.has(ownerRepoId)
+        },
+        isKnownBrowserWorkspace: (workspaceId, ownerWorktreeId) => {
+          const mappedOwner = browserWorkspaceOwners.get(workspaceId)
+          // Older session records used the worktree id as the browser workspace id and may not
+          // have a persisted browser-workspace row at all. Preserve that legacy shape while
+          // validating newer rows against the actual browser workspace owner when present.
+          return (
+            mappedOwner === ownerWorktreeId ||
+            (mappedOwner === undefined && workspaceId === ownerWorktreeId)
+          )
         }
       })
       for (const page of registry.listPages()) {

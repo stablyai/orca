@@ -134,6 +134,8 @@ export type ClientHostedBrowserPageRehydrationSource = {
   listWorkspaceSessions(): readonly WorkspaceSessionState[]
   /** Whether the worktree the rows name still exists here; a gone one is never restored. */
   isKnownWorktree(worktreeId: string): boolean
+  /** Whether a persisted browser workspace entity belongs to the owner map being replayed. */
+  isKnownBrowserWorkspace?: (workspaceId: string, worktreeId: string) => boolean
   now?: () => number
 }
 
@@ -160,7 +162,10 @@ export function rehydrateClientHostedBrowserPages(
       }
       for (const row of rows) {
         if (
-          row.workspaceId !== worktreeId ||
+          !(
+            source.isKnownBrowserWorkspace?.(row.workspaceId, worktreeId) ??
+            row.workspaceId === worktreeId
+          ) ||
           now - row.savedAt > CLIENT_HOSTED_BROWSER_PAGE_MAX_AGE_MS ||
           registry.getPage(row.browserPageId) !== undefined
         ) {

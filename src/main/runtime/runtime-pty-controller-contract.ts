@@ -1,3 +1,4 @@
+import type { PtyProviderOperationRetry } from '../providers/pty-provider-contract'
 import type {
   AgentSessionClaimedSpawnResult,
   AgentSessionExecutionClaim,
@@ -88,14 +89,17 @@ export type RuntimePtyController = {
     stablePaneOwner?: { handle: string; tabId: string; leafId: string }
     agentSessionEnsure?: AgentSessionClaimedSpawnResult
   }>
-  write(ptyId: string, data: string): boolean
+  write(ptyId: string, data: string, retry?: PtyProviderOperationRetry): boolean
   writeAgentSessionProof?(
     ptyId: string,
     data: string,
     authority: { sessionId: string; spawnToken: string }
   ): boolean
-  /** Three-valued settlement; local providers settle synchronously. */
-  writeWithSettlement?(ptyId: string, data: string): WriteSettlement | Promise<WriteSettlement>
+  writeWithSettlement?(
+    ptyId: string,
+    data: string,
+    retry?: PtyProviderOperationRetry
+  ): WriteSettlement | Promise<WriteSettlement>
   /** Attach-only adoption of a live local daemon session so its output streams
    *  to main without a renderer pane; never creates, resizes, or focuses.
    *  False on doubt (absent session, SSH-scoped id, non-daemon provider). */

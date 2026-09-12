@@ -5,7 +5,8 @@ import { WatcherProcessSupervisor } from '../main/ipc/parcel-watcher-process-sup
 export type RelayWatcherProcessPool = Pick<
   RuntimeWatcherProcessPool,
   'dispose' | 'forgetRoot' | 'subscribe'
->
+> &
+  Partial<Pick<RuntimeWatcherProcessPool, 'disposeAndWait'>>
 
 export function getRelayWatcherProcessEntryPath(): string {
   return join(__dirname, 'relay-watcher.js')

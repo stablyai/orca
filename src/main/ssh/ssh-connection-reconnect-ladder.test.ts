@@ -256,6 +256,41 @@ describe('SshConnection', () => {
     }
   })
 
+  it('recovers the same owner after a temporary DNS resolution failure', async () => {
+    vi.useFakeTimers()
+    try {
+      const states: string[] = []
+      const conn = new SshConnection(
+        createTarget(),
+        createCallbacks({
+          onStateChange: vi.fn((_id, state) => states.push(state.status))
+        })
+      )
+      await connectWithFakeTimers(conn)
+      const connectedGeneration = conn.getTransportGeneration()
+      const dnsFailure = new Error(
+        'getaddrinfo EAI_AGAIN temporary failure in name resolution'
+      ) as NodeJS.ErrnoException
+      dnsFailure.code = 'EAI_AGAIN'
+      ssh2Mock.connectSequence = [dnsFailure, 'ready']
+
+      emitSshEvent('close')
+      await advanceToNextSshClient(RECONNECT_BACKOFF_MS[0])
+
+      expect(conn.getState().status).toBe('reconnecting')
+      expect(states).not.toContain('error')
+      expect(states).not.toContain('reconnection-failed')
+
+      await advanceToNextSshClient(RECONNECT_BACKOFF_MS[1])
+
+      expect(conn.getState().status).toBe('connected')
+      expect(conn.getTransportGeneration()).toBeGreaterThan(connectedGeneration)
+      expect(clientInstances).toHaveLength(3)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
   it('keeps a system-transport target on the ladder after a probe timeout', async () => {
     vi.useFakeTimers()
     try {

@@ -22,10 +22,15 @@ import { resolveSafePtyDefaultCwd } from '../providers/pty-default-cwd'
 import { resolveUnixShellPath } from '../providers/local-pty-utils'
 import type { PtySpawnOptions, PtySpawnResult } from '../providers/types'
 import { injectHistoryEnv, injectWslFishHistoryEnv, logHistoryInjection } from '../terminal-history'
+import { assertDaemonRecoverySpawnAdmission } from './daemon-recovery-spawn-admission'
 import { addWslEnvKeys } from '../wsl-env'
 
 export abstract class DaemonPtySessionSpawn extends DaemonPtySpawnResult {
   async spawn(opts: PtySpawnOptions): Promise<PtySpawnResult> {
+    assertDaemonRecoverySpawnAdmission(this.recoveryOnly, this.protocolVersion, opts)
+    if (this.idleRetirementAdmissionClosed) {
+      throw new Error('Terminal daemon is decommissioning')
+    }
     const spawnOpts = this.withHistoryIsolation(opts)
     const sessionId = spawnOpts.sessionId ?? mintPtySessionId(spawnOpts.worktreeId)
     const operation: PendingDaemonSpawnOperation = {
@@ -105,6 +110,10 @@ export abstract class DaemonPtySessionSpawn extends DaemonPtySpawnResult {
     operation: PendingDaemonSpawnOperation,
     historyRecovery: HistoryRecoveryContext
   ): Promise<PtySpawnResult> {
+    assertDaemonRecoverySpawnAdmission(this.recoveryOnly, this.protocolVersion, opts)
+    if (this.idleRetirementAdmissionClosed) {
+      throw new Error('Terminal daemon is decommissioning')
+    }
     if (
       opts.agentSessionEnsure &&
       this.protocolVersion < AGENT_SESSION_CLAIM_DAEMON_PROTOCOL_VERSION

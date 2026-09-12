@@ -16,8 +16,9 @@
  * massacre the daemon exists to prevent.
  */
 import { shellEscape } from './ssh-connection-utils'
-import { joinRemotePath, type RemoteHostPlatform } from './ssh-remote-platform'
+import { isWindowsRemoteHost, joinRemotePath, type RemoteHostPlatform } from './ssh-remote-platform'
 import { assertPosixOrcadHost as assertPosixHost } from './orcad-remote-host-support'
+import { powerShellCommand, powerShellLiteral } from './ssh-remote-powershell'
 
 /**
  * Root-relative paths a rollback needs restored. Everything else under the data root is
@@ -31,7 +32,7 @@ export const ORCAD_SNAPSHOT_MEMBERS = [
 ] as const
 
 /** Never captured and never restored — see the module comment. */
-export const ORCAD_SNAPSHOT_EXCLUDED = ['daemon', 'logs'] as const
+export const ORCAD_SNAPSHOT_EXCLUDED = ['daemon', 'logs', 'orcad.lock'] as const
 
 /**
  * The member names go into the command unquoted (see `captureOrcadStateSnapshotCommand`), so
@@ -51,6 +52,10 @@ export function orcadSnapshotDirName(fullVersion: string, takenAtMs: number): st
   return `pre-${fullVersion}-${takenAtMs}`
 }
 
+export function orcadRollbackRescueDirName(fullVersion: string, takenAtMs: number): string {
+  return `rollback-rescue-${fullVersion}-${takenAtMs}`
+}
+
 /**
  * Capture the snapshot, or report why there is nothing to capture.
  *
@@ -64,6 +69,9 @@ export function captureOrcadStateSnapshotCommand(
   userDataDir: string,
   snapshotDir: string
 ): string {
+  if (isWindowsRemoteHost(host)) {
+    return windowsCaptureOrcadStateSnapshotCommand(host, userDataDir, snapshotDir)
+  }
   assertPosixHost(host)
   const root = shellEscape(userDataDir)
   const dir = shellEscape(snapshotDir)
@@ -76,15 +84,40 @@ export function captureOrcadStateSnapshotCommand(
       `[ -e ${root}/${shellEscape(member)} ] && members="$members ${assertPlainMemberName(member)}";`
   ).join(' ')
   return [
-    `members=;`,
+    `umask 077; members=;`,
     memberTests,
     'if [ -z "$members" ]; then echo EMPTY; else',
-    `mkdir -p ${dir} && umask 077 &&`,
+    `mkdir -p ${dir} &&`,
     // Why a temp name then mv: a deploy killed mid-tar must not leave a truncated archive
     // that a later rollback would happily restore.
     `tar -C ${root} -cf ${archive}.partial $members && mv ${archive}.partial ${archive} &&`,
     'echo CAPTURED; fi'
   ].join(' ')
+}
+
+function windowsCaptureOrcadStateSnapshotCommand(
+  host: RemoteHostPlatform,
+  userDataDir: string,
+  snapshotDir: string
+): string {
+  const archive = joinRemotePath(host, snapshotDir, 'state.tar')
+  const members = ORCAD_SNAPSHOT_MEMBERS.map(powerShellLiteral).join(', ')
+  return powerShellCommand(
+    [
+      `$root = ${powerShellLiteral(userDataDir)}`,
+      `$snapshotDir = ${powerShellLiteral(snapshotDir)}`,
+      `$archive = ${powerShellLiteral(archive)}`,
+      `$members = @(${members}) | Where-Object { Test-Path -LiteralPath (Join-Path $root $_) }`,
+      `if (@($members).Count -eq 0) { Write-Output 'EMPTY'; exit 0 }`,
+      `New-Item -ItemType Directory -Path $snapshotDir -Force -ErrorAction Stop | Out-Null`,
+      `$partial = $archive + '.partial'`,
+      `Remove-Item -LiteralPath $partial -Force -ErrorAction SilentlyContinue`,
+      `& tar.exe -C $root -cf $partial @members`,
+      `if ($LASTEXITCODE -ne 0) { Remove-Item -LiteralPath $partial -Force -ErrorAction SilentlyContinue; Write-Output 'FAILED'; exit 0 }`,
+      `Move-Item -LiteralPath $partial -Destination $archive -Force -ErrorAction Stop`,
+      `Write-Output 'CAPTURED'`
+    ].join('; ')
+  )
 }
 
 export type OrcadSnapshotCapture = 'captured' | 'empty' | 'failed'
@@ -101,9 +134,26 @@ export function probeOrcadStateSnapshotCommand(
   host: RemoteHostPlatform,
   snapshotDir: string
 ): string {
+  if (isWindowsRemoteHost(host)) {
+    const archive = joinRemotePath(host, snapshotDir, 'state.tar')
+    return powerShellCommand(
+      `if (Test-Path -LiteralPath ${powerShellLiteral(archive)} -PathType Leaf) { ` +
+        `Write-Output 'PRESENT' } else { Write-Output 'ABSENT' }`
+    )
+  }
   assertPosixHost(host)
   const archive = shellEscape(joinRemotePath(host, snapshotDir, 'state.tar'))
   return `test -f ${archive} && echo PRESENT || echo ABSENT`
+}
+
+export type OrcadSnapshotPresence = 'present' | 'absent' | 'unverifiable'
+
+export function parseOrcadSnapshotPresence(output: string): OrcadSnapshotPresence {
+  const value = output.trim().split('\n').pop()?.trim()
+  if (value === 'PRESENT') {
+    return 'present'
+  }
+  return value === 'ABSENT' ? 'absent' : 'unverifiable'
 }
 
 /**
@@ -121,17 +171,89 @@ export function restoreOrcadStateSnapshotCommand(
   userDataDir: string,
   snapshotDir: string
 ): string {
+  if (isWindowsRemoteHost(host)) {
+    return windowsRestoreOrcadStateSnapshotCommand(host, userDataDir, snapshotDir)
+  }
   assertPosixHost(host)
   const root = shellEscape(userDataDir)
   const archive = shellEscape(joinRemotePath(host, snapshotDir, 'state.tar'))
+  const stage = shellEscape(joinRemotePath(host, userDataDir, '.orcad-state-restore-stage'))
   const removals = ORCAD_SNAPSHOT_MEMBERS.map(
-    (member) => `rm -rf ${root}/${shellEscape(member)};`
-  ).join(' ')
+    (member) => `rm -rf ${root}/${shellEscape(member)}`
+  ).join(' && ')
+  const replacements = ORCAD_SNAPSHOT_MEMBERS.map(
+    (member) =>
+      `if [ -e ${stage}/${shellEscape(member)} ]; then mv ${stage}/${shellEscape(member)} ${root}/${shellEscape(member)}; fi`
+  ).join(' && ')
+  const stagedMemberChecks = ORCAD_SNAPSHOT_MEMBERS.map(
+    (member) => `[ -e ${stage}/${shellEscape(member)} ]`
+  ).join(' || ')
   return [
     `test -f ${archive} || { echo MISSING; exit 0; };`,
+    `umask 077;`,
     `test -d ${root} || mkdir -p ${root};`,
-    removals,
-    `tar -C ${root} -xf ${archive} && echo RESTORED || echo FAILED`
+    `rm -rf ${stage}; mkdir -p ${stage} || { echo FAILED; exit 0; };`,
+    // Extraction proves every archived byte is readable before live state is removed.
+    `tar -C ${stage} -xf ${archive} 2>/dev/null || { rm -rf ${stage}; echo FAILED; exit 0; };`,
+    `${stagedMemberChecks} || { rm -rf ${stage}; echo FAILED; exit 0; };`,
+    `if ${removals} && ${replacements}; then rm -rf ${stage}; echo RESTORED; else echo FAILED; fi`
+  ].join(' ')
+}
+
+function windowsRestoreOrcadStateSnapshotCommand(
+  host: RemoteHostPlatform,
+  userDataDir: string,
+  snapshotDir: string
+): string {
+  const archive = joinRemotePath(host, snapshotDir, 'state.tar')
+  const stage = joinRemotePath(host, userDataDir, '.orcad-state-restore-stage')
+  const members = ORCAD_SNAPSHOT_MEMBERS.map(powerShellLiteral).join(', ')
+  return powerShellCommand(
+    [
+      `$root = ${powerShellLiteral(userDataDir)}`,
+      `$archive = ${powerShellLiteral(archive)}`,
+      `$stage = ${powerShellLiteral(stage)}`,
+      `if (-not (Test-Path -LiteralPath $archive -PathType Leaf)) { Write-Output 'MISSING'; exit 0 }`,
+      `try { if (Test-Path -LiteralPath $stage) { Remove-Item -LiteralPath $stage -Recurse -Force -ErrorAction Stop }`,
+      `New-Item -ItemType Directory -Path $stage -Force -ErrorAction Stop | Out-Null`,
+      `& tar.exe -C $stage -xf $archive`,
+      `if ($LASTEXITCODE -ne 0) { throw 'tar validation extraction failed' }`,
+      `$stagedMembers = @(@(${members}) | Where-Object { Test-Path -LiteralPath (Join-Path $stage $_) })`,
+      `if ($stagedMembers.Count -eq 0) { throw 'snapshot contained no managed state members' }`,
+      `New-Item -ItemType Directory -Path $root -Force -ErrorAction Stop | Out-Null`,
+      `@(${members}) | ForEach-Object { $path = Join-Path $root $_; if (Test-Path -LiteralPath $path) { Remove-Item -LiteralPath $path -Recurse -Force -ErrorAction Stop } }`,
+      `@(${members}) | ForEach-Object { $source = Join-Path $stage $_; if (Test-Path -LiteralPath $source) { Move-Item -LiteralPath $source -Destination (Join-Path $root $_) -Force -ErrorAction Stop } }`,
+      `Remove-Item -LiteralPath $stage -Recurse -Force -ErrorAction Stop`,
+      `Write-Output 'RESTORED' } catch { Write-Output 'FAILED' }`
+    ].join('; ')
+  )
+}
+
+/** Restore an originally empty state root after a rejected candidate populated it. */
+export function clearOrcadStateSnapshotMembersCommand(
+  host: RemoteHostPlatform,
+  userDataDir: string
+): string {
+  if (isWindowsRemoteHost(host)) {
+    const members = ORCAD_SNAPSHOT_MEMBERS.map(powerShellLiteral).join(', ')
+    return powerShellCommand(
+      [
+        `$root = ${powerShellLiteral(userDataDir)}`,
+        `try { New-Item -ItemType Directory -Path $root -Force -ErrorAction Stop | Out-Null`,
+        `@(${members}) | ForEach-Object { $path = Join-Path $root $_; if (Test-Path -LiteralPath $path) { Remove-Item -LiteralPath $path -Recurse -Force -ErrorAction Stop } }`,
+        `Write-Output 'RESTORED' } catch { Write-Output 'FAILED' }`
+      ].join('; ')
+    )
+  }
+  assertPosixHost(host)
+  const root = shellEscape(userDataDir)
+  const removals = ORCAD_SNAPSHOT_MEMBERS.map(
+    (member) => `rm -rf ${root}/${shellEscape(member)}`
+  ).join(' && ')
+  return [
+    `umask 077;`,
+    `test -d ${root} || mkdir -p ${root};`,
+    `if ${removals}; then echo RESTORED; else echo FAILED; fi`
   ].join(' ')
 }
 
@@ -153,6 +275,20 @@ export function parseOrcadSnapshotRestore(output: string): OrcadSnapshotRestore 
  * assume writes".
  */
 export function newestStateMtimeCommand(host: RemoteHostPlatform, userDataDir: string): string {
+  if (isWindowsRemoteHost(host)) {
+    const members = ORCAD_SNAPSHOT_MEMBERS.map(powerShellLiteral).join(', ')
+    return powerShellCommand(
+      [
+        `$root = ${powerShellLiteral(userDataDir)}`,
+        `$files = @(@(${members}) | ForEach-Object { ` +
+          `$path = Join-Path $root $_; if (Test-Path -LiteralPath $path) { ` +
+          `Get-ChildItem -LiteralPath $path -File -Recurse -Force -ErrorAction SilentlyContinue } })`,
+        `if ($files.Count -eq 0) { Write-Output 'UNKNOWN'; exit 0 }`,
+        `$newest = $files | Sort-Object LastWriteTimeUtc -Descending | Select-Object -First 1`,
+        `Write-Output (([DateTimeOffset]$newest.LastWriteTimeUtc).ToUnixTimeSeconds())`
+      ].join('; ')
+    )
+  }
   assertPosixHost(host)
   const root = shellEscape(userDataDir)
   const paths = ORCAD_SNAPSHOT_MEMBERS.map((member) => `${root}/${shellEscape(member)}`).join(' ')

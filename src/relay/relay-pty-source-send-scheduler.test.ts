@@ -1,7 +1,8 @@
 import { describe, expect, it, vi } from 'vitest'
 import type {
   PtySourceDeliveryIdentity,
-  PtySourceDeliverySnapshot
+  PtySourceDeliverySnapshot,
+  PtySourceSpan
 } from '../shared/pty-source-credit-contract'
 import type { RelayDispatcher } from './dispatcher'
 import {
@@ -151,5 +152,92 @@ describe('RelayPtySourceSendScheduler close handling', () => {
       sealedUnsettled: 0,
       outstandingSourceUnits: 0
     })
+  })
+})
+
+describe('RelayPtySourceSendScheduler transfer envelopes', () => {
+  it('accounts for and emits an optional ownership-transfer envelope under credit', () => {
+    const record = deliveryRecord()
+    const transfer = {
+      bridgeId: 'bridge-1',
+      terminalId: identity.id,
+      incarnationId: identity.ptyIncarnation,
+      ownerLease: 'lease-1',
+      sourceOwnerGeneration: identity.ownerGeneration,
+      destinationRuntimeId: 'runtime-1',
+      version: 1 as const,
+      frameSeq: 4,
+      fragmentStartSu: 0,
+      fragmentEndSu: 4,
+      frameLengthSu: 4
+    }
+    const span: PtySourceSpan = Object.freeze({
+      ...identity,
+      spanId: 'span-1',
+      sourceStartSu: 0,
+      sourceEndSu: 4,
+      displayStart: 0,
+      displayEnd: 4,
+      data: 'data',
+      ownershipTransfer: transfer,
+      splittable: true,
+      transform: { transformed: false, rawLengthSu: 4, scalarSafe: true }
+    })
+    const reservation = Object.freeze({ reservationId: 'r1', identity, span })
+    const session = {
+      sourceDeliverySnapshot: vi.fn(() => ({
+        ...identity,
+        state: 'active' as const,
+        windowSu: 64,
+        receivedEndSu: 4,
+        sentEndSu: 0,
+        creditedEndSu: 0,
+        exitPublished: false,
+        generationClosed: false
+      })),
+      sourceDeliverySnapshotIfKnown: vi.fn(() => null),
+      reserveSourceSend: vi.fn(() => reservation),
+      commitSourceSend: vi.fn(),
+      rollbackSourceSend: vi.fn()
+    }
+    const sent: Record<string, unknown>[] = []
+    const dispatcher = {
+      onLegacyPtyCapacity: vi.fn(() => () => {}),
+      producerDataBudget: vi.fn(() => 4096),
+      tryNotifyPtyDataToClient: vi.fn((_clientId, params, settle) => {
+        sent.push(params)
+        settle({ ok: true })
+        return true
+      })
+    }
+    const counters: RelayPtySourcePublicationCounters = {
+      opened: 0,
+      rotated: 0,
+      appendDenied: 0,
+      sendCommitted: 0,
+      sendRolledBack: 0,
+      exitCommitted: 0,
+      exitRolledBack: 0
+    }
+    const scheduler = new RelayPtySourceSendScheduler(
+      dispatcher as unknown as RelayDispatcher,
+      session as unknown as SshPtyConsumerSessionAdapter,
+      new Map([['pty-1', record]]),
+      counters,
+      vi.fn()
+    )
+
+    scheduler.pump(record)
+
+    expect(dispatcher.producerDataBudget).toHaveBeenCalledTimes(2)
+    const budgetCalls = dispatcher.producerDataBudget.mock.calls as unknown as unknown[][]
+    expect(budgetCalls[1]?.[1]).toMatchObject({
+      ownershipTransfer: expect.objectContaining({ bridgeId: 'bridge-1' })
+    })
+    expect(sent[0]).toMatchObject({
+      data: 'data',
+      ownershipTransfer: expect.objectContaining({ frameSeq: 4 })
+    })
+    expect(session.commitSourceSend).toHaveBeenCalledWith(reservation)
   })
 })

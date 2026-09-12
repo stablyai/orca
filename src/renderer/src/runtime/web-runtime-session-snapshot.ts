@@ -30,6 +30,7 @@ export async function refreshWebRuntimeSessionTabsSnapshot(
     }
     afterCurrentInFlight?: boolean
     errorMode?: 'warn' | 'throw'
+    validateSnapshot?: (snapshot: RuntimeMobileSessionTabsResult) => void
   } = {}
 ): Promise<void> {
   const webSessionTabsSync = await import('./web-session-tabs-sync')
@@ -76,6 +77,7 @@ export async function refreshWebRuntimeSessionTabsSnapshot(
         )
       }
     })
+    options.validateSnapshot?.(snapshot)
     if (options.confirmAgentSessionHandoff) {
       const { confirmWebAgentSessionHandoffAfterCreate } =
         await import('./web-agent-session-handoff')
@@ -110,6 +112,7 @@ export async function refreshWebRuntimeSessionTabsSnapshot(
     ) {
       return
     }
+    options.validateSnapshot?.(recovered)
     // Why: this list is the host answering, but only the frame's own decision
     // says whether that answer is evidence — a workspace the mirror never
     // writes is discarded with nothing accepted behind it.

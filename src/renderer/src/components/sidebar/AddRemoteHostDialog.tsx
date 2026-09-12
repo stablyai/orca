@@ -4,6 +4,7 @@ import { Dialog, DialogContent } from '@/components/ui/dialog'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import { EMPTY_FORM, type EditingTarget } from '../settings/ssh-target-draft'
+import { createManagedSshHost } from '../settings/managed-ssh-host-create'
 import type { SshConfigHostSummary } from '../../../../shared/ssh-types'
 import { parseHostAccessLink } from '../../../../shared/remote-pairing-address'
 import {
@@ -60,6 +61,7 @@ export function AddRemoteHostDialog({
   const configSearchGeneration = useRef(0)
   const configSearchQuery = useRef('')
   const configResolveGeneration = useRef(0)
+  const sshProvisioningRequestId = useRef<string | null>(null)
   const parsedServerLink = useMemo(() => parseHostAccessLink(pairingCode), [pairingCode])
   const serverFormCanSubmit =
     serverName.trim() !== '' &&
@@ -80,6 +82,7 @@ export function AddRemoteHostDialog({
   }
 
   const reset = () => {
+    sshProvisioningRequestId.current = null
     setSshForm(EMPTY_FORM)
     setSshView('form')
     setConfigHosts([])
@@ -107,13 +110,18 @@ export function AddRemoteHostDialog({
   }
 
   const saveSshHost = async () => {
+    if (isSaving) {
+      return
+    }
     setIsSaving(true)
     try {
       const outcome = await saveNewSshHostFromForm({
         form: sshForm,
         ssh: window.api.ssh,
-        recordSshRepoReadoptions,
-        setSshTargetsMetadata,
+        provisionTarget: (target) => {
+          sshProvisioningRequestId.current ??= crypto.randomUUID()
+          return createManagedSshHost(sshProvisioningRequestId.current, target)
+        },
         recordFeatureInteraction
       })
       if (outcome === 'saved') {

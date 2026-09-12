@@ -352,7 +352,13 @@ describe('an unexpected provider exit', () => {
     await attach()
     const session = (
       host as unknown as {
-        sessions: Map<string, { journal: { appendItem: (...args: never[]) => Promise<unknown> } }>
+        sessions: Map<
+          string,
+          {
+            hasProviderChild: boolean
+            journal: { appendItem: (...args: never[]) => Promise<unknown> }
+          }
+        >
       }
     ).sessions.get(SESSION)
     expect(session).toBeDefined()
@@ -369,6 +375,8 @@ describe('an unexpected provider exit', () => {
         claimStatus: 'released',
         deathEvidence: { kind: 'exit-observed' }
       })
+      // The in-memory lease changes before its durable write has finished.
+      expect(session!.hasProviderChild).toBe(false)
     })
     expect(dispatch).not.toHaveBeenCalled()
     const history = host.history({ sessionId: SESSION, direction: 'tail' })

@@ -12,8 +12,26 @@ export function testPtyId(sequence: number): string {
   return `pty2:${encodeURIComponent(TEST_PTY_ID_MINT_EPOCH)}:${sequence}`
 }
 
+const testOwnedTransferFences = new WeakMap<PtyHandler, Set<string>>()
+
 export function createTestPtyHandler(dispatcher: MockDispatcher): PtyHandler {
-  return new PtyHandler(dispatcher as unknown as RelayDispatcher, undefined, TEST_PTY_ID_MINT_EPOCH)
+  const handler = new PtyHandler(
+    dispatcher as unknown as RelayDispatcher,
+    undefined,
+    TEST_PTY_ID_MINT_EPOCH
+  )
+  const fences = new Set<string>()
+  testOwnedTransferFences.set(handler, fences)
+  const setFenced = handler.setOwnershipTransferInputFenced.bind(handler)
+  handler.setOwnershipTransferInputFenced = (id, fenced) => {
+    setFenced(id, fenced)
+    if (fenced) {
+      fences.add(id)
+    } else {
+      fences.delete(id)
+    }
+  }
+  return handler
 }
 
 export type TestRequestContext = {
@@ -128,6 +146,9 @@ export async function endPtyHandlerTest(
   handler: PtyHandler,
   originalPlatform: PropertyDescriptor | undefined
 ): Promise<void> {
+  for (const id of testOwnedTransferFences.get(handler) ?? []) {
+    handler.setOwnershipTransferInputFenced(id, false)
+  }
   const cleanup = handler.dispose({ waitForPhysicalExit: false })
   await vi.runAllTimersAsync()
   await cleanup.catch(() => {})

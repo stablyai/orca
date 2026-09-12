@@ -28,6 +28,58 @@ describe('createRemoteRuntimePtyTransport', () => {
     resetRemoteRuntimeTransport()
   })
 
+  it('routes retry-aware input through unary terminal.send instead of the binary stream', async () => {
+    runtimeSubscribe.mockImplementation(
+      async (_args: unknown, callbacks: typeof subscriptionCallbacks) => {
+        subscriptionCallbacks = callbacks
+        return { unsubscribe: vi.fn(), sendBinary: subscriptionSendBinary }
+      }
+    )
+    const defaultRuntimeCall = runtimeCall.getMockImplementation()
+    runtimeCall.mockImplementation((args: { method: string }) => {
+      if (args.method === 'terminal.send') {
+        return Promise.resolve({
+          ok: true,
+          result: { send: { handle: 'terminal-1', accepted: true, bytesWritten: 1 } }
+        })
+      }
+      return defaultRuntimeCall?.(args)
+    })
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const transport = createRemoteRuntimePtyTransport('env-1', {
+      worktreeId: 'wt-1',
+      tabId: 'tab-1',
+      leafId: 'pane:1'
+    })
+
+    transport.attach({
+      existingPtyId: 'remote:env-1@@terminal-1',
+      callbacks: {}
+    })
+    await vi.waitFor(() => expect(transport.getPtyId()).toBe('remote:env-1@@terminal-1'))
+    subscriptionSendBinary.mockClear()
+    runtimeCall.mockClear()
+
+    expect(transport.sendInput('retry-aware', { operationId: 'paste-op-1' })).toBe(true)
+    await vi.waitFor(() =>
+      expect(runtimeCall).toHaveBeenCalledWith(
+        expect.objectContaining({
+          method: 'terminal.send',
+          params: expect.objectContaining({
+            text: 'retry-aware',
+            operationId: 'paste-op-1'
+          })
+        })
+      )
+    )
+    expect(
+      subscriptionSendBinary.mock.calls
+        .map((call) => decodeTerminalStreamFrame(call[0])?.opcode)
+        .filter((opcode) => opcode === TerminalStreamOpcode.Input)
+    ).toHaveLength(0)
+    transport.destroy?.()
+  })
+
   it('reports rejected input from the one-shot runtime fallback', async () => {
     vi.useFakeTimers()
     runtimeSubscribe.mockImplementation(

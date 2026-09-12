@@ -29,6 +29,15 @@ export type NativePreflightHooks = {
   exit?: (code: number) => never
 }
 
+function bunTerminalAvailable(): boolean {
+  const bun = (
+    globalThis as typeof globalThis & {
+      Bun?: { Terminal?: unknown; spawn?: unknown }
+    }
+  ).Bun
+  return typeof bun?.spawn === 'function' && bun.Terminal !== undefined
+}
+
 /**
  * Returns true when boot may continue.
  *
@@ -37,6 +46,10 @@ export type NativePreflightHooks = {
  * sentence printed here.
  */
 export function runOrcadNativePreflight(hooks: NativePreflightHooks = {}): boolean {
+  if (bunTerminalAvailable()) {
+    setRuntimeTerminalUnavailableCause(null)
+    return true
+  }
   const check = hooks.check ?? checkNodePtyPrecondition
   const warn = hooks.warn ?? ((message: string) => console.warn(message))
   const fail = hooks.fail ?? ((message: string) => console.error(message))

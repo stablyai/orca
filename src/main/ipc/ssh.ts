@@ -73,6 +73,7 @@ import { broadcastPortForwards, relayStateOverrides } from './ssh-renderer-broad
 import { resetSshShutdownDrain } from './ssh-shutdown-drain'
 import { registerSshTargetCrudHandlers } from './ssh-target-crud-handlers'
 import { targetLifecycleInFlight } from './ssh-target-lifecycle-queue'
+import { disposeOrcadManagedTunnels } from '../ssh/orcad-managed-tunnel'
 
 const SSH_IPC_CHANNELS = [
   'ssh:listTargets',
@@ -147,7 +148,8 @@ export async function requestActiveSshAiVaultSessionTitles(
 export function registerSshHandlers(
   store: Store,
   getMainWindow: () => BrowserWindow | null,
-  runtime?: OrcaRuntimeService
+  runtime?: OrcaRuntimeService,
+  getUserDataPath?: () => string
 ): { connectionManager: SshConnectionManager; sshStore: SshConnectionStore } {
   initializeSshConnectionGenerationSession()
   // Why: macOS re-activation re-calls this with a new BrowserWindow; ipcMain.handle() throws on a duplicate channel, so remove prior handlers first.
@@ -184,7 +186,7 @@ export function registerSshHandlers(
     }
   })
   refreshActiveRelaySessions()
-  registerPowerMonitorReconnect()
+  registerPowerMonitorReconnect(getUserDataPath)
   registerSshBrowseHandler(() => connectionManager)
   setSshConnectionManagerResolver(() => connectionManager)
 
@@ -228,6 +230,7 @@ export async function resetSshHandlerStateForTests(): Promise<void> {
   resetSshShutdownDrain()
 
   await connectionManager?.disconnectAll()
+  disposeOrcadManagedTunnels()
   portForwardManager?.dispose()
   setConnectionManager(null)
   setSshConnectionManagerResolver(null)

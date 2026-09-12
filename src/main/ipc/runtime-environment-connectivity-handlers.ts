@@ -50,6 +50,10 @@ function manuallyDisconnectedResponse(
 
 export { isRuntimeEnvironmentManuallyDisconnected }
 
+export function forgetRuntimeEnvironmentConnectivityState(environmentId: string): void {
+  clearRuntimeEnvironmentManualDisconnect(environmentId)
+}
+
 type ConnectivityHandlerOptions = {
   store: Store
   getUserDataPath: () => string
@@ -101,6 +105,11 @@ export function registerRuntimeEnvironmentConnectivityHandlers({
     'runtimeEnvironments:remove',
     (_event, args: { selector: string }): { removed: PublicKnownRuntimeEnvironment } => {
       const environment = resolveEnvironment(getUserDataPath(), args.selector)
+      if (environment.orcadDeployment) {
+        throw new Error(
+          'Managed Orca servers must be stopped and unlinked through their deployment controls.'
+        )
+      }
       if (store.getSettings().activeRuntimeEnvironmentId === environment.id) {
         throw new Error('Choose another Active Server in Advanced before removing this server.')
       }

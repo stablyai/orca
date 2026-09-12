@@ -41,7 +41,7 @@ describe('headless PTY registry hydration ordering', () => {
   it('hydrates orcad after Store and daemon readiness but before RPC and publication', () => {
     const source = readFileSync(join(process.cwd(), 'src/main/orcad/orcad-entry.ts'), 'utf8')
     const store = source.indexOf('const store = new Store(')
-    const daemon = source.indexOf('await startOrcadDaemon()', store)
+    const daemon = source.indexOf('await startOrcadProfileDaemon(profile.profileDirectory)', store)
     const handlersAndHydration = source.indexOf('await registerHeadlessPtyRuntime(', daemon)
     const rpc = source.indexOf('await rpc.start()', handlersAndHydration)
     const readiness = source.indexOf('await new ServeReadinessPublisher().publish(', rpc)

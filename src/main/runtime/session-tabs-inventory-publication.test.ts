@@ -240,7 +240,8 @@ describe('authoritative session tab inventory publication', () => {
               type: 'terminal',
               parentTabId: tabId,
               leafId,
-              ptyId
+              ptyId,
+              incarnationId: 'incarnation-survived-host-relaunch'
             })
           ]
         }

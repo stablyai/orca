@@ -1,5 +1,5 @@
 import type { SshChannelMultiplexer } from '../ssh/ssh-channel-multiplexer'
-import type { IPtyProvider, PtyProcessInfo, PtySpawnOptions, PtySpawnResult } from './types'
+import type { IPtyProvider, PtySpawnOptions, PtySpawnResult } from './types'
 import type { WriteSettlement } from '../../shared/pty-write-settlement'
 import { toAppSshPtyId, toRelaySshPtyId } from './ssh-pty-id'
 import { createSshPtyAppliedSizeReader } from './ssh-pty-applied-size'
@@ -8,11 +8,12 @@ import type {
   SshPtyDataCallback,
   SshPtyDeliveryPauseAdapter,
   SshPtyExitCallback,
+  SshPtyOwnershipTransferOwner,
+  SshPtyOwnershipTransferOutputCallback,
   SshPtyReplayCallback
 } from './ssh-pty-provider-contract'
 import { SshPtyProviderOutputState } from './ssh-pty-provider-output-state'
 import { spawnFreshSshPty } from './ssh-agent-session-create-operation'
-import { mapSshPtyProcessList } from './ssh-agent-session-process-list'
 import {
   requestSshPtyAttach,
   reattachSshPtySessionForSpawn,
@@ -23,70 +24,58 @@ import { buildSshPtySpawnRequest } from './ssh-pty-spawn-request'
 import { SshPtySpawnExitRaceTracker } from './ssh-pty-spawn-exit-race'
 import { SshAgentSessionCapabilities } from './ssh-agent-session-capabilities'
 import type { PtyProcessInspection } from './pty-process-inspection'
-import { spawnWithTerminalRuntimeRepair, type TerminalRepairHook } from './ssh-pty-spawn-repair'
+import type { PtyProviderOperationRetry } from './pty-provider-contract'
+import type { PtyOwnershipBridgeCapabilities } from '../../shared/pty-ownership-bridge-contract'
 import { createSshPtyProviderRpcOperations } from './ssh-pty-provider-rpc-operations'
-
-// Why: sequential relay teardown calls share one absolute budget; convert to the mux-relative timeout only at dispatch.
-function relayTimeoutOptions(deadlineMs: number | undefined): { timeoutMs: number } | undefined {
-  return deadlineMs === undefined ? undefined : { timeoutMs: Math.max(1, deadlineMs - Date.now()) }
-}
+import { SshPtyOwnershipTransferClient } from './ssh-pty-ownership-transfer-client'
+import { createSshPtyProcessLister } from './ssh-pty-process-list'
+import type { SshPtyOwnershipTransferPublishedRoute } from './ssh-pty-ownership-transfer-route-registry'
+import { SshPtyOwnershipTransferProviderControls } from './ssh-pty-ownership-transfer-provider-controls'
+import { spawnWithTerminalRuntimeRepair, type TerminalRepairHook } from './ssh-pty-spawn-repair'
+import type { SshPtyOutgoingControlRelease } from './ssh-pty-outgoing-control-fence'
+import { drainSshPtyControls, type SshPtyControlDrain } from './ssh-pty-source-preparation-drain'
 
 /** Remote PTY provider that proxies IPtyProvider operations through the relay. */
 export class SshPtyProvider implements IPtyProvider {
-  private mux: SshChannelMultiplexer
-  private connectionId: string
+  private readonly rpcOperations: ReturnType<typeof createSshPtyProviderRpcOperations>
   private livePtyIds = new Set<string>()
   readonly getAppliedSize: NonNullable<IPtyProvider['getAppliedSize']>
+  readonly listProcesses: IPtyProvider['listProcesses']
   private readonly agentSessionCapabilities: SshAgentSessionCapabilities
   private spawnExitRaces = new SshPtySpawnExitRaceTracker()
   private readonly outputState: SshPtyProviderOutputState
+  readonly ownershipTransfer: SshPtyOwnershipTransferClient
+  private readonly ownershipTransferControls: SshPtyOwnershipTransferProviderControls
+  private readonly getOwnershipTransferOwner?: () => SshPtyOwnershipTransferOwner | null
   private recoverFromTerminalUnavailable: TerminalRepairHook<SshPtyProvider> | null = null
-  private readonly rpcOperations: ReturnType<typeof createSshPtyProviderRpcOperations>
-
-  deleteWorktreeHistory = (worktreeId: string): Promise<void> =>
-    this.rpcOperations.deleteWorktreeHistory(worktreeId)
-  write = (id: string, data: string): boolean => this.rpcOperations.write(id, data)
-  writeWithSettlement = (id: string, data: string): Promise<WriteSettlement> =>
-    this.rpcOperations.writeWithSettlement(id, data)
-  resize = (id: string, cols: number, rows: number): void =>
-    this.rpcOperations.resize(id, cols, rows)
-  sendSignal = (id: string, signal: string): Promise<void> =>
-    this.rpcOperations.sendSignal(id, signal)
-  getCwd = (id: string): Promise<string> => this.rpcOperations.getCwd(id)
-  getInitialCwd = (id: string): Promise<string> => this.rpcOperations.getInitialCwd(id)
-  clearBuffer = (id: string): Promise<void> => this.rpcOperations.clearBuffer(id)
-  closeStartupQueryAuthority = (id: string): Promise<number> =>
-    this.rpcOperations.closeStartupQueryAuthority(id)
-  acknowledgeDataEvent = (id: string, charCount: number): void =>
-    this.rpcOperations.acknowledgeDataEvent(id, charCount)
-  hasChildProcesses = (id: string): Promise<boolean> => this.rpcOperations.hasChildProcesses(id)
-  getForegroundProcess = (id: string): Promise<string | null> =>
-    this.rpcOperations.getForegroundProcess(id)
-  inspectProcess = (
-    id: string,
-    options?: { expectedIncarnationId?: string; scanChildProcesses?: boolean }
-  ): Promise<PtyProcessInspection> => this.rpcOperations.inspectProcess(id, options)
-  serialize = (ids: string[]): Promise<string> => this.rpcOperations.serialize(ids)
-  revive = (state: string): Promise<void> => this.rpcOperations.revive(state)
-  getDefaultShell = (): Promise<string> => this.rpcOperations.getDefaultShell()
-  getProfiles = (): Promise<{ name: string; path: string }[]> => this.rpcOperations.getProfiles()
 
   requestHostRpc: NonNullable<IPtyProvider['requestHostRpc']> = (method, params, options) =>
     this.mux.request(method, params as Record<string, unknown>, options)
 
   constructor(
-    connectionId: string,
-    mux: SshChannelMultiplexer,
+    private readonly connectionId: string,
+    private readonly mux: SshChannelMultiplexer,
     private readonly remoteCliBridgeEnv?: RemoteCliBridgeEnv,
-    readonly providerGeneration = 1
+    readonly providerGeneration = 1,
+    options?: {
+      onOwnershipTransferOutput?: SshPtyOwnershipTransferOutputCallback
+      getOwnershipTransferOwner?: () => SshPtyOwnershipTransferOwner | null
+    }
   ) {
-    this.connectionId = connectionId
-    this.mux = mux
+    this.getOwnershipTransferOwner = options?.getOwnershipTransferOwner
     this.rpcOperations = createSshPtyProviderRpcOperations({
       mux,
       toRelayPtyId: (id) => this.toRelayPtyId(id)
     })
     this.agentSessionCapabilities = new SshAgentSessionCapabilities(mux)
+    this.ownershipTransfer = new SshPtyOwnershipTransferClient(mux)
+    this.ownershipTransferControls = new SshPtyOwnershipTransferProviderControls(
+      connectionId,
+      mux,
+      this.ownershipTransfer,
+      providerGeneration,
+      this.livePtyIds
+    )
     this.getAppliedSize = createSshPtyAppliedSizeReader(mux, connectionId)
 
     this.outputState = new SshPtyProviderOutputState(providerGeneration, {
@@ -95,18 +84,52 @@ export class SshPtyProvider implements IPtyProvider {
       livePtyIds: this.livePtyIds,
       recordExit: (relayPtyId, incarnationId) => {
         this.spawnExitRaces.recordExit(relayPtyId, incarnationId)
-      }
+        this.ownershipTransferControls.removeSourceExit(relayPtyId, incarnationId)
+      },
+      ...(options?.onOwnershipTransferOutput
+        ? { onOwnershipTransferOutput: options.onOwnershipTransferOutput }
+        : {})
+    })
+    this.listProcesses = createSshPtyProcessLister({
+      mux,
+      connectionId,
+      livePtyIds: this.livePtyIds,
+      outputState: this.outputState
     })
   }
 
   dispose(): void {
+    this.ownershipTransferControls.dispose()
     this.outputState.dispose()
     this.livePtyIds.clear()
   }
 
   getConnectionId = (): string => this.connectionId
 
+  isOutgoingSourceControlReleased = (id: string, expectedIdentity?: unknown): boolean =>
+    this.ownershipTransferControls.isSourceControlReleased(id, expectedIdentity)
+
+  /** Caller owns durable migration authority; does not drain already-admitted operations. */
+  releaseOutgoingSourceControl = (value: SshPtyOutgoingControlRelease): void =>
+    this.ownershipTransferControls.releaseSource(value, this.getOwnershipTransferSourceIdentity)
+
   canProvideAuthoritativeBufferSnapshot = (_id: string): boolean => false
+
+  getOwnershipTransferSourceIdentity = (id: string) =>
+    this.outputState.resolveOwnershipTransferSourceAuthority(
+      this.toRelayPtyId(id),
+      this.getOwnershipTransferOwner?.() ?? null
+    )
+
+  drainOutgoingSourceControls = (value: SshPtyControlDrain): Promise<void> =>
+    drainSshPtyControls(this, this.mux, value)
+
+  fenceOutgoingCatalogCreation = (signal: AbortSignal): Promise<void> =>
+    this.mux.drainPtyCatalogCreation(signal)
+
+  installPublishedOwnershipTransferRoute = (route: SshPtyOwnershipTransferPublishedRoute): void => {
+    this.ownershipTransferControls.install(route)
+  }
 
   private toRelayPtyId = (id: string): string => toRelaySshPtyId(this.connectionId, id)
 
@@ -117,9 +140,7 @@ export class SshPtyProvider implements IPtyProvider {
     this.recoverFromTerminalUnavailable = recover
   }
 
-  hasLivePtys(): boolean {
-    return this.livePtyIds.size > 0
-  }
+  hasLivePtys = (): boolean => this.livePtyIds.size > 0
 
   async spawn(opts: PtySpawnOptions): Promise<PtySpawnResult> {
     return await spawnWithTerminalRuntimeRepair<SshPtyProvider, PtySpawnResult>({
@@ -199,6 +220,11 @@ export class SshPtyProvider implements IPtyProvider {
     return await this.agentSessionCapabilities.supportsCreateOperations(options)
   }
 
+  getOwnershipBridgeCapabilities = (
+    options: { signal?: AbortSignal } = {}
+  ): Promise<PtyOwnershipBridgeCapabilities | null> =>
+    this.rpcOperations.getOwnershipBridgeCapabilities(options)
+
   async supportsForegroundProcessEvidence(
     options: { signal?: AbortSignal } = {}
   ): Promise<boolean> {
@@ -224,10 +250,7 @@ export class SshPtyProvider implements IPtyProvider {
     expected?: { paneKey?: string; tabId?: string },
     sourceRecovery?: PtySourceRecoveryRequest
   ): Promise<SshPtyAttachResult> {
-    // Why: reconnect owns replay delivery so stale/duplicate attach results can
-    // be filtered before they reach the renderer. The expected identity lets the
-    // relay reject a cross-generation id collision instead of reattaching this
-    // lease to a different pane's freshly spawned PTY.
+    // Reconnect filters replay before renderer delivery; expected identity rejects ID collisions.
     const params = {
       id: this.toRelayPtyId(id),
       suppressReplayNotification: true,
@@ -248,45 +271,70 @@ export class SshPtyProvider implements IPtyProvider {
     })
   }
 
-  async shutdown(id: string, opts: Parameters<IPtyProvider['shutdown']>[1]): Promise<void> {
-    // Both fences are omitted rather than sent undefined: a host that predates either must see no
-    // key at all, and the owner fence in particular must never reach it as a falsy claim.
-    const { expectedIncarnationId, expectedOwnerClientInstanceId } = opts
-    await this.mux.request(
-      'pty.shutdown',
-      {
-        id: this.toRelayPtyId(id),
-        immediate: opts.immediate ?? false,
-        keepHistory: opts.keepHistory ?? false,
-        ...(expectedIncarnationId === undefined ? {} : { expectedIncarnationId }),
-        ...(expectedOwnerClientInstanceId === undefined ? {} : { expectedOwnerClientInstanceId })
-      },
-      relayTimeoutOptions(opts.deadlineMs)
-    )
-    this.livePtyIds.delete(id)
+  write(id: string, data: string, retry?: PtyProviderOperationRetry): boolean {
+    return this.ownershipTransferControls.write(id, data, retry)
   }
 
-  async listProcesses(opts?: {
-    deadlineMs?: number
-    includeForegroundProcessEvidence?: boolean
-  }): Promise<PtyProcessInfo[]> {
-    const result = await this.mux.request(
-      'pty.listProcesses',
-      opts?.includeForegroundProcessEvidence === undefined
-        ? undefined
-        : { includeForegroundProcessEvidence: opts.includeForegroundProcessEvidence },
-      relayTimeoutOptions(opts?.deadlineMs)
-    )
-    const processes = mapSshPtyProcessList(result as PtyProcessInfo[], (id) => this.toAppPtyId(id))
-    for (const process of processes) {
-      this.livePtyIds.add(process.id)
-      const relayPtyId = this.toRelayPtyId(process.id)
-      this.outputState.rememberPtyIncarnation(relayPtyId, process.incarnationId)
-    }
-    return processes
+  writeWithSettlement(
+    id: string,
+    data: string,
+    retry?: PtyProviderOperationRetry
+  ): Promise<WriteSettlement> {
+    return this.ownershipTransferControls.writeWithSettlement(id, data, retry)
   }
+
+  retireWriteOperation(id: string, operationId: string): Promise<boolean> {
+    return this.ownershipTransferControls.retireWriteOperation(id, operationId)
+  }
+
+  resize(id: string, cols: number, rows: number, retry?: PtyProviderOperationRetry): void {
+    this.ownershipTransferControls.resize(id, cols, rows, retry)
+  }
+
+  shutdown(id: string, opts: Parameters<IPtyProvider['shutdown']>[1]): Promise<void> {
+    return this.ownershipTransferControls.shutdown(id, opts)
+  }
+
+  sendSignal(id: string, signal: string, retry?: PtyProviderOperationRetry): Promise<void> {
+    return this.ownershipTransferControls.sendSignal(id, signal, retry)
+  }
+
+  getCwd = (id: string): Promise<string> => this.rpcOperations.getCwd(id)
+
+  deleteWorktreeHistory = (worktreeId: string): Promise<void> =>
+    this.rpcOperations.deleteWorktreeHistory(worktreeId)
+
+  getInitialCwd = (id: string): Promise<string> => this.rpcOperations.getInitialCwd(id)
+
+  clearBuffer(id: string, retry?: PtyProviderOperationRetry): Promise<void> {
+    return this.ownershipTransferControls.clearBuffer(id, retry)
+  }
+
+  closeStartupQueryAuthority = (id: string): Promise<number> =>
+    this.rpcOperations.closeStartupQueryAuthority(id)
+
+  acknowledgeDataEvent = (id: string, charCount: number): void =>
+    this.rpcOperations.acknowledgeDataEvent(id, charCount)
+
+  hasChildProcesses = (id: string): Promise<boolean> => this.rpcOperations.hasChildProcesses(id)
+
+  getForegroundProcess = (id: string): Promise<string | null> =>
+    this.rpcOperations.getForegroundProcess(id)
+
+  inspectProcess = (
+    id: string,
+    options?: { expectedIncarnationId?: string; scanChildProcesses?: boolean }
+  ): Promise<PtyProcessInspection> => this.rpcOperations.inspectProcess(id, options)
+
+  serialize = (ids: string[]): Promise<string> => this.rpcOperations.serialize(ids)
+
+  revive = (state: string): Promise<void> => this.rpcOperations.revive(state)
 
   hasPty = (id: string): boolean => this.livePtyIds.has(id)
+
+  getDefaultShell = (): Promise<string> => this.rpcOperations.getDefaultShell()
+
+  getProfiles = (): Promise<{ name: string; path: string }[]> => this.rpcOperations.getProfiles()
 
   onData = (callback: SshPtyDataCallback): (() => void) => this.outputState.onData(callback)
   onRejectedData = (callback: SshPtyDataCallback): (() => void) =>
@@ -294,21 +342,14 @@ export class SshPtyProvider implements IPtyProvider {
   onReplay = (callback: SshPtyReplayCallback): (() => void) => this.outputState.onReplay(callback)
   onExit = (callback: SshPtyExitCallback): (() => void) => this.outputState.onExit(callback)
 
-  setPtyDeliveryPauseAdapter(adapter: SshPtyDeliveryPauseAdapter | null): void {
+  setPtyDeliveryPauseAdapter = (adapter: SshPtyDeliveryPauseAdapter | null): void =>
     this.outputState.setDeliveryPauseAdapter(adapter)
-  }
 
-  hasPtyDeliveryPauseAdapter(): boolean {
-    return this.outputState.hasDeliveryPauseAdapter()
-  }
+  hasPtyDeliveryPauseAdapter = (): boolean => this.outputState.hasDeliveryPauseAdapter()
 
-  pauseProducer(id: string): void {
-    this.outputState.pause(this.toRelayPtyId(id))
-  }
+  pauseProducer = (id: string): void => this.outputState.pause(this.toRelayPtyId(id))
 
-  resumeProducer(id: string): void {
-    this.outputState.resume(this.toRelayPtyId(id))
-  }
+  resumeProducer = (id: string): void => this.outputState.resume(this.toRelayPtyId(id))
 
   closeOutputIntake(reason: string): void {
     this.mux.dispose('connection_lost')

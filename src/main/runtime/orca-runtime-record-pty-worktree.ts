@@ -10,6 +10,7 @@ import { maxTimestamp } from './runtime-worktree-status-projection'
 import type { RuntimeSyncedLeaf } from '../../shared/runtime-types'
 import { isTerminalLeafId, makePaneKey } from '../../shared/stable-pane-id'
 import { inferWorktreeIdFromPtyId } from './runtime-worktree-path-identity'
+import { assertOutgoingPtyRegistrationAllowed } from './outgoing-pty-registration-fence'
 
 export class OrcaRuntimeWithRecordPtyWorktree extends OrcaRuntimeWithRefreshRepoWorktreeScan {
   protected recordPtyWorktree(
@@ -33,6 +34,7 @@ export class OrcaRuntimeWithRecordPtyWorktree extends OrcaRuntimeWithRefreshRepo
       >
     > = {}
   ): RuntimePtyWorktreeRecord {
+    assertOutgoingPtyRegistrationAllowed(this, ptyId)
     let pty = this.ptysById.get(ptyId)
     if (!pty) {
       const titleObservedAt = state.title ? this.nextTitleObservationSequence() : null

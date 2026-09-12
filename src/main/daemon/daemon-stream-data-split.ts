@@ -5,13 +5,15 @@
  */
 import { encodeNdjson } from './ndjson'
 import type { Socket } from 'node:net'
+import type { PtyIncarnationId } from '../../shared/pty-incarnation'
 
 export function encodeStreamDataEvent(
   sessionId: string,
   data: string,
   rawLength?: number,
   seq?: number,
-  transformed?: boolean
+  transformed?: boolean,
+  incarnationId?: PtyIncarnationId
 ): string {
   return encodeNdjson({
     type: 'event',
@@ -19,6 +21,7 @@ export function encodeStreamDataEvent(
     sessionId,
     payload: {
       data,
+      ...(incarnationId === undefined ? {} : { incarnationId }),
       ...(seq === undefined ? {} : { seq }),
       ...(rawLength === undefined ? {} : { rawLength }),
       ...(rawLength === undefined ? {} : { sequenceChars: rawLength }),
@@ -27,8 +30,16 @@ export function encodeStreamDataEvent(
   })
 }
 
-function streamDataEventLineBytes(sessionId: string, data: string, rawLength?: number): number {
-  return Buffer.byteLength(encodeStreamDataEvent(sessionId, data, rawLength), 'utf8')
+function streamDataEventLineBytes(
+  sessionId: string,
+  data: string,
+  rawLength?: number,
+  incarnationId?: PtyIncarnationId
+): number {
+  return Buffer.byteLength(
+    encodeStreamDataEvent(sessionId, data, rawLength, undefined, false, incarnationId),
+    'utf8'
+  )
 }
 
 function isHighSurrogate(value: number): boolean {
@@ -64,9 +75,10 @@ export function splitStreamDataForNdjson(
   sessionId: string,
   data: string,
   maxLineBytes: number,
-  sequenceChars?: number
+  sequenceChars?: number,
+  incarnationId?: PtyIncarnationId
 ): string[] {
-  if (streamDataEventLineBytes(sessionId, data, sequenceChars) <= maxLineBytes) {
+  if (streamDataEventLineBytes(sessionId, data, sequenceChars, incarnationId) <= maxLineBytes) {
     return [data]
   }
 
@@ -86,7 +98,8 @@ export function splitStreamDataForNdjson(
       }
 
       if (
-        streamDataEventLineBytes(sessionId, data.slice(start, mid), sequenceChars) <= maxLineBytes
+        streamDataEventLineBytes(sessionId, data.slice(start, mid), sequenceChars, incarnationId) <=
+        maxLineBytes
       ) {
         best = mid
         low = rawMid + 1
@@ -110,11 +123,12 @@ export function writeStreamDataEvents(
   maxLineBytes: number,
   rawLength = data.length,
   seq?: number,
-  transformed = false
+  transformed = false,
+  incarnationId?: PtyIncarnationId
 ): void {
   const explicitRawLength = rawLength === data.length ? undefined : rawLength
   if (transformed) {
-    streamSocket.write(encodeStreamDataEvent(sessionId, data, rawLength, seq, true))
+    streamSocket.write(encodeStreamDataEvent(sessionId, data, rawLength, seq, true, incarnationId))
     return
   }
   const carriesMetadata = explicitRawLength !== undefined || seq !== undefined
@@ -122,13 +136,16 @@ export function writeStreamDataEvents(
     sessionId,
     data,
     carriesMetadata ? Math.max(1, maxLineBytes - 96) : maxLineBytes,
-    explicitRawLength
+    explicitRawLength,
+    incarnationId
   )
   let consumed = 0
   for (const chunk of chunks) {
     consumed += chunk.length
     const chunkEndSeq = seq === undefined ? undefined : seq - (data.length - consumed)
     const chunkRawLength = explicitRawLength === 0 ? 0 : carriesMetadata ? chunk.length : undefined
-    streamSocket.write(encodeStreamDataEvent(sessionId, chunk, chunkRawLength, chunkEndSeq))
+    streamSocket.write(
+      encodeStreamDataEvent(sessionId, chunk, chunkRawLength, chunkEndSeq, false, incarnationId)
+    )
   }
 }

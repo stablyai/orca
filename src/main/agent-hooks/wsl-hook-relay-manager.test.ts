@@ -357,13 +357,36 @@ describe('WslHookRelayManager', () => {
     const { manager, deps } = createManager({ waitForSentinel })
     manager.ensureForDistro('Ubuntu')
     await vi.waitFor(() =>
-      expect(deps.warn).toHaveBeenCalledWith(expect.stringContaining('no node'))
+      expect(deps.warn).toHaveBeenCalledWith(expect.stringContaining('no compatible Bun runtime'))
     )
     expect(deps.runInstall).not.toHaveBeenCalled()
     // Cooldown: an immediate re-ensure must not spawn again.
     manager.ensureForDistro('Ubuntu')
     await new Promise((resolve) => setTimeout(resolve, 20))
     expect(deps.spawnRelay).toHaveBeenCalledTimes(1)
+    manager.disposeAll()
+  })
+
+  it('repairs a strict Bun guest before reporting the no-runtime failure', async () => {
+    const waitForSentinel = vi
+      .fn()
+      .mockRejectedValueOnce(startupError(43))
+      .mockImplementationOnce(async () => guestTransport())
+    const { manager, deps } = createManager({
+      waitForSentinel,
+      resolveBundle: () => ({
+        jsPath: '/fake/wsl-agent-hook-relay.js',
+        version: '0.1.0+abc',
+        bunRuntimePaths: { 'x64-glibc': '/fake/bun-runtime-linux-x64-glibc' },
+        requiresBundledBun: true
+      }),
+      readBundle: () => Buffer.from('// bundle')
+    })
+    manager.ensureForDistro('Ubuntu')
+    await vi.waitFor(() => expect(deps.installHooks).toHaveBeenCalledTimes(1))
+    expect(deps.runInstall).toHaveBeenCalledTimes(1)
+    expect(deps.warn).not.toHaveBeenCalledWith(expect.stringContaining('no compatible Bun runtime'))
+    expect(deps.spawnRelay).toHaveBeenCalledTimes(2)
     manager.disposeAll()
   })
 

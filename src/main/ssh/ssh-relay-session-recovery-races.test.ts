@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { SshRelaySession } from './ssh-relay-session'
 import { createMockDeps, mockDeploySuccess } from './ssh-relay-session-test-fixtures'
+import { registerSuccessorRetirementSessionTests } from './ssh-relay-session-successor-retirement-test-cases'
 
 const {
   acceptOutputDataMock,
@@ -226,6 +227,10 @@ describe('SshRelaySession recovery race fencing', () => {
     )
     return { session, deps }
   }
+
+  registerSuccessorRetirementSessionTests(prepareRecovery, () => {
+    vi.mocked(getPtyIdsForConnection).mockReturnValue([])
+  })
 
   it('publishes held recovery data before an exact exit without waiting for completion', async () => {
     const targetId = 'exit-with-complete-private-body'

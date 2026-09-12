@@ -1,8 +1,8 @@
 import { installRuntimeLinearCommandSurface } from './runtime-linear-command-surface'
-import { OrcaRuntimeWithResolveWaiter } from './orca-runtime-resolve-waiter'
+import { OrcaRuntimeWithMigrationCatalog } from './orca-runtime-migration-catalog'
 import type { RuntimeCommandSurfaceHost } from './orca-runtime-core'
 
-class OrcaRuntimeService extends OrcaRuntimeWithResolveWaiter {}
+class OrcaRuntimeService extends OrcaRuntimeWithMigrationCatalog {}
 type OrcaRuntimeServiceExport = RuntimeCommandSurfaceHost<OrcaRuntimeService>
 const OrcaRuntimeServiceExport = OrcaRuntimeService as unknown as {
   new (...args: ConstructorParameters<typeof OrcaRuntimeService>): OrcaRuntimeServiceExport
@@ -56,3 +56,7 @@ export {
   WORKTREE_SCAN_ADMIN_RECONCILE_INTERVAL_MS,
   WORKTREE_SCAN_ADMIN_FINGERPRINT_TIMEOUT_MS
 } from './orca-runtime-postlude'
+
+export type { RuntimePtyOwnershipTransferModelCheckpoint } from './runtime-ownership-transfer-contracts'
+
+export { createPtyOwnershipTransferDestinationRegistry } from './runtime-ownership-transfer-contracts'

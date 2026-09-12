@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { Terminal } from '@xterm/xterm'
 import {
+  isTerminalDataEventUserInput,
   subscribeToTerminalInputData,
   subscribeToTerminalUserInput
 } from './terminal-user-input-signal'
@@ -18,6 +19,45 @@ type CoreServiceAccess = {
 // removes or reshapes it must fail here loudly instead of silently dropping
 // terminal activity tracking to the onData fallback.
 describe('subscribeToTerminalUserInput', () => {
+  it('retains exact provenance across nested synthetic and user data events', () => {
+    const terminal = new Terminal({ allowProposedApi: true })
+    const core = (terminal as unknown as CoreServiceAccess)._core.coreService
+    const events: [string, boolean][] = []
+    const signal = subscribeToTerminalUserInput(terminal, () =>
+      core.triggerDataEvent('signal-reply')
+    )
+    const subscription = subscribeToTerminalInputData(terminal, (data, wasUserInput) => {
+      expect(wasUserInput).toBe(isTerminalDataEventUserInput(terminal))
+      events.push([data, wasUserInput])
+      if (data === 'keyboard') {
+        core.triggerDataEvent('nested-reply')
+        expect(isTerminalDataEventUserInput(terminal)).toBe(true)
+      }
+      if (data === 'outer-reply') {
+        core.triggerDataEvent('nested-keyboard', true)
+        expect(isTerminalDataEventUserInput(terminal)).toBe(false)
+      }
+    })
+    core.triggerDataEvent('keyboard', true)
+    core.triggerDataEvent('\x1b[1;2R', true)
+    core.triggerDataEvent('\x1b[1;2R')
+    core.triggerDataEvent('outer-reply')
+    expect(events).toEqual([
+      ['signal-reply', false],
+      ['keyboard', true],
+      ['nested-reply', false],
+      ['signal-reply', false],
+      ['\x1b[1;2R', true],
+      ['\x1b[1;2R', false],
+      ['outer-reply', false],
+      ['signal-reply', false],
+      ['nested-keyboard', true]
+    ])
+    expect(isTerminalDataEventUserInput(terminal)).toBe(false)
+    subscription.dispose()
+    signal?.dispose()
+    terminal.dispose()
+  })
   it('fires for real user input and not for parser auto-replies', () => {
     const terminal = new Terminal({ allowProposedApi: true })
     const listener = vi.fn()
@@ -83,7 +123,7 @@ describe('subscribeToTerminalUserInput', () => {
 })
 
 describe('subscribeToTerminalInputData', () => {
-  it('classifies real xterm events independently and disposes both subscriptions', () => {
+  it('classifies real xterm events independently and disposes the subscription', () => {
     const terminal = new Terminal({ allowProposedApi: true })
     const core = (terminal as unknown as CoreServiceAccess)._core.coreService
     const listener = vi.fn()

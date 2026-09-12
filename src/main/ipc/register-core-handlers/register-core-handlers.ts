@@ -212,7 +212,7 @@ export function registerCoreHandlers(
   }
   registerFilesystemWatcherHandlers()
   registerRuntimeHandlers(runtime)
-  registerRuntimeEnvironmentHandlers(store)
+  registerRuntimeEnvironmentHandlers(store, runtime, runtime)
   registerEphemeralVmHandlers(store, pluginService)
   registerAiVaultHandlers({
     ensureStructuredSessionOwnership: () => runtime.ensureStructuredAgentSessionHost(),

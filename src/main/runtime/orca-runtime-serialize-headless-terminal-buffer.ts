@@ -11,6 +11,7 @@ export class OrcaRuntimeWithSerializeHeadlessTerminalBuffer extends OrcaRuntimeW
     opts: { scrollbackRows?: number; includeEmpty?: boolean } = {}
   ): Promise<{
     data: string
+    frameRestoreAnsi?: string
     cols: number
     rows: number
     cwd?: string | null

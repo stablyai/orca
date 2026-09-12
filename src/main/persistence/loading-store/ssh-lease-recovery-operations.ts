@@ -3,6 +3,7 @@ import type {
   SshPendingPtyKillEntry
 } from '../../../shared/ssh-pending-pty-kill'
 import type { SshPtyConsumerRecovery, SshRemotePtyLease } from '../../../shared/ssh-types'
+import { retireSshRemotePtyLeaseSelection as retireSshRemotePtyLeaseSelectionOperation } from '../leasing-ssh-ptys/ssh-pty-reset-retirement'
 import {
   clearSshRemotePtyKillIntent as clearSshRemotePtyKillIntentOperation,
   getSshRemotePtyKillIntents as getSshRemotePtyKillIntentsOperation,
@@ -158,6 +159,19 @@ export class SshLeaseRecoveryOperations {
 
   removeSshRemotePtyLease(targetId: string, ptyId: string): void {
     removeSshRemotePtyLeaseOperation(getSshPtyLeaseOperations(this), targetId, ptyId)
+  }
+
+  retireSshRemotePtyLeaseSelection(
+    targetId: string,
+    expected: readonly SshRemotePtyLease[],
+    retiredAt: number
+  ): Promise<{ assertRetired: () => void }> {
+    return retireSshRemotePtyLeaseSelectionOperation(
+      getSshPtyLeaseOperations(this),
+      targetId,
+      expected,
+      retiredAt
+    )
   }
 
   removeSshRemotePtyLeases(targetId: string): void {

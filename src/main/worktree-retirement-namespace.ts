@@ -50,7 +50,7 @@ export function retirementNamespaceKey(hostIdentity: string, probePath: string):
 
 /** Rewrites a key's host identity, keeping its workspace-path half. Returns null when the key is
  *  not under `fromIdentity` or the swap is a no-op. */
-function swapRetirementNamespaceHost(
+export function replaceRetirementNamespaceHostIdentity(
   namespaceKey: string,
   fromIdentity: string,
   toIdentity: string
@@ -68,7 +68,7 @@ export function retirementNamespaceKeysToRead(
   namespaceKey: string,
   lookup?: SshTargetLookup
 ): string[] {
-  const legacyKey = swapRetirementNamespaceHost(
+  const legacyKey = replaceRetirementNamespaceHostIdentity(
     namespaceKey,
     retirementHostIdentity(repo, lookup),
     getRepoExecutionHostId(repo)

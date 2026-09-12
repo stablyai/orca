@@ -93,4 +93,57 @@ describe('SshConnectionManager', () => {
     expect(mgr.getConnection('a')).toBeUndefined()
     expect(mgr.getConnection('b')).toBeUndefined()
   })
+
+  it('disconnectAll preserves excluded reset connections in the registry', async () => {
+    const mgr = new SshConnectionManager(createCallbacks())
+    const retained = await mgr.connect(createTarget({ id: 'reset' }))
+    await mgr.connect(createTarget({ id: 'ordinary' }))
+    const disconnect = vi.spyOn(retained, 'disconnect')
+    await mgr.disconnectAll((id) => id !== 'reset')
+    expect(disconnect).not.toHaveBeenCalled()
+    expect(mgr.getConnection('reset')).toBe(retained)
+    expect(mgr.getConnection('ordinary')).toBeUndefined()
+    await mgr.disconnectAll()
+  })
+
+  it('checks disconnect admission immediately before each transport effect', async () => {
+    const mgr = new SshConnectionManager(createCallbacks())
+    const first = await mgr.connect(createTarget({ id: 'first' }))
+    const second = await mgr.connect(createTarget({ id: 'second' }))
+    const disconnectSecond = vi.spyOn(second, 'disconnect')
+    let reserved = false
+    const originalDisconnect = first.disconnect.bind(first)
+    vi.spyOn(first, 'disconnect').mockImplementation(() => {
+      reserved = true
+      return originalDisconnect()
+    })
+    await mgr.disconnectAll((id) => id !== 'second' || !reserved)
+    expect(disconnectSecond).not.toHaveBeenCalled()
+    expect(mgr.getConnection('second')).toBe(second)
+    await mgr.disconnectAll()
+  })
+
+  it('does not erase a replacement registered while an admitted disconnect settles', async () => {
+    const mgr = new SshConnectionManager(createCallbacks())
+    const target = createTarget({ id: 'target' })
+    const old = await mgr.connect(target)
+    const state = old.getState()
+    vi.spyOn(old, 'getState').mockReturnValue({ ...state, status: 'disconnected' })
+    let finish!: () => void
+    vi.spyOn(old, 'disconnect')
+      .mockImplementationOnce(
+        () =>
+          new Promise<void>((resolve) => {
+            finish = resolve
+          })
+      )
+      .mockResolvedValue(undefined)
+    const drain = mgr.disconnectAll()
+    const replacement = await mgr.connect(target)
+    expect(replacement).not.toBe(old)
+    finish()
+    await drain
+    expect(mgr.getConnection('target')).toBe(replacement)
+    await mgr.disconnectAll()
+  })
 })

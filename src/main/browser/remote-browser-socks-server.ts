@@ -1,7 +1,7 @@
 import { createServer, type Server, type Socket } from 'node:net'
 import type { Duplex } from 'node:stream'
 import { GrowingByteBuffer } from '../../shared/growing-byte-buffer'
-import { pipeUpstreamToClient } from './remote-browser-socks-upstream'
+import { pipeBrowserNetworkDestinationToSocket } from './browser-network-downstream-pipe'
 
 const SOCKS_VERSION = 5
 const SOCKS_NO_AUTH = 0
@@ -39,7 +39,7 @@ export class RemoteBrowserSocksServer {
 
   constructor(options: RemoteBrowserSocksServerOptions) {
     this.open = options.open
-    this.server = createServer((socket) => this.accept(socket))
+    this.server = createServer({ allowHalfOpen: true }, (socket) => this.accept(socket))
     this.server.maxConnections = 128
   }
 
@@ -207,7 +207,7 @@ export class RemoteBrowserSocksServer {
               upstream.write(pendingUpstream.takeBuffer())
             }
             socket.pipe(upstream)
-            pipeUpstreamToClient(upstream, socket)
+            pipeBrowserNetworkDestinationToSocket(upstream, socket)
             upstream.once('error', () => socket.destroy())
             upstream.once('close', () => socket.destroy())
             socket.once('close', () => upstream.destroy())
@@ -216,6 +216,11 @@ export class RemoteBrowserSocksServer {
         )
     }
     socket.on('data', onData)
+    socket.once('end', () => {
+      if (phase === 'greeting' || phase === 'request') {
+        socket.destroy()
+      }
+    })
     socket.once('error', cleanup)
     socket.once('close', cleanup)
   }
