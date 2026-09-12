@@ -12,7 +12,7 @@ import type { ClaudeUsageStore } from '../claude-usage/store'
 import type { CodexUsageStore } from '../codex-usage/store'
 import { runAutomationPrecheck } from './precheck-runner'
 import { resolveAutomationRunTarget, type AutomationRunTargetResult } from './run-target-resolution'
-import { collectAutomationRunUsage } from './run-usage-collection'
+import { persistAutomationRunUsage } from './run-usage-collection'
 import type { HeadlessAutomationDispatcher } from './headless-dispatch'
 import { clearAutomationDispatchTokens, createAutomationDispatchToken } from './dispatch-tokens'
 import { runHeadlessAutomationDispatch } from './headless-dispatch-runner'
@@ -77,7 +77,7 @@ export class AutomationService {
           observer: opts.terminalObserver,
           readRun: (automationId, runId) =>
             this.store.listAutomationRuns(automationId).find((entry) => entry.id === runId) ?? null,
-          markDispatchResult: (result) => this.markDispatchResult(result)
+          markDispatchResult: (result) => this.persistDispatchResult(result)
         })
       : null
   }
@@ -188,6 +188,19 @@ export class AutomationService {
   }
 
   async markDispatchResult(result: AutomationDispatchResult): Promise<AutomationRun> {
+    const deferred =
+      result.status === 'completed'
+        ? this.completionWatcher?.deferReportedCompletion(result.runId, this.store)
+        : null
+    return deferred ?? (await this.persistDispatchResult(result))
+  }
+
+  private async persistDispatchResult(result: AutomationDispatchResult): Promise<AutomationRun> {
+    const priorSessionId =
+      result.status === 'completed' && result.terminalSessionId === null
+        ? this.store.listAutomationRuns().find((entry) => entry.id === result.runId)
+            ?.terminalSessionId
+        : null
     const run = this.runs.updateRun(result)
     clearAutomationDispatchTokens(run.automationId, run.id)
     if (!isFinalAutomationRunStatus(run.status)) {
@@ -197,31 +210,13 @@ export class AutomationService {
       return run
     }
     this.completionWatcher?.forget(run.id)
-    // Why: the renderer's mark-completed effect can re-fire for the same run
-    // before refresh() flips its status snapshot off 'dispatched'. Re-running
-    // collectRunUsage advances the attribution window and can rewrite an
-    // already-collected 'known' usage to 'unavailable'/'ambiguous_session'.
-    if (run.usage) {
-      return run
-    }
-    const usage = await collectAutomationRunUsage({
-      automation: this.store.listAutomations().find((entry) => entry.id === run.automationId),
+    return await persistAutomationRunUsage({
+      store: this.store,
+      runs: this.runs,
       run,
+      priorSessionId,
       claudeUsage: this.claudeUsage,
       codexUsage: this.codexUsage
-    })
-    // Why: the run is final during the await above, so a concurrent create-time
-    // retention prune may have evicted it — the usage write must not throw then.
-    if (!this.store.listAutomationRuns(run.automationId).some((entry) => entry.id === run.id)) {
-      return run
-    }
-    return this.runs.updateRun({
-      runId: run.id,
-      status: run.status,
-      workspaceId: run.workspaceId,
-      terminalSessionId: run.terminalSessionId,
-      usage,
-      error: run.error
     })
   }
 

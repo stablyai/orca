@@ -234,7 +234,7 @@ describe('authority-owned automation run completion', () => {
     service.stop()
   })
 
-  it('persists the terminal status once when the renderer wins the race', async () => {
+  it('defers a renderer completion to the authority exit observation', async () => {
     const store = await createStore()
     const automation = createAutomation(store)
     let resolveObservation: ((value: AutomationRunCompletionObservation) => void) | null = null
@@ -258,18 +258,14 @@ describe('authority-owned automation run completion', () => {
       ...LAUNCH_TARGET,
       error: null
     })
-    const afterRenderer = readRun(store, automation.id, run.id)
-    const writeSpy = vi.spyOn(store, 'updateAutomationRun')
+    expect(readRun(store, automation.id, run.id).status).toBe('dispatched')
 
     resolveObservation!({ status: 'dispatch_failed', error: 'watcher lost the terminal' })
     await new Promise((resolve) => setTimeout(resolve, 0))
     await new Promise((resolve) => setTimeout(resolve, 0))
-    expect(writeSpy).not.toHaveBeenCalled()
     const afterWatcher = readRun(store, automation.id, run.id)
-    expect(afterWatcher.status).toBe('completed')
-    expect(afterWatcher.error).toBeNull()
-    expect(afterWatcher.usage).toEqual(afterRenderer.usage)
-    writeSpy.mockRestore()
+    expect(afterWatcher.status).toBe('dispatch_failed')
+    expect(afterWatcher.error).toBe('watcher lost the terminal')
     service.stop()
   })
 

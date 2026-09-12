@@ -201,6 +201,8 @@ describe('reconciling retained runs against a graph that has not published yet',
       ...LAUNCH_TARGET,
       error: null
     })
+    expect(readRun(store, automation.id, retained.id).status).toBe('dispatched')
+    surface.settleObservation({ status: 'completed', error: null })
     await vi.advanceTimersByTimeAsync(AFTER_SETTLE_MS)
 
     expect(transitions).toEqual(['completed'])

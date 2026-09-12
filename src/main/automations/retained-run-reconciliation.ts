@@ -1,6 +1,6 @@
 import type { AutomationRun } from '../../shared/automations-types'
 
-/** Cadence for re-checking a retained run whose pane has not remounted yet. */
+/** Cadence for re-checking a run whose pane has not mounted yet. */
 const RETRY_INTERVAL_MS = 2_000
 /** Grace after the terminal surface reports ready before an unresolvable run is
  *  called lost. Covers restored-pane remount and SSH/WSL reattach, and matches
@@ -16,7 +16,7 @@ export type RetainedRunReconcilerDeps = {
 }
 
 /**
- * Startup reconciliation of retained non-terminal runs.
+ * Reconciliation of non-terminal runs awaiting an observable pane.
  *
  * Why staged rather than one synchronous pass: at authority startup no window
  * graph has published yet, so "this pane has no terminal" means "not known yet",
@@ -26,7 +26,7 @@ export type RetainedRunReconcilerDeps = {
  */
 export class RetainedRunReconciler {
   private readonly deps: RetainedRunReconcilerDeps
-  private readonly pending = new Map<string, AutomationRun>()
+  private readonly pending = new Map<string, { run: AutomationRun; stagedAt: number }>()
   private timer: ReturnType<typeof setInterval> | null = null
   private surfaceReadyAt: number | null = null
   private disposed = false
@@ -41,7 +41,10 @@ export class RetainedRunReconciler {
     }
     for (const run of runs) {
       if (!this.deps.attach(run)) {
-        this.pending.set(run.id, run)
+        this.pending.set(run.id, {
+          run,
+          stagedAt: this.pending.get(run.id)?.stagedAt ?? Date.now()
+        })
       }
     }
     this.sweep()
@@ -63,14 +66,18 @@ export class RetainedRunReconciler {
   }
 
   private sweep(): void {
-    const strandAt = this.surfaceReadyAt === null ? null : this.surfaceReadyAt + SURFACE_SETTLE_MS
     // Deleting the current entry mid-iteration is defined for Map; nothing here
     // re-enters the reconciler, so no snapshot is needed.
-    for (const [runId, run] of this.pending) {
+    for (const [runId, { run, stagedAt }] of this.pending) {
       if (!this.deps.stillRetained(run) || this.deps.attach(run)) {
         this.pending.delete(runId)
         continue
       }
+      // A fresh dispatch gets its own grace even when the surface has long been ready.
+      const strandAt =
+        this.surfaceReadyAt === null
+          ? null
+          : Math.max(this.surfaceReadyAt, stagedAt) + SURFACE_SETTLE_MS
       if (strandAt !== null && Date.now() >= strandAt) {
         this.pending.delete(runId)
         this.deps.strand(run)
