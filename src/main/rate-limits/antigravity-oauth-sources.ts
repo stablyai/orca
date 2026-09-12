@@ -1,8 +1,12 @@
+import { execFile } from 'node:child_process'
 import { readFile, writeFile, rename } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import path from 'node:path'
+import { promisify } from 'node:util'
 import { net } from 'electron'
 import { extractOAuthClientCredentials } from './gemini-cli-oauth-extractor'
+
+const execFileAsync = promisify(execFile)
 
 const API_TIMEOUT_MS = 10_000
 const PRIMARY_OAUTH_CREDS_PATH = path.join(homedir(), '.gemini', 'oauth_creds.json')
@@ -10,11 +14,22 @@ const FALLBACK_OAUTH_CREDS_PATH = path.join(homedir(), '.antigravity', 'oauth_cr
 const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token'
 const LOAD_CODE_ASSIST_URL = 'https://cloudcode-pa.googleapis.com/v1internal:loadCodeAssist'
 
+// Why: cloudcode-pa rejects requests whose User-Agent is not an Antigravity
+// client with 403 PERMISSION_DENIED (the same contract the `agy` CLI and
+// sub2api follow). The platform segment is not validated, so we report the
+// truthful one.
+export const ANTIGRAVITY_USER_AGENT = `antigravity/2.9.1 ${process.platform}/${process.arch}`
+
 export type AntigravityCredentials = {
   access_token: string
   refresh_token: string
   expiry_date: number
   credsFilePath?: string
+  // Why: tokens minted by the `agy` CLI live in the OS keychain and are bound
+  // to the Antigravity OAuth client — Orca can read them but cannot refresh
+  // them (the refresh would need agy's embedded client secret). The CLI
+  // refreshes them on its own, so Orca just re-reads on every poll.
+  source?: 'keychain' | 'file'
 }
 
 export type GoogleAuthEntry = {
@@ -74,7 +89,8 @@ export async function readAntigravityCredentials(): Promise<AntigravityCredentia
           access_token: parsed.access_token,
           refresh_token: parsed.refresh_token,
           expiry_date: parsed.expiry_date,
-          credsFilePath: credPath
+          credsFilePath: credPath,
+          source: 'file'
         }
       }
     } catch (err) {
@@ -85,6 +101,55 @@ export async function readAntigravityCredentials(): Promise<AntigravityCredentia
     }
   }
   return null
+}
+
+// Why: the `agy` CLI (Go) stores its OAuth token via go-keyring. On macOS that
+// is a generic-password item with service "gemini" and account "antigravity",
+// whose data is the literal prefix "go-keyring-base64:" followed by base64 of
+// {"token":{"access_token":...,"refresh_token":...,"expiry":RFC3339}}.
+// This is the freshest working credential on a machine with agy installed —
+// the legacy ~/.gemini/oauth_creds.json token was minted by the retired
+// Gemini CLI client and gets 403 SUBSCRIPTION_REQUIRED from cloudcode-pa.
+export async function readAntigravityKeychainCredentials(): Promise<AntigravityCredentials | null> {
+  if (process.platform !== 'darwin') {
+    return null
+  }
+  try {
+    const { stdout } = await execFileAsync(
+      '/usr/bin/security',
+      ['find-generic-password', '-s', 'gemini', '-a', 'antigravity', '-w'],
+      { encoding: 'utf-8', timeout: API_TIMEOUT_MS, windowsHide: true }
+    )
+    const raw = stdout.trim()
+    if (!raw.startsWith('go-keyring-base64:')) {
+      return null
+    }
+    const decoded = JSON.parse(
+      Buffer.from(raw.slice('go-keyring-base64:'.length), 'base64').toString('utf-8')
+    ) as {
+      token?: { access_token?: unknown; refresh_token?: unknown; expiry?: unknown }
+    }
+    const token = decoded.token
+    if (
+      !token ||
+      typeof token.access_token !== 'string' ||
+      typeof token.refresh_token !== 'string' ||
+      !token.access_token ||
+      !token.refresh_token
+    ) {
+      return null
+    }
+    const expiryMs = typeof token.expiry === 'string' ? Date.parse(token.expiry) : Number.NaN
+    return {
+      access_token: token.access_token,
+      refresh_token: token.refresh_token,
+      expiry_date: Number.isFinite(expiryMs) ? expiryMs : 0,
+      source: 'keychain'
+    }
+  } catch {
+    // Missing item, keychain locked, or user denied access — fall through.
+    return null
+  }
 }
 
 export async function saveAntigravityCredentials(creds: AntigravityCredentials): Promise<void> {
@@ -142,9 +207,12 @@ export async function loadProjectId(accessToken: string): Promise<string> {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${accessToken}`
+        Authorization: `Bearer ${accessToken}`,
+        'User-Agent': ANTIGRAVITY_USER_AGENT
       },
-      body: JSON.stringify({ metadata: { ideType: 'ANTIGRAVITY' } }),
+      body: JSON.stringify({
+        metadata: { ideType: 'ANTIGRAVITY', ideName: 'antigravity', ideVersion: '2.9.1' }
+      }),
       signal: AbortSignal.timeout(API_TIMEOUT_MS)
     })
 
@@ -178,6 +246,24 @@ export async function loadProjectId(accessToken: string): Promise<string> {
     }
   }
 
+  // Why: the agy CLI caches its resolved default project on disk; it is the
+  // most accurate local fallback because it reflects the signed-in account.
+  try {
+    const cached = (
+      await readFile(
+        path.join(homedir(), '.gemini', 'antigravity-cli', 'cache', 'default_project_id.txt'),
+        'utf-8'
+      )
+    ).trim()
+    if (cached) {
+      return cached
+    }
+  } catch {
+    // ignore
+  }
+
+  // Why: mirrors the constant embedded in the agy binary — the server accepts
+  // this synthetic project for personal-tier accounts.
   return 'default-cli-project'
 }
 
