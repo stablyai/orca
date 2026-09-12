@@ -915,6 +915,18 @@ describe('buildPosixAgentHookPostCommand', () => {
     expect(command).toContain('Content-Type: application/x-www-form-urlencoded')
     expect(command).toContain('--data-urlencode "payload@-"')
   })
+
+  it('forces C numeric locale on every curl invocation so fractional timeouts parse', () => {
+    const command = buildPosixAgentHookPostCommand('claude').join('\n')
+    expect(command).toContain('| LC_NUMERIC=C curl -sS')
+    expect(command).not.toMatch(/\|\s+curl\b/)
+
+    const custom = buildPosixAgentHookPostCommand('codex', { curlCommand: '"$curl_bin"' }).join(
+      '\n'
+    )
+    expect(custom).toContain('| LC_NUMERIC=C "$curl_bin" -sS')
+    expect(custom).not.toMatch(/\|\s+"\$curl_bin"/)
+  })
 })
 
 describe('buildWindowsAgentHookCurlPostCommand', () => {

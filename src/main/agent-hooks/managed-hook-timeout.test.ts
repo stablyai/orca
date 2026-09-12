@@ -4,7 +4,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { spawn, spawnSync } from 'node:child_process'
 import { createServer, type Server, type Socket } from 'node:net'
-import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { SFTPWrapper } from 'ssh2'
@@ -202,11 +202,32 @@ describe('managed agent hook timeouts', () => {
           (process.platform === 'win32' && command.includes('-EncodedCommand'))
       )
       expect(carriers).toBeGreaterThan(0)
+      if (process.platform !== 'win32') {
+        assertPosixCurlUsesCNumericLocale(
+          readFileSync(join(homeDir, '.orca', 'agent-hooks', 'droid-hook.sh'), 'utf8'),
+          'droid'
+        )
+      }
     } finally {
       homedirMock.mockImplementation(() => process.env.HOME ?? tmpdir())
       rmSync(homeDir, { recursive: true, force: true })
     }
   })
+
+  function assertPosixCurlUsesCNumericLocale(content: string, label: string): void {
+    expect(content, `${label} wrapper missing curl transport`).toContain('curl')
+    expect(content, `${label} wrapper missing --connect-timeout`).toContain('--connect-timeout')
+    expect(content, `${label} wrapper missing --max-time`).toContain('--max-time')
+    expect(content, `${label} wrapper missing C numeric locale for curl`).toMatch(
+      /LC_NUMERIC=C (?:curl|"\$curl_bin")/
+    )
+    expect(content, `${label} wrapper posts curl without C numeric locale`).not.toMatch(
+      /\|\s+curl\b/
+    )
+    expect(content, `${label} wrapper posts curl_bin without C numeric locale`).not.toMatch(
+      /\|\s+"\$curl_bin"/
+    )
+  }
 
   it('bounds every generated POSIX curl wrapper with --connect-timeout and --max-time', async () => {
     let curlWrappersChecked = 0
@@ -217,19 +238,85 @@ describe('managed agent hook timeouts', () => {
         if (!path.endsWith('.sh')) {
           continue
         }
-        expect(content, `${agent} wrapper missing curl transport`).toContain('curl')
-        expect(content, `${agent} wrapper missing --connect-timeout`).toContain('--connect-timeout')
-        expect(content, `${agent} wrapper missing --max-time`).toContain('--max-time')
+        assertPosixCurlUsesCNumericLocale(content, `${agent} ${path}`)
         curlWrappersChecked += 1
       }
     }
     const kimi = createFakeSftp()
     await new KimiHookService().installRemote(kimi.sftp, REMOTE_HOME)
     const kimiWrapper = kimi.fs.files.get(`${REMOTE_HOME}/.orca/agent-hooks/kimi-hook.sh`)!
-    expect(kimiWrapper, 'kimi wrapper missing --connect-timeout').toContain('--connect-timeout')
-    expect(kimiWrapper, 'kimi wrapper missing --max-time').toContain('--max-time')
+    assertPosixCurlUsesCNumericLocale(kimiWrapper, 'kimi')
     curlWrappersChecked += 1
     expect(curlWrappersChecked).toBeGreaterThan(0)
+  })
+
+  describe('comma-decimal curl locale', () => {
+    let tempDir: string | null = null
+
+    afterEach(() => {
+      if (tempDir) {
+        rmSync(tempDir, { recursive: true, force: true })
+        tempDir = null
+      }
+    })
+
+    it.skipIf(process.platform === 'win32')(
+      'overrides a comma-decimal LC_NUMERIC so curl still receives C',
+      async () => {
+        const { sftp, fs } = createFakeSftp()
+        await new GeminiHookService().installRemote(sftp, REMOTE_HOME)
+        const wrapperBody = fs.files.get(`${REMOTE_HOME}/.orca/agent-hooks/gemini-hook.sh`)!
+
+        tempDir = mkdtempSync(join(tmpdir(), 'orca-hook-lc-numeric-'))
+        const binDir = join(tempDir, 'bin')
+        mkdirSync(binDir)
+        const observed = join(tempDir, 'lc-numeric')
+        writeFileSync(
+          join(binDir, 'curl'),
+          `#!/bin/sh\nprintf '%s' "$LC_NUMERIC" > "${observed}"\nexit 0\n`
+        )
+        chmodSync(join(binDir, 'curl'), 0o755)
+        const scriptPath = join(tempDir, 'gemini-hook.sh')
+        writeFileSync(scriptPath, wrapperBody, 'utf8')
+        chmodSync(scriptPath, 0o755)
+
+        await new Promise<void>((resolve, reject) => {
+          const child = spawn('sh', [scriptPath], {
+            env: {
+              ...process.env,
+              PATH: `${binDir}:${process.env.PATH ?? ''}`,
+              LC_NUMERIC: 'de_DE.UTF-8',
+              ORCA_AGENT_HOOK_ENDPOINT: '',
+              ORCA_AGENT_HOOK_PORT: '9',
+              ORCA_AGENT_HOOK_TOKEN: 'test-token',
+              ORCA_PANE_KEY: 'pane-1',
+              ORCA_TAB_ID: 'tab-1',
+              ORCA_WORKTREE_ID: 'wt-1'
+            },
+            stdio: ['pipe', 'ignore', 'ignore']
+          })
+          const timeout = setTimeout(() => {
+            child.kill('SIGKILL')
+            reject(new Error('hook script exceeded test timeout'))
+          }, 10_000)
+          child.on('error', (error) => {
+            clearTimeout(timeout)
+            reject(error)
+          })
+          child.on('close', (status) => {
+            clearTimeout(timeout)
+            if (status === 0) {
+              resolve()
+              return
+            }
+            reject(new Error(`hook script exited ${String(status)}`))
+          })
+          child.stdin.end('{"hook_event_name":"Stop"}')
+        })
+
+        expect(readFileSync(observed, 'utf8')).toBe('C')
+      }
+    )
   })
 
   describe('dead-endpoint transport budget', () => {

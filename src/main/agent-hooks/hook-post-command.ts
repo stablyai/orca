@@ -1,11 +1,19 @@
 import type { AgentHookSource } from '../../shared/agent-hook-relay'
 import { ORCA_HOOK_RAW_JSON_TRANSPORT } from '../../shared/agent-hook-types'
 
+// Why: curl parses --connect-timeout/--max-time with locale-sensitive strtod.
+// Comma-decimal locales reject `0.5` before opening a socket, so every hook
+// silently falls into the restart spool (#19578). Scoped to LC_NUMERIC so
+// spool_json_escape keeps UTF-8 LC_CTYPE for non-ASCII worktree paths.
+export function posixCurlCommand(curlCommand = 'curl'): string {
+  return `LC_NUMERIC=C ${curlCommand}`
+}
+
 export function buildPosixAgentHookPostCommand(
   source: AgentHookSource,
   options: { curlCommand?: string; indent?: string } = {}
 ): string[] {
-  const curlCommand = options.curlCommand ?? 'curl'
+  const curlCommand = posixCurlCommand(options.curlCommand ?? 'curl')
   const indent = options.indent ?? '  '
   return [
     `if [ "\${ORCA_AGENT_HOOK_TRANSPORT:-}" = "${ORCA_HOOK_RAW_JSON_TRANSPORT}" ] && command -v base64 >/dev/null 2>&1 && command -v tr >/dev/null 2>&1; then`,
