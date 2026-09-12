@@ -72,10 +72,9 @@ export function normalizeClaudeEvent(
   const previousLead = state.claudeLeadStateByPaneKey.get(paneKey)
   // Why: only a turn boundary may declare an interrupt or carry a prior one forward; any other event starts a fresh turn and drops it.
   const isTurnBoundary = eventName === 'Stop' || eventName === 'StopFailure'
+  const hookConfirmedInterrupt = eventAgentId === undefined && hookPayload['is_interrupt'] === true
   const interrupted =
-    isTurnBoundary &&
-    ((eventAgentId === undefined && hookPayload['is_interrupt'] === true) ||
-      previousLead?.interrupted === true)
+    isTurnBoundary && (hookConfirmedInterrupt || previousLead?.interrupted === true)
       ? true
       : undefined
   const backgroundTasks = readClaudeBackgroundAgentTasks(hookPayload)
@@ -224,6 +223,8 @@ export function normalizeClaudeEvent(
         : {
             state: previousLead.state,
             ...(previousLead.interrupted ? { interrupted: true as const } : {}),
+            // Why: keep the inference provenance so a clean Stop after the wait clears still drops the provisional interrupt.
+            ...(previousLead.interruptedInferred ? { interruptedInferred: true as const } : {}),
             // Why: a child's permission pause displaces an already-finished lead; keep the end time so the later drain is still that turn's tail.
             ...(previousLead.turnCompletedAt !== undefined
               ? { turnCompletedAt: previousLead.turnCompletedAt }
@@ -260,19 +261,33 @@ export function normalizeClaudeEvent(
   // Why: #15202's compact-completion guard reads the resolved state; this branch replaced the
   // resolver with one that also reports workingMode, so bridge rather than resolve twice.
   const effectiveState = resolvedStatus.stateName
+  // Why: the renderer infers an interrupt from a bare Escape, which it can't tell apart from an Escape
+  // that only dismisses a /model or /btw overlay. Claude emits NO hook on a real interrupt, so a clean
+  // lead-turn completion — only `Stop`, never a `StopFailure` error boundary — proves the turn was
+  // never interrupted, and drops the provisional flag. It clears even while a subagent still holds the
+  // pane `working` (that gate ignores `interrupted`), but stays engaged while a background shell/cron
+  // drives monitoring, so the interrupt-suppresses-monitoring behavior (#16201) is intact. A
+  // hook-confirmed `is_interrupt` is never provisional.
+  const clearsInferredInterrupt =
+    eventName === 'Stop' &&
+    eventAgentId === undefined &&
+    !hookConfirmedInterrupt &&
+    previousLead?.interruptedInferred === true &&
+    resolvedStatus.workingMode !== 'monitoring'
+  const finalInterrupted = clearsInferredInterrupt ? undefined : interrupted
   // Why: the lead already ended — the pane stays `working` only because background inventory is still registered. `stateStartedAt` is pinned for that whole run, so this end time is the per-turn identity and the later all-clear's pair key.
   const turnCompletedAt =
     eventAgentId === undefined &&
     isTurnBoundary &&
     reportedStateName === 'done' &&
     resolvedStatus.stateName === 'working' &&
-    interrupted !== true
+    finalInterrupted !== true
       ? Date.now()
       : undefined
 
   state.claudeLeadStateByPaneKey.set(paneKey, {
     state: reportedStateName,
-    ...(interrupted ? { interrupted } : {}),
+    ...(finalInterrupted ? { interrupted: finalInterrupted } : {}),
     ...(isWaitingInducing && eventAgentId ? { waitingAgentId: eventAgentId } : {}),
     ...(isAskUserQuestionWait && waitingToolUseId !== undefined ? { waitingToolUseId } : {}),
     ...(stateBeforeWait ? { stateBeforeWait } : {}),
@@ -305,7 +320,7 @@ export function normalizeClaudeEvent(
   return buildClaudeStatusPayload(state, eventName, promptText, paneKey, hookPayload, {
     ...resolvedStatus,
     updateToolSnapshot: true,
-    interrupted,
+    interrupted: finalInterrupted,
     // Why: a finished compact is a session-shaped boundary, not a completed turn. Without this the
     // clearing `done` would fire completion notifications, unread counts and automation-run
     // completion evidence for work nobody did.
