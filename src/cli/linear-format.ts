@@ -7,7 +7,6 @@ import type {
   LinearIssueContextResult,
   LinearIssueTaskUpdateResult,
   LinearIssueRelationWriteResult,
-  LinearIssueSummary,
   LinearSaveIssueResult,
   LinearProjectListResult,
   LinearSearchIssueSummary,
@@ -19,6 +18,7 @@ import type {
   LinearStatusSetResult
 } from '../shared/linear/agent-access'
 import { appendLinearListTruncation } from '../shared/linear/list-truncation-format'
+import { linearCycleLabel } from '../shared/linear/cycle-label'
 import { linearPriorityLabel } from '../shared/linear/priority-label'
 import {
   formatLinearProjectListRows,
@@ -33,7 +33,7 @@ export function formatLinearIssue(result: LinearIssueContextResult): string {
     `State: ${issue.state?.name ?? 'unknown'}`,
     `Assignee: ${issue.assignee?.displayName ?? 'unassigned'}`,
     `Project: ${issue.project?.name ?? 'none'}`,
-    `Cycle: ${formatCycle(issue.cycle)}`
+    `Cycle: ${linearCycleLabel(issue.cycle)}`
   ]
   lines.push(`Priority: ${formatPriority(issue.priority)}`)
   lines.push(`Estimate: ${issue.estimate ?? 'none'}`)
@@ -250,17 +250,6 @@ function formatSearchRow(issue: LinearSearchIssueSummary): string {
   const state = issue.state?.name ?? 'unknown'
   const assignee = issue.assignee?.displayName ?? 'unassigned'
   return `${issue.identifier.padEnd(10)} ${state.padEnd(14)} ${assignee.padEnd(18)} ${issue.title}`
-}
-
-// Why: cycles usually carry a number and no name; Linear's UI leads with the number.
-function formatCycle(cycle: LinearIssueSummary['cycle']): string {
-  if (!cycle) {
-    return 'none'
-  }
-  if (cycle.number == null) {
-    return cycle.name || 'none'
-  }
-  return cycle.name ? `${cycle.number} (${cycle.name})` : String(cycle.number)
 }
 
 function formatPriority(priority: number | null | undefined): string {
