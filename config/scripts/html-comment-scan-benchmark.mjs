@@ -40,7 +40,7 @@ for (const [name, file, invoke] of [
   const arms = {
     before: await load(
       file,
-      execFileSync('git', ['show', `${baseline}:${file}`], { encoding: 'utf8' })
+      execFileSync('git', ['show', `${baseline}:${String(file)}`], { encoding: 'utf8' })
     ),
     after: await load(file, readFileSync(file, 'utf8'))
   }
