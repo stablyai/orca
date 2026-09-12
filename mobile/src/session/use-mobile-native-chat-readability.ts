@@ -5,13 +5,38 @@ import { isMobileNativeChatTranscriptReadable } from './mobile-native-chat-eligi
 import { getRepoIdFromMobileWorktreeId } from './mobile-session-route-helpers'
 
 type RepoSummary = { id: string; connectionId?: string | null }
+type FolderWorkspaceSummary = { id: string; connectionId: string | null }
 type ReadabilityState = { client: RpcClient | null; worktreeId: string; readable: boolean }
+
+function resolveFolderWorkspaceSummary(
+  catalog: unknown,
+  workspaceId: string
+): FolderWorkspaceSummary | null {
+  if (!Array.isArray(catalog)) {
+    return null
+  }
+  const matches = catalog.filter(
+    (candidate) =>
+      typeof candidate === 'object' &&
+      candidate !== null &&
+      (candidate as { id?: unknown }).id === workspaceId
+  )
+  if (matches.length !== 1) {
+    return null
+  }
+  const connectionId = (matches[0] as { connectionId?: unknown }).connectionId
+  return connectionId === null || typeof connectionId === 'string'
+    ? { id: workspaceId, connectionId }
+    : null
+}
 
 export function useMobileNativeChatReadability(
   client: RpcClient | null,
   worktreeId: string
 ): boolean {
   const isFloatingWorkspace = isFloatingWorkspaceWorktreeId(worktreeId)
+  const isFolderWorkspace = worktreeId.startsWith('folder:')
+  const folderWorkspaceId = isFolderWorkspace ? worktreeId.slice('folder:'.length) : null
   const [state, setState] = useState<ReadabilityState>({
     client: null,
     worktreeId: '',
@@ -23,25 +48,34 @@ export function useMobileNativeChatReadability(
       return
     }
     let active = true
-    if (!client) {
+    if (!client || (folderWorkspaceId !== null && folderWorkspaceId.trim().length === 0)) {
       setState({ client, worktreeId, readable: false })
       return
     }
     void client
-      .sendRequest('repo.list')
+      .sendRequest(isFolderWorkspace ? 'folderWorkspace.list' : 'repo.list')
       .then((response) => {
         if (!active) {
           return
         }
-        const repos = response.ok
-          ? ((response.result as { repos?: RepoSummary[] }).repos ?? [])
-          : []
-        const repoId = getRepoIdFromMobileWorktreeId(worktreeId)
-        const repo = repos.find((candidate) => candidate.id === repoId)
+        const workspaceId =
+          folderWorkspaceId !== null ? folderWorkspaceId : getRepoIdFromMobileWorktreeId(worktreeId)
+        const workspace = response.ok
+          ? folderWorkspaceId !== null
+            ? resolveFolderWorkspaceSummary(
+                (response.result as { folderWorkspaces?: unknown }).folderWorkspaces,
+                workspaceId
+              )
+            : ((response.result as { repos?: RepoSummary[] }).repos ?? []).find(
+                (candidate) => candidate.id === workspaceId
+              )
+          : null
         setState({
           client,
           worktreeId,
-          readable: repo ? isMobileNativeChatTranscriptReadable(repo.connectionId ?? null) : false
+          readable: workspace
+            ? isMobileNativeChatTranscriptReadable(workspace.connectionId ?? null)
+            : false
         })
       })
       .catch(() => {
@@ -52,7 +86,7 @@ export function useMobileNativeChatReadability(
     return () => {
       active = false
     }
-  }, [client, isFloatingWorkspace, worktreeId])
+  }, [client, folderWorkspaceId, isFloatingWorkspace, isFolderWorkspace, worktreeId])
   if (isFloatingWorkspace) {
     return true
   }
