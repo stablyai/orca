@@ -6,7 +6,8 @@ import {
   filterAvailableTaskProviders,
   normalizeVisibleTaskProviders,
   type TaskProvider
-} from '../tasks/mobile-task-providers'
+} from '../../../src/shared/task-providers'
+import { extractJiraConnection, type MobileJiraConnection } from '../tasks/jira-mobile-connection'
 import type { NewWorktreeRuntimeSettings } from './new-worktree-agent-selection'
 
 function settledSuccess(entry: PromiseSettledResult<RpcResponse>): RpcSuccess | null {
@@ -23,10 +24,21 @@ export function useNewWorkspaceRuntimeContext(
   trustedOrcaHooks: PersistedTrustedOrcaHooks
   setTrustedOrcaHooks: (trust: PersistedTrustedOrcaHooks) => void
   availableProviders: TaskProvider[]
+  jiraConnection: MobileJiraConnection
 } {
   const [runtimeSettings, setRuntimeSettings] = useState<NewWorktreeRuntimeSettings | null>(null)
   const [trustedOrcaHooks, setTrustedOrcaHooks] = useState<PersistedTrustedOrcaHooks>({})
   const [availableProviders, setAvailableProviders] = useState<TaskProvider[]>([])
+  // Tracked apart from availableProviders: filterAvailableTaskProviders reports
+  // Jira as always available so Tasks can offer setup, but the composer tab is
+  // only useful once a site is connected — and pasted-URL lookup needs the site
+  // list to match against.
+  const [jiraConnection, setJiraConnection] = useState<MobileJiraConnection>({
+    connected: false,
+    sites: [],
+    selection: null,
+    credentialError: null
+  })
 
   useEffect(() => {
     if (!visible || !client) {
@@ -36,7 +48,8 @@ export function useNewWorkspaceRuntimeContext(
     void (async () => {
       const probes = Promise.allSettled([
         client.sendRequest('preflight.check'),
-        client.sendRequest('linear.status')
+        client.sendRequest('linear.status'),
+        client.sendRequest('jira.status')
       ])
       const [settingsRes, uiRes] = await Promise.allSettled([
         client.sendRequest('settings.get'),
@@ -63,7 +76,7 @@ export function useNewWorkspaceRuntimeContext(
         setTrustedOrcaHooks(ui?.trustedOrcaHooks ?? {})
       }
 
-      const [preflightRes, linearRes] = await probes
+      const [preflightRes, linearRes, jiraRes] = await probes
       if (stale) {
         return
       }
@@ -73,6 +86,7 @@ export function useNewWorkspaceRuntimeContext(
       const linearConnected =
         (settledSuccess(linearRes)?.result as { connected?: boolean } | undefined)?.connected ===
         true
+      setJiraConnection(extractJiraConnection(settledSuccess(jiraRes)?.result ?? null))
       const visibleProviders = normalizeVisibleTaskProviders(settingsValue?.visibleTaskProviders)
       setAvailableProviders(
         filterAvailableTaskProviders(visibleProviders, {
@@ -91,6 +105,7 @@ export function useNewWorkspaceRuntimeContext(
     setRuntimeSettings,
     trustedOrcaHooks,
     setTrustedOrcaHooks,
-    availableProviders
+    availableProviders,
+    jiraConnection
   }
 }

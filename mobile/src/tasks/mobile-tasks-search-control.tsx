@@ -14,6 +14,7 @@ export function renderMobileTasksSearchControl(model: ConnectionPresentationMode
     gitlabView,
     isGithubProjectSearch,
     linearConnected,
+    jiraConnection,
     persistTaskResumeState,
     provider,
     providerLabel,
@@ -25,13 +26,18 @@ export function renderMobileTasksSearchControl(model: ConnectionPresentationMode
     taskUiReady
   } = model
   return provider === 'gitlab' && gitlabView === 'todos' ? null : provider === 'linear' &&
-    !linearConnected ? null : (
+    !linearConnected ? null : provider === 'jira' && !jiraConnection.connected ? null : (
     <View style={styles.searchBar}>
       <MobileSearchField
         value={isGithubProjectSearch ? githubProjectSearch : query}
         onChangeText={isGithubProjectSearch ? setGithubProjectSearch : setQuery}
         placeholder={
-          isGithubProjectSearch ? 'Search project view...' : `Search ${providerLabel} tasks...`
+          isGithubProjectSearch
+            ? 'Search project view...'
+            : provider === 'jira'
+              ? // Matches desktop: the Jira box takes raw JQL, not free text.
+                'Jira JQL, e.g. project = ABC AND statusCategory != Done'
+              : `Search ${providerLabel} tasks...`
         }
         // Why: GitHub items seed the field with a preset query, so a bare
         // value.length check would always show clear. Project mode shows clear

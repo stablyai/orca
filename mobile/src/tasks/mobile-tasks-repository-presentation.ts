@@ -57,6 +57,15 @@ export function taskRepositoryMeta(
       color: repoColor(item.source.projectPath)
     }
   }
+  if (item.provider === 'jira') {
+    // Jira has no per-issue color, so derive a stable one from the project the
+    // way GitLab todos do from their project path.
+    return {
+      key: item.source.project.id,
+      label: item.source.project.name || item.source.project.key,
+      color: repoColor(item.source.project.key)
+    }
+  }
   return {
     key: item.source.team.id,
     label: item.source.team.name,

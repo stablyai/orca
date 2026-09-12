@@ -1,4 +1,5 @@
 import type { ProviderLoadActionsModel } from './use-mobile-tasks-provider-load-actions'
+import { fetchJiraTaskIssues } from './mobile-jira-task-source'
 import {
   extractLinearIssueReadItems,
   isHostedTaskRepo,
@@ -15,6 +16,7 @@ import {
   compareLinearIssues,
   createGitLabTask,
   createGitLabTodoTask,
+  createJiraTask,
   createLinearTask,
   isSuccess,
   mapWithConcurrency,
@@ -33,6 +35,8 @@ export function useMobileTasksTaskListLoading(model: ProviderLoadActionsModel) {
     gitlabFilter,
     gitlabView,
     linearConnected,
+    jiraConnection,
+    jiraFilter,
     linearFilter,
     linearOrderBy,
     loadGenerationRef,
@@ -77,6 +81,23 @@ export function useMobileTasksTaskListLoading(model: ProviderLoadActionsModel) {
         }
         if (provider === 'linear' && !linearConnected) {
           setItems([])
+          return
+        }
+        // Jira, like Linear, is not repo-scoped, so it returns before the repo
+        // list is needed at all.
+        if (provider === 'jira') {
+          if (!jiraConnection.connected) {
+            setItems([])
+            return
+          }
+          const issues = await fetchJiraTaskIssues(requestClient, {
+            jql: appliedQuery,
+            filter: jiraFilter,
+            siteId: jiraConnection.selection
+          })
+          if (isCurrent()) {
+            setItems(issues.map(createJiraTask))
+          }
           return
         }
         // Why: Linear issues do not need the repo list, only the composer does, so

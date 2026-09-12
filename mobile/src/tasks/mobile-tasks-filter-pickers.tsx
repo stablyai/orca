@@ -10,6 +10,7 @@ import {
   ActivityIndicator
 } from './mobile-tasks-dependencies'
 import { styles } from './mobile-tasks-legacy-styles'
+import { JIRA_FILTER_OPTIONS } from './mobile-task-view-options'
 import {
   GITLAB_VIEW_OPTIONS,
   GITLAB_FILTER_OPTIONS,
@@ -330,5 +331,66 @@ export function renderMobileTasksLinearStatusPicker(model: ConnectionPresentatio
         )}
       </View>
     </BottomDrawer>
+  )
+}
+
+export function renderMobileTasksJiraFilterPicker(model: ConnectionPresentationModel) {
+  const {
+    jiraFilter,
+    persistTaskResumeState,
+    setAppliedQuery,
+    setJiraFilter,
+    setQuery,
+    setShowJiraFilterPicker,
+    showJiraFilterPicker,
+    taskUiReady
+  } = model
+  return (
+    <PickerModal
+      visible={taskUiReady && showJiraFilterPicker}
+      title="Jira Filter"
+      options={JIRA_FILTER_OPTIONS}
+      selected={jiraFilter}
+      onSelect={(filter) => {
+        setJiraFilter(filter)
+        setQuery('')
+        setAppliedQuery('')
+        persistTaskResumeState({ jiraPreset: filter, jiraQuery: '' })
+      }}
+      onClose={() => setShowJiraFilterPicker(false)}
+    />
+  )
+}
+
+export function renderMobileTasksJiraSitePicker(model: ConnectionPresentationModel) {
+  const {
+    client,
+    jiraConnection,
+    jiraSiteOptions,
+    setItems,
+    setJiraConnection,
+    setShowJiraSitePicker,
+    showJiraSitePicker,
+    taskUiReady
+  } = model
+  return (
+    <PickerModal
+      visible={taskUiReady && showJiraSitePicker}
+      title="Jira Site"
+      options={jiraSiteOptions}
+      selected={jiraConnection.selection ?? ''}
+      onSelect={(siteId) => {
+        setJiraConnection((current) => ({ ...current, selection: siteId }))
+        setItems([])
+        if (client && siteId !== 'all') {
+          // 'all' is a client-side fan-out; only a concrete site is persisted
+          // host-side, so selectSite would reject it.
+          void client.sendRequest('jira.selectSite', { siteId }).catch((err: unknown) => {
+            console.warn('[mobile tasks] failed to select jira site', err)
+          })
+        }
+      }}
+      onClose={() => setShowJiraSitePicker(false)}
+    />
   )
 }

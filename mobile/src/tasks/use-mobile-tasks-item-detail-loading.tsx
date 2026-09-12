@@ -1,4 +1,6 @@
 import type { ItemDetailMetadataEffectsModel } from './use-mobile-tasks-item-detail-metadata-effects'
+import { fetchJiraIssueDetail } from './mobile-jira-task-source'
+import { createJiraTask } from './mobile-tasks-item-mapping'
 import {
   type HostedReviewDecision,
   buildGitLabCheckSummary,
@@ -181,6 +183,31 @@ export function useMobileTasksItemDetailLoading(model: ItemDetailMetadataEffects
                   }
                 : candidate
             )
+          )
+        }
+        return
+      }
+
+      if (actionItem.provider === 'jira') {
+        const { issue, comments } = await fetchJiraIssueDetail(client, {
+          key: actionItem.source.key,
+          siteId: actionItem.source.siteId
+        })
+        if (!stale) {
+          setDetailPayload({
+            provider: 'jira',
+            description: issue.description ?? '',
+            comments,
+            labels: issue.labels ?? [],
+            assignee: issue.assignee?.displayName,
+            projectName: issue.project.name || issue.project.key,
+            issueTypeName: issue.issueType.name,
+            priorityName: issue.priority?.name
+          })
+          setActionItem((current) =>
+            current?.provider === 'jira' && current.source.key === issue.key
+              ? (createJiraTask(issue) as Extract<TaskItem, { provider: 'jira' }>)
+              : current
           )
         }
         return
