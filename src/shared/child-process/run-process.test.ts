@@ -7,6 +7,11 @@ import { WINDOWS_ARGUMENT_CORPUS } from './__fixtures__/windows-argument-corpus'
 
 const SPEC = { program: 'C:\\bin\\agent.cmd', args: ['--prompt', 'hi'] }
 
+const ECHO_STDIN =
+  'process.stdin.on("data", (c) => process.stdout.write(c)); process.stdin.resume()'
+const COUNT_STDIN_BYTES =
+  'const c = []; process.stdin.on("data", (d) => c.push(d)); process.stdin.on("end", () => process.stdout.write(String(Buffer.concat(c).length)))'
+
 describe('resolveSpawn', () => {
   it('always hides the console and never uses a shell', () => {
     for (const platform of ['win32', 'darwin', 'linux'] as const) {
@@ -96,6 +101,27 @@ describe('runProcessSync', () => {
     })
     expect(result.stdout).toBe('hi')
     expect(result.code).toBe(3)
+  })
+
+  // Why these two: `encoding: 'buffer'` decodes string stdin as well as shaping stdout, and the
+  // sync path had no `input` coverage at all -- so it shipped a stdin that threw (#18670).
+  it('writes string input to the child stdin', () => {
+    const result = runProcessSync({
+      program: process.execPath,
+      args: ['-e', ECHO_STDIN],
+      input: 'piped-payload'
+    })
+    expect(result.stdout).toBe('piped-payload')
+    expect(result.code).toBe(0)
+  })
+
+  it('encodes non-ASCII stdin as utf8', () => {
+    const result = runProcessSync({
+      program: process.execPath,
+      args: ['-e', COUNT_STDIN_BYTES],
+      input: 'h\u00e9llo'
+    })
+    expect(result.stdout).toBe('6')
   })
 })
 
