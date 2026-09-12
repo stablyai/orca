@@ -8,8 +8,10 @@ export function getClaudeDailyTotal(entry: ClaudeUsageDailyPoint): number {
 type UsageIntensity = 0 | 1 | 2 | 3 | 4
 
 /**
- * Rank-based intensity: each non-zero level holds a quarter of the active days
- * among `totals`, so callers rank exactly the set of days they render.
+ * Rank-based intensity: each non-zero level holds roughly a quarter of the
+ * active days among `totals`, so callers rank exactly the set of days they
+ * render. With fewer than four active days the lower levels go unused (one
+ * active day is level 4, three distinct days are 2/3/4).
  *
  * Why: daily volume spans orders of magnitude across providers, so a linear
  * ramp against the single best day left most active days at the faintest
@@ -34,10 +36,20 @@ export function rankUsageIntensities(totals: number[]): UsageIntensity[] {
   })
 }
 
+/**
+ * Count distinct days in a list of `YYYY-MM-DD` keys.
+ * @param days - Day keys, possibly repeated across providers.
+ * @returns Number of distinct days.
+ */
 export function countActiveDays(days: string[]): number {
   return new Set(days).size
 }
 
+/**
+ * Merge every provider's daily series into one per-day total with a rank intensity.
+ * @param input - Per-provider scan state, summary, and daily series.
+ * @returns One point per day, sorted ascending, ranked across all days present.
+ */
 export function buildDailyOverview(input: UsageOverviewInput): UsageOverviewDailyPoint[] {
   const byDay = new Map<string, Omit<UsageOverviewDailyPoint, 'intensity'>>()
 
@@ -93,6 +105,13 @@ function formatLocalDay(date: Date): string {
   return `${year}-${month}-${day}`
 }
 
+/**
+ * Pad a daily series to a fixed trailing window ending at `anchorDate`.
+ * @param daily - Ranked daily points, any order.
+ * @param dayCount - Number of trailing days to return.
+ * @param anchorDate - Last day of the window; defaults to today.
+ * @returns Exactly `dayCount` points, idle days filled with zero tokens and intensity 0.
+ */
 export function getRecentUsageDays(
   daily: UsageOverviewDailyPoint[],
   dayCount: number,

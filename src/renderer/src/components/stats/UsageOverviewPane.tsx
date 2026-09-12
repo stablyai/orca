@@ -28,6 +28,11 @@ type HeatmapDaily = {
 
 const EMPTY_HEATMAP_DAILY: HeatmapDaily = { claude: [], codex: [], opencode: [] }
 
+/**
+ * Highest-volume day in a series.
+ * @param days - Daily points, any order.
+ * @returns The day with the most tokens, or `null` for an empty series.
+ */
 function pickBestDay(days: UsageOverviewDailyPoint[]): UsageOverviewDailyPoint | null {
   return days.reduce<UsageOverviewDailyPoint | null>(
     (best, entry) => (!best || entry.totalTokens > best.totalTokens ? entry : best),
@@ -49,6 +54,11 @@ function formatUpdatedAt(timestamp: number | null): string {
   return `Updated ${new Date(timestamp).toLocaleString()}`
 }
 
+/**
+ * Combined Claude, Codex, and OpenCode usage: totals, a 42-day intensity heatmap,
+ * token mix, and per-provider rows.
+ * @returns The Stats & Usage overview pane.
+ */
 export function UsageOverviewPane(): React.JSX.Element {
   const claudeScanState = useAppStore((state) => state.claudeUsageScanState)
   const claudeSummary = useAppStore((state) => state.claudeUsageSummary)
