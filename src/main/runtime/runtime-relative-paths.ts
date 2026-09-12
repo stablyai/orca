@@ -10,14 +10,14 @@ export function joinWorktreeRelativePath(rootPath: string, relativePath: string)
 }
 
 export function normalizeRuntimeRelativePath(relativePath: string): string {
-  const normalized = relativePath.replace(/\\/g, '/').replace(/\/+$/, '')
-  if (normalized === '') {
+  const cleaned = relativePath.replace(/\\/g, '/').replace(/^\.\/+/g, '').replace(/\/+$/, '')
+  if (cleaned === '' || cleaned === '.') {
     return ''
   }
-  if (!isSafeRuntimeRelativePath(normalized)) {
+  if (!isSafeRuntimeRelativePath(cleaned)) {
     throw new Error('invalid_relative_path')
   }
-  return normalized
+  return cleaned
 }
 
 function isSafeRuntimeRelativePath(relativePath: string): boolean {
