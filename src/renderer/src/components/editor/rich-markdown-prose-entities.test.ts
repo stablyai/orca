@@ -108,3 +108,38 @@ describe('base encoder markdown escapes', () => {
     expect(roundTrip('a - b')).toBe('a - b')
   })
 })
+
+describe('incomplete HTML construct scanning', () => {
+  it.each([
+    ['<?x ', 20_000],
+    ['<!x ', 20_000],
+    ['<![CDATA', 20_000],
+    ['<!-- ', 20_000]
+  ])('scans %j repeated %d times without quadratic cost', (fragment, count) => {
+    const text = fragment.repeat(count)
+    const started = performance.now()
+    const encoded = encodeProseTextForMarkdown(text)
+
+    expect(performance.now() - started).toBeLessThan(100)
+    expect(encoded).toBe(text)
+  })
+
+  it('escapes a complete construct that follows many incomplete ones', () => {
+    expect(encodeProseTextForMarkdown(`${'<?a '.repeat(1000)}<?php ?>`)).toContain('&lt;?php ?>')
+  })
+
+  it('escapes a complete construct late in a long document', () => {
+    const text = `${'x'.repeat(50_000)}<?php ?>${'y'.repeat(50_000)}`
+
+    expect(encodeProseTextForMarkdown(text)).toContain('&lt;?php ?>')
+  })
+
+  it.each([
+    ['<!-- unterminated'],
+    ['<?unterminated'],
+    ['<![CDATA[unterminated'],
+    ['<! not a decl']
+  ])('leaves the unterminated construct %j alone', (text) => {
+    expect(encodeProseTextForMarkdown(text)).toBe(text)
+  })
+})
