@@ -6,6 +6,7 @@ import type {
 import type { Store } from '../persistence'
 import type { RateLimitService } from '../rate-limits/service'
 import { findDuplicateClaudeAccount } from './claude-duplicate-account'
+import { isUnprovenManagedClaudeAuthError } from './claude-managed-auth-ownership'
 import type { CapturedClaudeAuth } from './claude-auth-capture'
 import type {
   ClaudeManagedAuthLocation,
@@ -64,7 +65,7 @@ export class ClaudeAccountRegistration {
       const captured = await this.dependencies.login(location)
       return await this.persist(accountId, location, previousSettings, captured)
     } catch (error) {
-      await this.cleanupFailedAdd(accountId, location.managedAuthPath, previousSettings, error)
+      await this.runCleanupFailedAdd(accountId, location.managedAuthPath, previousSettings, error)
       throw error
     }
   }
@@ -83,7 +84,7 @@ export class ClaudeAccountRegistration {
       )
       return await this.persist(accountId, location, previousSettings, captured)
     } catch (error) {
-      await this.cleanupFailedAdd(accountId, location.managedAuthPath, previousSettings, error)
+      await this.runCleanupFailedAdd(accountId, location.managedAuthPath, previousSettings, error)
       throw error
     }
   }
@@ -191,6 +192,24 @@ export class ClaudeAccountRegistration {
     return this.dependencies.selection.snapshot()
   }
 
+  /**
+   * The add's own failure is what the caller must see. Cleanup runs for its
+   * side effects only, so a throw from any step of it -- not just the
+   * rematerialize -- must not replace the login or write error that caused it.
+   */
+  private async runCleanupFailedAdd(
+    accountId: string,
+    managedAuthPath: string,
+    previousSettings: ReturnType<Store['getSettings']>,
+    error: unknown
+  ): Promise<void> {
+    try {
+      await this.cleanupFailedAdd(accountId, managedAuthPath, previousSettings, error)
+    } catch (cleanupError) {
+      console.warn('[claude-accounts] Cleanup after a failed add did not complete:', cleanupError)
+    }
+  }
+
   private async cleanupFailedAdd(
     accountId: string,
     managedAuthPath: string,
@@ -206,6 +225,18 @@ export class ClaudeAccountRegistration {
       await this.dependencies.runtimeAuth.forceMaterializeCurrentSelectionForRollback()
     } catch (rollbackError) {
       console.warn('[claude-accounts] Rollback rematerialization failed:', rollbackError)
+    }
+    // Why leak instead of delete: the add already wrote `.credentials.json`
+    // before the gate that failed, and a fail-once fault re-gates clean a moment
+    // later -- so `remove()` would happily delete the credentials the user just
+    // logged in for. An observation Orca could not complete is not authority to
+    // delete anything (STA-5674).
+    if (isUnprovenManagedClaudeAuthError(error)) {
+      console.warn(
+        '[claude-accounts] Leaving managed auth in place: ownership could not be established.',
+        error
+      )
+      return
     }
     await this.dependencies.removeManagedAuth(accountId, managedAuthPath)
   }
