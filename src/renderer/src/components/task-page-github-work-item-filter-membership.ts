@@ -18,7 +18,7 @@ function resolveMeLogin(viewerLogin: string | null): string | null {
  * Evaluate every applicable membership signal; hide if any fails (AND of constraints).
  */
 export function shouldSoftHideTaskPageGitHubWorkItem(args: {
-  item: Pick<GitHubWorkItem, 'state' | 'assignees' | 'reviewRequests'>
+  item: Pick<GitHubWorkItem, 'state' | 'assignees' | 'reviewRequests' | 'blockedByCount'>
   query: ParsedTaskQuery
   viewerLogin: string | null
   /**
@@ -53,6 +53,15 @@ export function shouldSoftHideTaskPageGitHubWorkItem(args: {
     return true
   }
 
+  // Why: only soft-hide when the list payload carried a dependency summary;
+  // absent counts mean the host/API omitted them, not "unblocked".
+  if (query.blocked !== null && item.blockedByCount !== undefined) {
+    const isBlocked = item.blockedByCount > 0
+    if (query.blocked ? !isBlocked : isBlocked) {
+      return true
+    }
+  }
+
   // Assignee membership
   if (query.assignee) {
     const assignee = query.assignee.trim()
@@ -82,7 +91,7 @@ export function shouldSoftHideTaskPageGitHubWorkItem(args: {
 }
 
 export function recomputeTaskPageGitHubItemSoftHide(args: {
-  item: Pick<GitHubWorkItem, 'state' | 'assignees' | 'reviewRequests'>
+  item: Pick<GitHubWorkItem, 'state' | 'assignees' | 'reviewRequests' | 'blockedByCount'>
   query: ParsedTaskQuery
   viewerLogin: string | null
   skipMeQualifiers: boolean

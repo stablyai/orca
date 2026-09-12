@@ -140,7 +140,8 @@ export async function listQueriedWorkItems(
     query.reviewRequested !== null ||
     query.reviewedBy !== null
   const issueScope = query.scope !== 'pr' && !hasPrOnlyFilter
-  const prScope = query.scope !== 'issue'
+  // Why: is:blocked is issue-only; keep the PR half for -is:blocked (PRs are never blocked).
+  const prScope = query.scope !== 'issue' && query.blocked !== true
   let successfulRequestCount = 0
   let nonAvailabilityFailureCount = 0
   let availabilityError: unknown

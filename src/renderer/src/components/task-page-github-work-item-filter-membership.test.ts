@@ -9,6 +9,7 @@ const baseQuery = (overrides: Partial<ParsedTaskQuery> = {}): ParsedTaskQuery =>
   scope: 'all',
   state: null,
   draft: false,
+  blocked: null,
   assignee: null,
   author: null,
   reviewRequested: null,
@@ -71,6 +72,33 @@ describe('shouldSoftHideTaskPageGitHubWorkItem', () => {
         skipMeQualifiers: false
       })
     ).toBe(true)
+  })
+
+  it('soft-hides against is:blocked / -is:blocked when blockedByCount is known', () => {
+    expect(
+      shouldSoftHideTaskPageGitHubWorkItem({
+        item: { state: 'open', assignees: [], reviewRequests: [], blockedByCount: 0 },
+        query: baseQuery({ blocked: true }),
+        viewerLogin: 'me',
+        skipMeQualifiers: false
+      })
+    ).toBe(true)
+    expect(
+      shouldSoftHideTaskPageGitHubWorkItem({
+        item: { state: 'open', assignees: [], reviewRequests: [], blockedByCount: 2 },
+        query: baseQuery({ blocked: false }),
+        viewerLogin: 'me',
+        skipMeQualifiers: false
+      })
+    ).toBe(true)
+    expect(
+      shouldSoftHideTaskPageGitHubWorkItem({
+        item: { state: 'open', assignees: [], reviewRequests: [] },
+        query: baseQuery({ blocked: true }),
+        viewerLogin: 'me',
+        skipMeQualifiers: false
+      })
+    ).toBe(false)
   })
 
   it('skips @me when skipMeQualifiers or viewerLogin null', () => {

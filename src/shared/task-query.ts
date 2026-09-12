@@ -2,6 +2,8 @@ export type ParsedTaskQuery = {
   scope: 'all' | 'issue' | 'pr'
   state: 'open' | 'closed' | 'all' | 'merged' | null
   draft: boolean
+  /** Why: true = `is:blocked`, false = `-is:blocked`; null when unset. */
+  blocked: boolean | null
   assignee: string | null
   author: string | null
   reviewRequested: string | null
@@ -59,6 +61,7 @@ export function parseTaskQuery(rawQuery: string): ParsedTaskQuery {
     scope: 'all',
     state: null,
     draft: false,
+    blocked: null,
     assignee: null,
     author: null,
     reviewRequested: null,
@@ -98,6 +101,14 @@ export function parseTaskQuery(rawQuery: string): ParsedTaskQuery {
       query.scope = 'pr'
       query.state = 'open'
       query.draft = true
+      continue
+    }
+    if (normalized === 'is:blocked') {
+      query.blocked = true
+      continue
+    }
+    if (normalized === '-is:blocked') {
+      query.blocked = false
       continue
     }
 
@@ -188,6 +199,11 @@ export function serializeTaskQuery(q: ParsedTaskQuery): string {
   }
   if (q.draft) {
     parts.push('is:draft')
+  }
+  if (q.blocked === true) {
+    parts.push('is:blocked')
+  } else if (q.blocked === false) {
+    parts.push('-is:blocked')
   }
   if (q.author) {
     parts.push(`author:${quoteIfNeeded(q.author)}`)

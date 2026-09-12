@@ -1383,7 +1383,8 @@
         "8812225174": "Reopen",
         "09d67a0f9b": "Failed to close pull request",
         "88809e79db": "Failed to reopen pull request",
-        "00f55cc17b": "Repository access is unavailable for this pull request."
+        "00f55cc17b": "Repository access is unavailable for this pull request.",
+        "blockedByTitlePlain": "Blocked by {{title}}"
       },
       "GitLabItemDialog": {
         "65e784c1f1": "Reopen",
@@ -2256,7 +2257,9 @@
         "linearModeHasWorktreeTooltip": "Linear tickets linked to an Orca workspace",
         "linearEmptyHasWorktree": "No Linear tickets are linked to an Orca workspace yet. Start work from a Linear issue to see it here.",
         "linearOpenAttachedWorkspace": "Open workspace attached to {{value0}}",
-        "linearWorktreesColumn": "Workspaces"
+        "linearWorktreesColumn": "Workspaces",
+        "blockedByCount": "Blocked by {{count}}",
+        "blocked": "Blocked"
       },
       "Terminal": {
         "73768427cf": "Close",
