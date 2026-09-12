@@ -18,7 +18,8 @@ export const SYNTHETIC_AGENT_TITLE_AGENTS = [
   'omp',
   'droid',
   'hermes',
-  'devin'
+  'devin',
+  'bob'
 ] as const satisfies readonly TuiAgent[]
 
 export const SYNTHETIC_AGENT_TITLE_PROFILES: Record<string, SyntheticAgentTitleProfile> = {
@@ -70,6 +71,14 @@ export const SYNTHETIC_AGENT_TITLE_PROFILES: Record<string, SyntheticAgentTitleP
     workingLabel: 'Hermes',
     permissionLabel: 'Hermes - action required',
     idleLabel: 'Hermes ready'
+  },
+  // Why: Bob paints no OSC title and has no hook for a pending approval, so its permission row is
+  // the only thing that can light up the pane — this profile is what turns that row into the
+  // "action required" title and the BEL that drives the notification.
+  bob: {
+    workingLabel: 'Bob',
+    permissionLabel: 'Bob - action required',
+    idleLabel: 'Bob ready'
   },
   devin: {
     workingLabel: 'Devin',

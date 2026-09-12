@@ -223,6 +223,10 @@ export class OrcaRuntimeWithOnPtyData extends OrcaRuntimeWithPreparePtyExecution
       // detector's bounded recent-text window; the detector strips remaining
       // control sequences itself, exactly like the renderer byte path.
       titleTrackerEntry.commandCodeDetector?.observe(agentStatusChunk.cleanData)
+      // Why: Bob has no hook for a pending approval (see bob-approval-prompt.ts); this is the
+      // only signal that the pane is blocked on the user, so it emits agent status directly
+      // rather than a side-effect fact.
+      titleTrackerEntry.bobApprovalDetector?.observe(agentStatusChunk.cleanData)
     } finally {
       titleTrackerEntry.applyingChunk = false
       try {

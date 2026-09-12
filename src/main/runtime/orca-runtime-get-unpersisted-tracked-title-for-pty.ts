@@ -177,7 +177,10 @@ export class OrcaRuntimeWithGetUnpersistedTrackedTitleForPty extends OrcaRuntime
       // saw one) mirrors the renderer detector's startupCommand fast-arm.
       commandCodeDetector: this.terminalSideEffectConsumerAvailable
         ? this.createTerminalSideEffectCommandCodeDetector(ptyId)
-        : null
+        : null,
+      // Why unconditional: unlike commandCodeDetector, this drives agent status (worktree ps,
+      // mobile, notifications), not a renderer-only side-effect fact, so headless serve needs it too.
+      bobApprovalDetector: this.createTerminalSideEffectBobApprovalDetector(ptyId)
     }
     this.ptyTitleTrackersByPtyId.set(ptyId, entry)
     return entry

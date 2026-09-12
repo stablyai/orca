@@ -5,6 +5,7 @@ import type {
   RuntimePtyWorktreeRecord
 } from './runtime-terminal-state-records'
 import { createCommandCodeOutputStatusDetector } from '../../shared/command-code-output-status'
+import { createBobApprovalPromptDetector } from '../../shared/bob-approval-prompt'
 import { extractLastOsc7Uri, extractOscScanTail } from '../daemon/osc7-uri-extraction'
 import { parseFileUriPathParts } from '../daemon/osc7-file-uri'
 import { splitWorktreeIdForFilesystem } from '../../shared/worktree/id'
@@ -25,6 +26,34 @@ export class OrcaRuntimeWithCreateTerminalSideEffectCommandCodeDetector extends 
         this.recordTerminalSideEffectFact(ptyId, { kind: 'command-code-done', prompt })
       }
     })
+  }
+
+  // Why not a 'command-code-*' style side-effect fact: Bob's approval is a real agent-status
+  // transition (it must reach `orca worktree ps`, mobile, and the dashboard, none of which
+  // consume pty:sideEffect facts), so it rides the same channel OSC hooks use — see
+  // docs/reference/agent-status-store.md's producer-routing invariant. Not gated on
+  // terminalSideEffectConsumerAvailable, unlike commandCodeDetector: that flag means "a renderer
+  // wants pty:sideEffect facts", which headless `orca serve` never has, but the attention row and
+  // its notification must still work with no window attached.
+  protected createTerminalSideEffectBobApprovalDetector(
+    ptyId: string
+  ): NonNullable<RuntimePtyTitleTrackerEntry['bobApprovalDetector']> {
+    return createBobApprovalPromptDetector(
+      { startupCommand: this.terminalSpawnCommandsByPtyId.get(ptyId) ?? null },
+      () => {
+        this.emitTerminalAgentStatusEvents(ptyId, {
+          cleanData: '',
+          lastPayloadCleanOffset: null,
+          payloads: [
+            {
+              state: 'waiting',
+              prompt: '',
+              agentType: 'bob'
+            }
+          ]
+        })
+      }
+    )
   }
 
   protected extractLastOsc7CwdForPty(
