@@ -29,7 +29,7 @@ export function parseQuickOpenInstallRgGuidance(
   message: string
 ): QuickOpenInstallRgGuidanceParts | null {
   const match = message.match(
-    /^Quick Open scan too large \((.+?)\)\. Install ripgrep (on the remote|on the host running the Quick Open scan) to enable fast, gitignore-aware listing: (.+)$/
+    /^Quick Open scan too large \((.+?)\)\. Install ripgrep (on the remote|on this machine|on the host running the Quick Open scan) to enable fast, gitignore-aware listing: (.+)$/
   )
   if (!match) {
     return null
@@ -127,8 +127,8 @@ export function QuickOpenInstallRgGuidance({
               'on the remote to enable fast, gitignore-aware listing:'
             )
           : translate(
-              'auto.components.QuickOpen.344f8a48dd',
-              'on the host running the Quick Open scan to enable fast, gitignore-aware listing:'
+              'auto.components.QuickOpen.47c3a72d38',
+              'on this machine to enable fast, gitignore-aware listing:'
             )}
       </p>
       {command ? (
