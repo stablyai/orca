@@ -102,12 +102,15 @@ export function recordReceivedWebSessionTabsSnapshot(
   }
   recordReceivedWebSessionTabsEnvironmentFrame(environmentId, frame)
   const publicationEpoch = snapshot.publicationEpoch
+  const isRetraction = (snapshot as { removed?: unknown }).removed === true
   const history = sessionTabsPublicationEpochHistoryByWorktree.get(key)
   const isRetired = history?.retired.includes(publicationEpoch) ?? false
   if (isRetired) {
     return frame
   }
-  if (!history || history.current !== publicationEpoch) {
+  // A retraction withdraws the worktree; it does not take over publishing it. Noting it as current
+  // would retire the generation that is still live and fence its next frame out of its own worktree.
+  if (!isRetraction && (!history || history.current !== publicationEpoch)) {
     noteSessionTabsPublicationEpoch(key, publicationEpoch)
   }
   // Stream delivery order is the freshest evidence even when a host's version
@@ -127,8 +130,8 @@ export function recordReceivedWebSessionTabsSnapshot(
       snapshotVersion: snapshot.snapshotVersion,
       ...(runtimeId ? { runtimeId } : {})
     })
-    if ((snapshot as { removed?: unknown }).removed === true) {
-      recordReceivedWebSessionTabsRemoval(environmentId, snapshot.worktree, frame)
+    if (isRetraction) {
+      recordReceivedWebSessionTabsRemoval(environmentId, snapshot.worktree, frame, publicationEpoch)
     }
   }
   return frame
@@ -179,9 +182,24 @@ export function beginWebSessionTabsSnapshotRecovery(
 export function recordReceivedWebSessionTabsRemoval(
   environmentId: string,
   worktreeId: string,
-  receivedFrame: number
+  receivedFrame: number,
+  publicationEpoch: string
 ): void {
   const key = sessionTabsFreshnessKey(environmentId, worktreeId)
+  const latest = latestReceivedSessionTabsSnapshotByWorktree.get(key)
+  // A retraction is this worktree's newest evidence, not an absence of evidence. Recording the
+  // boundary instead of dropping the ledger is what lets receivedFrame ordering fence a frame
+  // reserved before the retraction while still admitting the live publisher's next frame — the two
+  // are the same epoch at a higher version, so only delivery order separates them. A retraction
+  // epoch never matches a host publication, so a later live frame may still restart its version
+  // counter without being ranked against the pre-removal version.
+  if (!latest || latest.receivedFrame <= receivedFrame) {
+    latestReceivedSessionTabsSnapshotByWorktree.set(key, {
+      receivedFrame,
+      publicationEpoch,
+      snapshotVersion: 0
+    })
+  }
   const current = latestSessionTabsRemovalFenceByWorktree.get(key)
   if (current && current.receivedFrame >= receivedFrame) {
     return
@@ -196,10 +214,6 @@ export function recordReceivedWebSessionTabsRemoval(
     recoveryState,
     pendingCount: recoveryState.pendingCount
   })
-  // An inventory omission/removal is a new visibility boundary. A later live
-  // frame may legitimately restart its version counter, while recoveries
-  // queued before this boundary are fenced by receivedFrame above.
-  latestReceivedSessionTabsSnapshotByWorktree.delete(key)
 }
 
 export function shouldApplyRecoveredWebSessionTabsSnapshot(

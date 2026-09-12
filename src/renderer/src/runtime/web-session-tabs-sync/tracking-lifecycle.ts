@@ -132,9 +132,9 @@ export function clearWebSessionTabsTrackingForWorktree(
   const key = sessionTabsFreshnessKey(environmentId, worktreeId)
   latestSessionTabsSnapshotByWorktree.delete(key)
   replayableSessionTabsSnapshotByWorktree.delete(key)
-  latestReceivedSessionTabsSnapshotByWorktree.delete(key)
-  // Keep the bounded epoch history as a tombstone fence. A sibling stream can
-  // still deliver an old frame after this removal has cleared the live view.
+  // The received-evidence ledger is deliberately left alone: it holds the retraction boundary that
+  // orders a delayed predecessor frame against the live publisher's next one. Clearing the live
+  // view is this function's job; forgetting what was received is not.
   untrackWebSessionTabsWorktree(environmentId, worktreeId)
   removeWebSessionTabsEnvironment(environmentId, worktreeId)
   lastHostTerminalTabCountByWorktree.delete(key)

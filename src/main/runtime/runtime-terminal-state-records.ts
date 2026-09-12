@@ -53,6 +53,12 @@ export type RuntimePtyWorktreeRecord = RuntimeTerminalTailState & {
   wslDistro: string | null
   tabId: string | null
   paneKey: string | null
+  /**
+   * `graphSequence` when `paneKey` was last written. A surface recorded since the last graph
+   * statement has not yet been offered one that could contradict it — see
+   * pty-recorded-surface-topology.ts.
+   */
+  surfaceRecordedAtGraphSequence: number
   launchConfig: SleepingAgentLaunchConfig | null
   launchToken: string | null
   launchIncarnationId: PtyIncarnationId | null
