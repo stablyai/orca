@@ -7,6 +7,18 @@ import type { BrowserBackend, BrowserBackendCreateTab } from './browser-backend'
 import type { BrowserManager } from './browser-manager'
 import type { AgentBrowserBridge } from './agent-browser-bridge'
 import { browserSessionRegistry } from './browser-session-registry'
+import { BrowserError } from './browser-error'
+import {
+  offscreenBrowserTabCapacityMessage,
+  OFFSCREEN_BROWSER_TAB_CAPACITY_CODE,
+  resolveOffscreenBrowserTabCap
+} from './offscreen-browser-tab-capacity'
+import {
+  nodeRendererProcessControl,
+  reclaimRendererProcess,
+  type RendererProcessControl
+} from './offscreen-renderer-process-reclaim'
+import { readProcessStartTimeMs } from '../runtime/agent-session-process-identity-probe'
 
 // Why: headless orca serve has no renderer window to host a <webview>, so each
 // browser page is backed by a main-process offscreen BrowserWindow. The window
@@ -19,20 +31,38 @@ const DEFAULT_VIEWPORT_WIDTH = 1280
 const DEFAULT_VIEWPORT_HEIGHT = 800
 const LOAD_TIMEOUT_MS = 30_000
 const OWNER_RETIREMENT_CONCURRENCY = 4
+// Why bounded: retirement drives the agent-browser helper through the page's own renderer, and
+// #14552 hit pages whose renderer had stopped answering. The teardown below must not queue behind
+// a wait that will never return.
+const DEFAULT_OWNER_RETIREMENT_TIMEOUT_MS = 5_000
 
 export class OffscreenBrowserBackend implements BrowserBackend {
   private readonly windowsByPageId = new Map<string, BrowserWindow>()
+  private readonly closingPageIds = new Set<string>()
   // Shutdown is terminal for this backend; rejecting creates closes the race
   // where destroyAll snapshots ownership and a new page appears afterward.
   private shutdownStarted = false
   private readonly pendingOwnerRetirements = new Set<Promise<void>>()
 
+  private readonly maxTabs: number
+  private readonly retirementTimeoutMs: number
+  private readonly rendererProcessControl: RendererProcessControl
+
   constructor(
     private readonly browserManager: BrowserManager,
     private readonly options: {
       getAgentBrowserBridge?: () => Pick<AgentBrowserBridge, 'onPageClosed'> | null
+      /** Per-host override; production resolves the cap from the environment. */
+      maxTabs?: number
+      ownerRetirementTimeoutMs?: number
+      rendererProcessControl?: RendererProcessControl
     } = {}
-  ) {}
+  ) {
+    this.maxTabs = options.maxTabs ?? resolveOffscreenBrowserTabCap()
+    this.retirementTimeoutMs =
+      options.ownerRetirementTimeoutMs ?? DEFAULT_OWNER_RETIREMENT_TIMEOUT_MS
+    this.rendererProcessControl = options.rendererProcessControl ?? nodeRendererProcessControl
+  }
 
   async createTab(params: BrowserBackendCreateTab): Promise<{ browserPageId: string }> {
     if (this.shutdownStarted) {
@@ -41,6 +71,16 @@ export class OffscreenBrowserBackend implements BrowserBackend {
     const browserPageId = params.browserPageId ?? randomUUID()
     if (this.windowsByPageId.has(browserPageId)) {
       throw new Error(`Browser page ${browserPageId} already exists`)
+    }
+    // Why refuse instead of evicting the oldest tab: an open offscreen page is a measurement an
+    // agent is in the middle of, and closing it out from under the agent would lose page state it
+    // cannot recover — a refusal names the tab it must close and leaves the choice with the caller.
+    const currentCount = this.windowsByPageId.size + this.closingPageIds.size
+    if (currentCount >= this.maxTabs) {
+      throw new BrowserError(
+        OFFSCREEN_BROWSER_TAB_CAPACITY_CODE,
+        offscreenBrowserTabCapacityMessage(currentCount, this.maxTabs)
+      )
     }
     // Why: profiles map to Electron partitions; using the profile's partition
     // makes cookies/storage persist in the same SQLite DB the desktop path uses.
@@ -101,6 +141,7 @@ export class OffscreenBrowserBackend implements BrowserBackend {
       }
       void this.retirePageOwner(browserPageId)
       this.windowsByPageId.delete(browserPageId)
+      this.closingPageIds.delete(browserPageId)
       this.browserManager.unregisterGuest(browserPageId)
     })
 
@@ -117,17 +158,39 @@ export class OffscreenBrowserBackend implements BrowserBackend {
 
   async closeTab(browserPageId: string): Promise<void> {
     const win = this.windowsByPageId.get(browserPageId)
+    if (!win) {
+      return
+    }
     this.windowsByPageId.delete(browserPageId)
+    this.closingPageIds.add(browserPageId)
     this.browserManager.unregisterGuest(browserPageId)
+    // Why read the pid and start time before teardown: WebContents stops answering once it is
+    // destroyed, and the pid+startTime pair binds reclamation to that exact process instance.
+    const osProcessId = win.isDestroyed() ? 0 : win.webContents.getOSProcessId()
+    const expectedStartTimeMs =
+      osProcessId > 0
+        ? await (this.rendererProcessControl.readStartTimeMs ?? readProcessStartTimeMs)(
+            osProcessId
+          ).catch(() => null)
+        : null
     try {
-      if (win) {
-        await this.retirePageOwner(browserPageId)
-      }
+      await this.settleOwnerRetirement(browserPageId)
     } finally {
-      if (win && !win.isDestroyed()) {
+      if (!win.isDestroyed()) {
         win.destroy()
       }
+      this.closingPageIds.delete(browserPageId)
     }
+    if (osProcessId > 0) {
+      await reclaimRendererProcess(osProcessId, {
+        control: this.rendererProcessControl,
+        expectedStartTimeMs
+      })
+    }
+  }
+  /** Resolves on retirement or on the timeout, whichever lands first; the page is gone either way. */
+  private settleOwnerRetirement(browserPageId: string): Promise<void> {
+    return this.retirePageOwner(browserPageId)
   }
 
   getWebContentsId(browserPageId: string): number | null {
@@ -149,10 +212,19 @@ export class OffscreenBrowserBackend implements BrowserBackend {
     if (!bridge) {
       return Promise.resolve()
     }
-    const retirement = bridge.onPageClosed(browserPageId).catch(() => {})
-    this.pendingOwnerRetirements.add(retirement)
-    void retirement.finally(() => this.pendingOwnerRetirements.delete(retirement))
-    return retirement
+    const settled = Promise.withResolvers<void>()
+    const timer = setTimeout(settled.resolve, this.retirementTimeoutMs)
+    timer.unref?.()
+    const retirement = bridge
+      .onPageClosed(browserPageId)
+      .catch(() => {})
+      .finally(() => {
+        clearTimeout(timer)
+        settled.resolve()
+      })
+    this.pendingOwnerRetirements.add(settled.promise)
+    void retirement.finally(() => this.pendingOwnerRetirements.delete(settled.promise))
+    return settled.promise
   }
 
   private async loadUrl(win: BrowserWindow, url: string): Promise<void> {
