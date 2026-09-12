@@ -3,6 +3,7 @@ import {
   getAgentSessionOptionCatalog,
   mergeCatalogModels,
   mergeDiscoveredAuthoritativeModels,
+  withConsentGatedSeedModels,
   type CatalogModel
 } from '../../../../shared/agent-session-option-catalog'
 import { resolveNativeChatSessionOptionDefaults } from '../../../../shared/native-chat-session-option-defaults'
@@ -103,7 +104,7 @@ export function ensureNativeChatModelEnrichment(args: {
       }
       entry.models =
         args.agent === 'claude'
-          ? [...discovered]
+          ? withConsentGatedSeedModels(catalog, discovered)
           : catalog.discoveredModelsAreAuthoritative
             ? mergeDiscoveredAuthoritativeModels(catalog.models, discovered)
             : mergeCatalogModels(catalog.models, discovered)
