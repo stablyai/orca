@@ -163,13 +163,19 @@ function baseBrowserTab(overrides: Partial<BrowserTabState> = {}): BrowserTabSta
   }
 }
 
-async function renderBrowserTab(tab: BrowserTabState): Promise<unknown> {
+async function renderBrowserTab(
+  tab: BrowserTabState,
+  pinning: { isPinned: boolean; pinnedIconOnly: boolean } = {
+    isPinned: false,
+    pinnedIconOnly: false
+  }
+): Promise<unknown> {
   reactHookRuntime.index = 0
   const module = await import('./BrowserTab')
   return module.default({
     tab,
     isActive: true,
-    isPinned: false,
+    ...pinning,
     hasTabsToRight: false,
     hasTabsToLeft: false,
     tabCount: 1,
@@ -237,6 +243,39 @@ function findElementsByType(node: unknown, typeName: string): ReactElementLike[]
 
 async function renderExpandedBrowserTab(tab: BrowserTabState): Promise<unknown> {
   return expandNode(await renderBrowserTab(tab))
+}
+
+function collectText(node: unknown): string {
+  if (typeof node === 'string') {
+    return node
+  }
+  if (node == null || typeof node !== 'object') {
+    return ''
+  }
+  if (Array.isArray(node)) {
+    return node.map(collectText).join('')
+  }
+  return collectText((node as ReactElementLike).props?.children)
+}
+
+function findTabRoot(node: unknown): ReactElementLike | undefined {
+  const results: ReactElementLike[] = []
+  const visit = (current: unknown): void => {
+    if (current == null || typeof current !== 'object') {
+      return
+    }
+    if (Array.isArray(current)) {
+      current.forEach(visit)
+      return
+    }
+    const el = current as ReactElementLike
+    if (el.props?.['data-tab-id']) {
+      results.push(el)
+    }
+    visit(el.props?.children)
+  }
+  visit(node)
+  return results[0]
 }
 
 describe('BrowserTab favicon', { timeout: 30_000 }, () => {
@@ -338,5 +377,41 @@ describe('BrowserTab favicon', { timeout: 30_000 }, () => {
     expect(images).toHaveLength(1)
     expect(images[0].props.src).toBe(iconUrl)
     expect(findElementsByType(retryRender, 'Globe')).toHaveLength(0)
+  })
+})
+
+/**
+ * Collapsing a pinned tab strips every scrap of text from it, so the accessible name has to come
+ * from somewhere else — dnd-kit gives the root role="button", and an unnamed button is unusable.
+ */
+describe('BrowserTab pinned icon-only collapse', { timeout: 30_000 }, () => {
+  beforeEach(() => {
+    reactHookRuntime.states = []
+    reactHookRuntime.index = 0
+    vi.clearAllMocks()
+  })
+
+  it('drops the label but names the tab when a pinned tab collapses', async () => {
+    const tab = baseBrowserTab({ title: 'Example Domain', url: 'https://example.test/' })
+    const collapsed = expandNode(
+      await renderBrowserTab(tab, { isPinned: true, pinnedIconOnly: true })
+    )
+    const root = findTabRoot(collapsed)
+
+    // Scoped to the tab itself: the tooltip and context menu still carry the title, and should.
+    expect(collectText(root)).not.toContain('Example Domain')
+    expect(root?.props['aria-label']).toBe('Example Domain')
+    expect(findElementsByType(root, 'Pin')).toHaveLength(0)
+  })
+
+  it('leaves an unpinned tab alone while the setting is on', async () => {
+    const tab = baseBrowserTab({ title: 'Example Domain', url: 'https://example.test/' })
+    const expanded = expandNode(
+      await renderBrowserTab(tab, { isPinned: false, pinnedIconOnly: true })
+    )
+    const root = findTabRoot(expanded)
+
+    // No aria-label: the visible label is the accessible name, and duplicating it would override it.
+    expect(root?.props['aria-label']).toBeUndefined()
   })
 })
