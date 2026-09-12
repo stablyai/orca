@@ -13,11 +13,11 @@ import { parsePaneKey } from '../../shared/stable-pane-id'
 import type { ExactWorkerProviderSession } from '../../shared/orchestration-worker-output'
 import { selectExactWorkerProviderSession } from './orchestration/worker-provider-session'
 import type { TuiAgent } from '../../shared/tui-agent'
+import { isTuiAgent } from '../../shared/tui-agent-config'
 import { isTuiAgentEnabled } from '../../shared/tui-agent-selection'
 import { OrchestrationError } from './orchestration/orchestration-error'
 import { resolveLocalWindowsAgentStartupShell } from '../../shared/windows-terminal-shell'
 import { resolveStartupShell, type AgentStartupShell } from '../../shared/tui-agent-startup-shell'
-import { isTuiAgent } from '../../shared/tui-agent-config'
 import { resolveConfiguredWorkerAgent } from './orchestration/configured-worker-agent-selector'
 import { parseWslUncPath } from '../../shared/wsl-paths'
 import { resolveLocalProjectRuntimeForRepo } from '../project-runtime-git-options'
@@ -291,5 +291,18 @@ export class OrcaRuntimeWithGetTerminalInteractiveWait extends OrcaRuntimeWithAd
         `Agent launcher ${agent} is disabled or unavailable.`
       )
     }
+  }
+
+  // Why: an omitted worker-start --agent follows the Settings default, like the
+  // new-workspace picker; a disabled default is not swapped for another agent.
+  resolveDefaultOrchestrationAgent(): TuiAgent | null {
+    const settings = this.store?.getSettings()
+    if (!settings) {
+      throw new Error('runtime_unavailable')
+    }
+    const preferred = settings.defaultTuiAgent
+    return isTuiAgent(preferred) && isTuiAgentEnabled(preferred, settings.disabledTuiAgents)
+      ? preferred
+      : null
   }
 }
