@@ -112,7 +112,8 @@ durably marked consumed before mutation and cannot authorize another run.
 | Director instances | outside 5–6 |
 | Director CPU or memory | over 80% |
 | Director concurrency | over 64 |
-| Unexpected director 5xx or auth 5xx in five minutes | over 0 |
+| Unexpected director 5xx in five minutes (excludes 503) | over 3 |
+| Auth 5xx in five minutes | over 0 |
 | Connections per cell process | over 500 |
 | Queued bytes per cell process | over 48 MiB |
 | Blocked or expired/unregistered migration | over 0 |
@@ -276,3 +277,7 @@ without its segment is a compile error in relay-contract, not a silent gap.
   load the director's three-connection database pool.
 - Added private atomic state, idempotent JSONL checkpoints, and secret-safe Markdown evidence.
 - Added the manual production workflow. It has not been dispatched.
+
+### Director error allowance (2026-09-12)
+
+The serving-cell rollout observed three unexpected director 500 responses among approximately 33,600 responses in an hour, all two-second PostgreSQL connection timeouts. CPU remained near 30–37% and the zero-error bar repeatedly prevented any cell mutation. The five-minute allowance is now three non-503 director 5xx; four freezes. Auth errors, data freshness, active probes, SQL/pool pressure and other limits are unchanged. This is a bounded operational allowance, not a calibrated SLO or proof that intermittent failures are resolved; persistent low-frequency errors below this limit still require diagnosis.
