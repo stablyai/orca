@@ -31,6 +31,15 @@ export type StructuredAgentSessionAppendOptions = {
   observedAt?: number
 }
 
+export type StructuredAgentSessionLifecycleJournal = Pick<
+  AgentSessionJournal,
+  'epoch' | 'visitItems'
+>
+
+export type StructuredAgentSessionLifecycleIdentityResolver = (
+  journal: StructuredAgentSessionLifecycleJournal
+) => AgentJournalItemIdentity | null
+
 export type StructuredAgentSessionEventSink = {
   appendItem(
     identity: AgentJournalItemIdentity,
@@ -52,6 +61,14 @@ export type StructuredAgentSessionEventSink = {
     body: AgentJournalItemBody,
     options?: StructuredAgentSessionAppendOptions
   ): StructuredAgentSessionSinkAdmission
+  /** Queues one journal-derived lifecycle append; a null resolution is a no-op. */
+  tryAppendLifecycleTransition?(
+    identitySizeBound: AgentJournalItemIdentity,
+    body: AgentJournalItemBody,
+    resolveIdentity: StructuredAgentSessionLifecycleIdentityResolver
+  ): StructuredAgentSessionSinkAdmission
+  /** Current durable epoch, when this deferred sink is bound to its journal. */
+  journalEpoch?(): string | null
   appendLifecycleBatch?(
     settlementId: string,
     mutations: readonly JournalLifecycleMutationInput[],
@@ -186,6 +203,28 @@ export function createDeferredStructuredAgentSessionEventSink(
           },
           options
         ),
+      tryAppendLifecycleTransition: (identitySizeBound, body, resolveIdentity) => {
+        const bytes = estimateStructuredAgentSessionItemBytes(identitySizeBound, body)
+        return queue.submit(
+          {
+            bytes,
+            lifecycle: true,
+            run: async (bound) => {
+              const identity = resolveIdentity(bound.journal)
+              if (identity === null) {
+                return
+              }
+              if (estimateStructuredAgentSessionItemBytes(identity, body) > bytes) {
+                throw new Error('structured agent-session item identity exceeded its reserved size')
+              }
+              await bound.journal.appendItem(identity, body, { fence: bound.fence })
+              bound.publish()
+            }
+          },
+          { lifecycle: true }
+        )
+      },
+      journalEpoch: queue.journalEpoch,
       appendLifecycleBatch: (settlementId, mutations, options = {}) => {
         const admission = appendLifecycleBatch(settlementId, mutations, options)
         if (!admission.accepted) {

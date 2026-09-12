@@ -42,6 +42,9 @@ export abstract class AgentHookServerPersistence extends AgentHookServerHydratio
         observation: _observation,
         // Replay provenance is runtime-only and must not survive another restart.
         isReplay: _isReplay,
+        // A terminal handle belongs to the runtime that issued it; a hydrated one could only
+        // rejoin a row to somebody else's terminal.
+        terminalHandle: _terminalHandle,
         launchToken,
         ...persistedPayload
       } = enrichedPayload

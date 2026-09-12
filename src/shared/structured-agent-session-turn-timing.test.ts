@@ -158,7 +158,7 @@ describe('host-settled turns override local observation', () => {
       {
         activeTurnKey: 'u1',
         isWorking: false,
-        hasCurrentTurnResponse: true,
+        thinking: false,
         settledByTurn: settled
       }
     )

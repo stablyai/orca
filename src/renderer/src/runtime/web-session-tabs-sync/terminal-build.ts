@@ -171,6 +171,10 @@ export function buildMirroredTerminalTabs(
         // without this dropped the client's agent-prompt label on every snapshot.
         ...(existing?.generatedTitle ? { generatedTitle: existing.generatedTitle } : {}),
         ...(existing?.aiVaultTitle ? { aiVaultTitle: existing.aiVaultTitle } : {}),
+        // Why: the recovery ledger is client-local and the host carries none, so
+        // rebuilding without it would restore this tab's remount allowance on
+        // every snapshot — the counting loop recovery is meant to end (b5cfc6ca).
+        ...(existing?.recovery ? { recovery: existing.recovery } : {}),
         ...(quickCommandLabel ? { quickCommandLabel } : {}),
         ...(startupCwd ? { startupCwd } : {}),
         customTitle: existing?.customTitle ?? null,

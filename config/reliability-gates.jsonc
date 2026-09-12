@@ -11,6 +11,81 @@
   },
   "gates": [
     {
+      "id": "runtime.connection-owned-host-status",
+      "title": "Host status recovers with its owning connection",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "runtime",
+      "layer": "service-integration-and-e2e",
+      "surfaces": [
+        "sidebar host status",
+        "desktop runtime connection",
+        "browser primary connection"
+      ],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["remote-runtime"],
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": ["remote-runtime"],
+      "coverageNotes": "Real authenticated sockets plus isolated desktop and headless hosts with desktop and browser viewers; deterministic lifecycle tests cover stale results and reader deadlines.",
+      "motivatingLinks": ["https://github.com/stablyai/orca/pull/19163"],
+      "invariant": "Failed bootstrap and authenticated reconnect converge without UI triggers; one connection owner publishes verified status, with no independent healthy status polling.",
+      "oracle": "Observe automatic recovery, retained runtime identity on failure, ordered publications, exact request counts, isolated viewer outages, and retirement on disconnect.",
+      "commands": [
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/shared/runtime-host-status-owner.test.ts src/main/ipc/runtime-environment-status-recovery.test.ts src/main/ipc/runtime-environment-status-connection.test.ts src/renderer/src/store/slices/runtime-status-snapshot.test.ts src/renderer/src/web/web-runtime-status-owner.test.ts",
+        "ORCA_BACKGROUND_LAUNCH=1 ORCA_E2E_WEB_CLIENT=1 pnpm exec playwright test tests/e2e/runtime-host-status-recovery.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1"
+      ],
+      "testFiles": [
+        "src/shared/runtime-host-status-owner.test.ts",
+        "src/main/ipc/runtime-environment-status-recovery.test.ts",
+        "src/main/ipc/runtime-environment-status-connection.test.ts",
+        "src/renderer/src/store/slices/runtime-status-snapshot.test.ts",
+        "src/renderer/src/web/web-runtime-status-owner.test.ts",
+        "tests/e2e/runtime-host-status-recovery.spec.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/main/ipc/runtime-environment-status-recovery.test.ts",
+          "assertions": [
+            "recovers a saved host after its first status check fails, without another UI request"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-09-10",
+          "runner": "local",
+          "platform": "macos",
+          "command": "ORCA_BACKGROUND_LAUNCH=1 ORCA_E2E_WEB_CLIENT=1 pnpm exec playwright test tests/e2e/runtime-host-status-recovery.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1",
+          "result": "passed",
+          "summary": "Desktop-host and headless-host journeys passed with desktop and browser viewers.",
+          "durationSeconds": 31.3
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 180,
+        "scope": "Target excluding builds; measured p95 not established."
+      },
+      "flakeHistory": {
+        "status": "soaking",
+        "evidence": "Local candidate runs passed; no sustained CI history yet."
+      },
+      "redGreenEvidence": {
+        "status": "partial",
+        "evidence": "First-status-failure oracle failed on main 58ff95becb40 (one request instead of two) and passes on the candidate. E2E verifies candidate recovery, not a baseline comparison."
+      },
+      "performanceBudget": {
+        "required": false,
+        "evidence": "Deterministic tests assert one shared request and no healthy owner polling."
+      },
+      "promotionCriteria": ["Collect repeated CI runs without unexplained flakes."],
+      "knownGaps": [
+        "No live Linux, Windows, SSH, or mixed-version pair validation.",
+        "TCP interruption exercises reconnect, not a full real host process restart.",
+        "The outage begins on the first saved-host check, not by relaunching a preseeded desktop profile."
+      ],
+      "demotionRule": "Keep experimental until repeated runs establish reliability; preserve request-count and lifecycle assertions."
+    },
+    {
       "id": "mobile-push.headless-startup-and-policy",
       "title": "Headless push lifecycle and mobile delivery policy",
       "maturity": "experimental",
@@ -2852,6 +2927,78 @@
       ],
       "demotionRule": "Keep experimental or demote if assignment calls overlap, duplicate drain events bypass backoff, Retry-After is ignored, close resurrects work, or mixed-version request rate exceeds the reviewed director budget."
     },
+    {
+      "id": "desktop-relay.region-correction-idle-cutover",
+      "title": "Regional correction moves only an idle relay source",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "desktop-runtime",
+      "layer": "cell-desktop-real-websocket",
+      "surfaces": ["regional correction", "idle source cutover", "desktop relay reconnect"],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["cloud-relay"],
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": ["cloud-relay"],
+      "coverageNotes": "Real local WebSocket/control/proof/splice traffic and production SQLite store run with synthetic clock and synthetic token verification. Separate PostgreSQL16 suites validate SQL concurrency. This does not measure production network latency, physical phones, UI, or the production token issuer.",
+      "motivatingLinks": [
+        "docs/relay-region-correction/RELAY-REGION-CORRECTION-IDLE-CUTOVER-PLAN.md"
+      ],
+      "invariant": "Regional optimization never closes an established relay client. The source gates admissions only after actual work is idle, commits the exact assignment atomically, and releases its empty control. A failed target uses ordinary migration recovery; previously sent mutations are not replayed.",
+      "oracle": "Two real TCP WebSocket cells, the actual desktop origin pool, SQLite and an independent execution child verify busy phone/iPad deferral, idle movement, racing arrival rejection, definite-abort admission recovery and observed target-registration failure with ordinary rollback.",
+      "commands": [
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm test tests/e2e/relay-region-correction.unit.test.ts"
+      ],
+      "testFiles": ["tests/e2e/relay-region-correction.unit.test.ts"],
+      "assertionRefs": [
+        {
+          "file": "tests/e2e/relay-region-correction.unit.test.ts",
+          "assertions": [
+            "releases the empty source and recovers normally when the target never registers",
+            "rejects an arrival during cutover and restores admissions after a definite failed commit",
+            "defers for either connected device, then moves after both disconnect without replaying work"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-09-11",
+          "runner": "local",
+          "platform": "macos",
+          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm test tests/e2e/relay-region-correction.unit.test.ts",
+          "result": "passed",
+          "durationSeconds": 6.44,
+          "summary": "Three real TCP WebSocket cases passed after removing store retention. Log: .tmp/idle-cutover-review/transport-without-retention.log. Does not validate packaged or physical clients."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 180,
+        "scope": "three local real-WebSocket scenarios with synthetic elapsed time for ordinary recovery"
+      },
+      "flakeHistory": {
+        "status": "unknown",
+        "evidence": "Local implementation validation; no CI soak history yet."
+      },
+      "redGreenEvidence": {
+        "status": "partial",
+        "evidence": "Registry admission accounting negative control and five conflicting operation-identity regressions fail before their fixes and pass afterward. Locked database reconciliation has separate red/green evidence. Full cross-layer counterfactual remains unverified."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "No retained source lease or new mobile timer. Candidate selection is read-only; busy sources immediately defer. Idle cutover reuses normal desktop reconnect and existing migration recovery."
+      },
+      "promotionCriteria": [
+        "Collect 100 consecutive CI passes or 14 days of soak.",
+        "Complete mixed-version and packaged-client validation.",
+        "Validate bounded rollout latency and reliability against reviewed numerical limits."
+      ],
+      "knownGaps": [
+        "Production authentication verifier is mocked.",
+        "Synthetic elapsed time is not a wall-clock soak.",
+        "Physical phone lifecycle, packaged mixed versions, SSH execution and production network behavior require separate validation."
+      ],
+      "demotionRule": "Keep experimental or demote if optimization closes an established client, a gate reopens on ambiguous authority, a mutation is replayed, cleanup is lost, or eligible idle hosts starve."
+    },
+
     {
       "id": "git-worktree.refresh-event-semantics",
       "title": "Index-only Git metadata cannot trigger structural worktree refresh fanout",

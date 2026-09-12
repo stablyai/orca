@@ -1,7 +1,8 @@
 // ─── The one identity/clock contract the fleet path reads ────────────────────
 // A hook row carries a pane key, a delivery timestamp and, from newer hosts, an
-// observation timestamp. Terminal identity lives on the runtime, not on the row.
-// The fleet matcher needs both, and every fact it needs used to be an OPTIONAL
+// observation timestamp. A row may carry the runtime handle observed with OSC, but
+// fleet authority still resolves terminal identity from the runtime. The matcher needs both,
+// and every fact it needs used to be an OPTIONAL
 // field on `AgentStatusIpcPayload` — so an unenriched producer published a row the
 // matcher silently failed to identify (failure table L-1) and a missing observation
 // clock silently degraded to the delivery clock (W1-14 / RR-W-P1A).
@@ -10,8 +11,8 @@
 // deliberately exposes no `terminalHandle?`, no `evidenceObservedAt?` and no raw
 // payload, so a consumer cannot read an absent identity or clock by accident.
 //
-// This type never crosses IPC or the wire. `AgentStatusIpcPayload` is unchanged and
-// remains what `agentStatus:set` / `agentStatus:getSnapshot` publish.
+// This type never crosses IPC or the wire. `AgentStatusIpcPayload` remains what
+// `agentStatus:set` / `agentStatus:getSnapshot` publish.
 
 import type { AgentStatusIpcPayload } from './agent-status-ipc-payload'
 import type { AgentStatusState, AgentType } from './agent-status-types'

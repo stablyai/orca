@@ -36,6 +36,8 @@ export type PersistedAgentHookEventPayload = Omit<
   // Why: revision counters are in-memory and the authority id is regenerated per process, so
   // a stored observation could only rehydrate as a stale ordering claim from a dead authority.
   | 'observation'
+  // Same: a terminal handle is issued by one runtime and means nothing to the next.
+  | 'terminalHandle'
 > & {
   launchTokenHash?: string
 }
@@ -50,9 +52,15 @@ export type PersistedAgentHookAuthorityCommitment = {
 }
 
 export type AgentHookStatusChangeEntry = {
+  paneKey: string
   state: AgentStatusState
   receivedAt: number
   observedInCurrentRuntime: boolean
+}
+
+export type AgentHookStatusFreshnessObservation = AgentHookStatusChangeEntry & {
+  worktreeId?: string
+  terminalHandle?: string
 }
 
 export type AgentHookProviderSessionIdentity = {
@@ -77,9 +85,20 @@ export type AgentHookAuthorityAttestation = Readonly<{
 }>
 
 export type StatusChangeListener = (statuses: AgentHookStatusChangeEntry[]) => void
+export type StatusFreshnessListener = (status: AgentHookStatusFreshnessObservation) => void
 export type ProviderSessionChangeListener = (
   providerSessions: AgentHookProviderSessionIdentity[]
 ) => void
+export type AgentHookStatusRowIdentity = {
+  paneKey: string
+  worktreeId?: string
+  terminalHandle?: string
+}
+export type AgentHookStatusRowMutation = {
+  before: AgentHookStatusRowIdentity | null
+  after: AgentHookStatusRowIdentity | null
+}
+export type StatusRowMutationListener = (mutation: AgentHookStatusRowMutation) => void
 export type PaneStatusClearListener = (clear: AgentStatusClearIpcPayload) => void
 export type StatusDropListener = (paneKey: string) => void
 export type PaneKeyAliasPersistenceListener = (entries: LegacyPaneKeyAliasEntry[]) => void

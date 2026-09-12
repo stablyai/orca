@@ -40,7 +40,6 @@ function build(
     turnStatuses: NO_STATUSES,
     turnDiffs: new Map<string, NativeChatTurnDiff>(),
     showTurnStatus: true,
-    showTypingIndicator: false,
     isWorking: false,
     lifecycleWorking: false,
     ...overrides
@@ -85,13 +84,12 @@ describe('transcript slots', () => {
     expect(slots[0]?.receipt).toBe(receipt)
   })
 
-  it('hides the running turn status until the turn has something to say', () => {
+  it('leaves the running turn status to the single transcript-tail indicator', () => {
     const status: NativeChatTurnStatus = { startedAt: 1, thinking: false, workedSeconds: null }
     const slots = build([text('u', 'ask', 'user')], {
       latestUserIndex: 0,
       turnStatuses: { active: status, completedByTurn: {} },
-      isWorking: true,
-      showTypingIndicator: false
+      isWorking: true
     })
     expect(slots[0]?.status).toBeUndefined()
   })

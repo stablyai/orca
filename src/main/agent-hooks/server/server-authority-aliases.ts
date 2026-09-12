@@ -133,7 +133,7 @@ export abstract class AgentHookServerAuthorityAliases extends AgentHookServerAut
     toPaneKey: string,
     ptyId?: string,
     updatedAt = Date.now(),
-    options?: { authorityVerified?: boolean }
+    options?: { authorityVerified?: boolean; emitStatusRowMutation?: boolean }
   ): void {
     if (!isValidPaneKey(fromPaneKey) || !isValidPaneKey(toPaneKey)) {
       return
@@ -142,7 +142,10 @@ export abstract class AgentHookServerAuthorityAliases extends AgentHookServerAut
     const physicalPaneKey = this.getPhysicalPaneKeyForAuthority(fromPaneKey, ptyId)
     const existing = this.legacyPaneKeyAliases.get(physicalPaneKey)
     const normalizedPtyId = ptyId?.trim() || existing?.ptyId || null
-    const hadStatus = this.state.lastStatusByPaneKey.has(previousOwnerPaneKey)
+    const previousStatus = this.state.lastStatusByPaneKey.get(previousOwnerPaneKey) as
+      | EnrichedAgentHookEventPayload
+      | undefined
+    const hadStatus = previousStatus !== undefined
     movePaneCacheState(this.state, previousOwnerPaneKey, toPaneKey)
     const movedStatus = this.state.lastStatusByPaneKey.get(toPaneKey) as
       | EnrichedAgentHookEventPayload
@@ -155,6 +158,9 @@ export abstract class AgentHookServerAuthorityAliases extends AgentHookServerAut
         tabId: owner?.tabId
       })
     }
+    const transferredStatus = this.state.lastStatusByPaneKey.get(toPaneKey) as
+      | EnrichedAgentHookEventPayload
+      | undefined
     const hydratedLaunchTokenHash = this.hydratedLaunchTokenHashByPaneKey.get(previousOwnerPaneKey)
     if (hydratedLaunchTokenHash) {
       this.hydratedLaunchTokenHashByPaneKey.delete(previousOwnerPaneKey)
@@ -188,6 +194,11 @@ export abstract class AgentHookServerAuthorityAliases extends AgentHookServerAut
       this.activeHookTurnCompletedAtByPaneKey.delete(previousOwnerPaneKey)
       this.activeHookTurnCompletedAtByPaneKey.set(toPaneKey, activeTurnCompletedAt)
     }
+    const evidenceObservedAt = this.evidenceObservedAtByPaneKey.get(previousOwnerPaneKey)
+    if (evidenceObservedAt !== undefined) {
+      this.evidenceObservedAtByPaneKey.delete(previousOwnerPaneKey)
+      this.evidenceObservedAtByPaneKey.set(toPaneKey, evidenceObservedAt)
+    }
     const authorityObservation = this.currentAuthorityObservations.get(previousOwnerPaneKey)
     if (authorityObservation) {
       const owner = parsePaneKey(toPaneKey)
@@ -214,6 +225,11 @@ export abstract class AgentHookServerAuthorityAliases extends AgentHookServerAut
     this.boundPaneKeyAliases()
     this.closedAgentStatusPaneKeys.delete(toPaneKey)
     this.notifyPaneKeyAliasPersistenceListener()
+    this.commitStatusRowMutation(
+      previousStatus,
+      transferredStatus,
+      options?.emitStatusRowMutation !== false
+    )
     if (hadStatus || persistedAuthority) {
       this.scheduleStatusPersist()
       this.notifyStatusChangeListeners()

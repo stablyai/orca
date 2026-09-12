@@ -10,6 +10,7 @@ import {
   codexItemIdentity,
   codexJournalItem,
   codexMessageBlocks,
+  codexStreamingJournalItem,
   CodexTurnOrdinals,
   MAX_CODEX_TURN_ORDINAL_BYTES,
   MAX_CODEX_TURN_ORDINAL_ENTRIES,
@@ -601,12 +602,18 @@ describe('codex item bodies', () => {
       body: { kind: 'status', text, presentation: 'plan-document' },
       handled: true
     })
+    // A plan is a durable artifact, so it must never read as the model reasoning now.
+    expect(codexItemBody({ type: 'plan', id: 'plan-document', text })).not.toMatchObject({
+      kind: 'message',
+      role: 'reasoning'
+    })
   })
 
-  it('renders reasoning as status and exposes an unknown item as a provider frame', () => {
+  it('renders reasoning as a typed message and exposes an unknown item as a provider frame', () => {
     expect(codexItemBody({ type: 'reasoning', id: 'r', text: 'thinking' })).toEqual({
-      kind: 'status',
-      text: 'thinking'
+      kind: 'message',
+      role: 'reasoning',
+      blocks: [{ type: 'text', text: 'thinking' }]
     })
     expect(codexItemBody({ type: 'reasoning', id: 'r' })).toBeNull()
     expect(codexItemBody({ type: 'agentMessage', id: 'm', text: '' })).toBeNull()
@@ -614,6 +621,15 @@ describe('codex item bodies', () => {
       kind: 'status',
       text: 'codex · item:somethingCodexAddedLater',
       providerFrame: { provider: 'codex', kind: 'item:somethingCodexAddedLater' }
+    })
+  })
+
+  it('keeps non-reasoning item streams as status activity', () => {
+    expect(
+      codexStreamingJournalItem({ type: 'somethingCodexAddedLater', id: 'x' }, 'still working')
+    ).toEqual({
+      body: { kind: 'status', text: 'still working' },
+      handled: true
     })
   })
 
@@ -843,7 +859,11 @@ describe('codex item bodies', () => {
         summary: ['first', 'second'],
         content: [{ text: 'fallback' }]
       })
-    ).toEqual({ kind: 'status', text: 'first\nsecond' })
+    ).toEqual({
+      kind: 'message',
+      role: 'reasoning',
+      blocks: [{ type: 'text', text: 'first\nsecond' }]
+    })
   })
 
   it('refuses a value that is not a thread item at all', () => {

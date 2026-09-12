@@ -5,6 +5,7 @@ import {
   DEFAULT_JOURNAL_PAYLOAD_LIMITS,
   type JournalPayloadLimits
 } from '../agent-session-journal/journal-payload-bounds'
+import { codexGoalRowText } from '../../codex/codex-goal-journal-rows'
 import { classifyProviderFrame } from './provider-frame-disposition'
 
 export type UnhandledProviderFrameJournalItem = {
@@ -115,11 +116,15 @@ export function unhandledProviderFrameJournalItem(
         .filter((part): part is string => typeof part === 'string' && part.trim().length > 0)
         .join('\n\n') || message
   }
+  const goalText = provider === 'codex' ? codexGoalRowText(method, payload) : null
   const display = message ? boundInlineText(message, limits) : null
+  const goalDisplay = goalText ? boundInlineText(goalText, limits) : null
   return {
     body: {
       kind: 'status',
-      text: compaction ? 'Context compacted' : (display?.text ?? `${provider} · ${kind}`),
+      text: compaction
+        ? 'Context compacted'
+        : (goalDisplay?.text ?? display?.text ?? `${provider} · ${kind}`),
       ...(compaction ? { presentation: 'compaction' } : {}),
       ...(tone ? { tone } : {}),
       providerFrame: { provider, kind, payload: bounded }

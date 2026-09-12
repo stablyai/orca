@@ -43,7 +43,6 @@ export type NativeChatTranscriptSlotsInput = {
   }
   turnDiffs: ReadonlyMap<string, NativeChatTurnDiff>
   showTurnStatus: boolean
-  showTypingIndicator: boolean
   isWorking: boolean
   /** Session-level lifecycle, which outlives a transcript that never said "done". */
   lifecycleWorking: boolean
@@ -61,7 +60,6 @@ export function buildNativeChatTranscriptSlots(
     turnStatuses,
     turnDiffs,
     showTurnStatus,
-    showTypingIndicator,
     isWorking,
     lifecycleWorking
   } = input
@@ -76,11 +74,7 @@ export function buildNativeChatTranscriptSlots(
           ? turnStatuses.completedByTurn[turnKey]
           : undefined
     const status =
-      showTurnStatus &&
-      candidateStatus &&
-      (index !== latestUserIndex || showTypingIndicator || !isWorking)
-        ? candidateStatus
-        : undefined
+      showTurnStatus && candidateStatus?.workedSeconds != null ? candidateStatus : undefined
     const turnDiff = turnKey && turnKeys[index + 1] !== turnKey ? turnDiffs.get(turnKey) : undefined
     const drawsRow = receipt !== undefined || nativeChatRowRendersContent(message.blocks)
     if (!drawsRow && status === undefined && turnDiff === undefined) {

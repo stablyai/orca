@@ -7,6 +7,7 @@ import { CodexSubagentRoster } from './codex-subagent-roster'
 import { readCodexThreadItem } from './codex-structured-item-translation'
 import { CodexJournalGenericFrames } from './codex-structured-journal-generic-frames'
 import { CodexJournalCompactions } from './codex-structured-journal-compactions'
+import { CodexJournalGoals } from './codex-structured-journal-goals'
 import { CodexJournalItems } from './codex-structured-journal-items'
 import { CodexJournalPrompts } from './codex-structured-journal-prompts'
 import {
@@ -51,6 +52,7 @@ export function createCodexJournalTranslator(
   const genericFrames = new CodexJournalGenericFrames(deps, (threadId) =>
     activeTurns.current(threadId)
   )
+  const goals = new CodexJournalGoals(deps.sink)
   const items = new CodexJournalItems(
     deps,
     (threadId) => activeTurns.current(threadId),
@@ -178,6 +180,7 @@ export function createCodexJournalTranslator(
         prompts.pending.clear()
         activeTurns.clear()
         compactions.clear()
+        goals.clear()
         return CODEX_JOURNAL_ADMITTED
       }
       if (event.type === 'notification') {
@@ -220,6 +223,10 @@ export function createCodexJournalTranslator(
       const compaction = compactions.handle(event)
       if (compaction) {
         return publishActivity(event, compaction)
+      }
+      const goal = goals.handle(event)
+      if (goal) {
+        return publishActivity(event, goal)
       }
       if (event.method === CODEX_TOKEN_USAGE_METHOD) {
         // Classified `status-chrome`, so the generic-frame path swallows it
@@ -274,6 +281,7 @@ export function createCodexJournalTranslator(
       subagents.dispose()
       activeTurns.clear()
       compactions.clear()
+      goals.dispose()
     }
   }
 }
