@@ -2,6 +2,7 @@ import { EventEmitter } from 'node:events'
 import { describe, expect, it, vi } from 'vitest'
 import {
   MACOS_SYSTEM_SLEEP_ASSERTION_RETRY_MS,
+  MACOS_SYSTEM_SLEEP_ASSERTION_WATCHDOG_MS,
   MacosSystemSleepAssertion
 } from './macos-system-sleep-assertion'
 
@@ -56,6 +57,7 @@ describe('MacosSystemSleepAssertion', () => {
     const assertion = new MacosSystemSleepAssertion({
       logger: createLogger(),
       platform: 'darwin',
+      isProcessAlive: () => true,
       spawn
     })
 
@@ -219,5 +221,71 @@ describe('MacosSystemSleepAssertion', () => {
     expect(logger.warn).toHaveBeenCalledTimes(2)
     expect(logger.debug).toHaveBeenCalledTimes(1)
     assertion.dispose()
+  })
+
+  it('respawns when the recorded child vanished without an exit event', () => {
+    const spawn = vi.fn(() => new FakeCaffeinateProcess())
+    const assertion = new MacosSystemSleepAssertion({
+      logger: createLogger(),
+      platform: 'darwin',
+      isProcessAlive: () => false,
+      spawn
+    })
+
+    assertion.start('status-change')
+    expect(assertion.start('status-change')).toBe(true)
+
+    // Without a liveness check the second start short-circuits and the OS holds nothing.
+    expect(spawn).toHaveBeenCalledTimes(2)
+    assertion.dispose()
+  })
+
+  it('reports a vanished assertion from the watchdog so the service re-arms', () => {
+    vi.useFakeTimers()
+    try {
+      let alive = true
+      const onUnexpectedFailure = vi.fn()
+      const assertion = new MacosSystemSleepAssertion({
+        logger: createLogger(),
+        platform: 'darwin',
+        isProcessAlive: () => alive,
+        onUnexpectedFailure,
+        spawn: vi.fn(() => new FakeCaffeinateProcess())
+      })
+
+      assertion.start('status-change')
+      vi.advanceTimersByTime(MACOS_SYSTEM_SLEEP_ASSERTION_WATCHDOG_MS)
+      expect(onUnexpectedFailure).not.toHaveBeenCalled()
+
+      alive = false
+      vi.advanceTimersByTime(MACOS_SYSTEM_SLEEP_ASSERTION_WATCHDOG_MS)
+
+      expect(onUnexpectedFailure).toHaveBeenCalledWith('macos-assertion-vanished')
+      assertion.dispose()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('stops the watchdog once the assertion is intentionally released', () => {
+    vi.useFakeTimers()
+    try {
+      const onUnexpectedFailure = vi.fn()
+      const assertion = new MacosSystemSleepAssertion({
+        logger: createLogger(),
+        platform: 'darwin',
+        isProcessAlive: () => false,
+        onUnexpectedFailure,
+        spawn: vi.fn(() => new FakeCaffeinateProcess())
+      })
+
+      assertion.start('status-change')
+      assertion.stop('settings-change')
+      vi.advanceTimersByTime(MACOS_SYSTEM_SLEEP_ASSERTION_WATCHDOG_MS * 3)
+
+      expect(onUnexpectedFailure).not.toHaveBeenCalled()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })
