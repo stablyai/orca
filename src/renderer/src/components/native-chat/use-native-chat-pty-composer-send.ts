@@ -1,4 +1,4 @@
-import { useCallback, type Dispatch, type SetStateAction } from 'react'
+import { useCallback, useEffect, type Dispatch, type SetStateAction } from 'react'
 import type { AgentType } from '../../../../shared/agent-status-types'
 import type { NativeChatLaunchDraft } from '@/lib/native-chat-launch-prompt'
 import { useAppStore } from '../../store'
@@ -11,6 +11,10 @@ import {
 import type { NativeChatSendHandle } from './native-chat-runtime-send'
 import { sendNativeChatMessageWithImageAttachments } from './native-chat-runtime-image-send'
 import { resolveNativeChatLaunchDraftSend } from './native-chat-launch-draft-send'
+import {
+  primeComposerSubmitBytes,
+  resolveComposerSubmitBytes
+} from './native-chat-claude-submit-cache'
 import { nativeChatComposerTargetIsRemote } from './native-chat-composer-target'
 import type { NativeChatResolvedTarget } from './native-chat-composer-target'
 import { pushHistory, type HistoryState } from './native-chat-composer-state'
@@ -42,6 +46,9 @@ export function useNativeChatPtyComposerSend(args: {
   clearImageAttachments: () => void
   setNotice: Dispatch<SetStateAction<string | null>>
 }): () => void {
+  useEffect(() => {
+    primeComposerSubmitBytes(args.agent)
+  }, [args.agent])
   return useCallback(() => {
     const text = args.draft
     const imagePaths = args.imageAttachments.map((attachment) => attachment.path)
@@ -63,13 +70,22 @@ export function useNativeChatPtyComposerSend(args: {
       agent: args.agent,
       readScreen: () => args.readTerminalScreen?.()
     })
+    // Submit with the gesture the user bound to chat:submit (from their Claude
+    // keybindings) so a remapped Enter doesn't leave the message unsent. Only for
+    // LOCAL Claude: Codex/others have their own config, and a remote pane's
+    // keybindings live on its host — both keep the default CR.
+    const submitBytes = resolveComposerSubmitBytes(
+      args.agent,
+      nativeChatComposerTargetIsRemote(target.ptyId)
+    )
+    const messageOptions = submitBytes !== undefined ? { ...sendOptions, submitBytes } : sendOptions
     let pendingHandle: NativeChatSendHandle | null = null
     // Why: slash-like text must not silently drop its attached images.
     if (classification !== 'chat' && imagePaths.length === 0) {
       pendingHandle =
         args.agent === 'codex' && isSlashCommandDraft(text)
           ? sendNativeChatTypedCommand(target.settings, target.ptyId, text)
-          : sendNativeChatMessage(target.settings, target.ptyId, text, sendOptions)
+          : sendNativeChatMessage(target.settings, target.ptyId, text, messageOptions)
     } else if (imagePaths.length > 0) {
       pendingHandle = sendNativeChatMessageWithImageAttachments(
         target.settings,
@@ -79,7 +95,7 @@ export function useNativeChatPtyComposerSend(args: {
         sendOptions
       )
     } else if (text.trim().length > 0) {
-      pendingHandle = sendNativeChatMessage(target.settings, target.ptyId, text, sendOptions)
+      pendingHandle = sendNativeChatMessage(target.settings, target.ptyId, text, messageOptions)
     } else {
       submitNativeChatPrompt(target.settings, target.ptyId)
     }

@@ -53,6 +53,10 @@ export type NativeChatSendOptions = {
    * pasting on top of residue.
    */
   confirmCleared?: () => boolean
+  /** Bytes written to submit the message; defaults to a bare CR (Enter). The chat
+   *  composer resolves this from the user's Claude `chat:submit` keybinding so a
+   *  remapped Enter (bound to insert a newline) doesn't leave the message unsent. */
+  submitBytes?: string
 }
 
 /** Cancels an in-flight send's pending pty writes (the delayed Enter, and any
@@ -144,7 +148,7 @@ export function sendNativeChatMessage(
         // Schedule from the actual body write: an overdue clear-confirm callback
         // must not collapse the required body-to-Enter gap after a renderer stall.
         delay(NATIVE_CHAT_SUBMIT_DELAY_MS, () => {
-          sendRuntimePtyInput(settings, ptyId, NATIVE_CHAT_SUBMIT)
+          sendRuntimePtyInput(settings, ptyId, options?.submitBytes ?? NATIVE_CHAT_SUBMIT)
           markSubmitted()
         })
       })

@@ -12,6 +12,8 @@ import { useNativeChatDraft } from './use-native-chat-draft'
 import { useNativeChatLaunchDraftAdoption } from './use-native-chat-launch-draft-adoption'
 import { NativeChatComposerField } from './NativeChatComposerField'
 import type { NativeChatResolvedTarget } from './native-chat-composer-target'
+import { nativeChatComposerTargetIsRemote } from './native-chat-composer-target'
+import { useComposerSubmitKeyMatch } from './use-claude-submit-gesture'
 import { useNativeChatComposerAttachments } from './use-native-chat-composer-attachments'
 import { useNativeChatComposerPaste } from './use-native-chat-composer-paste'
 import { useNativeChatExternalAttachments } from './use-native-chat-external-attachments'
@@ -336,12 +338,18 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
       [dispatchPtyPickerCommand, sendStructured, structuredTransport]
     )
 
+    const matchesSubmitKey = useComposerSubmitKeyMatch(
+      agent,
+      nativeChatComposerTargetIsRemote(targetPtyId)
+    )
+
     const handleKeyDown = useNativeChatComposerKeyDown({
       autocomplete,
       activeSuggestion,
       draft,
       history,
       isComposing: imeEnterGesture.isComposing,
+      matchesSubmitKey,
       completePickerItem: completeItem,
       dispatchPickerCommand,
       dismissPicker: dismiss,

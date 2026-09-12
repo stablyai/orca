@@ -6,6 +6,7 @@ import {
   type HistoryState,
   type NativeChatPickerItem
 } from './native-chat-composer-state'
+import type { SubmitKeyEvent } from './use-claude-submit-gesture'
 
 export type UseNativeChatComposerKeyDownArgs = {
   autocomplete: ComposerAutocomplete
@@ -13,6 +14,7 @@ export type UseNativeChatComposerKeyDownArgs = {
   draft: string
   history: HistoryState
   isComposing: () => boolean
+  matchesSubmitKey: (event: SubmitKeyEvent) => boolean
   completePickerItem: (item: NativeChatPickerItem) => void
   dispatchPickerCommand: (item: Extract<NativeChatPickerItem, { kind: 'command' }>) => void
   dismissPicker: (triggerKey: string) => void
@@ -30,6 +32,7 @@ export function useNativeChatComposerKeyDown({
   draft,
   history,
   isComposing,
+  matchesSubmitKey,
   completePickerItem,
   dispatchPickerCommand,
   dismissPicker,
@@ -87,7 +90,7 @@ export function useNativeChatComposerKeyDown({
         interrupt()
         return
       }
-      if (event.key === 'Enter' && !event.shiftKey) {
+      if (matchesSubmitKey(event)) {
         event.preventDefault()
         send()
         return
@@ -122,6 +125,7 @@ export function useNativeChatComposerKeyDown({
       history,
       interrupt,
       isComposing,
+      matchesSubmitKey,
       send,
       setActiveSuggestion,
       setCaret,

@@ -21,6 +21,10 @@ import {
   sendPromptWithGuardedPasteAndEnter,
   sendPromptWithLegacyCombinedSend
 } from './active-agent-note-send-delivery'
+import { seedNativeChatLaunchDraftForAgentTab } from '@/lib/agent-launch-prompt-delivery'
+import { canMirrorLaunchDraftToNativeChat } from '@/lib/native-chat-launch-draft-mirrorability'
+import type { TuiAgent } from '../../../shared/tui-agent'
+import type { Tab } from '../../../shared/tab-types'
 
 export {
   getActiveAgentNoteTarget,
@@ -35,6 +39,32 @@ export {
   type ActiveAgentNotesSendStatus
 } from './active-agent-note-send-result'
 const ACTIVE_AGENT_SEND_TIMEOUT_MS = 8000
+
+/** When the target tab is showing the chat view, drop the note into the chat
+ *  composer as an unsent draft (the user submits it from chat) instead of writing
+ *  it to the terminal. Returns null to fall back to the terminal send. `viewMode`
+ *  must come from the live unified tab (`getTab`) — the `tabsByWorktree` terminal
+ *  record that carries `launchAgent` never sees the chat toggle. */
+export function seedNoteAsChatComposerDraft(args: {
+  viewMode: Tab['viewMode']
+  launchAgent: TuiAgent | undefined
+  tabId: string
+  text: string
+}): ActiveAgentNotesSendResult | null {
+  if (
+    args.viewMode !== 'chat' ||
+    !args.launchAgent ||
+    !canMirrorLaunchDraftToNativeChat(args.text)
+  ) {
+    return null
+  }
+  seedNativeChatLaunchDraftForAgentTab({
+    tabId: args.tabId,
+    agent: args.launchAgent,
+    text: args.text
+  })
+  return { status: 'sent' }
+}
 
 export async function sendNotesToActiveAgentSession(args: {
   worktreeId: string
@@ -70,6 +100,18 @@ async function sendNotesToActiveAgentSessionInternal({
   const noteTarget = explicitNoteTarget ?? getActiveTerminalNoteTarget(state, worktreeId)
   if (!noteTarget) {
     return reportNoteSendFailure({ status: 'no-active-terminal', code: 'no-note-target' }, null)
+  }
+  const terminalTab = (state.tabsByWorktree[worktreeId] ?? []).find(
+    (entry) => entry.id === noteTarget.tabId
+  )
+  const composerDraftResult = seedNoteAsChatComposerDraft({
+    viewMode: state.getTab(noteTarget.tabId)?.viewMode,
+    launchAgent: terminalTab?.launchAgent,
+    tabId: noteTarget.tabId,
+    text: trimmedPrompt
+  })
+  if (composerDraftResult) {
+    return reportNoteSendFailure(composerDraftResult, noteTarget)
   }
   const runtimeTarget = getActiveRuntimeTarget(
     getSettingsForWorktreeRuntimeOwner(state, worktreeId)
