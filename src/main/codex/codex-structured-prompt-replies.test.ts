@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   applyCodexPromptAnswer,
   CodexPromptRegistry,
+  MAX_CODEX_PROMPT_REGISTRY_BYTES,
   MAX_CODEX_PROMPT_REGISTRY_ENTRIES,
   codexJournalPromptIdPart,
   decodeCodexQuestionOptionId,
@@ -105,6 +106,87 @@ describe('CodexPromptRegistry', () => {
     registry.forget(prompt as NonNullable<typeof prompt>)
     expect(registry.find('codex:thread-1:turn-1:2')).toBeNull()
     expect(registry.find('codex-item-1')).toBeNull()
+  })
+
+  it('returns every journal row for one prompt only when it belongs to the cancelled turn', () => {
+    const registry = new CodexPromptRegistry()
+    registry.register(userInputRequest(['q1', 'q2']))
+    registry.bindJournalItemId('journal-q1', 'thread-1', 'codex-item-1')
+    registry.bindJournalItemId('journal-q2', 'thread-1', 'codex-item-1')
+
+    expect(registry.cancellation('journal-q1')).toEqual({
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      itemIds: ['journal-q1', 'journal-q2']
+    })
+    expect(registry.cancellation('unbound')).toBeNull()
+  })
+
+  it('reads nested turn identity and adopts the translator fallback when absent', () => {
+    const nested = new CodexPromptRegistry()
+    nested.register({
+      id: 6,
+      method: 'item/commandExecution/requestApproval',
+      params: { itemId: 'item-nested', threadId: 'thread-1', turn: { id: 'turn-nested' } }
+    })
+    nested.bindJournalItemId('journal-nested', 'thread-1', 'item-nested')
+    expect(nested.cancellation('journal-nested')?.turnId).toBe('turn-nested')
+
+    const fallback = new CodexPromptRegistry()
+    fallback.register({
+      id: 7,
+      method: 'item/commandExecution/requestApproval',
+      params: { itemId: 'item-fallback', threadId: 'thread-1' }
+    })
+    fallback.bindJournalItemId('journal-fallback', 'thread-1', 'item-fallback', 'turn-active')
+    expect(fallback.cancellation('journal-fallback')?.turnId).toBe('turn-active')
+  })
+
+  it('does not let a late turn identity exceed the retained prompt byte cap', () => {
+    const registry = new CodexPromptRegistry()
+    registry.register({
+      id: 8,
+      method: 'item/commandExecution/requestApproval',
+      params: { itemId: 'item-bounded', threadId: 'thread-1' }
+    })
+
+    registry.bindJournalItemId(
+      'journal-bounded',
+      'thread-1',
+      'item-bounded',
+      't'.repeat(MAX_CODEX_PROMPT_REGISTRY_BYTES)
+    )
+
+    expect(registry.bytes).toBeLessThanOrEqual(MAX_CODEX_PROMPT_REGISTRY_BYTES)
+    expect(registry.cancellation('journal-bounded')).toBeNull()
+  })
+
+  it('rejects multibyte provider identities beyond the durable-operation bound', () => {
+    const oversizedId = '🧀'.repeat(129)
+    const registry = new CodexPromptRegistry()
+
+    expect(
+      registry.register({
+        id: 9,
+        method: 'item/commandExecution/requestApproval',
+        params: { itemId: 'item-thread', threadId: oversizedId, turnId: 'turn-1' }
+      })
+    ).toBeNull()
+    expect(
+      registry.register({
+        id: 10,
+        method: 'item/commandExecution/requestApproval',
+        params: { itemId: 'item-turn', threadId: 'thread-1', turnId: oversizedId }
+      })
+    ).toBeNull()
+
+    registry.register({
+      id: 11,
+      method: 'item/commandExecution/requestApproval',
+      params: { itemId: 'item-fallback', threadId: 'thread-1' }
+    })
+    registry.bindJournalItemId('journal-fallback', 'thread-1', 'item-fallback', oversizedId)
+    expect(registry.cancellation('journal-fallback')).toBeNull()
   })
 
   it('keeps identical item ids on different threads independently answerable', () => {

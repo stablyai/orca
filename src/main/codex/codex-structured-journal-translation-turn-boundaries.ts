@@ -5,6 +5,7 @@ import {
   type CodexJournalTranslationAdmission
 } from './codex-structured-journal-contracts'
 import type { CodexJournalItems } from './codex-structured-journal-items'
+import type { CodexJournalPrompts } from './codex-structured-journal-prompts'
 import { settleCodexJournalTurn } from './codex-structured-journal-settlement'
 import type { CodexJournalActiveTurns } from './codex-structured-journal-translation-turn-state'
 import {
@@ -23,6 +24,9 @@ type TurnBoundaryEvent = {
   threadId: string
   params: unknown
   observedAt?: number
+  settlementId?: string
+  resolvedBy?: string
+  resolvedAt?: number
 }
 
 /** Opens and settles the durable lifecycle row for each primary-thread turn. */
@@ -33,6 +37,7 @@ export class CodexJournalTurnBoundaries {
       primaryThreadId: () => string | null
       activeTurns: CodexJournalActiveTurns
       items: Pick<CodexJournalItems, 'streams' | 'activeItems' | 'ordinals'>
+      prompts: Pick<CodexJournalPrompts, 'pending'>
       flushSuppression: () => CodexJournalTranslationAdmission
       resetActivity: (threadId: string) => void
       now?: () => number
@@ -93,7 +98,11 @@ export class CodexJournalTurnBoundaries {
             )
           : null,
       streams: this.deps.items.streams,
-      activeItems: this.deps.items.activeItems
+      activeItems: this.deps.items.activeItems,
+      pendingPrompts: this.deps.prompts.pending,
+      ...(event.settlementId ? { settlementId: event.settlementId } : {}),
+      ...(event.resolvedBy ? { resolvedBy: event.resolvedBy } : {}),
+      ...(event.resolvedAt !== undefined ? { resolvedAt: event.resolvedAt } : {})
     })
     if (admission.accepted) {
       this.deps.items.ordinals.forgetTurn(event.threadId, turnId)

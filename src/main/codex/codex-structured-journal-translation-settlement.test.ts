@@ -566,6 +566,36 @@ describe('codex journal translation', () => {
     ])
   })
 
+  it('cancels only prompts owned by the completed turn', () => {
+    const { translator, tap } = translatorWith()
+    const ask = (turnId: string, promptKey: string): void => {
+      translator.handle({
+        type: 'prompt',
+        sessionId: SESSION_ID,
+        threadId: THREAD_ID,
+        method: CODEX_COMMAND_APPROVAL_METHOD,
+        params: { turnId, availableDecisions: ['accept', 'decline'] },
+        codexItemId: `command-${turnId}`,
+        promptKey
+      })
+    }
+
+    translator.handle(TURN_STARTED)
+    ask(TURN_ID, 'approval-turn-1')
+    translator.handle(notification('turn/started', { turn: { id: 'turn-2' } }))
+    ask('turn-2', 'approval-turn-2')
+    translator.handle(notification('turn/completed', { turn: { id: TURN_ID } }))
+
+    const promptRows = tap.rows.filter((row) => row.body.kind === 'approval')
+    const rowsFor = (key: string) => promptRows.filter((row) => row.key.includes(key))
+    const completed = rowsFor('approval-turn-1')
+    const active = rowsFor('approval-turn-2')
+    expect(completed).toHaveLength(2)
+    expect(completed.at(-1)?.body).toMatchObject({ resolution: { state: 'cancelled' } })
+    expect(active).toHaveLength(1)
+    expect(active[0]?.body).toMatchObject({ resolution: { state: 'pending' } })
+  })
+
   it('journals an approval naming the command the item already announced, and binds it', () => {
     const { translator, tap } = translatorWith()
 

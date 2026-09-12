@@ -59,8 +59,10 @@ export function createCodexJournalTranslator(
     (threadId, turnId) => genericFrames.suppress(threadId, turnId)
   )
   const settleOversizedNotification = createCodexOversizedNotificationSettler(deps, items)
-  const prompts = new CodexJournalPrompts(deps, (threadId, itemId) =>
-    items.detailFor(threadId, itemId)
+  const prompts = new CodexJournalPrompts(
+    deps,
+    (threadId, itemId) => items.detailFor(threadId, itemId),
+    (threadId) => activeTurns.current(threadId)
   )
   const subagents = new CodexSubagentRoster({
     sink: deps.sink,
@@ -82,6 +84,7 @@ export function createCodexJournalTranslator(
     primaryThreadId: () => deps.primaryThreadId?.() ?? null,
     activeTurns,
     items,
+    prompts,
     flushSuppression: () => genericFrames.flush(),
     resetActivity,
     ...(deps.now ? { now: deps.now } : {})

@@ -18,15 +18,29 @@ export function translateCodexNotification(input: {
   method: string
   params: unknown
   observedAt?: number
+  settlementId?: string
+  resolvedBy?: string
+  resolvedAt?: number
   turnCancellation: Pick<CodexStructuredTurnCancellation, 'handleNotification'>
   emit: EmitCodexEvent
 }): CodexJournalTranslationAdmission {
-  const { sessionId, session, method, params, observedAt } = input
+  const { sessionId, session, method, params, observedAt, settlementId, resolvedBy, resolvedAt } =
+    input
   codexRewind.observeCodexRewindActivity(session, method, params)
   if (input.turnCancellation.handleNotification(sessionId, session, method, params, observedAt)) {
     return { accepted: true }
   }
-  return deliverCodexNotification(sessionId, session, method, params, input.emit, observedAt)
+  return deliverCodexNotification(
+    sessionId,
+    session,
+    method,
+    params,
+    input.emit,
+    observedAt,
+    settlementId,
+    resolvedBy,
+    resolvedAt
+  )
 }
 
 export function deliverCodexNotification(
@@ -35,7 +49,10 @@ export function deliverCodexNotification(
   method: string,
   params: unknown,
   emit: EmitCodexEvent,
-  observedAt?: number
+  observedAt?: number,
+  settlementId?: string,
+  resolvedBy?: string,
+  resolvedAt?: number
 ): CodexJournalTranslationAdmission {
   if (!session) {
     return { accepted: true }
@@ -50,6 +67,9 @@ export function deliverCodexNotification(
     threadId,
     method,
     params,
+    ...(settlementId ? { settlementId } : {}),
+    ...(resolvedBy ? { resolvedBy } : {}),
+    ...(resolvedAt !== undefined ? { resolvedAt } : {}),
     ...(observedAt !== undefined ? { observedAt } : {})
   })
   if (method === 'turn/started' && threadId === session.threadId) {

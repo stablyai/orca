@@ -2,6 +2,7 @@ import { forwardRef, useImperativeHandle, useRef } from 'react'
 import { vi, type Mock } from 'vitest'
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
 import type { AgentSessionBackgroundTask } from '../../../../shared/agent-session-wire'
+import type { NativeChatApprovalCardProps } from './NativeChatApprovalCard'
 import type { NativeChatQuestionCardProps } from './NativeChatQuestionCard'
 import type { NativeChatLaunchSeed } from './native-chat-composer-types'
 
@@ -24,6 +25,8 @@ export function createStructuredSessionMocks() {
       allowFileUriLinks?: boolean
       onLinkClick?: (...args: unknown[]) => void
       showTurnStatus?: boolean
+      showLiveTurnActivity?: boolean
+      isWorking?: boolean
       runtimeContext?: unknown
     },
     composerProps: null as null | {
@@ -31,9 +34,11 @@ export function createStructuredSessionMocks() {
       structuredTransport?: Record<string, unknown>
       isWorking?: boolean
     },
+    approvalCardProps: null as NativeChatApprovalCardProps | null,
     questionCardProps: null as NativeChatQuestionCardProps | null,
     promptItems: [] as AgentJournalRenderItem[],
     respond: vi.fn() as StructuredSessionSpy,
+    cancel: vi.fn() as StructuredSessionSpy,
     handlePasteEvent: vi.fn() as StructuredSessionSpy,
     pasteFromClipboard: vi.fn() as StructuredSessionSpy,
     submissions: [] as unknown[],
@@ -50,7 +55,8 @@ export function createStructuredSessionMocks() {
 
   const moduleFactories = {
     structuredAgentSessionClient: () => ({
-      callStructuredAgentSession: mocks.call
+      callStructuredAgentSession: mocks.call,
+      structuredAgentSessionSupportsPromptCancel: () => Promise.resolve(true)
     }),
     useStructuredAgentSession: async () => {
       const { useStructuredAgentSessionOutbox } =
@@ -105,7 +111,7 @@ export function createStructuredSessionMocks() {
               supportsStopAll: mocks.supportsBackgroundTaskStopAll
             },
             turnId: mocks.turnId,
-            cancel: vi.fn() as StructuredSessionSpy,
+            cancel: mocks.cancel,
             stopBackgroundTask: (taskId?: string) =>
               mocks.stopBackgroundTask(props.sessionId, taskId),
             respond: mocks.respond,
@@ -171,7 +177,12 @@ export function createStructuredSessionMocks() {
       })
     }),
     nativeChatEmptyState: () => ({ NativeChatEmptyState: () => null }),
-    nativeChatApprovalCard: () => ({ NativeChatApprovalCard: () => null }),
+    nativeChatApprovalCard: () => ({
+      NativeChatApprovalCard: (props: NativeChatApprovalCardProps) => {
+        mocks.approvalCardProps = props
+        return null
+      }
+    }),
     nativeChatQuestionCard: () => ({
       NativeChatQuestionCard: (props: NativeChatQuestionCardProps) => {
         mocks.questionCardProps = props
@@ -187,9 +198,11 @@ export function createStructuredSessionMocks() {
     mocks.messages = null
     mocks.messageListProps = null
     mocks.composerProps = null
+    mocks.approvalCardProps = null
     mocks.questionCardProps = null
     mocks.promptItems = []
     mocks.respond.mockReset()
+    mocks.cancel.mockReset()
     mocks.handlePasteEvent.mockReset()
     mocks.pasteFromClipboard.mockReset()
     mocks.submissions = []

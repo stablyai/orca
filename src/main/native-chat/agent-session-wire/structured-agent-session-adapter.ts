@@ -188,10 +188,20 @@ export type StructuredAgentSessionAdapter = {
   }): Promise<{ error?: string }>
   /** Cancels one turn, not the session: a session-wide interrupt would also kill
    *  a turn the client never asked to stop. */
+  promptCancellation?(input: {
+    sessionId: string
+    itemId: string
+    fence: number
+  }): { threadId?: string; turnId: string; itemIds: readonly string[] } | null
   cancelTurn(input: {
     sessionId: string
+    threadId?: string
     turnId: string
     fence: number
+    promptItemId?: string
+    promptCancellationId?: string
+    promptCancellationResolvedBy?: string
+    promptCancellationResolvedAt?: number
   }): Promise<{ cancelled: boolean }>
   stopBackgroundTasks?(input: {
     sessionId: string

@@ -91,4 +91,32 @@ describe('journal row writer', () => {
       kind: 'item'
     })
   })
+
+  it('commits a contiguous row batch atomically', async () => {
+    const { writer, committedRows } = writerHarness()
+
+    await expect(
+      writer.enqueueBatchIf((seq, ts) => [row(seq, ts), { ...row(seq + 1, ts), itemId: 'item-2' }])
+    ).resolves.toHaveLength(2)
+
+    expect(committedRows.map((entry) => entry.seq)).toEqual([1, 2])
+    expect(readJournalEpochRows(database.db, SESSION_ID, EPOCH).map((entry) => entry.seq)).toEqual([
+      1, 2
+    ])
+  })
+
+  it('rolls back every row when a later batch insert fails', async () => {
+    const { writer, committedRows } = writerHarness()
+    insertJournalRow(database.db, SESSION_ID, row(2, 1))
+
+    await expect(
+      writer.enqueueBatchIf((seq, ts) => [row(seq, ts), { ...row(seq + 1, ts), itemId: 'item-2' }])
+    ).rejects.toThrow()
+
+    expect(committedRows).toHaveLength(0)
+    expect(readJournalEpochRows(database.db, SESSION_ID, EPOCH).map((entry) => entry.seq)).toEqual([
+      2
+    ])
+    await expect(writer.enqueue(row)).resolves.toMatchObject({ seq: 1 })
+  })
 })

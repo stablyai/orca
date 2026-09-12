@@ -227,6 +227,7 @@ export function NativeChatStructuredSession(
             workingStartedAt={controller.workingStartedAt}
             settledTurns={controller.settledTurns}
             showTurnStatus
+            showLiveTurnActivity={prompt === null}
             turnActivity={controller.turnActivity}
             onLinkClick={onLinkClick}
             allowFileUriLinks={onLinkClick !== undefined}
@@ -245,6 +246,7 @@ export function NativeChatStructuredSession(
             }))
           }}
           onChoose={(optionId) => void controller.respond(prompt, optionId)}
+          onCancel={() => void controller.cancel(controller.turnId, prompt)}
         />
       ) : null}
       {prompt && questionBody ? (
@@ -295,9 +297,7 @@ export function NativeChatStructuredSession(
             }
           }}
           onCancel={() => {
-            if (controller.turnId) {
-              void controller.cancel(controller.turnId)
-            }
+            void controller.cancel(controller.turnId, prompt)
           }}
         />
       ) : null}

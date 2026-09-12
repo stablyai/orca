@@ -17,7 +17,8 @@ import {
   envelope,
   hostTestState,
   replaceHostTestState,
-  seedApproval
+  seedApproval,
+  seedQuestionGroup
 } from './structured-agent-session-host-test-harness'
 import {
   HOST_TEST_NOW as NOW,
@@ -33,6 +34,7 @@ let acquire: Mock<StructuredAgentSessionAdapter['acquire']>
 let releaseAcquisition: Mock<NonNullable<StructuredAgentSessionAdapter['releaseAcquisition']>>
 let dispatch: Mock<StructuredAgentSessionAdapter['dispatch']>
 let cancelTurn: Mock<StructuredAgentSessionAdapter['cancelTurn']>
+let promptCancellation: Mock<NonNullable<StructuredAgentSessionAdapter['promptCancellation']>>
 let answerPrompt: Mock<StructuredAgentSessionAdapter['answerPrompt']>
 let setOption: Mock<StructuredAgentSessionAdapter['setOption']>
 
@@ -44,6 +46,7 @@ beforeEach(() => {
     acquire,
     releaseAcquisition,
     dispatch,
+    promptCancellation,
     cancelTurn,
     answerPrompt,
     setOption
@@ -230,16 +233,237 @@ describe('cancel', () => {
     expect(await host.cancel(CALLER, params)).toMatchObject({
       ok: true,
       replayed: true,
-      value: { cancelled: false }
+      value: { cancelled: true }
     })
     expect(cancelTurn).toHaveBeenCalledTimes(1)
+  })
+
+  it('recovers a confirmed prompt interruption when later status persistence fails', async () => {
+    await attach()
+    const prompt = await seedApproval()
+    const journal = (
+      host as unknown as { sessions: Map<string, { journal: AgentSessionJournal }> }
+    ).sessions.get(SESSION)!.journal
+    const appendItem = journal.appendItem.bind(journal)
+    const statusFailure = vi
+      .spyOn(journal, 'appendItem')
+      .mockImplementation((identity, body, options) =>
+        body.kind === 'status'
+          ? Promise.reject(new Error('status persistence failed'))
+          : appendItem(identity, body, options)
+      )
+    const fields = {
+      prompt: { itemId: prompt.itemId, expectedRevision: prompt.revision }
+    }
+    const params = {
+      envelope: envelope('agentSession.cancel', fields),
+      ...fields
+    }
+
+    await expect(host.cancel(CALLER, params)).rejects.toThrow('status persistence failed')
+    statusFailure.mockRestore()
+
+    await expect(host.cancel(CALLER, params)).resolves.toMatchObject({
+      ok: true,
+      replayed: true,
+      value: { cancelled: true }
+    })
+    expect(cancelTurn).toHaveBeenCalledTimes(1)
+  })
+
+  it('terminalizes the displayed prompt only after the matching turn interruption succeeds', async () => {
+    await attach()
+    const prompt = await seedApproval()
+    const fields = {
+      turnId: 'turn-1',
+      prompt: { itemId: prompt.itemId, expectedRevision: prompt.revision }
+    }
+
+    expect(
+      await host.cancel(CALLER, {
+        envelope: envelope('agentSession.cancel', fields),
+        ...fields
+      })
+    ).toMatchObject({ ok: true, value: { cancelled: true } })
+
+    const page = host.history({ sessionId: SESSION, direction: 'tail' })
+    const items = page.ok ? page.page.items : []
+    expect(items.find((item) => item.itemId === prompt.itemId)).toMatchObject({
+      revision: prompt.revision + 1,
+      body: {
+        kind: 'approval',
+        resolution: {
+          state: 'cancelled',
+          selectedOptionId: null,
+          resolvedBy: CALLER.callerKey,
+          resolvedAt: NOW
+        }
+      }
+    })
+    expect(
+      items.filter(
+        (item) =>
+          (item.body.kind === 'approval' || item.body.kind === 'question') &&
+          item.body.resolution.state === 'pending'
+      )
+    ).toEqual([])
+  })
+
+  it('terminalizes every pending row for the cancelled logical question request', async () => {
+    await attach()
+    const prompts = await seedQuestionGroup()
+    promptCancellation.mockReturnValue({
+      turnId: 'provider-child-turn',
+      itemIds: prompts.map((prompt) => prompt.itemId)
+    })
+    const displayed = prompts[0]!
+    const fields = {
+      prompt: { itemId: displayed.itemId, expectedRevision: displayed.revision }
+    }
+
+    expect(
+      await host.cancel(CALLER, {
+        envelope: envelope('agentSession.cancel', fields),
+        ...fields
+      })
+    ).toMatchObject({ ok: true, value: { cancelled: true } })
+    expect(cancelTurn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        turnId: 'provider-child-turn',
+        promptItemId: displayed.itemId
+      })
+    )
+
+    const page = host.history({ sessionId: SESSION, direction: 'tail' })
+    const group = page.ok
+      ? page.page.items.filter((item) => prompts.some((prompt) => prompt.itemId === item.itemId))
+      : []
+    expect(group).toHaveLength(2)
+    expect(group.every((item) => item.revision === 2)).toBe(true)
+    expect(
+      group.every(
+        (item) =>
+          (item.body.kind === 'question' || item.body.kind === 'approval') &&
+          item.body.resolution.state === 'cancelled'
+      )
+    ).toBe(true)
+  })
+
+  it('does not interrupt or settle when the displayed prompt revision is stale', async () => {
+    await attach()
+    const prompt = await seedApproval()
+    const fields = {
+      turnId: 'turn-1',
+      prompt: { itemId: prompt.itemId, expectedRevision: prompt.revision + 1 }
+    }
+
+    expect(
+      await host.cancel(CALLER, {
+        envelope: envelope('agentSession.cancel', fields),
+        ...fields
+      })
+    ).toMatchObject({
+      ok: false,
+      refusal: { code: 'agent_session_item_revision_stale', currentRevision: prompt.revision }
+    })
+    expect(cancelTurn).not.toHaveBeenCalled()
+    const page = host.history({ sessionId: SESSION, direction: 'tail' })
+    expect(page.ok && page.page.items.find((item) => item.itemId === prompt.itemId)).toMatchObject({
+      revision: prompt.revision,
+      body: { resolution: { state: 'pending' } }
+    })
+  })
+
+  it('does not let a restored prompt interrupt an unrelated live turn', async () => {
+    const prompt = await seedApproval()
+    promptCancellation.mockReturnValue(null)
+    await attach()
+    const fields = {
+      turnId: 'turn-1',
+      prompt: { itemId: prompt.itemId, expectedRevision: prompt.revision }
+    }
+
+    expect(
+      await host.cancel(CALLER, {
+        envelope: envelope('agentSession.cancel', fields),
+        ...fields
+      })
+    ).toMatchObject({ ok: false, refusal: { code: 'agent_session_item_revision_stale' } })
+    expect(cancelTurn).not.toHaveBeenCalled()
+  })
+
+  it('leaves the displayed prompt pending when the provider refuses cancellation', async () => {
+    await attach()
+    const prompt = await seedApproval()
+    cancelTurn.mockResolvedValueOnce({ cancelled: false })
+    const fields = {
+      turnId: 'turn-1',
+      prompt: { itemId: prompt.itemId, expectedRevision: prompt.revision }
+    }
+
+    expect(
+      await host.cancel(CALLER, {
+        envelope: envelope('agentSession.cancel', fields),
+        ...fields
+      })
+    ).toMatchObject({ ok: true, value: { cancelled: false } })
+    const page = host.history({ sessionId: SESSION, direction: 'tail' })
+    expect(page.ok && page.page.items.find((item) => item.itemId === prompt.itemId)).toMatchObject({
+      revision: prompt.revision,
+      body: { resolution: { state: 'pending' } }
+    })
+  })
+
+  it('preserves a provider-settled prompt that races the confirmed interruption', async () => {
+    await attach()
+    const prompt = await seedApproval()
+    const journal = (
+      host as unknown as { sessions: Map<string, { journal: AgentSessionJournal }> }
+    ).sessions.get(SESSION)!.journal
+    cancelTurn.mockImplementationOnce(async () => {
+      await journal.appendItem(
+        { provider: 'orca', clientMessageId: `codex-prompt:${THREAD}:approval-1` },
+        {
+          kind: 'approval',
+          title: 'Run the command?',
+          detail: null,
+          options: [{ id: 'allow', label: 'Allow' }],
+          resolution: {
+            state: 'resolved',
+            selectedOptionId: 'allow',
+            resolvedBy: 'provider-race',
+            resolvedAt: NOW - 1
+          }
+        },
+        { fence: 1 }
+      )
+      return { cancelled: true }
+    })
+    const fields = {
+      turnId: 'turn-1',
+      prompt: { itemId: prompt.itemId, expectedRevision: prompt.revision }
+    }
+
+    expect(
+      await host.cancel(CALLER, {
+        envelope: envelope('agentSession.cancel', fields),
+        ...fields
+      })
+    ).toMatchObject({ ok: true, value: { cancelled: true } })
+    const page = host.history({ sessionId: SESSION, direction: 'tail' })
+    expect(page.ok && page.page.items.find((item) => item.itemId === prompt.itemId)).toMatchObject({
+      revision: prompt.revision + 1,
+      body: {
+        resolution: { state: 'resolved', selectedOptionId: 'allow', resolvedBy: 'provider-race' }
+      }
+    })
   })
 })
 
 describe('respondToPrompt', () => {
   it('commits the answer before the provider callback', async () => {
-    const prompt = await seedApproval()
     await attach()
+    const prompt = await seedApproval()
     const fields = { itemId: prompt.itemId, expectedRevision: prompt.revision, optionId: 'allow' }
     const result = await host.respondToPrompt(CALLER, {
       envelope: envelope('agentSession.respondTo:approval', fields),
@@ -254,8 +478,8 @@ describe('respondToPrompt', () => {
   })
 
   it('refuses a second answer to one prompt and says which answer won', async () => {
-    const prompt = await seedApproval()
     await attach()
+    const prompt = await seedApproval()
     const fields = { itemId: prompt.itemId, expectedRevision: prompt.revision, optionId: 'allow' }
     await host.respondToPrompt(CALLER, {
       envelope: envelope('agentSession.respondTo:approval', fields),
@@ -281,8 +505,8 @@ describe('respondToPrompt', () => {
   })
 
   it('refuses an option the prompt does not offer', async () => {
-    const prompt = await seedApproval()
     await attach()
+    const prompt = await seedApproval()
     const fields = { itemId: prompt.itemId, expectedRevision: prompt.revision, optionId: 'deny' }
     expect(
       await host.respondToPrompt(CALLER, {
@@ -295,8 +519,8 @@ describe('respondToPrompt', () => {
   })
 
   it("does not turn a recorded refusal into another client's successful answer", async () => {
-    const prompt = await seedApproval()
     await attach()
+    const prompt = await seedApproval()
     const rejectedFields = {
       itemId: prompt.itemId,
       expectedRevision: prompt.revision,
@@ -326,8 +550,8 @@ describe('respondToPrompt', () => {
   })
 
   it('keeps the answer and reports it undelivered when the provider callback throws', async () => {
-    const prompt = await seedApproval()
     await attach()
+    const prompt = await seedApproval()
     answerPrompt.mockRejectedValueOnce(new Error('pipe closed'))
     const fields = { itemId: prompt.itemId, expectedRevision: prompt.revision, optionId: 'allow' }
     const result = await host.respondToPrompt(CALLER, {

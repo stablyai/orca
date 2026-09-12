@@ -8,7 +8,12 @@ export type CodexJournalTranslatorDeps = {
   /** Keys restored lifecycle rows to the live identity; without it history restore skips them. */
   sessionId?: string
   now?: () => number
-  bindPromptItemId?: (journalItemId: string, threadId: string, promptKey: string) => void
+  bindPromptItemId?: (
+    journalItemId: string,
+    threadId: string,
+    promptKey: string,
+    turnId: string | null
+  ) => void
   primaryThreadId?: () => string | null
   subagentExecutions?: CodexSubagentExecutions
   coalesceMs?: number

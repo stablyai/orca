@@ -8,10 +8,29 @@ import { isLogicalClientCutoverError } from './stable-logical-rpc-client'
 const CUTOVER_RETRY_DELAY_MS = 250
 const FAILURE_RETRY_BASE_DELAY_MS = 1_000
 const FAILURE_RETRY_MAX_DELAY_MS = 15_000
+type RuntimeStatusClient = Pick<RpcClient, 'sendRequest'>
 
 export function startRuntimeCapabilityProbe(
-  client: Pick<RpcClient, 'sendRequest'>,
+  client: RuntimeStatusClient,
   onCapabilities: (capabilities: readonly string[]) => void
+): () => void {
+  return startRuntimeStatusProbe(client, (result) => {
+    const rawCapabilities =
+      result && typeof result === 'object'
+        ? (result as { capabilities?: unknown }).capabilities
+        : null
+    const capabilities =
+      Array.isArray(rawCapabilities) && rawCapabilities.every((value) => typeof value === 'string')
+        ? rawCapabilities
+        : []
+    onCapabilities(capabilities)
+  })
+}
+
+export function startRuntimeStatusProbe(
+  client: RuntimeStatusClient,
+  onStatus: (status: unknown) => void,
+  onUnavailable?: () => void
 ): () => void {
   let cancelled = false
   let retryTimer: ReturnType<typeof setTimeout> | null = null
@@ -24,25 +43,17 @@ export function startRuntimeCapabilityProbe(
           return
         }
         if (!response.ok) {
+          onUnavailable?.()
           scheduleRetry(false)
           return
         }
-        const result = (response as RpcSuccess).result
-        const rawCapabilities =
-          result && typeof result === 'object'
-            ? (result as { capabilities?: unknown }).capabilities
-            : null
-        const capabilities =
-          Array.isArray(rawCapabilities) &&
-          rawCapabilities.every((value) => typeof value === 'string')
-            ? rawCapabilities
-            : []
-        onCapabilities(capabilities)
+        onStatus((response as RpcSuccess).result)
       },
       (error: unknown) => {
         if (cancelled) {
           return
         }
+        onUnavailable?.()
         scheduleRetry(isLogicalClientCutoverError(error))
       }
     )

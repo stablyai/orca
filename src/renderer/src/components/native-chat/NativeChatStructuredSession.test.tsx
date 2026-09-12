@@ -3,6 +3,7 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { decodeAgentSessionQuestionAnswers } from '../../../../shared/agent-session-question-answer'
+import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
 import { useAppStore } from '@/store'
 import {
   claudeGroupedQuestionPromptItems,
@@ -153,6 +154,111 @@ describe('NativeChatStructuredSession', () => {
       expect(mocks.messageListProps?.runtimeContext).not.toBeUndefined()
     }
   )
+
+  it('suppresses live turn activity for a pending question without ending the turn', () => {
+    mocks.isWorking = true
+    mocks.turnId = 'turn-question'
+    mocks.promptItems = legacySingleQuestionPromptItems
+    const view = () => (
+      <NativeChatStructuredSession
+        isVisible
+        isFocusedGroup
+        tabId="structured-question"
+        sessionId="session-question"
+        target={{ kind: 'local' }}
+        agent="codex"
+      />
+    )
+    const { rerender } = render(view())
+
+    expect(mocks.messageListProps).toMatchObject({
+      isWorking: true,
+      showLiveTurnActivity: false
+    })
+    expect(
+      document
+        .querySelector('[data-native-chat-root="true"]')
+        ?.getAttribute('data-native-chat-working')
+    ).toBe('true')
+    expect(mocks.questionCardProps).not.toBeNull()
+    expect(screen.queryByTestId('structured-composer')).toBeNull()
+
+    act(() => mocks.questionCardProps?.onCancel())
+    expect(mocks.cancel).toHaveBeenCalledWith('turn-question', legacySingleQuestionPromptItems[0])
+    expect(mocks.messageListProps?.showLiveTurnActivity).toBe(false)
+
+    mocks.promptItems = []
+    rerender(view())
+    expect(mocks.messageListProps).toMatchObject({
+      isWorking: true,
+      showLiveTurnActivity: true
+    })
+    expect(screen.getByTestId('structured-composer')).toBeTruthy()
+    expect(mocks.composerProps?.isWorking).toBe(true)
+  })
+
+  it('suppresses live turn activity for a pending approval but keeps background work visible', () => {
+    const approvalItems: AgentJournalRenderItem[] = [
+      {
+        itemId: 'approval-item',
+        revision: 1,
+        sequence: 1,
+        observedAt: 1,
+        body: {
+          kind: 'approval',
+          title: 'Allow command?',
+          detail: 'pnpm test',
+          options: [
+            { id: 'allow', label: 'Allow' },
+            { id: 'deny', label: 'Deny' }
+          ],
+          resolution: {
+            state: 'pending',
+            selectedOptionId: null,
+            resolvedBy: null,
+            resolvedAt: null
+          }
+        }
+      }
+    ]
+    mocks.isWorking = true
+    mocks.turnId = 'turn-approval'
+    mocks.promptItems = approvalItems
+    mocks.monitoringBackgroundTasks = true
+
+    const view = () => (
+      <NativeChatStructuredSession
+        isVisible
+        isFocusedGroup
+        tabId="structured-approval"
+        sessionId="session-approval"
+        target={{ kind: 'local' }}
+        agent="claude"
+      />
+    )
+    const { rerender } = render(view())
+
+    expect(mocks.messageListProps).toMatchObject({
+      isWorking: true,
+      showLiveTurnActivity: false
+    })
+    expect(mocks.approvalCardProps?.approval.title).toBe('Allow command?')
+    expect(screen.queryByTestId('structured-composer')).toBeNull()
+    expect(document.querySelector('[data-native-chat-background-tasks="true"]')).not.toBeNull()
+
+    act(() => mocks.approvalCardProps?.onChoose('allow'))
+    expect(mocks.respond).toHaveBeenCalledWith(approvalItems[0], 'allow')
+    expect(mocks.messageListProps?.showLiveTurnActivity).toBe(false)
+
+    act(() => mocks.approvalCardProps?.onCancel?.())
+    expect(mocks.cancel).toHaveBeenCalledWith('turn-approval', approvalItems[0])
+
+    mocks.cancel.mockClear()
+    mocks.turnId = null
+    rerender(view())
+    act(() => mocks.approvalCardProps?.onCancel?.())
+    expect(mocks.cancel).toHaveBeenCalledWith(null, approvalItems[0])
+  })
 
   // Every background-task test mounts the same local Claude session; only the ids
   // differ. A fresh element per call also matters for the rerenders below: React

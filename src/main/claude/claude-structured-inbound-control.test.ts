@@ -30,6 +30,7 @@ function callbacksFor() {
   const { canUseTool, onUserDialog } = buildClaudePermissionCallbacks({
     sessionId: 'session-1',
     prompts,
+    activeTurnId: () => 'turn-1',
     emit
   })
   return { prompts, emit, canUseTool, onUserDialog }
@@ -93,6 +94,24 @@ describe('Claude permission callbacks', () => {
     )
     // Forgotten: a late answer can no longer find the prompt to authorize the wrong tool.
     expect(control.prompts.find('perm-3')).toBeNull()
+  })
+
+  it('does not tombstone a prompt whose abort belongs to confirmed host cancellation', async () => {
+    const control = callbacksFor()
+    const controller = new AbortController()
+    const answered = control.canUseTool(
+      'Bash',
+      { command: 'ls' },
+      permissionOptions('perm-host-cancel', 'tool-host-cancel', controller.signal)
+    )
+    control.prompts.bindJournalItemId('journal-host-cancel', 'perm-host-cancel')
+    expect(control.prompts.beginHostCancellation('journal-host-cancel', 'turn-1')).not.toBeNull()
+
+    controller.abort()
+
+    await expect(answered).resolves.toBeNull()
+    expect(control.emit).toHaveBeenCalledTimes(1)
+    expect(control.emit).toHaveBeenCalledWith(expect.objectContaining({ type: 'prompt' }))
   })
 
   it('cancels a request whose abort raced ahead of delivery without emitting a prompt', async () => {

@@ -1,4 +1,10 @@
 import type { CodexAppServerConnection } from './codex-app-server-connection'
+import { readCodexTurnId } from './codex-structured-thread-facts'
+import { isBoundedAgentSessionOperationProviderId } from '../../shared/agent-session-operation-ledger'
+import {
+  bindCodexPromptCancellationTurn,
+  codexPromptCancellationForItem
+} from './codex-prompt-cancellation-registry'
 import {
   CODEX_PROMPT_MAX_ANSWER_BYTES,
   MAX_CODEX_PROMPT_JOURNAL_BINDINGS,
@@ -167,7 +173,13 @@ export class CodexPromptRegistry {
   }): CodexPendingPrompt | null {
     const codexItemId = readString(request.params, 'itemId')
     const threadId = readString(request.params, 'threadId')
-    if (!isCodexPromptMethod(request.method) || !codexItemId || !threadId) {
+    const turnId = readCodexTurnId(request.params)
+    if (
+      !isCodexPromptMethod(request.method) ||
+      !codexItemId ||
+      !isBoundedAgentSessionOperationProviderId(threadId) ||
+      (turnId !== null && !isBoundedAgentSessionOperationProviderId(turnId))
+    ) {
       return null
     }
     const questionIds =
@@ -186,7 +198,7 @@ export class CodexPromptRegistry {
       requestId: request.id,
       method: request.method,
       threadId,
-      turnId: readString(request.params, 'turnId'),
+      turnId,
       codexItemId,
       promptKey: readString(request.params, 'approvalId') ?? codexItemId,
       questionIds,
@@ -222,7 +234,12 @@ export class CodexPromptRegistry {
   }
 
   /** Called by the translation module once the prompt has a journal id. */
-  bindJournalItemId(journalItemId: string, threadId: string, promptKey: string): void {
+  bindJournalItemId(
+    journalItemId: string,
+    threadId: string,
+    promptKey: string,
+    turnId?: string | null
+  ): void {
     const existing = this.journalItemIds.get(journalItemId)
     if (existing) {
       this.boundPrompts.delete(journalItemId)
@@ -233,6 +250,7 @@ export class CodexPromptRegistry {
     if (!prompt) {
       return
     }
+    bindCodexPromptCancellationTurn(prompt, threadId, turnId, this.retainedPromptBytes())
     this.journalItemIds.set(journalItemId, address)
     this.boundPrompts.set(journalItemId, prompt)
     this.trim()
@@ -249,6 +267,13 @@ export class CodexPromptRegistry {
       (prompt) => prompt.promptKey === journalItemId
     )
     return matches.length === 1 ? matches[0]! : null
+  }
+
+  cancellation(
+    journalItemId: string
+  ): { threadId: string; turnId: string; itemIds: readonly string[] } | null {
+    const prompt = this.find(journalItemId)
+    return codexPromptCancellationForItem(journalItemId, prompt, this.boundPrompts)
   }
 
   forget(prompt: CodexPendingPrompt): void {

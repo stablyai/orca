@@ -36,7 +36,14 @@ export type ClaudeStructuredSessionEvent =
     }
   | { type: 'provider-frame'; sessionId: string; kind: string; payload: unknown }
   | { type: 'prompt'; sessionId: string; prompt: ClaudePendingPrompt }
-  | { type: 'prompt-cancelled'; sessionId: string; promptKey: string }
+  | {
+      type: 'prompt-cancelled'
+      sessionId: string
+      promptKey: string
+      settlementId?: string
+      resolvedBy?: string
+      resolvedAt?: number
+    }
   | { type: 'options'; sessionId: string; models: unknown[] }
   | {
       type: 'handle'

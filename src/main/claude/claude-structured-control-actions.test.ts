@@ -87,6 +87,42 @@ describe('cancelClaudeTurn', () => {
 })
 
 describe('answerClaudePrompt', () => {
+  it('rejects a multibyte provider turn identity beyond the durable-operation bound', () => {
+    const prompts = new ClaudePromptRegistry()
+
+    expect(
+      prompts.register({
+        requestId: 'question-oversized',
+        turnId: '🧀'.repeat(129),
+        toolName: 'AskUserQuestion',
+        toolUseId: 'tool-oversized',
+        input: { questions: [{ question: 'One?' }] },
+        suggestions: [],
+        settle: vi.fn()
+      })
+    ).toBeNull()
+  })
+
+  it('groups journal rows only under the live turn that owns the prompt', () => {
+    const prompts = new ClaudePromptRegistry()
+    const prompt = prompts.register({
+      requestId: 'question-1',
+      turnId: 'turn-1',
+      toolName: 'AskUserQuestion',
+      toolUseId: 'tool-1',
+      input: { questions: [{ question: 'One?' }, { question: 'Two?' }] },
+      suggestions: [],
+      settle: vi.fn()
+    })!
+    prompts.bindJournalItemId('journal-q1', prompt.promptKey, 'One?')
+    prompts.bindJournalItemId('journal-q2', prompt.promptKey, 'Two?')
+
+    expect(prompts.cancellation('journal-q1')).toEqual({
+      turnId: 'turn-1',
+      itemIds: ['journal-q1', 'journal-q2']
+    })
+  })
+
   it('settles the pending prompt callback and forgets it', async () => {
     const prompts = new ClaudePromptRegistry()
     const settle = vi.fn()

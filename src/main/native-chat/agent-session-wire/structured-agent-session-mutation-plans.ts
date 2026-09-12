@@ -20,6 +20,7 @@ import {
   performPrompt,
   performSend,
   performSetOption,
+  resumePromptCancellation,
   type AgentSessionTurnContext,
   type TurnOutcome
 } from './structured-agent-session-turns'
@@ -29,6 +30,12 @@ export type MutationPlan<TValue> = {
   fields: Record<string, unknown>
   beforeRun?: () => void
   run: (ctx: AgentSessionTurnContext) => Promise<TurnOutcome<TValue>>
+  resume?: (
+    ctx: AgentSessionTurnContext,
+    outcome: AgentSessionOperationOutcome
+  ) => Promise<TurnOutcome<TValue> | null> | TurnOutcome<TValue> | null
+  /** A provider-confirmed retry has no provider effect left; settle it under the current host fence. */
+  resumeAtCurrentFence?: (outcome: AgentSessionOperationOutcome) => boolean
   replay: (ctx: AgentSessionTurnContext, outcome: AgentSessionOperationOutcome) => TValue | null
   rerunWhenReplayMissing?: (ctx: AgentSessionTurnContext) => boolean
   recoverUnknownFromDurableState?: boolean
@@ -76,27 +83,50 @@ export function sendPlan(params: {
 
 export function cancelPlan(params: {
   envelope: AgentSessionMutationEnvelope
-  turnId: string
+  turnId?: string
   scope?: 'background-tasks'
   taskId?: string
+  prompt?: { itemId: string; expectedRevision: number }
 }): MutationPlan<AgentSessionCancelResult> {
   return {
     method: 'agentSession.cancel',
     fields: {
-      turnId: params.turnId,
+      ...(params.turnId ? { turnId: params.turnId } : {}),
       ...(params.scope ? { scope: params.scope } : {}),
-      ...(params.taskId ? { taskId: params.taskId } : {})
+      ...(params.taskId ? { taskId: params.taskId } : {}),
+      ...(params.prompt ? { prompt: params.prompt } : {})
     },
     run: (ctx) =>
       performCancel(ctx, {
         clientOperationId: params.envelope.clientOperationId,
         turnId: params.turnId,
         ...(params.scope ? { scope: params.scope } : {}),
-        ...(params.taskId ? { taskId: params.taskId } : {})
+        ...(params.taskId ? { taskId: params.taskId } : {}),
+        ...(params.prompt ? { prompt: params.prompt } : {})
       }),
-    // Interrupting twice would kill a turn the client never asked to stop, so a
-    // replay reports the turn as already handled instead.
-    replay: () => ({ turnId: params.turnId, cancelled: false })
+    settledOutcome: (value) => ({
+      status: 'succeeded',
+      sessionId: params.envelope.sessionId,
+      cancelled: value.cancelled,
+      cancelledTurnId: value.turnId
+    }),
+    resume: (ctx, outcome) => {
+      const settlement = outcome.status === 'unknown' ? outcome.promptCancelSettlement : undefined
+      return settlement?.sessionId === params.envelope.sessionId
+        ? resumePromptCancellation(ctx, params.envelope.clientOperationId, settlement)
+        : null
+    },
+    resumeAtCurrentFence: (outcome) =>
+      outcome.status === 'unknown' &&
+      outcome.promptCancelSettlement?.phase === 'provider-confirmed',
+    // Interrupting twice would kill a turn the client never asked to stop.
+    replay: (_ctx, outcome) =>
+      outcome.status === 'succeeded'
+        ? {
+            turnId: outcome.cancelledTurnId ?? params.turnId ?? params.prompt?.itemId ?? 'unknown',
+            cancelled: outcome.cancelled === true
+          }
+        : null
   }
 }
 

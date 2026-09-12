@@ -24,6 +24,7 @@ export type ClaudeBlockingControlSubtype = keyof typeof CLAUDE_BLOCKING_CONTROL_
 export type ClaudePermissionCallbackDeps = {
   sessionId: string
   prompts: ClaudePromptRegistry
+  activeTurnId?: () => string | null
   emit: (event: ClaudeStructuredSessionEvent) => void
 }
 
@@ -53,6 +54,7 @@ export function buildClaudePermissionCallbacks(deps: ClaudePermissionCallbackDep
     new Promise<PermissionResult | null>((resolve) => {
       const prompt = deps.prompts.register({
         requestId: options.requestId,
+        turnId: deps.activeTurnId?.() ?? null,
         toolName,
         toolUseId: options.toolUseID,
         input,
@@ -64,12 +66,15 @@ export function buildClaudePermissionCallbacks(deps: ClaudePermissionCallbackDep
         return
       }
       const cancel = (): void => {
+        const hostCancellation = deps.prompts.consumeHostCancellation(prompt)
         if (deps.prompts.forgetIfPending(prompt)) {
-          deps.emit({
-            type: 'prompt-cancelled',
-            sessionId: deps.sessionId,
-            promptKey: prompt.promptKey
-          })
+          if (!hostCancellation) {
+            deps.emit({
+              type: 'prompt-cancelled',
+              sessionId: deps.sessionId,
+              promptKey: prompt.promptKey
+            })
+          }
           // Null is the SDK's "no response written" sentinel: a cancelled request must not
           // be answered, only forgotten.
           resolve(null)

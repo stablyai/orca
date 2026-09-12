@@ -4,6 +4,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { setStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
 import {
+  AGENT_SESSION_PROMPT_CANCEL_RUNTIME_CAPABILITY,
   AGENT_SESSION_PENDING_SEND_RESULT_RUNTIME_CAPABILITY,
   RUNTIME_CAPABILITIES,
   RUNTIME_PROTOCOL_VERSION,
@@ -148,6 +149,7 @@ describe('capability gating', () => {
   it('advertises the capability without bumping the protocol version', () => {
     expect(RUNTIME_CAPABILITIES).toContain(STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY)
     expect(RUNTIME_CAPABILITIES).toContain(AGENT_SESSION_PENDING_SEND_RESULT_RUNTIME_CAPABILITY)
+    expect(RUNTIME_CAPABILITIES).toContain(AGENT_SESSION_PROMPT_CANCEL_RUNTIME_CAPABILITY)
     expect(RUNTIME_CAPABILITIES).toContain(STRUCTURED_AGENT_SESSION_HOLD_RUNTIME_CAPABILITY)
     expect(RUNTIME_CAPABILITIES).toContain(STRUCTURED_AGENT_SESSION_REVEAL_RUNTIME_CAPABILITY)
     // Additive methods do not break an old client; bumping would strand every
@@ -606,6 +608,16 @@ describe('method routing', () => {
     expect(hostCalls.cancel).toHaveBeenCalledWith(expect.anything(), params)
   })
 
+  it('routes a prompt compare-and-set target without a client turn id', async () => {
+    const params = {
+      envelope: envelope(),
+      prompt: { itemId: 'item-1', expectedRevision: 2 }
+    }
+
+    expect(await call('agentSession.cancel', params, STRUCTURED_CLIENT)).toMatchObject({ ok: true })
+    expect(hostCalls.cancel).toHaveBeenCalledWith(expect.anything(), params)
+  })
+
   it('routes the structured handoff mutation through the host', async () => {
     const response = await call('agentSession.requestHandoff', {
       envelope: envelope(),
@@ -648,6 +660,21 @@ describe('parameter validation', () => {
       turnId: 'turn-1',
       taskId: 'task-2'
     })
+    expect(hostCalls.cancel).not.toHaveBeenCalled()
+  })
+
+  it('rejects prompt targets on background-task cancellation', async () => {
+    await rejects('agentSession.cancel', {
+      envelope: envelope(),
+      turnId: 'background-tasks',
+      scope: 'background-tasks',
+      prompt: { itemId: 'item-1', expectedRevision: 1 }
+    })
+    expect(hostCalls.cancel).not.toHaveBeenCalled()
+  })
+
+  it('requires either a turn id or a prompt target for cancellation', async () => {
+    await rejects('agentSession.cancel', { envelope: envelope() })
     expect(hostCalls.cancel).not.toHaveBeenCalled()
   })
 

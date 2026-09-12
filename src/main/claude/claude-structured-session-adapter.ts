@@ -4,11 +4,7 @@ import type {
   StructuredAgentSessionAcquireInput,
   StructuredAgentSessionAdapter
 } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
-import {
-  answerClaudePrompt,
-  cancelClaudeTurn,
-  stopClaudeBackgroundTasks
-} from './claude-structured-control-actions'
+import { answerClaudePrompt, stopClaudeBackgroundTasks } from './claude-structured-control-actions'
 import { dispatchClaudeTurn } from './claude-structured-dispatch'
 import { StructuredSessionCompaction } from '../native-chat/agent-session-wire/structured-session-compaction'
 import { releaseClaudeAcquisition } from './claude-structured-acquisition-release'
@@ -32,6 +28,7 @@ import {
 } from './claude-structured-session-close'
 import { readClaudeTranscriptLeafWithReproof } from './claude-transcript-branch-proof'
 import type { AgentSessionBackgroundTaskState } from '../../shared/agent-session-wire'
+import { cancelClaudeStructuredTurn } from './claude-structured-session-cancel'
 
 export type { ClaudeStructuredLaunch } from './claude-structured-launch-resolution'
 export type {
@@ -223,25 +220,40 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
   compact: NonNullable<StructuredAgentSessionAdapter['compact']> = (input) =>
     compactClaudeSession(this.session(input.sessionId), this.compactions, input)
 
-  cancelTurn: StructuredAgentSessionAdapter['cancelTurn'] = (input) => {
+  cancelTurn: StructuredAgentSessionAdapter['cancelTurn'] = async (input) => {
     const session = this.session(input.sessionId)
     const acquisitionGeneration = session.acquisitionGeneration
-    return cancelClaudeTurn(session, this.deps.requestTimeoutMs, () => {
-      // Keep every ownership check adjacent to the provider interrupt. The
-      // session map check fences a replaced child; the turn check fences a
-      // delayed cancel after a newer turn was admitted on the same child.
-      return (
-        this.sessions.get(input.sessionId) === session &&
-        session.fence === input.fence &&
-        session.acquisitionGeneration === acquisitionGeneration &&
-        (this.compactions.ownsTurn(input.sessionId, input.turnId) ||
-          (session.activeTurnId === undefined
-            ? session.dispatchSequence === 0
-            : session.activeTurnId === input.turnId &&
-              session.activeTurnSequence === session.dispatchSequence))
-      )
+    return cancelClaudeStructuredTurn({
+      session,
+      request: input,
+      requestTimeoutMs: this.deps.requestTimeoutMs,
+      stillOwnsTurn: () => {
+        // Keep every ownership check adjacent to the provider interrupt. The
+        // session map check fences a replaced child; the turn check fences a
+        // delayed cancel after a newer turn was admitted on the same child.
+        return (
+          this.sessions.get(input.sessionId) === session &&
+          session.fence === input.fence &&
+          session.acquisitionGeneration === acquisitionGeneration &&
+          (this.compactions.ownsTurn(input.sessionId, input.turnId) ||
+            (session.activeTurnId === undefined
+              ? session.dispatchSequence === 0
+              : session.activeTurnId === input.turnId &&
+                session.activeTurnSequence === session.dispatchSequence))
+        )
+      },
+      emitPromptCancelled: (promptKey, settlement) => {
+        this.emit(session, {
+          type: 'prompt-cancelled',
+          sessionId: input.sessionId,
+          promptKey,
+          ...settlement
+        })
+      }
     })
   }
+  promptCancellation: NonNullable<StructuredAgentSessionAdapter['promptCancellation']> = (input) =>
+    this.session(input.sessionId).prompts.cancellation(input.itemId)
   stopBackgroundTasks: StructuredAgentSessionAdapter['stopBackgroundTasks'] = (input) => {
     const session = this.session(input.sessionId)
     const acquisitionGeneration = session.acquisitionGeneration

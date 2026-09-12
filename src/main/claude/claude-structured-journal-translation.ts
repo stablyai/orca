@@ -1,4 +1,3 @@
-import type { AgentJournalItemIdentity } from '../../shared/agent-session-journal-types'
 import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
 import type { AgentSessionDeltaCoalescerDeps } from '../native-chat/agent-session-wire/agent-session-delta-coalescer'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
@@ -22,11 +21,6 @@ import {
   readClaudeMessageEnvelope,
   type ClaudeToolUse
 } from './claude-structured-item-translation'
-import {
-  claudeApprovalItem,
-  claudePromptIdentity,
-  claudeQuestionItems
-} from './claude-structured-prompt-items'
 import type { ClaudePromptRegistry } from './claude-structured-prompt-replies'
 import { claudeProviderFrameActivity } from '../native-chat/agent-session-wire/provider-frame-activity'
 import {
@@ -45,6 +39,7 @@ import {
   type ClaudeCurrentTurn,
   type ClaudeTurnEnd
 } from './claude-turn-lifecycle-item'
+import { ClaudeJournalPromptGroups } from './claude-journal-prompt-groups'
 
 export type ClaudeJournalTranslatorDeps = {
   sink: StructuredAgentSessionEventSink
@@ -59,6 +54,8 @@ export type ClaudeJournalTranslator = {
   flush: () => void
   /** Streamed blocks still awaiting a final frame. A settled turn leaves none. */
   readonly pendingStreamedBlocks: number
+  /** Provider prompts retained only until their tool settles or is cancelled. */
+  readonly pendingPromptGroups: number
   dispose: () => void
 }
 
@@ -81,7 +78,7 @@ export function createClaudeJournalTranslator(
   deps: ClaudeJournalTranslatorDeps
 ): ClaudeJournalTranslator {
   const tools = new Map<string, ClaudeToolUse>()
-  const promptItems = new Map<string, AgentJournalItemIdentity[]>()
+  const promptGroups = new ClaudeJournalPromptGroups(deps)
   const streamedBlocks = createClaudeStreamedBlockRegistry()
   let currentTurn: ClaudeCurrentTurn | null = null
   const groupKeyOf = (turn: ClaudeCurrentTurn | null): string | null =>
@@ -175,6 +172,7 @@ export function createClaudeJournalTranslator(
       subagents.observeToolResult(result.toolUseId, result.failed)
       // Tool inputs are only needed until their matching result arrives.
       tools.delete(result.toolUseId)
+      promptGroups.forgetToolUse(result.toolUseId)
       changed = true
     }
     const thinking = claudeThinkingText(outputEnvelope)
@@ -217,30 +215,6 @@ export function createClaudeJournalTranslator(
     return true
   }
 
-  const handlePrompt = (event: Extract<ClaudeStructuredSessionEvent, { type: 'prompt' }>): void => {
-    const identities: AgentJournalItemIdentity[] = []
-    if (event.prompt.kind === 'question') {
-      for (const question of claudeQuestionItems({
-        sessionId: event.sessionId,
-        prompt: event.prompt
-      })) {
-        identities.push(question.identity)
-        deps.sink.appendItem(question.identity, question.body)
-        deps.bindPromptItemId?.(agentJournalItemKey(question.identity), event.prompt.promptKey)
-      }
-    } else {
-      const identity = claudePromptIdentity({
-        sessionId: event.sessionId,
-        promptKey: event.prompt.promptKey
-      })
-      identities.push(identity)
-      deps.sink.appendItem(identity, claudeApprovalItem(event.prompt))
-      deps.bindPromptItemId?.(agentJournalItemKey(identity), event.prompt.promptKey)
-    }
-    promptItems.set(event.prompt.promptKey, identities)
-    deps.sink.publish()
-  }
-
   return {
     handle: (event) => {
       if (event.type === 'ended') {
@@ -256,6 +230,7 @@ export function createClaudeJournalTranslator(
           currentTurn = null
         }
         deps.sink.setActivity?.(null)
+        promptGroups.clear()
         return
       }
       if (event.type === 'message' && handleStream(event.message)) {
@@ -263,13 +238,9 @@ export function createClaudeJournalTranslator(
       }
       streamedText.flush()
       if (event.type === 'prompt') {
-        handlePrompt(event)
+        promptGroups.append(event)
       } else if (event.type === 'prompt-cancelled') {
-        for (const identity of promptItems.get(event.promptKey) ?? []) {
-          deps.sink.appendTombstone(identity)
-        }
-        promptItems.delete(event.promptKey)
-        deps.sink.publish()
+        promptGroups.cancel(event)
       } else if (event.type === 'message' && event.message.type === 'result') {
         // The turn is over however it ended, so a foreground child still
         // reported as working will never be settled by an event.
@@ -313,10 +284,13 @@ export function createClaudeJournalTranslator(
     get pendingStreamedBlocks() {
       return streamedText.pending
     },
+    get pendingPromptGroups() {
+      return promptGroups.size
+    },
     dispose: () => {
       streamedText.dispose()
       tools.clear()
-      promptItems.clear()
+      promptGroups.clear()
       streamedBlocks.clear()
       subagents.dispose()
     }

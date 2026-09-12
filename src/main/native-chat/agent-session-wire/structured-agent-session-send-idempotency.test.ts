@@ -58,6 +58,8 @@ describe('structured send idempotency', () => {
         fence: 2,
         adapter: { dispatch } as unknown as StructuredAgentSessionAdapter,
         persistOptions: async () => undefined,
+        persistOperationOutcome: async () => undefined,
+        flushLifecycle: async () => undefined,
         resolvedBy: 'caller',
         publish,
         now: () => 1
@@ -89,6 +91,8 @@ describe('structured send idempotency', () => {
       fence: 1,
       adapter: { dispatch } as unknown as StructuredAgentSessionAdapter,
       persistOptions: async () => undefined,
+      persistOperationOutcome: async () => undefined,
+      flushLifecycle: async () => undefined,
       resolvedBy: 'caller',
       publish: vi.fn(),
       now: () => 1

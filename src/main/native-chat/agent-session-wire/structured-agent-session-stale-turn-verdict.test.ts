@@ -5,6 +5,7 @@ import type { AgentSessionJournal } from '../agent-session-journal/journal-store
 import {
   runningTurnLifecycleRevisions,
   settleStaleRunningTurnsOnAcquire,
+  stalePromptCancellationRevisions,
   turnVerdictFromDeathEvidence
 } from './structured-agent-session-stale-turn-verdict'
 
@@ -39,6 +40,35 @@ function legacyLifecycleItem(turnId: string, startedAt: number): AgentJournalRen
       kind: 'status',
       text: 'Working',
       turnLifecycle: { turnId, state: 'running', startedAt }
+    }
+  }
+}
+
+function approvalItem(state: 'pending' | 'resolved'): AgentJournalRenderItem {
+  return {
+    itemId: agentJournalItemKey({
+      provider: 'codex',
+      threadId: THREAD,
+      turnId: 'turn-2',
+      ordinal: 3
+    }),
+    revision: 1,
+    sequence: 3,
+    observedAt: 3,
+    body: {
+      kind: 'approval',
+      title: 'Run command?',
+      detail: null,
+      options: [],
+      resolution:
+        state === 'pending'
+          ? { state: 'pending', selectedOptionId: null, resolvedBy: null, resolvedAt: null }
+          : {
+              state: 'resolved',
+              selectedOptionId: 'allow',
+              resolvedBy: 'client-1',
+              resolvedAt: 2
+            }
     }
   }
 }
@@ -105,6 +135,25 @@ describe('running turn lifecycle revisions', () => {
   })
 })
 
+describe('stale prompt revisions', () => {
+  it('cancels only pending prompts that cannot belong to the replacement child', () => {
+    expect(
+      stalePromptCancellationRevisions([approvalItem('pending'), approvalItem('resolved')])
+    ).toEqual([
+      expect.objectContaining({
+        body: expect.objectContaining({
+          resolution: {
+            state: 'cancelled',
+            selectedOptionId: null,
+            resolvedBy: null,
+            resolvedAt: null
+          }
+        })
+      })
+    ])
+  })
+})
+
 describe('stale running turns on a cold acquire', () => {
   function journalWith(items: AgentJournalRenderItem[]) {
     const appendLifecycleBatch = vi.fn(async () => ({ epoch: 'epoch-1', sequence: 9 }))
@@ -143,6 +192,32 @@ describe('stale running turns on a cold acquire', () => {
         }
       ]
     })
+  })
+
+  it('terminalizes a pending prompt restored from the prior provider child', async () => {
+    const prompt = approvalItem('pending')
+    const { journal, appendLifecycleBatch } = journalWith([prompt])
+
+    await expect(
+      settleStaleRunningTurnsOnAcquire({
+        journal,
+        sessionId: 'session-1',
+        fence: 14,
+        acquisitionGeneration: 'generation-2'
+      })
+    ).resolves.toBe(1)
+
+    expect(appendLifecycleBatch).toHaveBeenCalledWith(
+      expect.objectContaining({
+        mutations: [
+          expect.objectContaining({
+            body: expect.objectContaining({
+              resolution: expect.objectContaining({ state: 'cancelled' })
+            })
+          })
+        ]
+      })
+    )
   })
 
   it('writes nothing when no turn is running and keys on the journal position without a generation', async () => {

@@ -71,6 +71,9 @@ export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessi
   cancelTurn: StructuredAgentSessionAdapter['cancelTurn'] = (input) =>
     this.owner(input.sessionId).cancelTurn(input)
 
+  promptCancellation: NonNullable<StructuredAgentSessionAdapter['promptCancellation']> = (input) =>
+    this.owner(input.sessionId).promptCancellation?.(input) ?? null
+
   stopBackgroundTasks: NonNullable<StructuredAgentSessionAdapter['stopBackgroundTasks']> = (
     input
   ) => {

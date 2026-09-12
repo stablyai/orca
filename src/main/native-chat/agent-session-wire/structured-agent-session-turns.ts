@@ -11,10 +11,10 @@ import type {
   AgentJournalSubmission
 } from '../../../shared/agent-session-journal-types'
 import type {
-  AgentSessionCancelResult,
   AgentSessionSendResult,
   AgentSessionWireRefusal
 } from '../../../shared/agent-session-wire'
+import type { AgentSessionOperationOutcome } from '../../../shared/agent-session-operation-ledger'
 import {
   DISPATCH_DOUBT_PERSISTENCE_FAILED,
   DISPATCH_DOUBT_RETRY_IN_PROGRESS,
@@ -25,6 +25,11 @@ import type {
   AgentSessionDispatchOutcome,
   StructuredAgentSessionAdapter
 } from './structured-agent-session-adapter'
+export {
+  AgentSessionPreEffectPersistenceError,
+  performCancel,
+  resumePromptCancellation
+} from './structured-agent-session-turn-cancellation'
 export { performSetOption } from './structured-agent-session-turns-options'
 export { performPrompt } from './structured-agent-session-turns-prompt'
 
@@ -35,6 +40,11 @@ export type AgentSessionTurnContext = {
   adapter: StructuredAgentSessionAdapter
   persistedOptions?: Readonly<Record<string, string>>
   persistOptions: (options: Readonly<Record<string, string>>) => Promise<void>
+  persistOperationOutcome: (
+    operationId: string,
+    outcome: AgentSessionOperationOutcome
+  ) => Promise<void>
+  flushLifecycle: () => Promise<void>
   /** Opaque client identity recorded as the resolver of a prompt. */
   resolvedBy: string
   publish: () => void
@@ -66,19 +76,6 @@ async function dispatchSafely(
   } catch (error) {
     return { state: 'unknown', reason: error instanceof Error ? error.message : String(error) }
   }
-}
-
-async function appendStatus(
-  ctx: AgentSessionTurnContext,
-  clientMessageId: string,
-  text: string
-): Promise<void> {
-  await ctx.journal.appendItem(
-    { provider: 'orca', clientMessageId },
-    { kind: 'status', text },
-    { fence: ctx.fence }
-  )
-  ctx.publish()
 }
 
 /**
@@ -201,47 +198,4 @@ function requireSubmission(
     throw new Error('agent_session_submission_lost')
   }
   return submission
-}
-
-export async function performCancel(
-  ctx: AgentSessionTurnContext,
-  input: {
-    clientOperationId: string
-    turnId: string
-    scope?: 'background-tasks'
-    taskId?: string
-  }
-): Promise<TurnOutcome<AgentSessionCancelResult>> {
-  let cancelled = false
-  let note = 'Cancellation requested.'
-  try {
-    cancelled = input.scope
-      ? (
-          await ctx.adapter.stopBackgroundTasks?.({
-            sessionId: ctx.sessionId,
-            fence: ctx.fence,
-            ...(input.taskId ? { taskId: input.taskId } : {})
-          })
-        )?.cancelled === true
-      : (
-          await ctx.adapter.cancelTurn({
-            sessionId: ctx.sessionId,
-            turnId: input.turnId,
-            fence: ctx.fence
-          })
-        ).cancelled
-    if (!cancelled) {
-      note = 'The provider had already finished this turn.'
-    }
-  } catch (error) {
-    note = `Cancellation was not confirmed: ${
-      error instanceof Error ? error.message : String(error)
-    }`
-  }
-  if (input.scope) {
-    return { ok: true, value: { turnId: input.turnId, cancelled } }
-  }
-  // Keyed by the operation id so a replayed cancel upserts one item, not two.
-  await appendStatus(ctx, input.clientOperationId, note)
-  return { ok: true, value: { turnId: input.turnId, cancelled } }
 }

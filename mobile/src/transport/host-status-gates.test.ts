@@ -115,7 +115,7 @@ describe('useHostStatusGates', () => {
     }
   })
 
-  it('keeps the proven gates while the same client reconnects, pending until it re-answers', async () => {
+  it('keeps proven gates while reconnecting and clears them if the reprobe fails', async () => {
     let resolveReconnect: ((response: unknown) => void) | null = null
     const pendingReconnect = new Promise((resolve) => {
       resolveReconnect = resolve
@@ -127,6 +127,7 @@ describe('useHostStatusGates', () => {
         result: { capabilities: ['browser.screencast.v1'], floatingWorkspaceEnabled: true }
       })
       .mockReturnValueOnce(pendingReconnect)
+      .mockRejectedValueOnce(new Error('relay unavailable'))
     const client = { sendRequest } as unknown as RpcClient
     let gates: HostStatusGates | null = null
     let renderer: ReactTestRenderer | null = null
@@ -150,7 +151,8 @@ describe('useHostStatusGates', () => {
       expect(gates).toMatchObject({
         hostCapabilities: ['browser.screencast.v1'],
         floatingWorkspaceEnabled: true,
-        statusPending: false
+        statusPending: false,
+        hostCapabilitiesPending: false
       })
 
       await act(async () => {
@@ -159,7 +161,8 @@ describe('useHostStatusGates', () => {
       expect(gates).toMatchObject({
         hostCapabilities: ['browser.screencast.v1'],
         floatingWorkspaceEnabled: true,
-        statusPending: true
+        statusPending: true,
+        hostCapabilitiesPending: true
       })
 
       await act(async () => {
@@ -172,7 +175,22 @@ describe('useHostStatusGates', () => {
       expect(gates).toMatchObject({
         hostCapabilities: ['terminal.quick-commands.v1'],
         floatingWorkspaceEnabled: true,
-        statusPending: false
+        statusPending: false,
+        hostCapabilitiesPending: false
+      })
+
+      await act(async () => {
+        renderer?.update(createElement(Probe, { connState: 'disconnected' }))
+      })
+      await act(async () => {
+        renderer?.update(createElement(Probe, { connState: 'connected' }))
+        await Promise.resolve()
+      })
+      expect(gates).toMatchObject({
+        hostCapabilities: [],
+        floatingWorkspaceEnabled: false,
+        statusPending: false,
+        hostCapabilitiesPending: true
       })
     } finally {
       renderer?.unmount()
@@ -210,6 +228,53 @@ describe('useHostStatusGates', () => {
       expect(gates).toMatchObject({ hostCapabilities: [], statusPending: true })
     } finally {
       renderer?.unmount()
+    }
+  })
+
+  it('fails compatibility open while retrying capability discovery after a transient failure', async () => {
+    vi.useFakeTimers()
+    const sendRequest = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('relay cutover'))
+      .mockResolvedValueOnce({
+        ok: true,
+        result: {
+          capabilities: ['agent-session.prompt-cancel.v1'],
+          floatingWorkspaceEnabled: true
+        }
+      })
+    const client = { sendRequest } as unknown as RpcClient
+    let gates: HostStatusGates | null = null
+    let renderer: ReactTestRenderer | null = null
+
+    function Probe(): null {
+      gates = useHostStatusGates({ hostId: 'host-1', client, connState: 'connected' })
+      return null
+    }
+
+    try {
+      await act(async () => {
+        renderer = create(createElement(Probe))
+        await Promise.resolve()
+      })
+      expect(gates).toMatchObject({
+        compatVerdict: { kind: 'ok' },
+        statusPending: false,
+        hostCapabilities: [],
+        hostCapabilitiesPending: true
+      })
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1_000)
+      })
+      expect(gates).toMatchObject({
+        hostCapabilities: ['agent-session.prompt-cancel.v1'],
+        hostCapabilitiesPending: false
+      })
+      expect(sendRequest).toHaveBeenCalledTimes(2)
+    } finally {
+      renderer?.unmount()
+      vi.useRealTimers()
     }
   })
 })

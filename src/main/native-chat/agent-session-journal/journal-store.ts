@@ -6,6 +6,7 @@ import type {
   AgentJournalCursor,
   AgentJournalItemBody,
   AgentJournalItemIdentity,
+  AgentJournalRenderItem,
   AgentJournalSnapshot,
   AgentJournalSubmission,
   AgentSessionJournalIdentity
@@ -49,6 +50,10 @@ import { createJournalStoreCollaborators } from './journal-store-collaborators'
 import { ensureJournalDir, journalStoreLoadedFields } from './journal-store-open'
 import type { JournalItemAppender } from './journal-item-appender'
 import type { JournalLifecycleBatchAppender } from './journal-lifecycle-batch-appender'
+import {
+  cancelJournalPromptsAtRevisions,
+  type JournalPromptCancellationInput
+} from './journal-prompt-cancellation'
 
 export { AgentSessionJournalError } from './journal-write-guards'
 
@@ -162,6 +167,30 @@ export class AgentSessionJournal {
 
   snapshot = (): AgentJournalSnapshot => renderJournalState(this.state)
 
+  /** Orders a CAS preflight behind provider writes already admitted to the journal queue. */
+  readItem(itemId: string): Promise<AgentJournalRenderItem | null> {
+    return this.queue.serialize(async () => {
+      const resolved = this.state.aliases.get(itemId) ?? itemId
+      return this.state.items.get(resolved) ?? null
+    })
+  }
+
+  /** Orders a bounded prompt-group snapshot behind admitted provider writes. */
+  readItems(itemIds: readonly string[]): Promise<AgentJournalRenderItem[] | null> {
+    return this.queue.serialize(async () => {
+      const items: AgentJournalRenderItem[] = []
+      for (const itemId of itemIds) {
+        const resolved = this.state.aliases.get(itemId) ?? itemId
+        const item = this.state.items.get(resolved)
+        if (!item) {
+          return null
+        }
+        items.push(item)
+      }
+      return items
+    })
+  }
+
   /** Visits reduced items without allocating and sorting a full snapshot. */
   visitItems = (visit: (itemId: string, sequence: number) => void): void => {
     for (const item of this.state.items.values()) {
@@ -211,6 +240,14 @@ export class AgentSessionJournal {
     options: JournalItemAppendOptions = { fence: 0 }
   ): Promise<JournalAppendResult> {
     return this.itemAppender.append(identity, body, options)
+  }
+
+  cancelPromptsAtRevisions(input: JournalPromptCancellationInput): Promise<number> {
+    return cancelJournalPromptsAtRevisions(this.rowWriter, () => this.state, input)
+  }
+
+  hasAppliedSettlement(settlementId: string): boolean {
+    return this.state.appliedSettlementIds.has(settlementId)
   }
 
   appendTombstone(

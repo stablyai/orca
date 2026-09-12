@@ -67,8 +67,8 @@ const structuredSessionState = {
 }
 const draftsArgs: Record<string, unknown>[] = []
 const promptsState = {
-  permission: null as unknown,
-  question: null as unknown,
+  permission: structuredPermission as typeof structuredPermission | null,
+  question: structuredQuestion as typeof structuredQuestion | null,
   detectedAsk: null as unknown,
   ask: null as unknown
 }
@@ -90,8 +90,8 @@ vi.mock('./use-mobile-structured-agent-session', () => ({
     ...structuredActivity,
     sendWithOutcome: structuredSendWithOutcome,
     cancel: structuredCancel,
-    permission: structuredPermission,
-    question: structuredQuestion,
+    permission: promptsState.permission,
+    question: promptsState.question,
     optionSnapshot: structuredOptionSnapshot,
     optionSurface: structuredOptionSurface,
     pendingOptionId: 'model',
@@ -355,6 +355,7 @@ describe('useMobileNativeChatController handleNativeChatSend', () => {
       inputLeaseReady: false
     }
     structuredActivity.isWorking = true
+    Object.assign(promptsState, { permission: null, question: null })
     try {
       await act(async () => {
         renderer?.update(createElement(Harness, props))
@@ -369,6 +370,10 @@ describe('useMobileNativeChatController handleNativeChatSend', () => {
     } finally {
       structuredActivity.isWorking = false
       structuredActivity.turnId = null
+      Object.assign(promptsState, {
+        permission: structuredPermission,
+        question: structuredQuestion
+      })
     }
   })
 

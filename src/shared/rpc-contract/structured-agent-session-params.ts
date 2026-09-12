@@ -162,13 +162,26 @@ export const SendParams = z
 export const CancelParams = z
   .object({
     envelope: MutationEnvelope,
-    turnId: Identifier('Invalid turn id'),
+    turnId: Identifier('Invalid turn id').optional(),
     scope: z.literal('background-tasks').optional(),
-    taskId: Identifier('Invalid task id').optional()
+    taskId: Identifier('Invalid task id').optional(),
+    prompt: z
+      .object({
+        itemId: Identifier('Invalid item id'),
+        expectedRevision: z.number().int().positive()
+      })
+      .strict()
+      .optional()
   })
   .strict()
+  .refine((value) => value.turnId !== undefined || value.prompt !== undefined, {
+    message: 'A turn id is required unless a prompt identifies its owning turn'
+  })
   .refine((value) => value.taskId === undefined || value.scope === 'background-tasks', {
     message: 'A task id requires background-task scope'
+  })
+  .refine((value) => value.prompt === undefined || value.scope === undefined, {
+    message: 'A prompt target cannot use background-task scope'
   })
 
 export const RespondParams = z

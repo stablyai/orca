@@ -3,8 +3,15 @@ import type {
   AgentSessionStatusEvent,
   AgentSessionSubscribeEvent
 } from '../../../shared/agent-session-wire'
-import { getRuntimeEnvironmentRevision } from './runtime-environment-revision'
-import { AGENT_SESSION_REWIND_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
+import type { RuntimeStatus } from '../../../shared/runtime-types'
+import {
+  captureRuntimeEnvironmentRequestRevision,
+  getRuntimeEnvironmentRevision
+} from './runtime-environment-revision'
+import {
+  AGENT_SESSION_PROMPT_CANCEL_RUNTIME_CAPABILITY,
+  AGENT_SESSION_REWIND_RUNTIME_CAPABILITY
+} from '../../../shared/protocol-version'
 import {
   callRuntimeRpc,
   runtimeEnvironmentSupportsCapability,
@@ -14,7 +21,8 @@ import {
 export async function callStructuredAgentSession<TResult>(
   target: RuntimeClientTarget,
   method: string,
-  params?: unknown
+  params?: unknown,
+  expectedEnvironmentPairingRevision?: number
 ): Promise<TResult> {
   if (
     method === 'agentSession.rewind' &&
@@ -27,8 +35,31 @@ export async function callStructuredAgentSession<TResult>(
     throw new Error('Rewinding requires a newer Orca server. Update the server and try again.')
   }
   return method === 'agentSession.conversationCommand'
-    ? callRuntimeRpc<TResult>(target, method, params, { timeoutMs: 195_000 })
-    : callRuntimeRpc<TResult>(target, method, params)
+    ? callRuntimeRpc<TResult>(target, method, params, {
+        timeoutMs: 195_000,
+        expectedEnvironmentPairingRevision
+      })
+    : expectedEnvironmentPairingRevision === undefined
+      ? callRuntimeRpc<TResult>(target, method, params)
+      : callRuntimeRpc<TResult>(target, method, params, { expectedEnvironmentPairingRevision })
+}
+
+export async function structuredAgentSessionSupportsPromptCancel(
+  target: RuntimeClientTarget,
+  expectedEnvironmentPairingRevision?: number
+): Promise<boolean> {
+  if (target.kind === 'local') {
+    return true
+  }
+  const requestRevision = captureRuntimeEnvironmentRequestRevision(
+    target.environmentId,
+    expectedEnvironmentPairingRevision
+  )
+  const status = await callRuntimeRpc<RuntimeStatus>(target, 'status.get', undefined, {
+    timeoutMs: 15_000,
+    expectedEnvironmentPairingRevision: requestRevision
+  })
+  return status.capabilities?.includes(AGENT_SESSION_PROMPT_CANCEL_RUNTIME_CAPABILITY) === true
 }
 
 async function subscribeStructuredAgentSessionMethod<TEvent>(

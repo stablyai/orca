@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
   call: vi.fn(),
+  supportsPromptCancel: vi.fn(),
   operationId: vi.fn(),
   enqueueSettingsWrite: vi.fn()
 }))
@@ -14,7 +15,12 @@ let items: AgentJournalRenderItem[] = []
 let submissions: AgentJournalSubmission[] = []
 
 vi.mock('@/runtime/structured-agent-session-client', () => ({
-  callStructuredAgentSession: mocks.call
+  callStructuredAgentSession: mocks.call,
+  structuredAgentSessionSupportsPromptCancel: mocks.supportsPromptCancel
+}))
+
+vi.mock('@/runtime/runtime-environment-revision', () => ({
+  captureRuntimeEnvironmentRequestRevision: () => 31
 }))
 
 vi.mock('./native-chat-session-option-settings-write', () => ({
@@ -105,8 +111,10 @@ describe('useStructuredAgentSession working state', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     fence = 3
+    items = []
     submissions = []
     mocks.call.mockResolvedValue(null)
+    mocks.supportsPromptCancel.mockResolvedValue(true)
   })
 
   it('reports work from an unanswered dispatch, and keeps the turn id provider-minted', () => {
@@ -159,6 +167,47 @@ describe('useStructuredAgentSession working state', () => {
     )
 
     expect(result.current.isWorking).toBe(false)
+  })
+
+  it('keeps a prompted provider turn working and cancellable beneath presentation policy', () => {
+    items = [
+      {
+        itemId: 'turn-1',
+        revision: 1,
+        sequence: 1,
+        observedAt: 1,
+        body: { kind: 'turn', turnId: 'provider-turn', state: 'running' }
+      },
+      {
+        itemId: 'question-1',
+        revision: 1,
+        sequence: 2,
+        observedAt: 2,
+        body: {
+          kind: 'question',
+          question: 'Which approach?',
+          options: [{ id: 'focused', label: 'Focused' }],
+          resolution: {
+            state: 'pending',
+            selectedOptionId: null,
+            resolvedBy: null,
+            resolvedAt: null
+          }
+        }
+      }
+    ]
+    const { result } = renderHook(() =>
+      useStructuredAgentSession({
+        sessionId: 'session-1',
+        agent: 'codex',
+        target: LOCAL_TARGET,
+        isVisible: true
+      })
+    )
+
+    expect(result.current.isWorking).toBe(true)
+    expect(result.current.turnId).toBe('provider-turn')
+    expect(result.current.prompts).toHaveLength(1)
   })
 })
 

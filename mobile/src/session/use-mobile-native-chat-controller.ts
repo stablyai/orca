@@ -16,6 +16,7 @@ import { useThrottledLatestValue } from './use-throttled-latest-value'
 import type { MobileNativeChatController } from './mobile-native-chat-controller-contract'
 import { useMobileBridgeChatPromptWrites } from './use-mobile-bridge-chat-prompt-writes'
 import { useMobileNativeChatActiveResolution } from './use-mobile-native-chat-active-resolution'
+import { canCancelMobileStructuredPrompt } from './mobile-structured-prompt-cancellation'
 
 export type { MobileNativeChatController } from './mobile-native-chat-controller-contract'
 
@@ -35,6 +36,7 @@ export function useMobileNativeChatController(args: {
   nativeChatInputLeaseReady: boolean
   /** Live socket state; the lease collapses on disconnect but one render later. */
   connState: ConnectionState
+  promptCancelSupported?: boolean
   onSendError: (message: string) => void
   /** Retires a held failure banner. Any accepted chat write clears it — a delivered
    *  answer or permission reply must not sit under a stale "not sent". */
@@ -51,6 +53,7 @@ export function useMobileNativeChatController(args: {
     nativeChatTranscriptIsLocalReadable,
     nativeChatInputLeaseReady,
     connState,
+    promptCancelSupported,
     onSendError,
     onSendResolved
   } = args
@@ -89,7 +92,9 @@ export function useMobileNativeChatController(args: {
       sourceIdentity,
       enabled: showNativeChat,
       connState,
-      onSendError
+      promptCancelSupported,
+      onSendError,
+      onCancelResolved: onSendResolved
     })
   const {
     composerText: chatComposerText,
@@ -277,7 +282,7 @@ export function useMobileNativeChatController(args: {
     nativeChatWorkingStartedAt: activeChatStructured ? structuredNativeChat.workingStartedAt : null,
     nativeChatSettledTurns: activeChatStructured ? structuredNativeChat.settledTurns : null,
     nativeChatCanStop: activeChatStructured
-      ? structuredNativeChat.turnId !== null
+      ? canCancelMobileStructuredPrompt(structuredNativeChat)
       : nativeChatAgentWorking,
     nativeChatStreamingText,
     nativeChatStreamLive,

@@ -7,7 +7,7 @@ import type {
   StructuredAgentSessionLifecycleIdentityResolver,
   StructuredAgentSessionSinkAdmission
 } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
-import type { CodexPendingJournalPrompt } from './codex-structured-journal-settlement'
+import type { CodexPendingJournalPrompt } from './codex-structured-prompt-turn-settlement'
 import type { CodexJournalTranslationAdmission } from './codex-structured-journal-contracts'
 import { CODEX_JOURNAL_ADMITTED } from './codex-structured-journal-contracts'
 
@@ -57,7 +57,7 @@ export function publishCodexLifecycle(
 export function admitCodexLifecycleItems(
   sink: StructuredAgentSessionEventSink,
   settlementId: string,
-  items: readonly CodexPendingJournalPrompt[]
+  items: readonly Pick<CodexPendingJournalPrompt, 'identity' | 'body'>[]
 ): CodexJournalTranslationAdmission {
   if (items.length === 0) {
     return { accepted: false, reason: 'untranslated' }

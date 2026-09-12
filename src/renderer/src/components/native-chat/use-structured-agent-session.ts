@@ -27,7 +27,11 @@ import {
   hasUnansweredStructuredAgentSessionDispatch
 } from '../../../../shared/structured-agent-session-projection'
 import type { RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
-import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
+import { captureRuntimeEnvironmentRequestRevision } from '@/runtime/runtime-environment-revision'
+import {
+  callStructuredAgentSession,
+  structuredAgentSessionSupportsPromptCancel
+} from '@/runtime/structured-agent-session-client'
 import { useStructuredAgentSessionHold } from './use-structured-agent-session-hold'
 import { useStructuredAgentSessionRead } from './use-structured-agent-session-read'
 import {
@@ -39,6 +43,7 @@ import { useStructuredAgentSessionMessages } from './use-structured-agent-sessio
 import { selectStructuredAgentTurnActivity } from '../../../../shared/native-chat-turn-activity'
 import { enqueueSessionOptionSettingsWrite } from './native-chat-session-option-settings-write'
 import { useStructuredAgentTurnTiming } from './use-structured-agent-turn-timing'
+import { AGENT_SESSION_PROMPT_CANCEL_UPDATE_REQUIRED_MESSAGE } from '../../../../shared/protocol-version'
 
 export type { StructuredPromptItem } from './structured-agent-session-message-projection'
 
@@ -54,7 +59,11 @@ export function useStructuredAgentSession(args: {
   useStructuredAgentSessionHold({ sessionId, target, surface: 'desktop-chat', enabled: isVisible })
   const { state, loadingOlder, loadOlder } = useStructuredAgentSessionRead(args)
   const stateRef = useRef(state)
-  const { mutate, writeError } = useStructuredAgentSessionMutate({ sessionId, target, stateRef })
+  const { mutate, reportWriteError, writeError } = useStructuredAgentSessionMutate({
+    sessionId,
+    target,
+    stateRef
+  })
   const [conversationSupport, setConversationSupport] = useState<{
     sessionId: string
     commands: readonly AgentSessionConversationCommand[]
@@ -220,7 +229,46 @@ export function useStructuredAgentSession(args: {
     turnActivity,
     backgroundTasks,
     turnId,
-    cancel: (turnId: string) => mutate('agentSession.cancel', 'agentSession.cancel', { turnId }),
+    cancel: async (turnId: string | null, prompt?: StructuredPromptItem) => {
+      const targetFence = stateRef.current.fence
+      const requestRevision =
+        target.kind === 'environment'
+          ? captureRuntimeEnvironmentRequestRevision(target.environmentId)
+          : undefined
+      let promptSupported = false
+      if (prompt !== undefined) {
+        try {
+          promptSupported = await structuredAgentSessionSupportsPromptCancel(
+            target,
+            requestRevision
+          )
+        } catch (error) {
+          if (!turnId) {
+            reportWriteError(error, targetFence)
+            return null
+          }
+        }
+        if (!promptSupported && !turnId) {
+          reportWriteError(
+            new Error(AGENT_SESSION_PROMPT_CANCEL_UPDATE_REQUIRED_MESSAGE),
+            targetFence
+          )
+          return null
+        }
+      }
+      return mutate(
+        'agentSession.cancel',
+        'agentSession.cancel',
+        {
+          ...(turnId ? { turnId } : {}),
+          ...(promptSupported && prompt
+            ? { prompt: { itemId: prompt.itemId, expectedRevision: prompt.revision } }
+            : {})
+        },
+        undefined,
+        requestRevision
+      )
+    },
     stopBackgroundTask: (taskId?: string) =>
       mutate('agentSession.cancel', 'agentSession.cancel', {
         turnId: 'background-tasks',
