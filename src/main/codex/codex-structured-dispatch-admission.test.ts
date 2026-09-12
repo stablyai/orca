@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest'
+import { MAX_CODEX_PENDING_DISPATCH_ECHOES } from './codex-structured-dispatch-echo'
 import {
   acquiredCodexAdapter,
   echoUserMessage,
@@ -120,6 +121,53 @@ describe('codex dispatch admission', () => {
     // A refused write is disarmed, so a later echo of that id settles nothing.
     echoUserMessage(connection, { turnId: 'turn-1', itemId: 'item-u1', clientId: 'client-1' })
     expect(settlements).toEqual([])
+  })
+
+  it('retains correlation when a request fails after its write may have landed', async () => {
+    const codex = fakeCodexAppServer({
+      'turn/start': () => {
+        throw new Error('request timed out after write')
+      }
+    })
+    const settlements: LateSettlement[] = []
+    const adapter = await acquiredCodexAdapter({ codex, settlements })
+    const connection = codex.connections[0]!
+    startTurn(connection, 'turn-1')
+
+    await expect(send(adapter, 'client-1')).rejects.toThrow('request timed out after write')
+    echoUserMessage(connection, { turnId: 'turn-1', itemId: 'item-u1', clientId: 'client-1' })
+
+    expect(settlements).toEqual([
+      {
+        sessionId: 'session-1',
+        clientMessageId: 'client-1',
+        providerIdentity: {
+          provider: 'codex',
+          threadId: CODEX_TEST_THREAD_ID,
+          turnId: 'turn-1',
+          ordinal: 0
+        }
+      }
+    ])
+  })
+
+  it('refuses overflow without discarding an older accepted send', async () => {
+    const codex = fakeCodexAppServer({ 'turn/start': () => ({ turn: { id: 'turn-1' } }) })
+    const settlements: LateSettlement[] = []
+    const adapter = await acquiredCodexAdapter({ codex, settlements })
+    const connection = codex.connections[0]!
+    startTurn(connection, 'turn-1')
+
+    for (let index = 0; index < MAX_CODEX_PENDING_DISPATCH_ECHOES; index += 1) {
+      expect(await send(adapter, `client-${index}`)).toEqual({ state: 'admitted' })
+    }
+    expect(await send(adapter, 'client-overflow')).toEqual({
+      state: 'rejected',
+      reason: 'codex structured dispatch queue is full'
+    })
+
+    echoUserMessage(connection, { turnId: 'turn-1', itemId: 'item-u0', clientId: 'client-0' })
+    expect(settlements.map(({ clientMessageId }) => clientMessageId)).toEqual(['client-0'])
   })
 
   it('leaves no waiter behind when the session closes', async () => {

@@ -95,6 +95,7 @@ export async function acquiredCodexAdapter(input: {
     }),
     openConnection: input.codex.openConnection,
     readProcessStartTime: async () => 1_700_000_000_000,
+    captureTurnProcesses: async () => null,
     now: () => 1_700_000_000_500,
     onDispatchSettledLate: (settlement) => input.settlements.push(settlement)
   })

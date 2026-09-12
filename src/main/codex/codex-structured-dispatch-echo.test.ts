@@ -61,15 +61,16 @@ describe('codex dispatch echoes', () => {
     expect(echoes.settle('client-1')).toBe(false)
   })
 
-  it('retains a bounded window, dropping the oldest first', () => {
+  it('refuses new correlations at capacity without dropping an older send', () => {
     const echoes = createCodexDispatchEchoes()
-    for (let index = 0; index <= MAX_CODEX_PENDING_DISPATCH_ECHOES; index += 1) {
-      echoes.arm(`client-${index}`)
+    for (let index = 0; index < MAX_CODEX_PENDING_DISPATCH_ECHOES; index += 1) {
+      expect(echoes.arm(`client-${index}`)).toBe(true)
     }
 
+    expect(echoes.arm(`client-${MAX_CODEX_PENDING_DISPATCH_ECHOES}`)).toBe(false)
     expect(echoes.size).toBe(MAX_CODEX_PENDING_DISPATCH_ECHOES)
-    expect(echoes.settle('client-0')).toBe(false)
-    expect(echoes.settle(`client-${MAX_CODEX_PENDING_DISPATCH_ECHOES}`)).toBe(true)
+    expect(echoes.settle('client-0')).toBe(true)
+    expect(echoes.settle(`client-${MAX_CODEX_PENDING_DISPATCH_ECHOES}`)).toBe(false)
   })
 })
 

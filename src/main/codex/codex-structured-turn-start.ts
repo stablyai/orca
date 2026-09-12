@@ -53,30 +53,28 @@ function turnInputFor(body: AgentJournalMessageItem): Record<string, unknown>[] 
 }
 
 /**
- * Hands one submission to Codex. Resolves when Codex has taken it; throws only
- * for outcomes the wire must not read as acceptance.
+ * Hands one submission to Codex. False means the bounded correlation window
+ * refused it before the write; otherwise resolves when Codex has taken it.
  */
 export async function startCodexTurn(
   host: CodexTurnHost,
   input: { clientMessageId: string; body: AgentJournalMessageItem; timeoutMs?: number }
-): Promise<void> {
+): Promise<boolean> {
   // Armed before the write: the echo can land while the response is in flight.
-  host.dispatchEchoes.arm(input.clientMessageId)
-  try {
-    await host.connection.request(
-      'turn/start',
-      {
-        threadId: host.threadId,
-        clientUserMessageId: input.clientMessageId,
-        input: turnInputFor(input.body),
-        ...Object.fromEntries(host.options)
-      },
-      { timeoutMs: input.timeoutMs }
-    )
-  } catch (error) {
-    host.dispatchEchoes.disarm(input.clientMessageId)
-    throw error
+  if (!host.dispatchEchoes.arm(input.clientMessageId)) {
+    return false
   }
+  await host.connection.request(
+    'turn/start',
+    {
+      threadId: host.threadId,
+      clientUserMessageId: input.clientMessageId,
+      input: turnInputFor(input.body),
+      ...Object.fromEntries(host.options)
+    },
+    { timeoutMs: input.timeoutMs }
+  )
+  return true
 }
 
 /**
@@ -91,11 +89,17 @@ export async function dispatchCodexTurn(
   timeoutMs: number | undefined
 ): Promise<AgentSessionDispatchOutcome> {
   try {
-    await startCodexTurn(session, { ...input, timeoutMs })
+    if (!(await startCodexTurn(session, { ...input, timeoutMs }))) {
+      return { state: 'rejected', reason: 'codex structured dispatch queue is full' }
+    }
   } catch (error) {
     if (isCodexAppServerRequestError(error) || isCodexAppServerUnsupportedError(error)) {
+      // Codex answered and declined, so no echo for this write can arrive.
+      session.dispatchEchoes.disarm(input.clientMessageId)
       return { state: 'rejected', reason: (error as Error).message }
     }
+    // A timeout or transport failure can happen after the frame was written.
+    // Keep the correlation armed so a later echo can prove delivery.
     throw error
   }
   return { state: 'admitted' }

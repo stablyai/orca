@@ -13,8 +13,8 @@ export const MAX_CODEX_PENDING_DISPATCH_ECHOES = 256
  * their echoes arrive far apart. Queue position identifies neither.
  */
 export type CodexDispatchEchoes = {
-  /** Arms settlement for a send about to be written. */
-  arm: (clientMessageId: string) => void
+  /** Arms settlement for a send about to be written; false preserves older waits at capacity. */
+  arm: (clientMessageId: string) => boolean
   /** True once, for a send this session armed and has not yet settled. */
   settle: (clientMessageId: string) => boolean
   /** Drops an armed send whose write never reached the provider. */
@@ -27,15 +27,12 @@ export function createCodexDispatchEchoes(): CodexDispatchEchoes {
   const armed = new Set<string>()
   return {
     arm(clientMessageId) {
+      if (!armed.has(clientMessageId) && armed.size >= MAX_CODEX_PENDING_DISPATCH_ECHOES) {
+        return false
+      }
       armed.delete(clientMessageId)
       armed.add(clientMessageId)
-      while (armed.size > MAX_CODEX_PENDING_DISPATCH_ECHOES) {
-        const oldest = armed.values().next().value
-        if (typeof oldest !== 'string') {
-          break
-        }
-        armed.delete(oldest)
-      }
+      return true
     },
     settle: (clientMessageId) => armed.delete(clientMessageId),
     disarm: (clientMessageId) => void armed.delete(clientMessageId),
