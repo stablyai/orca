@@ -63,6 +63,7 @@ const SCOPE_B = 'h\0w\0tab-b'
 function baseArgs(overrides: Partial<HookArgs> & Pick<HookArgs, 'client'>): HookArgs {
   return {
     activeHandleRef: { current: 'term-1' },
+    agentRef: { current: 'claude' },
     deviceTokenRef: { current: null },
     getActiveWorktreeConnectionId: async () => null,
     connState: 'connected',

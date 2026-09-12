@@ -3,6 +3,8 @@ import type { RpcClient } from '../transport/rpc-client'
 import type { RpcResponse, RpcSuccess } from '../transport/types'
 import { pasteMobileNativeChatImagePaths } from './mobile-native-chat-image-send'
 import { buildAgentTuiClearInputForText } from '../../../src/shared/agent-tui-input-clear'
+import { NATIVE_CHAT_SUPPORTED_AGENT_LIST } from '../../../src/shared/native-chat-agent-support'
+import { getNativeChatAttachmentForm } from '../../../src/shared/native-chat-agent-profiles'
 
 function sendResult(accepted: boolean, id = 'send'): RpcSuccess {
   return { id, ok: true, result: { send: { accepted } }, _meta: { runtimeId: 'r' } }
@@ -38,6 +40,7 @@ describe('pasteMobileNativeChatImagePaths', () => {
       client,
       terminal: 'term-1',
       deviceToken: 'device-9',
+      agent: 'claude',
       imagePaths: ['/tmp/a.png', '/tmp/b.png', '/tmp/c.png'],
       followedByText: true
     })
@@ -67,6 +70,7 @@ describe('pasteMobileNativeChatImagePaths', () => {
       client,
       terminal: 'term-1',
       deviceToken: null,
+      agent: 'claude',
       imagePaths: ['/tmp/a.png', '/tmp/b.png'],
       followedByText: true
     })
@@ -96,6 +100,7 @@ describe('pasteMobileNativeChatImagePaths', () => {
         client,
         terminal: 'term-1',
         deviceToken: null,
+        agent: 'claude',
         imagePaths: ['/tmp/a.png', '/tmp/b.png'],
         followedByText: true
       })
@@ -123,6 +128,7 @@ describe('clearing a parked multi-line launch draft before the image paste', () 
       client,
       terminal: 'term-1',
       deviceToken: null,
+      agent: 'claude',
       imagePaths: ['/tmp/a.png'],
       followedByText: true,
       clearInput
@@ -140,6 +146,7 @@ describe('clearing a parked multi-line launch draft before the image paste', () 
       client,
       terminal: 'term-1',
       deviceToken: null,
+      agent: 'claude',
       imagePaths: ['/tmp/a.png', '/tmp/b.png'],
       followedByText: true,
       clearInput
@@ -156,6 +163,7 @@ describe('clearing a parked multi-line launch draft before the image paste', () 
       client,
       terminal: 'term-1',
       deviceToken: null,
+      agent: 'claude',
       imagePaths: ['/tmp/a.png'],
       followedByText: true
     })
@@ -170,6 +178,7 @@ describe('clearing a parked multi-line launch draft before the image paste', () 
       client,
       terminal: 'term-1',
       deviceToken: null,
+      agent: 'claude',
       imagePaths: ['/tmp/a.png', '/tmp/b.png'],
       followedByText: false
     })
@@ -178,5 +187,70 @@ describe('clearing a parked multi-line launch draft before the image paste', () 
       '\x1b[200~/tmp/a.png\x1b[201~',
       '\x1b[200~/tmp/b.png\x1b[201~'
     ])
+  })
+})
+
+describe('the attachment form mobile writes per agent', () => {
+  async function writesFor(agent: string | null, imagePaths: string[]): Promise<string[]> {
+    const client = clientWithResponses(
+      imagePaths.map(() => sendResult(true)).concat(sendResult(true))
+    )
+    const ok = await pasteMobileNativeChatImagePaths({
+      client,
+      terminal: 'term-1',
+      deviceToken: null,
+      agent,
+      imagePaths,
+      followedByText: true
+    })
+    expect(ok).toBe(true)
+    // Drop the leading clear; only the attachment writes are under test.
+    return client.calls.slice(1).map((call) => String(call.params.text))
+  }
+
+  it.each([
+    ['claude', 'image-paste'],
+    ['codex', 'image-paste'],
+    ['grok', 'image-paste'],
+    // OMP wraps Pi's TUI, which has no verified image-path paste gesture.
+    ['omp', 'file-reference'],
+    ['some-custom-agent', 'file-reference'],
+    [null, 'file-reference']
+  ] as const)('sends %s the %s form', async (agent, form) => {
+    const writes = await writesFor(agent, ['/tmp/a.png'])
+    expect(writes).toEqual(
+      form === 'image-paste' ? ['\x1b[200~/tmp/a.png\x1b[201~ '] : ['@/tmp/a.png ']
+    )
+  })
+
+  it('separates every @path reference, since a reference is not self-delimiting', async () => {
+    expect(await writesFor('omp', ['/tmp/a.png', '/tmp/b.png'])).toEqual([
+      '@/tmp/a.png ',
+      '@/tmp/b.png '
+    ])
+    // The bracketed frame closes itself, so only the last write needs the space.
+    expect(await writesFor('claude', ['/tmp/a.png', '/tmp/b.png'])).toEqual([
+      '\x1b[200~/tmp/a.png\x1b[201~',
+      '\x1b[200~/tmp/b.png\x1b[201~ '
+    ])
+  })
+
+  it('frames a CR/LF filename so a reference cannot submit the turn early', async () => {
+    const [write] = await writesFor('omp', ['/tmp/a\nb.png'])
+    expect(write).toBe('\x1b[200~@"/tmp/a\rb.png"\x1b[201~ ')
+    expect(write?.startsWith('\x1b[200~')).toBe(true)
+  })
+
+  it('quotes a spaced path so the reference stays one token', async () => {
+    expect(await writesFor('omp', ['/tmp/my shot.png'])).toEqual(['@"/tmp/my shot.png" '])
+  })
+
+  it('agrees with the shared per-agent rule for every native-chat agent', async () => {
+    for (const agent of NATIVE_CHAT_SUPPORTED_AGENT_LIST) {
+      const [write] = await writesFor(agent, ['/tmp/a.png'])
+      expect(write?.startsWith('\x1b[200~')).toBe(
+        getNativeChatAttachmentForm(agent) === 'image-paste'
+      )
+    }
   })
 })
