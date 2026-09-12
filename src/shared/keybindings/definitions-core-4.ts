@@ -66,5 +66,34 @@ export const KEYBINDING_DEFINITION_CORE_4: readonly KeybindingDefinition[] = [
     },
     // Why: macOS uses Shift+Space as an input-source shortcut; Orca otherwise rejects Shift-only bindings to avoid stealing typed text.
     allowShiftOnlyKeybindings: true
+  },
+  {
+    id: 'workspace.togglePin',
+    title: 'Toggle Workspace Pin',
+    group: 'Global',
+    scope: 'global',
+    searchKeywords: ['shortcut', 'global', 'workspace', 'worktree', 'pin', 'unpin', 'toggle'],
+    defaultBindings: platformBindings(['Mod+Alt+P']),
+    allowInTerminal: true
+  },
+  {
+    id: 'workspace.pin',
+    title: 'Pin Workspace',
+    group: 'Global',
+    scope: 'global',
+    searchKeywords: ['shortcut', 'global', 'workspace', 'worktree', 'pin'],
+    // Why: the idempotent set actions exist for macros and stream decks, which bind their own
+    // chord; shipping defaults here would claim two more global chords nobody presses by hand.
+    defaultBindings: platformBindings([]),
+    allowInTerminal: true
+  },
+  {
+    id: 'workspace.unpin',
+    title: 'Unpin Workspace',
+    group: 'Global',
+    scope: 'global',
+    searchKeywords: ['shortcut', 'global', 'workspace', 'worktree', 'unpin', 'pin'],
+    defaultBindings: platformBindings([]),
+    allowInTerminal: true
   }
 ]
