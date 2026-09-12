@@ -53,12 +53,15 @@ function clamp(value: number, min: number, max: number): number {
 export function AgentTerminalPreview({
   ptyId,
   terminalInput = null,
-  className
+  className,
+  onRequestClose
 }: {
   ptyId: string
   /** Host-input facts relayed with the card; null routes bytes by client OS. */
   terminalInput?: DashboardCardTerminalInput | null
   className?: string
+  /** Dismiss the hosting surface; fired by the pane-close chord (Cmd+W). */
+  onRequestClose?: () => void
 }): React.JSX.Element {
   const containerRef = useRef<HTMLDivElement>(null)
   const terminalRef = useRef<Terminal | null>(null)
@@ -70,6 +73,7 @@ export function AgentTerminalPreview({
   const settingsRef = useRef(settings)
   const macOptionAsAltRef = useRef(macOptionAsAlt)
   const terminalInputRef = useRef(terminalInput)
+  const onRequestCloseRef = useRef(onRequestClose)
   const { terminalTheme, terminalMode } = useMemo(() => {
     if (!settings) {
       return { terminalTheme: null, terminalMode: 'dark' as const }
@@ -93,7 +97,8 @@ export function AgentTerminalPreview({
     settingsRef.current = settings
     macOptionAsAltRef.current = macOptionAsAlt
     terminalInputRef.current = terminalInput
-  }, [settings, macOptionAsAlt, terminalInput])
+    onRequestCloseRef.current = onRequestClose
+  }, [settings, macOptionAsAlt, terminalInput, onRequestClose])
 
   useEffect(() => {
     setPtyGone(false)
@@ -204,6 +209,7 @@ export function AgentTerminalPreview({
           void pasteClipboardText(activeElement, source),
         // Why: route through terminal.input so the chord's bytes carry core's user-input signal, like typed keys.
         sendInput: (data) => terminal?.input(data),
+        requestClose: () => onRequestCloseRef.current?.(),
         getShortcutContext: () => ({
           clientPlatform: getShortcutPlatform(),
           macOptionAsAlt: macOptionAsAltRef.current,

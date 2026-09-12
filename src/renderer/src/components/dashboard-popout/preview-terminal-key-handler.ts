@@ -29,6 +29,8 @@ export function installPreviewTerminalKeyHandler(args: {
   claimImeKeyEvent: (event: KeyboardEvent) => boolean
   pasteClipboardText: (activeElement: Element | null, source: 'keyboard') => void
   sendInput: (data: string) => void
+  /** Dismiss the surface hosting this preview; the pane-close chord's only target here. */
+  requestClose: () => void
   /** Everything but optionKeyLocations, which this installer tracks itself. */
   getShortcutContext: () => Omit<PreviewShortcutContext, 'optionKeyLocations'>
 }): () => void {
@@ -193,14 +195,19 @@ export function installPreviewTerminalKeyHandler(args: {
         nativeOnlyShortcutTracker.armKeyDown(event)
         event.stopImmediatePropagation()
         return false
-      // Why: pane-scoped chords have no target in a preview dialog. Swallow them
-      // — a pane never sends these bytes to the shell, and xterm would encode
-      // e.g. Ctrl+Shift+D as a bare Ctrl+D. Listed one by one rather than under a
-      // `default` so a newly added action has to be classified here, not
-      // silently swallowed.
+      // Why: the preview's closable unit is the surface itself, so the pane-close
+      // chord (Cmd+W and terminal.closePane) dismisses it — the terminal owns
+      // focus, leaving no other keyboard way out.
+      case 'closeActivePane':
+        args.requestClose()
+        return consumeEvent(event)
+      // Why: the remaining pane-scoped chords have no target in a preview dialog.
+      // Swallow them — a pane never sends these bytes to the shell, and xterm
+      // would encode e.g. Ctrl+Shift+D as a bare Ctrl+D. Listed one by one rather
+      // than under a `default` so a newly added action has to be classified here,
+      // not silently swallowed.
       case 'clearActivePane':
       case 'clearPaneTitle':
-      case 'closeActivePane':
       case 'copySelection':
       case 'equalizePaneSizes':
       case 'focusPane':
