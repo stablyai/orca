@@ -30,8 +30,6 @@ const HEADING = /^(#{1,6})\s+(.*)$/
 const FENCE = /^```/
 // Captures the fence info string (language) on the opening fence, e.g. ```mermaid.
 const FENCE_OPEN = /^```\s*([^\s`]*)/
-// A GFM table delimiter row: cells of dashes with optional leading/trailing colons.
-const TABLE_DELIM = /^\s*\|?\s*:?-{1,}:?\s*(\|\s*:?-{1,}:?\s*)*\|?\s*$/
 const QUOTE = /^>\s?(.*)$/
 const HR = /^(?:---+|\*\*\*+|___+)\s*$/
 const UNORDERED = /^\s*[-*+]\s+(.*)$/
@@ -114,7 +112,7 @@ function parseLines(content: string): MarkdownBlock[] {
 
     // GFM pipe table: a header row immediately followed by a delimiter row.
     // Requires the delimiter row so plain prose with a stray `|` isn't captured.
-    if (line.includes('|') && i + 1 < lines.length && TABLE_DELIM.test(lines[i + 1])) {
+    if (line.includes('|') && i + 1 < lines.length && isTableDelimiter(lines[i + 1])) {
       flushParagraph()
       const headers = splitTableRow(line)
       const align = parseAlignRow(lines[i + 1])
@@ -215,6 +213,10 @@ function splitTableRow(line: string): string[] {
   }
   cells.push(cell.trim())
   return cells
+}
+
+function isTableDelimiter(line: string): boolean {
+  return splitTableRow(line).every((cell) => /^:?-+:?$/.test(cell))
 }
 
 // Reads alignment from a delimiter row's colons: `:--` left, `:-:` center, `--:` right.
