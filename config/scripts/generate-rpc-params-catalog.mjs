@@ -51,7 +51,14 @@ function indexableModules() {
     const source = readFileSync(path.join(RPC_DIR, file), 'utf8')
     for (const [, specifier] of source.matchAll(/from\s+'(\.[^']+)'/g)) {
       const resolved = `${path.resolve(path.dirname(path.join(RPC_DIR, file)), specifier)}.ts`
-      if (resolved.startsWith(`${SHARED_DIR}${path.sep}`) && existsSync(resolved)) {
+      // Never re-add the generator's own output: a module under RPC_DIR may import the
+      // catalog for a type-only contract, and bundling a stale catalog makes regeneration
+      // crash in exactly the state that requires regenerating.
+      if (
+        resolved !== OUTPUT_PATH &&
+        resolved.startsWith(`${SHARED_DIR}${path.sep}`) &&
+        existsSync(resolved)
+      ) {
         modules.add(resolved)
       }
     }
