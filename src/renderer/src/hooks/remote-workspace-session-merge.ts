@@ -262,10 +262,14 @@ export function mergeDirectSshRemoteWorkspaceSession(
   // the workspace or its path did not resolve to a local id, and taking that literally drops the
   // user onto the home screen while their terminals keep running. So it is only overridden when the
   // workspace they are standing in demonstrably still exists in the merged result.
+  // Why presence and not length, the same reading `hasLocalTabsRow` above already gives: an
+  // explicit empty row is the record that the user closed the last terminal, and a workspace they
+  // emptied still exists in the merged result. Counting rows sent them to the home screen for
+  // having closed their last tab.
   const localActiveWorkspaceSurvives =
     current.activeWorktreeId != null &&
     replaceWorktreeIds.has(current.activeWorktreeId) &&
-    (tabsByWorktree[current.activeWorktreeId]?.length ?? 0) > 0
+    Object.hasOwn(tabsByWorktree, current.activeWorktreeId)
   const preservedActiveWorktreeId = localActiveWorkspaceSurvives ? current.activeWorktreeId : null
   // The three active-* fields have to describe ONE workspace, so they are all derived from whichever
   // worktree wins rather than each choosing a source. Taking the repo from the host while the
