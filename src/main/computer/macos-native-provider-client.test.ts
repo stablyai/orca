@@ -117,6 +117,76 @@ describe('MacOSNativeProviderClient', () => {
     vi.useRealTimers()
   })
 
+  it('does not rescan a growing fragmented screenshot reply', async () => {
+    const { MacOSNativeProviderClient } = await loadClientModule()
+    const client = new MacOSNativeProviderClient()
+    const call = client.snapshot({ app: 'fixture' })
+    await vi.waitFor(() => expect(sockets).toHaveLength(1))
+    const socket = sockets[0]!
+    await vi.waitFor(() => expect(socket.writes).toHaveLength(1))
+    const handshake = JSON.parse(socket.writes[0]!) as { id: number }
+    socket.emit(
+      'data',
+      `${JSON.stringify({ id: handshake.id, ok: true, result: macOSProviderCapabilities() })}\n`
+    )
+    await vi.waitFor(() => expect(socket.writes).toHaveLength(2))
+    const request = JSON.parse(socket.writes[1]!) as { id: number }
+    const result = { screenshot: { data: 'A'.repeat(1_200_000) }, text: 'fixture' }
+    const reply = `${JSON.stringify({ id: request.id, ok: true, result })}\n`
+    const originalIndexOf = String.prototype.indexOf
+    const originalIncludes = String.prototype.includes
+    let searchedUnits = 0
+    const search = vi.spyOn(String.prototype, 'indexOf').mockImplementation(function (
+      this: string,
+      needle: string,
+      fromIndex?: number
+    ) {
+      if (needle === '\n') {
+        searchedUnits += Math.max(0, this.length - (fromIndex ?? 0))
+      }
+      return originalIndexOf.call(this, needle, fromIndex)
+    })
+    const includes = vi.spyOn(String.prototype, 'includes').mockImplementation(function (
+      this: string,
+      needle: string,
+      fromIndex?: number
+    ) {
+      if (needle === '\n') {
+        searchedUnits += Math.max(0, this.length - (fromIndex ?? 0))
+      }
+      return originalIncludes.call(this, needle, fromIndex)
+    })
+    try {
+      for (let offset = 0; offset < reply.length; offset += 4096) {
+        socket.emit('data', reply.slice(offset, offset + 4096))
+      }
+    } finally {
+      search.mockRestore()
+      includes.mockRestore()
+    }
+    await expect(call).resolves.toEqual(result)
+    expect(searchedUnits).toBeLessThanOrEqual(reply.length * 3)
+    client.shutdown()
+  })
+
+  it('retries buffered replies on an empty chunk after a malformed reply throws', async () => {
+    const { MacOSNativeProviderClient } = await loadClientModule()
+    const client = new MacOSNativeProviderClient()
+    void client.capabilities().catch(() => {})
+    const secondCall = client.capabilities()
+    await vi.waitFor(() => expect(sockets).toHaveLength(1))
+    const socket = sockets[0]!
+    await vi.waitFor(() => expect(socket.writes).toHaveLength(2))
+    const first = JSON.parse(socket.writes[0]!) as { id: number }
+    const second = JSON.parse(socket.writes[1]!) as { id: number }
+    const malformed = JSON.stringify({ id: first.id, ok: false })
+    const valid = JSON.stringify({ id: second.id, ok: true, result: macOSProviderCapabilities() })
+    expect(() => socket.emit('data', `${malformed}\n${valid}\n`)).toThrow(TypeError)
+    socket.emit('data', '')
+    await expect(secondCall).resolves.toEqual(macOSProviderCapabilities())
+    client.shutdown()
+  })
+
   it('ignores stale socket data, close, and error after a replacement socket starts', async () => {
     const { MacOSNativeProviderClient } = await loadClientModule()
     const client = new MacOSNativeProviderClient()
@@ -128,6 +198,7 @@ describe('MacOSNativeProviderClient', () => {
     await vi.waitFor(() => expect(sockets).toHaveLength(1))
     const firstSocket = sockets[0]!
 
+    firstSocket.emit('data', '{"id":999,"result":"partial')
     await vi.advanceTimersByTimeAsync(60_000)
     await firstRejection
     expect(firstSocket.destroyed).toBe(true)
@@ -170,6 +241,7 @@ describe('MacOSNativeProviderClient', () => {
     const firstSocketDirectory = mkdtempSyncMock.mock.results[0]?.value as string
     await vi.waitFor(() => expect(firstSocket.writes).toHaveLength(1))
 
+    firstSocket.emit('data', '{"id":999,"result":"partial')
     firstSocket.emit('error', new Error('active helper failed'))
     await firstRejection
     expect(firstSocket.destroyed).toBe(true)
