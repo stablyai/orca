@@ -12,6 +12,7 @@ const accountCardsSource = readFileSync(
   new URL('../home/MobileHomeAccountUsageCards.tsx', import.meta.url),
   'utf8'
 )
+const accountsScreenSource = readFileSync(new URL('../../app/h/[hostId]/accounts.tsx', import.meta.url), 'utf8')
 
 function navigationHarness(initialState: HostStackNavigationState) {
   const stateListeners = new Set<() => void>()
@@ -90,5 +91,13 @@ describe('mobile accounts route', () => {
     expect(homeSource).toContain('onOpenAccounts={openMobileAccounts}')
     expect(accountCardsSource).toContain('props.onOpen(host.id)')
     expect(accountCardsSource).not.toContain('/accounts`')
+  })
+
+  it('renders Claude F usage bars on the Accounts screen when fableWeekly data exists', () => {
+    expect(accountsScreenSource).toContain("provider === 'claude' && activeUsage?.fableWeekly")
+    expect(accountsScreenSource).toContain("getUsageBarState(activeUsage, 'fableWeekly')")
+    expect(accountsScreenSource).toContain("provider === 'claude' && usage?.fableWeekly")
+    expect(accountsScreenSource).toContain("getUsageBarState(usage, 'fableWeekly', isFetching)")
+    expect(accountsScreenSource).toContain('label="F"')
   })
 })
