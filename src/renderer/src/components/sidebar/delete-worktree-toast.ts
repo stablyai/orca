@@ -1,8 +1,10 @@
 import { translate } from '@/i18n/i18n'
 import {
   isLockedWorktreeRemovalError,
+  isProvenLivePtyRemovalError,
+  isProvenLiveStructuredSessionRemovalError,
   type WorktreeForceDeleteReason
-} from '../../../../shared/worktree-removal'
+} from '../../../../shared/worktree/removal'
 export type DeleteWorktreeToastCopy = {
   title: string
   description?: string
@@ -48,6 +50,51 @@ export function getDeleteWorktreeToastCopy(
           'auto.components.sidebar.delete.worktree.toast.0899ebdb28',
           'Git already forgot this workspace, but its directory is still on disk. Use Force Delete to remove the orphaned directory.'
         ),
+        isDestructive: false
+      }
+    }
+    if (forceDeleteReason === 'unstopped-pty') {
+      return {
+        title: translate(
+          'auto.components.sidebar.delete.worktree.toast.1d0fa5c0a5',
+          'Failed to delete workspace {{value0}}',
+          { value0: worktreeName }
+        ),
+        // Why: Force Delete proceeds either way, so the copy must say which case this is.
+        // Telling a user "could not confirm" about terminals Orca watched stay alive asks
+        // them to waive a doubt that does not exist, and any running agent's work dies with it.
+        description: isProvenLivePtyRemovalError(error)
+          ? translate(
+              'auto.components.sidebar.delete.worktree.toast.unstoppedPtyLive',
+              'This workspace still has running terminals, so Orca stopped before deleting any files. Force Delete will kill them and discard any uncommitted work they hold.'
+            )
+          : translate(
+              'auto.components.sidebar.delete.worktree.toast.unstoppedPty',
+              'Orca could not confirm every terminal in this workspace has exited, so it stopped before deleting any files. Use Force Delete to remove it anyway.'
+            ),
+        isDestructive: false
+      }
+    }
+    if (forceDeleteReason === 'running-agent-session') {
+      return {
+        title: translate(
+          'auto.components.sidebar.delete.worktree.toast.1d0fa5c0a5',
+          'Failed to delete workspace {{value0}}',
+          { value0: worktreeName }
+        ),
+        // Why two branches, like the PTY pair above: an ordinary delete already tried to close
+        // these sessions, and only the observation AFTER that attempt separates one Orca watched
+        // stay attached from one it simply could not reach. Telling the first user "could not
+        // confirm" asks them to waive a doubt that does not exist, and a conversation dies with it.
+        description: isProvenLiveStructuredSessionRemovalError(error)
+          ? translate(
+              'auto.components.sidebar.delete.worktree.toast.runningAgentSessionLive',
+              'This workspace still has running agent sessions that Orca could not close, so it stopped before deleting any files. Force Delete will discard any work they hold.'
+            )
+          : translate(
+              'auto.components.sidebar.delete.worktree.toast.runningAgentSession',
+              'Orca could not confirm every agent session in this workspace has closed, so it stopped before deleting any files. Use Force Delete to remove it anyway.'
+            ),
         isDestructive: false
       }
     }

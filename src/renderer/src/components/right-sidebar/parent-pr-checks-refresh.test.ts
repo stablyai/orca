@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { Repo, Worktree } from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import type { HostedReviewInfo } from '../../../../shared/hosted-review'
 import {
   getParentPrChecksRefreshCandidates,
@@ -126,7 +127,8 @@ describe('parent PR checks refresh', () => {
       worktrees: [unlinked, linked],
       repos: [repo]
     })
-    const fetchHostedReviewForBranch = vi.fn(async () => makeReview())
+    const githubRepository = { owner: 'upstream', repo: 'project' }
+    const fetchHostedReviewForBranch = vi.fn(async () => makeReview({ githubRepository }))
     const fetchPRChecks = vi.fn(async () => [])
 
     await runLimitedParentPrChecksRefreshes({
@@ -151,7 +153,7 @@ describe('parent PR checks refresh', () => {
         staleWhileRevalidate: true
       }
     ])
-    expect(fetchPRChecks).toHaveBeenCalledWith('/repo', 7, 'feature', 'abc123', null, {
+    expect(fetchPRChecks).toHaveBeenCalledWith('/repo', 7, 'feature', 'abc123', githubRepository, {
       repoId: 'repo-1',
       force: false
     })

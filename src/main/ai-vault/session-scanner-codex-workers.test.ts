@@ -119,6 +119,7 @@ describe('scanAiVaultSessions Codex worker sessions', () => {
       openclawLegacyStateDir: join(root, 'openclaw-legacy-state'),
       piSessionsDir: join(root, 'pi-sessions'),
       ompSessionsDir: join(root, 'omp-sessions'),
+      primeAgentSessionsDir: join(root, 'prime-agent-sessions'),
       droidSessionsDir: join(root, 'droid-sessions'),
       droidProjectsDir: join(root, 'droid-projects'),
       kimiSessionsDir: join(root, 'kimi-sessions'),

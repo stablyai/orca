@@ -235,6 +235,40 @@ describe('PortScanner', () => {
     expect(scanner.getDetectedPorts('t1')).toEqual([])
   })
 
+  it('aborts in-flight requests before stopping or replacing a target scan', async () => {
+    const harness = createVisibilityHarness(true)
+    const signals: AbortSignal[] = []
+    const request = vi.fn(
+      (_method: string, _params?: Record<string, unknown>, options?: { signal?: AbortSignal }) =>
+        new Promise<never>((_resolve, reject) => {
+          const signal = options?.signal
+          if (!signal) {
+            reject(new Error('missing request signal'))
+            return
+          }
+          signals.push(signal)
+          signal.addEventListener('abort', () => reject(signal.reason), { once: true })
+        })
+    )
+    const mux = { request } as unknown as SshChannelMultiplexer
+    const scanner = new PortScanner(harness.visibility)
+
+    scanner.startScanning('t1', mux, vi.fn())
+    expect(signals).toHaveLength(1)
+    expect(signals[0].aborted).toBe(false)
+
+    scanner.startScanning('t1', mux, vi.fn())
+    expect(signals).toHaveLength(2)
+    expect(signals[0].aborted).toBe(true)
+    expect(signals[1].aborted).toBe(false)
+
+    scanner.stopScanning('t1')
+    expect(signals[1].aborted).toBe(true)
+    await vi.advanceTimersByTimeAsync(10 * BASE)
+    expect(request).toHaveBeenCalledTimes(2)
+    expect(harness.listenerCount()).toBe(0)
+  })
+
   it('keeps targets independent: stopping one host leaves the other scanning', async () => {
     const harness = createVisibilityHarness(true)
     let nextA = 3000

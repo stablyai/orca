@@ -28,12 +28,8 @@ vi.mock('./local-git-config-signature', () => ({
   readLocalGitConfigSignature: readLocalGitConfigSignatureMock
 }))
 
-import {
-  getOwnerRepo,
-  getIssueOwnerRepo,
-  getOwnerRepoForRemote,
-  _resetOwnerRepoCache
-} from './github-repository-identity'
+import { getOwnerRepoForRemote, _resetOwnerRepoCache } from './github-repository-identity'
+import { getOwnerRepo, getIssueOwnerRepo } from './github-owner-repo-selection'
 import { getRepoUpstream } from './client'
 
 const FORK_PATH = '/tmp/fork-checkout'
@@ -128,7 +124,8 @@ describe('issue #7331: fork PR owner/repo resolution', () => {
     // fast-path would be skipped.
     const upstream = await getRepoUpstream(FORK_PATH)
 
-    expect(upstream).toEqual({ owner: 'stablyai', repo: 'orca' })
+    // Why: origin resolution pins github.com so host-scoped execution is explicit.
+    expect(upstream).toEqual({ owner: 'stablyai', repo: 'orca', host: 'github.com' })
     expect(ghExecFileAsyncMock).not.toHaveBeenCalled()
   })
 })

@@ -1,11 +1,10 @@
 import { getSshFilesystemProvider } from './providers/ssh-filesystem-dispatch'
 import { getSshGitProvider } from './providers/ssh-git-dispatch'
+import { connectRegisteredSshTarget, getSshConnectionStore } from './ipc/ssh'
 import {
-  connectRegisteredSshTarget,
   disconnectRegisteredSshTarget,
-  getSshConnectionStore,
   removeRegisteredSshTarget
-} from './ipc/ssh'
+} from './ipc/ssh-session-teardown'
 import type { EphemeralVmRecipeConnection } from '../shared/ephemeral-vm-recipes'
 import type { SshTarget } from '../shared/ssh-types'
 

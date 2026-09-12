@@ -2,7 +2,7 @@ import type {
   NestedRepoScanResult,
   ProjectGroupImportMode,
   ProjectGroupImportResult
-} from './types'
+} from './project-group-types'
 
 export const NESTED_REPO_TELEMETRY_MAX_REPO_COUNT = 500
 

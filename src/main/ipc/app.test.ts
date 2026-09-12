@@ -10,7 +10,9 @@ const {
   destroySystemTrayMock,
   relaunchAppMock,
   showOpenDialogMock,
-  grantFloatingWorkspaceDirectoryMock
+  grantFloatingWorkspaceDirectoryMock,
+  registerRendererShutdownCheckpointHandlerMock,
+  registerMacKeyboardLayoutChangeNotificationsMock
 } = vi.hoisted(() => ({
   handlers: new Map<string, (_event: unknown, args?: unknown) => unknown>(),
   appExitMock: vi.fn(),
@@ -20,7 +22,9 @@ const {
   destroySystemTrayMock: vi.fn(),
   relaunchAppMock: vi.fn(),
   showOpenDialogMock: vi.fn(),
-  grantFloatingWorkspaceDirectoryMock: vi.fn()
+  grantFloatingWorkspaceDirectoryMock: vi.fn(),
+  registerRendererShutdownCheckpointHandlerMock: vi.fn(),
+  registerMacKeyboardLayoutChangeNotificationsMock: vi.fn()
 }))
 
 vi.mock('node:child_process', () => ({
@@ -103,6 +107,35 @@ vi.mock('./floating-workspace-directory', () => ({
   resolveFloatingTerminalCwd: vi.fn()
 }))
 
+vi.mock('./renderer-shutdown-checkpoint', () => ({
+  registerRendererShutdownCheckpointHandler: registerRendererShutdownCheckpointHandlerMock
+}))
+
+vi.mock('./macos-keyboard-layout-change-notifications', () => ({
+  registerMacKeyboardLayoutChangeNotifications: registerMacKeyboardLayoutChangeNotificationsMock
+}))
+
+const windowsProbes = vi.hoisted(() => ({
+  isWslAvailable: vi.fn(() => true),
+  isWslAvailableAsync: vi.fn(async () => true),
+  listWslDistros: vi.fn(() => ['Ubuntu']),
+  listWslDistrosAsync: vi.fn(async () => ['Ubuntu']),
+  isPwshAvailable: vi.fn(() => true),
+  isPwshAvailableAsync: vi.fn(async () => true)
+}))
+
+vi.mock('../wsl', () => ({
+  isWslAvailable: windowsProbes.isWslAvailable,
+  isWslAvailableAsync: windowsProbes.isWslAvailableAsync,
+  listWslDistros: windowsProbes.listWslDistros,
+  listWslDistrosAsync: windowsProbes.listWslDistrosAsync
+}))
+
+vi.mock('../pwsh', () => ({
+  isPwshAvailable: windowsProbes.isPwshAvailable,
+  isPwshAvailableAsync: windowsProbes.isPwshAvailableAsync
+}))
+
 import { registerAppHandlers } from './app'
 
 describe('registerAppHandlers', () => {
@@ -123,6 +156,11 @@ describe('registerAppHandlers', () => {
     relaunchAppMock.mockImplementation(() => appRelaunchMock())
     showOpenDialogMock.mockReset()
     grantFloatingWorkspaceDirectoryMock.mockReset()
+    registerRendererShutdownCheckpointHandlerMock.mockReset()
+    registerMacKeyboardLayoutChangeNotificationsMock.mockReset()
+    for (const probe of Object.values(windowsProbes)) {
+      probe.mockClear()
+    }
     processKillSpy = vi.spyOn(process, 'kill').mockReturnValue(true)
     Object.defineProperty(process, 'platform', { value: originalPlatform, configurable: true })
   })
@@ -131,6 +169,15 @@ describe('registerAppHandlers', () => {
     processKillSpy.mockRestore()
     vi.useRealTimers()
     Object.defineProperty(process, 'platform', { value: originalPlatform, configurable: true })
+  })
+
+  it('registers the combined renderer shutdown checkpoint', () => {
+    const store = {}
+
+    registerAppHandlers(store as never)
+
+    expect(registerRendererShutdownCheckpointHandlerMock).toHaveBeenCalledWith(store)
+    expect(registerMacKeyboardLayoutChangeNotificationsMock).toHaveBeenCalledOnce()
   })
 
   it('marks relaunch as expected shutdown before exiting', async () => {
@@ -365,5 +412,22 @@ describe('registerAppHandlers', () => {
       properties: ['openDirectory']
     })
     expect(grantFloatingWorkspaceDirectoryMock).toHaveBeenCalledWith(store, '/Users/kaylee/notes')
+  })
+
+  // Why: the renderer reads these on every Windows capability refresh; the sync probes
+  // execFileSync wsl.exe/pwsh.exe and would stall the main event loop for up to 5s each.
+  it('answers the Windows shell capability channels without a blocking spawn', async () => {
+    registerAppHandlers({} as never)
+
+    await expect(handlers.get('wsl:isAvailable')?.(null)).resolves.toBe(true)
+    await expect(handlers.get('wsl:listDistros')?.(null)).resolves.toEqual(['Ubuntu'])
+    await expect(handlers.get('pwsh:isAvailable')?.(null)).resolves.toBe(true)
+
+    expect(windowsProbes.isWslAvailableAsync).toHaveBeenCalledTimes(1)
+    expect(windowsProbes.listWslDistrosAsync).toHaveBeenCalledTimes(1)
+    expect(windowsProbes.isPwshAvailableAsync).toHaveBeenCalledTimes(1)
+    expect(windowsProbes.isWslAvailable).not.toHaveBeenCalled()
+    expect(windowsProbes.listWslDistros).not.toHaveBeenCalled()
+    expect(windowsProbes.isPwshAvailable).not.toHaveBeenCalled()
   })
 })

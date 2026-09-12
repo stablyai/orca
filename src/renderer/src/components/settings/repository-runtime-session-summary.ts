@@ -1,5 +1,6 @@
 import type { AppState } from '../../store/types'
-import { getRepoIdFromWorktreeId } from '../../../../shared/worktree-id'
+import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
+import { getTabIdToWorktreeId } from '../sidebar/worktree-agent-row-selectors'
 
 export type ProjectRuntimeSessionSummary = {
   liveTerminalCount: number
@@ -11,16 +12,26 @@ type RuntimeSessionSummaryState = Pick<
   'tabsByWorktree' | 'ptyIdsByTabId' | 'agentStatusByPaneKey'
 >
 
+type SessionSummaryCache = {
+  ptyIdsByTabId: AppState['ptyIdsByTabId']
+  agentStatusByPaneKey: AppState['agentStatusByPaneKey']
+  byRepoId: Map<string, ProjectRuntimeSessionSummary>
+}
+
+// Why: one RepositoryPane per project reruns this on every store write, and each
+// run walked every worktree bucket plus every agent-status pane. Key on the three
+// input slices so unrelated writes reuse the answer instead of rescanning.
+const sessionSummaryCache = new WeakMap<AppState['tabsByWorktree'], SessionSummaryCache>()
+
 function getTabIdFromPaneKey(paneKey: string): string | null {
   const separator = paneKey.indexOf(':')
   return separator > 0 ? paneKey.slice(0, separator) : null
 }
 
-export function getProjectRuntimeSessionSummary(
+function computeProjectRuntimeSessionSummary(
   state: RuntimeSessionSummaryState,
   repoId: string
 ): ProjectRuntimeSessionSummary {
-  const tabWorktreeIds = new Map<string, string>()
   const projectWorktreeIds = new Set<string>()
   let liveTerminalCount = 0
 
@@ -31,7 +42,6 @@ export function getProjectRuntimeSessionSummary(
     projectWorktreeIds.add(worktreeId)
 
     for (const tab of tabs) {
-      tabWorktreeIds.set(tab.id, worktreeId)
       const livePtyIds = new Set(state.ptyIdsByTabId[tab.id] ?? [])
       if (tab.ptyId) {
         livePtyIds.add(tab.ptyId)
@@ -40,6 +50,9 @@ export function getProjectRuntimeSessionSummary(
     }
   }
 
+  // Rows outside this project resolve to a worktree the checks below reject, so
+  // the shared index answers the same question the repo-scoped map used to.
+  const tabWorktreeIds = getTabIdToWorktreeId(state.tabsByWorktree)
   let activeTaskCount = 0
   for (const [paneKey, entry] of Object.entries(state.agentStatusByPaneKey)) {
     if (entry.state === 'done') {
@@ -56,4 +69,30 @@ export function getProjectRuntimeSessionSummary(
   }
 
   return { liveTerminalCount, activeTaskCount }
+}
+
+export function getProjectRuntimeSessionSummary(
+  state: RuntimeSessionSummaryState,
+  repoId: string
+): ProjectRuntimeSessionSummary {
+  let cache = sessionSummaryCache.get(state.tabsByWorktree)
+  if (
+    !cache ||
+    cache.ptyIdsByTabId !== state.ptyIdsByTabId ||
+    cache.agentStatusByPaneKey !== state.agentStatusByPaneKey
+  ) {
+    cache = {
+      ptyIdsByTabId: state.ptyIdsByTabId,
+      agentStatusByPaneKey: state.agentStatusByPaneKey,
+      byRepoId: new Map()
+    }
+    sessionSummaryCache.set(state.tabsByWorktree, cache)
+  }
+  const cached = cache.byRepoId.get(repoId)
+  if (cached) {
+    return cached
+  }
+  const summary = computeProjectRuntimeSessionSummary(state, repoId)
+  cache.byRepoId.set(repoId, summary)
+  return summary
 }

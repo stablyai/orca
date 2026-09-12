@@ -1,9 +1,14 @@
 import type { AiVaultAgent, AiVaultScanIssue } from '../../shared/ai-vault-types'
-import { buildOpenCodeSqliteCandidatePath } from './session-scanner-opencode-sqlite-paths'
-import { splitOpenCodeSqliteCandidate } from './session-scanner-opencode-sqlite-paths'
+import {
+  buildOpenCodeSqliteCandidatePath,
+  splitOpenCodeSqliteCandidate
+} from './session-scanner-opencode-sqlite-paths'
+import {
+  openCodeDatabaseScanIssue,
+  readOpenCodeDatabase
+} from './session-scanner-opencode-sqlite-open'
 import type { SessionFileCandidate } from './session-scanner-types'
-import { errorMessage } from './session-scanner-values'
-import SyncDatabase from '../sqlite/sync-database'
+import type SyncDatabase from '../sqlite/sync-database'
 import { columnExists, tableExists } from '../opencode-usage/schema-helpers'
 
 // Why: the SQLite session-list query + reader lives in its own electron-free
@@ -16,12 +21,6 @@ type SessionRow = {
   time_updated: number
 }
 
-function openReadonlyDatabase(dbPath: string): SyncDatabase {
-  const db = new SyncDatabase(dbPath, { readonly: true, fileMustExist: true })
-  db.pragma('query_only = ON')
-  return db
-}
-
 function canReadOpenCodeSessions(db: SyncDatabase): boolean {
   return (
     tableExists(db, 'session') &&
@@ -30,7 +29,7 @@ function canReadOpenCodeSessions(db: SyncDatabase): boolean {
   )
 }
 
-function buildSessionListQuery(db: SyncDatabase): string {
+function buildSessionListQuery(db: SyncDatabase, limited: boolean): string {
   const parentIdPredicate = columnExists(db, 'session', 'parent_id') ? 'AND parent_id IS NULL' : ''
   const archivedPredicate = columnExists(db, 'session', 'time_archived')
     ? 'AND time_archived IS NULL'
@@ -43,7 +42,16 @@ function buildSessionListQuery(db: SyncDatabase): string {
           FROM session
           WHERE 1=1 ${parentIdPredicate} ${archivedPredicate}
           ORDER BY CASE WHEN time_updated > 0 THEN time_updated ELSE time_created END DESC
-          LIMIT ?`
+          ${limited ? 'LIMIT ?' : ''}`
+}
+
+function readSessionRows(db: SyncDatabase, limit: number): SessionRow[] {
+  if (!canReadOpenCodeSessions(db)) {
+    return []
+  }
+  const limited = Number.isFinite(limit)
+  const statement = db.prepare(buildSessionListQuery(db, limited))
+  return (limited ? statement.all(limit) : statement.all()) as SessionRow[]
 }
 
 function rowToCandidate(row: SessionRow, dbPath: string): SessionFileCandidate {
@@ -97,24 +105,17 @@ export async function listOpenCodeSqliteSessions(args: {
 }): Promise<SessionFileCandidate[]> {
   const candidates: SessionFileCandidate[] = []
   for (const dbPath of args.dbPaths) {
-    let db: SyncDatabase | null = null
     try {
-      db = openReadonlyDatabase(dbPath)
-      if (!canReadOpenCodeSessions(db)) {
-        continue
-      }
-      const rows = db.prepare(buildSessionListQuery(db)).all(args.limit) as SessionRow[]
+      const rows = readOpenCodeDatabase({
+        dbPath,
+        read: (db) => readSessionRows(db, args.limit)
+      })
       for (const row of rows) {
         candidates.push(rowToCandidate(row, dbPath))
       }
     } catch (err) {
-      args.issues.push({
-        agent: 'opencode',
-        path: dbPath,
-        message: errorMessage(err)
-      })
-    } finally {
-      db?.close()
+      // A whole DB failed, not one transcript: kinded so the panel says so.
+      args.issues.push(openCodeDatabaseScanIssue(dbPath, err))
     }
   }
   return dedupeAndSortSqliteCandidates(candidates)

@@ -1,6 +1,10 @@
+import { startAndroidForegroundPushPresentation } from '../src/notifications/android-foreground-push'
+import { registerPushDismissalTask } from '../src/notifications/push-background-dismissal'
+import { readNativeNotificationData } from '../src/notifications/native-notification-data'
+import { setNotificationViewingWorkspace } from '../src/notifications/notification-viewing-policy'
 import { useCallback, useEffect, useRef } from 'react'
 import { View, StyleSheet } from 'react-native'
-import { Stack, useRouter } from 'expo-router'
+import { Stack, useRouter, useGlobalSearchParams, usePathname } from 'expo-router'
 import { StatusBar } from 'expo-status-bar'
 import * as SplashScreen from 'expo-splash-screen'
 import * as Notifications from 'expo-notifications'
@@ -8,8 +12,16 @@ import * as Linking from 'expo-linking'
 import { colors } from '../src/theme/mobile-theme'
 import { OrcaLogo } from '../src/components/OrcaLogo'
 import { RpcClientProvider } from '../src/transport/client-context'
-import { getNotificationNavigationPath } from '../src/notifications/notification-routing'
-import { loadHosts } from '../src/transport/host-store'
+import { getNotificationNavigationTarget } from '../src/notifications/notification-routing'
+import { useOpenNotificationRoute } from '../src/notifications/use-open-notification-route'
+import {
+  isRemotePushTrigger,
+  pushNotificationRouteData,
+  foregroundNotificationBehavior
+} from '../src/notifications/push-receive'
+import { startPushTokenSync } from '../src/notifications/push-registration'
+import { ensureDesktopNotificationChannel } from '../src/notifications/desktop-notification-channel'
+import { loadHostCatalog } from '../src/transport/host-store'
 import { extractPairingCodeFromUrl } from '../src/transport/pairing'
 import { recoverMobileRelayPairing } from '../src/transport/mobile-relay-pairing-recovery'
 
@@ -18,22 +30,30 @@ import { recoverMobileRelayPairing } from '../src/transport/mobile-relay-pairing
 // between the native splash and the first React paint.
 SplashScreen.preventAutoHideAsync()
 
-// Why: without this, expo-notifications silently drops notifications when
-// the app is in the foreground. Setting all three to true makes iOS/Android
-// display the banner, play the sound, and show the badge even while the
-// app is active. This runs once at module load time before any notification
-// is scheduled.
+// Why at boot and not only on subscribe: the gateway's FCM payload targets the
+// 'orca-desktop' channel, and a background push can land before any socket has
+// connected. Android drops a notification whose channel does not exist yet.
+void ensureDesktopNotificationChannel().catch(() => {})
+void registerPushDismissalTask().catch(() => {})
+
+// Register before scheduling so foreground delivery uses the same suppression policy.
 Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowBanner: true,
-    shouldShowList: true,
-    shouldPlaySound: true,
-    shouldSetBadge: false
-  })
+  handleNotification: foregroundNotificationBehavior
 })
 
 export default function RootLayout() {
   const router = useRouter()
+  const pathname = usePathname()
+  const { hostId, worktreeId } = useGlobalSearchParams<{ hostId?: string; worktreeId?: string }>()
+  useEffect(() => {
+    setNotificationViewingWorkspace(
+      pathname.includes('/session/') && typeof hostId === 'string' && typeof worktreeId === 'string'
+        ? { hostId, worktreeId }
+        : null
+    )
+    return () => setNotificationViewingWorkspace(null)
+  }, [pathname, hostId, worktreeId])
+  const openNotificationRoute = useOpenNotificationRoute()
   const handledNotificationIdsRef = useRef<Set<string>>(new Set())
 
   useEffect(() => {
@@ -41,6 +61,11 @@ export default function RootLayout() {
     // reconcile the server result before another scan can replace that journal.
     void recoverMobileRelayPairing()
   }, [])
+
+  // Why: a rolled APNs/FCM token stops delivering silently, so every paired host
+  // has to be re-registered with the new one as soon as the provider hands it over.
+  useEffect(() => startPushTokenSync(), [])
+  useEffect(() => startAndroidForegroundPushPresentation(), [])
 
   // Why: route `orca://pair?...` deep links to the confirm screen so
   // the same pairing flow runs whether the link arrived via QR scan,
@@ -68,6 +93,7 @@ export default function RootLayout() {
     return () => sub.remove()
   }, [router])
 
+  // ─── Notification tap routing ───
   // Why: iOS delivers local notification taps through expo-notifications,
   // not Linking. Route both cold-start and warm-start responses to the host
   // and worktree that scheduled the notification.
@@ -91,10 +117,22 @@ export default function RootLayout() {
       }
     }
 
-    async function getNavigationPath(data: unknown): Promise<string | null> {
-      const hosts = await loadHosts().catch(() => null)
-      return getNotificationNavigationPath(data, {
-        knownHostIds: hosts ? new Set(hosts.map((host) => host.id)) : undefined
+    async function getNavigationTarget(notification: Notifications.Notification) {
+      const hosts = await loadHostCatalog().catch(() => null)
+      const data = readNativeNotificationData(notification.request)
+      // A gateway push names its host by key fingerprint, not by this device's hostId.
+      // With no catalog to resolve against, such a push stays unrouted instead of
+      // falling back to whatever hostId its raw data carries.
+      const routeData = pushNotificationRouteData(
+        data,
+        hosts ?? [],
+        isRemotePushTrigger(notification.request.trigger)
+      )
+      return getNotificationNavigationTarget(routeData, {
+        knownHostIds: hosts ? new Set(hosts.map((host) => host.id)) : undefined,
+        credentialStatusByHostId: hosts
+          ? new Map(hosts.map((host) => [host.id, host.credentialStatus]))
+          : undefined
       })
     }
 
@@ -118,13 +156,13 @@ export default function RootLayout() {
         }
       }
 
-      const path = await getNavigationPath(response.notification.request.content.data)
+      const target = await getNavigationTarget(response.notification)
       clearLastNotificationResponse()
       if (disposed) {
         return
       }
-      if (path) {
-        router.push(path)
+      if (target) {
+        openNotificationRoute(target)
       }
     }
 
@@ -140,7 +178,8 @@ export default function RootLayout() {
       disposed = true
       sub.remove()
     }
-  }, [router])
+  }, [openNotificationRoute])
+  // ─── End notification tap routing ───
 
   // Why: hide the native splash only once the navigation Stack has been laid
   // out — this is the earliest moment the user will see actual app content.
@@ -179,7 +218,7 @@ export default function RootLayout() {
           <Stack.Screen name="pair" options={{ headerShown: false }} />
           <Stack.Screen name="pair-confirm" options={{ headerShown: false }} />
           <Stack.Screen
-            name="notification-opt-in"
+            name="mobile-onboarding"
             options={{ headerShown: false, presentation: 'modal', gestureEnabled: false }}
           />
           <Stack.Screen name="settings" options={{ headerShown: false }} />

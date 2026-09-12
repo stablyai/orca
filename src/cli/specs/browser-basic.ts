@@ -3,6 +3,12 @@ import { GLOBAL_FLAGS } from '../args'
 
 export const BROWSER_BASIC_COMMAND_SPECS: CommandSpec[] = [
   {
+    path: ['open-url'],
+    summary: 'Open a URL on the paired client that hosts this terminal',
+    usage: 'orca open-url --url <url> [--worktree <selector>] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'url', 'worktree']
+  },
+  {
     path: ['snapshot'],
     summary: 'Capture an accessibility snapshot of the active browser tab',
     usage: 'orca snapshot [--worktree <selector>] [--json]',
@@ -190,8 +196,9 @@ export const BROWSER_BASIC_COMMAND_SPECS: CommandSpec[] = [
   {
     path: ['tab', 'profile', 'create'],
     summary: 'Create a browser session profile for browser tabs',
-    usage: 'orca tab profile create --label <name> [--scope <isolated|imported>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'label', 'scope']
+    usage:
+      'orca tab profile create --label <name> [--scope <isolated|imported>] [--no-ua-spoof] [--json]',
+    allowedFlags: [...GLOBAL_FLAGS, 'label', 'scope', 'no-ua-spoof']
   },
   {
     path: ['tab', 'profile', 'delete'],

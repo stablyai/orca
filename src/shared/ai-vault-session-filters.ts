@@ -2,8 +2,13 @@
 // It lives in /shared (not renderer) so the mobile package can reuse it —
 // Metro only watches mobile/ + repo-root src/shared, never src/renderer.
 // INVARIANT: /shared is a leaf — this module must NOT import from src/renderer.
-import { isPathInsideOrEqual, normalizeRuntimePathSeparators } from './cross-platform-path'
+import {
+  createNormalizedPathInsideOrEqualMatcher,
+  normalizeRuntimePathForComparison,
+  normalizeRuntimePathSeparators
+} from './cross-platform-path'
 import { isClipboardTextByteLengthOverLimit } from './clipboard-text'
+import { splitAiVaultSearchQuery } from './ai-vault-search-query-operators'
 import { parseWslUncPath } from './wsl-paths'
 import type {
   AiVaultAgent,
@@ -75,45 +80,50 @@ export function filterAiVaultSessions(
 
   const agentSet = new Set(filters.agents)
   const parsedQuery = parseVaultQuery(filters.query)
+  const workspaceMatchers =
+    filters.scope === 'workspace'
+      ? filters.activeWorktreePaths.map(createAiVaultWorkspaceMatcher)
+      : []
 
-  return sessions
-    .filter((session) => {
-      if (!agentSet.has(session.agent)) {
+  const filtered = sessions.filter((session) => {
+    if (!agentSet.has(session.agent)) {
+      return false
+    }
+    // Hide plain empty sessions, but keep sessions with resumable content
+    // (some parsers only learn turns from previews, e.g. Grok) and zero-turn
+    // sessions that still carry recoverable content (queued prompts /
+    // subagent transcripts) so a lost conversation is surfaced distinctly.
+    if (
+      filters.hideEmptySessions &&
+      !isAiVaultSessionResumableContent(session) &&
+      !isAiVaultSessionRecoverableEmpty(session)
+    ) {
+      return false
+    }
+    if (filters.scope === 'workspace') {
+      const cwd = session.cwd
+      const normalizedCwd = cwd ? normalizeRuntimePathForComparison(cwd) : null
+      if (normalizedCwd === null || !workspaceMatchers.some((matches) => matches(normalizedCwd))) {
         return false
       }
-      // Hide plain empty sessions, but keep sessions with resumable content
-      // (some parsers only learn turns from previews, e.g. Grok) and zero-turn
-      // sessions that still carry recoverable content (queued prompts /
-      // subagent transcripts) so a lost conversation is surfaced distinctly.
-      if (
-        filters.hideEmptySessions &&
-        !isAiVaultSessionResumableContent(session) &&
-        !isAiVaultSessionRecoverableEmpty(session)
-      ) {
+    }
+    if (filters.scope === 'project') {
+      if (!filters.activeProjectKey) {
         return false
       }
-      if (filters.scope === 'workspace') {
-        const cwd = session.cwd
-        if (
-          !cwd ||
-          !filters.activeWorktreePaths.some((pathValue) =>
-            isAiVaultSessionInWorkspacePath(pathValue, cwd)
-          )
-        ) {
-          return false
-        }
+      if (filters.sessionProjectById?.get(session.id)?.key !== filters.activeProjectKey) {
+        return false
       }
-      if (filters.scope === 'project') {
-        if (!filters.activeProjectKey) {
-          return false
-        }
-        if (filters.sessionProjectById?.get(session.id)?.key !== filters.activeProjectKey) {
-          return false
-        }
-      }
-      return matchesQuery(session, parsedQuery, filters)
-    })
-    .sort((left, right) => compareSessions(left, right, filters.sort))
+    }
+    return matchesQuery(session, parsedQuery, filters)
+  })
+  if (filtered.length < 2) {
+    return filtered
+  }
+  return filtered
+    .map((session) => ({ session, time: sessionSortTime(session, filters.sort) }))
+    .sort((left, right) => right.time - left.time)
+    .map(({ session }) => session)
 }
 
 export function groupAiVaultSessions(
@@ -143,42 +153,88 @@ export function folderLabel(pathValue: string | null): string {
   if (!pathValue) {
     return 'Unknown location'
   }
-  const parts = normalizeRuntimePathSeparators(pathValue).split('/').filter(Boolean)
+  // NFC so one folder renders the same header whichever spelling (macOS NFD vs
+  // agent-recorded NFC) reaches the group first.
+  const parts = normalizeRuntimePathSeparators(pathValue.normalize('NFC'))
+    .split('/')
+    .filter(Boolean)
   if (parts.length >= 2) {
     return parts.slice(-2).join('/')
   }
   return parts[0] ?? pathValue
 }
 
+/**
+ * Why comparison-normalized: cwd is copied verbatim out of agent transcripts, so
+ * one folder arrives with and without a trailing slash and in both NFD/NFC — each
+ * spelling otherwise became its own group under an identical `folderLabel`. Also
+ * avoids blanket lowercasing, which merged distinct case-sensitive POSIX folders.
+ * The `folder:` prefix matches the folder project key so project grouping and its
+ * fallback agree.
+ */
+export function folderGroupKey(pathValue: string | null): string {
+  return pathValue ? `folder:${normalizeRuntimePathForComparison(pathValue)}` : 'unknown'
+}
+
 export function agentLabel(agent: AiVaultAgent): string {
   return aiVaultAgentLabel(agent)
 }
 
+/**
+ * One reading of `repo:` / `path:` for the whole product.
+ *
+ * Delegates to `splitAiVaultSearchQuery`, which the search index also plans
+ * from, so a query cannot mean one thing in this list and another in the index.
+ * The values come back folded because everything this file compares is folded;
+ * the index keeps the unfolded form, which is why the split itself does not.
+ */
 export function parseVaultQuery(query: string): ParsedQuery {
-  const terms: string[] = []
-  const repoTerms: string[] = []
-  const pathTerms: string[] = []
-
-  for (const rawToken of tokenizeQuery(query)) {
-    const token = rawToken.toLowerCase()
-    if (token.startsWith('repo:')) {
-      const value = token.slice('repo:'.length)
-      if (value) {
-        repoTerms.push(value)
-      }
-      continue
-    }
-    if (token.startsWith('path:')) {
-      const value = token.slice('path:'.length)
-      if (value) {
-        pathTerms.push(value)
-      }
-      continue
-    }
-    terms.push(token)
+  const split = splitAiVaultSearchQuery(query)
+  const fold = (values: readonly string[]): string[] => values.map((value) => value.toLowerCase())
+  return {
+    terms: fold(split.terms),
+    repoTerms: fold(split.repoTerms),
+    pathTerms: fold(split.pathTerms)
   }
+}
 
-  return { terms, repoTerms, pathTerms }
+/** What `repo:` and `path:` are compared against for one session. */
+export type AiVaultQueryOperatorTarget = {
+  cwd: string | null
+  filePath: string
+  /**
+   * What `repo:` matches. The panel passes a resolved project label when it has
+   * one; everything else falls back to the last two path segments.
+   */
+  repoLabel?: string
+}
+
+/**
+ * Whether one session satisfies every `repo:` and `path:` term.
+ *
+ * The single definition of what those operators mean. The search index applies
+ * this over its retrieved rows rather than expressing it in SQL, because SQL
+ * cannot: LIKE folds ASCII and nothing else, and `path:` searches the transcript
+ * path as well as the working directory. Both keys are conjunctive, matching
+ * the qualifier semantics the panel has always had.
+ */
+export function matchesAiVaultQueryOperators(
+  target: AiVaultQueryOperatorTarget,
+  operators: { repoTerms: readonly string[]; pathTerms: readonly string[] }
+): boolean {
+  if (operators.repoTerms.length > 0) {
+    const repoLabel = (target.repoLabel ?? folderLabel(target.cwd)).toLowerCase()
+    if (operators.repoTerms.some((term) => !repoLabel.includes(term.toLowerCase()))) {
+      return false
+    }
+  }
+  if (operators.pathTerms.length > 0) {
+    const pathSearch = `${target.cwd ?? ''} ${target.filePath}`.toLowerCase()
+    if (operators.pathTerms.some((term) => !pathSearch.includes(term.toLowerCase()))) {
+      return false
+    }
+  }
+  return true
 }
 
 function matchesQuery(
@@ -186,48 +242,41 @@ function matchesQuery(
   parsed: ParsedQuery,
   filters: Pick<AiVaultSessionFilterState, 'sessionProjectById' | 'projectLabelByKey'>
 ): boolean {
-  const searchable = [
-    session.title,
-    session.sessionId,
-    session.agent,
-    session.branch,
-    session.model,
-    session.cwd,
-    session.filePath,
-    sessionPreviewSearchText(session)
-  ]
-    .filter(Boolean)
-    .join(' ')
-    .toLowerCase()
-
-  if (parsed.terms.some((term) => !searchable.includes(term))) {
-    return false
+  if (parsed.terms.length > 0) {
+    const searchable = [
+      session.title,
+      session.sessionId,
+      session.agent,
+      session.branch,
+      session.model,
+      session.cwd,
+      session.filePath,
+      sessionPreviewSearchText(session)
+    ]
+      .filter(Boolean)
+      .join(' ')
+      .toLowerCase()
+    if (parsed.terms.some((term) => !searchable.includes(term))) {
+      return false
+    }
   }
-
   const sessionProject = filters.sessionProjectById?.get(session.id)
-  const repoLabel = (
-    sessionProject?.kind === 'repo'
-      ? (filters.projectLabelByKey?.get(sessionProject.key) ?? sessionProject.label)
-      : folderLabel(session.cwd)
-  ).toLowerCase()
-  if (parsed.repoTerms.some((term) => !repoLabel.includes(term))) {
-    return false
-  }
-
-  const pathSearch = `${session.cwd ?? ''} ${session.filePath}`.toLowerCase()
-  if (parsed.pathTerms.some((term) => !pathSearch.includes(term))) {
-    return false
-  }
-
-  return true
+  return matchesAiVaultQueryOperators(
+    {
+      cwd: session.cwd,
+      filePath: session.filePath,
+      repoLabel:
+        sessionProject?.kind === 'repo'
+          ? (filters.projectLabelByKey?.get(sessionProject.key) ?? sessionProject.label)
+          : undefined
+    },
+    parsed
+  )
 }
 
-function compareSessions(left: AiVaultSession, right: AiVaultSession, sort: AiVaultSort): number {
-  const leftValue = sort === 'created' ? left.createdAt : left.updatedAt
-  const rightValue = sort === 'created' ? right.createdAt : right.updatedAt
-  const leftTime = Date.parse(leftValue ?? left.modifiedAt)
-  const rightTime = Date.parse(rightValue ?? right.modifiedAt)
-  return rightTime - leftTime
+function sessionSortTime(session: AiVaultSession, sort: AiVaultSort): number {
+  const value = sort === 'created' ? session.createdAt : session.updatedAt
+  return Date.parse(value ?? session.modifiedAt)
 }
 
 function getGroupIdentity(
@@ -253,46 +302,16 @@ function getGroupIdentity(
       }
     }
   }
-  return { key: getFolderGroupKey(session.cwd), label: folderLabel(session.cwd) }
+  return { key: folderGroupKey(session.cwd), label: folderLabel(session.cwd) }
 }
 
-function getFolderGroupKey(pathValue: string | null): string {
-  return pathValue ? normalizeRuntimePathSeparators(pathValue).toLowerCase() : 'unknown'
-}
-
-function isAiVaultSessionInWorkspacePath(workspacePath: string, sessionCwd: string): boolean {
-  if (isPathInsideOrEqual(workspacePath, sessionCwd)) {
-    return true
-  }
-
+function createAiVaultWorkspaceMatcher(workspacePath: string): (normalizedCwd: string) => boolean {
+  const matches = createNormalizedPathInsideOrEqualMatcher(workspacePath)
   const workspaceWslPath = parseWslUncPath(workspacePath)
   if (!workspaceWslPath) {
-    return false
+    return matches
   }
-
-  // WSL agent transcripts record Linux cwd values even when Orca stores the
-  // active worktree as a Windows UNC path.
-  return isPathInsideOrEqual(workspaceWslPath.linuxPath, sessionCwd)
-}
-
-function tokenizeQuery(query: string): string[] {
-  const tokens: string[] = []
-  // Why: keep quoted operator values (repo:/path:) intact so labels and paths
-  // containing spaces still match — e.g. path:"/Users/ada/My Project".
-  const pattern = /(repo|path):"([^"]+)"|(repo|path):'([^']+)'|"([^"]+)"|'([^']+)'|(\S+)/gi
-  let match: RegExpExecArray | null
-  while ((match = pattern.exec(query)) !== null) {
-    const operator = match[1] ?? match[3]
-    const operatorValue = match[2] ?? match[4]
-    if (operator && operatorValue?.trim()) {
-      tokens.push(`${operator.toLowerCase()}:${operatorValue.trim()}`)
-      continue
-    }
-
-    const token = match[5] ?? match[6] ?? match[7]
-    if (token?.trim()) {
-      tokens.push(token.trim())
-    }
-  }
-  return tokens
+  // WSL transcripts record Linux cwd even when the workspace uses a UNC path.
+  const matchesLinux = createNormalizedPathInsideOrEqualMatcher(workspaceWslPath.linuxPath)
+  return (cwd) => matches(cwd) || matchesLinux(cwd)
 }

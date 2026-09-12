@@ -1,9 +1,13 @@
-import React, { useMemo } from 'react'
-import type { DiffComment } from '../../../../shared/types'
+import React, { useCallback, useMemo } from 'react'
+import type { DiffComment } from '../../../../shared/diff-comment-types'
 import { useAppStore } from '@/store'
 import { formatDiffComments } from '@/lib/diff-comments-format'
 import { NotesSendMenu, type NotesSendMenuScope } from './NotesSendMenu'
 import { translate } from '@/i18n/i18n'
+
+// Why: a keyboard open request the menu never got to consume (e.g. the user
+// navigated away before it mounted) must not reopen the menu on a later remount.
+const OPEN_REQUEST_TTL_MS = 5000
 
 export function DiffNotesSendMenu({
   worktreeId,
@@ -16,7 +20,8 @@ export function DiffNotesSendMenu({
   triggerCount,
   actionLabel,
   iconClassName = 'size-3.5',
-  align = 'end'
+  align = 'end',
+  respondToOpenRequest = false
 }: {
   worktreeId: string
   groupId: string
@@ -29,8 +34,25 @@ export function DiffNotesSendMenu({
   actionLabel?: string
   iconClassName?: string
   align?: 'start' | 'center' | 'end'
+  // When set, this menu opens in response to the store's keyboard-shortcut open
+  // request. Enable on exactly one instance per worktree to avoid double-open.
+  respondToOpenRequest?: boolean
 }): React.JSX.Element {
   const clearDeliveredDiffComments = useAppStore((s) => s.clearDeliveredDiffComments)
+  const openRequest = useAppStore((s) => s.diffNotesSendMenuOpenRequest)
+  const consumeOpenRequest = useAppStore((s) => s.consumeDiffNotesSendMenuOpenRequest)
+  // Why: the TTL is a deadline, not a label, so it is enforced on the commit
+  // that opens the menu (see NotesSendMenu) where the clock is exact — a render
+  // clock either burns a tick per second or reads stale at the moment it matters.
+  const hasPendingOpenRequest = respondToOpenRequest && openRequest?.worktreeId === worktreeId
+  const openRequestNonce = hasPendingOpenRequest ? (openRequest?.nonce ?? null) : null
+  const openRequestExpiresAt = hasPendingOpenRequest
+    ? (openRequest?.issuedAt ?? 0) + OPEN_REQUEST_TTL_MS
+    : null
+  const handleOpenRequestHandled = useCallback(
+    () => consumeOpenRequest(worktreeId),
+    [consumeOpenRequest, worktreeId]
+  )
   const unsentNotes = useMemo(() => comments.filter((comment) => !comment.sentAt), [comments])
   const unsentPrompt = useMemo(() => formatDiffComments(unsentNotes), [unsentNotes])
   const fileNotes = useMemo(
@@ -76,6 +98,9 @@ export function DiffNotesSendMenu({
       actionLabel={actionLabel}
       iconClassName={iconClassName}
       align={align}
+      openRequestNonce={openRequestNonce}
+      openRequestExpiresAt={openRequestExpiresAt}
+      onOpenRequestHandled={handleOpenRequestHandled}
       onDelivered={(notes) => void clearDeliveredDiffComments(worktreeId, notes)}
     />
   )

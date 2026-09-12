@@ -12,7 +12,8 @@ vi.mock('../git/runner', () => ({
 }))
 
 vi.mock('../providers/ssh-git-dispatch', () => ({
-  getSshGitProvider: getSshGitProviderMock
+  getSshGitProvider: getSshGitProviderMock,
+  getSshGitProviderGeneration: () => 0
 }))
 
 vi.mock('../source-control/pull-request-template', () => ({
@@ -81,14 +82,18 @@ describe('Gitea pull request creation', () => {
     globalThis.fetch = fetchMock as never
 
     await expect(
-      createGiteaPullRequest('/repo', {
-        provider: 'gitea',
-        base: 'origin/main',
-        head: 'refs/heads/feature/gitea',
-        title: 'Add Gitea create',
-        body: 'Body',
-        draft: true
-      })
+      createGiteaPullRequest(
+        '/repo',
+        {
+          provider: 'gitea',
+          base: 'origin/main',
+          head: 'refs/heads/feature/gitea',
+          title: 'Add Gitea create',
+          body: 'Body',
+          draft: true
+        },
+        'local'
+      )
     ).resolves.toEqual({
       ok: true,
       number: 13,
@@ -125,13 +130,15 @@ describe('Gitea pull request creation', () => {
           head: 'feature/gitea',
           title: 'Remote Gitea create'
         },
-        'ssh-1'
+        'ssh:ssh-1'
       )
     ).resolves.toMatchObject({
       ok: true,
       number: 14
     })
-    expect(remoteGit.exec).toHaveBeenCalledWith(['remote', 'get-url', 'origin'], '/remote/repo')
+    expect(remoteGit.exec).toHaveBeenCalledWith(['remote', 'get-url', 'origin'], '/remote/repo', {
+      signal: expect.any(AbortSignal)
+    })
     expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
   })
 
@@ -141,12 +148,16 @@ describe('Gitea pull request creation', () => {
     ) as never
 
     await expect(
-      createGiteaPullRequest('/repo', {
-        provider: 'gitea',
-        base: 'main',
-        head: 'feature/gitea',
-        title: 'Add Gitea create'
-      })
+      createGiteaPullRequest(
+        '/repo',
+        {
+          provider: 'gitea',
+          base: 'main',
+          head: 'feature/gitea',
+          title: 'Add Gitea create'
+        },
+        'local'
+      )
     ).resolves.toMatchObject({
       ok: false,
       code: 'validation'

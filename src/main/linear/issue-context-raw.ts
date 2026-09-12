@@ -2,7 +2,8 @@ import type {
   LinearCollectionMeta,
   LinearIssueSummary,
   LinearSearchIssueSummary
-} from '../../shared/linear-agent-access'
+} from '../../shared/linear/agent-access'
+import { linearPriorityLabel } from '../../shared/linear/priority-label'
 
 export type RawIssueResponse = {
   issue?: RawIssue | null
@@ -88,14 +89,21 @@ export type RawAttachmentsResponse = {
   } | null
 }
 
+export type RawRelationNode = {
+  id: string
+  type?: string | null
+  issue?: RawIssue | null
+  relatedIssue?: RawIssue | null
+}
+
 export type RawRelationsResponse = {
   issue?: {
     relations?: {
-      nodes?: {
-        id: string
-        type?: string | null
-        relatedIssue?: RawIssue | null
-      }[]
+      nodes?: RawRelationNode[]
+      pageInfo?: RawPageInfo
+    } | null
+    inverseRelations?: {
+      nodes?: RawRelationNode[]
       pageInfo?: RawPageInfo
     } | null
   } | null
@@ -196,6 +204,22 @@ export const RELATIONS_QUERY = `
   }
 `
 
+export const INVERSE_RELATIONS_QUERY = `
+  query OrcaAgentLinearIssueInverseRelations($id: String!, $first: Int, $after: String) {
+    issue(id: $id) {
+      inverseRelations(first: $first, after: $after) {
+        nodes {
+          id
+          type
+          issue { id identifier title url }
+          relatedIssue { id identifier title url }
+        }
+        pageInfo { hasNextPage endCursor }
+      }
+    }
+  }
+`
+
 export function mapIssue(issue: RawIssue): LinearIssueSummary {
   return {
     id: issue.id,
@@ -210,6 +234,7 @@ export function mapIssue(issue: RawIssue): LinearIssueSummary {
     assignee: issue.assignee ?? null,
     labels: issue.labels?.nodes ?? [],
     priority: issue.priority,
+    priorityLabel: linearPriorityLabel(issue.priority),
     estimate: issue.estimate,
     dueDate: issue.dueDate,
     branchName: issue.branchName,
@@ -231,6 +256,7 @@ export function pickSearchIssue(
     project: issue.project,
     assignee: issue.assignee,
     priority: issue.priority,
+    priorityLabel: issue.priorityLabel,
     estimate: issue.estimate,
     dueDate: issue.dueDate,
     updatedAt: issue.updatedAt

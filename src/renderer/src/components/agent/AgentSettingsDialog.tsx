@@ -10,11 +10,11 @@ import { AgentsPane } from '@/components/settings/AgentsPane'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import {
-  getWindowsTerminalCapabilityOwnerKey,
-  useWindowsTerminalCapabilities
+  isWindowsTerminalCapabilityHost,
+  useLocalWindowsTerminalCapabilities
 } from '@/lib/windows-terminal-capabilities'
-import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
 import { isWebClientLocation } from '@/lib/web-client-location'
+import { useWindowsTerminalCapabilityOwnerKey } from '@/hooks/useWindowsTerminalCapabilityOwnerKey'
 
 type AgentSettingsDialogProps = {
   open: boolean
@@ -27,20 +27,24 @@ export default function AgentSettingsDialog({
 }: AgentSettingsDialogProps): React.JSX.Element | null {
   const settings = useAppStore((s) => s.settings)
   const updateSettings = useAppStore((s) => s.updateSettings)
-  const runtimeTarget = getActiveRuntimeTarget(settings)
-  const runtimeEnvironmentId = settings?.activeRuntimeEnvironmentId?.trim() || null
-  const capabilitiesOwnerKey = getWindowsTerminalCapabilityOwnerKey(runtimeEnvironmentId)
   const isWindowsRenderer =
     typeof navigator !== 'undefined' && navigator.userAgent.includes('Windows')
   const isWebClient = isWebClientLocation()
-  const windowsTerminalCapabilities = useWindowsTerminalCapabilities(
-    open && (isWindowsRenderer || isWebClient || runtimeTarget.kind === 'environment'),
-    false,
-    capabilitiesOwnerKey,
-    runtimeTarget
+  const runtimeCapabilityOwnerKey = useWindowsTerminalCapabilityOwnerKey(
+    settings?.activeRuntimeEnvironmentId
   )
-  const wslSupportedPlatform =
-    isWindowsRenderer || windowsTerminalCapabilities.hostPlatform === 'win32'
+  const localCapabilityOwnerKey = isWebClient ? runtimeCapabilityOwnerKey : 'local'
+  const localWindowsTerminalCapabilities = useLocalWindowsTerminalCapabilities(
+    open && (isWindowsRenderer || isWebClient),
+    false,
+    localCapabilityOwnerKey
+  )
+  const wslSupportedPlatform = isWindowsTerminalCapabilityHost({
+    isWindowsRenderer,
+    isWebClient,
+    target: { kind: 'local' },
+    hostPlatform: localWindowsTerminalCapabilities.hostPlatform
+  })
 
   if (!settings) {
     return null
@@ -69,9 +73,9 @@ export default function AgentSettingsDialog({
             settings={settings}
             updateSettings={updateSettings}
             wslSupportedPlatform={wslSupportedPlatform}
-            wslAvailable={windowsTerminalCapabilities.wslAvailable}
-            wslDistros={windowsTerminalCapabilities.wslDistros}
-            wslCapabilitiesLoading={windowsTerminalCapabilities.isLoading}
+            wslAvailable={localWindowsTerminalCapabilities.wslAvailable}
+            wslDistros={localWindowsTerminalCapabilities.wslDistros}
+            wslCapabilitiesLoading={localWindowsTerminalCapabilities.isLoading}
           />
         </div>
       </DialogContent>

@@ -2,7 +2,9 @@ import { describe, expect, it, vi } from 'vitest'
 import type { PairingCandidateClient } from './mobile-relay-physical-client'
 import { RelayOuterError } from './mobile-relay-physical-client'
 import { createRecoveringPairingRelayCandidate } from './pairing-relay-candidate'
+import { RelayDirectorMoveNotNewerError } from './mobile-relay-invite-director'
 import type { MobileRelayPairingJournal } from './mobile-relay-pairing-journal'
+import type { ConnectionLogEntry } from './types'
 
 vi.mock('react-native', () => ({ Platform: { OS: 'ios' } }))
 vi.mock('expo-crypto', () => ({
@@ -88,6 +90,165 @@ describe('recovering pairing relay candidate', () => {
     expect(stale.close).toHaveBeenCalledOnce()
   })
 
+  it('retries the authoritative cell when the director confirms the same assignment', async () => {
+    const stale = client(Promise.reject(new RelayOuterError(1006)))
+    const target = client(Promise.resolve(success()))
+    const persistMove = vi.fn()
+    let connects = 0
+    const candidate = createRecoveringPairingRelayCandidate({
+      journal,
+      connect: (relay) => {
+        expect(relay.cellUrl).toBe(journal.metadata.relay.cellUrl)
+        expect(relay.assignmentEpoch).toBe(journal.metadata.relay.assignmentEpoch)
+        return connects++ === 0 ? stale : target
+      },
+      resolveDirector: async (relay) => {
+        throw new RelayDirectorMoveNotNewerError({
+          cellUrl: relay.cellUrl,
+          assignmentEpoch: relay.assignmentEpoch,
+          currentCellUrl: relay.cellUrl,
+          currentAssignmentEpoch: relay.assignmentEpoch
+        })
+      },
+      persistMove,
+      now: () => 1,
+      random: () => 0,
+      sleep: async () => {}
+    })
+
+    await expect(candidate.sendRequest('status.get')).resolves.toEqual(success())
+    expect(connects).toBe(2)
+    expect(persistMove).not.toHaveBeenCalled()
+  })
+
+  it('keeps recovery bounded when the authoritative-cell constructor throws', async () => {
+    const stale = client(Promise.reject(new RelayOuterError(1006)))
+    const target = client(Promise.resolve(success()))
+    const entries: ConnectionLogEntry[] = []
+    let connects = 0
+    const candidate = createRecoveringPairingRelayCandidate({
+      journal,
+      connect: () => {
+        connects++
+        if (connects === 1) {
+          return stale
+        }
+        if (connects === 2) {
+          throw new Error('relay constructor failed')
+        }
+        return target
+      },
+      resolveDirector: async (relay) => {
+        throw new RelayDirectorMoveNotNewerError({
+          cellUrl: relay.cellUrl,
+          assignmentEpoch: relay.assignmentEpoch,
+          currentCellUrl: relay.cellUrl,
+          currentAssignmentEpoch: relay.assignmentEpoch
+        })
+      },
+      persistMove: vi.fn(),
+      now: () => 1,
+      random: () => 0,
+      sleep: async () => {},
+      onLog: (entry) => entries.push(entry)
+    })
+
+    await expect(candidate.sendRequest('status.get')).resolves.toEqual(success())
+    expect(connects).toBe(3)
+    expect(entries).toContainEqual(
+      expect.objectContaining({
+        level: 'warn',
+        message: 'Relay: recovery attempt 1 failed',
+        detail: 'Error: relay constructor failed'
+      })
+    )
+  })
+
+  it('retries the stored assignment when the director reports a non-newer different cell', async () => {
+    const stale = client(Promise.reject(new RelayOuterError(1006)))
+    const target = client(Promise.resolve(success()))
+    const persistMove = vi.fn()
+    const sleep = vi.fn(async () => {})
+    const resolveDirector = vi.fn(async (relay) => {
+      throw new RelayDirectorMoveNotNewerError({
+        cellUrl: 'https://relay-c2.onorca.dev',
+        assignmentEpoch: relay.assignmentEpoch,
+        currentCellUrl: relay.cellUrl,
+        currentAssignmentEpoch: relay.assignmentEpoch
+      })
+    })
+    let connects = 0
+    const candidate = createRecoveringPairingRelayCandidate({
+      journal,
+      connect: (relay) => {
+        expect(relay.cellUrl).toBe(journal.metadata.relay.cellUrl)
+        return connects++ === 0 ? stale : target
+      },
+      resolveDirector,
+      persistMove,
+      now: () => 1,
+      random: () => 0,
+      sleep
+    })
+
+    await expect(candidate.sendRequest('status.get')).resolves.toEqual(success())
+    expect(resolveDirector).toHaveBeenCalledOnce()
+    // Why: the non-newer move must never be adopted — the stored cell is redialed.
+    expect(persistMove).not.toHaveBeenCalled()
+    expect(sleep).toHaveBeenCalledWith(250)
+  })
+
+  it('gives up with the dial error once same-assignment retries exhaust the budget', async () => {
+    const stale = client(Promise.reject(new RelayOuterError(1006)))
+    const resolveDirector = vi.fn(async (relay) => {
+      throw new RelayDirectorMoveNotNewerError({
+        cellUrl: 'https://relay-c2.onorca.dev',
+        assignmentEpoch: relay.assignmentEpoch - 1,
+        currentCellUrl: relay.cellUrl,
+        currentAssignmentEpoch: relay.assignmentEpoch
+      })
+    })
+    let connects = 0
+    const candidate = createRecoveringPairingRelayCandidate({
+      journal,
+      connect: () => {
+        connects++
+        return stale
+      },
+      resolveDirector,
+      persistMove: vi.fn(),
+      now: () => 1,
+      random: () => 0,
+      sleep: async () => {}
+    })
+
+    await expect(candidate.sendRequest('status.get')).rejects.toEqual(new RelayOuterError(1006))
+    expect(resolveDirector).toHaveBeenCalledTimes(3)
+    expect(connects).toBe(4)
+  })
+
+  it('keeps a cell load refusal out of director recovery', async () => {
+    const limited = client(Promise.reject(new RelayOuterError(4429)))
+    const resolveDirector = vi.fn()
+    let connects = 0
+    const candidate = createRecoveringPairingRelayCandidate({
+      journal,
+      connect: () => {
+        connects++
+        return limited
+      },
+      resolveDirector,
+      persistMove: vi.fn(),
+      now: () => 1
+    })
+
+    // Why: 4429 is rejected after the cell reserves the invite credential, so a
+    // retry burns an attempt — and a director hop cannot relieve cell load.
+    await expect(candidate.sendRequest('status.get')).rejects.toEqual(new RelayOuterError(4429))
+    expect(resolveDirector).not.toHaveBeenCalled()
+    expect(connects).toBe(1)
+  })
+
   it('does not ask the director to reinterpret endpoint-scoped host-offline', async () => {
     const offline = client(Promise.reject(new RelayOuterError(4404)))
     const resolveDirector = vi.fn()
@@ -162,5 +323,77 @@ describe('recovering pairing relay candidate', () => {
     await expect(candidate.sendRequest('status.get')).resolves.toEqual(success())
     expect(resolveDirector).toHaveBeenCalledTimes(3)
     expect(sleep.mock.calls.map(([delay]) => delay)).toEqual([50, 100, 200])
+  })
+
+  it('narrates every director attempt, cell move and backoff to the pairing log', async () => {
+    const entries: ConnectionLogEntry[] = []
+    const stale = client(Promise.reject(new Error('HTTP 503')))
+    const target = client(Promise.resolve(success()))
+    const resolveDirector = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('HTTP 504'))
+      .mockImplementationOnce(async (relay) => ({
+        ...relay,
+        cellUrl: 'https://relay-c2.onorca.dev',
+        assignmentEpoch: 8
+      }))
+    let connects = 0
+    const candidate = createRecoveringPairingRelayCandidate({
+      journal,
+      connect: () => (connects++ === 0 ? stale : target),
+      resolveDirector,
+      persistMove: vi.fn(async () => {}),
+      now: () => 1,
+      random: () => 0.5,
+      sleep: async () => {},
+      onLog: (entry) => entries.push(entry)
+    })
+
+    await expect(candidate.sendRequest('status.get')).resolves.toEqual(success())
+    expect(entries.map((entry) => `${entry.level}|${entry.message}`)).toEqual([
+      'warn|Relay: cell dial failed',
+      'info|Relay: resolving director (attempt 1/3)',
+      'warn|Relay: recovery attempt 1 failed',
+      'info|Relay: backing off 50ms',
+      'info|Relay: resolving director (attempt 2/3)',
+      'info|Relay: cell moved',
+      'info|Relay: backing off 100ms'
+    ])
+    expect(entries[0]!.detail).toBe('Error: HTTP 503')
+    expect(entries[1]!.detail).toBe('relay.onorca.dev')
+    expect(entries[2]!.detail).toBe('Error: HTTP 504')
+    expect(entries[5]!.detail).toBe('relay-c1.onorca.dev → relay-c2.onorca.dev')
+    expect(new Set(entries.map((entry) => entry.id)).size).toBe(entries.length)
+  })
+
+  it('reports the final give-up once the recovery budget is spent', async () => {
+    const entries: ConnectionLogEntry[] = []
+    const stale = client(Promise.reject(new RelayOuterError(4409)))
+    const candidate = createRecoveringPairingRelayCandidate({
+      journal,
+      connect: () => stale,
+      resolveDirector: vi.fn(async () => {
+        throw new Error('relay director resolution timed out')
+      }),
+      persistMove: vi.fn(async () => {}),
+      now: () => 1,
+      random: () => 0,
+      sleep: async () => {},
+      maxRecoveryAttempts: 2,
+      onLog: (entry) => entries.push(entry)
+    })
+
+    await expect(candidate.sendRequest('status.get')).rejects.toThrow(/timed out/)
+    expect(entries[0]).toMatchObject({
+      level: 'warn',
+      message: 'Relay: cell dial failed',
+      detail: 'relay close code 4409'
+    })
+    expect(entries.filter((entry) => entry.level === 'error')).toEqual([
+      expect.objectContaining({
+        message: 'Relay: recovery gave up',
+        detail: 'after 2 attempt(s)'
+      })
+    ])
   })
 })

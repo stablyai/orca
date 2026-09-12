@@ -111,6 +111,7 @@ describe('runtime hooks client', () => {
 
   it('forwards an explicit SSH host to local hook IPC', async () => {
     hooksCheck.mockResolvedValue({ hasHooks: false, hooks: null, mayNeedUpdate: false })
+    hooksInspectSetupScriptImports.mockResolvedValue([])
     hooksReadIssueCommand.mockResolvedValue({
       localContent: null,
       sharedContent: null,
@@ -119,7 +120,16 @@ describe('runtime hooks client', () => {
       source: 'none'
     })
 
-    await checkRuntimeHooks({ activeRuntimeEnvironmentId: null }, 'same-repo', 'ssh:server')
+    await checkRuntimeHooks(
+      { activeRuntimeEnvironmentId: 'focused-elsewhere' },
+      'same-repo',
+      'ssh:server'
+    )
+    await inspectRuntimeSetupScriptImports(
+      { activeRuntimeEnvironmentId: 'focused-elsewhere' },
+      'same-repo',
+      'ssh:server'
+    )
     await readRuntimeIssueCommand({ activeRuntimeEnvironmentId: null }, 'same-repo', 'ssh:server')
     await writeRuntimeIssueCommand(
       { activeRuntimeEnvironmentId: null },
@@ -129,6 +139,10 @@ describe('runtime hooks client', () => {
     )
 
     expect(hooksCheck).toHaveBeenCalledWith({ repoId: 'same-repo', hostId: 'ssh:server' })
+    expect(hooksInspectSetupScriptImports).toHaveBeenCalledWith({
+      repoId: 'same-repo',
+      hostId: 'ssh:server'
+    })
     expect(hooksReadIssueCommand).toHaveBeenCalledWith({
       repoId: 'same-repo',
       hostId: 'ssh:server'

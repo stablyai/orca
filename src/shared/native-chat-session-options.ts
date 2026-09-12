@@ -1,3 +1,5 @@
+import type { AgentType } from './agent-status-types'
+
 export type SessionOptionValue = string | boolean
 
 export type SessionOptionSelectChoice = {
@@ -6,7 +8,17 @@ export type SessionOptionSelectChoice = {
   description?: string
 }
 
-export type SessionOptionValueSource = 'applied' | 'dispatched' | 'reported' | 'unknown'
+/** `default` is the catalog's own value shown before anything is observed —
+ *  truthful to display, but never evidence about a running agent. `dispatched`
+ *  is sent-but-unread: the pill shows it, and a later report that disagrees is
+ *  what corrects it. Both transports emit it, so it alone names neither — see
+ *  `transport` on the descriptor. */
+export type SessionOptionValueSource = 'applied' | 'dispatched' | 'reported' | 'default' | 'unknown'
+
+/** How a live value reaches the agent. `catalog` types the catalog's command into
+ *  the agent's terminal and can only learn the outcome by parsing the screen back;
+ *  `agent-session` writes over the structured protocol, which reports every turn. */
+export type NativeChatLiveOptionTransport = 'catalog' | 'agent-session'
 
 /** Closed set of reasons an option is not settable in the current mode. A key
  *  (not free English) so the producer and the localized label stay in sync —
@@ -32,11 +44,23 @@ export type SessionOptionDescriptor = {
         currentValue?: boolean
       }
   valueSource: SessionOptionValueSource
+  /** Required so a new producer cannot inherit the wrong lane's rendering by
+   *  omission — `dispatched` is emitted identically by both and cannot discriminate. */
+  transport: NativeChatLiveOptionTransport
   settable: boolean
   disabledReason?: SessionOptionDisabledReason
   /** Why: picker-only and toggle-only PTY commands cannot be represented as
    * a truthful radio/checkbox state, so the producer exposes an action row. */
   action?: { type: 'agent-picker' | 'toggle-command' }
+}
+
+/** A value we typed at the agent and have never read back. Only the terminal
+ *  transport can be in this state: the structured lane's own per-turn report is
+ *  what moves a value off `dispatched`, and until it lands nothing else has. */
+export function sessionOptionDispatchUnconfirmed(
+  descriptor: Pick<SessionOptionDescriptor, 'valueSource' | 'transport'>
+): boolean {
+  return descriptor.valueSource === 'dispatched' && descriptor.transport === 'catalog'
 }
 
 export type SessionOptionSetResult = {
@@ -52,6 +76,19 @@ export type PersistedNativeChatSessionOptions = Partial<
     }
   >
 >
+
+export type NativeChatSessionOptionSettingsMutation =
+  | {
+      type: 'apply-picks'
+      agent: AgentType
+      picks: readonly {
+        modelId: string
+        optionId: string
+        value: SessionOptionValue
+        adoptModelAsLaunchDefault?: boolean
+      }[]
+    }
+  | { type: 'clear-model-if-missing'; agent: AgentType; availableModelIds: readonly string[] }
 
 export type SessionOptionsSurface = {
   getSnapshot(): SessionOptionDescriptor[]

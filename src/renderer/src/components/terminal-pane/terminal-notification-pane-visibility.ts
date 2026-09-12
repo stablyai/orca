@@ -1,5 +1,5 @@
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
-import type { TerminalLayoutSnapshot } from '../../../../shared/types'
+import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-types'
 
 type NotificationPaneVisibilityState = {
   activeWorktreeId: string | null

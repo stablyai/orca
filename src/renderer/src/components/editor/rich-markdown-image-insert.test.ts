@@ -1,6 +1,11 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+// @vitest-environment happy-dom
+
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { Editor } from '@tiptap/core'
 import { toast } from 'sonner'
 import { insertRichMarkdownImageFromPath } from './rich-markdown-image-insert'
+import { createRichMarkdownExtensions } from './rich-markdown-extensions'
+import { createRichMarkdownEditorCodec } from './rich-markdown-source-transport'
 import { importExternalPathsToRuntime } from '@/runtime/runtime-file-client'
 
 vi.mock('@/runtime/runtime-file-client', () => ({
@@ -8,7 +13,7 @@ vi.mock('@/runtime/runtime-file-client', () => ({
 }))
 
 vi.mock('@/lib/connection-context', () => ({
-  getConnectionId: vi.fn(() => 'ssh-1')
+  getConnectionId: vi.fn(() => null)
 }))
 
 vi.mock('@/store', () => ({
@@ -27,12 +32,28 @@ vi.mock('sonner', () => ({
   toast: { error: vi.fn() }
 }))
 
-function editorWithRunResult(runResult: boolean) {
+const openEditors: Editor[] = []
+
+function createRichMarkdownEditor(markdown: string): Editor {
+  const editor = new Editor({
+    element: null,
+    extensions: createRichMarkdownExtensions({ codec: createRichMarkdownEditorCodec() }),
+    content: markdown,
+    contentType: 'markdown'
+  })
+  openEditors.push(editor)
+  return editor
+}
+
+function editorWithRunResult(runResult: boolean, markdown = 'hello world') {
   const run = vi.fn(() => runResult)
   const insertContentAt = vi.fn(() => ({ run }))
   const focus = vi.fn(() => ({ insertContentAt }))
   const chain = vi.fn(() => ({ focus }))
-  return { editor: { chain }, chain, focus, insertContentAt, run }
+  // Why: the insert path reads the real schema and document to decide whether an
+  // inline image fits at the target position, so the stub borrows both.
+  const { schema, state } = createRichMarkdownEditor(markdown)
+  return { editor: { chain, schema, state }, chain, focus, insertContentAt, run }
 }
 
 describe('insertRichMarkdownImageFromPath', () => {
@@ -49,6 +70,12 @@ describe('insertRichMarkdownImageFromPath', () => {
     vi.mocked(importExternalPathsToRuntime).mockResolvedValue({
       results: [{ status: 'imported', destPath: '/repo/image.png' }]
     } as never)
+  })
+
+  afterEach(() => {
+    while (openEditors.length > 0) {
+      openEditors.pop()?.destroy()
+    }
   })
 
   it('shows an error when TipTap rejects image insertion without throwing', async () => {

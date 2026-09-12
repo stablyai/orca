@@ -10,30 +10,22 @@ import {
   writeFileSync
 } from 'node:fs'
 import { dirname, join, win32 as winPath } from 'node:path'
-import { app } from 'electron'
-import { parseDaemonPidFile, startTimeMatches } from './daemon-health'
+import { getAppEnvironment } from '../../shared/app-environment'
+import type { ProcessLivenessVerdict } from './daemon-incarnation-evidence-types'
+import { parseDaemonPidFile } from './daemon-pid-file-parse'
+import { quarantineCorruptDaemonPidRecord } from './daemon-pid-record-quarantine'
+import { inspectProcessLiveness, mergeProcessLivenessVerdict } from './daemon-process-inspection'
 
 /**
- * Relocates the terminal daemon's process image out of the app install
- * directory into userData so it survives Windows auto-updates.
+ * Relocate the terminal daemon's process image out of the app install dir into LOCAL userData so it
+ * survives Windows auto-updates: the NSIS installer deletes the old install and force-kills every process
+ * imaged under it, which would otherwise kill the daemon and its live terminals. The relocated exe is a
+ * run-as-node Orca.exe copy (not node.exe) so there's no console flash and asar still resolves. Fail-open:
+ * any failure returns null and the caller forks the install-dir host (pre-relocation behavior).
  *
- * Why: the daemon is forked as plain Node via ELECTRON_RUN_AS_NODE, so its
- * image is the install-dir Orca.exe and its loaded modules (node-pty native,
- * ConPTY runtime) map from the install dir. On update, electron-builder's NSIS
- * installer deletes the old install and force-closes every process whose image
- * lives under it — killing the daemon and every live terminal it owns. Copying
- * the daemon's whole file closure to a version-keyed userData dir and forking
- * from that copy takes its image + loaded modules out of the installer's reach.
- *
- * The copy keeps the ELECTRON binary run as node (not stock node.exe): a copy
- * of Orca.exe (renamed to a distinct image name) is byte-identical, so
- * run-as-node behavior — no console flashing, asar-correct — matches the in-dir
- * fork exactly. The win-unpacked layout is mirrored verbatim so
- * require('node-pty') and node-pty's native loader resolve the relocated tree
- * identically to the packaged app.
- *
- * Fail-open everywhere: any failure returns null and the caller forks the
- * install-dir host — the pre-relocation behavior, byte-identical off win32.
+ * What escapes the updater is the PATH, not the file name: electron-builder's kill sweep selects
+ * processes whose image path sits under $INSTDIR. See docs/reference/windows-daemon-host-relocation.md
+ * for the survival contract and why the exe is copied verbatim rather than renamed.
  */
 
 export type RelocatedDaemonHost = {
@@ -46,22 +38,19 @@ export type RelocatedDaemonHost = {
 const HOST_SUBDIR = 'daemon-host'
 const MARKER_NAME = '.materialized.json'
 
-// The relocated host is machine-specific runtime (~260MB). It must live under
-// LOCAL appData, not the roaming userData dir, so a roaming profile or OneDrive
-// Known-Folder-Move never syncs it (slow login/logout, sync bloat). This folder
-// name is shared verbatim with the NSIS uninstall cleanup
-// (config/nsis/daemon-host-uninstall.nsh), which removes
-// %LOCALAPPDATA%\<LOCAL_HOST_ROOT_NAME>\daemon-host — keep the two in sync.
+// LOCAL appData (not roaming) so OneDrive/roaming never syncs this ~260MB runtime. Shared with NSIS uninstall (config/nsis/orca-installer-hooks.nsh) — keep in sync.
 const LOCAL_HOST_ROOT_NAME = 'Orca'
 
-// The relocated host exe is a copy of Orca.exe renamed to a distinct image
-// name. The NSIS updater's name-based kill (`taskkill /IM Orca.exe`) matches by
-// image name, so a distinct name spares the daemon from that branch, while the
-// userData path (outside $INSTDIR) spares it from the path-based branch.
-const DAEMON_HOST_EXE_NAME = 'orca-terminal-daemon.exe'
+/**
+ * The host exe keeps the app exe's own file name, so the relocated image is a byte-for-byte,
+ * name-included copy of a signed binary — nothing for EDR to read as a renamed image (MITRE T1036).
+ * Survival comes from the path (see the module header). The one name-sensitive updater path is the
+ * no-PowerShell `taskkill /IM` fallback, where the daemon is killed and terminals cold-restore —
+ * the documented pre-relocation outcome, not a failure.
+ */
+const daemonHostExeName = (execPath: string): string => winPath.basename(execPath)
 
-// V8 snapshots + ICU data the Electron bootstrap reads even under
-// ELECTRON_RUN_AS_NODE; siblings of Orca.exe in win-unpacked.
+// V8 snapshots + ICU data the Electron bootstrap reads even under ELECTRON_RUN_AS_NODE; siblings of Orca.exe.
 const RUNTIME_DATA_FILES = ['icudtl.dat', 'snapshot_blob.bin', 'v8_context_snapshot.bin']
 
 type CopyOp = {
@@ -89,9 +78,7 @@ type MaterializeMarker = {
   entryRelPath: string
 }
 
-// Uses win32 path semantics so Windows layout paths (drive letters, `\`)
-// decompose correctly regardless of host OS — needed for cross-platform unit
-// tests; production runs this on win32 only.
+// win32 path semantics so Windows paths decompose correctly off-win32 in cross-platform unit tests; production runs on win32 only.
 function toPosixRelative(fromDir: string, absPath: string): string {
   return winPath.relative(fromDir, absPath).split(winPath.sep).join('/')
 }
@@ -100,8 +87,7 @@ function destPath(root: string, destRel: string): string {
   return join(root, ...destRel.split('/'))
 }
 
-// Mirror getDaemonEntryPath()'s resolution order (unpacked root first, then
-// out/main) so the copied entry is the exact file the in-dir fork would run.
+// Mirror getDaemonEntryPath()'s resolution order so the copied entry is the exact file the in-dir fork would run.
 function resolveEntrySourcePath(resourcesPath: string): string {
   const unpackedRoot = join(resourcesPath, 'app.asar.unpacked')
   const direct = join(unpackedRoot, 'daemon-entry.js')
@@ -111,10 +97,27 @@ function resolveEntrySourcePath(resourcesPath: string): string {
   return join(unpackedRoot, 'out', 'main', 'daemon-entry.js')
 }
 
-// Discover the relocation inputs from the live packaged process, or null when
-// relocation does not apply (non-win32, dev, or missing resourcesPath).
+/**
+ * Whether this process is a packaged ELECTRON app on win32 — the only shape relocation
+ * addresses, because what it escapes is the NSIS updater's kill zone.
+ *
+ * Why asar and not isPackaged alone: orcad answers isPackaged() true (it is a shipped build,
+ * not a dev checkout) while having no asar, no resourcesPath and no NSIS installer. Asking
+ * whether the app root is an asar archive is the same honesty fix the watcher path uses, and
+ * it keeps a Node host from staging a copy of an Electron tree it does not have.
+ */
+function isPackagedElectronWin32(): boolean {
+  const environment = getAppEnvironment()
+  return (
+    process.platform === 'win32' &&
+    environment.isPackaged() &&
+    environment.getAppPath().includes('app.asar')
+  )
+}
+
+// Relocation inputs from the live packaged process, or null when it doesn't apply (non-win32, dev, or missing resourcesPath).
 function collectDaemonHostSources(): DaemonHostSources | null {
-  if (process.platform !== 'win32' || !app.isPackaged) {
+  if (!isPackagedElectronWin32()) {
     return null
   }
   const resourcesPath = process.resourcesPath
@@ -133,12 +136,7 @@ function collectDaemonHostSources(): DaemonHostSources | null {
   }
 }
 
-// node-pty ships debug symbols (.pdb) and a win32 prebuild dir per CPU arch; the
-// run-as-node daemon loads neither the symbols nor any non-host-arch prebuild
-// (verified against the live daemon's loaded module list), so they are filtered
-// out of the copy — the bulk of node-pty's on-disk size. Keyed on the host arch
-// rather than dropping arm64 outright so a future Windows-arm64 build keeps the
-// `win32-arm64` prebuild it actually needs and prunes `win32-x64` instead.
+// Drop node-pty's .pdb symbols and non-host-arch prebuilds (its bulk); keyed on host arch so a future win32-arm64 build keeps the prebuild it needs.
 const HOST_WIN_PREBUILD_DIR = `win32-${process.arch}`.toLowerCase()
 function isRuntimeNodePtyPath(sourcePath: string): boolean {
   const p = sourcePath.toLowerCase()
@@ -151,29 +149,20 @@ function isRuntimeNodePtyPath(sourcePath: string): boolean {
 }
 
 /**
- * The ordered copy plan. Every destRel mirrors the source's win-unpacked
- * relative path so require() and node-pty's native loader resolve the mirror
- * identically to the packaged app. Pure over its inputs so tests can assert the
- * layout without a real build.
+ * The ordered copy plan. Every destRel mirrors the source's win-unpacked relative path so require()
+ * and node-pty's loader resolve the mirror identically to the packaged app. Pure so tests can assert layout.
  */
 export function buildDaemonHostManifest(sources: DaemonHostSources): CopyOp[] {
   const { appDir, execPath, resourcesPath, entrySourcePath, entryRelPath } = sources
   const ops: CopyOp[] = []
 
-  // Electron host binary + V8/ICU data blobs at the dest root. The exe is
-  // renamed to a distinct image name so the NSIS updater's name-based
-  // `taskkill /IM Orca.exe` can't match it; the blobs beside it are read by the
-  // Electron bootstrap by fixed name. Top-level DLLs are deliberately NOT copied
-  // — they are all GPU/graphics/media (swiftshader, vulkan, d3d, dxcompiler,
-  // ffmpeg) that a windowless run-as-node host never loads (verified empirically
-  // against the live daemon's module list), so copying them only wastes ~48MB.
-  ops.push({ sourcePath: execPath, destRel: DAEMON_HOST_EXE_NAME, kind: 'file' })
+  // Host exe (verbatim name) + V8/ICU blobs at dest root. Top-level DLLs omitted: GPU/media libs a windowless run-as-node host never loads (~48MB saved).
+  ops.push({ sourcePath: execPath, destRel: daemonHostExeName(execPath), kind: 'file' })
   for (const name of RUNTIME_DATA_FILES) {
     ops.push({ sourcePath: join(appDir, name), destRel: name, kind: 'file', optional: true })
   }
 
-  // Daemon bundle: entry + its sibling chunks/ + the unpacked out/package.json
-  // (CJS/ESM loader resolution), mirrored verbatim.
+  // Daemon bundle: entry + sibling chunks/ + out/package.json (CJS/ESM loader resolution), mirrored verbatim.
   ops.push({ sourcePath: entrySourcePath, destRel: entryRelPath, kind: 'file' })
   const chunksDir = join(winPath.dirname(entrySourcePath), 'chunks')
   ops.push({
@@ -190,10 +179,7 @@ export function buildDaemonHostManifest(sources: DaemonHostSources): CopyOp[] {
     optional: true
   })
 
-  // node-pty package tree (native conpty.node + conpty/ runtime dir). It is a
-  // sibling of app.asar.unpacked; require('node-pty') resolves it by walking up
-  // from the mirrored daemon-entry dir to resources/node_modules. Filtered to
-  // drop .pdb debug symbols and other-arch prebuilds the host never loads.
+  // node-pty tree, mirrored so require('node-pty') resolves it; filtered to drop unused .pdb/other-arch prebuilds.
   const nodePtyDir = join(resourcesPath, 'node_modules', 'node-pty')
   ops.push({
     sourcePath: nodePtyDir,
@@ -245,34 +231,31 @@ function readMarker(dir: string): MaterializeMarker | null {
 }
 
 function hostRootDir(): string {
-  // Prefer LOCAL appData (see LOCAL_HOST_ROOT_NAME). Fall back to userData only
-  // if LOCALAPPDATA is somehow unset — a no-op off win32, where relocation never
-  // runs anyway; on win32 packaged the env var is always present.
+  // Prefer LOCAL appData (see LOCAL_HOST_ROOT_NAME); fall back to userData only if LOCALAPPDATA is unset.
   const localAppData = process.env.LOCALAPPDATA
   const base =
     typeof localAppData === 'string' && localAppData.length > 0
       ? join(localAppData, LOCAL_HOST_ROOT_NAME)
-      : app.getPath('userData')
+      : getAppEnvironment().getPath('userData')
   return join(base, HOST_SUBDIR)
 }
 
 /**
- * Cheap idempotency check: the relocated host for the current version, or null.
- * Valid only when the marker matches this version AND the exe + entry exist, so
- * a partial or stale copy never reports ready.
+ * The relocated host for the current version, or null. Valid only when the marker matches this version
+ * AND the exe + entry exist, so a partial or stale copy never reports ready.
  */
 export function getRelocatedDaemonHost(): RelocatedDaemonHost | null {
   const sources = collectDaemonHostSources()
   if (!sources) {
     return null
   }
-  const version = app.getVersion()
+  const version = getAppEnvironment().getVersion()
   const dest = join(hostRootDir(), version)
   const marker = readMarker(dest)
   if (!marker || marker.version !== version) {
     return null
   }
-  const execPath = join(dest, DAEMON_HOST_EXE_NAME)
+  const execPath = join(dest, daemonHostExeName(sources.execPath))
   const entryPath = destPath(dest, marker.entryRelPath)
   if (!existsSync(execPath) || !existsSync(entryPath)) {
     return null
@@ -281,11 +264,8 @@ export function getRelocatedDaemonHost(): RelocatedDaemonHost | null {
 }
 
 /**
- * Ensure the current version's daemon host is materialized under
- * userData/daemon-host/<version>, returning its fork paths or null (fail-open).
- * Idempotent: a valid marker for this version short-circuits without recopying.
- * The copy stages into a temp sibling and is published by atomic rename, so a
- * crash mid-copy never leaves a half-populated dest.
+ * Materialize the current version's daemon host, returning its fork paths or null (fail-open). Idempotent
+ * via marker; stages into a temp sibling and publishes by atomic rename, so a crash mid-copy never leaves a half-populated dest.
  */
 export function materializeRelocatedDaemonHost(): RelocatedDaemonHost | null {
   const existing = getRelocatedDaemonHost()
@@ -296,7 +276,7 @@ export function materializeRelocatedDaemonHost(): RelocatedDaemonHost | null {
   if (!sources) {
     return null
   }
-  const version = app.getVersion()
+  const version = getAppEnvironment().getVersion()
   const root = hostRootDir()
   const dest = join(root, version)
   const staging = join(root, `${version}.staging-${randomBytes(6).toString('hex')}`)
@@ -304,15 +284,16 @@ export function materializeRelocatedDaemonHost(): RelocatedDaemonHost | null {
     mkdirSync(root, { recursive: true })
     rmSync(staging, { recursive: true, force: true })
     executeManifest(buildDaemonHostManifest(sources), staging)
-    // Marker written LAST: an interrupted copy leaves a marker-less staging dir
-    // that the next launch discards, never a dest the cheap check trusts.
+    // Marker written LAST so an interrupted copy leaves a marker-less staging dir the next launch discards.
     const marker: MaterializeMarker = {
       version,
       completedAt: new Date().toISOString(),
       entryRelPath: sources.entryRelPath
     }
     writeFileSync(join(staging, MARKER_NAME), JSON.stringify(marker))
-    // Replace any stale/partial dest, then publish the staging dir atomically.
+    // Replace any stale/partial dest, then publish atomically. Windows refuses to delete a running
+    // image, so a live daemon already hosted in THIS version's dir (same-version reinstall, or a dev
+    // channel reusing a version) throws here and materialization fails open to the install-dir host.
     rmSync(dest, { recursive: true, force: true })
     renameSync(staging, dest)
   } catch {
@@ -326,58 +307,94 @@ export function materializeRelocatedDaemonHost(): RelocatedDaemonHost | null {
   return getRelocatedDaemonHost()
 }
 
-function isDaemonPidAlive(pid: number, startedAtMs: number | null): boolean {
-  try {
-    process.kill(pid, 0)
-  } catch {
-    return false
-  }
-  return startTimeMatches(pid, startedAtMs)
-}
+export type PinnedDaemonVersionsEvidence =
+  | { status: 'complete'; versionLiveness: ReadonlyMap<string, ProcessLivenessVerdict> }
+  | { status: 'unverifiable'; reason: string }
 
 /**
- * App versions still pinned by a live daemon, read from the daemon-v<N>.pid
- * files under `runtimeDir`. A surviving daemon runs from its version's host dir,
- * so its dir must never be reclaimed while the process is alive. On win32 the
- * start-time check cannot verify, so a matching pid pins conservatively.
+ * App versions still pinned by a live daemon (from daemon-v<N>.pid files under `runtimeDir`), whose
+ * host dir must not be reclaimed while alive. On win32 start-time can't verify, so a matching pid pins conservatively.
  */
-export function collectPinnedDaemonVersions(runtimeDir: string): Set<string> {
-  const pinned = new Set<string>()
+export function collectPinnedDaemonVersions(runtimeDir: string): PinnedDaemonVersionsEvidence {
+  const versionLiveness = new Map<string, ProcessLivenessVerdict>()
   let entries
   try {
     entries = readdirSync(runtimeDir, { withFileTypes: true })
   } catch {
-    return pinned
+    return { status: 'unverifiable', reason: 'the daemon runtime directory could not be read' }
   }
   for (const entry of entries) {
     if (!entry.isFile() || !/^daemon-v\d+\.pid$/.test(entry.name)) {
       continue
     }
-    let parsed
+    let contents
     try {
-      parsed = parseDaemonPidFile(readFileSync(join(runtimeDir, entry.name), 'utf8'))
+      contents = readFileSync(join(runtimeDir, entry.name), 'utf8')
     } catch {
+      // Read failures (AV lock, vanished file) are transient; the veto re-evaluates next launch.
+      return {
+        status: 'unverifiable',
+        reason: `the daemon pid file could not be read: ${entry.name}`
+      }
+    }
+    const parsed = parseDaemonPidFile(contents)
+    // Why not just `!parsed`: the parser's legacy bare-integer fallback coerces an empty or
+    // whitespace-only record to pid 0 (Number('') === 0), which is the exact shape a concurrent
+    // read sees while a live daemon publishes its record — writeFileSync 'wx' creates the file
+    // before writing it. Such a record would otherwise pass as a valid pre-relocation daemon,
+    // skip on appVersion === null, and leave its version unpinned, so the prune below would
+    // reclaim a running daemon's host image. A pid that is not a positive integer names no
+    // process — process.kill(0, 0) probes the caller's own process group, never a daemon — so
+    // it is not liveness evidence and must veto rather than be skipped.
+    if (!parsed || !Number.isInteger(parsed.pid) || parsed.pid <= 0) {
+      return {
+        status: 'unverifiable',
+        reason: quarantineCorruptDaemonPidRecord(runtimeDir, entry.name, contents)
+      }
+    }
+    // appVersion null => pre-relocation daemon forked from the install dir; pins no host dir here.
+    if (parsed.appVersion === null) {
       continue
     }
-    // appVersion null => a pre-relocation daemon forked from the install dir,
-    // which pins no host dir here.
-    if (parsed && parsed.appVersion !== null && isDaemonPidAlive(parsed.pid, parsed.startedAtMs)) {
-      pinned.add(parsed.appVersion)
-    }
+    const verdict = inspectProcessLiveness(parsed.pid)
+    versionLiveness.set(
+      parsed.appVersion,
+      mergeProcessLivenessVerdict(versionLiveness.get(parsed.appVersion), verdict)
+    )
   }
-  return pinned
+  return { status: 'complete', versionLiveness }
+}
+
+// Why: deletion is the destructive direction and this is a statement position the compiler does
+// not police for exhaustiveness — reclaim must be opted into by a positively matched 'exited',
+// so any future unhandled verdict status preserves the host dir instead of deleting it.
+export function reclaimUnownedDaemonHostDir(
+  verdict: ProcessLivenessVerdict,
+  hostDir: string
+): void {
+  if (verdict.status !== 'exited') {
+    return
+  }
+  try {
+    rmSync(hostDir, { recursive: true, force: true })
+  } catch {
+    // Still locked or already gone — retry on a future launch.
+  }
 }
 
 /**
- * Reclaim daemon-host/<ver> dirs whose ver is neither the current version nor
- * pinned by a live daemon. Best-effort — never throws; a still-locked or
- * concurrently-staging dir is simply retried on a future launch.
+ * Reclaim daemon-host/<ver> dirs that are neither the current version nor pinned by a live daemon.
+ * Best-effort — never throws; a locked/staging dir is retried on a future launch.
  */
-export function pruneOldDaemonHosts(pinnedVersions: ReadonlySet<string>): void {
-  if (process.platform !== 'win32' || !app.isPackaged) {
+export function pruneOldDaemonHosts(evidence: PinnedDaemonVersionsEvidence): void {
+  if (!isPackagedElectronWin32()) {
     return
   }
-  const version = app.getVersion()
+  if (evidence.status === 'unverifiable') {
+    console.warn(`[daemon] Skipping daemon-host prune: ${evidence.reason}`)
+    return
+  }
+  const version = getAppEnvironment().getVersion()
   const root = hostRootDir()
   let entries
   try {
@@ -386,13 +403,11 @@ export function pruneOldDaemonHosts(pinnedVersions: ReadonlySet<string>): void {
     return
   }
   for (const entry of entries) {
-    if (!entry.isDirectory() || entry.name === version || pinnedVersions.has(entry.name)) {
+    if (!entry.isDirectory() || entry.name === version) {
       continue
     }
-    try {
-      rmSync(join(root, entry.name), { recursive: true, force: true })
-    } catch {
-      // Still locked or already gone — retry on a future launch.
-    }
+    // A complete runtime-dir listing with no pid record for this version proves it is unowned.
+    const verdict = evidence.versionLiveness.get(entry.name) ?? { status: 'exited' }
+    reclaimUnownedDaemonHostDir(verdict, join(root, entry.name))
   }
 }

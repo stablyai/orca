@@ -8,6 +8,10 @@ export type GitBranchCleanupExec = (
 
 const SQUASH_PATCH_SCAN_LIMIT = 200
 
+function isLocalTargetRef(ref: string): boolean {
+  return ref === 'HEAD' || ref.startsWith('refs/heads/') || ref.startsWith('refs/tags/')
+}
+
 async function readOptionalGitStdout(
   runGit: GitBranchCleanupExec,
   argv: string[],
@@ -252,4 +256,27 @@ export async function branchHasNoUnmergedChangesOnAnyTarget(
   }
 
   return false
+}
+
+export async function branchHasNoUnmergedChangesWithLazyTargetRefresh(
+  runGit: GitBranchCleanupExec,
+  branchName: string,
+  targetRefs: string[],
+  capabilities: GitCapabilityCache
+): Promise<boolean> {
+  // Why: an unrefreshed remote-tracking ref may no longer represent the remote's branch contents.
+  const localTargetRefs = targetRefs.filter(isLocalTargetRef)
+  const refreshDependentTargetRefs = targetRefs.filter((targetRef) => !isLocalTargetRef(targetRef))
+  if (
+    await branchHasNoUnmergedChangesOnAnyTarget(runGit, branchName, localTargetRefs, capabilities)
+  ) {
+    return true
+  }
+  await refreshBranchCleanupTargetRefs(runGit, targetRefs)
+  return branchHasNoUnmergedChangesOnAnyTarget(
+    runGit,
+    branchName,
+    refreshDependentTargetRefs,
+    capabilities
+  )
 }

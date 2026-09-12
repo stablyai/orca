@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AppState } from '@/store'
 import type * as TuiAgentSelectionModule from '../../../shared/tui-agent-selection'
 import type * as TuiAgentStartupModule from '@/lib/tui-agent-startup'
+import type * as DirectAgentRoutingModule from '@/lib/launch-work-item-direct-agent-routing'
 
 const mocks = vi.hoisted(() => ({
   toastError: vi.fn(),
@@ -11,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   updateWorktreeMeta: vi.fn(),
   setSidebarOpen: vi.fn(),
   seedNativeChatLaunchPrompt: vi.fn(),
+  seedNativeChatLaunchDraft: vi.fn(),
   markNativeChatLaunchPromptFailed: vi.fn(),
   activateAndRevealWorktree: vi.fn(),
   pasteDraftWhenAgentReady: vi.fn(),
@@ -24,6 +26,7 @@ const mocks = vi.hoisted(() => ({
     updateWorktreeMeta: ReturnType<typeof vi.fn>
     setSidebarOpen: ReturnType<typeof vi.fn>
     seedNativeChatLaunchPrompt: ReturnType<typeof vi.fn>
+    seedNativeChatLaunchDraft: ReturnType<typeof vi.fn>
     markNativeChatLaunchPromptFailed: ReturnType<typeof vi.fn>
   }
 }))
@@ -77,11 +80,11 @@ vi.mock('@/lib/new-workspace', () => ({
       ? {
           displayName:
             args.workItem.type === 'pr'
-              ? `PR ${args.workItem.number} - Review`
+              ? `Review PR ${args.workItem.number}`
               : `Issue ${args.workItem.number}`,
           seedName:
             args.workItem.type === 'pr'
-              ? `pr-${args.workItem.number}-review`
+              ? `review-pr-${args.workItem.number}`
               : `issue-${args.workItem.number}`
         }
       : null,
@@ -114,8 +117,19 @@ vi.mock('../../../shared/tui-agent-selection', async () => {
   }
 })
 
+vi.mock('@/lib/launch-work-item-direct-agent-routing', async () => {
+  const actual = await vi.importActual<typeof DirectAgentRoutingModule>(
+    '@/lib/launch-work-item-direct-agent-routing'
+  )
+  return {
+    ...actual,
+    settleDirectWorkItemStructuredLaunch: vi.fn(actual.settleDirectWorkItemStructuredLaunch)
+  }
+})
+
 import { launchWorkItemDirect } from './launch-work-item-direct'
 import { pasteDraftWhenAgentReady } from '@/lib/agent-paste-draft'
+import { settleDirectWorkItemStructuredLaunch } from '@/lib/launch-work-item-direct-agent-routing'
 import { buildAgentDraftLaunchPlan, buildAgentStartupPlan } from '@/lib/tui-agent-startup'
 import { pickTuiAgent } from '../../../shared/tui-agent-selection'
 
@@ -191,6 +205,7 @@ describe('launchWorkItemDirect', () => {
       updateWorktreeMeta: mocks.updateWorktreeMeta,
       setSidebarOpen: mocks.setSidebarOpen,
       seedNativeChatLaunchPrompt: mocks.seedNativeChatLaunchPrompt,
+      seedNativeChatLaunchDraft: mocks.seedNativeChatLaunchDraft,
       markNativeChatLaunchPromptFailed: mocks.markNativeChatLaunchPromptFailed
     } as typeof mocks.store
     // @ts-expect-error -- test shim
@@ -253,12 +268,12 @@ describe('launchWorkItemDirect', () => {
     })
     expect(mocks.createWorktree).toHaveBeenCalledWith(
       'repo-1',
-      'pr-6934-review',
+      'review-pr-6934',
       'abc123',
       'inherit',
       undefined,
       'sidebar',
-      'PR 6934 - Review',
+      'Review PR 6934',
       undefined,
       6934,
       { remoteName: 'origin', branchName: 'feature/fix' },
@@ -428,6 +443,72 @@ describe('launchWorkItemDirect', () => {
     expect(pasteDraftWhenAgentReady).not.toHaveBeenCalled()
   })
 
+  it('seeds the chat-composer launch draft for a GitHub issue draft launch', async () => {
+    mocks.ensureDetectedAgents.mockResolvedValue(['claude'])
+    const { launchWorkItemDirect } = await import('./launch-work-item-direct')
+
+    await expect(
+      launchWorkItemDirect({
+        repoId: 'repo-1',
+        launchSource: 'task_page',
+        openModalFallback: vi.fn(),
+        agentOverride: 'claude',
+        item: {
+          type: 'issue',
+          number: 12,
+          title: 'Fix crash on launch',
+          url: 'https://github.com/acme/repo/issues/12'
+        }
+      })
+    ).resolves.toBe(true)
+
+    // The issue link prefills only the TUI input (argv `--prefill`); the seeded
+    // draft is what makes the same context visible in the chat view.
+    expect(mocks.seedNativeChatLaunchDraft).toHaveBeenCalledWith({
+      tabId: 'tab-1',
+      agent: 'claude',
+      text: 'https://github.com/acme/repo/issues/12',
+      createdAt: expect.any(Number)
+    })
+    expect(mocks.seedNativeChatLaunchPrompt).not.toHaveBeenCalled()
+    // Why: the draft is inside `--prefill`, so the plan sets no draftPrompt.
+    // launchDraftText is the only thing that lets the view-mode gate see a
+    // draft here — without it this tab opens in chat unconditionally.
+    const startup = mocks.activateAndRevealWorktree.mock.calls.at(-1)?.[1]?.startup
+    expect(startup?.draftPrompt).toBeUndefined()
+    expect(startup?.launchDraftText).toBe('https://github.com/acme/repo/issues/12')
+  })
+
+  it('seeds the chat-composer launch draft for a multi-line Linear draft launch', async () => {
+    // A Linear draft is always `Linked Linear issue: ENG-42\n<url>\n`, so withholding
+    // multi-line drafts made every Linear launch invisible in the chat view.
+    mocks.ensureDetectedAgents.mockResolvedValue(['claude'])
+    const { launchWorkItemDirect } = await import('./launch-work-item-direct')
+
+    await expect(
+      launchWorkItemDirect({
+        repoId: 'repo-1',
+        launchSource: 'task_page',
+        openModalFallback: vi.fn(),
+        agentOverride: 'claude',
+        item: {
+          type: 'issue',
+          number: null,
+          title: 'Ship Linear parity',
+          url: 'https://linear.app/acme/issue/ENG-42/ship-linear-parity',
+          linearIdentifier: 'ENG-42'
+        }
+      })
+    ).resolves.toBe(true)
+
+    expect(mocks.seedNativeChatLaunchDraft).toHaveBeenCalledWith({
+      tabId: 'tab-1',
+      agent: 'claude',
+      text: 'Linked Linear issue: ENG-42\nhttps://linear.app/acme/issue/ENG-42/ship-linear-parity\n',
+      createdAt: expect.any(Number)
+    })
+  })
+
   it('preserves explicit Linear paste content submit-after-ready behavior', async () => {
     mocks.ensureDetectedAgents.mockResolvedValue(['claude'])
     const { launchWorkItemDirect } = await import('./launch-work-item-direct')
@@ -472,6 +553,46 @@ describe('launchWorkItemDirect', () => {
       text: 'Use this explicit user prompt.',
       createdAt: expect.any(Number)
     })
+    expect(mocks.seedNativeChatLaunchDraft).not.toHaveBeenCalled()
+  })
+
+  it('reports a failed structured settlement instead of pasting into the pre-launch tab', async () => {
+    mocks.ensureDetectedAgents.mockResolvedValue(['claude'])
+    // Why: activation seeded a plain shell (`tab-1`); a failed structured launch hands back no tab,
+    // so the PR body must not reach that shell where the Claude readiness heuristic would submit it
+    // — and callers hang irreversible follow-up work off a `true`, so this must not report success.
+    vi.mocked(settleDirectWorkItemStructuredLaunch).mockResolvedValueOnce({
+      completed: false,
+      structuredLaunch: true,
+      visibilityUnknown: false,
+      failed: true,
+      primaryTabId: null
+    })
+    const { launchWorkItemDirect } = await import('./launch-work-item-direct')
+
+    await expect(
+      launchWorkItemDirect({
+        repoId: 'repo-1',
+        launchSource: 'task_page',
+        openModalFallback: vi.fn(),
+        agentOverride: 'claude',
+        promptDelivery: 'submit-after-ready',
+        item: {
+          type: 'pr',
+          number: 7,
+          title: 'Review this PR',
+          url: 'https://github.com/acme/repo/pull/7',
+          pasteContent: 'rm -rf ./build\nReview the PR body.'
+        }
+      })
+    ).resolves.toBe(false)
+
+    expect(settleDirectWorkItemStructuredLaunch).toHaveBeenCalledWith(
+      expect.objectContaining({ primaryTabId: 'tab-1' })
+    )
+    expect(pasteDraftWhenAgentReady).not.toHaveBeenCalled()
+    expect(mocks.seedNativeChatLaunchPrompt).not.toHaveBeenCalled()
+    expect(mocks.seedNativeChatLaunchDraft).not.toHaveBeenCalled()
   })
 
   it('uses remote cursor-agent detection, trust preflight, and paste launch for SSH repos', async () => {
@@ -618,7 +739,9 @@ describe('launchWorkItemDirect', () => {
 
     expect(mocks.activateAndRevealWorktree).toHaveBeenCalled()
     const activationOptions = mocks.activateAndRevealWorktree.mock.calls.at(-1)?.[1]
-    expect(activationOptions.startup.command).toContain('unset ORCA_PI_PREFILL')
+    expect(activationOptions.startup.command).toContain(
+      `command test -n "$fish_pid" && set --erase -g ORCA_PI_PREFILL; command test -z "$fish_pid" && unset ORCA_PI_PREFILL; true`
+    )
     expect(activationOptions.startup.command).not.toContain('Remove-Item Env:ORCA_PI_PREFILL')
   })
 
@@ -659,7 +782,9 @@ describe('launchWorkItemDirect', () => {
     expect(mocks.ensureRemoteDetectedAgents).toHaveBeenCalledWith('ssh-1')
     expect(mocks.ensureDetectedAgents).not.toHaveBeenCalled()
     const activationOptions = mocks.activateAndRevealWorktree.mock.calls.at(-1)?.[1]
-    expect(activationOptions.startup.command).toContain('unset ORCA_PI_PREFILL')
+    expect(activationOptions.startup.command).toContain(
+      `command test -n "$fish_pid" && set --erase -g ORCA_PI_PREFILL; command test -z "$fish_pid" && unset ORCA_PI_PREFILL; true`
+    )
   })
 
   it('plans direct local Windows-path launches with POSIX startup for WSL project runtime', async () => {

@@ -1,10 +1,32 @@
-import type { Repo } from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
 import type { SettingsSearchEntry } from './settings-search'
 import { translate } from '@/i18n/i18n'
 import { translateSearchKeyword } from './settings-search-keywords'
 
 export function getRepositoryGitWorktreeSearchEntries(repo: Repo): SettingsSearchEntry[] {
   return [
+    {
+      title: translate(
+        'auto.components.settings.repository.search.externalWorktrees',
+        'External worktrees'
+      ),
+      description: translate(
+        'auto.components.settings.repository.search.externalWorktreesDescription',
+        'Override whether worktrees created outside Orca appear for this project.'
+      ),
+      keywords: [
+        repo.displayName,
+        ...translateSearchKeyword(
+          'auto.components.settings.repository.search.external',
+          'external'
+        ),
+        ...translateSearchKeyword(
+          'auto.components.settings.repository.search.visibility',
+          'visibility'
+        ),
+        ...translateSearchKeyword('auto.components.settings.repository.search.sidebar', 'sidebar')
+      ]
+    },
     {
       title: translate(
         'auto.components.settings.repository.search.094adbe930',

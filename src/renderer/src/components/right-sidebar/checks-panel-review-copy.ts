@@ -1,4 +1,4 @@
-import type { GitHubPRRefreshSkippedReason } from '../../../../shared/types'
+import type { GitHubPRRefreshSkippedReason } from '../../../../shared/github/pull-request-refresh-types'
 import { translate } from '@/i18n/i18n'
 import { getGitHubUnavailableEmptyStateCopy } from './github-refresh-error-copy'
 import {

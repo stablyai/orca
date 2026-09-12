@@ -1,6 +1,15 @@
 import { useEffect, useState } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
-import { Globe, X, ExternalLink, Copy, Pin, PinOff, PanelRightClose } from 'lucide-react'
+import {
+  X,
+  ExternalLink,
+  Copy,
+  CopyX,
+  Pin,
+  PinOff,
+  PanelLeftClose,
+  PanelRightClose
+} from 'lucide-react'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -11,9 +20,9 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { ORCA_BROWSER_BLANK_URL } from '../../../../shared/constants'
 import { redactKagiSessionToken } from '../../../../shared/browser-url'
-import type { BrowserTab as BrowserTabState } from '../../../../shared/types'
+import type { BrowserTab as BrowserTabState } from '../../../../shared/browser-workspace-types'
 import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from './SortableTab'
-import { getLiveBrowserUrl } from '../browser-pane/browser-runtime'
+import { getLiveBrowserUrl } from '../browser-pane/describe-page/live-browser-url-registry'
 import type { TabDragItemData } from '../tab-group/useTabDragSplit'
 import {
   ACTIVE_TAB_INDICATOR_CLASSES,
@@ -27,8 +36,11 @@ import { translate } from '@/i18n/i18n'
 import { TAB_CONTAINER_WIDTH_CLASSES, TAB_LABEL_WIDTH_CLASSES } from './tab-width-rules'
 import { TabWorkspaceLayoutMenuSection } from './TabWorkspaceLayoutMenuSection'
 import { useTabStripPointerActivation } from './tab-strip-pointer-activation'
+import { TAB_CONTEXT_MENU_CONTENT_CLASS } from './tab-context-menu-sizing'
+import { cn } from '@/lib/utils'
+import { BrowserFavicon } from '@/components/browser-favicon'
 
-function formatBrowserTabUrlLabel(url: string): string {
+export function formatBrowserTabUrlLabel(url: string): string {
   if (url === ORCA_BROWSER_BLANK_URL || url === 'about:blank') {
     return 'New Tab'
   }
@@ -56,59 +68,18 @@ function isBlankBrowserTab(tab: BrowserTabState): boolean {
   return tab.url === ORCA_BROWSER_BLANK_URL || tab.url === 'about:blank'
 }
 
-type FailedFavicon = {
-  tabId: string
-  faviconUrl: string
-}
-
-function BrowserTabFavicon({
-  tabId,
-  faviconUrl
-}: {
-  tabId: string
-  faviconUrl: string | null
-}): React.JSX.Element {
-  const displayFaviconUrl = faviconUrl?.trim() ? faviconUrl : null
-  const [failedFavicon, setFailedFavicon] = useState<FailedFavicon | null>(null)
-
-  // Why: reset during render so a new favicon identity retries before the tab
-  // commits one frame with the stale fallback icon.
-  if (
-    failedFavicon &&
-    (failedFavicon.tabId !== tabId || failedFavicon.faviconUrl !== displayFaviconUrl)
-  ) {
-    setFailedFavicon(null)
-  }
-
-  const currentFaviconFailed =
-    failedFavicon?.tabId === tabId && failedFavicon.faviconUrl === displayFaviconUrl
-
-  if (displayFaviconUrl && !currentFaviconFailed) {
-    return (
-      <img
-        src={displayFaviconUrl}
-        alt=""
-        aria-hidden
-        draggable={false}
-        // Why: transparent dark/light-mode favicons can disappear against tab
-        // chrome; a token-colored 1px shadow keeps the 12px mark legible.
-        className="size-3 mr-1 shrink-0 rounded-sm object-contain drop-shadow-[0_0_1px_var(--foreground)]"
-        onError={() => setFailedFavicon({ tabId, faviconUrl: displayFaviconUrl })}
-      />
-    )
-  }
-
-  return <Globe className="size-3 mr-1 shrink-0 text-blue-500" />
-}
-
 export default function BrowserTab({
   tab,
   isActive,
   isPinned,
   hasTabsToRight,
+  hasTabsToLeft,
+  tabCount,
   onActivate,
   onClose,
+  onCloseOthers,
   onCloseToRight,
+  onCloseToLeft,
   onDuplicate,
   onTogglePin,
   dragData,
@@ -119,10 +90,14 @@ export default function BrowserTab({
   isActive: boolean
   isPinned: boolean
   hasTabsToRight: boolean
+  hasTabsToLeft: boolean
+  tabCount: number
   onActivate: () => void
   onClose: () => void
+  onCloseOthers: () => void
   onCloseToRight: () => void
-  onDuplicate: () => void
+  onCloseToLeft: () => void
+  onDuplicate?: () => void
   onTogglePin: () => void
   dragData: TabDragItemData
   dropIndicator?: DropIndicator
@@ -178,6 +153,7 @@ export default function BrowserTab({
     <div
       ref={setNodeRef}
       data-tab-id={tab.id}
+      data-active={isActive ? 'true' : 'false'}
       data-pinned={isPinned ? 'true' : 'false'}
       {...attributes}
       {...listeners}
@@ -213,12 +189,14 @@ export default function BrowserTab({
           browser tabs at a glance even when the strip is saturated. We
           keep full color on both active and inactive tabs — dimming to
           muted-foreground made the icon read as "disabled" in practice. */}
-      <BrowserTabFavicon tabId={tab.id} faviconUrl={tab.faviconUrl} />
+      <BrowserFavicon
+        faviconUrl={tab.faviconUrl}
+        loading={tab.loading && !tab.loadError && !isBlankBrowserTab(tab)}
+        className="size-3 mr-1"
+        fallbackClassName="text-blue-500"
+      />
       {isPinned && <Pin className="mr-1 size-3 shrink-0 text-muted-foreground" aria-hidden />}
       <span className={`${TAB_LABEL_WIDTH_CLASSES} mr-1`}>{tabLabel}</span>
-      {tab.loading && !tab.loadError && !isBlankBrowserTab(tab) && (
-        <span className="mr-1 size-1.5 rounded-full bg-sky-500/80 shrink-0" />
-      )}
       {!isPinned && (
         <button
           className={`flex items-center justify-center w-4 h-4 rounded-sm shrink-0 ${
@@ -275,7 +253,10 @@ export default function BrowserTab({
           />
         </DropdownMenuTrigger>
         <DropdownMenuContent
-          className="min-w-[11rem] rounded-[11px] border-border/80 p-1 shadow-[0_16px_36px_rgba(0,0,0,0.24)]"
+          className={cn(
+            'rounded-[11px] border-border/80 p-1 shadow-[0_16px_36px_rgba(0,0,0,0.24)]',
+            TAB_CONTEXT_MENU_CONTENT_CLASS
+          )}
           sideOffset={0}
           align="start"
         >
@@ -284,11 +265,15 @@ export default function BrowserTab({
             groupId={dragData.groupId}
             trailingSeparator
           />
-          <DropdownMenuItem onSelect={onDuplicate}>
-            <Copy className="size-3.5" />
-            {translate('auto.components.tab.bar.BrowserTab.5d6e89891f', 'Duplicate Tab')}
-          </DropdownMenuItem>
-          <DropdownMenuSeparator />
+          {onDuplicate ? (
+            <>
+              <DropdownMenuItem onSelect={onDuplicate}>
+                <Copy className="size-3.5" />
+                {translate('auto.components.tab.bar.BrowserTab.5d6e89891f', 'Duplicate Tab')}
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+            </>
+          ) : null}
           <DropdownMenuItem onSelect={onTogglePin}>
             {isPinned ? <PinOff className="size-3.5" /> : <Pin className="size-3.5" />}
             {isPinned
@@ -300,9 +285,17 @@ export default function BrowserTab({
             <X className="size-3.5" />
             {translate('auto.components.tab.bar.BrowserTab.1611a1324b', 'Close')}
           </DropdownMenuItem>
+          <DropdownMenuItem onSelect={onCloseOthers} disabled={tabCount <= 1}>
+            <CopyX className="size-3.5" />
+            {translate('components.tab.bar.BrowserTab.closeOthers', 'Close Others')}
+          </DropdownMenuItem>
           <DropdownMenuItem onSelect={onCloseToRight} disabled={!hasTabsToRight}>
             <PanelRightClose className="size-3.5" />
             {translate('auto.components.tab.bar.BrowserTab.9dd880bd56', 'Close Tabs To The Right')}
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={onCloseToLeft} disabled={!hasTabsToLeft}>
+            <PanelLeftClose className="size-3.5" />
+            {translate('components.tab.bar.BrowserTab.closeTabsToLeft', 'Close Tabs To The Left')}
           </DropdownMenuItem>
           <DropdownMenuItem
             onSelect={() => void window.api.shell.openUrl(openInBrowserUrl)}

@@ -1,32 +1,24 @@
+import type { WorkspaceVisibleTabType } from '../../../shared/tab-types'
 import type {
-  BrowserPage,
-  BrowserWorkspace,
   PersistedOpenFile,
-  WorkspaceSessionState,
-  WorkspaceVisibleTabType
-} from '../../../shared/types'
+  WorkspaceSessionState
+} from '../../../shared/workspace-session-state-types'
 import { pruneLocalTerminalScrollbackBuffers } from '../../../shared/workspace-session-terminal-buffers'
 import { normalizeBrowserHistoryEntries } from '../../../shared/workspace-session-browser-history'
+import { normalizeWorkspaceDocHistoryEntries } from '../../../shared/workspace-doc-history'
 import type { AppState } from '../store'
 import type { OpenFile } from '../store/slices/editor'
 import { buildPersistedUnifiedTabSessionData } from './workspace-session-unified-tabs'
 import { buildLastVisitedAtByWorktreeId } from './workspace-session-focus-recency'
 import { buildSleepingAgentSessionData } from './workspace-session-sleeping-agents'
+import { buildPersistedClosedTerminalTabTombstones } from './workspace-session-closed-tab-tombstones'
 import { buildActiveConnectionIdsAtShutdown } from './workspace-session-reconnect-targets'
+import { withoutStagedBrowserTabs } from './workspace-session-staged-browser-tabs'
+import { buildBrowserSessionData } from './workspace-session-browser-tabs'
 
 export { buildActiveConnectionIdsAtShutdown }
 
-/** Why (issue #1158): the debounced + shutdown session writers share this
- *  gate so a hydration failure cannot overwrite orca-data.json with the
- *  empty in-memory state the error path leaves behind.
- *
- *  - workspaceSessionReady gates the UI mount; it flips true even in the
- *    error path so users aren't locked out of a crashed session.
- *  - hydrationSucceeded only flips true after a clean load; it stays false
- *    forever if hydration ever threw, which is what keeps the writer a
- *    no-op for the rest of that process lifetime.
- *
- *  Both must be true to persist. */
+/** Why (issue #1158): require both flags so a hydration failure can't overwrite orca-data.json with empty error-path state. */
 export function shouldPersistWorkspaceSession(
   state: Pick<AppState, 'workspaceSessionReady' | 'hydrationSucceeded'>
 ): boolean {
@@ -52,6 +44,8 @@ export type WorkspaceSessionSnapshot = Pick<
   | 'browserPagesByWorkspace'
   | 'activeBrowserTabIdByWorktree'
   | 'browserUrlHistory'
+  | 'workspaceDocHistory'
+  | 'remoteBrowserPageHandlesByPageId'
   | 'unifiedTabsByWorktree'
   | 'groupsByWorktree'
   | 'layoutByWorktree'
@@ -62,19 +56,21 @@ export type WorkspaceSessionSnapshot = Pick<
   | 'lastKnownRelayPtyIdByTabId'
   | 'lastVisitedAtByWorktreeId'
   | 'defaultTerminalTabsAppliedByWorktreeId'
+  | 'closedTerminalTabTombstonesByTabId'
 > & {
+  activeWorkspaceExecutionHostId?: AppState['activeWorkspaceExecutionHostId']
   sleepingAgentSessionsByPaneKey?: AppState['sleepingAgentSessionsByPaneKey']
+  clientHostedBrowserCloseIntentsByEnvironment?: AppState['clientHostedBrowserCloseIntentsByEnvironment']
+  /** Optional so the many partial snapshot fixtures keep type-checking; see buildTerminalSessionData. */
+  pendingReconnectPtyIdByTabId?: AppState['pendingReconnectPtyIdByTabId']
+  deferredSshSessionIdsByTabId?: AppState['deferredSshSessionIdsByTabId']
 }
 
-// Why: the App-level Zustand subscriber that debounces session writes uses
-// this list as a shallow-equality gate so it only resets the timer when a
-// field that actually feeds buildWorkspaceSessionPayload changes. Keeping
-// the list co-located with WorkspaceSessionSnapshot means a future field
-// added to the snapshot type fails the _exhaustive check below at compile
-// time, preventing the gate from silently going stale.
+// Why: shallow-equality gate for the debounced session writer; _exhaustive below keeps it in sync with the snapshot type.
 export const SESSION_RELEVANT_FIELDS = [
   'activeRepoId',
   'activeWorkspaceKey',
+  'activeWorkspaceExecutionHostId',
   'activeWorktreeId',
   'activeTabId',
   'tabsByWorktree',
@@ -90,6 +86,8 @@ export const SESSION_RELEVANT_FIELDS = [
   'browserPagesByWorkspace',
   'activeBrowserTabIdByWorktree',
   'browserUrlHistory',
+  'workspaceDocHistory',
+  'remoteBrowserPageHandlesByPageId',
   'unifiedTabsByWorktree',
   'groupsByWorktree',
   'layoutByWorktree',
@@ -100,15 +98,18 @@ export const SESSION_RELEVANT_FIELDS = [
   'lastKnownRelayPtyIdByTabId',
   'lastVisitedAtByWorktreeId',
   'defaultTerminalTabsAppliedByWorktreeId',
-  'sleepingAgentSessionsByPaneKey'
+  'closedTerminalTabTombstonesByTabId',
+  'sleepingAgentSessionsByPaneKey',
+  'clientHostedBrowserCloseIntentsByEnvironment',
+  'pendingReconnectPtyIdByTabId',
+  'deferredSshSessionIdsByTabId'
 ] as const satisfies readonly (keyof WorkspaceSessionSnapshot)[]
 
 type _MissingSessionField = Exclude<
   keyof WorkspaceSessionSnapshot,
   (typeof SESSION_RELEVANT_FIELDS)[number]
 >
-const _exhaustive: [_MissingSessionField] extends [never] ? true : never = true
-void _exhaustive
+void (true satisfies [_MissingSessionField] extends [never] ? true : never)
 
 /** Build the editor-file portion of the workspace session for persistence.
  *  Only edit-mode files are saved — diffs and conflict views are transient. */
@@ -130,9 +131,7 @@ export function buildEditorSessionData(
   const editFileIdsByWorktree: Record<string, Set<string>> = {}
   for (const f of editFiles) {
     const arr = byWorktree[f.worktreeId] ?? (byWorktree[f.worktreeId] = [])
-    // Why: read-only tabs never persist a dirty draft even if isDirty is
-    // somehow set — restoring a draft would reintroduce writable/hot-exit state
-    // for an agent-owned transcript.
+    // Why: never persist a dirty draft for a read-only tab — restoring one would reintroduce writable/hot-exit state for an agent transcript.
     const dirtyDraftContent = f.isDirty && f.readOnly !== true ? editorDrafts[f.id] : undefined
     arr.push({
       filePath: f.filePath,
@@ -141,14 +140,12 @@ export function buildEditorSessionData(
       language: f.language,
       isPreview: f.isPreview || undefined,
       runtimeEnvironmentId: f.runtimeEnvironmentId,
-      // Why: persist read-only only when true so pre-existing writable sessions
-      // stay writable on restore (absence is the writable default).
+      externalSshTargetId: f.externalSshTargetId,
+      // Why: persist readOnly only when true; absence is the writable default on restore.
       ...(f.readOnly === true ? { readOnly: true } : {}),
       ...(f.readOnly === true && f.liveTail === true ? { liveTail: true } : {}),
       ...(dirtyDraftContent !== undefined ? { dirtyDraftContent } : {}),
-      // Why: the edit baseline travels with the dirty draft so a restore can
-      // re-derive a changed-on-disk conflict before autosave may overwrite an
-      // agent write that landed while the app was closed.
+      // Why: baseline travels with the draft so restore can detect a changed-on-disk conflict before autosave clobbers an offline agent write.
       ...(dirtyDraftContent !== undefined && f.lastKnownDiskSignature
         ? { lastKnownDiskSignature: f.lastKnownDiskSignature }
         : {})
@@ -178,10 +175,7 @@ export function buildEditorSessionData(
       activeTabTypeEntries.push([worktreeId, tabType])
       continue
     }
-    // Why: restart only restores edit-mode files. Persisting "editor" with a
-    // transient diff/conflict file ID creates a session payload that cannot be
-    // satisfied on startup and leaves the UI with no real editor tab to select.
-    // Only keep the editor marker when it points at a restored file.
+    // Why: only keep the "editor" marker when it points at a restored file, else startup has no real editor tab to select.
     if (persistedActiveFileIdByWorktree[worktreeId]) {
       activeTabTypeEntries.push([worktreeId, tabType])
     }
@@ -191,8 +185,7 @@ export function buildEditorSessionData(
     WorkspaceVisibleTabType
   >
   const allEditFileIds = new Set(Object.values(editFileIdsByWorktree).flatMap((ids) => [...ids]))
-  // Why: preserve the actual value so per-file hide overrides survive restart;
-  // the map only ever carries `false` entries (visible is the default).
+  // Why: preserve the value so per-file hide overrides survive restart (map only carries `false`; visible is the default).
   const persistedMarkdownFrontmatterVisible = Object.fromEntries(
     Object.entries(markdownFrontmatterVisible ?? {}).filter(([fileId]) =>
       allEditFileIds.has(fileId)
@@ -207,64 +200,18 @@ export function buildEditorSessionData(
   }
 }
 
-export function buildBrowserSessionData(
-  browserTabsByWorktree: Record<string, BrowserWorkspace[]>,
-  browserPagesByWorkspace: Record<string, BrowserPage[]>,
-  activeBrowserTabIdByWorktree: Record<string, string | null>
-): Pick<
-  WorkspaceSessionState,
-  'browserTabsByWorktree' | 'browserPagesByWorkspace' | 'activeBrowserTabIdByWorktree'
-> {
-  return {
-    // Why: browser tabs persist only lightweight chrome state. Live guest
-    // webContents are recreated on restore, so loading is reset to false and
-    // transient errors are preserved only as last-known tab metadata.
-    browserTabsByWorktree: buildPersistedBrowserTabsByWorktree(browserTabsByWorktree),
-    browserPagesByWorkspace: buildPersistedBrowserPagesByWorkspace(browserPagesByWorkspace),
-    activeBrowserTabIdByWorktree
-  }
-}
-
-export function buildPersistedBrowserTabsByWorktree(
-  browserTabsByWorktree: Record<string, BrowserWorkspace[]>
-): WorkspaceSessionState['browserTabsByWorktree'] {
-  return Object.fromEntries(
-    Object.entries(browserTabsByWorktree).map(([worktreeId, tabs]) => [
-      worktreeId,
-      tabs.map((tab) => ({ ...tab, loading: false }))
-    ])
-  )
-}
-
-export function buildPersistedBrowserPagesByWorkspace(
-  browserPagesByWorkspace: Record<string, BrowserPage[]>
-): WorkspaceSessionState['browserPagesByWorkspace'] {
-  return Object.fromEntries(
-    Object.entries(browserPagesByWorkspace).map(([workspaceId, pages]) => [
-      workspaceId,
-      pages.map((page) => ({ ...page, loading: false }))
-    ])
-  )
-}
-
 export function buildSanitizedTabsByWorktree(
   tabsByWorktree: WorkspaceSessionSnapshot['tabsByWorktree']
 ): WorkspaceSessionState['tabsByWorktree'] {
-  // Why: pendingActivationSpawn is documented on TerminalTab as a transient
-  // renderer-only handoff between setActiveWorktree and the next updateTabPtyId
-  // — it must never be persisted. The main-process session:set handler writes
-  // the payload to disk without re-parsing it against the Zod schema, so if
-  // the flag were ever set and not consumed before a save (e.g. app quits
-  // mid-handoff), it would round-trip to disk and the next session would
-  // start with a stale suppression flag that drops the first legitimate PTY
-  // spawn from the sidebar's recency sort. Strip it here to enforce the
-  // type-level invariant at the persistence boundary.
+  // Why: strip transient pendingActivationSpawn — session:set persists without Zod re-parse, so a stale flag would drop the first PTY spawn on restart.
+  // Same for the recovery ledger: it describes a mounted pane's in-flight heal, so a persisted one would refuse the first recovery after restart.
   return Object.fromEntries(
     Object.entries(tabsByWorktree).map(([worktreeId, tabs]) => [
       worktreeId,
       tabs.map((tab) => {
-        const { pendingActivationSpawn: _unused, ...rest } = tab
+        const { pendingActivationSpawn: _unused, recovery: _recovery, ...rest } = tab
         void _unused
+        void _recovery
         return rest
       })
     ])
@@ -276,20 +223,24 @@ export function buildTerminalSessionData(
 ): Pick<WorkspaceSessionState, 'activeWorktreeIdsOnShutdown' | 'remoteSessionIdsByTabId'> {
   const tabsByWorktree = snapshot.tabsByWorktree
 
-  // Why: ptyIdsByTabId is the live-PTY map. tab.ptyId is only a wake hint that
-  // sleep intentionally preserves, so using it as liveness would revive slept
-  // worktrees as active after restart.
+  // Why: use ptyIdsByTabId (live PTYs), not tab.ptyId, which sleep preserves as a wake hint and would revive slept worktrees as active.
   const ptyIdsByTabId = snapshot.ptyIdsByTabId
   const hasLivePty = (tabId: string): boolean => (ptyIdsByTabId[tabId]?.length ?? 0) > 0
 
-  // Why: lastKnownRelayPtyIdByTabId preserves remote session IDs across relay
-  // disconnect/reconnect cycles, where clearTabPtyId(null) clears tab.ptyId
-  // but keeps the relay PTY alive. Sleep is different: it preserves tab.ptyId
-  // as a wake hint after clearing ptyIdsByTabId, so that shape must not count
-  // as active on restart.
+  // Why: relay reconnect keeps lastKnown but clears tab.ptyId; the !tab.ptyId guard excludes slept tabs (which keep ptyId as a wake hint).
   const lastKnown = snapshot.lastKnownRelayPtyIdByTabId
+  // Why the two reconnect maps (#17743): hydration nulls tab.ptyId, empties ptyIdsByTabId, and
+  // never restores lastKnown, so on a fresh process they are the ONLY surviving handle for a
+  // relay-backed tab between restore and rebind. Persisting without them republishes the nulled
+  // row over the id the file (and the relay snapshot) still held, which is the client's own
+  // bookkeeping being read as evidence the remote PTY is gone. Both already count as live
+  // ownership for the orphan sweep (terminal-orphan-helpers) and for retirement planning.
+  const pendingReconnect = snapshot.pendingReconnectPtyIdByTabId ?? {}
+  const deferredSshSessions = snapshot.deferredSshSessionIdsByTabId ?? {}
+  const restoredSessionId = (tabId: string): string | undefined =>
+    lastKnown[tabId] || pendingReconnect[tabId] || deferredSshSessions[tabId]
   const hasReconnectableSession = (tab: { id: string; ptyId: string | null }): boolean =>
-    hasLivePty(tab.id) || (!tab.ptyId && Boolean(lastKnown[tab.id]))
+    hasLivePty(tab.id) || (!tab.ptyId && Boolean(restoredSessionId(tab.id)))
 
   const activeWorktreeIdsOnShutdown = Object.entries(tabsByWorktree)
     .filter(([, tabs]) => tabs.some(hasReconnectableSession))
@@ -302,13 +253,8 @@ export function buildTerminalSessionData(
   )
   const repoById = new Map(snapshot.repos.map((repo) => [repo.id, repo]))
 
-  // Why: the renderer already has tab.ptyId for every terminal tab and knows
-  // which worktrees are SSH-backed via repo.connectionId. Deriving the map
-  // here avoids a sync IPC round-trip during beforeunload, which is fragile
-  // (can be dropped by Chromium under shutdown time pressure).
-  // Why: this builder runs from the session-write debounce and beforeunload.
-  // Pre-index repo/worktree identity once so large workspaces don't rescan all
-  // repos/worktrees for every terminal tab while the renderer is trying to quit.
+  // Why: derive here to avoid a fragile sync IPC round-trip during beforeunload (Chromium can drop it under shutdown pressure).
+  // Why: pre-indexed above so large workspaces don't rescan every repo/worktree per terminal tab while the renderer is quitting.
   const remoteSessionIdsByTabId: Record<string, string> = {}
   for (const [worktreeId, tabs] of Object.entries(tabsByWorktree)) {
     const worktree = worktreeById.get(worktreeId)
@@ -320,7 +266,7 @@ export function buildTerminalSessionData(
       if (!hasReconnectableSession(tab)) {
         continue
       }
-      const sessionId = tab.ptyId || lastKnown[tab.id]
+      const sessionId = tab.ptyId || restoredSessionId(tab.id)
       if (sessionId) {
         remoteSessionIdsByTabId[tab.id] = sessionId
       }
@@ -335,20 +281,20 @@ export function buildTerminalSessionData(
 }
 
 export function buildWorkspaceSessionPayload(
-  snapshot: WorkspaceSessionSnapshot
+  fullSnapshot: WorkspaceSessionSnapshot
 ): WorkspaceSessionState {
+  const snapshot = withoutStagedBrowserTabs(fullSnapshot)
   const terminalSessionData = buildTerminalSessionData(snapshot)
 
   const payload = {
     activeRepoId: snapshot.activeRepoId,
     activeWorkspaceKey: snapshot.activeWorkspaceKey,
+    activeWorkspaceExecutionHostId: snapshot.activeWorkspaceExecutionHostId,
     activeWorktreeId: snapshot.activeWorktreeId,
     activeTabId: snapshot.activeTabId,
     tabsByWorktree: buildSanitizedTabsByWorktree(snapshot.tabsByWorktree),
     terminalLayoutsByTabId: snapshot.terminalLayoutsByTabId,
-    // Why: session:set fully replaces the persisted object, so every write path
-    // must carry forward which worktrees still had live PTYs. Dropping this
-    // field silently disables eager terminal reconnect on the next restart.
+    // Why: session:set fully replaces the persisted object, so dropping this silently disables eager terminal reconnect on restart.
     activeWorktreeIdsOnShutdown: terminalSessionData.activeWorktreeIdsOnShutdown,
     activeTabIdByWorktree: snapshot.activeTabIdByWorktree,
     ...buildEditorSessionData(
@@ -361,32 +307,34 @@ export function buildWorkspaceSessionPayload(
     ...buildBrowserSessionData(
       snapshot.browserTabsByWorktree,
       snapshot.browserPagesByWorkspace,
-      snapshot.activeBrowserTabIdByWorktree
+      snapshot.activeBrowserTabIdByWorktree,
+      snapshot.remoteBrowserPageHandlesByPageId
     ),
-    // Why: browser history is user-lifetime state. Enforce the storage cap at
-    // the payload boundary so stale renderer state cannot make every session
-    // write stringify an oversized legacy history array.
+    // Why: enforce the history storage cap here so stale renderer state can't make every write stringify an oversized legacy array.
     browserUrlHistory: normalizeBrowserHistoryEntries(snapshot.browserUrlHistory),
-    // Why: split creation and tab creation are separate renderer updates.
-    // Persist only layouts backed by real tabs so a reload cannot restore a
-    // blank split pane from that transient midpoint.
+    workspaceDocHistory: normalizeWorkspaceDocHistoryEntries(snapshot.workspaceDocHistory ?? []),
+    // Why: persist only layouts backed by real tabs so a reload can't restore a blank split pane from the split-before-tab midpoint.
     ...buildPersistedUnifiedTabSessionData(snapshot),
     activeConnectionIdsAtShutdown: buildActiveConnectionIdsAtShutdown(
       snapshot,
       terminalSessionData.remoteSessionIdsByTabId ?? null
     ),
     remoteSessionIdsByTabId: terminalSessionData.remoteSessionIdsByTabId,
-    // Why: per-worktree focus-recency for Cmd+J's empty-query ordering.
-    // Omit when empty so sessions written by builds that never stamped
-    // anything don't bloat the payload. See
-    // docs/cmd-j-empty-query-ordering.md.
+    // Why: omit when empty so builds that never stamped focus-recency don't bloat the payload. See docs/cmd-j-empty-query-ordering.md.
     lastVisitedAtByWorktreeId: buildLastVisitedAtByWorktreeId(snapshot),
     defaultTerminalTabsAppliedByWorktreeId:
       snapshot.defaultTerminalTabsAppliedByWorktreeId &&
       Object.keys(snapshot.defaultTerminalTabsAppliedByWorktreeId).length > 0
         ? snapshot.defaultTerminalTabsAppliedByWorktreeId
         : undefined,
-    ...buildSleepingAgentSessionData(snapshot)
+    closedTerminalTabTombstonesByTabId: buildPersistedClosedTerminalTabTombstones(
+      snapshot.closedTerminalTabTombstonesByTabId
+    ),
+    ...buildSleepingAgentSessionData(snapshot),
+    // Why unconditional rather than omit-when-empty: a full write replaces the persisted object,
+    // so an emptied map has to be written as empty or the last replay never sticks.
+    clientHostedBrowserCloseIntentsByEnvironment:
+      snapshot.clientHostedBrowserCloseIntentsByEnvironment
   }
 
   return pruneLocalTerminalScrollbackBuffers(payload, snapshot.repos)

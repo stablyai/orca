@@ -26,10 +26,20 @@ describe('requestTerminalTabCloseFromRenderer', () => {
     const webContents = { isDestroyed: () => false, send: vi.fn() }
     const otherWebContents = {}
     const mainWindow = { isDestroyed: () => false, webContents }
-    const pending = requestTerminalTabCloseFromRenderer(mainWindow as never, 'tab-1')
-    const request = webContents.send.mock.calls[0]?.[1] as { requestId: string; tabId: string }
+    const pending = requestTerminalTabCloseFromRenderer(mainWindow as never, 'tab-1', {
+      localPtyTeardownOwnedExternally: true,
+      force: true
+    })
+    const request = webContents.send.mock.calls[0]?.[1] as {
+      requestId: string
+      tabId: string
+      localPtyTeardownOwnedExternally?: boolean
+      force?: boolean
+    }
 
     expect(request.tabId).toBe('tab-1')
+    expect(request.localPtyTeardownOwnedExternally).toBe(true)
+    expect(request.force).toBe(true)
     ipcEmitter.emit(
       'ui:terminalTabCloseResponse',
       { sender: otherWebContents },

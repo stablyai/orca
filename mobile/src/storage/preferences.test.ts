@@ -24,6 +24,7 @@ import {
 import {
   loadDefaultSessionView,
   loadSessionViewOverrides,
+  readDefaultSessionViewPreference,
   readSessionViewOverridesPreference,
   saveDefaultSessionView,
   updateSessionViewOverride
@@ -59,6 +60,39 @@ describe('session view preference', () => {
     expect(AsyncStorage.setItem).toHaveBeenCalledWith('orca:defaultSessionView', 'chat')
 
     vi.mocked(AsyncStorage.getItem).mockResolvedValue('bogus')
+    await expect(loadDefaultSessionView()).resolves.toBe('terminal')
+  })
+
+  it('reports an absent default as an undecided (null) preference', async () => {
+    vi.mocked(AsyncStorage.getItem).mockResolvedValue(null)
+    await expect(readDefaultSessionViewPreference()).resolves.toEqual({
+      value: null,
+      loaded: true,
+      hasStoredValue: false
+    })
+
+    vi.mocked(AsyncStorage.getItem).mockResolvedValue('chat')
+    await expect(readDefaultSessionViewPreference()).resolves.toEqual({
+      value: 'chat',
+      loaded: true,
+      hasStoredValue: true
+    })
+
+    vi.mocked(AsyncStorage.getItem).mockResolvedValue('bogus')
+    await expect(readDefaultSessionViewPreference()).resolves.toEqual({
+      value: null,
+      loaded: true,
+      hasStoredValue: true
+    })
+  })
+
+  it('marks an unreadable default as not loaded so the opt-in gate can bail', async () => {
+    vi.mocked(AsyncStorage.getItem).mockRejectedValue(new Error('storage unavailable'))
+    await expect(readDefaultSessionViewPreference()).resolves.toEqual({
+      value: null,
+      loaded: false,
+      hasStoredValue: false
+    })
     await expect(loadDefaultSessionView()).resolves.toBe('terminal')
   })
 
@@ -244,8 +278,18 @@ describe('push notification preference', () => {
     vi.mocked(AsyncStorage.setItem).mockReset()
   })
 
+  it.each(['true', 'false'])('requires fresh consent for legacy choice %s', async (legacy) => {
+    vi.mocked(AsyncStorage.getItem).mockImplementation(async (key) =>
+      key === 'orca:pushNotificationsEnabled' ? legacy : null
+    )
+    await expect(readPushNotificationsPreference()).resolves.toEqual({ value: null, loaded: true })
+    await expect(loadPushNotificationsEnabled()).resolves.toBe(false)
+  })
+
   it('distinguishes an unset preference from an explicit disabled choice', async () => {
-    vi.mocked(AsyncStorage.getItem).mockResolvedValue(null)
+    vi.mocked(AsyncStorage.getItem).mockImplementation(async (key) =>
+      key === 'orca:remotePushEnabled' ? 'true' : null
+    )
     await expect(readPushNotificationsPreference()).resolves.toEqual({
       value: null,
       loaded: true
@@ -269,12 +313,17 @@ describe('push notification preference', () => {
     await expect(loadPushNotificationsEnabled()).resolves.toBe(false)
   })
 
-  it('persists the onboarding decision in the existing mobile toggle', async () => {
-    await savePushNotificationsEnabled(true)
-    expect(AsyncStorage.setItem).toHaveBeenCalledWith('orca:pushNotificationsEnabled', 'true')
-
-    await savePushNotificationsEnabled(false)
-    expect(AsyncStorage.setItem).toHaveBeenCalledWith('orca:pushNotificationsEnabled', 'false')
+  it('persists and reloads master consent', async () => {
+    const storage = new Map<string, string>()
+    vi.mocked(AsyncStorage.getItem).mockImplementation(async (key) => storage.get(key) ?? null)
+    vi.mocked(AsyncStorage.setItem).mockImplementation(async (key, value) => {
+      storage.set(key, value)
+    })
+    for (const enabled of [true, false]) {
+      await savePushNotificationsEnabled(enabled)
+      await expect(loadPushNotificationsEnabled()).resolves.toBe(enabled)
+    }
+    expect([...storage]).toEqual([['orca:pushServiceNotificationsEnabled', 'false']])
   })
 })
 

@@ -7,7 +7,6 @@ import type { IDisposable } from '@xterm/xterm'
 
 export type SerializeOpts = {
   scrollbackRows?: number
-  altScreenForcesZeroRows?: boolean
 }
 
 export type SerializedBuffer = {
@@ -16,6 +15,10 @@ export type SerializedBuffer = {
   rows: number
   seq?: number
   lastTitle?: string
+  /** Kitty flags this pane's mirror could PROVE at `seq`. Published only from
+   *  the tracker's snapshotFlags, so an old host's unknown state is never
+   *  republished as a known `0`. */
+  kittyKeyboardFlags?: number
 }
 
 export type SerializeFn = (
@@ -151,6 +154,11 @@ function ensureSerializerListener(): void {
         }
         if (result.seq !== undefined) {
           payload.seq = result.seq
+        }
+        // Why gated on seq: flags describe a boundary, and an unsequenced
+        // snapshot has none for a consumer to reconcile live bytes against.
+        if (result.seq !== undefined && result.kittyKeyboardFlags !== undefined) {
+          payload.kittyKeyboardFlags = result.kittyKeyboardFlags
         }
         if (lastTitle !== undefined) {
           payload.lastTitle = lastTitle

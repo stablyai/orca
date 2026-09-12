@@ -1,4 +1,10 @@
+import {
+  RELAY_HOST_CLOSE_REASON,
+  type RelayHostCloseReason
+} from '../../../shared/relay-host-close-reason'
+import { relayStatusCellUrl } from '../../../shared/mobile-relay-status'
 import type { RelayBrokerStatus } from './relay-session-broker'
+import { RelayHttpError, shouldRetryRelayConnectionError } from './relay-http-client'
 
 export type RelayAuthIdentity = {
   userId: string
@@ -13,7 +19,9 @@ export type RelayAuthContext = {
 }
 
 export type CoordinatedRelayBroker = {
-  closeNow(): void
+  closeNow(hostCloseReason?: RelayHostCloseReason): void
+  isLive?(): boolean
+  readonly endpoint?: { cellUrl: string } | null
 }
 
 type RelayAuthCoordinatorOptions = {
@@ -24,8 +32,9 @@ type RelayAuthCoordinatorOptions = {
     isCurrent: () => boolean
     refreshAccessToken: () => Promise<string | null>
   }) => Promise<CoordinatedRelayBroker>
-  onStatus: (status: RelayBrokerStatus) => void
+  onStatus: (status: RelayBrokerStatus, cellUrl?: string) => void
   lingerMs?: number
+  random?: () => number
 }
 
 type BrokerOwnership = {
@@ -39,12 +48,17 @@ function identityKey(identity: RelayAuthIdentity): string {
 }
 
 export class RelayAuthCoordinator {
+  // Why: recover brief failures quickly without turning a sustained outage into auth/director load.
+  private static readonly RETRY_BASE_MS = 1_000
+  private static readonly RETRY_MAX_MS = 5 * 60_000
   private readonly options: RelayAuthCoordinatorOptions
   private authEpoch = 0
   private ownership: BrokerOwnership | null = null
   private readonly pendingOwnerships = new Set<BrokerOwnership>()
   private latestReconcile: Promise<void> = Promise.resolve()
   private lingerTimer: ReturnType<typeof setTimeout> | null = null
+  private retryTimer: ReturnType<typeof setTimeout> | null = null
+  private retryAttempt = 0
   private stopped = false
 
   constructor(options: RelayAuthCoordinatorOptions) {
@@ -52,38 +66,85 @@ export class RelayAuthCoordinator {
   }
 
   reconcile(): void {
+    this.beginReconcile(true)
+  }
+
+  private beginReconcile(resetRetry: boolean, expectedIdentityKey?: string): void {
     if (this.stopped) {
       return
     }
+    this.cancelRetry()
+    if (resetRetry) {
+      this.retryAttempt = 0
+    }
     const epoch = ++this.authEpoch
     this.invalidatePendingOwnerships()
-    const reconcile = this.reconcileEpoch(epoch)
+    const reconcile = this.reconcileEpoch(epoch, expectedIdentityKey)
     this.latestReconcile = reconcile
     void reconcile
   }
 
-  fenceAndCloseNow(): void {
+  // hostCloseReason names an auth loss the phone should be told about. Quit,
+  // relaunch and every other fence pass nothing, so the control socket dies
+  // abruptly exactly as before and the cell records no cause.
+  fenceAndCloseNow(hostCloseReason?: RelayHostCloseReason): void {
     ++this.authEpoch
     this.cancelLinger()
+    this.cancelRetry()
+    this.retryAttempt = 0
     this.invalidatePendingOwnerships()
-    this.invalidateOwnership()
-    this.options.onStatus('offline')
+    this.invalidateOwnership(hostCloseReason)
+    this.publish('offline')
   }
 
+  // Why derived rather than passed in: the coordinator republishes `registered`
+  // after the broker already announced its cell, so a call site that forgot the
+  // cell would silently blank it moments after the broker set it.
+  private publish(status: RelayBrokerStatus): void {
+    this.options.onStatus(
+      status,
+      relayStatusCellUrl(status, this.ownership?.broker?.endpoint?.cellUrl)
+    )
+  }
+
+  // Raw ownership handle for identity matching (revoke routing); control work uses getLiveBroker.
   getActiveBroker(): CoordinatedRelayBroker | null {
     return this.ownership?.valid ? this.ownership.broker : null
   }
 
-  async waitForActiveBroker(): Promise<CoordinatedRelayBroker | null> {
+  // Why: ownership stays valid across a control death, so control work must
+  // apply the same liveness gate reconcile does; unprovable liveness stays usable.
+  getLiveBroker(): CoordinatedRelayBroker | null {
+    const broker = this.getActiveBroker()
+    return broker && (broker.isLive?.() ?? true) ? broker : null
+  }
+
+  // Why: some broker deaths end with no retry timer — an auth refresh that
+  // fails past token expiry (laptop sleep), or a transient context read that
+  // returned null at open. Periodic/power-resume callers use this as a
+  // dead-man's switch; it never disturbs a live broker, a scheduled retry,
+  // or an open already in flight.
+  ensureLive(): void {
+    if (this.stopped || this.retryTimer || this.pendingOwnerships.size > 0) {
+      return
+    }
+    const ownership = this.ownership
+    if (ownership?.valid && (ownership.broker?.isLive?.() ?? true)) {
+      return
+    }
+    this.beginReconcile(false)
+  }
+
+  async waitForLiveBroker(): Promise<CoordinatedRelayBroker | null> {
     while (!this.stopped) {
-      const broker = this.getActiveBroker()
+      const broker = this.getLiveBroker()
       if (broker) {
         return broker
       }
       const pending = this.latestReconcile
       await pending
       if (pending === this.latestReconcile) {
-        return this.getActiveBroker()
+        return this.getLiveBroker()
       }
     }
     return null
@@ -94,7 +155,8 @@ export class RelayAuthCoordinator {
     this.fenceAndCloseNow()
   }
 
-  private async reconcileEpoch(epoch: number): Promise<void> {
+  private async reconcileEpoch(epoch: number, expectedIdentityKey?: string): Promise<void> {
+    let retryIdentityKey: string | undefined
     try {
       const context = await this.options.readContext()
       if (!this.isEpochCurrent(epoch)) {
@@ -102,28 +164,47 @@ export class RelayAuthCoordinator {
       }
       if (!context || !context.relayEntitled) {
         this.cancelLinger()
-        this.invalidateOwnership()
-        this.options.onStatus('offline')
+        this.retryAttempt = 0
+        // Why only the null case: readContext throws on transient failures and
+        // returns null solely when the cloud session is gone (absent, or cleared
+        // by a 401). A present-but-unentitled context is still a signed-in
+        // desktop, and "sign in to reconnect" would be wrong advice for it.
+        this.invalidateOwnership(context ? undefined : RELAY_HOST_CLOSE_REASON.SIGNED_OUT)
+        this.publish('offline')
         return
       }
       const nextIdentityKey = identityKey(context.identity)
+      if (expectedIdentityKey && nextIdentityKey !== expectedIdentityKey) {
+        this.retryAttempt = 0
+        this.publish('offline')
+        return
+      }
       if (!(this.options.hasDemand?.(context) ?? true)) {
+        this.retryAttempt = 0
         if (this.ownership?.valid && this.ownership.identityKey !== nextIdentityKey) {
           this.cancelLinger()
           this.invalidateOwnership()
         } else if (this.ownership?.valid) {
           this.scheduleLinger(context, this.ownership)
         }
-        this.options.onStatus('standby')
+        this.publish('standby')
         return
       }
       this.cancelLinger()
-      if (this.ownership?.valid && this.ownership.identityKey === nextIdentityKey) {
-        this.options.onStatus('registered')
+      if (
+        this.ownership?.valid &&
+        this.ownership.identityKey === nextIdentityKey &&
+        // Why: registered must be provable; a broker whose control died without
+        // recovering falls through and is replaced instead of republished.
+        (this.ownership.broker?.isLive?.() ?? true)
+      ) {
+        this.retryAttempt = 0
+        this.publish('registered')
         return
       }
+      retryIdentityKey = nextIdentityKey
       this.invalidateOwnership()
-      this.options.onStatus('connecting')
+      this.publish('connecting')
       const ownership: BrokerOwnership = {
         identityKey: nextIdentityKey,
         broker: null,
@@ -150,12 +231,47 @@ export class RelayAuthCoordinator {
         return
       }
       this.ownership = ownership
-      this.options.onStatus('registered')
-    } catch {
+      this.retryAttempt = 0
+      this.publish('registered')
+    } catch (error) {
       if (this.isEpochCurrent(epoch)) {
-        this.options.onStatus('offline')
+        // Why: silent broker-open failures made a dead relay look like standby
+        // during incident diagnosis; the message carries operation + status.
+        console.warn(
+          '[relay] broker reconcile failed:',
+          error instanceof Error ? error.message : String(error)
+        )
+        this.publish('offline')
+        if (shouldRetryRelayConnectionError(error)) {
+          const retryAfterMs = error instanceof RelayHttpError ? (error.retryAfterMs ?? 0) : 0
+          this.scheduleRetry(epoch, retryIdentityKey, retryAfterMs)
+        }
       }
     }
+  }
+
+  private scheduleRetry(epoch: number, expectedIdentityKey?: string, retryAfterMs = 0): void {
+    if (this.retryTimer || !this.isEpochCurrent(epoch)) {
+      return
+    }
+    const exponent = Math.min(
+      this.retryAttempt,
+      Math.ceil(Math.log2(RelayAuthCoordinator.RETRY_MAX_MS / RelayAuthCoordinator.RETRY_BASE_MS))
+    )
+    const capMs = Math.min(
+      RelayAuthCoordinator.RETRY_MAX_MS,
+      RelayAuthCoordinator.RETRY_BASE_MS * 2 ** exponent
+    )
+    this.retryAttempt++
+    const random = this.options.random ?? Math.random
+    const delayMs = Math.max(Math.floor(random() * (capMs + 1)), retryAfterMs)
+    this.retryTimer = setTimeout(() => {
+      this.retryTimer = null
+      if (this.isEpochCurrent(epoch)) {
+        // Retry still re-reads entitlement and demand; the timer grants no authority.
+        this.beginReconcile(false, expectedIdentityKey)
+      }
+    }, delayMs)
   }
 
   private async refreshAccessToken(
@@ -178,12 +294,12 @@ export class RelayAuthCoordinator {
     return context.accessToken
   }
 
-  private invalidateOwnership(): void {
+  private invalidateOwnership(hostCloseReason?: RelayHostCloseReason): void {
     const ownership = this.ownership
     this.ownership = null
     if (ownership) {
       ownership.valid = false
-      ownership.broker?.closeNow()
+      ownership.broker?.closeNow(hostCloseReason)
     }
   }
 
@@ -200,7 +316,7 @@ export class RelayAuthCoordinator {
         !(this.options.hasDemand?.(context) ?? true)
       ) {
         this.invalidateOwnership()
-        this.options.onStatus('standby')
+        this.publish('standby')
       }
     }, lingerMs)
   }
@@ -209,6 +325,13 @@ export class RelayAuthCoordinator {
     if (this.lingerTimer) {
       clearTimeout(this.lingerTimer)
       this.lingerTimer = null
+    }
+  }
+
+  private cancelRetry(): void {
+    if (this.retryTimer) {
+      clearTimeout(this.retryTimer)
+      this.retryTimer = null
     }
   }
 

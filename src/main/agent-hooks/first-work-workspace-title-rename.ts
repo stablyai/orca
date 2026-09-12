@@ -1,4 +1,4 @@
-import { deriveWorkspaceDisplayName } from '../../shared/display-name-from-work'
+import { humanizeBranchSlug } from '../../shared/branch-name-from-work'
 import {
   generateBranchNameFromContext,
   resolveTextGenerationParams
@@ -27,6 +27,7 @@ export async function runFolderWorkspaceTitleAutoRename(
     return stop('folder workspace path unavailable')
   }
 
+  const originalDisplayName = deps.getCurrentDisplayName(worktreeId)
   const settings = deps.getSettings()
   const resolvedParams = resolveTextGenerationParams(settings, 'local', 'branchName', null)
   if (!resolvedParams.ok) {
@@ -49,6 +50,13 @@ export async function runFolderWorkspaceTitleAutoRename(
     resolvedParams.params,
     target
   )
+  // Generation may outlive a manual rename or workspace removal.
+  if (
+    deps.isPendingFirstAgentMessageRename?.(worktreeId) !== true ||
+    deps.getCurrentDisplayName(worktreeId) !== originalDisplayName
+  ) {
+    return stop('folder workspace changed during generation', true)
+  }
   if (!generated.success) {
     if (!generated.canceled) {
       deps.setRenameError(worktreeId, generated.error, generated.failureOutput ?? null)
@@ -56,7 +64,7 @@ export async function runFolderWorkspaceTitleAutoRename(
     return retry(`generation failed: ${generated.error}`)
   }
 
-  const newDisplayName = deriveWorkspaceDisplayName({ prompt, slug: generated.slug })
+  const newDisplayName = humanizeBranchSlug(generated.slug)
   deps.setDisplayName(worktreeId, newDisplayName)
   deps.setRenameError(worktreeId, null)
   deps.onRenamed(worktreeId)

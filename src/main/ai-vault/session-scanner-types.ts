@@ -1,15 +1,23 @@
-import type { AiVaultAgent } from '../../shared/ai-vault-types'
 import type {
+  AiVaultAgent,
   AiVaultScanIssue,
   AiVaultSession,
   AiVaultSessionPreviewMessage
 } from '../../shared/ai-vault-types'
 import type { ExecutionHostId } from '../../shared/execution-host'
+import type {
+  TranscriptMessageSink,
+  TranscriptSessionIdentity
+} from './session-transcript-consumers'
+import type { SessionSidecarObservation } from './session-sidecar-stat'
 
 export type AiVaultScanOptions = {
   claudeProjectsDir?: string
   codexSessionsDir?: string
   additionalCodexSessionsDirs?: readonly string[]
+  // Why: tests inject a sandbox "real ~/.codex" so real-home attribution
+  // (codexHome null → unprefixed resume) is testable without the user's home.
+  defaultCodexHomeDir?: string
   wslHomeDirs?: readonly string[]
   geminiSessionsDir?: string
   antigravityBrainDir?: string
@@ -27,16 +35,22 @@ export type AiVaultScanOptions = {
   openclawLegacyStateDir?: string
   piSessionsDir?: string
   ompSessionsDir?: string
+  primeAgentSessionsDir?: string
   droidSessionsDir?: string
   droidProjectsDir?: string
+  clineSessionsDir?: string
   kimiSessionsDir?: string
   limit?: number
+  unlimited?: boolean
   limitPerAgent?: number
   // Active workspace/project paths whose sessions must be included regardless of
   // the recency cap (see discoverInScopeClaudeFiles).
   scopePaths?: readonly string[]
   platform?: NodeJS.Platform
   executionHostId?: ExecutionHostId
+  // Superseded/cancelled scans stop between parse batches instead of parsing
+  // every remaining transcript for a caller that already left.
+  signal?: AbortSignal
 }
 
 export type FileWithMtime = {
@@ -45,8 +59,17 @@ export type FileWithMtime = {
   modifiedAt: string
   // Present when discovery statted the file; lets the parse cache detect
   // unchanged/truncated files without a second stat. Synthetic candidates
-  // (OpenCode SQLite rows, remote files) omit it.
+  // such as OpenCode SQLite rows omit it. The transcript's own length: a byte
+  // offset into it may be compared against this directly.
   sizeBytes?: number
+  // What discovery saw of the agent's sibling file, tracked apart from the
+  // transcript's own stat (see session-sidecar-stat.ts).
+  sidecar?: SessionSidecarObservation
+  // Present when discovery can prove filesystem identity. Codex dual-root
+  // scans use a multi-link inode to collapse only actual hardlink aliases.
+  dev?: number
+  ino?: number
+  nlink?: number
 }
 
 export type SessionFileCandidate = {
@@ -78,6 +101,14 @@ export type ResumableParseFinalizeOptions = {
 // read or a display-only trailing line can never corrupt the cached fold.
 export type ResumableSessionParseState = {
   consumeLine(line: string): void
+  // Optional zero-copy path for parsers that can reject irrelevant records
+  // from a bounded byte prefix before decoding a potentially huge JSONL line.
+  consumeLineBytes?(line: Buffer): void
+  // Lets a parser terminate an excluded transcript without draining the file.
+  shouldStop?(): boolean
+  // What the fold knows about the session right now, for a consumer that has to
+  // commit before the read ends (see TranscriptSessionIdentity).
+  identity?(): TranscriptSessionIdentity | null
   clone(): ResumableSessionParseState
   // Refresh per-scan file metadata (mtime display string) without re-parsing.
   touchFile(file: FileWithMtime): void
@@ -89,6 +120,9 @@ export type ResumableSessionParseState = {
 
 export type SessionAccumulator = {
   agent: AiVaultAgent
+  // Every decoded message this fold sees also goes here, for the reader's
+  // consumers. Shared by clones on purpose: one read, one message stream.
+  messages: TranscriptMessageSink
   sessionId: string
   title: string | null
   fallbackTitle: string | null
@@ -102,6 +136,11 @@ export type SessionAccumulator = {
   messageCount: number
   totalTokens: number
   previewMessages: AiVaultSessionPreviewMessage[]
+  // True once an older message fell out of the newest-N preview window, so the
+  // earliest preview turn is no longer the session's opening ask.
+  previewMessagesTruncated: boolean
+  firstUserPrompt: string | null
+  lastUserPrompt: string | null
   // Recoverable signal for a zero-turn transcript (see AiVaultSession).
   queuedMessageCount: number
   subagentTranscriptCount: number

@@ -1,5 +1,5 @@
-import { mkdirSync, writeFileSync } from 'node:fs'
-import { realpathSync } from 'node:fs'
+import { openSidebarWorkspaceComposer } from './helpers/sidebar-project-dialog'
+import { mkdirSync, writeFileSync, realpathSync } from 'node:fs'
 import path from 'node:path'
 import type { ElectronApplication, Page, TestInfo } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
@@ -161,7 +161,7 @@ async function addRealOrcaRepo(page: Page, repoPath: string): Promise<string> {
 
 async function createWorkspaceThroughComposer(page: Page, workspaceName: string): Promise<string> {
   const previousWorktreeId = await getActiveWorktreeId(page)
-  await page.getByRole('button', { name: 'New workspace', exact: true }).click()
+  await openSidebarWorkspaceComposer(page)
   const dialog = page.getByRole('dialog', { name: /Create (Workspace|Worktree)/i })
   await expect(dialog).toBeVisible({ timeout: 10_000 })
   await expect(dialog.locator('[data-workspace-name-input="true"]')).toBeVisible({

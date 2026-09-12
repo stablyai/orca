@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Project, ProjectHostSetup, Repo } from '../../../../shared/types'
+import type { Project, ProjectHostSetup } from '../../../../shared/project-types'
+import type { Repo } from '../../../../shared/repo-types'
 import {
   createCompatibleRuntimeStatusResponseIfNeeded,
   type RuntimeEnvironmentCallRequest
@@ -126,7 +127,13 @@ describe('repo slice project host setup lifecycle', () => {
       })
     ).resolves.toEqual({
       project,
-      setup: { ...runtimeSetup, displayName: 'GPU VM renamed' },
+      setup: {
+        ...runtimeSetup,
+        displayName: 'GPU VM renamed',
+        executionHostId: 'runtime:env-1',
+        runtimeOwnerEnvironmentId: 'env-1',
+        connectionId: null
+      },
       repo: undefined
     })
 
@@ -171,6 +178,59 @@ describe('repo slice project host setup lifecycle', () => {
       params: { setupId: runtimeSetup.id },
       timeoutMs: 15_000
     })
+  })
+
+  it('routes duplicate setup IDs through the first row and replaces every collision', async () => {
+    const localSetup: ProjectHostSetup = {
+      ...runtimeSetup,
+      hostId: 'local',
+      displayName: 'Local setup'
+    }
+    const updatedLocalSetup = { ...localSetup, displayName: 'Local renamed', updatedAt: 2 }
+    projectsUpdateHostSetup.mockResolvedValue({
+      project,
+      setup: updatedLocalSetup
+    })
+    const store = createTestStore()
+    store.setState({
+      projectHostSetups: [localSetup, runtimeSetup],
+      settings: { activeRuntimeEnvironmentId: null } as never
+    })
+
+    await store.getState().updateProjectHostSetup({
+      setupId: localSetup.id,
+      updates: { displayName: 'Local renamed' }
+    })
+
+    expect(projectsUpdateHostSetup).toHaveBeenCalledWith({
+      setupId: localSetup.id,
+      updates: { displayName: 'Local renamed' }
+    })
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+    // Current contract: setup mutations are keyed by bare setup ID after the first row selects routing.
+    expect(store.getState().projectHostSetups).toEqual([updatedLocalSetup, updatedLocalSetup])
+  })
+
+  it('routes duplicate setup-ID deletion through the first row and removes every collision', async () => {
+    const localSetup: ProjectHostSetup = {
+      ...runtimeSetup,
+      hostId: 'local',
+      displayName: 'Local setup'
+    }
+    projectsDeleteHostSetup.mockResolvedValue({ project, setup: localSetup })
+    const store = createTestStore()
+    store.setState({
+      projects: [project],
+      projectHostSetups: [localSetup, runtimeSetup],
+      settings: { activeRuntimeEnvironmentId: null } as never
+    })
+
+    await store.getState().deleteProjectHostSetup({ setupId: localSetup.id })
+
+    expect(projectsDeleteHostSetup).toHaveBeenCalledWith({ setupId: localSetup.id })
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+    // Current contract: delete filters the full catalog by bare setup ID.
+    expect(store.getState().projectHostSetups).toEqual([])
   })
 
   it('preserves runtime-fetched setup-only states during repo hydration', async () => {

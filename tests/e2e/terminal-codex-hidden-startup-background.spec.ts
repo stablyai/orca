@@ -2,6 +2,7 @@ import { Buffer } from 'node:buffer'
 import { PNG } from 'pngjs'
 import type { Page } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
+import { stageNodeScriptForTerminal } from './helpers/run-node-script-in-terminal'
 import {
   ensureTerminalVisible,
   getActiveWorktreeId,
@@ -26,7 +27,8 @@ const COMPOSER_BG = { red: 72, green: 72, blue: 72 }
 
 function codexLikeStartupCommand(marker: string): string {
   const script = [
-    'const marker = process.argv[1];',
+    // Why: embedded as a literal — an argv marker would need per-shell quoting.
+    `const marker = ${JSON.stringify(marker)};`,
     'const width = Math.max(60, process.stdout.columns || 100);',
     'const pad = (text) => (text + " ".repeat(width)).slice(0, width);',
     'const bg = "\\x1b[48;2;72;72;72m\\x1b[38;2;235;235;235m";',
@@ -54,7 +56,8 @@ function codexLikeStartupCommand(marker: string): string {
     'setTimeout(render, 100);',
     'setInterval(() => {}, 1000);'
   ].join('')
-  return `node -e ${JSON.stringify(script)} ${JSON.stringify(marker)}`
+  // Why: delivered via a temp file — `node -e` quoting is not PowerShell-safe (#8521).
+  return stageNodeScriptForTerminal(script, { prefix: 'orca-codex-startup-bg' }).command
 }
 
 async function waitForHiddenTabPtyId(page: Page, tabId: string): Promise<string> {

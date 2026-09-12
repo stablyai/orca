@@ -8,14 +8,22 @@ import {
   RelayVersionMismatchError,
   RELAY_EXIT_CODE_VERSION_MISMATCH
 } from './ssh-relay-version-mismatch-error'
+import {
+  RelayCredentialMismatchError,
+  RELAY_EXIT_CODE_CREDENTIAL_MISMATCH
+} from './ssh-relay-credential-mismatch-error'
 
-function createMockChannel(): ClientChannel {
+type MockChannel = ClientChannel & {
+  stdin: EventEmitter & { write: ReturnType<typeof vi.fn> }
+}
+
+function createMockChannel(): MockChannel {
   return Object.assign(new EventEmitter(), {
     stderr: Object.assign(new EventEmitter(), { resume: vi.fn() }),
-    stdin: { write: vi.fn() },
+    stdin: Object.assign(new EventEmitter(), { write: vi.fn(() => true) }),
     close: vi.fn(),
     resume: vi.fn()
-  }) as unknown as ClientChannel
+  }) as unknown as MockChannel
 }
 
 // execCommand only rejects with Error; narrow the caught reason (its resolve
@@ -147,6 +155,23 @@ describe('waitForSentinel', () => {
     await expect(transportPromise).rejects.toBeInstanceOf(RelayVersionMismatchError)
   })
 
+  it('translates a pre-sentinel exit-43 + close into RelayCredentialMismatchError', async () => {
+    const channel = createMockChannel()
+    const transportPromise = waitForSentinel(channel)
+
+    channel.stderr.emit(
+      'data',
+      Buffer.from('[relay-connect] Endpoint credential refused by daemon; exiting 43\n')
+    )
+    channel.emit('exit', RELAY_EXIT_CODE_CREDENTIAL_MISMATCH)
+    channel.emit('close')
+
+    await expect(transportPromise).rejects.toBeInstanceOf(RelayCredentialMismatchError)
+    await transportPromise.catch((err: unknown) => {
+      expect(err).not.toBeInstanceOf(RelayVersionMismatchError)
+    })
+  })
+
   it('rejects with a generic error (not RelayVersionMismatchError) on a non-42 exit code', async () => {
     const channel = createMockChannel()
     const transportPromise = waitForSentinel(channel)
@@ -204,9 +229,41 @@ describe('waitForSentinel', () => {
     expect(Buffer.concat(chunks)).toEqual(postSentinelPayload)
     expect(channel.close).not.toHaveBeenCalled()
   })
+
+  it.each(['ssh2 channel', 'system-SSH child stdio'])(
+    'forwards write(false), callback settlement, and drain for a %s',
+    async (shape) => {
+      const channel = createMockChannel()
+      if (shape.startsWith('system')) {
+        Object.assign(channel, { _process: new EventEmitter() })
+      }
+      const callback = vi.fn()
+      const drain = vi.fn()
+      channel.stdin.write.mockImplementation((...args: unknown[]) => {
+        const onWritten = args.find((arg) => typeof arg === 'function') as (
+          error?: Error | null
+        ) => void
+        onWritten(null)
+        return false
+      })
+      const transportPromise = waitForSentinel(channel)
+      channel.emit('data', Buffer.from(RELAY_SENTINEL))
+      const transport = await transportPromise
+
+      transport.onDrain?.(drain)
+      expect(transport.write(Buffer.from('frame'), callback)).toBe(false)
+      expect(callback).toHaveBeenCalledWith({ ok: true })
+      channel.stdin.emit('drain')
+      expect(drain).toHaveBeenCalledOnce()
+      expect(transport.supportsWriteSettlement).toBe(true)
+    }
+  )
 })
 
 describe('execCommand', () => {
+  const installMarkerToken = 'a'.repeat(32)
+  const installMarkerPath = `/home/u/.install-lock/.sftp-namespace-${installMarkerToken}`
+
   it('waits for channel close before rejecting a timed-out remote command', async () => {
     vi.useFakeTimers()
     try {
@@ -269,6 +326,42 @@ describe('execCommand', () => {
     expect(channel.listenerCount('close')).toBe(0)
     expect(channel.stderr.listenerCount('error')).toBe(0)
     expect(channel.stderr.listenerCount('data')).toBe(0)
+  })
+
+  it('redacts install-owner marker tokens from command failures', async () => {
+    const channel = createMockChannel()
+    const conn = {
+      exec: vi.fn().mockResolvedValue(channel)
+    }
+    const commandPromise = execCommand(conn as never, `touch '${installMarkerPath}'`)
+
+    await Promise.resolve()
+    channel.emit('data', Buffer.from(`touch failed for ${installMarkerPath}\n`))
+    channel.emit('close', 1)
+
+    const error = await execCommandRejection(commandPromise)
+    expect(error.message).toContain('.sftp-namespace-[redacted]')
+    expect(error.message).not.toContain(installMarkerToken)
+  })
+
+  it('redacts install-owner marker tokens from timeout errors', async () => {
+    vi.useFakeTimers()
+    try {
+      const channel = createMockChannel()
+      const conn = { exec: vi.fn().mockResolvedValue(channel) }
+      const commandPromise = execCommand(conn as never, `touch '${installMarkerPath}'`, {
+        timeoutMs: 1_000
+      })
+
+      await vi.advanceTimersByTimeAsync(1_000)
+      channel.emit('close', 0)
+
+      const error = await execCommandRejection(commandPromise)
+      expect(error.message).toContain('.sftp-namespace-[redacted]')
+      expect(error.message).not.toContain(installMarkerToken)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('surfaces stdout alongside stderr on nonzero exit instead of masking it', async () => {
@@ -476,6 +569,27 @@ describe('execCommand', () => {
     expect(channel.listenerCount('close')).toBe(0)
     expect(channel.stderr.listenerCount('error')).toBe(0)
     expect(channel.stderr.listenerCount('data')).toBe(0)
+  })
+
+  it('hands a zero-exit command stderr to onStderr instead of dropping it', async () => {
+    // Why: probes fenced with `|| echo MISSING` always exit 0, so the resolve path used to be the
+    // one place the failure reason was discarded.
+    const channel = createMockChannel()
+    const conn = { exec: vi.fn().mockResolvedValue(channel) }
+    const captured: string[] = []
+    const commandPromise = execCommand(conn as never, "(node -e 'x' || echo MISSING)", {
+      onStderr: (stderr) => captured.push(stderr)
+    })
+
+    await Promise.resolve()
+    channel.stderr.emit('data', Buffer.from('node: --bogus is not allowed in NODE_OPTIONS\n'))
+    channel.emit('data', Buffer.from('MISSING\n'))
+    channel.emit('close', 0)
+
+    await expect(commandPromise).resolves.toBe('MISSING\n')
+    expect(captured).toEqual(['node: --bogus is not allowed in NODE_OPTIONS\n'])
+    // onStderr must not leak into the SSH exec options.
+    expect(conn.exec).toHaveBeenCalledWith("(node -e 'x' || echo MISSING)", {})
   })
 
   it('uses custom command timeouts without forwarding them to SSH exec', async () => {

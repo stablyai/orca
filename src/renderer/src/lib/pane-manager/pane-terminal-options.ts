@@ -1,5 +1,6 @@
 import type { ITerminalOptions } from '@xterm/xterm'
 import { DESKTOP_TERMINAL_SCROLLBACK_ROWS_DEFAULT } from '../../../../shared/terminal-scrollback-policy'
+import { LIGHT_BG_MIN_CONTRAST } from '@/lib/terminal-contrast-correction'
 
 type TerminalCursorStyle = NonNullable<ITerminalOptions['cursorStyle']>
 type TerminalCursorInactiveStyle = NonNullable<ITerminalOptions['cursorInactiveStyle']>
@@ -47,9 +48,8 @@ export function buildDefaultTerminalOptions(): ITerminalOptions {
     scrollSensitivity: DEFAULT_TERMINAL_SCROLL_SENSITIVITY,
     fastScrollSensitivity: DEFAULT_TERMINAL_FAST_SCROLL_SENSITIVITY,
     allowTransparency: false,
-    // Why: agent CLIs sometimes render body text with ANSI white/bright-white
-    // on light themes; xterm can keep those cells readable across renderers.
-    minimumContrastRatio: 4.5,
+    // Initial value only; applyTerminalAppearance re-gates by background luminance (#7934) before any content paints.
+    minimumContrastRatio: LIGHT_BG_MIN_CONTRAST,
     // Why: on macOS, non-US layouts rely on Option to compose characters like @ and €.
     macOptionIsMeta: false,
     macOptionClickForcesSelection: true,

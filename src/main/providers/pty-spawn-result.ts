@@ -1,10 +1,26 @@
 import type { TerminalOscLinkRange } from '../../shared/terminal-osc-link-ranges'
-import type { TuiAgent } from '../../shared/types'
+import type { TuiAgent } from '../../shared/tui-agent'
+import type { AgentSessionClaimedSpawnResult } from '../../shared/agent-session-host-authority'
+import type { PtyIncarnationId } from '../../shared/pty-incarnation'
+import type { PtySourceReceivingActivation } from '../../shared/pty-source-receiving-activation'
+import type { TerminalOwner } from '../../shared/terminal-owner'
 
 export type PtySpawnResult = {
+  agentSessionEnsure?: AgentSessionClaimedSpawnResult
   /** App-facing PTY id. Remote providers must return globally routable ids,
    *  not relay-local handles, because renderer/runtime IPC routes by this key. */
   id: string
+  /** Opaque provider-owned identity for this process behind a reusable PTY id. */
+  incarnationId?: PtyIncarnationId
+  /** Relay source identity installed before adjacent source frames are decoded. */
+  sourceActivation?: PtySourceReceivingActivation
+  /** The provider observed this exact spawn exit before returning its spawn result. */
+  exitedBeforeSpawnReply?: true
+  /** Whether the execution host armed the shell-ready marker for a renderer-delivered startup
+   *  command. `false` means the host looked and did not (fish, sh, Windows) so the client must
+   *  not wait; absent means the host predates the field and the client keeps its own guess.
+   *  Never collapse absent into `false`. */
+  shellReadyArmed?: boolean
   /** OS-level pid of the shell process, when available at spawn time.
    *  Why: the memory collector needs this to walk each PTY's process
    *  subtree. Daemon-backed providers return it from the RPC result;
@@ -22,6 +38,12 @@ export type PtySpawnResult = {
    *  writing the snapshot so ANSI cursor positions land correctly. */
   snapshotCols?: number
   snapshotRows?: number
+  /** Normal-buffer history and mode preamble before an alternate-screen frame. */
+  snapshotPrefixAnsi?: string
+  /** Visual alternate-screen frame, separate so newer clients can omit it safely. */
+  snapshotFrameAnsi?: string
+  /** Live state to append when omitting `snapshotFrameAnsi`. */
+  snapshotFrameRestoreAnsi?: string
   /** Provider sequence at the attach boundary. `reset` starts a new provider
    *  generation; `continued` resumes the existing absolute domain. */
   providerSequence?: {
@@ -33,8 +55,21 @@ export type PtySpawnResult = {
    *  (terminal-query-authority.md §kitty). Never replayed into a renderer
    *  xterm — POST_REPLAY_REATTACH_RESET's kitty reset stays authoritative. */
   snapshotKittyKeyboardFlags?: number
+  /** Renderer-domain sequence main reconciled for the attach boundary those
+   *  flags describe. Set by main, not the provider. */
+  snapshotSeq?: number
+  /** Ordered ownership evidence proven by the provider snapshot. */
+  snapshotTerminalOwner?: TerminalOwner
   /** True when the spawn reattached to an existing daemon session. */
   isReattach?: boolean
+  /** Grid the PTY is proven to be at once this spawn settled. Only providers whose attach
+   *  applies the requested size set it; daemon/relay attach leave the live grid alone, so main
+   *  must not read the requested dims back as a measurement (see `resolveCommittedPtySize`). */
+  attachedGrid?: { cols: number; rows: number }
+  /** Last OSC title tracked by the daemon session the snapshot came from.
+   *  Seeds main's terminal title records after a relaunch; never replayed
+   *  into a terminal. */
+  lastTitle?: string
   /** True when the reattached session uses the alternate screen buffer
    *  (e.g., Codex CLI, vim). Normal-screen TUIs like Claude Code are false. */
   isAlternateScreen?: boolean
@@ -55,5 +90,7 @@ export type PtySpawnResult = {
     cols?: number
     rows?: number
     oscLinks?: TerminalOscLinkRange[]
+    /** Last OSC title from the recovered checkpoint (see `lastTitle` above). */
+    lastTitle?: string
   }
 }

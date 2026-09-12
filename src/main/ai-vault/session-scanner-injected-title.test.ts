@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { scanAiVaultSessions } from './session-scanner'
+import { withFullFirstUserPromptCapture } from './session-scanner-first-user-prompt-capture'
 import { isolatedScanRoots, jsonLines } from './session-scanner-test-fixtures'
 
 let tempRoots: string[] = []
@@ -90,5 +91,55 @@ describe('scanAiVaultSessions harness-injected title seeding', () => {
     expect(result.issues).toEqual([])
     expect(result.sessions).toHaveLength(1)
     expect(result.sessions[0]?.title).toBe('<my-custom-element> render the profile card')
+  })
+
+  it('uses Claude last-prompt metadata instead of injected and tool-result user records', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-ai-vault-claude-last-prompt-'))
+    tempRoots.push(root)
+    const roots = isolatedScanRoots(root)
+    await mkdir(join(roots.claudeProjectsDir, 'project'), { recursive: true })
+
+    await writeFile(
+      join(roots.claudeProjectsDir, 'project', 'last-prompt.jsonl'),
+      jsonLines([
+        {
+          type: 'user',
+          sessionId: 'last-prompt',
+          timestamp: '2026-06-11T10:00:00.000Z',
+          cwd: '/repo/app',
+          isMeta: true,
+          message: { role: 'user', content: 'Base directory for this skill: /tmp/skills' }
+        },
+        {
+          type: 'last-prompt',
+          sessionId: 'last-prompt',
+          lastPrompt: 'Fix the zoom behavior in a separate PR'
+        },
+        {
+          type: 'user',
+          sessionId: 'last-prompt',
+          timestamp: '2026-06-11T10:00:01.000Z',
+          cwd: '/repo/app',
+          message: {
+            role: 'user',
+            content: [{ type: 'tool_result', content: 'src/main/window.ts was updated' }]
+          }
+        }
+      ])
+    )
+
+    // Full capture, else firstUserPrompt is never populated and the assertion
+    // below would pass whether or not the meta preamble is excluded.
+    const result = await withFullFirstUserPromptCapture(() =>
+      scanAiVaultSessions({
+        ...roots,
+        platform: 'darwin'
+      })
+    )
+
+    expect(result.issues).toEqual([])
+    expect(result.sessions[0]?.lastUserPrompt).toBe('Fix the zoom behavior in a separate PR')
+    // Meta skill preamble must not become the copyable first prompt.
+    expect(result.sessions[0]?.firstUserPrompt).toBeUndefined()
   })
 })

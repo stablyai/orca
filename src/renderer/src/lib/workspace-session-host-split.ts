@@ -1,5 +1,23 @@
-import type { WorkspaceSessionState } from '../../../shared/types'
-import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../shared/execution-host'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
+import {
+  LOCAL_EXECUTION_HOST_ID,
+  parseExecutionHostId,
+  type ExecutionHostId
+} from '../../../shared/execution-host'
+import { isWorktreeHostIdentity } from '../../../shared/worktree/host-qualified-identity'
+import {
+  GLOBAL_WORKSPACE_SESSION_FIELDS,
+  hostPartitionSliceTemplate,
+  WORKSPACE_SESSION_FIELD_OWNERSHIP
+} from '../../../shared/workspace-session-host-field-ownership'
+import {
+  buildWorktreeIdByFileId,
+  buildWorktreeIdByTabId,
+  isWorkspaceSessionRecord,
+  mergeWorkspaceSessionArrayField,
+  mergeWorkspaceSessionRecordField,
+  type WorkspaceSessionRecord
+} from './workspace-session-host-records'
 
 /**
  * Split / merge the unified WorkspaceSessionState across per-host partitions.
@@ -25,170 +43,106 @@ export type HostIdByWorktreeId = (worktreeId: string) => ExecutionHostId
 
 /** How a WorkspaceSessionState field is partitioned across hosts.
  *  - global: client-wide; always stays in the 'local' slice.
+ *  - hostPrivate: main/runtime-owned; omitted from renderer merge and writes.
  *  - worktreeKeyed: Record keyed by worktree id; each entry goes to its owner.
  *  - worktreeArray: array of worktree ids; each id goes to its owner.
  *  - tabKeyed: Record keyed by tab id; follows the owning tab's worktree.
  *  - browserWorkspaceKeyed: Record keyed by browser-workspace id; follows the
  *    page record's own worktreeId.
  *  - fileKeyed: Record keyed by editor file id; follows the open file's worktree.
- *  - sleepingAgentKeyed: Record keyed by pane key; follows the record's worktreeId. */
-type FieldOwnership =
-  | 'global'
-  | 'worktreeKeyed'
-  | 'worktreeArray'
-  | 'tabKeyed'
-  | 'browserWorkspaceKeyed'
-  | 'fileKeyed'
-  | 'sleepingAgentKeyed'
-
-const FIELD_OWNERSHIP = {
-  activeRepoId: 'global',
-  activeWorktreeId: 'global',
-  activeTabId: 'global',
-  browserUrlHistory: 'global',
-  // Why: SSH-connection ids, not worktrees. SSH stays in the local blob today
-  // (the runtime split intentionally leaves SSH ownership unchanged), so this
-  // reconnect list rides along in 'local'.
-  activeConnectionIdsAtShutdown: 'global',
-  tabsByWorktree: 'worktreeKeyed',
-  openFilesByWorktree: 'worktreeKeyed',
-  activeFileIdByWorktree: 'worktreeKeyed',
-  activeBrowserTabIdByWorktree: 'worktreeKeyed',
-  activeTabTypeByWorktree: 'worktreeKeyed',
-  activeTabIdByWorktree: 'worktreeKeyed',
-  browserTabsByWorktree: 'worktreeKeyed',
-  unifiedTabs: 'worktreeKeyed',
-  tabGroups: 'worktreeKeyed',
-  tabGroupLayouts: 'worktreeKeyed',
-  activeGroupIdByWorktree: 'worktreeKeyed',
-  lastVisitedAtByWorktreeId: 'worktreeKeyed',
-  defaultTerminalTabsAppliedByWorktreeId: 'worktreeKeyed',
-  activeWorkspaceKey: 'global',
-  activeWorktreeIdsOnShutdown: 'worktreeArray',
-  terminalLayoutsByTabId: 'tabKeyed',
-  remoteSessionIdsByTabId: 'tabKeyed',
-  browserPagesByWorkspace: 'browserWorkspaceKeyed',
-  markdownFrontmatterVisible: 'fileKeyed',
-  sleepingAgentSessionsByPaneKey: 'sleepingAgentKeyed'
-} as const satisfies Record<keyof WorkspaceSessionState, FieldOwnership>
-
-// Why: a new WorkspaceSessionState field must be classified above or the split
-// would silently drop it from every non-local host. This fails compilation
-// until the table is updated, mirroring the _exhaustive guard in
-// workspace-session.ts.
-type _MissingOwnership = Exclude<keyof WorkspaceSessionState, keyof typeof FIELD_OWNERSHIP>
-const _exhaustive: [_MissingOwnership] extends [never] ? true : never = true
-void _exhaustive
-
-const GLOBAL_FIELDS = (Object.keys(FIELD_OWNERSHIP) as (keyof WorkspaceSessionState)[]).filter(
-  (field) => FIELD_OWNERSHIP[field] === 'global'
-)
-
-type AnyRecord = Record<string, unknown>
-
-function isPlainRecord(value: unknown): value is AnyRecord {
-  return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
-}
-
-/** Build tabId → worktreeId from both the legacy and unified tab models so
- *  tab-keyed maps (terminal layouts, remote session ids) follow their tab. */
-function buildWorktreeIdByTabId(state: WorkspaceSessionState): Map<string, string> {
-  const byTab = new Map<string, string>()
-  for (const [worktreeId, tabs] of Object.entries(state.tabsByWorktree ?? {})) {
-    for (const tab of tabs) {
-      byTab.set(tab.id, worktreeId)
-    }
-  }
-  // Why: unified tabs carry their own worktreeId; index it too so layouts for a
-  // tab that exists only in the unified model still resolve to an owner.
-  for (const tabs of Object.values(state.unifiedTabs ?? {})) {
-    for (const tab of tabs) {
-      if (!byTab.has(tab.id)) {
-        byTab.set(tab.id, tab.worktreeId)
-      }
-    }
-  }
-  return byTab
-}
-
-/** Build editor-file id → worktreeId so markdownFrontmatterVisible (keyed by
- *  file id) follows the file's worktree. */
-function buildWorktreeIdByFileId(state: WorkspaceSessionState): Map<string, string> {
-  const byFile = new Map<string, string>()
-  for (const files of Object.values(state.openFilesByWorktree ?? {})) {
-    for (const file of files) {
-      // PersistedOpenFile.filePath is the editor tab/file id used elsewhere.
-      byFile.set(file.filePath, file.worktreeId)
-    }
-  }
-  return byFile
-}
-
+ *  - sleepingAgentKeyed: Record keyed by pane key; follows the record's worktreeId.
+ *  - surfaceTombstoneKeyed: Record under an opaque key whose value names its own worktreeId --
+ *    the only routing available once the tab or pane it describes is gone. */
 type SplitContext = {
   hostIdByWorktreeId: HostIdByWorktreeId
   worktreeIdByTabId: Map<string, string>
   worktreeIdByFileId: Map<string, string>
 }
 
+/** 'local' owns the full global set; every other host gets the subset the merge can still read
+ *  back off it. Handing one template to both is what re-injected local's browserUrlHistory into
+ *  every runtime partition and undid the load-time drop on the next full snapshot write (#18161). */
+type SliceTemplates = {
+  local: WorkspaceSessionState
+  nonLocal: WorkspaceSessionState
+}
+
 function ensureSlice(
   slices: HostSessionSlices,
   hostId: ExecutionHostId,
-  template: WorkspaceSessionState
+  templates: SliceTemplates
 ): WorkspaceSessionState {
   let slice = slices[hostId]
   if (!slice) {
     // Why: clone the global fields onto every slice so a partition read in
     // isolation still carries the active pointers; merge later prefers 'local'.
-    slice = { ...template }
+    slice = { ...(hostId === LOCAL_EXECUTION_HOST_ID ? templates.local : templates.nonLocal) }
     slices[hostId] = slice
   }
   return slice
 }
 
-function hostForWorktree(
-  ctx: SplitContext,
-  worktreeId: string | undefined
-): ExecutionHostId | null {
-  if (!worktreeId) {
-    return null
-  }
-  return ctx.hostIdByWorktreeId(worktreeId)
-}
-
 function assignWorktreeKeyed(
   slices: HostSessionSlices,
-  template: WorkspaceSessionState,
+  templates: SliceTemplates,
   field: keyof WorkspaceSessionState,
   value: unknown,
   ctx: SplitContext
 ): void {
-  if (!isPlainRecord(value)) {
+  if (!isWorkspaceSessionRecord(value)) {
     return
   }
   for (const [worktreeId, entry] of Object.entries(value)) {
     const host = ctx.hostIdByWorktreeId(worktreeId)
-    const slice = ensureSlice(slices, host, template) as AnyRecord
-    const target = (slice[field] ??= {}) as AnyRecord
+    const slice = ensureSlice(slices, host, templates) as WorkspaceSessionRecord
+    const target = (slice[field] ??= {}) as WorkspaceSessionRecord
     target[worktreeId] = entry
+  }
+}
+
+function assignVisitRecencyByHost(
+  slices: HostSessionSlices,
+  templates: SliceTemplates,
+  value: unknown,
+  ctx: SplitContext
+): void {
+  if (!isWorkspaceSessionRecord(value)) {
+    return
+  }
+  for (const [key, entry] of Object.entries(value)) {
+    // Why: boot hydration reads only local + runtime:* partitions, and SSH worktree
+    // session state deliberately stays in the local partition (see buildHostIdByWorktreeId);
+    // routing ssh-qualified keys to an ssh partition would strand them across restarts.
+    const qualifiedHost = isWorktreeHostIdentity(key)
+      ? parseExecutionHostId(key.slice(0, key.indexOf('|')))
+      : null
+    const host = isWorktreeHostIdentity(key)
+      ? qualifiedHost?.kind === 'runtime'
+        ? qualifiedHost.id
+        : LOCAL_EXECUTION_HOST_ID
+      : ctx.hostIdByWorktreeId(key)
+    const slice = ensureSlice(slices, host, templates) as WorkspaceSessionRecord
+    const target = (slice.lastVisitedAtByWorktreeId ??= {}) as WorkspaceSessionRecord
+    target[key] = entry
   }
 }
 
 function assignKeyedByResolvedWorktree(
   slices: HostSessionSlices,
-  template: WorkspaceSessionState,
+  templates: SliceTemplates,
   field: keyof WorkspaceSessionState,
   value: unknown,
   resolveWorktreeId: (key: string, entry: unknown) => string | undefined,
   ctx: SplitContext
 ): void {
-  if (!isPlainRecord(value)) {
+  if (!isWorkspaceSessionRecord(value)) {
     return
   }
   for (const [key, entry] of Object.entries(value)) {
     const worktreeId = resolveWorktreeId(key, entry)
-    const host = hostForWorktree(ctx, worktreeId) ?? LOCAL_EXECUTION_HOST_ID
-    const slice = ensureSlice(slices, host, template) as AnyRecord
-    const target = (slice[field] ??= {}) as AnyRecord
+    const host = worktreeId ? ctx.hostIdByWorktreeId(worktreeId) : LOCAL_EXECUTION_HOST_ID
+    const slice = ensureSlice(slices, host, templates) as WorkspaceSessionRecord
+    const target = (slice[field] ??= {}) as WorkspaceSessionRecord
     target[key] = entry
   }
 }
@@ -206,16 +160,21 @@ export function splitWorkspaceSessionByHost(
   // does not inject `undefined` values that would clobber persisted state when
   // the slice is applied as a patch. Intentional `undefined` keys are preserved.
   const template = {} as WorkspaceSessionState
-  for (const field of GLOBAL_FIELDS) {
+  for (const field of GLOBAL_WORKSPACE_SESSION_FIELDS) {
     if (Object.hasOwn(state, field)) {
-      ;(template as AnyRecord)[field] = state[field]
+      ;(template as WorkspaceSessionRecord)[field] = state[field]
     }
+  }
+
+  const templates: SliceTemplates = {
+    local: template,
+    nonLocal: hostPartitionSliceTemplate(template)
   }
 
   const slices: HostSessionSlices = {}
   // Why: 'local' must always exist — it owns the global fields and is the
   // hydration anchor even when every worktree belongs to a runtime host.
-  ensureSlice(slices, LOCAL_EXECUTION_HOST_ID, template)
+  ensureSlice(slices, LOCAL_EXECUTION_HOST_ID, templates)
 
   const ctx: SplitContext = {
     hostIdByWorktreeId,
@@ -223,25 +182,34 @@ export function splitWorkspaceSessionByHost(
     worktreeIdByFileId: buildWorktreeIdByFileId(state)
   }
 
-  const localSlice = slices[LOCAL_EXECUTION_HOST_ID] as AnyRecord
+  const localSlice = slices[LOCAL_EXECUTION_HOST_ID] as WorkspaceSessionRecord
 
-  for (const field of Object.keys(FIELD_OWNERSHIP) as (keyof WorkspaceSessionState)[]) {
-    const ownership = FIELD_OWNERSHIP[field]
+  for (const field of Object.keys(
+    WORKSPACE_SESSION_FIELD_OWNERSHIP
+  ) as (keyof WorkspaceSessionState)[]) {
+    const ownership = WORKSPACE_SESSION_FIELD_OWNERSHIP[field]
     const value = state[field]
     if (value === undefined) {
       continue
     }
     // Why: a present-but-empty container ({} / []) must survive the round trip.
     // Seed it on 'local' so merge reproduces the field instead of dropping it.
-    if (ownership !== 'global') {
+    if (ownership !== 'global' && ownership !== 'hostPrivate') {
       localSlice[field] ??= Array.isArray(value) ? [] : {}
     }
     switch (ownership) {
       case 'global':
         // Already on the template / local slice.
         break
+      case 'hostPrivate':
+        // Main preserves this field while rebasing renderer writes onto host authority.
+        break
       case 'worktreeKeyed':
-        assignWorktreeKeyed(slices, template, field, value, ctx)
+        if (field === 'lastVisitedAtByWorktreeId') {
+          assignVisitRecencyByHost(slices, templates, value, ctx)
+        } else {
+          assignWorktreeKeyed(slices, templates, field, value, ctx)
+        }
         break
       case 'worktreeArray': {
         if (!Array.isArray(value)) {
@@ -249,7 +217,7 @@ export function splitWorkspaceSessionByHost(
         }
         for (const worktreeId of value as string[]) {
           const host = ctx.hostIdByWorktreeId(worktreeId)
-          const slice = ensureSlice(slices, host, template) as AnyRecord
+          const slice = ensureSlice(slices, host, templates) as WorkspaceSessionRecord
           const target = (slice[field] ??= []) as string[]
           target.push(worktreeId)
         }
@@ -258,7 +226,7 @@ export function splitWorkspaceSessionByHost(
       case 'tabKeyed':
         assignKeyedByResolvedWorktree(
           slices,
-          template,
+          templates,
           field,
           value,
           (tabId) => ctx.worktreeIdByTabId.get(tabId),
@@ -268,7 +236,7 @@ export function splitWorkspaceSessionByHost(
       case 'fileKeyed':
         assignKeyedByResolvedWorktree(
           slices,
-          template,
+          templates,
           field,
           value,
           (fileId) => ctx.worktreeIdByFileId.get(fileId),
@@ -278,7 +246,7 @@ export function splitWorkspaceSessionByHost(
       case 'browserWorkspaceKeyed':
         assignKeyedByResolvedWorktree(
           slices,
-          template,
+          templates,
           field,
           value,
           (_workspaceId, pages) => {
@@ -293,11 +261,39 @@ export function splitWorkspaceSessionByHost(
       case 'sleepingAgentKeyed':
         assignKeyedByResolvedWorktree(
           slices,
-          template,
+          templates,
           field,
           value,
           (_paneKey, record) =>
-            isPlainRecord(record) && typeof record.worktreeId === 'string'
+            isWorkspaceSessionRecord(record) && typeof record.worktreeId === 'string'
+              ? record.worktreeId
+              : undefined,
+          ctx
+        )
+        break
+      case 'paneKeyed':
+        assignKeyedByResolvedWorktree(
+          slices,
+          templates,
+          field,
+          value,
+          (paneKey) => {
+            const separator = paneKey.lastIndexOf(':')
+            return separator > 0
+              ? ctx.worktreeIdByTabId.get(paneKey.slice(0, separator))
+              : undefined
+          },
+          ctx
+        )
+        break
+      case 'surfaceTombstoneKeyed':
+        assignKeyedByResolvedWorktree(
+          slices,
+          templates,
+          field,
+          value,
+          (_paneKey, record) =>
+            isWorkspaceSessionRecord(record) && typeof record.worktreeId === 'string'
               ? record.worktreeId
               : undefined,
           ctx
@@ -309,30 +305,13 @@ export function splitWorkspaceSessionByHost(
   return slices
 }
 
-function mergeRecordField(
-  out: AnyRecord,
-  field: keyof WorkspaceSessionState,
-  slice: WorkspaceSessionState
-): void {
-  const value = slice[field]
-  if (!isPlainRecord(value)) {
-    return
-  }
-  const target = (out[field] ??= {}) as AnyRecord
-  Object.assign(target, value)
-}
-
-function mergeArrayField(
-  out: AnyRecord,
-  field: keyof WorkspaceSessionState,
-  slice: WorkspaceSessionState
-): void {
-  const value = slice[field]
-  if (!Array.isArray(value)) {
-    return
-  }
-  const target = (out[field] ??= []) as unknown[]
-  target.push(...value)
+/** Every defined non-'local' partition; 'local' is handled by its own dedicated write. */
+export function nonLocalHostSessionEntries(
+  slices: HostSessionSlices
+): [ExecutionHostId, WorkspaceSessionState][] {
+  return (Object.entries(slices) as [ExecutionHostId, WorkspaceSessionState][]).filter(
+    ([hostId, slice]) => hostId !== LOCAL_EXECUTION_HOST_ID && slice !== undefined
+  )
 }
 
 /** Inverse of split: combine per-host slices into one unified session. Global
@@ -344,15 +323,15 @@ export function mergeWorkspaceSessionsFromHosts(slices: HostSessionSlices): Work
 
   // Global fields: 'local' wins. Fall back to any slice that has them so a
   // standalone non-local slice still yields sane active pointers.
-  for (const field of GLOBAL_FIELDS) {
+  for (const field of GLOBAL_WORKSPACE_SESSION_FIELDS) {
     const fromLocal = local?.[field]
     if (fromLocal !== undefined) {
-      ;(out as AnyRecord)[field] = fromLocal
+      ;(out as WorkspaceSessionRecord)[field] = fromLocal
       continue
     }
     for (const slice of Object.values(slices)) {
       if (slice && slice[field] !== undefined) {
-        ;(out as AnyRecord)[field] = slice[field]
+        ;(out as WorkspaceSessionRecord)[field] = slice[field]
         break
       }
     }
@@ -362,15 +341,17 @@ export function mergeWorkspaceSessionsFromHosts(slices: HostSessionSlices): Work
     if (!slice) {
       continue
     }
-    for (const field of Object.keys(FIELD_OWNERSHIP) as (keyof WorkspaceSessionState)[]) {
-      const ownership = FIELD_OWNERSHIP[field]
-      if (ownership === 'global') {
+    for (const field of Object.keys(
+      WORKSPACE_SESSION_FIELD_OWNERSHIP
+    ) as (keyof WorkspaceSessionState)[]) {
+      const ownership = WORKSPACE_SESSION_FIELD_OWNERSHIP[field]
+      if (ownership === 'global' || ownership === 'hostPrivate') {
         continue
       }
       if (ownership === 'worktreeArray') {
-        mergeArrayField(out as AnyRecord, field, slice)
+        mergeWorkspaceSessionArrayField(out as WorkspaceSessionRecord, field, slice)
       } else {
-        mergeRecordField(out as AnyRecord, field, slice)
+        mergeWorkspaceSessionRecordField(out as WorkspaceSessionRecord, field, slice)
       }
     }
   }

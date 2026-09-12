@@ -1,5 +1,5 @@
 import type { ProviderRateLimits } from '../../../../shared/rate-limit-types'
-import type { GlobalSettings } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 
 export type UsageProviderSettings = Pick<
   GlobalSettings,
@@ -16,18 +16,19 @@ export type UsageProviderSettings = Pick<
   antigravityUsageConfigured: boolean
   // Why: MiniMax/Grok sign-in live on disk, not in settings; main sets these each poll.
   minimaxCookieConfigured: boolean
+  minimaxApiKeyConfigured: boolean
   grokAuthConfigured: boolean
 }
 
 type UsageProviderSnapshots = {
-  claude: ProviderRateLimits | null
-  codex: ProviderRateLimits | null
-  gemini: ProviderRateLimits | null
-  opencodeGo: ProviderRateLimits | null
-  kimi: ProviderRateLimits | null
-  antigravity: ProviderRateLimits | null
-  minimax: ProviderRateLimits | null
-  grok: ProviderRateLimits | null
+  claude: ProviderRateLimits | null | undefined
+  codex: ProviderRateLimits | null | undefined
+  gemini: ProviderRateLimits | null | undefined
+  opencodeGo: ProviderRateLimits | null | undefined
+  kimi: ProviderRateLimits | null | undefined
+  antigravity: ProviderRateLimits | null | undefined
+  minimax: ProviderRateLimits | null | undefined
+  grok: ProviderRateLimits | null | undefined
 }
 
 type UsageProviderId = ProviderRateLimits['provider']
@@ -42,8 +43,8 @@ function hasUsageData(provider: ProviderRateLimits): boolean {
   )
 }
 
-function isProviderSnapshotPending(provider: ProviderRateLimits | null): boolean {
-  return provider === null || (provider.status === 'fetching' && !hasUsageData(provider))
+function isProviderSnapshotPending(provider: ProviderRateLimits | null | undefined): boolean {
+  return provider == null || (provider.status === 'fetching' && !hasUsageData(provider))
 }
 
 // Why: a provider that returns `unavailable` is explicitly not configured
@@ -53,9 +54,11 @@ function isProviderSnapshotPending(provider: ProviderRateLimits | null): boolean
 // — that's a *configured* provider failing transiently, and hiding it would
 // make the bar flap on every refresh hiccup.
 export function isProviderConfigured(
-  provider: ProviderRateLimits | null
+  provider: ProviderRateLimits | null | undefined
 ): provider is ProviderRateLimits {
-  if (provider === null || provider.status === 'unavailable') {
+  // Why: renderer HMR can briefly run against an older main process whose rate-limit
+  // payload predates newer provider keys, so missing snapshots arrive as undefined.
+  if (provider == null || provider.status === 'unavailable') {
     return false
   }
   if (provider.status === 'fetching' && !hasUsageData(provider)) {
@@ -75,6 +78,7 @@ export function hasUsageProviderSettings(
     // Antigravity's durable signal requires geminiCliOAuthEnabled, so it is
     // already covered by the gemini term above.
     settings?.minimaxCookieConfigured === true ||
+    settings?.minimaxApiKeyConfigured === true ||
     settings?.grokAuthConfigured === true
   )
 }
@@ -105,7 +109,7 @@ export function hasUsageProviderSettingsForProvider(
     return settings.antigravityUsageConfigured === true && settings.geminiCliOAuthEnabled === true
   }
   if (providerId === 'minimax') {
-    return settings.minimaxCookieConfigured === true
+    return settings.minimaxCookieConfigured === true || settings.minimaxApiKeyConfigured === true
   }
   if (providerId === 'grok') {
     return settings.grokAuthConfigured === true
@@ -128,7 +132,7 @@ function createPendingProviderSnapshot(providerId: UsageProviderId): ProviderRat
 
 export function getVisibleUsageProvider(
   providerId: UsageProviderId,
-  provider: ProviderRateLimits | null,
+  provider: ProviderRateLimits | null | undefined,
   settings: Partial<UsageProviderSettings> | null | undefined
 ): ProviderRateLimits | null {
   if (isProviderConfigured(provider)) {

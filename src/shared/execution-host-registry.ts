@@ -1,3 +1,4 @@
+import type { RuntimeHostStatusSnapshot } from './runtime-host-status'
 import {
   LOCAL_EXECUTION_HOST_ID,
   getLocalExecutionHostLabel,
@@ -14,7 +15,8 @@ import { MIN_COMPATIBLE_RUNTIME_SERVER_VERSION, RUNTIME_PROTOCOL_VERSION } from 
 import type { RuntimeStatus } from './runtime-types'
 import type { SshConnectionState, SshConnectionStatus } from './ssh-types'
 import type { RuntimeEnvironmentSource } from './runtime-environments'
-import type { GlobalSettings, Repo } from './types'
+import type { GlobalSettings } from './global-settings-types'
+import type { Repo } from './repo-types'
 
 export type ExecutionHostHealth =
   | 'local'
@@ -48,11 +50,15 @@ type RuntimeEnvironmentSummary = {
 }
 
 type RuntimeHostStatus = {
+  snapshot?: RuntimeHostStatusSnapshot
   status?: RuntimeStatus | null
+  remoteControl?: RuntimeStatus['remoteControl'] | null
   appVersion?: string | null
 }
 
 type RuntimeStatusByEnvironmentId = ReadonlyMap<string, RuntimeHostStatus>
+
+export type ExecutionHostSource = 'configured-only' | 'include-references'
 
 function normalizeHostPart(value: string | null | undefined): string | null {
   const trimmed = value?.trim()
@@ -76,13 +82,13 @@ function runtimeCompatibility(
 
 function runtimeHealth(
   status: RuntimeStatus | null | undefined,
-  compatibility: RuntimeCompatVerdict | null
+  compatibility: RuntimeCompatVerdict | null,
+  remoteControl: RuntimeStatus['remoteControl'] | null | undefined
 ): ExecutionHostHealth {
-  // Why: with no live status we have no evidence the Orca server is reachable, so
-  // it must read 'disconnected' (like SSH) rather than defaulting to 'available'.
-  // A configured-but-never-connected host was showing "Connected" otherwise.
+  // Why: with no live status we have no evidence the Orca server is reachable,
+  // unless a ready shared-control socket already proved the transport is up.
   if (!status) {
-    return 'disconnected'
+    return remoteControl?.state === 'ready' ? 'available' : 'disconnected'
   }
   if (!compatibility) {
     return 'available'
@@ -154,22 +160,38 @@ function addRuntimeHost(
   const hostId = toRuntimeExecutionHostId(environmentId)
   const runtimeStatus = statusByEnvironmentId?.get(environmentId)
   const status = runtimeStatus?.status
-  const compatibility = runtimeCompatibility(status)
-  const controlHealth = runtimeControlHealth(status?.remoteControl)
+  const snapshot = runtimeStatus?.snapshot
+  const metadata = status ?? snapshot?.status
+  const compatibility = runtimeCompatibility(metadata)
+  const remoteControl = runtimeStatus?.remoteControl ?? status?.remoteControl
+  const controlHealth = snapshot?.retired
+    ? 'disconnected'
+    : snapshot?.verification === 'blocked'
+      ? 'blocked'
+      : !runtimeStatus ||
+          snapshot?.verification === 'checking' ||
+          snapshot?.transport === 'disconnected' ||
+          snapshot?.transport === 'connecting'
+        ? 'connecting'
+        : snapshot?.transport === 'ready'
+          ? compatibility?.kind === 'blocked'
+            ? 'blocked'
+            : 'available'
+          : runtimeControlHealth(remoteControl)
   setHost(hosts, {
     id: hostId,
     kind: 'runtime',
     label,
     detail: 'Orca server',
-    health: controlHealth ?? runtimeHealth(status, compatibility),
+    health: controlHealth ?? runtimeHealth(status, compatibility, remoteControl),
     compatibility: compatibility ?? undefined,
-    capabilities: status?.capabilities,
-    appVersion: runtimeStatus?.appVersion ?? null,
-    protocolVersion: status?.runtimeProtocolVersion ?? status?.protocolVersion ?? null,
+    capabilities: metadata?.capabilities,
+    appVersion: runtimeStatus?.appVersion ?? metadata?.appVersion ?? null,
+    protocolVersion: metadata?.runtimeProtocolVersion ?? metadata?.protocolVersion ?? null,
     minCompatibleClientVersion:
-      status?.minCompatibleRuntimeClientVersion ?? status?.minCompatibleMobileVersion ?? null,
-    platform: status?.hostPlatform ?? null,
-    remoteControlState: status?.remoteControl ?? null,
+      metadata?.minCompatibleRuntimeClientVersion ?? metadata?.minCompatibleMobileVersion ?? null,
+    platform: metadata?.hostPlatform ?? null,
+    remoteControlState: remoteControl ?? null,
     ...(source ? { source } : {})
   })
 }
@@ -177,6 +199,7 @@ function addRuntimeHost(
 export function buildExecutionHostRegistry(args: {
   repos: readonly Pick<Repo, 'connectionId' | 'executionHostId'>[]
   settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined
+  hostSource?: ExecutionHostSource
   sshTargetLabels?: ReadonlyMap<string, string>
   sshConnectionStates?: ReadonlyMap<string, SshConnectionState>
   runtimeEnvironments?: readonly RuntimeEnvironmentSummary[]
@@ -219,7 +242,7 @@ export function buildExecutionHostRegistry(args: {
 
   const focusedHost = getSettingsFocusedExecutionHostId(args.settings)
   const parsedFocusedHost = parseExecutionHostId(focusedHost)
-  if (parsedFocusedHost?.kind === 'runtime') {
+  if (parsedFocusedHost?.kind === 'runtime' && args.hostSource !== 'configured-only') {
     addRuntimeHost(
       hosts,
       parsedFocusedHost.environmentId,
@@ -230,21 +253,23 @@ export function buildExecutionHostRegistry(args: {
   }
 
   const sshTargetIds = new Set<string>()
-  for (const repo of args.repos) {
-    const parsedHost = parseExecutionHostId(repo.executionHostId)
-    if (parsedHost?.kind === 'runtime') {
-      addRuntimeHost(
-        hosts,
-        parsedHost.environmentId,
-        parsedHost.environmentId,
-        undefined,
-        args.runtimeStatusByEnvironmentId
-      )
-    }
-    // Why: a VM-backed repo's executionHostId is `ssh:runtime-ssh-<id>`. Runtime-owned
-    // targets are hidden, so they must not become visible SSH run-target hosts here.
-    if (parsedHost?.kind === 'ssh' && !isRuntimeOwnedSshTargetId(parsedHost.targetId)) {
-      sshTargetIds.add(parsedHost.targetId)
+  if (args.hostSource !== 'configured-only') {
+    for (const repo of args.repos) {
+      const parsedHost = parseExecutionHostId(repo.executionHostId)
+      if (parsedHost?.kind === 'runtime') {
+        addRuntimeHost(
+          hosts,
+          parsedHost.environmentId,
+          parsedHost.environmentId,
+          undefined,
+          args.runtimeStatusByEnvironmentId
+        )
+      }
+      // Why: a VM-backed repo's executionHostId is `ssh:runtime-ssh-<id>`. Runtime-owned
+      // targets are hidden, so they must not become visible SSH run-target hosts here.
+      if (parsedHost?.kind === 'ssh' && !isRuntimeOwnedSshTargetId(parsedHost.targetId)) {
+        sshTargetIds.add(parsedHost.targetId)
+      }
     }
   }
   for (const targetId of args.sshTargetLabels?.keys() ?? []) {
@@ -253,10 +278,12 @@ export function buildExecutionHostRegistry(args: {
       sshTargetIds.add(normalized)
     }
   }
-  for (const repo of args.repos) {
-    const targetId = normalizeHostPart(repo.connectionId)
-    if (targetId && !isRuntimeOwnedSshTargetId(targetId)) {
-      sshTargetIds.add(targetId)
+  if (args.hostSource !== 'configured-only') {
+    for (const repo of args.repos) {
+      const targetId = normalizeHostPart(repo.connectionId)
+      if (targetId && !isRuntimeOwnedSshTargetId(targetId)) {
+        sshTargetIds.add(targetId)
+      }
     }
   }
 

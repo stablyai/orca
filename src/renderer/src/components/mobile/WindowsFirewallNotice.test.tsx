@@ -44,6 +44,27 @@ describe('WindowsFirewallNotice', () => {
     expect(screen.getByText(/TCP port 6768/i)).toBeInTheDocument()
   })
 
+  it('reassures on Relay that pairing works without the firewall rule', async () => {
+    const getWindowsFirewallStatus = vi.fn().mockResolvedValue({
+      supported: true,
+      port: 6768,
+      ruleAllowed: false,
+      blockingRuleDetected: false,
+      privateFirewallEnabled: true,
+      networkCategory: 'private',
+      inspectionAvailable: true
+    })
+    setMobileApi({ getWindowsFirewallStatus })
+    const { rerender } = render(
+      <WindowsFirewallNotice pairingReady address="192.168.0.108" usingRelay />
+    )
+    expect(await screen.findByText(/allow phone connections through/i)).toBeInTheDocument()
+    expect(screen.getByText(/still works over Orca Relay/i)).toBeInTheDocument()
+
+    rerender(<WindowsFirewallNotice pairingReady address="192.168.0.108" />)
+    expect(screen.queryByText(/still works over Orca Relay/i)).not.toBeInTheDocument()
+  })
+
   it('repairs only after explicit user action and hides after success', async () => {
     const repairWindowsFirewall = vi.fn().mockResolvedValue({ ok: true })
     const getWindowsFirewallStatus = vi

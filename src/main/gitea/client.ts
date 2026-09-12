@@ -1,10 +1,12 @@
 import {
   deriveGiteaCommitStatus,
   mapGiteaPullRequest,
+  mapGiteaPullRequestState,
   type GiteaPullRequestInfo,
   type RawGiteaCombinedStatus,
   type RawGiteaPullRequest
 } from './pull-request-mappers'
+import { shouldHideNonOpenReviewOnDefaultBranch } from '../source-control/repo-default-branch'
 import { getGiteaRepoRef, type GiteaRepoRef } from './repository-ref'
 import { invalidateGiteaPullRequestScan, scanGiteaPullRequests } from './pull-request-scan-cache'
 import {
@@ -281,7 +283,20 @@ export async function getGiteaPullRequestForBranch(
     )
     const raw = pullRequests.find((item) => matchesBranch(item, branchName))
     if (raw) {
-      return normalizePullRequest(repo, raw)
+      // Why (#9171): discard a non-open implicit branch match on the repo
+      // default branch and fall through to the linked-number fallback below.
+      const hideOnDefaultBranch = await shouldHideNonOpenReviewOnDefaultBranch({
+        state: mapGiteaPullRequestState(raw),
+        reviewNumber: raw.number ?? null,
+        linkedReviewNumber: linkedPRNumber,
+        branchName,
+        repoPath,
+        connectionId,
+        localGitOptions: getHostedReviewLocalGitOptions(options)
+      })
+      if (!hideOnDefaultBranch) {
+        return normalizePullRequest(repo, raw)
+      }
     }
   }
 

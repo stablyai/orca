@@ -93,6 +93,24 @@ describe('matchSearchNavigate', () => {
 })
 
 describe('resolveTerminalKeyboardShortcutAction', () => {
+  it('routes native Option dead keys to consume-only release tracking', () => {
+    expect(
+      resolveTerminalKeyboardShortcutAction(
+        makeKeyEvent({ key: 'Dead', altKey: true }),
+        true,
+        'false',
+        0,
+        false,
+        undefined,
+        undefined,
+        () => 2,
+        undefined,
+        () => 'alt-enter',
+        () => false
+      )
+    ).toEqual({ type: 'trackNativeOptionDeadKey' })
+  })
+
   it('routes macOS Shift+Enter with the active Windows PTY host bytes', () => {
     expect(
       resolveTerminalKeyboardShortcutAction(
@@ -109,6 +127,26 @@ describe('resolveTerminalKeyboardShortcutAction', () => {
         () => true
       )
     ).toEqual({ type: 'sendInput', data: '\x1b\r' })
+  })
+
+  it('forwards trusted Ctrl+Enter authority to the shared policy', () => {
+    expect(
+      resolveTerminalKeyboardShortcutAction(
+        makeKeyEvent({ key: 'Enter', ctrlKey: true }),
+        false,
+        'false',
+        0,
+        true,
+        undefined,
+        () => true,
+        () => 0,
+        undefined,
+        () => 'alt-enter',
+        () => true,
+        'orca-first',
+        () => true
+      )
+    ).toEqual({ type: 'sendInput', data: '\x1b[13;5u' })
   })
 })
 

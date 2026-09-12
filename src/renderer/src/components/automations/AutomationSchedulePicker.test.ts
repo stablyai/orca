@@ -1,6 +1,6 @@
 import React from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import type { AutomationDraft } from './AutomationEditorDialog'
 import {
   AutomationCustomCronPanel,
@@ -9,9 +9,14 @@ import {
 } from './AutomationCustomCronPanel'
 import {
   AUTOMATION_SCHEDULE_PRESET_OPTIONS,
+  AutomationSchedulePicker,
+  getAutomationSchedulePresetLabel,
   getSchedulePresetDraft
 } from './AutomationSchedulePicker'
-import { isValidAutomationCronSchedule } from '../../../../shared/automation-schedules'
+import { formatUiAutomationSchedule } from './automation-schedule-label'
+import { isValidAutomationCronSchedule } from '../../../../shared/automation-schedule-parsing'
+import { SelectItem } from '@/components/ui/select'
+import { i18n } from '@/i18n/i18n'
 
 const BASE_DRAFT: AutomationDraft = {
   name: '',
@@ -32,9 +37,106 @@ const BASE_DRAFT: AutomationDraft = {
   scheduleWarning: null
 }
 
+function collectSelectItems(
+  node: React.ReactNode,
+  found: [string, string][] = []
+): [string, string][] {
+  if (!React.isValidElement(node)) {
+    if (Array.isArray(node)) {
+      for (const child of node) {
+        collectSelectItems(child, found)
+      }
+    }
+    return found
+  }
+  const props = node.props as { value?: unknown; children?: React.ReactNode }
+  if (node.type === SelectItem && typeof props.value === 'string') {
+    found.push([props.value, String(props.children)])
+  }
+  return collectSelectItems(props.children ?? null, found)
+}
+
 describe('AutomationSchedulePicker', () => {
-  it('offers custom cron as a selectable cadence', () => {
-    expect(AUTOMATION_SCHEDULE_PRESET_OPTIONS).toContainEqual(['custom', 'Custom cron'])
+  // Reset here, not after the assertion: a failed expect would otherwise leak the locale.
+  afterEach(async () => {
+    await i18n.changeLanguage('en')
+  })
+
+  it('provides an i18n key for every selectable cadence (#10043)', () => {
+    expect(AUTOMATION_SCHEDULE_PRESET_OPTIONS).toContainEqual([
+      'custom',
+      'Custom cron',
+      'auto.components.automations.AutomationSchedulePicker.ddba78647e'
+    ])
+    for (const [value, fallbackLabel, labelKey] of AUTOMATION_SCHEDULE_PRESET_OPTIONS) {
+      expect(value).not.toBe('')
+      expect(fallbackLabel).not.toBe('')
+      expect(labelKey).toMatch(
+        /^auto\.components\.automations\.AutomationSchedulePicker\.[0-9a-f]{10}$/
+      )
+    }
+  })
+
+  it.each([
+    ['zh', ['每小时', '每天', '工作日', '每周', '自定义 cron']],
+    ['ja', ['毎時', '毎日', '平日', '毎週', 'カスタム cron']],
+    ['ko', ['매시간', '매일', '평일', '매주', '사용자 지정 cron']],
+    ['es', ['Cada hora', 'Diario', 'Días laborables', 'Semanal', 'Cron personalizado']]
+  ])('translates every cadence option in %s', async (locale, labels) => {
+    await i18n.changeLanguage(locale)
+    expect(AUTOMATION_SCHEDULE_PRESET_OPTIONS.map(getAutomationSchedulePresetLabel)).toEqual(labels)
+  })
+
+  it.each([
+    ['zh', '星期日', '星期一'],
+    ['ja', '日曜日', '月曜日'],
+    ['ko', '일요일', '월요일'],
+    ['es', 'domingo', 'lunes']
+  ])('translates every weekday option in %s (#14404)', async (locale, sunday, monday) => {
+    await i18n.changeLanguage(locale)
+    // Radix renders SelectContent only when open, so walk the element tree the picker builds.
+    const dayOptions = collectSelectItems(
+      AutomationSchedulePicker({
+        draft: { ...BASE_DRAFT, preset: 'weekly' },
+        validateAdvancedSchedule: isValidAutomationCronSchedule,
+        onDraftChange: () => undefined
+      })
+    ).filter(([value]) => /^[0-6]$/.test(value))
+
+    // Values stay Sunday-indexed '0'..'6' so persisted AutomationDraft.dayOfWeek round-trips.
+    expect(dayOptions.map(([value]) => value)).toEqual(['0', '1', '2', '3', '4', '5', '6'])
+    expect(dayOptions[0][1]).toBe(sunday)
+    expect(dayOptions[1][1]).toBe(monday)
+    expect(dayOptions.map(([, label]) => label)).not.toContain('Monday')
+  })
+
+  it.each([
+    ['zh', '每星期五'],
+    ['ja', '毎週金曜日'],
+    ['ko', '매주 금요일'],
+    ['es', 'Cada viernes']
+  ])(
+    'localizes the weekly schedule label without an English plural in %s (#14404)',
+    async (locale, expected) => {
+      await i18n.changeLanguage(locale)
+      const label = formatUiAutomationSchedule('0 9 * * 5')
+
+      expect(label).toContain(expected)
+      expect(label).not.toMatch(/Friday/)
+      expect(label).not.toMatch(/s at /)
+    }
+  )
+
+  it('localizes the valid-custom-cron status without matching English copy (#14404)', async () => {
+    await i18n.changeLanguage('zh')
+
+    expect(getCronScheduleStatusLabel('*/30 9-17 * * 1-5', isValidAutomationCronSchedule)).toEqual({
+      kind: 'valid',
+      label: '有效的自定义 cron'
+    })
+    expect(getCronScheduleStatusLabel('0 9 * * *', isValidAutomationCronSchedule).label).toContain(
+      '每天'
+    )
   })
 
   it('seeds custom cron from the current simple schedule', () => {

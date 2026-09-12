@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { AgentSkillSetupPanel } from './AgentSkillSetupPanel'
-import { StepBadge } from './BrowserUseStepBadge'
+import type { LocalAgentRuntime } from './CliSkillRuntimeSetup'
+import { StepBadge } from './SetupStepBadge'
 import { translate } from '@/i18n/i18n'
 
 type Props = {
@@ -11,6 +12,7 @@ type Props = {
   skillError: string | null
   disabled?: boolean
   terminalShellOverride?: string
+  terminalRuntime?: LocalAgentRuntime
   preInstallNotice?: ReactNode
   getPrerequisiteStatus?: () => Promise<Awaited<ReturnType<typeof window.api.cli.getInstallStatus>>>
   onBeforeOpenTerminal?: () => void | Promise<void>
@@ -25,6 +27,7 @@ export function BrowserUseSkillStep({
   skillError,
   disabled = false,
   terminalShellOverride,
+  terminalRuntime,
   preInstallNotice,
   getPrerequisiteStatus,
   onBeforeOpenTerminal,
@@ -47,6 +50,7 @@ export function BrowserUseSkillStep({
       terminalAriaLabel="Browser Use skill install terminal"
       terminalWorktreeId="settings-browser-use-skill-terminal"
       terminalShellOverride={terminalShellOverride}
+      terminalRuntime={terminalRuntime}
       installed={skillDetected}
       loading={skillLoading}
       error={skillError}

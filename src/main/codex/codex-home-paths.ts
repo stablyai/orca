@@ -1,6 +1,5 @@
 import {
   cpSync,
-  existsSync,
   lstatSync,
   mkdirSync,
   readFileSync,
@@ -9,11 +8,16 @@ import {
   rmSync,
   statSync,
   symlinkSync,
-  unlinkSync,
-  writeFileSync
+  unlinkSync
 } from 'node:fs'
 import { homedir } from 'node:os'
-import { dirname, join } from 'node:path'
+import { join } from 'node:path'
+import {
+  clearCopiedResourceMarker,
+  markCopiedResource,
+  targetIsOwnedFallbackCopy
+} from './codex-managed-home-resource-copy-marker'
+import { observe, observeResolvedPathEntry } from './codex-path-observation'
 
 const CODEX_GLOBAL_INSTRUCTIONS_ENTRY = 'AGENTS.md'
 
@@ -32,13 +36,22 @@ export function getSystemCodexHomePath(): string {
   return join(homedir(), '.codex')
 }
 
+/** Path only; use when a read-only caller must not materialize the mirror. */
+export function resolveOrcaManagedCodexHomePath(): string {
+  return join(getOrcaUserDataPath(), 'codex-runtime-home', 'home')
+}
+
 export function getOrcaManagedCodexHomePath(): string {
-  const managedHomePath = join(getOrcaUserDataPath(), 'codex-runtime-home', 'home')
+  const managedHomePath = resolveOrcaManagedCodexHomePath()
   mkdirSync(managedHomePath, { recursive: true })
   return managedHomePath
 }
 
-function getOrcaUserDataPath(): string {
+export function getCodexSessionBackfillStateDirPath(): string {
+  return join(getOrcaUserDataPath(), 'codex-session-backfill')
+}
+
+export function getOrcaUserDataPath(): string {
   if (process.env.ORCA_USER_DATA_PATH) {
     return process.env.ORCA_USER_DATA_PATH
   }
@@ -53,11 +66,15 @@ function getOrcaUserDataPath(): string {
   return join(process.env.XDG_CONFIG_HOME || join(homedir(), '.config'), 'orca')
 }
 
-export function syncSystemCodexResourcesIntoManagedHome(): void {
+// Why: each managed home (the shared runtime mirror, or a per-account
+// self-contained CODEX_HOME that the caller has already created) links the same
+// system resources with its own ownership markers, so a per-account launch home
+// is complete without ever symlinking into or mutating the user's real ~/.codex.
+export function syncSystemCodexResourcesIntoManagedHome(managedHomePath?: string): void {
+  const targetHome = managedHomePath ?? getOrcaManagedCodexHomePath()
   const systemHomePath = getSystemCodexHomePath()
-  const managedHomePath = getOrcaManagedCodexHomePath()
   for (const entryName of CODEX_SYSTEM_RESOURCE_ENTRIES) {
-    linkSystemCodexResource(systemHomePath, managedHomePath, entryName)
+    linkSystemCodexResource(systemHomePath, targetHome, entryName)
   }
 }
 
@@ -86,11 +103,20 @@ function linkSystemCodexResource(
 ): void {
   const sourcePath = join(systemHomePath, entryName)
   const targetPath = join(managedHomePath, entryName)
-  if (!existsSync(sourcePath)) {
+  // Why: both branches below DELETE Orca's mirrored copy because the system
+  // resource "is not there". `existsSync` and the old `catch { return false }`
+  // both reported that for a source we merely could not read, so one denied
+  // read on ~/.codex/AGENTS.md removed the managed copy on the next launch.
+  // One resolved stat now answers reachability and regular-file-ness together.
+  const sourceObservation = observeResolvedPathEntry(sourcePath)
+  if (sourceObservation.kind === 'indeterminate') {
+    return
+  }
+  if (sourceObservation.kind === 'absent') {
     removeCopiedResourceIfOwned(targetPath, managedHomePath, entryName, sourcePath)
     return
   }
-  if (entryName === CODEX_GLOBAL_INSTRUCTIONS_ENTRY && !systemResourceIsRegularFile(sourcePath)) {
+  if (entryName === CODEX_GLOBAL_INSTRUCTIONS_ENTRY && !sourceObservation.value.isFile()) {
     removeCopiedResourceIfOwned(targetPath, managedHomePath, entryName, sourcePath)
     console.warn('[codex-home] Ignoring non-file system Codex resource:', entryName)
     return
@@ -102,23 +128,28 @@ function linkSystemCodexResource(
       return
     }
   }
-  const shouldRefreshFallbackCopy = targetIsOwnedFallbackCopy(
-    targetPath,
-    managedHomePath,
-    entryName,
-    sourcePath
-  )
-  if (pathEntryExists(targetPath) && !shouldRefreshFallbackCopy) {
+  // Why: an unreadable target is not a missing target; do not let the fallback
+  // copier remove it merely because existsSync/lstatSync collapsed the error.
+  const targetObservation = observe(() => lstatSync(targetPath))
+  if (targetObservation.kind === 'indeterminate') {
+    return
+  }
+  const shouldRefreshFallbackCopy =
+    targetObservation.kind === 'present' &&
+    targetIsOwnedFallbackCopy(targetPath, managedHomePath, entryName, sourcePath)
+  if (targetObservation.kind === 'present' && !shouldRefreshFallbackCopy) {
     return
   }
   if (shouldRefreshFallbackCopy) {
     // Why: WSL launch preparation runs before every Codex start. Avoid
     // rewriting an unchanged file across the UNC boundary on every launch.
-    if (
-      entryName === CODEX_GLOBAL_INSTRUCTIONS_ENTRY &&
-      copiedFileContentsMatch(sourcePath, targetPath)
-    ) {
-      return
+    if (entryName === CODEX_GLOBAL_INSTRUCTIONS_ENTRY) {
+      const contentsMatch = copiedFileContentsMatch(sourcePath, targetPath)
+      if (contentsMatch === 'match' || contentsMatch === 'indeterminate') {
+        // Why: a failed comparison is not permission to remove the only
+        // readable copy; leave it in place for the next launch.
+        return
+      }
     }
     rmSync(targetPath, { recursive: true, force: true })
   }
@@ -188,33 +219,19 @@ function copySystemCodexResourceAsOwnedFallback(
   }
 }
 
-function systemResourceIsRegularFile(sourcePath: string): boolean {
-  try {
-    return statSync(sourcePath).isFile()
-  } catch {
-    return false
-  }
-}
-
-function pathEntryExists(entryPath: string): boolean {
-  try {
-    lstatSync(entryPath)
-    return true
-  } catch {
-    return false
-  }
-}
-
-function copiedFileContentsMatch(sourcePath: string, targetPath: string): boolean {
+function copiedFileContentsMatch(
+  sourcePath: string,
+  targetPath: string
+): 'match' | 'different' | 'indeterminate' {
   try {
     // Why: reading a FIFO or device synchronously can block Codex launch.
     // Follow source symlinks, but only compare two regular files.
     if (!statSync(sourcePath).isFile() || !lstatSync(targetPath).isFile()) {
-      return false
+      return 'different'
     }
-    return readFileSync(sourcePath).equals(readFileSync(targetPath))
+    return readFileSync(sourcePath).equals(readFileSync(targetPath)) ? 'match' : 'different'
   } catch {
-    return false
+    return 'indeterminate'
   }
 }
 
@@ -238,59 +255,6 @@ function linkTargetsMatch(actualTarget: string, expectedTarget: string): boolean
 
 function normalizeWindowsLinkTarget(linkTarget: string): string {
   return linkTarget.replace(/^\\\\\?\\/, '').toLowerCase()
-}
-
-function getResourceCopyMarkerPath(managedHomePath: string, entryName: string): string {
-  return join(managedHomePath, '.orca-resource-copies', `${entryName}.json`)
-}
-
-function markCopiedResource(managedHomePath: string, entryName: string, sourcePath: string): void {
-  const markerPath = getResourceCopyMarkerPath(managedHomePath, entryName)
-  mkdirSync(dirname(markerPath), { recursive: true })
-  writeFileSync(markerPath, `${JSON.stringify({ sourcePath }, null, 2)}\n`, {
-    encoding: 'utf-8',
-    mode: 0o600
-  })
-}
-
-function readCopiedResourceSourcePath(managedHomePath: string, entryName: string): string | null {
-  try {
-    const parsed: unknown = JSON.parse(
-      readFileSync(getResourceCopyMarkerPath(managedHomePath, entryName), 'utf-8')
-    )
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-      return null
-    }
-    const sourcePath = 'sourcePath' in parsed ? parsed.sourcePath : null
-    return typeof sourcePath === 'string' ? sourcePath : null
-  } catch {
-    return null
-  }
-}
-
-function clearCopiedResourceMarker(managedHomePath: string, entryName: string): void {
-  // Why: a malformed marker directory must not block Codex launch or prevent
-  // an owned resource from being repaired.
-  rmSync(getResourceCopyMarkerPath(managedHomePath, entryName), {
-    recursive: true,
-    force: true
-  })
-}
-
-function targetIsOwnedFallbackCopy(
-  targetPath: string,
-  managedHomePath: string,
-  entryName: string,
-  sourcePath: string
-): boolean {
-  if (readCopiedResourceSourcePath(managedHomePath, entryName) !== sourcePath) {
-    return false
-  }
-  try {
-    return existsSync(targetPath) && !lstatSync(targetPath).isSymbolicLink()
-  } catch {
-    return false
-  }
 }
 
 function removeCopiedResourceIfOwned(

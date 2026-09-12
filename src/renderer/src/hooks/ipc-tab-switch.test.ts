@@ -15,6 +15,8 @@ vi.mock('@/components/tab-bar/group-tab-order', () => ({
   getActiveTabNavOrder: getActiveTabNavOrderMock
 }))
 
+import { createTabsFocusActions } from '../store/slices/tabs/tabs-focus-actions'
+import type { TabsSliceGet, TabsSliceSet } from '../store/slices/tabs/tabs-slice-contract'
 import {
   handleSwitchRecentTab,
   handleSwitchTab,
@@ -39,15 +41,26 @@ type MockStore = {
   activeBrowserTabId: string
   activeGroupIdByWorktree: Record<string, string>
   groupsByWorktree: Record<string, MockGroup[]>
+  tabsByWorktree: Record<string, { id: string }[]>
+  unifiedTabsByWorktree: Record<
+    string,
+    {
+      id: string
+      entityId: string
+      groupId: string
+      contentType: 'terminal' | 'editor' | 'browser' | 'simulator' | 'agent-session'
+    }[]
+  >
   setActiveTab: ReturnType<typeof vi.fn>
   setActiveFile: ReturnType<typeof vi.fn>
   setActiveBrowserTab: ReturnType<typeof vi.fn>
   activateTab: ReturnType<typeof vi.fn>
   setActiveTabType: ReturnType<typeof vi.fn>
+  getActiveTab: (worktreeId: string) => unknown
 }
 
 function makeStore(activeTabType: ActiveTabType, overrides: Partial<MockStore> = {}): MockStore {
-  return {
+  const store: MockStore = {
     activeWorktreeId: 'wt-1',
     activeTabType,
     activeTabId: 'term-1',
@@ -55,13 +68,23 @@ function makeStore(activeTabType: ActiveTabType, overrides: Partial<MockStore> =
     activeBrowserTabId: 'browser-1',
     activeGroupIdByWorktree: { 'wt-1': 'group-1' },
     groupsByWorktree: { 'wt-1': [{ id: 'group-1', activeTabId: 'tab-1' }] },
+    tabsByWorktree: {},
+    unifiedTabsByWorktree: {},
     setActiveTab: vi.fn(),
     setActiveFile: vi.fn(),
     setActiveBrowserTab: vi.fn(),
     activateTab: vi.fn(),
     setActiveTabType: vi.fn(),
+    getActiveTab: () => null,
     ...overrides
   }
+  // Why the real resolver: the group-scoped active tab is what the code under test reads, so a
+  // hand-written stub here would decide the answer instead of exercising it.
+  store.getActiveTab = createTabsFocusActions(
+    (() => {}) as unknown as TabsSliceSet,
+    (() => store) as unknown as TabsSliceGet
+  ).getActiveTab
+  return store
 }
 
 describe('handleSwitchTerminalTab', () => {
@@ -171,6 +194,98 @@ describe('handleSwitchTerminalTab', () => {
     expect(store.setActiveTab).not.toHaveBeenCalled()
     expect(store.setActiveTabType).not.toHaveBeenCalled()
   })
+
+  it('falls back to the worktree terminal order when the active group is still empty', () => {
+    const store = makeStore('terminal')
+    store.activeTabId = 'term-1'
+    store.tabsByWorktree = {
+      'wt-1': [{ id: 'term-1' }, { id: 'term-2' }]
+    }
+    getStateMock.mockReturnValue(store)
+    // Keyboard-only worktree activation can briefly restore the group before its unified tabs.
+    getActiveTabNavOrderMock.mockReturnValue([])
+
+    expect(handleSwitchTerminalTab(1)).toBe(true)
+    expect(store.setActiveTab).toHaveBeenCalledWith('term-2')
+    expect(store.setActiveTabType).toHaveBeenCalledWith('terminal')
+  })
+
+  it('falls back when one stale group terminal hides the remaining worktree terminal', () => {
+    const store = makeStore('terminal')
+    store.activeTabId = 'term-1'
+    store.tabsByWorktree = {
+      'wt-1': [{ id: 'term-1' }, { id: 'term-2' }]
+    }
+    getStateMock.mockReturnValue(store)
+    getActiveTabNavOrderMock.mockReturnValue([{ type: 'terminal', id: 'term-1' }])
+
+    expect(handleSwitchTerminalTab(1)).toBe(true)
+    expect(store.setActiveTab).toHaveBeenCalledWith('term-2')
+  })
+
+  it('keeps a genuine one-terminal split group a no-op', () => {
+    const store = makeStore('terminal')
+    store.activeTabId = 'term-1'
+    store.tabsByWorktree = {
+      'wt-1': [{ id: 'term-1' }, { id: 'term-2' }]
+    }
+    store.groupsByWorktree = {
+      'wt-1': [
+        { id: 'group-1', activeTabId: 'tab-1', tabOrder: ['tab-1'] },
+        { id: 'group-2', activeTabId: 'tab-2', tabOrder: ['tab-2'] }
+      ]
+    }
+    store.unifiedTabsByWorktree = {
+      'wt-1': [
+        { id: 'tab-1', entityId: 'term-1', groupId: 'group-1', contentType: 'terminal' },
+        { id: 'tab-2', entityId: 'term-2', groupId: 'group-2', contentType: 'terminal' }
+      ]
+    }
+    getStateMock.mockReturnValue(store)
+    getActiveTabNavOrderMock.mockReturnValue([{ type: 'terminal', id: 'term-1', tabId: 'tab-1' }])
+
+    expect(handleSwitchTerminalTab(1)).toBe(false)
+    expect(store.setActiveTab).not.toHaveBeenCalled()
+    expect(store.setActiveTabType).not.toHaveBeenCalled()
+  })
+
+  it('keeps an editor-only active group local when terminals belong to another split', () => {
+    const store = makeStore('editor')
+    store.activeFileId = 'editor-1'
+    store.tabsByWorktree = {
+      'wt-1': [{ id: 'term-2' }]
+    }
+    store.groupsByWorktree = {
+      'wt-1': [
+        { id: 'group-1', activeTabId: 'editor-tab', tabOrder: ['editor-tab'] },
+        { id: 'group-2', activeTabId: 'terminal-tab', tabOrder: ['terminal-tab'] }
+      ]
+    }
+    store.unifiedTabsByWorktree = {
+      'wt-1': [
+        {
+          id: 'editor-tab',
+          entityId: 'editor-1',
+          groupId: 'group-1',
+          contentType: 'editor'
+        },
+        {
+          id: 'terminal-tab',
+          entityId: 'term-2',
+          groupId: 'group-2',
+          contentType: 'terminal'
+        }
+      ]
+    }
+    getStateMock.mockReturnValue(store)
+    getActiveTabNavOrderMock.mockReturnValue([
+      { type: 'editor', id: 'editor-1', tabId: 'editor-tab' }
+    ])
+
+    expect(handleSwitchTerminalTab(1)).toBe(false)
+    expect(store.setActiveTab).not.toHaveBeenCalled()
+    expect(store.setActiveTabType).not.toHaveBeenCalled()
+  })
 })
 
 describe('handleSwitchTab', () => {
@@ -186,11 +301,12 @@ describe('handleSwitchTab', () => {
       { type: 'terminal', id: 'term-1' },
       { type: 'editor', id: 'file-1', tabId: 'tab-editor-1' },
       { type: 'browser', id: 'browser-1', tabId: 'tab-browser-1' },
-      { type: 'terminal', id: 'term-2' }
+      { type: 'terminal', id: 'term-2', tabId: 'tab-terminal-2' }
     ])
 
     expect(handleSwitchTab(1)).toBe(true)
     expect(store.setActiveTab).toHaveBeenCalledWith('term-2')
+    expect(store.activateTab).toHaveBeenCalledWith('tab-terminal-2')
     expect(store.setActiveFile).not.toHaveBeenCalled()
     expect(store.setActiveBrowserTab).not.toHaveBeenCalled()
     expect(store.setActiveTabType).toHaveBeenCalledWith('terminal')

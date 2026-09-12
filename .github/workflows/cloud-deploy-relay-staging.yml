@@ -1,0 +1,112 @@
+name: Deploy Relay Staging
+
+on:
+  workflow_dispatch:
+    inputs:
+      expected-image-digest:
+        description: Exact checked-in production Relay sha256 digest to deploy
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  # Staging deploy, candidate, auth, and power operations must never overlap.
+  group: relay-staging-mutation
+  cancel-in-progress: false
+
+defaults:
+  run:
+    working-directory: cloud
+
+jobs:
+  deploy:
+    if: ${{ vars.ORCA_CLOUD_OPERATIONS_ENABLED == 'true' }}
+    runs-on: blacksmith-2vcpu-ubuntu-2204
+    environment: staging
+    env:
+      GCP_PROJECT_ID: onorca-cloud-staging
+      GCP_REGION: ${{ vars.STAGING_GCP_REGION }}
+      DIRECTOR_SERVICE_NAME: orca-cloud-relay-staging
+      REPOSITORY_ID: orca-cloud
+      IMAGE_NAME: relay
+      EXPECTED_IMAGE_DIGEST: ${{ inputs.expected-image-digest }}
+      CAPACITY_SERVICE_ACCOUNT: ${{ vars.STAGING_GCP_RELAY_CAPACITY_SERVICE_ACCOUNT }}
+      ASIA_PROOF_SERVICE_ACCOUNT: ${{ vars.STAGING_GCP_RELAY_ASIA_PROOF_SERVICE_ACCOUNT }}
+      REGIONAL_PLACEMENT_SECRET: orca-cloud-relay-regional-placement-enabled
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Require the expected immutable image
+        run: '[[ "${EXPECTED_IMAGE_DIGEST}" =~ ^sha256:[a-f0-9]{64}$ ]]'
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.15.8
+          terraform_wrapper: false
+
+      - id: google-auth
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.STAGING_GCP_RELAY_DEPLOY_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.STAGING_GCP_RELAY_DEPLOY_SERVICE_ACCOUNT }}
+          token_format: id_token
+          id_token_audience: https://relay-staging.onorca.dev/v1/admin/drain
+          id_token_include_email: true
+
+      - name: Bind the request to the checked-in staging C4 image
+        shell: bash
+        run: |
+          set -euo pipefail
+          terraform -chdir=infra/terraform init -reconfigure \
+            -backend-config=backend/staging.hcl -input=false
+          IMAGE="$(terraform -chdir=infra/terraform console \
+            -var-file=environments/staging.tfvars \
+            <<< 'var.relay_gce_cells["staging-gce-c4"].image' | jq -er '.')"
+          test "${IMAGE}" = \
+            "${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${REPOSITORY_ID}/${IMAGE_NAME}@${EXPECTED_IMAGE_DIGEST}"
+          echo "IMAGE=${IMAGE}" >> "${GITHUB_ENV}"
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - uses: ./.github/actions/cloud-sql-rollout-lease
+        with:
+          bucket: onorca-cloud-staging-terraform-state
+          object: terraform/state/cloud-sql-rollout/staging.lock
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Require the mirrored immutable image
+        run: |
+          DIGEST="$(gcloud artifacts docker images describe "${IMAGE}" \
+            --project "${GCP_PROJECT_ID}" --format='value(image_summary.digest)')"
+          test "${DIGEST}" = "${EXPECTED_IMAGE_DIGEST}"
+
+      - name: Deploy director blue/green
+        run: |
+          regional_version="$(gcloud secrets versions describe latest \
+            --project "${GCP_PROJECT_ID}" --secret "${REGIONAL_PLACEMENT_SECRET}" \
+            --format='value(name)' | awk -F/ '{print $NF}')"
+          [[ "${regional_version}" =~ ^[1-9][0-9]*$ ]]
+          RELEASE_ID="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${GITHUB_SHA:0:8}"
+          node dev/scripts/deploy-relay-blue-green.mjs \
+            --project "${GCP_PROJECT_ID}" \
+            --region "${GCP_REGION}" \
+            --service "${DIRECTOR_SERVICE_NAME}" \
+            --image "${IMAGE}" \
+            --role director \
+            --max-instances 2 \
+            --capacity-service-account "${CAPACITY_SERVICE_ACCOUNT}" \
+            --asia-proof-service-account "${ASIA_PROOF_SERVICE_ACCOUNT}" \
+            --regional-placement-secret-version "${regional_version}" \
+            --min-instances 0 \
+            --release-id "${RELEASE_ID}"
+
+      - name: Smoke director health
+        run: |
+          URL="$(gcloud run services describe "${DIRECTOR_SERVICE_NAME}" --project "${GCP_PROJECT_ID}" --region "${GCP_REGION}" --format='value(status.url)')"
+          node dev/scripts/smoke-relay.mjs "${URL}"

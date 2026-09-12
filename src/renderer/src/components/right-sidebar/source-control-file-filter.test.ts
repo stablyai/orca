@@ -6,7 +6,7 @@ import {
   getSourceControlFileFilterState,
   isSourceControlFileFilterQueryTooLarge,
   type SourceControlPathEntry
-} from './source-control-file-filter'
+} from './source-control/listing/file-filter'
 
 describe('source-control-file-filter', () => {
   it('normalizes bounded queries and filters entries by path', () => {

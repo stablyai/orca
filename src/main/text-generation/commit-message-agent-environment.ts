@@ -4,7 +4,9 @@ import { readShellStartupEnvVar } from '../pty/shell-startup-env'
 import { parseWslUncPath } from '../../shared/wsl-paths'
 
 export type CommitMessageAgentEnvironmentResolvers = {
-  prepareForCodexLaunch?: (target?: CommitMessageAgentRuntimeTarget) => string | null
+  prepareForCodexLaunch?: (
+    target?: CommitMessageAgentRuntimeTarget
+  ) => string | null | Promise<string | null>
   prepareForClaudeLaunch?: (
     target?: CommitMessageAgentRuntimeTarget
   ) => Promise<ClaudeRuntimeAuthPreparation>
@@ -25,6 +27,20 @@ function cloneProcessEnv(): Record<string, string> {
   return env
 }
 
+// Why: with system-default real-home routing, the headless Codex commit run
+// must use the user's own ~/.codex. If Orca itself was launched from a nested
+// Orca terminal it can inherit an Orca-owned CODEX_HOME override; strip only
+// that (CODEX_HOME matching the private ORCA_CODEX_HOME marker), preserving a
+// user-set CODEX_HOME.
+function cloneProcessEnvWithoutOrcaCodexHomeOverride(): Record<string, string> {
+  const env = cloneProcessEnv()
+  if (env.ORCA_CODEX_HOME && env.CODEX_HOME === env.ORCA_CODEX_HOME) {
+    delete env.CODEX_HOME
+  }
+  delete env.ORCA_CODEX_HOME
+  return env
+}
+
 function readInheritedOrShellEnvVar(name: string, sourceName?: string): string | undefined {
   return (
     (sourceName ? process.env[sourceName] : undefined) ??
@@ -39,7 +55,9 @@ function prepareShellConfigDirEnv(agentId: string): { ok: true; env?: NodeJS.Pro
       ? 'OPENCODE_CONFIG_DIR'
       : agentId === 'pi' || agentId === 'omp'
         ? 'PI_CODING_AGENT_DIR'
-        : null
+        : agentId === 'grok'
+          ? 'GROK_HOME'
+          : null
   if (!configVar) {
     return null
   }
@@ -72,6 +90,8 @@ export async function prepareLocalCommitMessageAgentEnv(
   resolvers: CommitMessageAgentEnvironmentResolvers | undefined,
   target?: CommitMessageAgentRuntimeTarget
 ): Promise<{ ok: true; env?: NodeJS.ProcessEnv } | { ok: false; error: string }> {
+  // Why: a non-null result short-circuits the resolvers below, so any agent added
+  // to prepareShellConfigDirEnv must not also need a Codex/Claude-style resolver.
   const shellConfigEnv = target?.runtime === 'wsl' ? null : prepareShellConfigDirEnv(agentId)
   if (shellConfigEnv) {
     return shellConfigEnv
@@ -82,15 +102,17 @@ export async function prepareLocalCommitMessageAgentEnv(
 
   try {
     if (agentId === 'codex' && resolvers.prepareForCodexLaunch) {
-      const codexHomePath = resolvers.prepareForCodexLaunch(target)
+      const codexHomePath = await resolvers.prepareForCodexLaunch(target)
       const wslCodexHome = codexHomePath ? parseWslUncPath(codexHomePath) : null
       if (target?.runtime === 'wsl') {
         const codexHomeForTarget = wslCodexHome?.linuxPath ?? null
+        // Why: the fallback must still strip Orca-owned overrides, or a
+        // system-default WSL run inherits the managed CODEX_HOME.
         return {
           ok: true,
           env: codexHomeForTarget
-            ? { ...cloneProcessEnv(), CODEX_HOME: codexHomeForTarget }
-            : undefined
+            ? { ...cloneProcessEnvWithoutOrcaCodexHomeOverride(), CODEX_HOME: codexHomeForTarget }
+            : cloneProcessEnvWithoutOrcaCodexHomeOverride()
         }
       }
       if (codexHomePath && wslCodexHome) {
@@ -100,7 +122,9 @@ export async function prepareLocalCommitMessageAgentEnv(
       }
       return {
         ok: true,
-        env: codexHomePath ? { ...cloneProcessEnv(), CODEX_HOME: codexHomePath } : undefined
+        env: codexHomePath
+          ? { ...cloneProcessEnv(), CODEX_HOME: codexHomePath }
+          : cloneProcessEnvWithoutOrcaCodexHomeOverride()
       }
     }
 

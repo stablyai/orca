@@ -1,5 +1,5 @@
 import type { RuntimeMobileSessionTabGroup } from '../../shared/runtime-types'
-import type { TabGroupLayoutNode } from '../../shared/types'
+import type { TabGroupLayoutNode } from '../../shared/tab-types'
 
 /**
  * Headless ("Orca server") tab-GROUP split operations (distinct from terminal

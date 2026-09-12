@@ -1,7 +1,9 @@
 import { parseAuthenticatedFrame, parseReadyFrame } from './remote-runtime-request-frames'
 import type { RemoteRuntimeClientError } from './remote-runtime-client-error'
+import type { RuntimeCapability } from './protocol-version'
 import { dispatchSharedControlFrame } from './remote-runtime-shared-control-frame-dispatch'
 import { parseSharedControlFrame } from './remote-runtime-shared-control-protocol'
+import type { SharedControlRetiredRequestIds } from './remote-runtime-shared-control-retired-request-ids'
 import { resolveSharedControlReadyWaiters } from './remote-runtime-shared-control-state'
 import type {
   SharedControlConnectionState,
@@ -15,9 +17,11 @@ export function handleSharedControlTextFrame(args: {
   state: SharedControlConnectionState
   sharedKey: Uint8Array | null
   deviceToken: string
+  clientCapabilities: readonly RuntimeCapability[]
   environmentId?: string
   pendingRequests: Map<string, SharedControlPendingRequest<unknown>>
   subscriptions: Map<string, SharedControlLogicalSubscription<unknown>>
+  retiredRequestIds: SharedControlRetiredRequestIds
   readyWaiters: SharedControlReadyWaiter[]
   setState: (state: SharedControlConnectionState) => void
   handleSocketClosed: (error: RemoteRuntimeClientError) => void
@@ -32,7 +36,11 @@ export function handleSharedControlTextFrame(args: {
       return
     }
     args.setState('awaiting_authenticated')
-    args.sendEncrypted({ type: 'e2ee_auth', deviceToken: args.deviceToken })
+    args.sendEncrypted({
+      type: 'e2ee_auth',
+      deviceToken: args.deviceToken,
+      clientCapabilities: args.clientCapabilities
+    })
     return
   }
 
@@ -60,6 +68,7 @@ export function handleSharedControlTextFrame(args: {
     frame: parsed.frame,
     pendingRequests: args.pendingRequests,
     subscriptions: args.subscriptions,
+    retiredRequestIds: args.retiredRequestIds,
     deviceToken: args.deviceToken,
     send: args.sendEncrypted
   })

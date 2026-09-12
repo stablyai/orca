@@ -104,5 +104,7 @@ describe('feature tips', () => {
 
     expect(voiceTip?.eyebrow).toBe('Tip')
     expect(voiceTip?.priority).toBe('unseen')
+    expect(voiceTip?.title).toBe('Dictate into any pane')
+    expect(voiceTip?.ctaLabel).toBe('Set up voice dictation')
   })
 })

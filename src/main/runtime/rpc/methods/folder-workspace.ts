@@ -1,72 +1,13 @@
-import { z } from 'zod'
-import { defineMethod, type RpcMethod } from '../core'
-import { OptionalFiniteNumber, OptionalString, requiredString } from '../schemas'
-import { isTuiAgent } from '../../../../shared/tui-agent-config'
+import { defineMethod } from '../core'
+import { resolveRpcWorkspaceCreatorProvenance } from '../workspace-creator-context'
+import {
+  FolderWorkspaceCreate,
+  FolderWorkspacePathStatus,
+  FolderWorkspaceSelector,
+  FolderWorkspaceUpdate
+} from '../../../../shared/rpc-contract/folder-workspace-params'
 
-const FolderWorkspaceLinkedTask = z
-  .object({
-    provider: z.enum(['github', 'gitlab', 'linear', 'jira']),
-    type: z.enum(['issue', 'pr', 'mr']),
-    number: z.number().finite(),
-    title: requiredString('Missing linked task title'),
-    url: requiredString('Missing linked task URL'),
-    linearIdentifier: OptionalString,
-    jiraIdentifier: OptionalString,
-    repoId: OptionalString
-  })
-  .nullable()
-
-const FolderWorkspaceCreate = z.object({
-  projectGroupId: requiredString('Missing project group id'),
-  name: OptionalString,
-  folderPath: OptionalString.nullable().optional(),
-  connectionId: OptionalString.nullable().optional(),
-  linkedTask: FolderWorkspaceLinkedTask.optional(),
-  createdWithAgent: z.string().refine(isTuiAgent).optional(),
-  pendingFirstAgentMessageRename: z.boolean().optional()
-})
-
-const FolderWorkspaceUpdate = z.object({
-  folderWorkspaceId: requiredString('Missing folder workspace id'),
-  updates: z.object({
-    name: OptionalString,
-    folderPath: OptionalString,
-    linkedTask: FolderWorkspaceLinkedTask.optional(),
-    comment: z.string().optional(),
-    isArchived: z.boolean().optional(),
-    isUnread: z.boolean().optional(),
-    isPinned: z.boolean().optional(),
-    sortOrder: OptionalFiniteNumber,
-    manualOrder: OptionalFiniteNumber,
-    workspaceStatus: OptionalString,
-    createdWithAgent: z.string().refine(isTuiAgent).optional(),
-    pendingFirstAgentMessageRename: z.boolean().optional(),
-    firstAgentMessageRenameError: z.string().nullable().optional(),
-    lastActivityAt: OptionalFiniteNumber
-  })
-})
-
-const FolderWorkspaceSelector = z.object({
-  folderWorkspaceId: requiredString('Missing folder workspace id')
-})
-
-const FolderWorkspacePathStatus = z.discriminatedUnion('scope', [
-  z.object({
-    scope: z.literal('folder-workspace'),
-    folderWorkspaceId: requiredString('Missing folder workspace id')
-  }),
-  z.object({
-    scope: z.literal('project-group'),
-    projectGroupId: requiredString('Missing project group id')
-  }),
-  z.object({
-    scope: z.literal('path'),
-    path: requiredString('Missing folder path'),
-    connectionId: OptionalString.nullable().optional()
-  })
-])
-
-export const FOLDER_WORKSPACE_METHODS: RpcMethod[] = [
+export const FOLDER_WORKSPACE_METHODS = [
   defineMethod({
     name: 'folderWorkspace.list',
     params: null,
@@ -77,8 +18,11 @@ export const FOLDER_WORKSPACE_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'folderWorkspace.create',
     params: FolderWorkspaceCreate,
-    handler: async (params, { runtime }) => ({
-      folderWorkspace: await runtime.createFolderWorkspace(params)
+    handler: async (params, context) => ({
+      folderWorkspace: await context.runtime.createFolderWorkspace({
+        ...params,
+        creatorProvenance: resolveRpcWorkspaceCreatorProvenance(context)
+      })
     })
   }),
   defineMethod({

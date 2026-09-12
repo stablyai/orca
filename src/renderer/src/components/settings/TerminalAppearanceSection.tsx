@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import type { GlobalSettings } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import {
   matchesSettingsSearch,
   normalizeSettingsSearchQuery,
@@ -21,9 +21,8 @@ import {
   getTerminalWindowSearchEntries
 } from './terminal-search'
 import { Button } from '../ui/button'
-import { SettingsRow, SettingsSubsectionHeader } from './SettingsFormControls'
+import { SettingsRow, SettingsSubsectionHeader, FontAutocomplete } from './SettingsFormControls'
 import { SearchableSetting } from './SearchableSetting'
-import { FontAutocomplete } from './SettingsFormControls'
 import { TerminalFontSizeSetting } from './TerminalFontSizeSetting'
 import { TerminalAdvancedTypographyControls } from './TerminalAdvancedTypographyControls'
 import { TerminalThemeCatalogSection } from './TerminalThemeSections'
@@ -35,7 +34,7 @@ import { GhosttyImportModal } from './GhosttyImportModal'
 import type { UseGhosttyImportReturn } from './useGhosttyImport'
 import { WarpThemeImportModal } from './WarpThemeImportModal'
 import type { UseWarpThemeImportReturn } from './useWarpThemeImport'
-import { isWebClientLocation } from '@/hooks/useSettingsNavigationMetadata'
+import { isWebClientLocation } from '@/lib/web-client-location'
 import ghosttyIcon from '../../../../../resources/ghostty.svg'
 import { translate } from '@/i18n/i18n'
 
@@ -84,7 +83,7 @@ export function TerminalAppearanceSection({
   const isSearching = normalizeSettingsSearchQuery(searchQuery).length > 0
   const [themeSearch, setThemeSearch] = useState('')
   const [previewFontFamily, setPreviewFontFamily] = useState<string | null>(null)
-  const showWarpThemeImport = !isWebClientLocation()
+  const showDesktopThemeImports = !isWebClientLocation()
   const darkThemeSearchEntries = getTerminalDarkThemeSearchEntries()
   const lightThemeSearchEntries = getTerminalLightThemeSearchEntries()
   const terminalTypographyEntries = getTerminalTypographySearchEntries()
@@ -93,7 +92,7 @@ export function TerminalAppearanceSection({
     ...getTerminalThemeTargetSearchEntries(),
     ...darkThemeSearchEntries,
     ...lightThemeSearchEntries,
-    ...(showWarpThemeImport
+    ...(showDesktopThemeImports
       ? [...getTerminalWarpImportSearchEntries(), ...getTerminalYamlImportSearchEntries()]
       : [])
   ]
@@ -117,14 +116,16 @@ export function TerminalAppearanceSection({
     searchQuery,
     terminalTypographyEntries.slice(0, 2)
   )
-  const ghosttyImportMatches = matchesSettingsSearch(searchQuery, ghosttyImportEntries)
+  const ghosttyImportMatches =
+    showDesktopThemeImports && matchesSettingsSearch(searchQuery, ghosttyImportEntries)
   const showPrimaryTypography =
     !isSearching ||
     forceVisiblePrimary ||
     primaryTypographyMatches ||
     typographyMatches ||
     ghosttyImportMatches
-  const showGhosttyImport = !isSearching || forceVisiblePrimary || ghosttyImportMatches
+  const showGhosttyImport =
+    showDesktopThemeImports && (!isSearching || forceVisiblePrimary || ghosttyImportMatches)
   const showTypographyAdvancedDisclosure = !isSearching || typographyMatches
 
   const advancedGroups = [
@@ -260,36 +261,38 @@ export function TerminalAppearanceSection({
           previewFontFamily={previewFontFamily}
           importedHighlightSignal={warpThemes.importSignal}
           warpThemes={warpThemes}
-          showThemeImport={showWarpThemeImport}
+          showThemeImport={showDesktopThemeImports}
           preferredTarget={preferredThemeTarget}
           advancedContent={previewAdvancedContent}
         />
       ) : null}
 
-      <GhosttyImportModal
-        open={ghostty.open}
-        onOpenChange={ghostty.handleOpenChange}
-        preview={ghostty.preview}
-        loading={ghostty.loading}
-        onApply={ghostty.handleApply}
-        applied={ghostty.applied}
-        applyError={ghostty.applyError}
-      />
-      {showWarpThemeImport ? (
-        <WarpThemeImportModal
-          open={warpThemes.open}
-          mode={warpThemes.mode}
-          preview={warpThemes.preview}
-          loading={warpThemes.loading}
-          desktopOnly={warpThemes.desktopOnly}
-          applyError={warpThemes.applyError}
-          selectedThemeIds={warpThemes.selectedThemeIds}
-          handlePreviewSource={warpThemes.handlePreviewSource}
-          handleToggleTheme={warpThemes.handleToggleTheme}
-          handleToggleAll={warpThemes.handleToggleAll}
-          handleApply={warpThemes.handleApply}
-          handleOpenChange={warpThemes.handleOpenChange}
-        />
+      {showDesktopThemeImports ? (
+        <>
+          <GhosttyImportModal
+            open={ghostty.open}
+            onOpenChange={ghostty.handleOpenChange}
+            preview={ghostty.preview}
+            loading={ghostty.loading}
+            onApply={ghostty.handleApply}
+            applied={ghostty.applied}
+            applyError={ghostty.applyError}
+          />
+          <WarpThemeImportModal
+            open={warpThemes.open}
+            mode={warpThemes.mode}
+            preview={warpThemes.preview}
+            loading={warpThemes.loading}
+            desktopOnly={warpThemes.desktopOnly}
+            applyError={warpThemes.applyError}
+            selectedThemeIds={warpThemes.selectedThemeIds}
+            handlePreviewSource={warpThemes.handlePreviewSource}
+            handleToggleTheme={warpThemes.handleToggleTheme}
+            handleToggleAll={warpThemes.handleToggleAll}
+            handleApply={warpThemes.handleApply}
+            handleOpenChange={warpThemes.handleOpenChange}
+          />
+        </>
       ) : null}
     </div>
   )

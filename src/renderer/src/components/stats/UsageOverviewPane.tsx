@@ -5,12 +5,8 @@ import { Badge } from '../ui/badge'
 import { Button } from '../ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
 import { StatCard } from './StatCard'
-import {
-  buildUsageOverview,
-  formatUsageCost,
-  formatUsageTokens,
-  getRecentUsageDays
-} from './usage-overview-model'
+import { getRecentUsageDays } from './usage-overview-daily-series'
+import { buildUsageOverview, formatUsageCost, formatUsageTokens } from './usage-overview-model'
 import { DailyIntensityGrid, ProviderUsageRow, TokenMixBar } from './usage-overview-sections'
 import { translate } from '@/i18n/i18n'
 
@@ -253,7 +249,7 @@ export function UsageOverviewPane(): React.JSX.Element {
             </h4>
             <p className="text-xs text-muted-foreground">
               {overview.enabledProviderCount}{' '}
-              {translate('auto.components.stats.UsageOverviewPane.ecb0cd8a4c', 'enabled -')}
+              {translate('auto.components.stats.UsageOverviewPane.ecb0cd8a4c', 'enabled -')}{' '}
               {overview.dataProviderCount}{' '}
               {translate('auto.components.stats.UsageOverviewPane.444585cb41', 'with data')}
             </p>

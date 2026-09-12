@@ -1,5 +1,5 @@
 import { Plus } from 'lucide-react'
-import type { BrowserSessionProfile } from '../../../../shared/types'
+import type { BrowserSessionProfile } from '../../../../shared/browser-workspace-types'
 import { Button } from '../ui/button'
 import { Label } from '../ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select'
@@ -72,7 +72,7 @@ export function BrowserSessionCookiesSection({
             {translate(
               'auto.components.settings.BrowserPane.cd47bc9622',
               'Select a default profile for new browser tabs. Import cookies and switch profiles per-tab via the'
-            )}
+            )}{' '}
             <strong>···</strong>{' '}
             {translate('auto.components.settings.BrowserPane.e4aaf8051b', 'toolbar menu.')}
           </p>

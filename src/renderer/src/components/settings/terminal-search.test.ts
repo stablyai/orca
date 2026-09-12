@@ -156,14 +156,17 @@ describe('getTerminalPaneSearchEntries', () => {
     expect(matchesSettingsSearch(query, getAppearancePaneSearchEntries())).toBe(true)
   })
 
-  it('omits the Warp import appearance entry when desktop-only controls are hidden', () => {
-    const desktopEntries = getAppearancePaneSearchEntries({ showWarpImport: true })
-    const webEntries = getAppearancePaneSearchEntries({ showWarpImport: false })
+  it.each(['ghostty', 'warp', 'yaml'])(
+    'omits desktop-only %s search results on web clients',
+    (query) => {
+      const desktopEntries = getAppearancePaneSearchEntries()
+      const webEntries = getAppearancePaneSearchEntries({ showDesktopThemeImports: false })
 
-    expect(desktopEntries.some((entry) => entry.title === 'Import from Warp')).toBe(true)
-    expect(webEntries.some((entry) => entry.title === 'Import from Warp')).toBe(false)
-    expect(webEntries.some((entry) => entry.title === 'Import from Ghostty')).toBe(true)
-  })
+      expect(matchesSettingsSearch(query, desktopEntries)).toBe(true)
+      expect(matchesSettingsSearch(query, webEntries)).toBe(false)
+      expect(matchesSettingsSearch('font size', webEntries)).toBe(true)
+    }
+  )
 
   it('includes the system tray appearance entry only when desktop tray controls are shown', () => {
     const desktopEntries = getAppearancePaneSearchEntries({ showSystemTray: true })
@@ -217,6 +220,21 @@ describe('getTerminalPaneSearchEntries', () => {
   it('matches the Appearance catalog for compact workspace card searches', () => {
     expect(matchesSettingsSearch('compact', getAppearancePaneSearchEntries())).toBe(true)
   })
+
+  // The notice tells users to "turn it off in Terminal settings", so the product names in
+  // the copy have to be the ones that find it.
+  it.each(['zellij', 'grok', 'tmux', 'osc 52'])(
+    'finds the OSC 52 clipboard setting by searching %s',
+    (query) => {
+      const entries = getTerminalPaneSearchEntries({ isWindows: false, isMac: true })
+      const osc52 = entries.filter((entry) =>
+        entry.title.includes('Allow TUI Clipboard Writes (OSC 52)')
+      )
+
+      expect(osc52).toHaveLength(1)
+      expect(matchesSettingsSearch(query, osc52)).toBe(true)
+    }
+  )
 
   it('includes pinned worktree duplicate display in sidebar and Appearance search', () => {
     const entry = getShowPinnedWorktreesInGroupsEntry()

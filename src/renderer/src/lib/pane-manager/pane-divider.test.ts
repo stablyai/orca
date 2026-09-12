@@ -212,6 +212,79 @@ describe('disposeDivider', () => {
     expect(windowListeners.has('pointerup')).toBe(false)
   })
 
+  it('continues a resize when motion arrives from a different primary pointer (WSLg pen relay)', () => {
+    const dividerListeners = new Map<string, EventListener>()
+    const windowListeners = new Map<string, EventListener>()
+    const capturedPointerIds = new Set<number>()
+    const previousPane = createSizedPaneElement({ width: 100, height: 200 })
+    const nextPane = createSizedPaneElement({ width: 300, height: 200 })
+    const divider = {
+      style: {
+        setProperty: vi.fn()
+      },
+      classList: {
+        add: vi.fn(),
+        remove: vi.fn()
+      },
+      addEventListener: vi.fn((event: string, listener: EventListener) => {
+        dividerListeners.set(event, listener)
+      }),
+      removeEventListener: vi.fn((event: string, listener: EventListener) => {
+        if (dividerListeners.get(event) === listener) {
+          dividerListeners.delete(event)
+        }
+      }),
+      setPointerCapture: vi.fn((pointerId: number) => {
+        capturedPointerIds.add(pointerId)
+      }),
+      hasPointerCapture: vi.fn((pointerId: number) => capturedPointerIds.has(pointerId)),
+      releasePointerCapture: vi.fn((pointerId: number) => {
+        capturedPointerIds.delete(pointerId)
+      }),
+      previousElementSibling: previousPane,
+      nextElementSibling: nextPane
+    } as unknown as HTMLElement
+    const refitPanesUnder = vi.fn()
+    const onLayoutChanged = vi.fn()
+    vi.stubGlobal('document', {
+      createElement: vi.fn(() => divider)
+    })
+    vi.stubGlobal('window', {
+      addEventListener: vi.fn((event: string, listener: EventListener) => {
+        windowListeners.set(event, listener)
+      }),
+      removeEventListener: vi.fn((event: string, listener: EventListener) => {
+        if (windowListeners.get(event) === listener) {
+          windowListeners.delete(event)
+        }
+      })
+    })
+    vi.stubGlobal(
+      'requestAnimationFrame',
+      vi.fn(() => 7)
+    )
+    vi.stubGlobal('cancelAnimationFrame', vi.fn())
+
+    createDivider(true, {}, { refitPanesUnder, onLayoutChanged })
+    // WSLg's RDP relay presses/releases as `mouse` but streams motion as a
+    // `pen` pointer with a different pointerId; both are the primary pointer.
+    dividerListeners.get('pointerdown')?.(
+      createPointerEvent({ pointerId: 1, pointerType: 'mouse', isPrimary: true, clientX: 100 })
+    )
+    windowListeners.get('pointermove')?.(
+      createPointerEvent({ pointerId: 19, pointerType: 'pen', isPrimary: true, clientX: 180 })
+    )
+    windowListeners.get('pointerup')?.(
+      createPointerEvent({ pointerId: 1, pointerType: 'mouse', isPrimary: true, clientX: 180 })
+    )
+
+    expect(previousPane.style.flex).toBe('180 1 0%')
+    expect(nextPane.style.flex).toBe('220 1 0%')
+    expect(onLayoutChanged).toHaveBeenCalledTimes(1)
+    expect(divider.classList.remove).toHaveBeenCalledWith('is-dragging')
+    expect(windowListeners.has('pointermove')).toBe(false)
+  })
+
   it('keeps flex bases nonnegative when panes are smaller than combined minimums', () => {
     const dividerListeners = new Map<string, EventListener>()
     const windowListeners = new Map<string, EventListener>()

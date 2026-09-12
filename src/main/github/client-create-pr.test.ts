@@ -57,10 +57,19 @@ vi.mock('../git/runner', () => ({
 }))
 
 vi.mock('./github-enterprise-repository', () => ({
-  getEnterpriseGitHubRepoSlug: getEnterpriseGitHubRepoSlugMock
+  getEnterpriseGitHubRepoSlug: getEnterpriseGitHubRepoSlugMock,
+  isGitHubHostAuthenticated: vi.fn().mockResolvedValue(true)
 }))
 
 import { createGitHubPullRequest } from './client'
+
+import { _resetOriginGitHubApiRepositoryCache } from './github-api-repository'
+
+// The origin-repository cache is module-level state; reset it so slugs
+// resolved by one test cannot leak into the next.
+beforeEach(() => {
+  _resetOriginGitHubApiRepositoryCache()
+})
 
 describe('createGitHubPullRequest', () => {
   beforeEach(() => {
@@ -93,14 +102,18 @@ describe('createGitHubPullRequest', () => {
     })
 
     await expect(
-      createGitHubPullRequest('/repo-root', {
-        provider: 'github',
-        base: 'origin/main',
-        head: 'refs/heads/feature/create-pr',
-        title: '  Create PR UI  ',
-        body: 'Body text',
-        draft: true
-      })
+      createGitHubPullRequest(
+        '/repo-root',
+        {
+          provider: 'github',
+          base: 'origin/main',
+          head: 'refs/heads/feature/create-pr',
+          title: '  Create PR UI  ',
+          body: 'Body text',
+          draft: true
+        },
+        'local'
+      )
     ).resolves.toEqual({
       ok: true,
       number: 42,
@@ -150,12 +163,16 @@ describe('createGitHubPullRequest', () => {
     })
 
     await expect(
-      createGitHubPullRequest('/repo-root', {
-        provider: 'github',
-        base: 'main',
-        head: 'my-branch',
-        title: 'Fork PR'
-      })
+      createGitHubPullRequest(
+        '/repo-root',
+        {
+          provider: 'github',
+          base: 'main',
+          head: 'my-branch',
+          title: 'Fork PR'
+        },
+        'local'
+      )
     ).resolves.toEqual({
       ok: true,
       number: 5,
@@ -167,7 +184,7 @@ describe('createGitHubPullRequest', () => {
     expect(args[args.indexOf('--head') + 1]).toBe('my-branch')
   })
 
-  it('host-qualifies --repo for a GHES remote so gh targets the Enterprise server (#8312)', async () => {
+  it('routes --repo to the Enterprise server via options.host for a GHES remote (#8312)', async () => {
     // github.com-only slug parsing misses GHES, so creation comes from the
     // enterprise resolver, which carries the host.
     getOwnerRepoMock.mockResolvedValueOnce(null)
@@ -182,25 +199,30 @@ describe('createGitHubPullRequest', () => {
     })
 
     await expect(
-      createGitHubPullRequest('/repo-root', {
-        provider: 'github',
-        base: 'main',
-        head: 'feature/create-pr',
-        title: 'GHES PR'
-      })
+      createGitHubPullRequest(
+        '/repo-root',
+        {
+          provider: 'github',
+          base: 'main',
+          head: 'feature/create-pr',
+          title: 'GHES PR'
+        },
+        'local'
+      )
     ).resolves.toEqual({
       ok: true,
       number: 7,
       url: 'https://github.acme-corp.com/team/orca/pull/7'
     })
 
-    const [args] = ghExecFileAsyncMock.mock.calls[0]
-    // Bare "team/orca" would resolve against gh's default host (github.com);
-    // the host prefix pins the command to the Enterprise server.
-    expect(args[args.indexOf('--repo') + 1]).toBe('github.acme-corp.com/team/orca')
+    const [args, options] = ghExecFileAsyncMock.mock.calls[0]
+    // The runner host-qualifies argv at spawn time from options.host, so the
+    // mocked call sees a bare owner/repo plus the host in exec options.
+    expect(args[args.indexOf('--repo') + 1]).toBe('team/orca')
+    expect(options).toMatchObject({ host: 'github.acme-corp.com' })
   })
 
-  it('host-qualifies --repo for the GHES existing-PR fallback lookup (#8312)', async () => {
+  it('routes the GHES existing-PR fallback lookup through options.host (#8312)', async () => {
     getOwnerRepoMock.mockResolvedValue(null)
     getEnterpriseGitHubRepoSlugMock.mockResolvedValue({
       owner: 'team',
@@ -222,21 +244,26 @@ describe('createGitHubPullRequest', () => {
       })
 
     await expect(
-      createGitHubPullRequest('/repo-root', {
-        provider: 'github',
-        base: 'main',
-        head: 'feature/create-pr',
-        title: 'GHES PR'
-      })
+      createGitHubPullRequest(
+        '/repo-root',
+        {
+          provider: 'github',
+          base: 'main',
+          head: 'feature/create-pr',
+          title: 'GHES PR'
+        },
+        'local'
+      )
     ).resolves.toMatchObject({
       ok: false,
       code: 'already_exists',
       existingReview: { number: 9, url: 'https://github.acme-corp.com/team/orca/pull/9' }
     })
 
-    const [listArgs] = ghExecFileAsyncMock.mock.calls[1]
+    const [listArgs, listOptions] = ghExecFileAsyncMock.mock.calls[1]
     expect(listArgs).toEqual(expect.arrayContaining(['pr', 'list']))
-    expect(listArgs[listArgs.indexOf('--repo') + 1]).toBe('github.acme-corp.com/team/orca')
+    expect(listArgs[listArgs.indexOf('--repo') + 1]).toBe('team/orca')
+    expect(listOptions).toMatchObject({ host: 'github.acme-corp.com' })
   })
 
   it('runs local WSL project pull request creation through the selected distro', async () => {
@@ -257,7 +284,7 @@ describe('createGitHubPullRequest', () => {
           head: 'feature/wsl-create-pr',
           title: 'WSL Create PR'
         },
-        null,
+        'local',
         { localGitExecOptions: { wslDistro: 'Ubuntu' } }
       )
     ).resolves.toEqual({
@@ -293,7 +320,7 @@ describe('createGitHubPullRequest', () => {
           head: 'feature/ssh-create-pr',
           title: 'SSH Create PR'
         },
-        'ssh-1'
+        'ssh:ssh-1'
       )
     ).resolves.toEqual({
       ok: true,
@@ -301,7 +328,12 @@ describe('createGitHubPullRequest', () => {
       url: 'https://github.com/acme/widgets/pull/45'
     })
 
-    expect(getOwnerRepoForRemoteMock).toHaveBeenCalledWith('/remote/repo-root', 'origin', 'ssh-1')
+    expect(getOwnerRepoForRemoteMock).toHaveBeenCalledWith(
+      '/remote/repo-root',
+      'origin',
+      'ssh-1',
+      {}
+    )
     const [args, options] = ghExecFileAsyncMock.mock.calls[0]
     expect(args).toEqual(
       expect.arrayContaining([
@@ -377,7 +409,7 @@ describe('createGitHubPullRequest', () => {
             body: '',
             useTemplate: true
           },
-          'ssh-1'
+          'ssh:ssh-1'
         )
       ).resolves.toEqual({
         ok: true,
@@ -399,12 +431,16 @@ describe('createGitHubPullRequest', () => {
     })
 
     await expect(
-      createGitHubPullRequest('/repo-root', {
-        provider: 'github',
-        base: 'main',
-        head: 'feature/url-output',
-        title: 'URL output'
-      })
+      createGitHubPullRequest(
+        '/repo-root',
+        {
+          provider: 'github',
+          base: 'main',
+          head: 'feature/url-output',
+          title: 'URL output'
+        },
+        'local'
+      )
     ).resolves.toEqual({
       ok: true,
       number: 43,
@@ -426,12 +462,16 @@ describe('createGitHubPullRequest', () => {
       })
 
     await expect(
-      createGitHubPullRequest('/repo-root', {
-        provider: 'github',
-        base: 'main',
-        head: 'refs/remotes/origin/feature/existing',
-        title: 'Existing'
-      })
+      createGitHubPullRequest(
+        '/repo-root',
+        {
+          provider: 'github',
+          base: 'main',
+          head: 'refs/remotes/origin/feature/existing',
+          title: 'Existing'
+        },
+        'local'
+      )
     ).resolves.toEqual({
       ok: false,
       code: 'already_exists',
@@ -459,7 +499,9 @@ describe('createGitHubPullRequest', () => {
         '--json',
         'number,url'
       ],
-      { cwd: '/repo-root' }
+      // Why: dotcom slugs resolve with host:'github.com' so creation stays
+      // pinned against a process-level GH_HOST.
+      { cwd: '/repo-root', host: 'github.com' }
     ])
   })
 
@@ -467,12 +509,16 @@ describe('createGitHubPullRequest', () => {
     getOwnerRepoMock.mockResolvedValueOnce({ owner: 'acme', repo: 'widgets' })
 
     await expect(
-      createGitHubPullRequest('/repo-root', {
-        provider: 'github',
-        base: 'refs/heads/feature',
-        head: 'feature',
-        title: 'Feature'
-      })
+      createGitHubPullRequest(
+        '/repo-root',
+        {
+          provider: 'github',
+          base: 'refs/heads/feature',
+          head: 'feature',
+          title: 'Feature'
+        },
+        'local'
+      )
     ).resolves.toEqual({
       ok: false,
       code: 'validation',

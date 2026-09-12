@@ -1,6 +1,208 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { NativeChatBlock } from './native-chat-types'
-import { briefToolArg, summarizeToolInput, summarizeToolRun } from './native-chat-tool-summary'
+import {
+  briefToolArg,
+  createToolInputDisplay,
+  describeToolInput,
+  formatToolInput,
+  isStructuredToolInput,
+  MAX_TOOL_DETAIL_LENGTH,
+  summarizeToolInput,
+  summarizeToolRun,
+  toolRunSummaryMembers,
+  toolFilePath,
+  truncateToolDetail
+} from './native-chat-tool-summary'
+
+describe('createToolInputDisplay', () => {
+  it('builds the shared row model from one JSON-string parse', () => {
+    const parse = vi.spyOn(JSON, 'parse')
+    const display = createToolInputDisplay(
+      '{"file_path":"src/index.ts","description":"Read the entry point"}'
+    )
+
+    expect(display.label).toBe('src/index.ts')
+    expect(display.filePath).toBe('src/index.ts')
+    expect(display.hasDetail).toBe(true)
+    expect(display.formatDetail()).toBe(
+      '{\n  "file_path": "src/index.ts",\n  "description": "Read the entry point"\n}'
+    )
+    expect(parse).toHaveBeenCalledTimes(1)
+    parse.mockRestore()
+  })
+
+  it('only offers detail when the formatted input adds information', () => {
+    expect(createToolInputDisplay('x'.repeat(60)).hasDetail).toBe(false)
+    expect(createToolInputDisplay('x'.repeat(100)).hasDetail).toBe(true)
+    expect(createToolInputDisplay('{}').hasDetail).toBe(false)
+    expect(createToolInputDisplay('{"command":"ls"}').hasDetail).toBe(true)
+  })
+
+  it('bounds tool detail through the shared desktop and mobile cap', () => {
+    const detail = truncateToolDetail('x'.repeat(MAX_TOOL_DETAIL_LENGTH + 1))
+    expect(detail).toHaveLength(MAX_TOOL_DETAIL_LENGTH + 1)
+    expect(detail.endsWith('…')).toBe(true)
+  })
+})
+
+describe('describeToolInput', () => {
+  it('labels a file-target call with its path, not raw JSON', () => {
+    expect(describeToolInput({ file_path: '/repo/src/app/Main.tsx', offset: 10 })).toBe(
+      '/repo/src/app/Main.tsx'
+    )
+    expect(describeToolInput({ path: 'src/index.ts' })).toBe('src/index.ts')
+    expect(describeToolInput({ file_path: 'C:\\Users\\me\\project\\app.tsx' })).toBe(
+      'C:\\Users\\me\\project\\app.tsx'
+    )
+  })
+
+  it('labels a command-shaped call with its primary argument', () => {
+    expect(describeToolInput({ command: 'pnpm test', description: 'Run tests' })).toBe('pnpm test')
+    expect(describeToolInput({ pattern: 'foo.*bar', glob: '*.ts' })).toBe('foo.*bar')
+    expect(describeToolInput({ url: 'https://example.com', description: 'Fetch it' })).toBe(
+      'https://example.com'
+    )
+    expect(describeToolInput({ description: 'Only prose' })).toBe('Only prose')
+  })
+
+  it('falls back to the bounded JSON preview for other shapes', () => {
+    expect(describeToolInput({ todos: [{ id: 1 }] })).toBe(
+      summarizeToolInput({ todos: [{ id: 1 }] })
+    )
+    expect(describeToolInput({ command: '   ' })).toBe(summarizeToolInput({ command: '   ' }))
+    expect(describeToolInput('raw string input')).toBe('raw string input')
+    expect(describeToolInput(null)).toBe('')
+  })
+
+  it('truncates an overlong path like any other preview', () => {
+    const path = `/very/${'long/'.repeat(30)}file.ts`
+    const label = describeToolInput({ file_path: path })
+    expect(label.length).toBeLessThanOrEqual(80)
+    expect(label).toContain('…')
+    // A bounded JSON preview also satisfies the two assertions above, so pin the
+    // label to the path itself or this passes with path-labelling deleted.
+    expect(label).not.toContain('file_path')
+    expect(label.endsWith('/file.ts')).toBe(true)
+  })
+
+  it('keeps the filename when trimming an overlong path', () => {
+    // Head-truncating an absolute path drops the basename — the one part that
+    // tells two rows apart — so the trim has to come off the front.
+    const path = `/Users/me/orca/workspaces/orca/sta-3333/src/shared/${'nested/'.repeat(4)}app.tsx`
+    const label = describeToolInput({ file_path: path, offset: 10 })
+    expect(label.length).toBeLessThanOrEqual(80)
+    expect(label.startsWith('…')).toBe(true)
+    expect(label.endsWith('/app.tsx')).toBe(true)
+  })
+
+  it('distinguishes two long paths that share a deep prefix', () => {
+    const base = '/Users/me/orca/workspaces/orca/sta-3333-tool-summary/src/session/native'
+    const a = describeToolInput({ file_path: `${base}/MobileNativeChatMessage.tsx` })
+    const b = describeToolInput({ file_path: `${base}/MobileNativeChatComposer.tsx` })
+    expect(a).not.toBe(b)
+  })
+
+  it('names a search call by its pattern, not the directory it scanned', () => {
+    // `path` on a Grep/Glob is the scan root; labelling with it loses the term.
+    expect(describeToolInput({ pattern: 'summarizeToolInput', path: 'src/shared' })).toBe(
+      'summarizeToolInput'
+    )
+    expect(describeToolInput({ pattern: '**/*.tsx', path: 'mobile/src' })).toBe('**/*.tsx')
+    expect(describeToolInput({ query: 'auth flow', path: 'src' })).toBe('auth flow')
+    // ...and offers no open-file link, since that path is a folder.
+    expect(toolFilePath({ pattern: 'x', path: 'src/shared' })).toBeNull()
+    expect(briefToolArg({ pattern: 'x', path: 'src/shared' })).toBe('x')
+  })
+
+  it('still treats an explicit file target as one alongside a search term', () => {
+    expect(toolFilePath({ pattern: 'x', file_path: 'src/a.ts' })).toBe('src/a.ts')
+    expect(toolFilePath({ path: 'src/c.ts' })).toBe('src/c.ts')
+  })
+
+  it('does not count a blank search key as a search', () => {
+    // A whitespace-only `query` is no search term, but treating it as one
+    // suppresses `path` — costing the row its label, its link and its header
+    // argument all at once, and putting raw JSON back in the label.
+    expect(toolFilePath({ query: '   ', path: 'src/a.ts' })).toBe('src/a.ts')
+    expect(describeToolInput({ query: '   ', path: 'src/a.ts' })).toBe('src/a.ts')
+    expect(briefToolArg({ query: '   ', path: 'src/a.ts' })).toBe('a.ts')
+  })
+
+  it('skips a present-but-blank key instead of falling through to raw JSON', () => {
+    expect(describeToolInput({ command: '', query: 'needle' })).toBe('needle')
+    expect(describeToolInput({ command: '   ', url: 'https://example.com' })).toBe(
+      'https://example.com'
+    )
+    expect(briefToolArg({ cmd: '', query: 'needle' })).toBe('needle')
+    // Inverted, so the skip is still exercised now that the search keys rank first.
+    expect(describeToolInput({ query: '', command: 'git status' })).toBe('git status')
+    expect(briefToolArg({ pattern: '   ', cmd: 'git status' })).toBe('git status')
+  })
+
+  it('labels a classified search row by its term, not the command that ran it', () => {
+    // Codex `commandActions` rows are the only input carrying both keys: the
+    // search term identifies the row, the raw command stays for the detail view.
+    const search = { command: 'rg -n --no-heading beta .', cwd: '/repo', query: 'beta', path: '.' }
+
+    expect(describeToolInput(search)).toBe('beta')
+    expect(briefToolArg(search)).toBe('beta')
+    expect(toolFilePath(search)).toBeNull()
+  })
+
+  it('labels by a listed directory without offering it as a file target', () => {
+    // A folder under `path` becomes a tappable open-file link on mobile.
+    const listing = { command: 'ls src', cwd: '/repo', directory: 'src' }
+
+    expect(describeToolInput(listing)).toBe('src')
+    expect(briefToolArg(listing)).toBe('src')
+    expect(toolFilePath(listing)).toBeNull()
+  })
+
+  it('leaves a command-only input labelled by its command', () => {
+    // Bash and Codex's unclassified shell rows carry no search key at all.
+    expect(describeToolInput({ command: 'pnpm test', description: 'Run tests' })).toBe('pnpm test')
+    expect(briefToolArg({ command: 'pnpm test' })).toBe('pnpm test')
+    expect(describeToolInput({ cmd: 'git status --short' })).toBe('git status --short')
+  })
+})
+
+describe('Codex JSON-string tool arguments', () => {
+  it('normalizes them for labels, details, file links and run summaries', () => {
+    expect(describeToolInput('{"cmd":"git status --short"}')).toBe('git status --short')
+    expect(formatToolInput('{"cmd":"git status --short"}')).toBe(
+      '{\n  "cmd": "git status --short"\n}'
+    )
+    expect(toolFilePath('{"file_path":"src/index.ts"}')).toBe('src/index.ts')
+    expect(briefToolArg('{"file_path":"src/app/index.ts"}')).toBe('index.ts')
+    expect(briefToolArg('{"cmd":"git status --short"}')).toBe('git status --short')
+    expect(isStructuredToolInput('{"cmd":"ls"}')).toBe(true)
+  })
+
+  it('joins an argv-array command into one label', () => {
+    expect(describeToolInput('{"command":["bash","-lc","make"]}')).toBe('bash -lc make')
+    expect(briefToolArg({ command: ['bash', '-lc', 'make'] })).toBe('bash -lc make')
+  })
+
+  it('leaves prose and malformed JSON as plain strings', () => {
+    expect(describeToolInput('{ not json')).toBe('{ not json')
+    expect(formatToolInput('just prose')).toBe('just prose')
+    expect(toolFilePath('{"file_path":')).toBeNull()
+    expect(isStructuredToolInput('just prose')).toBe(false)
+    // A JSON scalar is not an argument object — keep the literal text.
+    expect(formatToolInput('"quoted"')).toBe('"quoted"')
+  })
+})
+
+describe('isStructuredToolInput', () => {
+  it('does not offer an expander whose detail would repeat the row label', () => {
+    // `{}` formats back to `{}` — the label itself.
+    expect(isStructuredToolInput({})).toBe(false)
+    expect(isStructuredToolInput([])).toBe(false)
+    expect(isStructuredToolInput('{}')).toBe(false)
+    expect(isStructuredToolInput({ command: 'ls' })).toBe(true)
+    expect(isStructuredToolInput([1])).toBe(true)
+  })
+})
 
 describe('summarizeToolInput bounded preview', () => {
   it('collapses depth beyond the bound instead of serializing the whole tree', () => {
@@ -32,6 +234,91 @@ describe('briefToolArg', () => {
 
   it('falls back to the command preview when no path is present', () => {
     expect(briefToolArg({ command: 'git status --short' })).toBe('git status --short')
+  })
+
+  it('keeps a blank primary argument out of the run header', () => {
+    // Skipping a blank key must not fall through to raw JSON — the row would
+    // read `Bash {"command":""}` where it used to read `Bash`.
+    expect(briefToolArg({ command: '' })).toBe('')
+    expect(briefToolArg({ cmd: '   ' })).toBe('')
+    expect(briefToolArg({ cmd: '', file_path: '' })).toBe('')
+    const blocks: NativeChatBlock[] = [{ type: 'tool-call', name: 'Bash', input: { command: '' } }]
+    expect(summarizeToolRun(blocks)).toBe('Bash')
+  })
+
+  it('still previews a primary argument that is populated but not a string', () => {
+    // Only a *blank* key means "no argument" — a mixed argv or a structured
+    // query is unrenderable as a label, not absent, so it keeps the preview.
+    expect(briefToolArg({ command: ['kill', '-9', 1234] })).toBe('{"command":["kill","-9",1234')
+    expect(briefToolArg({ command: 42 })).toBe('{"command":42}')
+    expect(briefToolArg({ query: { text: 'auth flow' } })).toBe('{"query":{"text":"auth flow"')
+  })
+})
+
+describe('toolRunSummaryMembers', () => {
+  it('keeps each call separate so a boundary can be drawn between them', () => {
+    const blocks: NativeChatBlock[] = [
+      { type: 'tool-call', name: 'Bash', input: { command: 'ls -la' } },
+      { type: 'tool-call', name: 'tools/read', input: { file_path: 'README.md' } }
+    ]
+
+    expect(toolRunSummaryMembers(blocks)).toEqual([
+      { name: 'Bash', arg: 'ls -la', mcpIdentity: undefined },
+      { name: 'tools/read', arg: 'README.md', mcpIdentity: undefined }
+    ])
+  })
+
+  // `url` is a PRIMARY_ARG_KEY but not a BRIEF_ARG_KEY, so a call carrying only
+  // a url falls through to the bounded JSON preview and is cut at 28 chars —
+  // mid-token, brace unbalanced. Pinned as-is: the header renders whatever this
+  // returns, and changing the key list would move mobile's summary too.
+  it('still falls through to a clipped JSON preview for a url-only call', () => {
+    const blocks: NativeChatBlock[] = [
+      { type: 'tool-call', name: 'browser.open', input: { url: 'https://example.com' } }
+    ]
+
+    expect(toolRunSummaryMembers(blocks)[0]?.arg).toBe('{"url":"https://example.com"')
+  })
+
+  it('caps at the summary limit and skips nameless calls, as the joined string does', () => {
+    const blocks: NativeChatBlock[] = [
+      { type: 'tool-call', name: '  ', input: {} },
+      { type: 'tool-call', name: 'Bash', input: { command: 'ls' } },
+      { type: 'tool-call', name: 'Read', input: { file_path: 'a.ts' } },
+      { type: 'tool-call', name: 'Edit', input: { file_path: 'b.ts' } },
+      { type: 'tool-call', name: 'Write', input: { file_path: 'c.ts' } }
+    ]
+
+    const members = toolRunSummaryMembers(blocks)
+    expect(members.map((member) => member.name)).toEqual(['Bash', 'Read', 'Edit'])
+    // The joined string is derived from these, so the two can never disagree.
+    expect(summarizeToolRun(blocks)).toBe(
+      members.map((member) => `${member.name} ${member.arg}`).join('  ·  ')
+    )
+  })
+
+  it('carries provider MCP identity through, so a pill can draw the server glyph', () => {
+    const blocks: NativeChatBlock[] = [
+      {
+        type: 'tool-call',
+        name: 'mcp__linear__list_issues',
+        input: {},
+        mcpIdentity: { server: 'linear', tool: 'list_issues' }
+      }
+    ]
+
+    expect(toolRunSummaryMembers(blocks)[0]?.mcpIdentity).toEqual({
+      server: 'linear',
+      tool: 'list_issues'
+    })
+  })
+
+  it('reports a blank argument rather than standing raw JSON in for one', () => {
+    const blocks: NativeChatBlock[] = [{ type: 'tool-call', name: 'Bash', input: { command: '' } }]
+
+    expect(toolRunSummaryMembers(blocks)).toEqual([
+      { name: 'Bash', arg: '', mcpIdentity: undefined }
+    ])
   })
 })
 

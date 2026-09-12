@@ -1,24 +1,24 @@
-import { z } from 'zod'
-import { defineMethod, defineStreamingMethod, type RpcAnyMethod } from '../core'
+import { getRegisteredSshState, listRegisteredSshTargets } from '../../../ssh/ssh-target-registry'
+import { getPublicSshState } from '../../public-ssh-state'
+import { defineMethod, defineStreamingMethod } from '../core'
+import { ClientEventsUnsubscribeParams } from '../../../../shared/rpc-contract/client-events-params'
 
 let clientEventSubscriptionSeq = 0
 
-const ClientEventsUnsubscribeParams = z.object({
-  subscriptionId: z
-    .unknown()
-    .transform((value) => (typeof value === 'string' && value.length > 0 ? value : ''))
-    .pipe(z.string().min(1, 'Missing subscriptionId'))
-})
-
-export const CLIENT_EVENT_METHODS: readonly RpcAnyMethod[] = [
+export const CLIENT_EVENT_METHODS = [
   defineStreamingMethod({
     name: 'runtime.clientEvents.subscribe',
     params: null,
-    handler: async (_params, { runtime, connectionId }, emit) => {
+    handler: async (_params, { runtime, connectionId, clientKind }, emit) => {
       await new Promise<void>((resolve) => {
-        const unsubscribe = runtime.onClientEvent((event) => {
-          emit(event)
-        })
+        // Why: mobile discards terminalSideEffects; excluding it stops the
+        // per-OSC batch frames from crossing the relay.
+        const unsubscribe = runtime.onClientEvent(
+          (event) => {
+            emit(event)
+          },
+          { consumesTerminalSideEffects: clientKind !== 'mobile' }
+        )
 
         const seq = ++clientEventSubscriptionSeq
         const subscriptionId = `runtime-client-events-${connectionId ?? 'inproc'}-${seq}`
@@ -32,7 +32,20 @@ export const CLIENT_EVENT_METHODS: readonly RpcAnyMethod[] = [
           connectionId
         )
 
-        emit({ type: 'ready', subscriptionId })
+        // Why: listener-first snapshotting closes the subscribe race while restoring state missed during disconnects.
+        for (const event of runtime.getTerminalSleepClientEventSnapshot?.() ?? []) {
+          emit(event)
+        }
+        for (const event of runtime.getNativeChatLaunchDraftResolutionClientEventSnapshot?.() ??
+          []) {
+          emit(event)
+        }
+        const sshStates = listRegisteredSshTargets().flatMap((target) => {
+          const state = getPublicSshState(getRegisteredSshState(target.id) ?? null)
+          return state ? [{ targetId: target.id, state }] : []
+        })
+        // Why: attaching the listener before snapshotting closes the reload gap without exposing HUB-private target configuration.
+        emit({ type: 'ready', subscriptionId, snapshot: { sshStates } })
       })
     }
   }),

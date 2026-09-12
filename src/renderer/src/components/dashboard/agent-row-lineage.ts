@@ -3,6 +3,7 @@ import { buildAgentRowLineageTree } from './agent-row-lineage-model'
 
 export type AgentRowLineagePresentation = {
   depth: 0 | 1
+  parentPaneKey?: string
   isFirstSibling: boolean
   isLastSibling: boolean
   childCount: number
@@ -52,6 +53,7 @@ export function applyAgentRowLineage(rows: DashboardAgentRow[]): DashboardAgentR
         // visible parent, but visual depth remains capped so dense sidebar
         // rows don't lose too much prompt width.
         depth: 1,
+        parentPaneKey: row.paneKey,
         isFirstSibling: index === 0,
         isLastSibling: index === children.length - 1,
         childCount: 0
@@ -68,4 +70,12 @@ export function applyAgentRowLineage(rows: DashboardAgentRow[]): DashboardAgentR
   }
 
   return ordered
+}
+
+export function dashboardCardParentPaneKey(row: DashboardAgentRowWithLineage): string | undefined {
+  const directParentPaneKey = row.entry.orchestration?.parentPaneKey
+  return (
+    row.lineage.parentPaneKey ??
+    (directParentPaneKey === row.paneKey ? undefined : directParentPaneKey)
+  )
 }

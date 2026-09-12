@@ -17,6 +17,11 @@ export type SubscribeNativeChatTranscriptArgs = ResolveSessionFileOptions & {
     error?: string,
     lifecycle?: NativeChatTurnLifecycle
   ) => void
+  /** The transcript file does not exist yet (a session whose agent has not
+   *  flushed, or has not been prompted at all). Fires at most once, before any
+   *  snapshot, so a client can settle its view on the empty window it really
+   *  has instead of spinning — while still knowing the read is not settled. */
+  onTranscriptPending?: () => void
   onReplace?: (
     messages: NativeChatMessage[],
     hasMore: boolean,
@@ -28,6 +33,8 @@ export type SubscribeNativeChatTranscriptArgs = ResolveSessionFileOptions & {
   debounceMs?: number
   /** Test-only override for the production resolve-poll backoff. */
   resolvePollIntervalMs?: number
+  /** Test-only override for the host-side watcher reconciliation interval. */
+  reconciliationIntervalMs?: number
 }
 
 export type NativeChatTranscriptSubscription = {

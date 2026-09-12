@@ -1,4 +1,5 @@
-import { createReadStream } from 'node:fs'
+import { remoteSessionContentLines } from './remote-session-content-lines'
+import { openTranscriptReadStream } from '../native-chat/wsl-transcript-fs-access'
 import { createInterface } from 'node:readline'
 import type { AiVaultSession } from '../../shared/ai-vault-types'
 import type { ExecutionHostId } from '../../shared/execution-host'
@@ -7,6 +8,7 @@ import type {
   ResumableSessionParseState,
   SessionAccumulator
 } from './session-scanner-types'
+import type { TranscriptMessageSink } from './session-transcript-consumers'
 import {
   accumulatorFoldResumeState,
   addPreviewMessage,
@@ -31,24 +33,31 @@ type ParserSessionOptions = {
 
 export async function parseDroidSessionFile(
   file: FileWithMtime,
-  platform: NodeJS.Platform = process.platform
+  platform: NodeJS.Platform = process.platform,
+  messages?: TranscriptMessageSink
 ): Promise<AiVaultSession | null> {
-  const lines = createInterface({
-    input: createReadStream(file.path, { encoding: 'utf-8' }),
-    crlfDelay: Infinity
-  })
-  return parseDroidSessionLines({ file, lines, platform })
+  const input = openTranscriptReadStream(file.path, { encoding: 'utf-8' }, 'scan')
+  const lines = createInterface({ input, crlfDelay: Infinity })
+  try {
+    return await parseDroidSessionLines({ file, lines, platform, messages })
+  } finally {
+    // readline.close() leaves the underlying stream open; destroy it so a
+    // mid-parse throw cannot leak the gated transcript handle.
+    lines.close()
+    input.destroy()
+  }
 }
 
 export async function parseDroidSessionContent(
   file: FileWithMtime,
   content: string,
   platform: NodeJS.Platform = process.platform,
-  options: ParserSessionOptions = {}
+  options: ParserSessionOptions = {},
+  signal?: AbortSignal
 ): Promise<AiVaultSession | null> {
   return parseDroidSessionLines({
     file,
-    lines: content.split(/\r?\n/),
+    lines: remoteSessionContentLines(content, signal),
     platform,
     options
   })
@@ -87,9 +96,17 @@ function consumeDroidRecordLine(accumulator: SessionAccumulator, line: string): 
   }
 }
 
-export function createDroidSessionResumeState(file: FileWithMtime): ResumableSessionParseState {
+export function createDroidSessionResumeState(
+  file: FileWithMtime,
+  messages?: TranscriptMessageSink
+): ResumableSessionParseState {
   return accumulatorFoldResumeState(
-    createAccumulator({ agent: 'droid', file, sessionId: sessionIdFromFileName(file.path) }),
+    createAccumulator({
+      agent: 'droid',
+      file,
+      sessionId: sessionIdFromFileName(file.path),
+      messages
+    }),
     consumeDroidRecordLine
   )
 }
@@ -99,8 +116,9 @@ async function parseDroidSessionLines(args: {
   lines: AsyncIterable<string> | Iterable<string>
   platform: NodeJS.Platform
   options?: ParserSessionOptions
+  messages?: TranscriptMessageSink
 }): Promise<AiVaultSession | null> {
-  const state = createDroidSessionResumeState(args.file)
+  const state = createDroidSessionResumeState(args.file, args.messages)
   for await (const line of args.lines) {
     state.consumeLine(line)
   }

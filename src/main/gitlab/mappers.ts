@@ -1,14 +1,10 @@
-import type {
-  CheckStatus,
-  GitLabIssueInfo,
-  GitLabWorkItem,
-  MRInfo,
-  MRState
-} from '../../shared/types'
+import type { CheckStatus } from '../../shared/github/pull-request-types'
+import type { GitLabIssueInfo, GitLabWorkItem, MRInfo, MRState } from '../../shared/gitlab-types'
 import {
   mapGitLabPipelineJobStatusToCheckStatus,
   mapGitLabPipelineJobStatusToConclusion
 } from '../../shared/gitlab-pipeline-checks'
+import { summarizeProviderChecks } from '../../shared/provider-check-summary'
 
 // ── Pipeline job mapping (GitLab REST `/pipelines/:id/jobs`) ────────
 // Why: GitLab pipeline jobs roughly map to GitHub check-runs, but use a
@@ -96,12 +92,16 @@ type GitLabMRRaw = {
   sha?: string
   has_conflicts?: boolean
   detailed_merge_status?: string
+  /** Deprecated since GitLab 15.6, but the only merge signal older instances return. */
+  merge_status?: string
   description?: string | null
   target_branch?: string
   author?: { username?: string | null; avatar_url?: string | null } | null
 }
 
 export function mapMRInfo(data: GitLabMRRaw, pipelineStatus: CheckStatus): MRInfo {
+  const mergeable = deriveMergeable(data)
+  const mergeStateStatus = deriveMergeStateStatus(data, mergeable)
   return {
     number: data.iid ?? data.number ?? 0,
     title: data.title,
@@ -109,7 +109,8 @@ export function mapMRInfo(data: GitLabMRRaw, pipelineStatus: CheckStatus): MRInf
     url: data.web_url ?? data.url ?? '',
     pipelineStatus,
     updatedAt: data.updated_at ?? data.updatedAt ?? '',
-    mergeable: deriveMergeable(data),
+    mergeable,
+    ...(mergeStateStatus ? { mergeStateStatus } : {}),
     headSha: data.sha,
     baseRefName: data.target_branch,
     // Why: detail-endpoint payloads include `description`; list endpoints
@@ -136,7 +137,32 @@ function deriveMergeable(data: GitLabMRRaw): MRInfo['mergeable'] {
   if (data.detailed_merge_status === 'broken_status' || data.detailed_merge_status === 'conflict') {
     return 'CONFLICTING'
   }
+  // Why: `detailed_merge_status` only exists from GitLab 15.6. Without this fallback an older
+  // instance reports UNKNOWN forever, and the merge UI (which now gates on MERGEABLE) would
+  // permanently show "Checking" with no merge button. Only the positive legacy value is trusted;
+  // `cannot_be_merged` stays UNKNOWN because `has_conflicts` above already owns the conflict case.
+  if (data.detailed_merge_status === undefined && data.merge_status === 'can_be_merged') {
+    return 'MERGEABLE'
+  }
   return 'UNKNOWN'
+}
+
+/** Project GitLab detailed_merge_status onto a short reason the merge UI can label. */
+function deriveMergeStateStatus(
+  data: GitLabMRRaw,
+  mergeable: MRInfo['mergeable']
+): string | undefined {
+  if (mergeable === 'CONFLICTING') {
+    return 'conflict'
+  }
+  if (mergeable === 'MERGEABLE') {
+    return 'mergeable'
+  }
+  const status = data.detailed_merge_status?.toLowerCase()
+  if (!status) {
+    return undefined
+  }
+  return status
 }
 
 // ── Pipeline rollup (parallel to GitHub deriveCheckStatus) ──────────
@@ -156,33 +182,20 @@ export function derivePipelineStatus(
   if (!Array.isArray(rollup)) {
     return classifyPipelineString(rollup.status ?? '')
   }
-  if (rollup.length === 0) {
-    return 'neutral'
-  }
-  let hasFailure = false
-  let hasPending = false
-  for (const job of rollup) {
-    const s = job.status?.toLowerCase()
-    if (s === 'failed') {
-      hasFailure = true
-    } else if (
-      s === 'created' ||
-      s === 'pending' ||
-      s === 'running' ||
-      s === 'waiting_for_resource' ||
-      s === 'preparing' ||
-      s === 'scheduled'
-    ) {
-      hasPending = true
-    }
-  }
-  if (hasFailure) {
-    return 'failure'
-  }
-  if (hasPending) {
-    return 'pending'
-  }
-  return 'success'
+  // Why: a job array is just a check list, so route it through the shared classifier instead of
+  // re-deriving the rules here — a local copy drifted (manual-only read green, an unrecognized
+  // status demoted a passing pipeline to neutral).
+  const { state } = summarizeProviderChecks(
+    rollup.map((job) => {
+      const s = job.status?.toLowerCase() ?? ''
+      return {
+        status: mapPipelineJobStatusToCheckStatus(s),
+        conclusion: mapPipelineJobStatusToConclusion(s)
+      }
+    })
+  )
+  // Why: CheckStatus has no 'none'; an empty job list carries the same "nothing to report" meaning.
+  return state === 'none' ? 'neutral' : state
 }
 
 // ── Raw → GitLabWorkItem mapping ────────────────────────────────────
@@ -209,6 +222,8 @@ type GitLabMRRawForWorkItem = {
    *  when the workspace flow can't safely resolve the head. */
   source_project_id?: number
   target_project_id?: number
+  has_conflicts?: boolean
+  detailed_merge_status?: string
 }
 
 export function mapMRToWorkItem(
@@ -237,6 +252,9 @@ export function mapMRToWorkItem(
       data.target_project_id !== undefined &&
       data.source_project_id !== data.target_project_id,
     repoId,
+    ...(data.has_conflicts !== undefined || data.detailed_merge_status !== undefined
+      ? { mergeable: deriveMergeable(data) }
+      : {}),
     ...(projectRef ? { projectRef } : {})
   }
 }
@@ -283,9 +301,21 @@ function classifyPipelineString(status: string): CheckStatus {
   if (s === 'success') {
     return 'success'
   }
-  if (s === 'failed') {
+  if (s === 'failed' || s === 'action_required') {
     return 'failure'
   }
+  // Why: GitLab only reports pipeline-level `manual` when the pipeline is *blocked* on a human
+  // trigger (a manual job with allow_failure: false), so it is outstanding rather than broken or
+  // done. Red overstated it; neutral would drop the cue entirely and paint the worktree card's MR
+  // icon green (worktree-review-helpers.tsx defaults `open` to emerald), which is worse — with
+  // "Pipelines must succeed" on, GitLab rejects this merge.
+  if (s === 'manual') {
+    return 'pending'
+  }
+  // Why: `skipped` and `canceled` pipelines stay neutral (the fall-through below) even though the
+  // job rollup calls the same jobs passing/failing. GitLab's own MR widget paints both grey, and
+  // `allow_merge_on_skipped_pipeline` defaults to false, so a skipped pipeline still blocks merge —
+  // flipping either tone is a product decision that belongs in its own change, not this one.
   if (
     s === 'created' ||
     s === 'pending' ||

@@ -1,5 +1,8 @@
 import type { RuntimeRpcResponse } from './runtime-rpc-envelope'
 import type { RemoteRuntimeClientError } from './remote-runtime-client-error'
+import type { RemoteRuntimePreparedRequest } from './remote-runtime-prepared-request-admission'
+import type { RuntimeCapability } from './protocol-version'
+import type { RemoteRuntimeSocketLivenessOptions } from './remote-runtime-socket-liveness'
 
 export type SharedControlConnectionState =
   | 'closed'
@@ -12,6 +15,7 @@ export type SharedControlPendingRequest<TResult> = {
   resolve: (response: RuntimeRpcResponse<TResult>) => void
   reject: (error: Error) => void
   timeout: ReturnType<typeof setTimeout>
+  preparedRequest?: RemoteRuntimePreparedRequest | null
   // Why: keepalives on the shared socket are armed for an unrelated long-poll,
   // not this request. Only requests that opt in (long-polls issued via the
   // short-RPC path) may have their deadline refreshed by a keepalive; ordinary
@@ -31,6 +35,7 @@ export type SharedControlLogicalSubscription<TResult = unknown> = {
   requestId: string
   method: string
   params: unknown
+  retainedParamsBytes: number
   callbacks: SharedControlSubscriptionCallbacks<TResult>
   sent: boolean
   closed: boolean
@@ -66,4 +71,14 @@ export type RemoteRuntimeSharedConnectionDiagnostics = {
   lastConnectedAt: number | null
   lastClose: { code: number; reason: string } | null
   lastError: string | null
+}
+export type RemoteRuntimeSharedControlConnectionOptions = {
+  environmentId?: string
+  clientCapabilities?: readonly RuntimeCapability[]
+  isManuallyDisconnected?: () => boolean
+  isCapabilityPaused?: () => boolean
+  /** Publishes local transport diagnostics after a meaningful state transition. */
+  onDiagnosticsChanged?: (diagnostics: RemoteRuntimeSharedConnectionDiagnostics) => void
+  reconnectStableResetMs?: number
+  liveness?: RemoteRuntimeSocketLivenessOptions
 }

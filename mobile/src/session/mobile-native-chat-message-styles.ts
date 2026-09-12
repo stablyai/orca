@@ -3,7 +3,6 @@ import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 
 export const TEXT_SIZE = 17
 export const MONO_SIZE = 12
-export const MAX_TOOL_RESULT_CHARS = 4000
 
 export const styles = StyleSheet.create({
   row: {
@@ -30,34 +29,8 @@ export const styles = StyleSheet.create({
     lineHeight: TEXT_SIZE + 6,
     fontWeight: '500'
   },
-  controls: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    gap: spacing.xs,
-    marginBottom: 2,
-    opacity: 0.7
-  },
-  controlButton: {
-    padding: 3
-  },
-  controlPressed: {
-    opacity: 0.5
-  },
-  copied: {
-    backgroundColor: colors.diffAddedBg,
-    borderRadius: radii.card
-  },
   reasoning: {
     opacity: 0.7
-  },
-  queued: {
-    opacity: 0.55
-  },
-  queuedTag: {
-    color: colors.textMuted,
-    fontSize: 11,
-    fontWeight: '600',
-    marginBottom: 2
   },
   toolRun: {
     marginTop: spacing.xs
@@ -74,10 +47,6 @@ export const styles = StyleSheet.create({
     gap: spacing.sm,
     paddingVertical: 3
   },
-  controlsRow: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end'
-  },
   toolRunCount: {
     color: colors.statusGreen,
     fontFamily: typography.monoFamily,
@@ -89,6 +58,18 @@ export const styles = StyleSheet.create({
     color: colors.textMuted,
     fontFamily: typography.monoFamily,
     fontSize: MONO_SIZE
+  },
+  toolRunActive: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm,
+    paddingVertical: 3
+  },
+  toolRunActiveLabel: {
+    flex: 1,
+    color: colors.textSecondary,
+    fontSize: typography.bodySize
   },
   toolRunBody: {
     paddingLeft: spacing.sm,
@@ -140,6 +121,14 @@ export const styles = StyleSheet.create({
   imageRef: {
     color: colors.textSecondary,
     fontSize: TEXT_SIZE
+  },
+  imageThumb: {
+    width: 200,
+    height: 150,
+    borderRadius: radii.card,
+    backgroundColor: colors.bgRaised,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.borderSubtle
   },
   diff: {
     borderRadius: radii.button,

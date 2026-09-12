@@ -5,7 +5,8 @@ import {
 } from '../../../../shared/feature-tips'
 import type { CliInstallStatus } from '../../../../shared/cli-install-types'
 import type { FeatureInteractionState } from '../../../../shared/feature-interactions'
-import type { GlobalSettings, OnboardingState } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { OnboardingState } from '../../../../shared/onboarding-state-types'
 import { shouldShowOnboarding } from '../onboarding/should-show-onboarding'
 
 export type FeatureTipsAppOpenDecision =
@@ -16,7 +17,7 @@ export type FeatureTipsAppOpenDecision =
 export function isCliFeatureTipCompleted(status: CliInstallStatus): boolean {
   // Why: unsupported launch modes cannot complete setup, but an installed
   // launcher still needs attention until it is reachable on PATH.
-  return !status.supported || (status.state === 'installed' && status.pathConfigured)
+  return !status.supported || (status.state === 'installed' && status.pathConfigured === true)
 }
 
 export function getFeatureTipsAppOpenDecision(args: {

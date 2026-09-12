@@ -1,5 +1,5 @@
-import { createReadStream } from 'node:fs'
-import { readFile } from 'node:fs/promises'
+import { remoteSessionContentLines } from './remote-session-content-lines'
+import { openTranscriptReadStream, wslGatedReadFile } from '../native-chat/wsl-transcript-fs-access'
 import { createInterface } from 'node:readline'
 import type { AiVaultSession } from '../../shared/ai-vault-types'
 import type {
@@ -8,6 +8,7 @@ import type {
   ResumableSessionParseState,
   SessionAccumulator
 } from './session-scanner-types'
+import type { TranscriptMessageSink } from './session-transcript-consumers'
 import {
   accumulatorFoldResumeState,
   addPreviewContent,
@@ -27,25 +28,33 @@ import {
 
 export async function parseGeminiSessionFile(
   file: FileWithMtime,
-  platform: NodeJS.Platform = process.platform
+  platform: NodeJS.Platform = process.platform,
+  messages?: TranscriptMessageSink
 ): Promise<AiVaultSession | null> {
   if (file.path.endsWith('.jsonl')) {
-    return parseGeminiJsonlSessionFile(file, platform)
+    return parseGeminiJsonlSessionFile(file, platform, messages)
   }
 
-  return parseGeminiJsonSessionContent(file, await readFile(file.path, 'utf-8'), platform)
+  return parseGeminiJsonSessionContent(
+    file,
+    await wslGatedReadFile(file.path, 'utf-8', 'scan'),
+    platform,
+    {},
+    messages
+  )
 }
 
 export async function parseGeminiSessionContent(
   file: FileWithMtime,
   content: string,
   platform: NodeJS.Platform = process.platform,
-  options: ResumableParseFinalizeOptions = {}
+  options: ResumableParseFinalizeOptions = {},
+  signal?: AbortSignal
 ): Promise<AiVaultSession | null> {
   if (file.path.endsWith('.jsonl')) {
     return parseGeminiJsonlSessionLines({
       file,
-      lines: content.split(/\r?\n/),
+      lines: remoteSessionContentLines(content, signal),
       platform,
       options
     })
@@ -57,7 +66,8 @@ function parseGeminiJsonSessionContent(
   file: FileWithMtime,
   content: string,
   platform: NodeJS.Platform,
-  options: ResumableParseFinalizeOptions = {}
+  options: ResumableParseFinalizeOptions = {},
+  messages?: TranscriptMessageSink
 ): AiVaultSession | null {
   const record = asRecord(JSON.parse(content) as unknown)
   if (!record) {
@@ -66,7 +76,8 @@ function parseGeminiJsonSessionContent(
   const accumulator = createAccumulator({
     agent: 'gemini',
     file,
-    sessionId: extractString(record.sessionId) ?? sessionIdFromFileName(file.path)
+    sessionId: extractString(record.sessionId) ?? sessionIdFromFileName(file.path),
+    messages
   })
   updateTimeline(accumulator, extractString(record.startTime))
   updateTimeline(accumulator, extractString(record.lastUpdated))
@@ -78,13 +89,14 @@ function parseGeminiJsonSessionContent(
 
 export async function parseGeminiJsonlSessionFile(
   file: FileWithMtime,
-  platform: NodeJS.Platform
+  platform: NodeJS.Platform,
+  messages?: TranscriptMessageSink
 ): Promise<AiVaultSession | null> {
   const lines = createInterface({
-    input: createReadStream(file.path, { encoding: 'utf-8' }),
+    input: openTranscriptReadStream(file.path, { encoding: 'utf-8' }, 'scan'),
     crlfDelay: Infinity
   })
-  return parseGeminiJsonlSessionLines({ file, lines, platform })
+  return parseGeminiJsonlSessionLines({ file, lines, platform, messages })
 }
 
 function consumeGeminiJsonlRecordLine(accumulator: SessionAccumulator, line: string): void {
@@ -109,10 +121,16 @@ function consumeGeminiJsonlRecordLine(accumulator: SessionAccumulator, line: str
 // Resumable only for the JSONL log format; Gemini's legacy single-JSON
 // session documents are rewritten in place and must be re-read whole.
 export function createGeminiJsonlSessionResumeState(
-  file: FileWithMtime
+  file: FileWithMtime,
+  messages?: TranscriptMessageSink
 ): ResumableSessionParseState {
   return accumulatorFoldResumeState(
-    createAccumulator({ agent: 'gemini', file, sessionId: sessionIdFromFileName(file.path) }),
+    createAccumulator({
+      agent: 'gemini',
+      file,
+      sessionId: sessionIdFromFileName(file.path),
+      messages
+    }),
     consumeGeminiJsonlRecordLine
   )
 }
@@ -122,8 +140,9 @@ async function parseGeminiJsonlSessionLines(args: {
   lines: AsyncIterable<string> | Iterable<string>
   platform: NodeJS.Platform
   options?: ResumableParseFinalizeOptions
+  messages?: TranscriptMessageSink
 }): Promise<AiVaultSession | null> {
-  const state = createGeminiJsonlSessionResumeState(args.file)
+  const state = createGeminiJsonlSessionResumeState(args.file, args.messages)
   for await (const line of args.lines) {
     state.consumeLine(line)
   }

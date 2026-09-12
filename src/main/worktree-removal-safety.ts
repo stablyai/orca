@@ -2,7 +2,9 @@ import { lstat, readFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { posix, win32 } from 'node:path'
 import { isWindowsAbsolutePathLike } from '../shared/cross-platform-path'
-import type { GitWorktreeInfo, Repo, WorktreeMeta } from '../shared/types'
+import type { Repo } from '../shared/repo-types'
+import type { WorktreeMeta } from '../shared/worktree/meta-types'
+import type { GitWorktreeInfo } from '../shared/worktree/types'
 import { areWorktreePathsEqual } from './ipc/worktree-logic'
 import {
   gitFileProvesOrphanedWorktreeDirectory,
@@ -22,7 +24,9 @@ const ORCA_OWNED_PROVENANCE_META_KEYS = [
   'orcaCreatedAt',
   'orcaCreationSource',
   'orcaCreationWorkspaceLayout',
-  'automationProvenance'
+  'automationProvenance',
+  'cliProvenance',
+  'creatorProvenance'
 ] as const
 type UnregisteredOrcaCleanupMeta = Pick<
   WorktreeMeta,

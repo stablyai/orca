@@ -4,47 +4,89 @@ import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { ListFilter, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
-import { useTeamLabels, useTeamMembers, useTeamStates } from '@/hooks/useIssueMetadata'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { useTeamsLabels, useTeamsMembers, useTeamsStates } from '@/hooks/useIssueMetadata'
 import type { RuntimeLinearSettings } from '@/runtime/runtime-linear-client'
 import { translate } from '@/i18n/i18n'
 import {
+  LINEAR_ISSUE_ATTRIBUTE_FILTER_MAX_LABEL_IDS,
+  LINEAR_ISSUE_ATTRIBUTE_FILTER_MAX_STATE_IDS,
+  boundLinearIssueAttributeFilter,
   canonicalizeLinearIssueAttributeFilter,
   emptyLinearIssueAttributeFilter,
   type LinearIssueAttributeFilter
-} from '../../../shared/linear-issue-attribute-filter'
-import type { LinearTeam } from '../../../shared/types'
+} from '../../../shared/linear/issue-attribute-filter'
+import type { LinearTeam } from '../../../shared/linear/workspace-types'
+import {
+  clearLinearIssueAttributeFacet,
+  countLinearIssueAttributeFilters,
+  linearIssueAttributeFilterPillLabels
+} from './linear-issue-attribute-filter-pills'
 import {
   LinearIssueFilterSectionDetail,
   LinearIssueFilterSectionMenu,
-  clearLinearIssueAttributeFacet,
-  countLinearIssueAttributeFilters,
-  linearIssueAttributeFilterPillLabels,
   type LinearIssueFilterSectionKey
 } from './linear-issue-attribute-filter-sections'
+import {
+  capLinearMetadataIdsAcrossGroups,
+  groupLinearMetadataByName,
+  isLinearMetadataTruncated,
+  recordLinearMetadataTruncation,
+  resolveLinearIssueAttributeFilterTeamIds,
+  type LinearMetadataTruncationRecord
+} from './linear-issue-attribute-filter-team-ids'
 
 type Props = {
   value: LinearIssueAttributeFilter
   onChange: (next: LinearIssueAttributeFilter) => void
+  /** `null` or `all` means no single workspace owns the facet ids. */
   workspaceId: string | null
-  isAllWorkspaces: boolean
   primaryTeam: LinearTeam | null
-  selectedTeamCount: number
+  /** Selected Linear team ids (All teams / multi-select). Empty → primary fallback. */
+  selectedTeamIds: readonly string[]
+  availableTeams: readonly LinearTeam[]
+  /** False while `availableTeams` is still the issue-scraped fallback, not the real fetch. */
+  teamsSettled: boolean
   settings?: RuntimeLinearSettings
 }
 
 function ActivePill({
   label,
   value,
+  partial,
   onClear
 }: {
   label: string
   value: string
+  partial: boolean
   onClear: () => void
 }): React.JSX.Element {
   return (
     <span className="inline-flex h-6 items-center gap-1 rounded-full border border-border/60 bg-muted/50 pl-2 pr-1 text-[11px] text-foreground">
       <span className="text-muted-foreground">{label}:</span>
       <span className="max-w-[160px] truncate font-medium">{value}</span>
+      {partial ? (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            {/* Why: a bare title attribute reaches neither keyboard nor screen reader. */}
+            <button
+              type="button"
+              className="rounded-sm text-muted-foreground underline decoration-dotted underline-offset-2 outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+            >
+              {translate(
+                'auto.components.linear-issue-attribute-filter-dropdowns.partialCoverage',
+                'partial'
+              )}
+            </button>
+          </TooltipTrigger>
+          <TooltipContent side="top" sideOffset={4}>
+            {translate(
+              'auto.components.linear-issue-attribute-filter-dropdowns.partialCoverageTitle',
+              'Some teams may be left out of this filter. Open Filters for details.'
+            )}
+          </TooltipContent>
+        </Tooltip>
+      ) : null}
       <button
         type="button"
         aria-label={translate(
@@ -65,27 +107,60 @@ export default function LinearIssueAttributeFilterDropdowns({
   value,
   onChange,
   workspaceId,
-  isAllWorkspaces,
   primaryTeam,
-  selectedTeamCount,
+  selectedTeamIds,
+  availableTeams,
+  teamsSettled,
   settings
 }: Props): React.JSX.Element {
   const [popoverOpen, setPopoverOpen] = useState(false)
   const [openSection, setOpenSection] = useState<LinearIssueFilterSectionKey | null>(null)
+  // Why: each record holds the ids the cap left behind, so it stops applying the moment the
+  // facet carries anything else — prune, pill clear, Clear all, workspace switch (STA-5996).
+  const [stateIdsTruncation, setStateIdsTruncation] = useState<LinearMetadataTruncationRecord>(null)
+  const [labelIdsTruncation, setLabelIdsTruncation] = useState<LinearMetadataTruncationRecord>(null)
+  const statusTruncated = isLinearMetadataTruncated(stateIdsTruncation, value.stateIds)
+  const labelsTruncated = isLinearMetadataTruncated(labelIdsTruncation, value.labelIds)
+  const activeCount = countLinearIssueAttributeFilters(value)
+  const metadataNeeded =
+    popoverOpen ||
+    value.stateIds.length > 0 ||
+    value.labelIds.length > 0 ||
+    value.assignee?.kind === 'user'
 
-  const activeTeamId = popoverOpen && !isAllWorkspaces ? (primaryTeam?.id ?? null) : null
-  const concreteWorkspaceId =
-    popoverOpen && !isAllWorkspaces && workspaceId && workspaceId !== 'all' ? workspaceId : null
+  // Why: facet ids belong to one workspace, so an unresolved id is as unusable as `all`
+  // — both must show the picker hint rather than accept a filter that goes nowhere.
+  const scopedWorkspaceId = workspaceId && workspaceId !== 'all' ? workspaceId : null
 
-  const states = useTeamStates(activeTeamId, settings, concreteWorkspaceId)
-  const labels = useTeamLabels(activeTeamId, settings, concreteWorkspaceId)
-  const members = useTeamMembers(activeTeamId, settings, concreteWorkspaceId)
+  const activeTeamIds = useMemo(() => {
+    if (!metadataNeeded || !scopedWorkspaceId) {
+      return [] as string[]
+    }
+    return resolveLinearIssueAttributeFilterTeamIds({
+      selectedTeamIds,
+      availableTeams,
+      primaryTeamId: primaryTeam?.id ?? null
+    })
+  }, [metadataNeeded, scopedWorkspaceId, selectedTeamIds, availableTeams, primaryTeam?.id])
 
-  // Why: prune only after a successful non-empty metadata load for the same team;
+  const concreteWorkspaceId = metadataNeeded ? scopedWorkspaceId : null
+
+  // Why: multi-team / All teams must union filter options across every selected team (#8739).
+  const states = useTeamsStates(activeTeamIds, settings, concreteWorkspaceId)
+  const labels = useTeamsLabels(activeTeamIds, settings, concreteWorkspaceId)
+  const members = useTeamsMembers(activeTeamIds, settings, concreteWorkspaceId)
+
+  // Why: prune only after a successful non-empty metadata load for the same team set;
   // loading/error/empty-before-load must never clear active selections (R12).
   const pruneTeamKeyRef = useRef<string | null>(null)
   useEffect(() => {
-    if (!activeTeamId || !concreteWorkspaceId) {
+    if (activeTeamIds.length === 0 || !concreteWorkspaceId) {
+      return
+    }
+    // Why: restored filters make this run at startup, when availableTeams may still be
+    // the issue-scraped subset. Metadata complete for a partial team set looks valid,
+    // so pruning there would permanently delete facets from another team (R12).
+    if (!teamsSettled) {
       return
     }
     if (states.loading || labels.loading || members.loading) {
@@ -97,7 +172,7 @@ export default function LinearIssueAttributeFilterDropdowns({
     if (states.data.length === 0 && labels.data.length === 0 && members.data.length === 0) {
       return
     }
-    const pruneKey = `${concreteWorkspaceId}::${activeTeamId}`
+    const pruneKey = `${concreteWorkspaceId}::${activeTeamIds.join(',')}`
     if (pruneTeamKeyRef.current === pruneKey) {
       return
     }
@@ -118,8 +193,9 @@ export default function LinearIssueAttributeFilterDropdowns({
       onChange(canonicalNext)
     }
   }, [
-    activeTeamId,
+    activeTeamIds,
     concreteWorkspaceId,
+    teamsSettled,
     states.loading,
     states.error,
     states.data,
@@ -133,12 +209,24 @@ export default function LinearIssueAttributeFilterDropdowns({
     onChange
   ])
 
+  // Why: workflow states and team labels are per team, so several ids share one name —
+  // one row per name, selecting every id behind it (#16785).
   const statusOptions = useMemo(
-    () => states.data.map((state) => ({ key: state.id, primary: state.name })),
+    () =>
+      groupLinearMetadataByName(states.data).map((group) => ({
+        key: group.key,
+        primary: group.name,
+        ids: group.ids
+      })),
     [states.data]
   )
   const labelOptions = useMemo(
-    () => labels.data.map((label) => ({ key: label.id, primary: label.name })),
+    () =>
+      groupLinearMetadataByName(labels.data).map((group) => ({
+        key: group.key,
+        primary: group.name,
+        ids: group.ids
+      })),
     [labels.data]
   )
   const assigneeOptions = useMemo(
@@ -164,13 +252,50 @@ export default function LinearIssueAttributeFilterDropdowns({
     [members.data]
   )
 
-  const activeCount = countLinearIssueAttributeFilters(value)
   const pills = linearIssueAttributeFilterPillLabels({
     value,
     stateNamesById,
     memberNamesById,
-    labelNamesById
+    labelNamesById,
+    statusOptions,
+    labelOptions,
+    statusTruncated,
+    labelsTruncated
   })
+
+  // Why: one picked row expands to an id per team, so bound here — the IPC/RPC parser rejects a
+  // filter over the transport cap outright. Spread the cap over the picked rows first: the
+  // canonical slice is lexicographic, so it can drop every id of a row the user just checked.
+  const applyPickedFilter = (next: LinearIssueAttributeFilter): void => {
+    const bounded = boundLinearIssueAttributeFilter(
+      canonicalizeLinearIssueAttributeFilter({
+        ...next,
+        stateIds: capLinearMetadataIdsAcrossGroups(
+          statusOptions,
+          next.stateIds,
+          LINEAR_ISSUE_ATTRIBUTE_FILTER_MAX_STATE_IDS
+        ),
+        labelIds: capLinearMetadataIdsAcrossGroups(
+          labelOptions,
+          next.labelIds,
+          LINEAR_ISSUE_ATTRIBUTE_FILTER_MAX_LABEL_IDS
+        )
+      })
+    )
+    // Why: only here are the pre-cap expansion and the survivors both in hand. Re-capping an
+    // untouched facet (a priority click) is a no-op, so keep a record that still matches.
+    setStateIdsTruncation(
+      isLinearMetadataTruncated(stateIdsTruncation, bounded.stateIds)
+        ? stateIdsTruncation
+        : recordLinearMetadataTruncation(next.stateIds, bounded.stateIds)
+    )
+    setLabelIdsTruncation(
+      isLinearMetadataTruncated(labelIdsTruncation, bounded.labelIds)
+        ? labelIdsTruncation
+        : recordLinearMetadataTruncation(next.labelIds, bounded.labelIds)
+    )
+    onChange(bounded)
+  }
 
   const teamRequiredMessage = !primaryTeam
     ? translate(
@@ -214,7 +339,7 @@ export default function LinearIssueAttributeFilterDropdowns({
           </Button>
         </PopoverTrigger>
         <PopoverContent align="start" className="w-72 p-0">
-          {isAllWorkspaces ? (
+          {!scopedWorkspaceId ? (
             <div className="space-y-2 p-3 text-xs">
               <p className="font-medium text-foreground">
                 {translate(
@@ -231,20 +356,11 @@ export default function LinearIssueAttributeFilterDropdowns({
             </div>
           ) : (
             <>
-              {selectedTeamCount > 1 && primaryTeam ? (
-                <p className="border-b border-border/50 px-3 py-1.5 text-[11px] text-muted-foreground">
-                  {translate(
-                    'auto.components.linear-issue-attribute-filter-dropdowns.optionsFromTeam',
-                    'Options from {{team}}',
-                    { team: primaryTeam.name }
-                  )}
-                </p>
-              ) : null}
               {openSection ? (
                 <LinearIssueFilterSectionDetail
                   section={openSection}
                   value={value}
-                  onChange={(next) => onChange(canonicalizeLinearIssueAttributeFilter(next))}
+                  onChange={applyPickedFilter}
                   statusOptions={statusOptions}
                   assigneeOptions={assigneeOptions}
                   labelOptions={labelOptions}
@@ -254,11 +370,20 @@ export default function LinearIssueAttributeFilterDropdowns({
                   assigneeError={members.error}
                   labelLoading={labels.loading}
                   labelError={labels.error}
+                  statusTruncated={statusTruncated}
+                  labelsTruncated={labelsTruncated}
                   teamRequiredMessage={teamRequiredMessage}
                   onBack={() => setOpenSection(null)}
                 />
               ) : (
-                <LinearIssueFilterSectionMenu value={value} onOpenSection={setOpenSection} />
+                <LinearIssueFilterSectionMenu
+                  value={value}
+                  statusOptions={statusOptions}
+                  labelOptions={labelOptions}
+                  statusTruncated={statusTruncated}
+                  labelsTruncated={labelsTruncated}
+                  onOpenSection={setOpenSection}
+                />
               )}
               {activeCount > 0 ? (
                 <div className="border-t border-border/50 p-2">
@@ -284,6 +409,7 @@ export default function LinearIssueAttributeFilterDropdowns({
           key={pill.key}
           label={pill.label}
           value={pill.value}
+          partial={pill.partial}
           onClear={() =>
             onChange(
               canonicalizeLinearIssueAttributeFilter(

@@ -1,4 +1,4 @@
-import { WifiOff, Shield, Monitor, Clock, Globe } from 'lucide-react-native'
+import { WifiOff, Shield, Monitor, Clock, Globe, Bell } from 'lucide-react-native'
 import { colors } from '../theme/mobile-theme'
 
 export type TroubleshootSection = {
@@ -10,11 +10,21 @@ export type TroubleshootSection = {
 
 export const troubleshootCommonIssues: TroubleshootSection[] = [
   {
+    id: 'notifications',
+    icon: <Bell size={16} color={colors.textSecondary} />,
+    title: 'Push Notifications',
+    steps: [
+      'Check that system settings allow Orca notifications and that Focus or Do Not Disturb is off.',
+      'Try cellular or another Wi-Fi network. If alerts arrive after switching, your network may be delaying delivery.'
+    ]
+  },
+
+  {
     id: 'wifi',
     icon: <WifiOff size={16} color={colors.textSecondary} />,
     title: 'Different WiFi Networks',
     steps: [
-      'Both devices must be on the same local network (unless connected through Tailscale).',
+      'Both devices must be on the same LAN (unless connected through Tailscale).',
       'Ethernet and WiFi must share the same subnet.',
       'Try reconnecting WiFi on both devices.'
     ]

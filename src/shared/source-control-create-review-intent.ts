@@ -2,7 +2,6 @@ import { isBehindOnlyUpstream, shouldForcePushWithLeaseForUpstream } from './git
 import type { HostedReviewCreationEligibility } from './hosted-review'
 import { supportsHostedReviewCreation } from './hosted-review-creation-providers'
 import type { GitUpstreamStatus } from './git-status-types'
-import type { SourceControlPrimaryActionDecision } from './source-control-primary-action-decision-types'
 
 export type CreateReviewIntentKind =
   | 'dirty'
@@ -41,16 +40,20 @@ export function resolveCreateReviewIntentEligibility({
     !hasCurrentBranch ||
     !hostedReviewCreation ||
     hostedReviewCreation.canCreate ||
-    // Fail closed when the existing-review lookup could not prove there is no
-    // review: a local blocker (e.g. needs_push) returned after a failed lookup
-    // must not offer a Create PR intent that would push under a false promise —
-    // the main preflight would refuse the create anyway (invariant 8).
-    hostedReviewCreation.reviewLookupOutcome === 'unavailable' ||
     !supportsHostedReviewCreation(hostedReviewCreation.provider)
   ) {
     return { eligible: false, kind: null }
   }
 
+  if (
+    hostedReviewCreation.reviewLookupOutcome === 'unavailable' &&
+    !hostedReviewCreation.defaultBaseRef?.trim()
+  ) {
+    return { eligible: false, kind: null }
+  }
+
+  // Why: safe branch preparation can continue without lookup authority; the
+  // main create preflight still fails closed before creating a duplicate.
   if (hostedReviewCreation.blockedReason === 'dirty') {
     if (stagedCount > 0 && !hasMessage) {
       return { eligible: true, kind: 'message_required' }
@@ -86,14 +89,4 @@ export function resolveCreateReviewIntentEligibility({
   }
 
   return { eligible: false, kind: null }
-}
-
-export function resolveVisibleCreateReviewHeaderAction({
-  createPrHeaderAction
-}: {
-  createPrHeaderAction: SourceControlPrimaryActionDecision | null
-}): SourceControlPrimaryActionDecision | null {
-  // Why: keep a stable header anchor; disable Create Review when the branch is
-  // not ready instead of hiding it and shifting toolbar layout.
-  return createPrHeaderAction
 }

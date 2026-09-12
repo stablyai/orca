@@ -24,7 +24,9 @@ import type { AgentCatalogEntry } from '@/lib/agent-catalog'
 import { cn } from '@/lib/utils'
 import type { SourceControlLaunchActionId } from '../../../../shared/source-control-ai-actions'
 import type { SourceControlAiWriteTarget } from '../../../../shared/source-control-ai-recipe-save'
-import type { GlobalSettings, Repo, TuiAgent } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { TuiAgent } from '../../../../shared/tui-agent'
 import { SourceControlActionVariableChips } from '../source-control/SourceControlActionVariableChips'
 import { sourceControlActionRecipeMatchesTarget } from './source-control-action-recipe-match'
 import type { SourceControlAgentScopeNote } from './source-control-agent-action-dialog-result'
@@ -378,7 +380,7 @@ export function SourceControlAgentActionDialogForm({
                   {translate(
                     'auto.components.right.sidebar.SourceControlAgentActionDialogForm.1bc0bdbb5e',
                     'Launch:'
-                  )}
+                  )}{' '}
                   {deliveryPlan.commandLabel}
                 </div>
                 <div className="text-[11px]">{deliveryPlan.caveat}</div>

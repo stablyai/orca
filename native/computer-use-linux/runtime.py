@@ -408,8 +408,11 @@ def render_accessibility_tree(root, window_rect, root_path, compact_browser_tabs
         item = record(node, len(records), path, window_rect)
         child_items = list(children(node))
         role_key = (item["controlType"] or "").lower()
-        summary_values = text_snippets(node, limit=8, max_depth=4)
-        generic_summary = " ".join(summary_values) if role_key in {"panel", "filler", "unknown", "section"} and not item["name"] and not item["value"] and len(summary_values) >= 2 and is_plain_text_subtree(node) else None
+        generic_summary = None
+        if role_key in {"panel", "filler", "unknown", "section"} and not item["name"] and not item["value"]:
+            summary_values = text_snippets(node, limit=8, max_depth=4)
+            if len(summary_values) >= 2 and is_plain_text_subtree(node):
+                generic_summary = " ".join(summary_values)
         if should_elide(item, len(child_items), generic_summary):
             for child_index, child in child_items:
                 walk(child, depth, path + [child_index])
@@ -822,17 +825,58 @@ def require_non_empty_string(value, name):
     return str(value)
 
 
-def click_at(x, y, button, count):
+def click_at(x, y, button, count, modifiers=None):
     button = (button or "left").lower()
     buttons = {"left": ("b1p", "b1r"), "right": ("b3p", "b3r"), "middle": ("b2p", "b2r")}
     if button not in buttons:
         raise RuntimeError(f"unsupported mouse button: {button}")
+    parsed_count = require_positive_integer(1 if count is None else count, "click_count")
+    modifier_keys = click_modifier_keys(modifiers)
+    if modifier_keys:
+        modified_click_at(x, y, button, parsed_count, modifier_keys)
+        return
     down, up = buttons[button]
-    for _ in range(require_positive_integer(1 if count is None else count, "click_count")):
+    for _ in range(parsed_count):
         Atspi.generate_mouse_event(round(x), round(y), "abs")
         Atspi.generate_mouse_event(round(x), round(y), down)
         time.sleep(0.03)
         Atspi.generate_mouse_event(round(x), round(y), up)
+
+
+def click_modifier_keys(raw):
+    if raw is None:
+        return []
+    aliases = {
+        "ctrl": "ctrl", "control": "ctrl", "cmdorctrl": "ctrl", "commandorcontrol": "ctrl",
+        "shift": "shift", "alt": "alt", "option": "alt",
+        "meta": "super", "super": "super", "win": "super", "cmd": "super", "command": "super",
+    }
+    parts = [part.strip().lower() for part in str(raw).split("+")]
+    if not parts or any(not part or part not in aliases for part in parts):
+        raise RuntimeError("click modifiers require modifier keys only")
+    return list(dict.fromkeys(aliases[part] for part in parts))
+
+
+def modified_click_at(x, y, button, count, modifier_keys):
+    xdotool = shutil.which("xdotool")
+    is_wayland = os.environ.get("XDG_SESSION_TYPE", "").lower() == "wayland"
+    if not xdotool or is_wayland:
+        raise RuntimeError("modified clicks require xdotool on an X11 session")
+    button_number = {"left": "1", "middle": "2", "right": "3"}[button]
+    command = [xdotool, "mousemove", "--sync", str(round(x)), str(round(y))]
+    for modifier in modifier_keys:
+        command.extend(["keydown", modifier])
+    command.extend(["click", "--repeat", str(count), "--delay", "35", button_number])
+    for modifier in reversed(modifier_keys):
+        command.extend(["keyup", modifier])
+    try:
+        subprocess.run(command, check=True, timeout=5)
+    finally:
+        subprocess.run(
+            [xdotool, *[item for modifier in reversed(modifier_keys) for item in ("keyup", modifier)]],
+            check=False,
+            timeout=2,
+        )
 
 
 def scroll_at(x, y, direction, pages):
@@ -1024,12 +1068,14 @@ def run_operation(operation):
             if operation.get("click_count") is not None
             else 1
         )
-        handled = operation.get("mouse_button", "left") == "left" and click_count <= 1 and perform_action(node, preferred)
+        has_modifiers = bool(str(operation.get("modifiers") or "").strip())
+        handled = not has_modifiers and operation.get("mouse_button", "left") == "left" and click_count <= 1 and perform_action(node, preferred)
         if not handled:
             click_at(
                 *screen_point(bounds, saved, operation.get("x"), operation.get("y"), node),
                 operation.get("mouse_button", "left"),
                 click_count,
+                operation.get("modifiers"),
             )
             action = {"path": "synthetic", "actionName": None, "fallbackReason": "actionUnsupported"}
         else:

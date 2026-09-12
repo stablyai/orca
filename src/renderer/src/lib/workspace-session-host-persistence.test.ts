@@ -1,14 +1,19 @@
 import { describe, expect, it, vi } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../../shared/constants'
-import type { WorkspaceSessionState } from '../../../shared/types'
+import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 import { folderWorkspaceKey, worktreeWorkspaceKey } from '../../../shared/workspace-scope'
 import {
   buildHostIdByWorktreeId,
-  fetchWorkspaceSessionFromHosts,
-  fetchWorkspaceSessionWithRuntimeHostOwners,
+  buildWorkspaceSessionHostSnapshots,
   patchWorkspaceSessionByHost,
-  persistWorkspaceSessionByHost
+  persistWorkspaceSessionByHost,
+  persistWorkspaceSessionByHostSync,
+  type HostPersistenceState
 } from './workspace-session-host-persistence'
+import {
+  fetchWorkspaceSessionFromHosts,
+  fetchWorkspaceSessionWithRuntimeHostOwners
+} from './workspace-session-host-hydration'
 
 describe('fetchWorkspaceSessionFromHosts', () => {
   it('reads saved runtime host partitions before runtime repos are loaded', async () => {
@@ -74,7 +79,9 @@ describe('fetchWorkspaceSessionFromHosts', () => {
     const read = await fetchWorkspaceSessionWithRuntimeHostOwners({ get }, [], ['runtime:env-1'])
 
     expect(read.session.tabsByWorktree[worktreeId]).toHaveLength(1)
-    expect(read.runtimeHostIdByWorkspaceSessionKey).toEqual({ [worktreeId]: 'runtime:env-1' })
+    expect(read.runtimeHostIdByWorkspaceSessionKey).toEqual({
+      [worktreeId]: 'runtime:env-1'
+    })
   })
 
   it('normalizes canonical worktree session keys in runtime owner maps', async () => {
@@ -105,7 +112,9 @@ describe('fetchWorkspaceSessionFromHosts', () => {
 
     const read = await fetchWorkspaceSessionWithRuntimeHostOwners({ get }, [], ['runtime:env-1'])
 
-    expect(read.runtimeHostIdByWorkspaceSessionKey).toEqual({ [worktreeId]: 'runtime:env-1' })
+    expect(read.runtimeHostIdByWorkspaceSessionKey).toEqual({
+      [worktreeId]: 'runtime:env-1'
+    })
   })
 
   it('returns runtime owners for folder workspace session keys', async () => {
@@ -137,7 +146,9 @@ describe('fetchWorkspaceSessionFromHosts', () => {
     const read = await fetchWorkspaceSessionWithRuntimeHostOwners({ get }, [], ['runtime:env-1'])
 
     expect(read.session.tabsByWorktree[folderKey]).toHaveLength(1)
-    expect(read.runtimeHostIdByWorkspaceSessionKey).toEqual({ [folderKey]: 'runtime:env-1' })
+    expect(read.runtimeHostIdByWorkspaceSessionKey).toEqual({
+      [folderKey]: 'runtime:env-1'
+    })
   })
 
   it('returns runtime owners for sleeping-agent-only runtime worktrees', async () => {
@@ -169,7 +180,9 @@ describe('fetchWorkspaceSessionFromHosts', () => {
     expect(read.session.sleepingAgentSessionsByPaneKey?.['remote-tab:leaf-1']?.worktreeId).toBe(
       worktreeId
     )
-    expect(read.runtimeHostIdByWorkspaceSessionKey).toEqual({ [worktreeId]: 'runtime:env-1' })
+    expect(read.runtimeHostIdByWorkspaceSessionKey).toEqual({
+      [worktreeId]: 'runtime:env-1'
+    })
   })
 
   it('routes restored runtime folder workspace patches back to the runtime host', async () => {
@@ -197,7 +210,9 @@ describe('fetchWorkspaceSessionFromHosts', () => {
       {
         repos: [],
         worktreesByRepo: {},
-        restoredRuntimeHostIdByWorkspaceSessionKey: { [folderKey]: 'runtime:env-1' }
+        restoredRuntimeHostIdByWorkspaceSessionKey: {
+          [folderKey]: 'runtime:env-1'
+        }
       }
     )
 
@@ -239,7 +254,9 @@ describe('fetchWorkspaceSessionFromHosts', () => {
         folderWorkspaces: [{ id: 'folder-1', projectGroupId: 'group-1' }],
         projectGroups: [{ id: 'group-1', executionHostId: 'local' }],
         worktreesByRepo: {},
-        restoredRuntimeHostIdByWorkspaceSessionKey: { [folderKey]: 'runtime:stale-env' }
+        restoredRuntimeHostIdByWorkspaceSessionKey: {
+          [folderKey]: 'runtime:stale-env'
+        }
       }
     )
 
@@ -277,8 +294,16 @@ describe('fetchWorkspaceSessionFromHosts', () => {
         }
       },
       {
-        repos: [{ id: 'remote-repo', connectionId: null, executionHostId: 'runtime:env-1' }],
-        worktreesByRepo: { 'remote-repo': [{ id: worktreeId, repoId: 'remote-repo' }] }
+        repos: [
+          {
+            id: 'remote-repo',
+            connectionId: null,
+            executionHostId: 'runtime:env-1'
+          }
+        ],
+        worktreesByRepo: {
+          'remote-repo': [{ id: worktreeId, repoId: 'remote-repo' }]
+        }
       }
     )
 
@@ -331,12 +356,20 @@ describe('fetchWorkspaceSessionFromHosts', () => {
       {
         repos: [
           { id: 'same-repo', connectionId: null, executionHostId: 'local' },
-          { id: 'same-repo', connectionId: null, executionHostId: 'runtime:env-1' }
+          {
+            id: 'same-repo',
+            connectionId: null,
+            executionHostId: 'runtime:env-1'
+          }
         ],
         worktreesByRepo: {
           'same-repo': [
             { id: localWorktreeId, repoId: 'same-repo' },
-            { id: remoteWorktreeId, repoId: 'same-repo', hostId: 'runtime:env-1' }
+            {
+              id: remoteWorktreeId,
+              repoId: 'same-repo',
+              hostId: 'runtime:env-1'
+            }
           ]
         }
       }
@@ -363,7 +396,11 @@ describe('fetchWorkspaceSessionFromHosts', () => {
     const owner = buildHostIdByWorktreeId({
       repos: [
         { id: 'same-repo', connectionId: null, executionHostId: 'local' },
-        { id: 'same-repo', connectionId: null, executionHostId: 'runtime:env-1' }
+        {
+          id: 'same-repo',
+          connectionId: null,
+          executionHostId: 'runtime:env-1'
+        }
       ],
       worktreesByRepo: {
         'same-repo': [{ id: 'same-repo::/local-only', repoId: 'same-repo' }]
@@ -383,6 +420,92 @@ describe('fetchWorkspaceSessionFromHosts', () => {
     })
 
     expect(owner(worktreeWorkspaceKey(worktreeId))).toBe('runtime:env-1')
+  })
+
+  it('builds local-first host snapshots reused by synchronous persistence', () => {
+    const localWorktreeId = 'local-repo::C:\\src\\local'
+    const remoteWorktreeId = 'remote-repo::/srv/remote'
+    const makeTab = (id: string, worktreeId: string) => ({
+      id,
+      ptyId: null,
+      worktreeId,
+      title: id,
+      customTitle: null,
+      color: null,
+      sortOrder: 0,
+      createdAt: 1
+    })
+    const payload: WorkspaceSessionState = {
+      ...getDefaultWorkspaceSession(),
+      tabsByWorktree: {
+        [localWorktreeId]: [makeTab('local-tab', localWorktreeId)],
+        [remoteWorktreeId]: [makeTab('remote-tab', remoteWorktreeId)]
+      }
+    }
+    const state = {
+      repos: [
+        { id: 'local-repo', connectionId: null, executionHostId: 'local' },
+        {
+          id: 'remote-repo',
+          connectionId: null,
+          executionHostId: 'runtime:env-1'
+        }
+      ],
+      worktreesByRepo: {
+        'local-repo': [{ id: localWorktreeId, repoId: 'local-repo' }],
+        'remote-repo': [
+          {
+            id: remoteWorktreeId,
+            repoId: 'remote-repo',
+            hostId: 'runtime:env-1'
+          }
+        ]
+      }
+    } satisfies HostPersistenceState
+
+    const snapshots = buildWorkspaceSessionHostSnapshots(payload, state)
+
+    expect(snapshots.map((snapshot) => snapshot.hostId)).toEqual([undefined, 'runtime:env-1'])
+    expect(snapshots[0].state.tabsByWorktree).toEqual({
+      [localWorktreeId]: [expect.objectContaining({ id: 'local-tab' })]
+    })
+    expect(snapshots[1].state.tabsByWorktree).toEqual({
+      [remoteWorktreeId]: [expect.objectContaining({ id: 'remote-tab' })]
+    })
+
+    const setSync = vi.fn()
+    persistWorkspaceSessionByHostSync({ get: vi.fn(), patch: vi.fn(), setSync }, payload, state)
+
+    expect(setSync.mock.calls).toEqual(
+      snapshots.map((snapshot) => [snapshot.state, snapshot.hostId])
+    )
+  })
+})
+
+describe('buildHostIdByWorktreeId nested ownership', () => {
+  it('persists an SSH worktree in its paired HUB session partition', () => {
+    const worktreeId = 'nested-repo::/srv/remote-wt'
+    const owner = buildHostIdByWorktreeId({
+      repos: [
+        {
+          id: 'nested-repo',
+          connectionId: 'hub-private-ssh',
+          executionHostId: 'runtime:owner-hub'
+        }
+      ],
+      worktreesByRepo: {
+        'nested-repo': [
+          {
+            id: worktreeId,
+            repoId: 'nested-repo',
+            hostId: 'ssh:hub-private-ssh',
+            runtimeOwnerEnvironmentId: 'owner-hub'
+          }
+        ]
+      }
+    })
+
+    expect(owner(worktreeId)).toBe('runtime:owner-hub')
   })
 })
 
@@ -428,18 +551,30 @@ describe('persistWorkspaceSessionByHost', () => {
       {
         repos: [
           { id: 'local-repo', connectionId: null, executionHostId: 'local' },
-          { id: 'remote-repo', connectionId: null, executionHostId: 'runtime:env-1' }
+          {
+            id: 'remote-repo',
+            connectionId: null,
+            executionHostId: 'runtime:env-1'
+          }
         ],
         worktreesByRepo: {
           'local-repo': [{ id: localWorktreeId, repoId: 'local-repo' }],
-          'remote-repo': [{ id: remoteWorktreeId, repoId: 'remote-repo', hostId: 'runtime:env-1' }]
+          'remote-repo': [
+            {
+              id: remoteWorktreeId,
+              repoId: 'remote-repo',
+              hostId: 'runtime:env-1'
+            }
+          ]
         }
       }
     )
 
     expect(set).toHaveBeenCalledTimes(2)
     expect(set).toHaveBeenCalledWith(
-      expect.objectContaining({ tabsByWorktree: { [localWorktreeId]: expect.any(Array) } })
+      expect.objectContaining({
+        tabsByWorktree: { [localWorktreeId]: expect.any(Array) }
+      })
     )
     expect(set).toHaveBeenCalledWith(
       expect.objectContaining({

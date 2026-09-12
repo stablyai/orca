@@ -1,11 +1,11 @@
 import type {
   CheckStatus,
-  GitHubPRCheckSummary,
   PRMergeableState,
   PRReviewDecision,
-  PRState
-} from '../../../shared/types'
-import { canEnableGitHubPRAutoMerge } from '../../../shared/github-pr-auto-merge-availability'
+  PRState,
+  ProviderCheckSummary
+} from '../../../shared/github/pull-request-types'
+import { canEnableGitHubPRAutoMerge } from '../../../shared/github/pull-request-auto-merge-availability'
 import { translate } from '@/i18n/i18n'
 
 export type GitHubPRMergeStateInput = {
@@ -14,7 +14,7 @@ export type GitHubPRMergeStateInput = {
   mergeStateStatus?: string | null
   reviewDecision?: PRReviewDecision | null
   checksStatus?: CheckStatus
-  checksSummary?: GitHubPRCheckSummary
+  checksSummary?: ProviderCheckSummary
   autoMergeEnabled?: boolean
   autoMergeAllowed?: boolean | null
   mergeQueueRequired?: boolean | null

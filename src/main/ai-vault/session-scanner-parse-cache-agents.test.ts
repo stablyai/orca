@@ -163,7 +163,9 @@ describe('codex-specific resume behavior', () => {
       process.platform,
       stats
     )
-    expect(stats.incremental).toBe(1)
+    // The append is dismissed without a read, so it is an early stop rather
+    // than an incremental parse.
+    expect(stats).toMatchObject({ earlyStopped: 1, incremental: 0 })
     expect(grown).toBeNull()
   })
 
@@ -183,19 +185,18 @@ describe('codex-specific resume behavior', () => {
     )
     expect(seeded?.title).toBe('codex seed question')
 
-    // Codex names the thread lazily; the next (incremental) parse must adopt it.
+    // Codex names the thread lazily; an unchanged transcript must still adopt it.
     await writeFile(
       join(codexHome, 'session_index.jsonl'),
       `${JSON.stringify({ id: CODEX_FIXTURE_SESSION_ID, thread_name: 'Indexed thread title' })}\n`
     )
-    await appendFile(path, `${fixture.appendLines.join('\n')}\n`)
     const stats = createSessionParseStats()
     const renamed = await parseAgentSessionFileCached(
       await candidateFor('codex', path, codexHome),
       process.platform,
       stats
     )
-    expect(stats.incremental).toBe(1)
+    expect(stats.reused).toBe(1)
     expect(renamed?.title).toBe('Indexed thread title')
     expect(renamed).toEqual(
       await parseAgentSessionFile(await candidateFor('codex', path, codexHome), process.platform)
@@ -204,6 +205,61 @@ describe('codex-specific resume behavior', () => {
 })
 
 describe('non-resumable formats keep reuse-only caching', () => {
+  it('re-parses cline when only its messages sidecar changed', async () => {
+    const root = await makeTempDir()
+    const sessionDir = join(root, 'cline-1')
+    await mkdir(sessionDir, { recursive: true })
+    const metadataPath = join(sessionDir, 'cline-1.json')
+    const messagesPath = join(sessionDir, 'cline-1.messages.json')
+    await writeFile(
+      metadataPath,
+      JSON.stringify({
+        session_id: 'cline-1',
+        cwd: '/tmp/cline',
+        started_at: '2026-05-01T10:00:00Z'
+      })
+    )
+    const writeMessages = (text: string): Promise<void> =>
+      writeFile(
+        messagesPath,
+        JSON.stringify({
+          updated_at: '2026-05-01T10:00:01Z',
+          messages: [{ role: 'user', content: [{ type: 'text', text }] }]
+        })
+      )
+    await writeMessages('first ask')
+
+    // Cline reads the sidecar as part of its parse, so a change to it has to
+    // re-parse; there is no metadata-only merge to re-run.
+    const candidate = async (): Promise<SessionFileCandidate> => {
+      const base = await candidateFor('cline', metadataPath)
+      const sidecarStat = await stat(messagesPath)
+      return {
+        ...base,
+        file: {
+          ...base.file,
+          sidecar: {
+            path: messagesPath,
+            mtimeMs: sidecarStat.mtimeMs,
+            sizeBytes: sidecarStat.size
+          }
+        }
+      }
+    }
+
+    const stats = createSessionParseStats()
+    const seeded = await parseAgentSessionFileCached(await candidate(), process.platform, stats)
+    expect(seeded?.title).toBe('first ask')
+    await parseAgentSessionFileCached(await candidate(), process.platform, stats)
+    expect(stats).toMatchObject({ fullParses: 1, reused: 1 })
+
+    await writeMessages('second ask, rather longer than the first')
+    const rewritten = await parseAgentSessionFileCached(await candidate(), process.platform, stats)
+
+    expect(rewritten?.title).toBe('second ask, rather longer than the first')
+    expect(stats).toMatchObject({ fullParses: 2, reused: 1 })
+  })
+
   it('re-parses a changed grok summary fully and reuses it when unchanged', async () => {
     const root = await makeTempDir()
     const sessionDir = join(root, 'session-1')

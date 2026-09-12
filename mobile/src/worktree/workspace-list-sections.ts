@@ -1,4 +1,4 @@
-import type { WorkspaceStatusDefinition } from '../../../src/shared/types'
+import type { WorkspaceStatusDefinition } from '../../../src/shared/worktree/types'
 import {
   DEFAULT_MOBILE_WORKSPACE_STATUSES,
   coerceMobileWorkspaceStatuses,
@@ -10,6 +10,7 @@ import { getPRGroupKey, PR_GROUP_LABELS, PR_GROUP_ORDER } from './workspace-pr-s
 import type { FilterState, Section, Worktree } from './workspace-list-types'
 import type { MobileGroupMode, MobileSortMode } from './workspace-view-settings'
 import { sortWorktrees } from './workspace-list-ordering'
+import { getWorktreeRowIdentity } from './worktree-host-row-identity'
 
 export type { FilterState, Section, Worktree } from './workspace-list-types'
 export { CREATE_GRACE_MS, getWorktreeStatus, sortWorktrees } from './workspace-list-ordering'
@@ -28,7 +29,7 @@ function makeSection(
     ...(icon ? { icon } : {}),
     data: rows.map((worktree) => ({
       ...worktree,
-      sectionListKey: `${key}:${worktree.worktreeId}`
+      sectionListKey: `${key}:${getWorktreeRowIdentity(worktree)}`
     }))
   }
 }
@@ -65,6 +66,19 @@ function isDefaultBranchWorkspace(w: Worktree): boolean {
   return branch === 'main' || branch === 'master'
 }
 
+/**
+ * Whether "Hide sleeping" must keep this row — the project's entry point (#8873).
+ * Falls back to the branch heuristic for hosts that predate isMainWorktree; a
+ * folder workspace is always its project's entry point, and isDefaultBranchWorkspace
+ * rejects it by design, so it needs its own legacy arm or #8873 still reproduces.
+ */
+function isSleepingSweepExempt(w: Worktree, alwaysShowDefaultBranch: boolean | undefined): boolean {
+  if (alwaysShowDefaultBranch === false) {
+    return false
+  }
+  return w.isMainWorktree ?? (w.workspaceKind === 'folder-workspace' || isDefaultBranchWorkspace(w))
+}
+
 function orderMainWorktreeFirst(worktrees: Worktree[]): Worktree[] {
   const mainWorktrees = worktrees.filter((worktree) => worktree.isMainWorktree)
   if (mainWorktrees.length === 0) {
@@ -80,7 +94,9 @@ export function filterWorktrees(
 ): Worktree[] {
   let result = worktrees.filter((w) => !w.isArchived)
   if (filters.hideSleeping) {
-    result = result.filter(isWorktreeActive)
+    result = result.filter(
+      (w) => isSleepingSweepExempt(w, filters.alwaysShowDefaultBranch) || isWorktreeActive(w)
+    )
   }
   if (filters.hideDefaultBranch) {
     result = result.filter((w) => !isDefaultBranchWorkspace(w))

@@ -28,3 +28,20 @@ export type DeveloperPermissionRequestResult = {
   status: DeveloperPermissionStatus
   openedSystemSettings: boolean
 }
+
+export type LocalNetworkConnectionTestFailure =
+  | 'invalid-target'
+  | 'timeout'
+  | 'refused'
+  | 'unreachable'
+  | 'unresolved'
+  | 'failed'
+  | 'unsupported'
+
+export type LocalNetworkConnectionTestResult = {
+  ok: boolean
+  host: string
+  port: number
+  testedAt: number
+  failure?: LocalNetworkConnectionTestFailure
+}

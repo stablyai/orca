@@ -1,27 +1,60 @@
-// Why: the SSH relay shim (`~/.orca-relay/bin/orca`) forwards CLI invocations
-// to the host app. Instead of re-implementing every command in a hand-rolled
-// switch (the cause of "Unsupported SSH Orca CLI command", #7716), the host
-// runs the real bundled `orca` CLI entry in Electron node mode — the same
-// entry the local shell command uses — so remote invocations get the full
-// command surface (orchestration, worktree, terminal, ...) by construction.
+// The SSH shim runs the bundled CLI so remote shells get the full command surface.
 import { app } from 'electron'
 import { spawn as nodeSpawn } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { getCanonicalUserDataPath } from '../persistence'
+import { resolveHostCliKillTimeoutMs } from './ssh-host-cli-deadline'
+export { resolveHostCliKillTimeoutMs } from './ssh-host-cli-deadline'
+import { MAX_TIMER_DELAY_MS, isSafeTimerDelayMs } from '../../shared/timer-delay'
+import {
+  ORCHESTRATION_COMPATIBILITY_ATTACHMENT_ENV,
+  ORCHESTRATION_COMPATIBILITY_HOST_ID_ENV,
+  ORCHESTRATION_COMPATIBILITY_HOST_INCARNATION_ENV,
+  ORCHESTRATION_COMPATIBILITY_HOST_KIND_ENV
+} from '../../shared/orchestration-compatibility-evidence'
+import {
+  REMOTE_ARTIFACT_INPUT_ENV,
+  sshArtifactSourceKey,
+  type RemoteArtifactInput
+} from '../../shared/artifact-cli-bridge'
+
+export type SshCliRuntimeAuthority = {
+  kind: 'ssh'
+  targetId: string
+  connectionIncarnation: string
+  attachmentId: string
+}
 
 export type RemoteOrcaCliRequest = {
   argv: string[]
   cwd: string
   env: Record<string, string>
   stdin?: string
+  artifactInput?: RemoteArtifactInput
+  runtimeAuthority?: SshCliRuntimeAuthority
 }
 
 export type RemoteOrcaCliResult = {
   stdout: string
   stderr: string
   exitCode: number
+  postOutput?: RemoteOrcaCliPostOutput
 }
+
+export type RemoteOrcaCliPostOutput =
+  | {
+      kind: 'legacy_check_ack'
+      terminal: string
+      messageIds: string[]
+      types?: string[]
+    }
+  | {
+      kind: 'legacy_question_ack'
+      terminal: string
+      questionId: string
+      answerMessageId: string
+    }
 
 export type HostCliPassthroughOptions = {
   execPath?: string
@@ -38,22 +71,17 @@ export type HostCliPassthroughOptions = {
  * working even on broken installs. */
 export class HostCliUnavailableError extends Error {}
 
-// Why: only Orca terminal-context vars may cross from the remote shell into
-// the host CLI process. Remote PATH / ORCA_USER_DATA_PATH are paths on the
-// remote machine (meaningless or instance-hijacking on the host), and
-// NODE_OPTIONS-style vars could alter host execution.
+// Only terminal identity may cross hosts; remote paths and Node options cannot.
 const REMOTE_CONTEXT_ENV_VARS = [
   'ORCA_TERMINAL_HANDLE',
   'ORCA_WORKTREE_ID',
   'ORCA_PANE_KEY',
+  'ORCA_AGENT_LAUNCH_TOKEN',
   'ORCA_WORKSPACE_ID'
 ] as const
 
-// Why: bound captured output so a runaway command cannot balloon the relay
-// JSON-RPC response or main-process memory.
+// Bound output retained for the relay response.
 const MAX_CAPTURED_OUTPUT_BYTES = 8 * 1024 * 1024
-const DEFAULT_KILL_TIMEOUT_MS = 10 * 60_000
-const KILL_TIMEOUT_GRACE_MS = 2 * 60_000
 
 export function resolveHostCliEntryPath(app: {
   isPackaged: boolean
@@ -68,22 +96,13 @@ export function resolveHostCliEntryPath(app: {
     : join(app.appPath, 'out', 'cli', 'index.js')
 }
 
-/** Kill timer for the host CLI subprocess. Long-poll commands carry their wait
- * budget in `--timeout-ms`; extend past it so the CLI's own timeout fires
- * first and produces a proper error message. */
-export function resolveHostCliKillTimeoutMs(argv: string[]): number {
-  const explicit = parseTimeoutMsFlag(argv)
-  if (explicit !== null && Number.isFinite(explicit) && explicit > 0) {
-    return Math.max(DEFAULT_KILL_TIMEOUT_MS, explicit + KILL_TIMEOUT_GRACE_MS)
-  }
-  return DEFAULT_KILL_TIMEOUT_MS
-}
-
 export function buildHostCliEnv(args: {
   hostEnv: NodeJS.ProcessEnv
   remoteEnv: Record<string, string>
   userDataPath: string
   remoteCwd: string
+  runtimeAuthority?: SshCliRuntimeAuthority
+  artifactInput?: RemoteArtifactInput
 }): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = { ...args.hostEnv }
   for (const key of REMOTE_CONTEXT_ENV_VARS) {
@@ -99,12 +118,32 @@ export function buildHostCliEnv(args: {
   // subprocess cwd cannot be chdir'd there; ORCA_CLI_CWD carries it for
   // cwd-based selectors like `--worktree active`.
   env.ORCA_CLI_CWD = args.remoteCwd
+  // Why: recovery commands run on the SSH execution host through its relay shim.
+  env.ORCA_CLI_COMMAND = 'orca'
   // Why: same node-mode hygiene as the shipped CLI launchers — stash and clear
   // NODE_OPTIONS so Electron's node bootstrap does not inherit them.
   env.ORCA_NODE_OPTIONS = args.hostEnv.NODE_OPTIONS ?? ''
   env.ORCA_NODE_REPL_EXTERNAL_MODULE = args.hostEnv.NODE_REPL_EXTERNAL_MODULE ?? ''
   delete env.NODE_OPTIONS
   delete env.NODE_REPL_EXTERNAL_MODULE
+  delete env[ORCHESTRATION_COMPATIBILITY_HOST_KIND_ENV]
+  delete env[ORCHESTRATION_COMPATIBILITY_HOST_ID_ENV]
+  delete env[ORCHESTRATION_COMPATIBILITY_HOST_INCARNATION_ENV]
+  delete env[ORCHESTRATION_COMPATIBILITY_ATTACHMENT_ENV]
+  delete env[REMOTE_ARTIFACT_INPUT_ENV]
+  if (args.runtimeAuthority) {
+    env[ORCHESTRATION_COMPATIBILITY_HOST_KIND_ENV] = 'ssh'
+    env[ORCHESTRATION_COMPATIBILITY_HOST_ID_ENV] = args.runtimeAuthority.targetId
+    env[ORCHESTRATION_COMPATIBILITY_HOST_INCARNATION_ENV] =
+      args.runtimeAuthority.connectionIncarnation
+    env[ORCHESTRATION_COMPATIBILITY_ATTACHMENT_ENV] = args.runtimeAuthority.attachmentId
+  }
+  if (args.artifactInput) {
+    const sourceKey = args.runtimeAuthority
+      ? sshArtifactSourceKey(args.runtimeAuthority.targetId, args.artifactInput.sourceKey)
+      : args.artifactInput.sourceKey
+    env[REMOTE_ARTIFACT_INPUT_ENV] = JSON.stringify({ ...args.artifactInput, sourceKey })
+  }
   env.ELECTRON_RUN_AS_NODE = '1'
   return env
 }
@@ -141,6 +180,11 @@ export async function runHostOrcaCliPassthrough(
   const spawn = options.spawn ?? nodeSpawn
   const entryExists = options.entryExists ?? existsSync
   const killTimeoutMs = options.killTimeoutMs ?? resolveHostCliKillTimeoutMs(request.argv)
+  if (!isSafeTimerDelayMs(killTimeoutMs)) {
+    throw new RangeError(
+      `Host CLI kill timeout must be an integer between 0 and ${MAX_TIMER_DELAY_MS}ms.`
+    )
+  }
 
   if (!entryExists(cliEntryPath)) {
     throw new HostCliUnavailableError(`Orca CLI entry not found at ${cliEntryPath}`)
@@ -150,7 +194,9 @@ export async function runHostOrcaCliPassthrough(
     hostEnv,
     remoteEnv: request.env,
     userDataPath,
-    remoteCwd: request.cwd
+    remoteCwd: request.cwd,
+    runtimeAuthority: request.runtimeAuthority,
+    artifactInput: request.artifactInput
   })
 
   return await new Promise<RemoteOrcaCliResult>((resolve, reject) => {
@@ -251,20 +297,4 @@ class CappedOutputCollector {
     const text = Buffer.concat(this.chunks).toString('utf8')
     return this.truncated ? `${text}\n[orca ssh cli] output truncated\n` : text
   }
-}
-
-function parseTimeoutMsFlag(argv: string[]): number | null {
-  for (let i = 0; i < argv.length; i += 1) {
-    const token = argv[i]
-    if (token === '--timeout-ms') {
-      const next = argv[i + 1]
-      const parsed = next === undefined ? Number.NaN : Number(next)
-      return Number.isFinite(parsed) ? parsed : null
-    }
-    if (token.startsWith('--timeout-ms=')) {
-      const parsed = Number(token.slice('--timeout-ms='.length))
-      return Number.isFinite(parsed) ? parsed : null
-    }
-  }
-  return null
 }

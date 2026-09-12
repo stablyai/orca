@@ -11,6 +11,35 @@ import { ProviderHostScopeControl } from './ProviderHostScopeControl'
 import { usePreflightCardStatuses } from './source-control-preflight-card-status'
 import { translate } from '@/i18n/i18n'
 
+function integrationStatusLabel(
+  status: 'connected' | 'unavailable' | 'not-installed' | 'not-authenticated' | 'checking'
+): string {
+  switch (status) {
+    case 'connected':
+      return translate(
+        'auto.components.settings.cli.source.control.integration.cards.statusConnected',
+        'Connected'
+      )
+    case 'unavailable':
+      return translate(
+        'auto.components.settings.cli.source.control.integration.cards.statusUnavailable',
+        'Unavailable'
+      )
+    case 'not-installed':
+      return translate(
+        'auto.components.settings.cli.source.control.integration.cards.statusNotInstalled',
+        'Not installed'
+      )
+    case 'not-authenticated':
+      return translate(
+        'auto.components.settings.cli.source.control.integration.cards.statusNotAuthenticated',
+        'Not authenticated'
+      )
+    case 'checking':
+      return ''
+  }
+}
+
 function ProviderAccountScopeDetails({
   children
 }: {
@@ -65,15 +94,7 @@ export function GitHubIntegrationCard(): React.JSX.Element {
       }
       checking={status === 'checking'}
       statusTone={connected ? 'connected' : 'attention'}
-      statusLabel={
-        connected
-          ? 'Connected'
-          : status === 'unavailable'
-            ? 'Unavailable'
-            : status === 'not-installed'
-              ? 'Not installed'
-              : 'Not authenticated'
-      }
+      statusLabel={integrationStatusLabel(status)}
     >
       <ProviderAccountScopeDetails>
         {status !== 'checking' && !connected ? (
@@ -194,15 +215,7 @@ export function GitLabIntegrationCard(): React.JSX.Element {
       }
       checking={status === 'checking'}
       statusTone={connected ? 'connected' : 'attention'}
-      statusLabel={
-        connected
-          ? 'Connected'
-          : status === 'unavailable'
-            ? 'Unavailable'
-            : status === 'not-installed'
-              ? 'Not installed'
-              : 'Not authenticated'
-      }
+      statusLabel={integrationStatusLabel(status)}
     >
       <ProviderAccountScopeDetails>
         {status !== 'checking' && !connected ? (

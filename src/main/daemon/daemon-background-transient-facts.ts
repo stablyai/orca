@@ -19,6 +19,11 @@ import {
   createTerminalTitleTracker,
   type TerminalTitleTracker
 } from '../../shared/terminal-output-side-effects'
+import {
+  INITIAL_MODE_2031_REPLY_SCAN_STATE,
+  scanMode2031ReplyDecision,
+  type Mode2031ReplyScanState
+} from '../../shared/terminal-color-scheme-protocol'
 import type { DaemonTransientFact } from './types'
 
 // Kill switch for the whole background keep-tail mechanism (thinning +
@@ -27,6 +32,8 @@ export const BACKGROUND_STREAM_DROP_ENABLED = process.env.ORCA_DAEMON_BACKGROUND
 
 export class BackgroundTransientFactRelay {
   private trackersBySessionId = new Map<string, TerminalTitleTracker>()
+  // Why: shadow foreground bytes so a provisional subscribe survives either scan-authority handoff.
+  private mode2031ReplyScanStateBySessionId = new Map<string, Mode2031ReplyScanState>()
   private emitFact: (sessionId: string, fact: DaemonTransientFact) => void
 
   constructor(emitFact: (sessionId: string, fact: DaemonTransientFact) => void) {
@@ -59,7 +66,8 @@ export class BackgroundTransientFactRelay {
           // PR-link dedup memory, so a link re-printed across toggles can
           // re-fire — consumers treat pr-link as a latest-association update.
           onPrLink: (link) => this.emitFact(sessionId, { kind: 'pr-link', link }),
-          onMode2031Subscribe: () => this.emitFact(sessionId, { kind: '2031-subscribe' })
+          onMode2031Subscribe: () => this.emitFact(sessionId, { kind: '2031-subscribe' }),
+          onMode2031Unsubscribe: () => this.emitFact(sessionId, { kind: '2031-unsubscribe' })
         })
       )
     } else {
@@ -73,30 +81,63 @@ export class BackgroundTransientFactRelay {
    *  background toggle neither mints a phantom bell nor loses its fact. A
    *  partial tail contains no complete sequence, so this can never fire. */
   seedSessionScanState(sessionId: string, partialEscapeTailAnsi: string): void {
-    if (partialEscapeTailAnsi.length > 0) {
-      this.trackersBySessionId
-        .get(sessionId)
-        ?.handleChunk(partialEscapeTailAnsi, { titleScanData: '' })
+    let mode2031State = this.mode2031ReplyScanStateBySessionId.get(sessionId)
+    if (!mode2031State && partialEscapeTailAnsi.length > 0) {
+      mode2031State = scanMode2031ReplyDecision(
+        INITIAL_MODE_2031_REPLY_SCAN_STATE,
+        partialEscapeTailAnsi
+      ).state
+      if (mode2031State.tail.length > 0) {
+        this.mode2031ReplyScanStateBySessionId.set(sessionId, mode2031State)
+      }
+    }
+    mode2031State ??= INITIAL_MODE_2031_REPLY_SCAN_STATE
+    const scanSeedAnsi = mode2031State.tail || partialEscapeTailAnsi
+    if (scanSeedAnsi.length > 0) {
+      this.trackersBySessionId.get(sessionId)?.handleChunk(scanSeedAnsi, {
+        titleScanData: '',
+        mode2031PendingSubscribe: mode2031State.pendingSubscribe
+      })
     }
   }
 
   /** Feed one raw chunk, in byte order, BEFORE it is enqueued for delivery —
    *  facts must be captured even when the chunk is later keep-tail dropped. */
   onSessionData(sessionId: string, data: string): void {
+    const previousMode2031State = this.mode2031ReplyScanStateBySessionId.get(sessionId)
+    if (previousMode2031State || data.includes('\x1b') || data.includes('\x9b')) {
+      const mode2031Result = scanMode2031ReplyDecision(
+        previousMode2031State ?? INITIAL_MODE_2031_REPLY_SCAN_STATE,
+        data
+      )
+      if (mode2031Result.state.tail.length > 0 || mode2031Result.state.pendingSubscribe) {
+        this.mode2031ReplyScanStateBySessionId.set(sessionId, mode2031Result.state)
+      } else {
+        this.mode2031ReplyScanStateBySessionId.delete(sessionId)
+      }
+    }
     // titleScanData:'' skips title extraction (titles stay main-authoritative)
     // and keeps the stale-working-title timer permanently unarmed — only the
     // four transient scanners consume the chunk.
     this.trackersBySessionId.get(sessionId)?.handleChunk(data, { titleScanData: '' })
   }
 
+  getMode2031ReplyScanState(sessionId: string): Mode2031ReplyScanState {
+    return (
+      this.mode2031ReplyScanStateBySessionId.get(sessionId) ?? INITIAL_MODE_2031_REPLY_SCAN_STATE
+    )
+  }
+
   onSessionExit(sessionId: string): void {
     this.disposeTracker(sessionId)
+    this.mode2031ReplyScanStateBySessionId.delete(sessionId)
   }
 
   dispose(): void {
     for (const sessionId of Array.from(this.trackersBySessionId.keys())) {
       this.disposeTracker(sessionId)
     }
+    this.mode2031ReplyScanStateBySessionId.clear()
   }
 
   private disposeTracker(sessionId: string): void {

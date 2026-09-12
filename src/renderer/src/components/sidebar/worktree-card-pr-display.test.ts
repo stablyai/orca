@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { HostedReviewInfo } from '../../../../shared/hosted-review'
-import type { PRInfo } from '../../../../shared/types'
+import type { PRInfo } from '../../../../shared/github/pull-request-types'
 import {
   getWorktreeCardPrDisplay,
   isCachedMergedBranchPRCurrentForWorktree
@@ -72,10 +72,72 @@ describe('getWorktreeCardPrDisplay', () => {
     ).toBeNull()
   })
 
+  it('keeps an unlinked GitHub PR visible when branch provenance names the same PR', () => {
+    expect(
+      getWorktreeCardPrDisplay(pr, null, null, null, null, null, {
+        reviewHintKey: 'github:123',
+        branchLookupGitHubPRNumber: 123
+      })
+    ).toBe(pr)
+  })
+
+  it('still suppresses unlinked linked-lookup details when branch provenance names a different PR', () => {
+    expect(
+      getWorktreeCardPrDisplay(pr, null, null, null, null, null, {
+        reviewHintKey: 'github:123',
+        branchLookupGitHubPRNumber: 999
+      })
+    ).toBeNull()
+  })
+
+  it('does not let a GitHub branch PR number corroborate an unlinked GitLab MR', () => {
+    expect(
+      getWorktreeCardPrDisplay(gitLabReview, null, null, null, null, null, {
+        reviewHintKey: 'gitlab:321',
+        branchLookupGitHubPRNumber: 321
+      })
+    ).toBeNull()
+  })
+
+  it('does not let branch provenance override linked non-GitHub review metadata', () => {
+    expect(
+      getWorktreeCardPrDisplay(pr, null, 321, null, null, null, {
+        reviewHintKey: 'gitlab:321',
+        branchLookupGitHubPRNumber: 123
+      })
+    ).toBeNull()
+  })
+
   it('shows branch-discovered GitHub PR details when the worktree is unlinked', () => {
     expect(
       getWorktreeCardPrDisplay(pr, null, null, null, null, null, {
         reviewHintKey: ''
+      })
+    ).toBe(pr)
+  })
+
+  it('hides a matching suppressed branch-discovered GitHub PR', () => {
+    expect(
+      getWorktreeCardPrDisplay(pr, null, null, null, null, null, {
+        reviewHintKey: '',
+        suppressedGitHubPR: 123
+      })
+    ).toBeNull()
+  })
+
+  it('lets an explicit GitHub link override stale suppression metadata', () => {
+    expect(
+      getWorktreeCardPrDisplay(pr, 123, null, null, null, null, {
+        suppressedGitHubPR: 123
+      })
+    ).toBe(pr)
+  })
+
+  it('keeps a different branch-discovered GitHub PR visible', () => {
+    expect(
+      getWorktreeCardPrDisplay(pr, null, null, null, null, null, {
+        reviewHintKey: '',
+        suppressedGitHubPR: 999
       })
     ).toBe(pr)
   })
@@ -105,7 +167,11 @@ describe('getWorktreeCardPrDisplay', () => {
   })
 
   it('preserves branch-discovered hosted reviews for providers without worktree metadata', () => {
-    expect(getWorktreeCardPrDisplay(bitbucketReview, null)).toBe(bitbucketReview)
+    expect(
+      getWorktreeCardPrDisplay(bitbucketReview, null, null, null, null, null, {
+        suppressedGitHubPR: bitbucketReview.number
+      })
+    ).toBe(bitbucketReview)
   })
 })
 

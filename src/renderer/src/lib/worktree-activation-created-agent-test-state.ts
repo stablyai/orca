@@ -1,6 +1,6 @@
 import path from 'node:path'
 import { vi } from 'vitest'
-import type { Worktree } from '../../../shared/types'
+import type { Worktree } from '../../../shared/worktree/types'
 import { useAppStore } from '@/store'
 
 export function makeCreatedAgentWorktree(): Worktree {
@@ -27,9 +27,74 @@ export function makeCreatedAgentWorktree(): Worktree {
   }
 }
 
+type StoreState = ReturnType<typeof useAppStore.getState>
+
+/** The empty-workspace store shape both seeds start from; each layers its own tabs/actions on top. */
+function baseSeedState(worktree: Worktree, worktrees: Worktree[]): Partial<StoreState> {
+  return {
+    repos: [
+      {
+        id: worktree.repoId,
+        path: path.join(path.sep, 'workspace', 'repo'),
+        displayName: 'repo',
+        badgeColor: '#000000',
+        addedAt: 0
+      }
+    ],
+    worktreesByRepo: { [worktree.repoId]: worktrees },
+    activeRepoId: worktree.repoId,
+    activeView: 'terminal',
+    tabsByWorktree: {},
+    unifiedTabsByWorktree: {},
+    groupsByWorktree: {},
+    layoutByWorktree: {},
+    activeGroupIdByWorktree: {},
+    openFiles: [],
+    browserTabsByWorktree: {},
+    activeFileIdByWorktree: {},
+    activeBrowserTabIdByWorktree: {},
+    activeTabTypeByWorktree: {},
+    activeTabIdByWorktree: {},
+    tabBarOrderByWorktree: {},
+    pendingStartupByTabId: {},
+    settings: {
+      agentCmdOverrides: {},
+      setupScriptLaunchMode: 'new-tab'
+    } as unknown as StoreState['settings'],
+    refreshGitHubForWorktreeIfStale: vi.fn()
+  }
+}
+
+/** Seeds a `createdWithAgent` worktree with zero renderable tabs — the state that used to
+ *  trigger the removed creation-agent relaunch. */
+export function seedEmptyActivatableWorktree(
+  worktree: Worktree,
+  options: { extraWorktrees?: Worktree[] } = {}
+): { revealWorktreeInSidebar: ReturnType<typeof vi.fn> } {
+  const revealWorktreeInSidebar = vi.fn()
+
+  useAppStore.setState({
+    ...baseSeedState(worktree, [...(options.extraWorktrees ?? []), worktree]),
+    markWorktreeVisited: vi.fn(),
+    recordWorktreeVisit: vi.fn(),
+    revealWorktreeInSidebar
+  })
+
+  // Why: orphan terminals and reconnectable PTYs also feed renderableTabCount, so
+  // assert the premise — drift here would make the regression tests pass blind.
+  const { renderableTabCount } = useAppStore.getState().reconcileWorktreeTabModel(worktree.id)
+  if (renderableTabCount !== 0) {
+    throw new Error(
+      `seedEmptyActivatableWorktree: expected 0 renderable tabs, got ${renderableTabCount}`
+    )
+  }
+
+  return { revealWorktreeInSidebar }
+}
+
 export function seedAlreadyActiveWorktree(
   worktree: Worktree,
-  overrides: Partial<ReturnType<typeof useAppStore.getState>> = {}
+  overrides: Partial<StoreState> = {}
 ): {
   markWorktreeVisited: ReturnType<typeof vi.fn>
   recordWorktreeVisit: ReturnType<typeof vi.fn>
@@ -39,21 +104,9 @@ export function seedAlreadyActiveWorktree(
   const recordWorktreeVisit = vi.fn()
   const revealWorktreeInSidebar = vi.fn()
   const terminalTitle = ['Terminal', '1'].join(' ')
-  const repoPath = path.join(path.sep, 'workspace', 'repo')
 
   useAppStore.setState({
-    repos: [
-      {
-        id: worktree.repoId,
-        path: repoPath,
-        displayName: 'repo',
-        badgeColor: '#000000',
-        addedAt: 0
-      }
-    ],
-    worktreesByRepo: { [worktree.repoId]: [worktree] },
-    activeRepoId: worktree.repoId,
-    activeView: 'terminal',
+    ...baseSeedState(worktree, [worktree]),
     activeWorktreeId: worktree.id,
     activeTabId: 'tab-1',
     activeTabType: 'terminal',
@@ -101,19 +154,9 @@ export function seedAlreadyActiveWorktree(
     activeGroupIdByWorktree: { [worktree.id]: 'group-1' },
     activeTabTypeByWorktree: { [worktree.id]: 'terminal' },
     everActivatedWorktreeIds: new Set([worktree.id]),
-    openFiles: [],
-    browserTabsByWorktree: {},
-    activeFileIdByWorktree: {},
-    activeBrowserTabIdByWorktree: {},
     activeTabIdByWorktree: { [worktree.id]: 'tab-1' },
-    tabBarOrderByWorktree: {},
-    settings: {
-      agentCmdOverrides: {},
-      setupScriptLaunchMode: 'new-tab'
-    } as unknown as ReturnType<typeof useAppStore.getState>['settings'],
     markWorktreeVisited,
     recordWorktreeVisit,
-    refreshGitHubForWorktreeIfStale: vi.fn(),
     revealWorktreeInSidebar,
     ...overrides
   })

@@ -1,32 +1,23 @@
 import { readFileSync } from 'node:fs'
 import { describe, expect, it, vi } from 'vitest'
-import { parseArgs } from '../../tools/win-crash-survival-e2e/cli-args.mjs'
-import { buildCrashAssertions } from '../../tools/win-crash-survival-e2e/crash-assertions.mjs'
-import { scanPwshFailFast } from '../../tools/win-crash-survival-e2e/crash-step.mjs'
-import { selectScopedDaemon } from '../../tools/win-crash-survival-e2e/daemon-identity.mjs'
+import { parseArgs } from '../../tests/tools/win-crash-survival-e2e/cli-args.mjs'
+import { buildCrashAssertions } from '../../tests/tools/win-crash-survival-e2e/crash-assertions.mjs'
+import { scanPwshFailFast } from '../../tests/tools/win-crash-survival-e2e/crash-step.mjs'
+import { selectScopedDaemon } from '../../tests/tools/win-crash-survival-e2e/daemon-identity.mjs'
 import {
   reattachSentinelMatches,
   selectCreatedTabId
-} from '../../tools/win-crash-survival-e2e/reattach-proof.mjs'
-import { quotePowerShellLiteral } from '../../tools/win-update-e2e/powershell-runner.mjs'
-import { closeApp, resolveElectronMainPid } from '../../tools/win-update-e2e/app-driver.mjs'
-import { isPidAlive } from '../../tools/win-update-e2e/daemon-processes.mjs'
+} from '../../tests/tools/win-crash-survival-e2e/reattach-proof.mjs'
+import { quotePowerShellLiteral } from '../../tests/tools/win-update-e2e/powershell-runner.mjs'
+import { closeApp, resolveElectronMainPid } from '../../tests/tools/win-update-e2e/app-driver.mjs'
+import { isPidAlive } from '../../tests/tools/win-update-e2e/daemon-processes.mjs'
 
 describe('win-crash-survival-e2e proof contracts', () => {
-  it('keeps the packaged proof wired as a targeted pull-request gate', () => {
+  it('keeps the packaged proof manually dispatchable without a PR trigger', () => {
     const workflow = readFileSync('.github/workflows/win-crash-survival-e2e.yml', 'utf8')
-    expect(workflow).toMatch(/^  pull_request:/m)
+    expect(workflow).not.toMatch(/^  pull_request:/m)
+    expect(workflow).toMatch(/^  workflow_dispatch:/m)
     expect(workflow).not.toMatch(/^  push:/m)
-    expect(workflow).toContain("- 'src/main/daemon/**'")
-    expect(workflow).toContain("- 'src/main/index.ts'")
-    expect(workflow).toContain("- 'src/main/ipc/pty*.ts'")
-    expect(workflow).toContain("- 'src/main/startup/first-window-startup-services.ts'")
-    expect(workflow).toContain("- 'src/main/window/attach-main-window-services.ts'")
-    expect(workflow).toContain("- 'src/preload/**'")
-    expect(workflow).toContain("- 'src/renderer/src/components/terminal-pane/**'")
-    expect(workflow).toContain("- 'src/renderer/src/store/slices/terminals.ts'")
-    expect(workflow).toContain("- '!src/**/*.test.*'")
-    expect(workflow).toContain("- '!src/**/*.bench.*'")
     expect(workflow).toContain('--expect "$env:EXPECT"')
     expect(workflow).toContain('exit $LASTEXITCODE')
     expect(workflow).toContain("'!config/**/*.test.*'")
@@ -68,7 +59,7 @@ describe('win-crash-survival-e2e proof contracts', () => {
   })
 
   it('scans for FailFast only after the post-crash input probe', () => {
-    const harness = readFileSync('tools/win-crash-survival-e2e/run.mjs', 'utf8')
+    const harness = readFileSync('tests/tools/win-crash-survival-e2e/run.mjs', 'utf8')
     const scanIndex = harness.indexOf('const { events: failFastEvents }')
     const probeIndex = harness.indexOf('reattachProven = await proveReattachedShell')
     expect(scanIndex).not.toBe(-1)
@@ -172,7 +163,7 @@ describe('win-crash-survival-e2e proof contracts', () => {
   })
 
   it('requires the real packaged main for the crash proof but permits fallback cleanup', async () => {
-    const harness = readFileSync('tools/win-crash-survival-e2e/run.mjs', 'utf8')
+    const harness = readFileSync('tests/tools/win-crash-survival-e2e/run.mjs', 'utf8')
     expect(harness).toContain(
       'resolveElectronMainPid(session.app, { allowLauncherFallback: false })'
     )

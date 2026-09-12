@@ -81,22 +81,164 @@ export type SkillFreshnessInstallation = {
   currentPackageDigest: string
   currentAppVersion: string
   observedPackageDigest: string | null
+  /** Git tree sha of the observed bytes; lets the post-run verdict match disk against the updater's lock. */
+  observedGitTreeSha?: string | null
+  /**
+   * The same hash over only the files the current bundle lists. Carried beside the
+   * whole-folder hash, not in place of it, so a folder holding an agent CLI's sidecar
+   * can still match the lock without blinding the check to an upstream revision that
+   * added a file. Absent from hosts older than this field.
+   */
+  observedOfficialGitTreeSha?: string | null
   errorCategory: string | null
+}
+
+// A scope whose contents belong to someone other than the user: a project's own checkout,
+// or a plugin's bundled copy. Orca's global update never writes here, so the owner's
+// content is not the user's drift — which is why ownership outranks byte status when
+// labelling a location.
+const OWNER_MANAGED_SKILL_SCOPES: ReadonlySet<SkillInstallationTopology> = new Set([
+  'repo-scope',
+  'plugin-cache'
+])
+
+export function isOwnerManagedSkillScope(topology: SkillInstallationTopology): boolean {
+  return OWNER_MANAGED_SKILL_SCOPES.has(topology)
+}
+
+// Why: Orca's updater only ever passes --global, so a copy a project owns is not
+// something Orca can act on — it has no remedy by design. Reporting it as global drift
+// produced an amber badge no user action could clear, over a copy their own repo
+// legitimately owns. Stated by scope rather than by byte status on purpose: an outdated
+// or unreadable project copy is just as far outside the global updater's reach as an
+// unrecognized one.
+export function skillPlacementParticipatesInGlobalFreshness(
+  installation: SkillFreshnessInstallation
+): boolean {
+  return installation.topology !== 'repo-scope'
+}
+
+/**
+ * Whether a copy is wrong in a way running the update would not resolve.
+ *
+ * Shared so the badge and the review dialog cannot disagree about what counts: the
+ * badge points at the dialog for the explanation, so a copy that turns the badge
+ * amber must also produce a row there. An out-of-date copy the command converges is
+ * ordinary work, not a problem; a plugin's own copy of a same-named skill is the vendor's
+ * business rather than the user's drift, and a project's own copy is outside the reach of
+ * the only update Orca runs.
+ */
+export function isSkillCopyNeedingAttention(installation: SkillFreshnessInstallation): boolean {
+  return (
+    skillPlacementParticipatesInGlobalFreshness(installation) &&
+    installation.status !== 'current' &&
+    // Why: 'newer-known' is recognized official content ahead of this build — the
+    // updater's own install or a newer release's bytes. There is nothing to fix and
+    // nothing to update to, so amber would send the user chasing a phantom edit.
+    installation.status !== 'newer-known' &&
+    !(installation.status === 'unrecognized' && installation.topology === 'plugin-cache') &&
+    !(
+      SUPPORTED_GLOBAL_SKILL_TOPOLOGIES.has(installation.topology) &&
+      installation.status === 'outdated'
+    )
+  )
+}
+
+export type SkillFreshnessScanIssueReason =
+  | 'depth-limit'
+  | 'entry-limit'
+  | 'candidate-limit'
+  | 'manifest-limit'
+  | 'outside-root'
+  | 'io-error'
+  | 'issue-limit'
+
+export type SkillFreshnessScanIssue = {
+  rootId: string
+  sourceLabel: string
+  path: string
+  reason: SkillFreshnessScanIssueReason
+  errorCode: string | null
+}
+
+// Why: a real read failure is a fact about the user's disk and stays actionable. Orca's
+// own traversal bounds are not — reporting them as attention turns an ordinary large
+// plugin cache into a permanent amber pill on every skill.
+//
+// 'outside-root' is deliberately NOT here. A plugin that links its skills out of the
+// cache (a content-addressed store, a dev-linked package) is a packaging choice by the
+// vendor, not a fault the user can clear: deleting the link only makes their package
+// manager recreate it. Flagging it turned an install that is clean on main into amber on
+// every installed skill. It is still listed in Details, like the other bounds.
+const SKILL_SCAN_ATTENTION_REASONS = new Set<SkillFreshnessScanIssueReason>(['io-error'])
+
+export function isSkillScanAttentionReason(reason: SkillFreshnessScanIssueReason): boolean {
+  return SKILL_SCAN_ATTENTION_REASONS.has(reason)
+}
+
+export function isSkillScanIssueNeedingAttention(issue: SkillFreshnessScanIssue): boolean {
+  return isSkillScanAttentionReason(issue.reason)
+}
+
+// Why: these are the bounds that end the walk rather than skip one folder. They are
+// still not the user's to act on, so they raise no pill — but a scan that stopped
+// early cannot be reported as proof every copy is up to date.
+const SKILL_SCAN_TRUNCATING_REASONS = new Set<SkillFreshnessScanIssueReason>([
+  'entry-limit',
+  'candidate-limit'
+])
+
+export function isTruncatingSkillScanReason(reason: SkillFreshnessScanIssueReason): boolean {
+  return SKILL_SCAN_TRUNCATING_REASONS.has(reason)
+}
+
+export function isSkillScanIssueTruncatingScan(issue: SkillFreshnessScanIssue): boolean {
+  return isTruncatingSkillScanReason(issue.reason)
 }
 
 export type SkillFreshnessInventory = {
   schemaVersion: 1
   installations: SkillFreshnessInstallation[]
   eligibleUpdateNames: string[]
+  scanIssues: SkillFreshnessScanIssue[]
   scannedAt: number
 }
 
-export function buildTargetedSkillUpdateCommand(names: readonly string[]): string | null {
+export function canonicalizeSkillUpdateNames(names: readonly string[]): string[] | null {
   const canonicalNames = [...new Set(names)].sort((left, right) => left.localeCompare(right, 'en'))
-  // Why: names become editable shell input. Official manifests use this
-  // restricted package-name grammar so no entry can introduce shell syntax.
+  // Why: names reach a shell in the terminal fallback. Official manifests use
+  // this restricted package-name grammar so no entry can introduce shell syntax.
   if (canonicalNames.some((name) => !/^[a-z0-9][a-z0-9._-]*$/.test(name))) {
     return null
   }
-  return canonicalNames.length > 0 ? `npx skills update ${canonicalNames.join(' ')} --global` : null
+  return canonicalNames.length > 0 ? canonicalNames : null
 }
+
+export function buildTargetedSkillUpdateCommand(names: readonly string[]): string | null {
+  const canonicalNames = canonicalizeSkillUpdateNames(names)
+  return canonicalNames ? `npx skills update ${canonicalNames.join(' ')} --global` : null
+}
+
+// Why: `skills update` has no --json (that flag only exists on `list`), so the
+// run reports one indeterminate phase. Per-skill outcomes come from re-scanning
+// the inventory after exit, never from parsing stdout.
+export type SkillUpdateRun =
+  | { state: 'idle' }
+  // `stopping` covers the window between Stop and the process tree actually
+  // dying — the run is still `running` (that is what blocks a second writer),
+  // but the Stop affordance has already been spent.
+  | { state: 'running'; names: string[]; startedAt: number; output: string; stopping?: boolean }
+  | { state: 'success'; names: string[]; finishedAt: number; output: string }
+  | {
+      state: 'error'
+      names: string[]
+      finishedAt: number
+      output: string
+      message: string
+      /** Names still outdated after the run — the re-scan is the source of truth. */
+      failedNames: string[]
+    }
+
+export type SkillUpdateStartResult =
+  | { started: true }
+  | { started: false; reason: 'already-running' | 'invalid-names' | 'unsafe-command-path' }

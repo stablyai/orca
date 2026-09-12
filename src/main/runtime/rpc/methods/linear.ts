@@ -1,137 +1,26 @@
-import { z } from 'zod'
-import { defineMethod, type RpcMethod } from '../core'
-import { OptionalFiniteNumber, OptionalString, requiredString } from '../schemas'
+import { defineMethod } from '../core'
 import { LINEAR_PROJECT_CREATE_METHOD } from './linear-project-create'
-import { LinearIssueAttributeFilterSchema } from './linear-issue-attribute-filter-schema'
+import { LINEAR_ISSUE_LIST_METHOD, LINEAR_MCP_ISSUE_LIST_METHOD } from './linear-issue-list-method'
+import {
+  Connect,
+  CreateIssue,
+  CustomViewContents,
+  CustomViewId,
+  IssueComment,
+  IssueId,
+  IssueUpdate,
+  LinearIssueCommentsParams,
+  ListCustomViews,
+  ListProjects,
+  ProjectId,
+  ProjectIssues,
+  SearchIssues,
+  SelectWorkspace,
+  TeamId,
+  WorkspaceSelection
+} from '../../../../shared/rpc-contract/linear-params'
 
-const VALID_FILTERS = ['assigned', 'created', 'all', 'completed'] as const
-const VALID_CUSTOM_VIEW_MODELS = ['issue', 'project'] as const
-const LinearPriority = z.number().int().min(0).max(4).optional()
-const LinearLabelIds = z.array(requiredString('Invalid label ID')).optional()
-
-const Connect = z.object({
-  apiKey: requiredString('Invalid API key')
-})
-
-const WorkspaceSelection = z
-  .object({
-    workspaceId: OptionalString
-  })
-  .optional()
-
-const ConcreteWorkspaceId = requiredString('Concrete Linear workspace ID is required').refine(
-  (value) => value !== 'all',
-  'Concrete Linear workspace ID is required'
-)
-
-const SelectWorkspace = z.object({
-  workspaceId: requiredString('Workspace ID is required')
-})
-
-const SearchIssues = z.object({
-  query: requiredString('Missing query'),
-  limit: OptionalFiniteNumber,
-  workspaceId: OptionalString
-})
-
-const ListIssues = z
-  .object({
-    filter: z.enum(VALID_FILTERS).optional(),
-    limit: OptionalFiniteNumber,
-    workspaceId: OptionalString,
-    attributeFilter: LinearIssueAttributeFilterSchema.optional()
-  })
-  .strict()
-  .optional()
-
-const CreateIssue = z.object({
-  teamId: requiredString('Team ID is required'),
-  title: requiredString('Title is required'),
-  description: OptionalString,
-  workspaceId: OptionalString,
-  parentIssueId: OptionalString,
-  projectId: z.union([z.string(), z.null()]).optional(),
-  stateId: OptionalString,
-  priority: LinearPriority,
-  assigneeId: z.union([z.string(), z.null()]).optional(),
-  labelIds: LinearLabelIds
-})
-
-const IssueId = z.object({
-  id: requiredString('Issue ID is required'),
-  workspaceId: OptionalString
-})
-
-const IssueComment = z.object({
-  issueId: requiredString('Issue ID is required'),
-  body: requiredString('Comment body is required'),
-  workspaceId: OptionalString
-})
-
-const ListProjects = z
-  .object({
-    query: OptionalString,
-    limit: OptionalFiniteNumber,
-    workspaceId: OptionalString,
-    force: z.boolean().optional()
-  })
-  .optional()
-
-const ProjectId = z.object({
-  id: requiredString('Project ID is required'),
-  workspaceId: ConcreteWorkspaceId,
-  force: z.boolean().optional()
-})
-
-const ProjectIssues = z.object({
-  projectId: requiredString('Project ID is required'),
-  limit: OptionalFiniteNumber,
-  workspaceId: ConcreteWorkspaceId,
-  force: z.boolean().optional()
-})
-
-const ListCustomViews = z.object({
-  model: z.enum(VALID_CUSTOM_VIEW_MODELS),
-  limit: OptionalFiniteNumber,
-  workspaceId: OptionalString,
-  force: z.boolean().optional()
-})
-
-const CustomViewId = z.object({
-  viewId: requiredString('Custom view ID is required'),
-  model: z.enum(VALID_CUSTOM_VIEW_MODELS),
-  workspaceId: ConcreteWorkspaceId,
-  force: z.boolean().optional()
-})
-
-const CustomViewContents = z.object({
-  viewId: requiredString('Custom view ID is required'),
-  limit: OptionalFiniteNumber,
-  workspaceId: ConcreteWorkspaceId,
-  force: z.boolean().optional()
-})
-
-const TeamId = z.object({
-  teamId: requiredString('Team ID is required'),
-  workspaceId: OptionalString
-})
-
-const IssueUpdate = z.object({
-  id: requiredString('Issue ID is required'),
-  workspaceId: OptionalString,
-  updates: z.object({
-    stateId: OptionalString,
-    title: OptionalString,
-    description: z.string().optional(),
-    assigneeId: z.union([z.string(), z.null()]).optional(),
-    estimate: z.union([z.number().int().min(0), z.null()]).optional(),
-    priority: z.number().int().min(0).max(4).optional(),
-    labelIds: z.array(z.string()).optional(),
-    projectId: z.union([z.string(), z.null()]).optional()
-  })
-})
-
-export const LINEAR_METHODS: RpcMethod[] = [
+export const LINEAR_METHODS = [
   defineMethod({
     name: 'linear.connect',
     params: Connect,
@@ -163,14 +52,8 @@ export const LINEAR_METHODS: RpcMethod[] = [
     handler: async (params, { runtime }) =>
       runtime.linearSearchIssues(params.query, params.limit, params.workspaceId)
   }),
-  defineMethod({
-    name: 'linear.listIssues',
-    params: ListIssues,
-    handler: async (params, { runtime }) =>
-      runtime.linearListIssues(params?.filter, params?.limit, params?.workspaceId, {
-        attributeFilter: params?.attributeFilter
-      })
-  }),
+  LINEAR_ISSUE_LIST_METHOD,
+  LINEAR_MCP_ISSUE_LIST_METHOD,
   defineMethod({
     name: 'linear.createIssue',
     params: CreateIssue,
@@ -210,10 +93,7 @@ export const LINEAR_METHODS: RpcMethod[] = [
   }),
   defineMethod({
     name: 'linear.issueComments',
-    params: z.object({
-      issueId: requiredString('Issue ID is required'),
-      workspaceId: OptionalString
-    }),
+    params: LinearIssueCommentsParams,
     handler: async (params, { runtime }) =>
       runtime.linearIssueComments(params.issueId.trim(), params.workspaceId)
   }),

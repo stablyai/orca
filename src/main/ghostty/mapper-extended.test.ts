@@ -200,15 +200,15 @@ describe('mapGhosttyToOrca — cursor-text', () => {
 })
 
 describe('mapGhosttyToOrca — bold-color', () => {
-  it('maps valid hex to terminalColorOverrides.bold', () => {
+  // Why: xterm.js ITheme has no bold color slot (xtermjs/xterm.js#6032), so bold-color can never
+  // render; the importer must list it as unsupported rather than claim it was applied (#8595).
+  it('reports valid bold-color as unsupported and does not apply it', () => {
     const result = mapGhosttyToOrca({ 'bold-color': '#ff0000' })
-    expect(result.diff).toEqual({
-      terminalColorOverrides: { bold: '#ff0000' }
-    })
-    expect(result.unsupportedKeys).toEqual([])
+    expect(result.diff).toEqual({})
+    expect(result.unsupportedKeys).toEqual(['bold-color'])
   })
 
-  it('rejects invalid bold-color', () => {
+  it('reports invalid bold-color as unsupported', () => {
     const result = mapGhosttyToOrca({ 'bold-color': 'red' })
     expect(result.diff).toEqual({})
     expect(result.unsupportedKeys).toEqual(['bold-color'])

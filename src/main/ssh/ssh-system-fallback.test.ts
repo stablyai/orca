@@ -24,7 +24,6 @@ vi.mock('child_process', () => ({
 
 import {
   buildSshArgs,
-  findSystemSsh,
   downloadFileViaSystemSsh,
   spawnSystemSsh,
   spawnSystemSshCommand,
@@ -106,6 +105,13 @@ type EventedProcess = EventEmitter & {
   killed: boolean
 }
 
+// Windows writes read their source asynchronously before spawning, so a close emitted straight
+// after the call can beat the listener. Emit it from the spawn instead.
+function closeOnceSpawned(proc: EventedProcess): EventedProcess {
+  setImmediate(() => proc.emit('close', 0, null))
+  return proc
+}
+
 function createEventedProcess(): EventedProcess {
   const proc = new EventEmitter() as EventedProcess
   proc.stdin = Object.assign(new EventEmitter(), {
@@ -151,22 +157,6 @@ function createMockChildProcess(): EventEmitter & {
   })
   return child
 }
-
-describe('findSystemSsh', () => {
-  beforeEach(() => {
-    existsSyncMock.mockReset()
-  })
-
-  it('returns the first existing ssh path', () => {
-    mockSystemSshExists()
-    expect(findSystemSsh()).toBe(SYSTEM_SSH_PATH)
-  })
-
-  it('returns null when no ssh binary is found', () => {
-    existsSyncMock.mockReturnValue(false)
-    expect(findSystemSsh()).toBeNull()
-  })
-})
 
 describe('spawnSystemSsh', () => {
   let mockProc: {
@@ -276,12 +266,68 @@ describe('spawnSystemSsh', () => {
       })
     )
 
-    expect(args).toContain('deploy@fdpass-host')
+    expect(args).toContain('fdpass-host')
+    expect(args).not.toContain('deploy@fdpass-host')
     expect(args).not.toContain('resolved.example.com')
     expect(args).not.toContain('-p')
     expect(args).not.toContain('-i')
     expect(args).not.toContain('IdentityAgent=/tmp/agent.sock')
     expect(args).not.toContain('ProxyCommand=ignored')
+  })
+
+  it('states the stored endpoint when no Host block claims the alias', () => {
+    // A wildcard `Host *` supplies the proxy for every alias, so an alias whose own block is gone
+    // still reads as config-backed and gets dialled bare - the #11746 P1.
+    const args = buildSshArgs(
+      createTarget({
+        source: 'ssh-config',
+        configHost: 'prod',
+        host: '10.0.0.5',
+        port: 2222,
+        username: 'deploy'
+      }),
+      { aliasClaimedByConfig: false }
+    )
+
+    expect(args).toContain('Hostname=10.0.0.5')
+    expect(args.slice(args.indexOf('-p'))).toContain('2222')
+    expect(args.slice(args.indexOf('-l'))).toContain('deploy')
+    // The alias is still the destination so OpenSSH keeps applying the wildcard's proxy.
+    expect(args.at(-1)).toBe('prod')
+    expect(args).not.toContain('deploy@prod')
+    expect(args).not.toContain('-i')
+    expect(args).not.toContain('-J')
+  })
+
+  it('stays a no-op when the stored endpoint matches the unclaimed alias', () => {
+    const args = buildSshArgs(
+      createTarget({ source: 'ssh-config', configHost: 'prod', host: 'prod', username: '' }),
+      { aliasClaimedByConfig: false }
+    )
+
+    expect(args.some((arg) => arg.startsWith('Hostname='))).toBe(false)
+    expect(args).not.toContain('-p')
+    expect(args).not.toContain('-l')
+    expect(args.at(-1)).toBe('prod')
+  })
+
+  it('leaves a manual target alone even when nothing claims its alias', () => {
+    const args = buildSshArgs(
+      createTarget({ source: 'manual', configHost: 'prod', host: '10.0.0.5', port: 2222 }),
+      { aliasClaimedByConfig: false }
+    )
+
+    expect(args.some((arg) => arg.startsWith('Hostname='))).toBe(false)
+    expect(args).toContain('deploy@prod')
+  })
+
+  it('passes an explicit main-owned OpenSSH config as one argument', () => {
+    const args = buildSshArgs(createTarget({ configHost: 'isolated-host', source: 'ssh-config' }), {
+      configFile: '/tmp/orca isolated/ssh_config'
+    })
+
+    expect(args.slice(0, 2)).toEqual(['-F', '/tmp/orca isolated/ssh_config'])
+    expect(args).toContain('isolated-host')
   })
 
   it('passes explicit options for manual targets with implicit configHost', () => {
@@ -335,7 +381,7 @@ describe('spawnSystemSsh', () => {
     const standaloneControlIdx = args.indexOf('-S')
     expect(standaloneControlIdx).toBeGreaterThan(-1)
     expect(args[standaloneControlIdx + 1]).toBe('none')
-    expect(args.at(-2)).toBe('deploy@krb-host; touch /tmp/not-run')
+    expect(args.at(-2)).toBe('krb-host; touch /tmp/not-run')
     expect(args.at(-1)).toBe('echo ready')
   })
 
@@ -345,7 +391,7 @@ describe('spawnSystemSsh', () => {
     )
 
     expect(args).not.toContain('GSSAPIAuthentication=yes')
-    expect(args).toContain('deploy@krb-host')
+    expect(args).toContain('krb-host')
   })
 
   it('does not inject Orca ControlMaster flags when ssh config already owns muxing', () => {
@@ -359,7 +405,7 @@ describe('spawnSystemSsh', () => {
 
     expectNoOrcaControlMasterArgs(args)
     expect(args).not.toContain('-S')
-    expect(args).toContain('deploy@workbox')
+    expect(args).toContain('workbox')
   })
 
   it('injects Orca ControlMaster flags when ssh config only sets ControlPersist', () => {
@@ -402,7 +448,7 @@ describe('spawnSystemSsh', () => {
 
     expectNoOrcaControlMasterArgs(args)
     expect(args).not.toContain('-S')
-    expect(args).toContain('deploy@workbox')
+    expect(args).toContain('workbox')
   })
 
   it('does not inject Orca ControlMaster flags for unresolved legacy config aliases', () => {
@@ -410,7 +456,7 @@ describe('spawnSystemSsh', () => {
 
     expectNoOrcaControlMasterArgs(args)
     expect(args).not.toContain('-S')
-    expect(args).toContain('deploy@workbox')
+    expect(args).toContain('workbox')
   })
 
   it('can inject Orca ControlMaster flags for ssh-config targets with resolved config', () => {
@@ -448,7 +494,7 @@ describe('spawnSystemSsh', () => {
     // split it before /bin/sh receives it.
     const args = spawnMock.mock.calls[0][1] as string[]
     expect(args).toContain('--')
-    expect(args).toContain('deploy@fdpass-host')
+    expect(args).toContain('fdpass-host')
     const wrapped = args.at(-1)!
     expect(wrapped).not.toContain('\n')
     expect(wrapped).toContain('printf %b "$@"')
@@ -482,7 +528,7 @@ describe('spawnSystemSsh', () => {
     expect(standaloneControlIdx).toBe(-1)
     expectNoOrcaControlMasterArgs(args)
     expect(args).toContain('127.0.0.1:5173:127.0.0.1:3000')
-    expect(args[terminatorIdx + 1]).toBe('deploy@fdpass-host')
+    expect(args[terminatorIdx + 1]).toBe('fdpass-host')
     expect(spawnMock).toHaveBeenCalledWith(
       SYSTEM_SSH_PATH,
       expect.any(Array),
@@ -497,7 +543,7 @@ describe('spawnSystemSsh', () => {
 
     expect(spawnMock).toHaveBeenCalledWith(
       SYSTEM_SSH_PATH,
-      expect.arrayContaining(['--', 'deploy@fdpass-host', 'echo hello']),
+      expect.arrayContaining(['--', 'fdpass-host', 'echo hello']),
       expect.objectContaining({ stdio: ['pipe', 'pipe', 'pipe'] })
     )
   })
@@ -663,9 +709,13 @@ describe('spawnSystemSsh', () => {
     expect(args[standaloneControlIdx + 1]).toBe('none')
   })
 
-  it('writes files to Windows system SSH targets with PowerShell stdin bytes', async () => {
-    const proc = createEventedProcess()
-    spawnMock.mockReturnValue(proc)
+  it('sends Windows file writes over sftp, not through a remote PowerShell stdin', async () => {
+    const spawned: EventedProcess[] = []
+    spawnMock.mockImplementation(() => {
+      const proc = createEventedProcess()
+      spawned.push(proc)
+      return closeOnceSpawned(proc)
+    })
     const hostPlatform = getRemoteHostPlatform('win32-x64')
 
     const promise = writeFileViaSystemSsh(
@@ -674,19 +724,26 @@ describe('spawnSystemSsh', () => {
       '0.1.0',
       { hostPlatform }
     )
-    proc.emit('close', 0, null)
 
     await expect(promise).resolves.toBeUndefined()
-    const args = spawnMock.mock.calls[0][1] as string[]
-    const remoteCommand = args.at(-1) ?? ''
-    expect(remoteCommand).toContain('powershell.exe')
-    expect(remoteCommand).not.toContain('/bin/sh')
-    expect(proc.stdin.end).toHaveBeenCalledWith(Buffer.from('0.1.0', 'utf-8'))
+    // #16432, re-measured: Windows PowerShell 5.1 can lose a redirected stdin for good when a read
+    // finds it momentarily empty, so the bytes must not travel that way at all.
+    const batch = String(spawned[0]!.stdin.end.mock.calls[0]?.[0] ?? '')
+    expect(batch).toContain('put ')
+    expect(batch).toContain('/C:/Users/me/.orca-remote/relay/.version.orca-partial-')
+    const sftpArgs = spawnMock.mock.calls[0][1] as string[]
+    expect(sftpArgs).toContain('-b')
+    // The rename that publishes it reads the staged file, never a pipe.
+    const publish = (spawnMock.mock.calls[1][1] as string[]).at(-1) ?? ''
+    expect(publish).toContain('powershell.exe')
+    expect(decodePowerShellCommand(publish)).toContain(
+      '[System.IO.File]::Replace($staging, $path, [NullString]::Value)'
+    )
+    expect(publish).not.toContain('/bin/sh')
   })
 
-  it('writes binary buffers to Windows system SSH targets with CreateNew mode', async () => {
-    const proc = createEventedProcess()
-    spawnMock.mockReturnValue(proc)
+  it('enforces an exclusive Windows buffer write at the rename, where it is atomic', async () => {
+    spawnMock.mockImplementation(() => closeOnceSpawned(createEventedProcess()))
     const hostPlatform = getRemoteHostPlatform('win32-x64')
 
     const promise = writeBufferViaSystemSsh(
@@ -695,15 +752,13 @@ describe('spawnSystemSsh', () => {
       Buffer.from('png'),
       { hostPlatform, exclusive: true }
     )
-    proc.emit('close', 0, null)
 
     await expect(promise).resolves.toBeUndefined()
-    const args = spawnMock.mock.calls[0][1] as string[]
-    const remoteCommand = args.at(-1) ?? ''
-    expect(remoteCommand).toContain('powershell.exe')
-    expect(decodePowerShellCommand(remoteCommand)).toContain('CreateNew')
-    expect(remoteCommand).not.toContain('/bin/sh')
-    expect(proc.stdin.end).toHaveBeenCalledWith(Buffer.from('png'))
+    const publish = decodePowerShellCommand((spawnMock.mock.calls[1][1] as string[]).at(-1) ?? '')
+    // `File::Move` raising on an existing destination is what carries the exclusive contract now;
+    // a `CreateNew` on the staged file would only refuse a leftover of our own.
+    expect(publish).toContain('[System.IO.File]::Move($staging, $path)')
+    expect(publish).not.toContain('[System.IO.File]::Delete($path)')
   })
 
   it('downloads files from Windows system SSH targets with PowerShell stdout bytes', async () => {
@@ -735,8 +790,7 @@ describe('spawnSystemSsh', () => {
   })
 
   it('forces standalone SSH for Windows file writes when requested', async () => {
-    const proc = createEventedProcess()
-    spawnMock.mockReturnValue(proc)
+    spawnMock.mockImplementation(() => closeOnceSpawned(createEventedProcess()))
     const hostPlatform = getRemoteHostPlatform('win32-x64')
 
     const promise = writeFileViaSystemSsh(
@@ -745,16 +799,19 @@ describe('spawnSystemSsh', () => {
       '0.1.0',
       { hostPlatform, disableControlMaster: true }
     )
-    proc.emit('close', 0, null)
 
     await expect(promise).resolves.toBeUndefined()
-    const args = spawnMock.mock.calls[0][1] as string[]
-    const standaloneControlIdx = args.indexOf('-S')
+    const sftpArgs = spawnMock.mock.calls[0][1] as string[]
+    // sftp's own `-S` names a program to run, so the same request has to be spelled as an option.
+    expect(sftpArgs).not.toContain('-S')
+    expect(sftpArgs).toContain('ControlPath=none')
+    const publishArgs = spawnMock.mock.calls[1][1] as string[]
+    const standaloneControlIdx = publishArgs.indexOf('-S')
     expect(standaloneControlIdx).toBeGreaterThan(-1)
-    expect(args[standaloneControlIdx + 1]).toBe('none')
+    expect(publishArgs[standaloneControlIdx + 1]).toBe('none')
   })
 
-  it('uploads directories to Windows system SSH targets in one PowerShell batch', async () => {
+  it('uploads a Windows directory as a mkdir batch plus per-file writes, never one blob', async () => {
     const localDir = mkdtempSync(join(tmpdir(), 'orca-system-ssh-upload-'))
     writeFileSync(join(localDir, 'relay.js'), 'console.log("relay")')
     const spawned: EventedProcess[] = []
@@ -776,26 +833,20 @@ describe('spawnSystemSsh', () => {
       rmSync(localDir, { recursive: true, force: true })
     }
 
+    // #16432: directories first, then the file — but both over sftp now, so the only PowerShell
+    // left is the rename that publishes the staged file, which reads a file rather than a pipe.
+    const mkdirBatch = String(spawned[0]!.stdin.end.mock.calls[0]?.[0] ?? '')
+    expect(mkdirBatch).toBe('-mkdir "/C:/Users/me/.orca-remote/relay"\n')
+    const putBatch = String(spawned[1]!.stdin.end.mock.calls[0]?.[0] ?? '')
+    expect(putBatch).toContain('put ')
+    expect(putBatch).toContain('/C:/Users/me/.orca-remote/relay/relay.js.orca-partial-')
     const commands = spawnMock.mock.calls.map((call) => (call[1] as string[]).at(-1) ?? '')
-    expect(commands).toHaveLength(1)
-    expect(commands.every((command) => command.includes('powershell.exe'))).toBe(true)
     expect(commands.every((command) => !command.includes('/bin/sh'))).toBe(true)
     expect(commands.join('\n')).not.toContain('tar -xzf')
-    const payload = JSON.parse(spawned[0].stdin.end.mock.calls[0]?.[0] as string) as {
-      kind: string
-      path: string
-      contentsBase64?: string
-    }[]
-    expect(payload).toEqual(
-      expect.arrayContaining([
-        { kind: 'directory', path: 'C:/Users/me/.orca-remote/relay' },
-        {
-          kind: 'file',
-          path: 'C:/Users/me/.orca-remote/relay/relay.js',
-          contentsBase64: Buffer.from('console.log("relay")').toString('base64')
-        }
-      ])
-    )
+    // Nothing base64s the bundle into one PowerShell string any more, and nothing reads one.
+    expect(
+      commands.some((command) => decodePowerShellCommand(command).includes('OpenStandardInput'))
+    ).toBe(false)
   })
 
   it('forces standalone SSH for Windows upload packages when requested', async () => {
@@ -819,13 +870,14 @@ describe('spawnSystemSsh', () => {
     }
 
     const args = spawnMock.mock.calls[0][1] as string[]
-    const standaloneControlIdx = args.indexOf('-S')
-    expect(standaloneControlIdx).toBeGreaterThan(-1)
-    expect(args[standaloneControlIdx + 1]).toBe('none')
+    // The first spawn is the sftp client, whose own `-S` names a program to run.
+    expect(args).not.toContain('-S')
+    expect(args).toContain('ControlPath=none')
   })
 
   it('throws when no system ssh is found', () => {
     existsSyncMock.mockReturnValue(false)
+    vi.stubEnv('PATH', '')
     expect(() => spawnSystemSsh(createTarget())).toThrow('No system ssh binary found')
   })
 

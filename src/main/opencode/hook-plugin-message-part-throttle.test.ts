@@ -167,6 +167,82 @@ describe('OpenCode plugin MessagePart throttling', () => {
     expect(posts[1].body.payload.text).toBe('first final')
   })
 
+  it('waits for an in-flight preview before delivering SessionIdle', async () => {
+    let releasePart: (() => void) | undefined
+    const delayedPart = new Promise<void>((resolve) => {
+      releasePart = resolve
+    })
+    globalThis.fetch = vi.fn(async (url: RequestInfo | URL, init?: RequestInit) => {
+      const post = { url: String(url), body: JSON.parse(String(init?.body)) } as RecordedPost
+      posts.push(post)
+      if (post.body.payload.hook_event_name === 'MessagePart') {
+        await delayedPart
+      }
+      return new Response(null, { status: 204 })
+    }) as typeof globalThis.fetch
+    const handler = await loadPluginEventHandler()
+    await seedAssistantRole(handler)
+    await handler({
+      event: {
+        type: 'session.status',
+        properties: { sessionID: 'session-1', status: { type: 'busy' } }
+      }
+    })
+    posts.length = 0
+
+    await handler(assistantPartEvent('completed reply'))
+    const idle = handler({
+      event: { type: 'session.idle', properties: { sessionID: 'session-1' } }
+    })
+    await vi.advanceTimersByTimeAsync(0)
+    expect(posts.map((post) => post.body.payload.hook_event_name)).toEqual(['MessagePart'])
+
+    releasePart?.()
+    await idle
+    expect(posts.map((post) => post.body.payload.hook_event_name)).toEqual([
+      'MessagePart',
+      'SessionIdle'
+    ])
+  })
+
+  it('clears question attention when its tool part completes without a reply event', async () => {
+    const handler = await loadPluginEventHandler()
+    await handler({
+      event: {
+        type: 'session.status',
+        properties: { sessionID: 'session-1', status: { type: 'busy' } }
+      }
+    })
+    await handler({
+      event: {
+        type: 'question.asked',
+        properties: {
+          id: 'question-1',
+          sessionID: 'session-1',
+          tool: { messageID: 'message-1', callID: 'call-1' }
+        }
+      }
+    })
+    expect(posts.at(-1)?.body.payload.hook_event_name).toBe('AskUserQuestion')
+
+    await handler({
+      event: {
+        type: 'message.part.updated',
+        properties: {
+          sessionID: 'session-1',
+          part: {
+            type: 'tool',
+            tool: 'question',
+            messageID: 'message-1',
+            callID: 'call-1',
+            state: { status: 'completed' }
+          }
+        }
+      }
+    })
+    expect(posts.at(-1)?.body.payload.hook_event_name).toBe('SessionBusy')
+  })
+
   it('posts user prompts immediately without consuming the assistant throttle slot', async () => {
     const handler = await loadPluginEventHandler()
     await handler({

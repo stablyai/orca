@@ -4,7 +4,7 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { DetectedSpriteCacheEntry } from './pet-blob-cache'
-import type { CustomPet } from '../../../../shared/types'
+import type { CustomPet } from '../../../../shared/pet-types'
 
 type PetUrlState =
   | { url: string; ready: boolean; sprite: null; detected: null }

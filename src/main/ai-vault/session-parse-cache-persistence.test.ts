@@ -14,9 +14,11 @@ import * as fsPromises from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { AiVaultSession } from '../../shared/ai-vault-types'
 import {
   ensureSessionParseCacheLoaded,
   flushSessionParseCachePersistForTests,
+  getSessionParseCachePersistenceOptions,
   initSessionParseCachePersistence,
   resetSessionParseCachePersistenceForTests,
   scheduleSessionParseCachePersist
@@ -27,9 +29,12 @@ import {
   parseAgentSessionFileCached,
   resetSessionParseCacheForTests,
   seedSessionParseCache,
+  snapshotSessionParseCacheForPersistence,
   type PersistedSessionParseCacheEntry,
   type SessionParseStats
 } from './session-scanner-parse-cache'
+import { getSessionParseCacheEntry } from './session-parse-cache-store'
+import type { SessionSidecarObservation } from './session-sidecar-stat'
 import { isolatedScanRoots } from './session-scanner-test-fixtures'
 import { parseClaudeSessionFile } from './session-scanner-primary-parsers'
 import type { FileWithMtime, SessionFileCandidate } from './session-scanner-types'
@@ -125,7 +130,64 @@ async function coldParseStats(path: string): Promise<SessionParseStats> {
   return stats
 }
 
+/**
+ * Schema 2 dropped the `appVersion` equality gate: a cache written by any
+ * release with this schema is now replayed straight into Agent Session
+ * History without re-reading the transcript (#17888 — the gate forced a
+ * multi-gigabyte cold scan after every update). The cost of that reuse is
+ * that nothing else invalidates a stale row, so `SCHEMA_VERSION` is the only
+ * remaining compatibility signal and forgetting to bump it ships wrong data.
+ *
+ * This table is the reminder. Changing the persisted session shape — or the
+ * meaning of a field the parsers fill — breaks this `satisfies` and the fix
+ * is to bump `SCHEMA_VERSION` in session-parse-cache-persistence.ts, not to
+ * silently extend the list.
+ */
+const CACHED_SESSION_FIELDS = {
+  id: true,
+  executionHostId: true,
+  executionHostPlatform: true,
+  agent: true,
+  sessionId: true,
+  title: true,
+  cwd: true,
+  branch: true,
+  model: true,
+  filePath: true,
+  codexHome: true,
+  createdAt: true,
+  updatedAt: true,
+  modifiedAt: true,
+  messageCount: true,
+  totalTokens: true,
+  previewMessages: true,
+  previewMessagesTruncated: true,
+  firstUserPrompt: true,
+  lastUserPrompt: true,
+  queuedMessageCount: true,
+  subagentTranscriptCount: true,
+  resumeCommand: true,
+  subagent: true,
+  structuredSession: true
+} satisfies Record<keyof AiVaultSession, true>
+
+describe('cached session compatibility', () => {
+  it('pins the persisted session shape to the current parse-cache schema', () => {
+    expect(Object.keys(CACHED_SESSION_FIELDS).length).toBeGreaterThan(0)
+  })
+})
+
 describe('session parse cache persistence', () => {
+  it('exposes a copy of the active configuration for background scanners', () => {
+    const configured = { filePath: '/tmp/ai-vault-cache.json', appVersion: APP_VERSION }
+    initSessionParseCachePersistence(configured)
+
+    const snapshot = getSessionParseCachePersistenceOptions()
+
+    expect(snapshot).toEqual(configured)
+    expect(snapshot).not.toBe(configured)
+  })
+
   it('round-trips: a persisted entry is a reused hit after a restart, without reading the transcript', async () => {
     const root = await makeTempDir()
     const cacheFile = join(root, 'vault-state', 'session-parse-cache.json')
@@ -186,17 +248,43 @@ describe('session parse cache persistence', () => {
     expect(stats.reused).toBe(0)
   })
 
-  it('ignores a cache file written by a different app version', async () => {
+  it('rejects the legacy schema 1 cache after parser semantics changed', async () => {
     const root = await makeTempDir()
     const cacheFile = join(root, 'session-parse-cache.json')
     initSessionParseCachePersistence({ filePath: cacheFile, appVersion: APP_VERSION })
     const transcript = await writeTranscript(root)
     await parseAndPersist(transcript)
 
-    simulateRestart(cacheFile, '9.9.9-other')
+    const persisted = JSON.parse(await readFile(cacheFile, 'utf-8'))
+    persisted.schemaVersion = 1
+    await writeFile(cacheFile, JSON.stringify(persisted))
+
+    simulateRestart(cacheFile)
     const stats = await coldParseStats(transcript)
     expect(stats.fullParses).toBe(1)
     expect(stats.reused).toBe(0)
+  })
+
+  it('reuses a schema-compatible cache written by a different app version', async () => {
+    const root = await makeTempDir()
+    const cacheFile = join(root, 'session-parse-cache.json')
+    initSessionParseCachePersistence({ filePath: cacheFile, appVersion: APP_VERSION })
+    const transcript = await writeTranscript(root)
+    const candidate = await claudeCandidate(transcript)
+    await parseAndPersist(transcript)
+
+    simulateRestart(cacheFile, '9.9.9-other')
+    await ensureSessionParseCacheLoaded()
+
+    // Deleting the transcript proves the cross-version result comes entirely
+    // from the schema-compatible cache and performs no transcript read.
+    await rm(transcript)
+    const stats = createSessionParseStats()
+    const session = await parseAgentSessionFileCached(candidate, process.platform, stats)
+    expect(session).not.toBeNull()
+    expect(stats.reused).toBe(1)
+    expect(stats.fullParses).toBe(0)
+    expect(stats.bytesRead).toBe(0)
   })
 
   it('seeding never clobbers a live in-memory entry', async () => {
@@ -255,7 +343,13 @@ describe('session parse cache persistence', () => {
     vi.clearAllMocks()
 
     await ensureSessionParseCacheLoaded()
-    scheduleSessionParseCachePersist({ reused: 0, incremental: 2, fullParses: 5, bytesRead: 10 })
+    scheduleSessionParseCachePersist({
+      reused: 0,
+      incremental: 2,
+      fullParses: 5,
+      earlyStopped: 0,
+      bytesRead: 10
+    })
     await flushSessionParseCachePersistForTests()
 
     expect(fsPromises.readFile).not.toHaveBeenCalled()
@@ -433,5 +527,40 @@ describe('session parse cache persistence', () => {
     expect(await readdir(root)).toEqual(expect.arrayContaining(['blocker']))
     expect((await readdir(root)).filter((name) => name.endsWith('.tmp'))).toEqual([])
     debugSpy.mockRestore()
+  })
+})
+
+describe('sidecar observations survive the round trip', () => {
+  const OBSERVATIONS: [string, SessionSidecarObservation | undefined][] = [
+    ['an object', { path: '/chats/a/meta.json', mtimeMs: 42, sizeBytes: 7 }],
+    ['none', 'none'],
+    ['unknown', 'unknown'],
+    ['absent', undefined]
+  ]
+
+  it.each(OBSERVATIONS)('restores %s exactly', async (_label, sidecar) => {
+    const root = await makeTempDir()
+    const cacheFile = join(root, 'session-parse-cache.json')
+    const path = await writeTranscript(root)
+    initSessionParseCachePersistence({ filePath: cacheFile, appVersion: APP_VERSION })
+    await ensureSessionParseCacheLoaded()
+
+    const stats = createSessionParseStats()
+    await parseAgentSessionFileCached(await claudeCandidate(path), process.platform, stats)
+    const seeded = snapshotSessionParseCacheForPersistence().map(
+      ([entryPath, entry]): [string, PersistedSessionParseCacheEntry] => [
+        entryPath,
+        sidecar === undefined ? entry : { ...entry, sidecar }
+      ]
+    )
+    resetSessionParseCacheForTests()
+    seedSessionParseCache(seeded)
+    scheduleSessionParseCachePersist(stats)
+    await flushSessionParseCachePersistForTests()
+
+    simulateRestart(cacheFile)
+    await ensureSessionParseCacheLoaded()
+
+    expect(getSessionParseCacheEntry(path)?.sidecar).toEqual(sidecar)
   })
 })

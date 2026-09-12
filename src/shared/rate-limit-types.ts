@@ -15,7 +15,7 @@ export type RateLimitBucket = RateLimitWindow & {
   name: string
 }
 
-export type UsageRateLimitSource = 'oauth' | 'cli' | 'web'
+export type UsageRateLimitSource = 'oauth' | 'cli' | 'web' | 'live-session'
 
 export type UsageRateLimitFailureKind =
   | 'missing-credentials'
@@ -41,6 +41,8 @@ export type UsageRateLimitMetadata = {
   authProvenance?: string
   deferredByLiveClaudeSession?: boolean
   lastSuccessfulSource?: UsageRateLimitSource
+  /** Unix ms timestamp before which usage refetches should not be attempted (from HTTP Retry-After). */
+  retryAtMs?: number
 }
 
 export type ProviderRateLimits = {
@@ -76,6 +78,8 @@ export type ProviderRateLimits = {
       grantedAt: number | null
     }[]
   } | null
+  /** Subscription plan tier for the active account (Codex `plan_type`, e.g. "plus"). */
+  planType?: string | null
   /** Unix ms timestamp of the last successful data update. */
   updatedAt: number
   /** Human-readable error message, null when status is 'ok'. */
@@ -127,6 +131,13 @@ export type RateLimitState = {
    * between snapshot refreshes.
    */
   minimaxCookieConfigured: boolean
+  /**
+   * True when a MiniMax API key is persisted on disk. The key value itself
+   * never leaves main, so the renderer only sees this boolean. The status bar
+   * ORs it with the cookie flag to decide whether to keep the MiniMax bar
+   * visible across reloads.
+   */
+  minimaxApiKeyConfigured: boolean
   /** True when main finds a Grok CLI session file (~/.grok/auth.json or GROK_HOME). */
   grokAuthConfigured: boolean
   claudeTarget: RateLimitRuntimeTarget

@@ -1,9 +1,17 @@
 import type { Session } from 'electron'
 
+import {
+  currentUserAgent,
+  googleAuthUserAgent,
+  isGoogleAuthUrl,
+  setUserAgentHeader,
+  stripClientHints
+} from './browser-google-auth-ua'
+
 // Why: Electron's default UA includes "Electron/X.X.X" and the app name
-// (e.g. "orca/1.2.3"), which Cloudflare Turnstile and other bot detectors
-// flag as non-human traffic. Strip those tokens so the webview's UA and
-// sec-ch-ua Client Hints look like standard Chrome.
+// (e.g. "orca/1.2.3"), an impossible identity for sessions imported from Chrome.
+// This focused revocation fix strips only those tokens; it does not attempt full Chrome
+// impersonation, and Chromium's client-hint identity remains browser-owned.
 export function cleanElectronUserAgent(ua: string): string {
   return (
     ua
@@ -14,41 +22,34 @@ export function cleanElectronUserAgent(ua: string): string {
   )
 }
 
-// Why: Electron's actual Chromium version (e.g. 134) differs from the source
-// browser's version (e.g. Edge 147). The sec-ch-ua Client Hints headers
-// reveal the real version, creating a mismatch that Google's anti-fraud
-// detection flags as CookieMismatch on accounts.google.com. Override Client
-// Hints on outgoing requests to match the source browser's UA.
-export function setupClientHintsOverride(sess: Session, ua: string): void {
-  const chromeMatch = ua.match(/Chrome\/([\d.]+)/)
-  if (!chromeMatch) {
-    return
-  }
-  const fullChromeVersion = chromeMatch[1]
-  const majorVersion = fullChromeVersion.split('.')[0]
-
-  let brand = 'Google Chrome'
-  let brandFullVersion = fullChromeVersion
-
-  const edgeMatch = ua.match(/Edg\/([\d.]+)/)
-  if (edgeMatch) {
-    brand = 'Microsoft Edge'
-    brandFullVersion = edgeMatch[1]
-  }
-  const brandMajor = brandFullVersion.split('.')[0]
-
-  const secChUa = `"${brand}";v="${brandMajor}", "Chromium";v="${majorVersion}", "Not/A)Brand";v="24"`
-  const secChUaFull = `"${brand}";v="${brandFullVersion}", "Chromium";v="${fullChromeVersion}", "Not/A)Brand";v="24.0.0.0"`
+// Why: Chromium already publishes one internally consistent client-hint identity through both
+// request headers and navigator.userAgentData. This handler only owns the host-scoped Firefox
+// exception; synthesizing Chrome brands here would make those two browser-owned surfaces disagree.
+export function setupGoogleAuthUserAgentOverride(sess: Session): void {
+  const firefoxUa = googleAuthUserAgent()
 
   sess.webRequest.onBeforeSendHeaders({ urls: ['https://*/*'] }, (details, callback) => {
     const headers = details.requestHeaders
-    for (const key of Object.keys(headers)) {
-      const lower = key.toLowerCase()
-      if (lower === 'sec-ch-ua') {
-        headers[key] = secChUa
-      } else if (lower === 'sec-ch-ua-full-version-list') {
-        headers[key] = secChUaFull
-      }
+    if (isGoogleAuthUrl(details.url)) {
+      // Why: present a Firefox identity on Google's sign-in hosts so the user logs
+      // in inside the app and Google issues self-refreshing bound cookies. Strip
+      // sec-ch-ua* because real Firefox sends none.
+      setUserAgentHeader(headers, firefoxUa)
+      stripClientHints(headers)
+      callback({ requestHeaders: headers })
+      return
+    }
+    if (currentUserAgent(headers) === firefoxUa) {
+      // Why: while the auth document is on screen the WebContents UA is Firefox,
+      // so its cross-host subresource/XHR requests (gstatic, play.google.com, the
+      // sign-in challenge endpoints) reach here carrying the Firefox UA yet still
+      // bearing Chromium client hints. Rewriting those to Chrome pairs a Firefox
+      // UA with Chrome hints — a sharper cross-host identity tell than either
+      // alone, which can stall Google's password-submit challenge. Real Firefox
+      // sends no client hints, so strip them to keep one identity for the flow.
+      stripClientHints(headers)
+      callback({ requestHeaders: headers })
+      return
     }
     callback({ requestHeaders: headers })
   })

@@ -1,4 +1,4 @@
-import type { Repo } from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
 import {
   getRepoExecutionHostId,
   LOCAL_EXECUTION_HOST_ID,
@@ -17,15 +17,18 @@ export type PaletteHostBadge = {
 // unlike the sidebar gate, which lists disconnected hosts so users can connect.
 function hasActiveRemoteHost(hostOptions: readonly SidebarHostOption[]): boolean {
   return hostOptions.some(
-    (host) => host.id !== LOCAL_EXECUTION_HOST_ID && host.health !== 'disconnected'
+    (host) => host.id !== LOCAL_EXECUTION_HOST_ID && host.health === 'available'
   )
 }
 
 export function getPaletteHostBadge(
   repo: Pick<Repo, 'connectionId' | 'executionHostId'> | null | undefined,
-  hostOptions: readonly SidebarHostOption[]
+  hostOptions: readonly SidebarHostOption[],
+  // Why: with a host filter applied the badge is the only thing explaining which
+  // rows survived, so it must show even when every remote is disconnected.
+  alwaysShowHostLabel = false
 ): PaletteHostBadge | null {
-  if (!repo || !hasActiveRemoteHost(hostOptions)) {
+  if (!repo || (!alwaysShowHostLabel && !hasActiveRemoteHost(hostOptions))) {
     return null
   }
   const hostId = getRepoExecutionHostId(repo)

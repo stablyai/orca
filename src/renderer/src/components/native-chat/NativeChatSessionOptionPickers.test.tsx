@@ -32,7 +32,17 @@ vi.mock('@/components/ui/tooltip', () => ({
 vi.mock('@/components/ui/dropdown-menu', () => {
   const React = require('react') as typeof ReactModule
   return {
-    DropdownMenu: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+    DropdownMenu: ({
+      children,
+      defaultOpen
+    }: {
+      children: React.ReactNode
+      defaultOpen?: boolean
+    }) => (
+      <div data-testid="dropdown-root" data-open={defaultOpen ? 'true' : 'false'}>
+        {children}
+      </div>
+    ),
     DropdownMenuTrigger: ({
       children,
       disabled
@@ -40,7 +50,23 @@ vi.mock('@/components/ui/dropdown-menu', () => {
       children: React.ReactNode
       disabled?: boolean
     }) => <div data-disabled={disabled || undefined}>{children}</div>,
-    DropdownMenuContent: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+    DropdownMenuContent: ({
+      children,
+      side,
+      collisionPadding
+    }: {
+      children: React.ReactNode
+      side?: string
+      collisionPadding?: number
+    }) => (
+      <div
+        data-testid="session-option-menu"
+        data-side={side}
+        data-collision-padding={collisionPadding}
+      >
+        {children}
+      </div>
+    ),
     DropdownMenuLabel: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
     DropdownMenuSeparator: () => <hr />,
     DropdownMenuItem: ({
@@ -139,6 +165,7 @@ function model(overrides: Partial<SessionOptionDescriptor> = {}): SessionOptionD
       ]
     },
     valueSource: 'applied',
+    transport: 'catalog',
     settable: true,
     ...overrides
   }
@@ -157,6 +184,7 @@ const effort: SessionOptionDescriptor = {
     ]
   },
   valueSource: 'applied',
+  transport: 'catalog',
   settable: true
 }
 
@@ -166,12 +194,75 @@ const fast: SessionOptionDescriptor = {
   category: 'mode',
   kind: { type: 'boolean', currentValue: true },
   valueSource: 'applied',
+  transport: 'catalog',
   settable: true
 }
 
 afterEach(() => cleanup())
 
 describe('NativeChatSessionOptionPickers', () => {
+  it('opens the native picker requested by a structured slash command', async () => {
+    const { rerender } = render(
+      <NativeChatSessionOptionPickers
+        surface={surface}
+        snapshot={[model(), effort]}
+        isWorking={false}
+        pickerRequest={null}
+      />
+    )
+
+    rerender(
+      <NativeChatSessionOptionPickers
+        surface={surface}
+        snapshot={[model(), effort]}
+        isWorking={false}
+        pickerRequest={{ id: 'model', sequence: 1 }}
+      />
+    )
+    await waitFor(() =>
+      expect(
+        screen
+          .getByRole('button', { name: 'Model Opus 4.8' })
+          .closest('[data-testid="dropdown-root"]')
+          ?.getAttribute('data-open')
+      ).toBe('true')
+    )
+
+    rerender(
+      <NativeChatSessionOptionPickers
+        surface={surface}
+        snapshot={[model(), effort]}
+        isWorking={false}
+        pickerRequest={{ id: 'effort', sequence: 2 }}
+      />
+    )
+    await waitFor(() =>
+      expect(
+        screen
+          .getByRole('button', { name: 'Effort High' })
+          .closest('[data-testid="dropdown-root"]')
+          ?.getAttribute('data-open')
+      ).toBe('true')
+    )
+  })
+
+  it('prefers collision-aware upward placement for model and option menus', () => {
+    render(
+      <NativeChatSessionOptionPickers
+        surface={surface}
+        snapshot={[model(), effort]}
+        isWorking={false}
+      />
+    )
+
+    const menus = screen.getAllByTestId('session-option-menu')
+    expect(menus).toHaveLength(2)
+    for (const menu of menus) {
+      expect(menu.getAttribute('data-side')).toBe('top')
+      expect(menu.getAttribute('data-collision-padding')).toBe('8')
+    }
+  })
+
   it('renders model and joined option labels, and hides an empty options pill', () => {
     const { rerender } = render(
       <NativeChatSessionOptionPickers
@@ -189,8 +280,8 @@ describe('NativeChatSessionOptionPickers', () => {
     )
     expect(
       screen
-        .getByRole('button', { name: 'Effort High · Fast' })
-        .compareDocumentPosition(screen.getByRole('button', { name: 'Model Opus 4.8' })) &
+        .getByRole('button', { name: 'Model Opus 4.8' })
+        .compareDocumentPosition(screen.getByRole('button', { name: 'Effort High · Fast' })) &
         Node.DOCUMENT_POSITION_FOLLOWING
     ).not.toBe(0)
 
@@ -264,16 +355,47 @@ describe('NativeChatSessionOptionPickers', () => {
     expect(screen.queryByRole('button', { name: /^Effort/ })).toBeNull()
   })
 
-  it('shows the unconfirmed hint for dispatched values', () => {
+  // The terminal transport typed the value at the agent and has not read it back,
+  // so the pill says so; the structured transport's own per-turn report is the
+  // confirmation, which makes the same hedge transient noise there.
+  it('hedges a dispatched value the terminal transport produced', () => {
     render(
       <NativeChatSessionOptionPickers
         surface={surface}
-        snapshot={[model({ valueSource: 'dispatched' })]}
+        snapshot={[model({ valueSource: 'dispatched', transport: 'catalog' })]}
         isWorking={false}
       />
     )
-    expect(screen.getByText('Sent to the agent — not confirmed')).not.toBeNull()
+    expect(screen.getByText('Model')).not.toBeNull()
+    expect(screen.getAllByText('Sent to the agent — not confirmed').length).toBeGreaterThan(0)
   })
+
+  it('does not hedge a dispatched value the structured transport produced', () => {
+    render(
+      <NativeChatSessionOptionPickers
+        surface={surface}
+        snapshot={[model({ valueSource: 'dispatched', transport: 'agent-session' })]}
+        isWorking={false}
+      />
+    )
+    expect(screen.getByText('Model')).not.toBeNull()
+    expect(screen.queryByText(/not confirmed/)).toBeNull()
+  })
+
+  it.each(['catalog', 'agent-session'] as const)(
+    'does not hedge a reported value on the %s transport',
+    (transport) => {
+      render(
+        <NativeChatSessionOptionPickers
+          surface={surface}
+          snapshot={[model({ valueSource: 'reported', transport })]}
+          isWorking={false}
+        />
+      )
+      expect(screen.getByText('Model')).not.toBeNull()
+      expect(screen.queryByText(/not confirmed/)).toBeNull()
+    }
+  )
 
   it('renders agent-picker routes as one action instead of radio choices', async () => {
     const invokeAction = vi.fn().mockResolvedValue({ snapshot: [] })
@@ -371,6 +493,7 @@ describe('NativeChatSessionOptionPickers', () => {
             category: 'mode',
             kind: { type: 'boolean' },
             valueSource: 'unknown',
+            transport: 'catalog',
             settable: true
           }
         ]}
@@ -385,26 +508,7 @@ describe('NativeChatSessionOptionPickers', () => {
     await waitFor(() => expect(setOption).toHaveBeenCalledWith('thinking', false))
   })
 
-  it('does not show unconfirmed for applied flip-only booleans', () => {
-    render(
-      <NativeChatSessionOptionPickers
-        surface={surface}
-        snapshot={[
-          model(),
-          {
-            ...fast,
-            kind: { type: 'boolean', currentValue: true },
-            // Why: flip-only tracks as applied — never a healable dispatched state.
-            valueSource: 'applied'
-          }
-        ]}
-        isWorking={false}
-      />
-    )
-    expect(screen.queryByText('Sent to the agent — not confirmed')).toBeNull()
-  })
-
-  it('shows unconfirmed for confirmable dispatched booleans', () => {
+  it('tooltips a dispatched option pill with the category alone', () => {
     render(
       <NativeChatSessionOptionPickers
         surface={surface}
@@ -416,12 +520,14 @@ describe('NativeChatSessionOptionPickers', () => {
             category: 'mode',
             kind: { type: 'boolean', currentValue: true },
             valueSource: 'dispatched',
+            transport: 'catalog',
             settable: true
           }
         ]}
         isWorking={false}
       />
     )
-    expect(screen.getByText('Sent to the agent — not confirmed')).not.toBeNull()
+    expect(screen.getAllByText('Thinking').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('Sent to the agent — not confirmed').length).toBeGreaterThan(0)
   })
 })

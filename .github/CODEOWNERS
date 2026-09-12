@@ -1,0 +1,10 @@
+# Product source remains owned by its normal reviewers; localization inputs need focused review.
+/src/renderer/src/i18n/locales/ @brennanb2025
+/config/scripts/*localization*.mjs @brennanb2025
+/config/scripts/*locale*.mjs @brennanb2025
+/config/i18next.config.ts @brennanb2025
+
+# The relay's deploy and operate surface: workspace, workflows, and the rollout lease action.
+/cloud/ @Jinwoo-H
+/.github/workflows/cloud-*.yml @Jinwoo-H
+/.github/actions/cloud-sql-rollout-lease/ @Jinwoo-H

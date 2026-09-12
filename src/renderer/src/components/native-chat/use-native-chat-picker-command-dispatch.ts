@@ -5,7 +5,7 @@ import {
   emitNativeChatPickerItemAccepted,
   emitNativeChatSendClassified
 } from '@/lib/native-chat-telemetry'
-import { sendNativeChatMessage } from './native-chat-runtime-send'
+import { sendNativeChatMessage, sendNativeChatTypedCommand } from './native-chat-runtime-send'
 import {
   nativeChatComposerTargetIsRemote,
   type NativeChatResolvedTarget
@@ -57,7 +57,11 @@ export function useNativeChatPickerCommandDispatch(args: {
       if (!target || disabled || isDispatchingSessionOption) {
         return
       }
-      trackPendingSend(sendNativeChatMessage(target.settings, target.ptyId, text))
+      trackPendingSend(
+        agent === 'codex'
+          ? sendNativeChatTypedCommand(target.settings, target.ptyId, text)
+          : sendNativeChatMessage(target.settings, target.ptyId, text)
+      )
       emitNativeChatPickerItemAccepted({ agent, itemKind: 'command' })
       // Why: picker dispatch is a catalog-verified command send; it must leave
       // the same telemetry and composer state as the typed path — including

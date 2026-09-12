@@ -24,6 +24,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
+import { sshConnectVerb } from '@/ssh/ssh-connect-verb'
 import { parseExecutionHostId } from '../../../../shared/execution-host'
 import { describeRuntimeCompatBlock } from '../../../../shared/protocol-compat'
 import {
@@ -74,18 +75,18 @@ export function HostSectionHeaderMenu({ row }: { row: HostHeaderRow }): React.JS
   const [renameOpen, setRenameOpen] = useState(false)
   const [removeOpen, setRemoveOpen] = useState(false)
   const mountedRef = useMountedRef()
-  const sshConnected = useAppStore((s) => {
+  const sshStatus = useAppStore((s) => {
     const parsed = parseExecutionHostId(row.hostId)
     if (parsed?.kind !== 'ssh') {
-      return false
+      return null
     }
-    return s.sshConnectionStates.get(parsed.targetId)?.status === 'connected'
+    return s.sshConnectionStates.get(parsed.targetId)?.status ?? null
   })
 
   const model = buildHostHeaderMenuModel({
     kind: row.kind,
     health: row.health,
-    sshConnected,
+    sshConnected: sshStatus === 'connected',
     compatibility: row.compatibility
   })
   const removalTarget = resolveHostRemoval(row.hostId)
@@ -140,13 +141,10 @@ export function HostSectionHeaderMenu({ row }: { row: HostHeaderRow }): React.JS
         selector: parsed.environmentId,
         timeoutMs: 10_000
       })
-      const runtimeStatus = unwrapRuntimeRpcResult<RuntimeStatus>(response)
+      unwrapRuntimeRpcResult<RuntimeStatus>(response)
       // Why: feed the probe result into the shared store so the host header and
       // other host pickers reflect this check without a separate fetch.
-      useAppStore.getState().setRuntimeEnvironmentStatus(parsed.environmentId, {
-        status: runtimeStatus,
-        checkedAt: Date.now()
-      })
+      await useAppStore.getState().readRuntimeHostStatusSnapshots()
       toast.success(
         translate(
           'auto.components.sidebar.HostSectionHeaderMenu.7f1a2b3c4d',
@@ -159,10 +157,7 @@ export function HostSectionHeaderMenu({ row }: { row: HostHeaderRow }): React.JS
     } catch (err) {
       // Why: record the failed probe so the host registry can drop a previously
       // healthy verdict instead of showing stale "compatible" state.
-      useAppStore.getState().setRuntimeEnvironmentStatus(parsed.environmentId, {
-        status: null,
-        checkedAt: Date.now()
-      })
+      await useAppStore.getState().readRuntimeHostStatusSnapshots()
       toast.error(
         err instanceof Error
           ? err.message
@@ -242,7 +237,7 @@ export function HostSectionHeaderMenu({ row }: { row: HostHeaderRow }): React.JS
         {model.actions.includes('ssh-reconnect') && (
           <DropdownMenuItem onSelect={() => void runSshAction('connect')}>
             <Plug className="size-3.5" />
-            {translate('auto.components.sidebar.HostSectionHeaderMenu.63f36455cc', 'Reconnect')}
+            {sshConnectVerb(sshStatus)}
           </DropdownMenuItem>
         )}
         {model.actions.includes('ssh-disconnect') && (

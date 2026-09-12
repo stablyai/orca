@@ -26,9 +26,53 @@ describe('RelayAuthCoordinator', () => {
       onStatus: (status) => statuses.push(status)
     })
     coordinator.reconcile()
-    await coordinator.waitForActiveBroker()
+    await coordinator.waitForLiveBroker()
     expect(openBroker).not.toHaveBeenCalled()
     expect(statuses.at(-1)).toBe('standby')
+  })
+
+  it('republishes the owned broker cell instead of blanking what the broker set', async () => {
+    const broker = { closeNow: vi.fn(), endpoint: { cellUrl: 'https://c27.relay.example.test' } }
+    const onStatus = vi.fn()
+    const coordinator = new RelayAuthCoordinator({
+      readContext: async () => context,
+      openBroker: async () => broker,
+      onStatus
+    })
+    coordinator.reconcile()
+    await coordinator.waitForLiveBroker()
+
+    // Why: the broker announces its cell, then the coordinator republishes the
+    // same status; a republish without the cell would erase it immediately.
+    expect(onStatus).toHaveBeenLastCalledWith('registered', 'https://c27.relay.example.test')
+
+    coordinator.reconcile()
+    await coordinator.waitForLiveBroker()
+    expect(onStatus).toHaveBeenLastCalledWith('registered', 'https://c27.relay.example.test')
+  })
+
+  it('drops the cell from every status the host is not served on', async () => {
+    let demanded = true
+    const broker = { closeNow: vi.fn(), endpoint: { cellUrl: 'https://c27.relay.example.test' } }
+    const onStatus = vi.fn()
+    const coordinator = new RelayAuthCoordinator({
+      readContext: async () => context,
+      hasDemand: () => demanded,
+      openBroker: async () => broker,
+      onStatus,
+      lingerMs: 0
+    })
+    coordinator.reconcile()
+    await coordinator.waitForLiveBroker()
+    demanded = false
+    coordinator.reconcile()
+    await vi.waitFor(() => expect(onStatus).toHaveBeenLastCalledWith('standby', undefined))
+
+    coordinator.fenceAndCloseNow()
+    expect(onStatus).toHaveBeenLastCalledWith('offline', undefined)
+    for (const [status, cellUrl] of onStatus.mock.calls) {
+      expect(status === 'registered' || cellUrl === undefined).toBe(true)
+    }
   })
 
   it('opens on demand and lingers before closing the last control', async () => {
@@ -43,10 +87,10 @@ describe('RelayAuthCoordinator', () => {
       lingerMs: 250
     })
     coordinator.reconcile()
-    await coordinator.waitForActiveBroker()
+    await coordinator.waitForLiveBroker()
     demanded = true
     coordinator.reconcile()
-    await expect(coordinator.waitForActiveBroker()).resolves.toBe(broker)
+    await expect(coordinator.waitForLiveBroker()).resolves.toBe(broker)
     demanded = false
     coordinator.reconcile()
     await vi.waitFor(() => expect(statuses.at(-1)).toBe('standby'))
@@ -65,7 +109,7 @@ describe('RelayAuthCoordinator', () => {
       lingerMs: 20
     })
     coordinator.reconcile()
-    await expect(coordinator.waitForActiveBroker()).resolves.toBe(broker)
+    await expect(coordinator.waitForLiveBroker()).resolves.toBe(broker)
     demanded = false
     coordinator.reconcile()
     demanded = true
@@ -85,10 +129,10 @@ describe('RelayAuthCoordinator', () => {
       lingerMs: 10_000
     })
     coordinator.reconcile()
-    await expect(coordinator.waitForActiveBroker()).resolves.toBe(broker)
+    await expect(coordinator.waitForLiveBroker()).resolves.toBe(broker)
     current = { ...context, identity: { ...context.identity, profileId: 'profile-2' } }
     coordinator.reconcile()
-    await coordinator.waitForActiveBroker()
+    await coordinator.waitForLiveBroker()
     expect(broker.closeNow).toHaveBeenCalledOnce()
   })
 
@@ -273,5 +317,33 @@ describe('RelayAuthCoordinator', () => {
     coordinator.reconcile()
     await vi.waitFor(() => expect(coordinator.getActiveBroker()).toBe(brokers[2]))
     expect(brokers[1]!.closeNow).toHaveBeenCalledOnce()
+  })
+
+  it('reopens instead of republishing registered for a dead broker', async () => {
+    // Why: a broker that lost its control without recovering must not keep
+    // reporting registered on every reconcile while phones get HOST_OFFLINE.
+    let firstBrokerLive = true
+    const brokers = [
+      { closeNow: vi.fn(), isLive: () => firstBrokerLive },
+      { closeNow: vi.fn(), isLive: () => true }
+    ]
+    const openBroker = vi.fn().mockResolvedValueOnce(brokers[0]).mockResolvedValueOnce(brokers[1])
+    const statuses: string[] = []
+    const coordinator = new RelayAuthCoordinator({
+      readContext: async () => context,
+      openBroker,
+      onStatus: (status) => statuses.push(status)
+    })
+    coordinator.reconcile()
+    await vi.waitFor(() => expect(coordinator.getActiveBroker()).toBe(brokers[0]))
+    expect(statuses.at(-1)).toBe('registered')
+
+    firstBrokerLive = false
+    coordinator.reconcile()
+
+    await vi.waitFor(() => expect(coordinator.getActiveBroker()).toBe(brokers[1]))
+    expect(brokers[0]!.closeNow).toHaveBeenCalledOnce()
+    expect(statuses.at(-1)).toBe('registered')
+    expect(statuses.filter((status) => status === 'connecting')).toHaveLength(2)
   })
 })

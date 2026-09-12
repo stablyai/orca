@@ -1,0 +1,90 @@
+import type { AgentProviderSessionMetadata } from './agent-session-resume'
+import type { AgentType, NativeChatMessage } from './native-chat-types'
+import type { OrchestrationFleetWorker } from './orchestration-fleet-projection'
+import type { RuntimeTerminalRead, RuntimeTerminalState } from './runtime-types'
+import type { PtyLivenessVerdict } from './pty-liveness-verdict'
+
+export const ORCHESTRATION_WORKER_READ_SOURCES = ['auto', 'transcript', 'terminal'] as const
+export type OrchestrationWorkerReadSource = (typeof ORCHESTRATION_WORKER_READ_SOURCES)[number]
+
+export const ORCHESTRATION_WORKER_READ_FALLBACK_REASONS = [
+  'provider_unsupported',
+  'session_not_reported',
+  'transcript_empty',
+  'transcript_missing',
+  'transcript_unreadable',
+  'transcript_parse_failed',
+  'remote_capability_unavailable'
+] as const
+export type OrchestrationWorkerReadFallbackReason =
+  (typeof ORCHESTRATION_WORKER_READ_FALLBACK_REASONS)[number]
+
+export type ExactWorkerProviderSession = {
+  paneKey: string
+  processIncarnation: string
+  /** Accepted transport authority for the PTY; null is the local runtime. */
+  connectionId?: string | null
+  /** Attested distro for a local PTY whose hook session arrived over WSL. */
+  wslDistro?: string
+  agent: AgentType
+  providerSession: AgentProviderSessionMetadata
+  observedAt: number
+}
+
+export type OrchestrationWorkerTranscriptPage = {
+  messages: NativeChatMessage[]
+  nextCursor: string
+  limited: boolean
+  returnedMessageCount: number
+}
+
+export type OrchestrationWorkerReadTranscriptResult = {
+  dispatchId: string
+  source: 'transcript'
+  sourceIdentity: string
+  provider: AgentType
+  transcript: OrchestrationWorkerTranscriptPage
+  cursor: string
+  status: {
+    worker: string
+    terminal: RuntimeTerminalState
+    liveness?: PtyLivenessVerdict['status']
+  }
+  /** Fleet agent verdict for this Dispatch; absent from hosts that predate it. */
+  projection?: OrchestrationFleetWorker | null
+  fallbackReason: null
+  /** Additive provenance/coverage metadata. */
+  sourceExact?: boolean
+  contentComplete?: boolean
+  clipping?: string[]
+  warnings: string[]
+  // The live PTY was released; output comes from the frozen archive source.
+  archived?: boolean
+}
+
+export type OrchestrationWorkerReadTerminalResult = {
+  dispatchId: string
+  source: 'terminal'
+  sourceIdentity: string
+  terminal: RuntimeTerminalRead
+  cursor: string | null
+  status: {
+    worker: string
+    terminal: RuntimeTerminalState
+    liveness?: PtyLivenessVerdict['status']
+  }
+  /** Fleet agent verdict for this Dispatch; absent from hosts that predate it. */
+  projection?: OrchestrationFleetWorker | null
+  fallbackReason: OrchestrationWorkerReadFallbackReason | null
+  /** Additive provenance/coverage metadata. */
+  sourceExact?: boolean
+  contentComplete?: boolean
+  clipping?: string[]
+  warnings: string[]
+  // The live PTY was released; output comes from the frozen archive source.
+  archived?: boolean
+}
+
+export type OrchestrationWorkerReadResult =
+  | OrchestrationWorkerReadTranscriptResult
+  | OrchestrationWorkerReadTerminalResult

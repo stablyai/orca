@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useRef } from 'react'
 import { FEATURE_WALL_MAX_DWELL_MS } from '../../../../shared/feature-wall-telemetry'
-import type { FeatureWallExitAction } from '../../../../shared/feature-wall-tour-depth'
-import type { FeatureWallTourDepthSummary } from '../../../../shared/feature-wall-tour-depth'
+import type {
+  FeatureWallExitAction,
+  FeatureWallTourDepthSummary
+} from '../../../../shared/feature-wall-tour-depth'
 import type {
   EventProps,
   FeatureWallOpenSourceTelemetry
@@ -75,7 +77,8 @@ export function useFeatureWallTourTelemetry(args: {
   getDepthSummary: () => FeatureWallTourDepthSummary
 }): { markExitAction: (exitAction: FeatureWallExitAction) => void } {
   const { isOpen, source, getDepthSummary } = args
-  const telemetryRef = useRef<FeatureWallTourTelemetryState>(createFeatureWallTourTelemetryState())
+  const telemetryRef = useRef<FeatureWallTourTelemetryState>(undefined!)
+  telemetryRef.current ??= createFeatureWallTourTelemetryState()
   const sourceRef = useRef(source)
   const getDepthSummaryRef = useRef(getDepthSummary)
   // Why: close telemetry may emit from stable callbacks; keep the payload

@@ -1,12 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { create } from 'zustand'
 import type { AppState } from '../types'
-import {
-  createHostedReviewSlice,
-  getHostedReviewCacheKey,
-  HostedReviewCreationEligibilityTimeoutError,
-  refreshHostedReviewCard
-} from './hosted-review'
+import { createHostedReviewSlice } from './hosted-review'
+import { refreshHostedReviewCard } from './hosted-review-card-refresh'
+import { getHostedReviewCacheKey } from './hosted-review-cache-identity'
+import { HostedReviewCreationEligibilityTimeoutError } from './hosted-review-cache-state'
 import type { HostedReviewInfo } from '../../../../shared/hosted-review'
 
 const runtimeRpc = vi.hoisted(() => ({
@@ -27,7 +25,8 @@ const mockApi = {
   hostedReview: {
     forBranch: vi.fn(),
     getCreationEligibility: vi.fn(),
-    create: vi.fn()
+    create: vi.fn(),
+    createStacked: vi.fn()
   }
 }
 
@@ -41,6 +40,7 @@ function makeStore(settings: AppState['settings'] = null) {
       | 'fetchHostedReviewForBranch'
       | 'getHostedReviewCreationEligibility'
       | 'createHostedReview'
+      | 'createStackedHostedReview'
       | 'settings'
       | 'repos'
       | 'prCache'
@@ -64,11 +64,23 @@ const review: HostedReviewInfo = {
   mergeable: 'MERGEABLE'
 }
 
+const githubReview: HostedReviewInfo = {
+  provider: 'github',
+  number: 12,
+  title: 'Branch PR',
+  state: 'open',
+  url: 'https://github.com/acme/orca/pull/12',
+  status: 'success',
+  updatedAt: '2026-05-10T00:00:00.000Z',
+  mergeable: 'MERGEABLE'
+}
+
 describe('hosted review slice', () => {
   beforeEach(() => {
     mockApi.hostedReview.forBranch.mockReset()
     mockApi.hostedReview.getCreationEligibility.mockReset()
     mockApi.hostedReview.create.mockReset()
+    mockApi.hostedReview.createStacked.mockReset()
     runtimeRpc.callRuntimeRpc.mockReset()
   })
 
@@ -99,6 +111,36 @@ describe('hosted review slice', () => {
       linkedBitbucketPR: null,
       linkedAzureDevOpsPR: null,
       linkedGiteaPR: null
+    })
+  })
+
+  it('records branch provenance separately from a GitHub fallback request hint', async () => {
+    mockApi.hostedReview.forBranch.mockResolvedValueOnce(githubReview)
+    const store = makeStore()
+
+    await store.getState().fetchHostedReviewForBranch('/repo', 'feature/github', {
+      fallbackGitHubPR: 12
+    })
+
+    expect(store.getState().hostedReviewCache['local::repo-1::feature/github']).toMatchObject({
+      data: githubReview,
+      linkedReviewHintKey: 'github:12',
+      branchLookupGitHubPRNumber: 12
+    })
+  })
+
+  it('does not mark an exact linked GitHub lookup as branch-discovered', async () => {
+    mockApi.hostedReview.forBranch.mockResolvedValueOnce(githubReview)
+    const store = makeStore()
+
+    await store.getState().fetchHostedReviewForBranch('/repo', 'feature/github', {
+      linkedGitHubPR: 12
+    })
+
+    expect(store.getState().hostedReviewCache['local::repo-1::feature/github']).toEqual({
+      data: githubReview,
+      fetchedAt: expect.any(Number),
+      linkedReviewHintKey: 'github:12'
     })
   })
 
@@ -347,6 +389,35 @@ describe('hosted review slice', () => {
     })
   })
 
+  it('routes stacked pull request creation through its dedicated IPC method', async () => {
+    mockApi.hostedReview.createStacked.mockResolvedValueOnce({
+      ok: true,
+      number: 42,
+      url: 'https://github.com/acme/orca/pull/42',
+      stackNumber: 50,
+      parentReview: { number: 41, url: 'https://github.com/acme/orca/pull/41' }
+    })
+    const store = makeStore()
+
+    await store.getState().createStackedHostedReview('/repo', {
+      provider: 'github',
+      base: 'stack/parent',
+      head: 'stack/child',
+      title: 'Child',
+      worktreePath: '/worktrees/child'
+    })
+
+    expect(mockApi.hostedReview.createStacked).toHaveBeenCalledWith(
+      expect.objectContaining({
+        repoPath: '/repo',
+        repoId: 'repo-1',
+        base: 'stack/parent',
+        head: 'stack/child'
+      })
+    )
+    expect(mockApi.hostedReview.create).not.toHaveBeenCalled()
+  })
+
   it('forwards SSH connectionId when checking pull request creation eligibility', async () => {
     mockApi.hostedReview.getCreationEligibility.mockResolvedValueOnce({
       provider: 'github',
@@ -449,6 +520,39 @@ describe('hosted review slice', () => {
     )
   })
 
+  it('uses a distinct runtime method for stacked pull request creation', async () => {
+    runtimeRpc.callRuntimeRpc.mockResolvedValueOnce({
+      ok: true,
+      number: 42,
+      url: 'https://github.com/acme/orca/pull/42',
+      stackNumber: 50,
+      parentReview: { number: 41, url: 'https://github.com/acme/orca/pull/41' }
+    })
+    const store = makeStore({
+      activeRuntimeEnvironmentId: 'env-win'
+    } as AppState['settings'])
+
+    await store.getState().createStackedHostedReview('/repo', {
+      provider: 'github',
+      base: 'stack/parent',
+      head: 'stack/child',
+      title: 'Child',
+      worktreePath: 'C:\\worktrees\\child'
+    })
+
+    expect(runtimeRpc.callRuntimeRpc).toHaveBeenCalledWith(
+      { kind: 'environment', environmentId: 'env-win' },
+      'hostedReview.createStacked',
+      expect.objectContaining({
+        repo: 'repo-1',
+        worktree: 'path:C:\\worktrees\\child',
+        base: 'stack/parent',
+        head: 'stack/child'
+      }),
+      { timeoutMs: 90_000 }
+    )
+  })
+
   it('uses the selected worktree selector for runtime pull request creation eligibility', async () => {
     runtimeRpc.callRuntimeRpc.mockResolvedValueOnce({
       provider: 'github',
@@ -499,6 +603,23 @@ describe('hosted review slice', () => {
       linkedAzureDevOpsPR: null,
       linkedGiteaPR: null
     })
+  })
+
+  it('marks an explicit card refresh interactive', async () => {
+    const fetchHostedReviewForBranch = vi.fn().mockResolvedValue(null)
+
+    await refreshHostedReviewCard(fetchHostedReviewForBranch, {
+      repoPath: '/repo',
+      repoId: 'repo-id',
+      branch: 'feature/test',
+      admissionTier: 'interactive'
+    })
+
+    expect(fetchHostedReviewForBranch).toHaveBeenCalledWith(
+      '/repo',
+      'feature/test',
+      expect.objectContaining({ admissionTier: 'interactive' })
+    )
   })
 
   it('refetches a fresh null branch result when a linked PR hint is later available', async () => {

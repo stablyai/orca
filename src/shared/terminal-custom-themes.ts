@@ -1,4 +1,4 @@
-import type { TerminalColorOverrides } from './types'
+import type { TerminalColorOverrides } from './terminal-color-overrides'
 import { HEX_COLOR_RE } from './color-validation'
 
 export type TerminalCustomThemeSource = 'warp' | 'ghostty' | 'manual'
@@ -14,8 +14,6 @@ export type TerminalCustomTheme = {
   sourceLabel?: string
   unsupportedFeatures?: string[]
 }
-
-export type TerminalThemeSelection = string
 
 export type WarpThemeImportSource =
   | { kind: 'auto' }
@@ -45,7 +43,7 @@ export type WarpThemeImportPreview = {
 export const MAX_TERMINAL_CUSTOM_THEMES = 200
 export const CUSTOM_TERMINAL_THEME_PREFIX = 'custom:'
 
-const TERMINAL_COLOR_KEYS = [
+export const TERMINAL_COLOR_KEYS = [
   'foreground',
   'background',
   'cursor',

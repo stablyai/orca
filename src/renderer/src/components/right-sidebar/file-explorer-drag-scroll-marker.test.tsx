@@ -64,7 +64,7 @@ function virtualRowsElement(nodes: TreeNode[]): React.JSX.Element {
     statusByRelativePath: new Map(),
     ignoredByRelativePath: new Set(),
     expanded: new Set(),
-    dirCache: {},
+    loadingDirPaths: new Set<string>(),
     selectedPaths: new Set(),
     activeFileId: null,
     flashingPath: null,
@@ -120,6 +120,7 @@ function HandlersProbe({ scrollRef }: { scrollRef: React.RefObject<HTMLDivElemen
     toggleDir: vi.fn(),
     loadDir: vi.fn(),
     statPath: vi.fn(),
+    authorizeExternalPath: vi.fn(),
     markPathAsDirectory: vi.fn(),
     setSelectedPath: vi.fn(),
     scrollRef

@@ -16,6 +16,7 @@ vi.mock('electron', () => ({
 
 function workingStatus(overrides: Partial<AgentAwakeStatus> = {}): AgentAwakeStatus {
   return {
+    paneKey: 'pane-1',
     state: 'working',
     receivedAt: 1_000,
     observedInCurrentRuntime: true,
@@ -85,6 +86,7 @@ function createService(
     linuxAssertion,
     macosAssertion,
     now,
+    platform: 'linux',
     powerMonitor,
     logger: {
       debug: vi.fn(),
@@ -120,6 +122,42 @@ describe('AgentAwakeService', () => {
     expect(blocker.start).toHaveBeenCalledWith('prevent-display-sleep')
     expect(macosAssertion.start).toHaveBeenCalledTimes(1)
     expect(linuxAssertion.start).toHaveBeenCalledTimes(1)
+  })
+
+  it('stays awake in On mode without a working agent', () => {
+    const blocker = createBlocker()
+    const service = createService(() => 1_000, blocker)
+
+    service.setMode('on')
+
+    expect(blocker.start).toHaveBeenCalledWith('prevent-display-sleep')
+    expect(service.getStatus()).toEqual({ mode: 'on', active: true })
+  })
+
+  it('publishes Auto activity changes to status subscribers', () => {
+    const service = createService(() => 1_000)
+    const listener = vi.fn()
+    service.subscribe(listener)
+
+    service.setMode('auto')
+    service.setStatuses([workingStatus()])
+    service.setStatuses([workingStatus(), workingStatus()])
+    service.setStatuses([workingStatus()])
+    service.setStatuses([])
+
+    expect(listener).toHaveBeenNthCalledWith(1, {
+      mode: 'auto',
+      active: false
+    })
+    expect(listener).toHaveBeenNthCalledWith(2, {
+      mode: 'auto',
+      active: true
+    })
+    expect(listener).toHaveBeenNthCalledWith(3, {
+      mode: 'auto',
+      active: false
+    })
+    expect(listener).toHaveBeenCalledTimes(3)
   })
 
   it('starts and stops from settings flips around an already-running status', () => {
@@ -239,6 +277,35 @@ describe('AgentAwakeService', () => {
     vi.advanceTimersByTime(1_000)
 
     expect(blocker.stop).toHaveBeenCalledWith(1)
+    service.dispose()
+  })
+
+  it('renews a working lease across two hours without semantic status churn', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(1_000)
+    const blocker = createBlocker()
+    const service = createService(() => Date.now(), blocker)
+    const listener = vi.fn()
+    service.subscribe(listener)
+    service.setMode('auto')
+    service.setStatuses([workingStatus()])
+
+    for (let index = 0; index < 5; index += 1) {
+      vi.advanceTimersByTime(30 * 60 * 1000)
+      service.observeStatusFreshness(
+        workingStatus({ receivedAt: Date.now(), observedInCurrentRuntime: true })
+      )
+    }
+
+    expect(Date.now()).toBeGreaterThan(1_000 + AGENT_AWAKE_STATUS_STALE_AFTER_MS)
+    expect(service.getStatus()).toEqual({ mode: 'auto', active: true })
+    expect(blocker.stop).not.toHaveBeenCalled()
+    expect(listener).toHaveBeenCalledTimes(2)
+
+    vi.advanceTimersByTime(AGENT_AWAKE_STATUS_STALE_AFTER_MS)
+    expect(service.getStatus()).toEqual({ mode: 'auto', active: true })
+    vi.advanceTimersByTime(1)
+    expect(service.getStatus()).toEqual({ mode: 'auto', active: false })
     service.dispose()
   })
 

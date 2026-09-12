@@ -17,6 +17,9 @@ type RunVirtualizedScrollAnchorRestoreArgs<
   pendingRestoreRef: MutableRefObject<boolean>
   programmaticScrollMarks?: ProgrammaticScrollMarks
   recordScrollAnchor: (scrollTop: number) => void
+  // Why: old key -> new key for rows that were re-keyed without moving. Lets an
+  // anchor follow its own row instead of resolving a fallback row below it.
+  rekeyedRowKeys?: ReadonlyMap<string, string>
   rowIndexByKey: ReadonlyMap<string, number>
   scrollOffsetRef: MutableRefObject<number>
   virtualizer: Virtualizer<TScrollElement, TItemElement>
@@ -40,13 +43,18 @@ export function runVirtualizedScrollAnchorRestore<
   pendingRestoreRef,
   programmaticScrollMarks,
   recordScrollAnchor,
+  rekeyedRowKeys,
   rowIndexByKey,
   scrollOffsetRef,
   virtualizer
 }: RunVirtualizedScrollAnchorRestoreArgs<TScrollElement, TItemElement>): (() => void) | undefined {
-  const resolvedKey = rowIndexByKey.has(anchor.key)
+  const hasExactKey = rowIndexByKey.has(anchor.key)
+  const rekeyed = hasExactKey ? undefined : rekeyedRowKeys?.get(anchor.key)
+  // Why: only follow a rekey that names a row present in this render.
+  const followedKey = rekeyed !== undefined && rowIndexByKey.has(rekeyed) ? rekeyed : undefined
+  const resolvedKey = hasExactKey
     ? anchor.key
-    : anchor.fallbackKeys?.find((key) => rowIndexByKey.has(key))
+    : (followedKey ?? anchor.fallbackKeys?.find((key) => rowIndexByKey.has(key)))
   if (!resolvedKey) {
     // Why: an unresolvable anchor has nothing to converge; rows that make it
     // resolvable again always arrive via a signal change, so leaving the arm
@@ -59,7 +67,16 @@ export function runVirtualizedScrollAnchorRestore<
     pendingRestoreRef.current = false
     return
   }
-  const offset = resolvedKey === anchor.key ? anchor.offset : 0
+  // Why: a fallback key means the anchored row was REMOVED and the row below
+  // slid up — a different row, so the within-row offset does not transfer. A
+  // followed key is the SAME row under a new key, so it does.
+  const followedRow = resolvedKey === followedKey
+  const offset = hasExactKey || followedRow ? anchor.offset : 0
+  // Why: the followed row can be a different height than the one the offset was
+  // recorded against (a lineage group dissolving back to a single card), so
+  // clamp it the same way recording does.
+  const offsetWithinRow = (rowHeight: number): number =>
+    followedRow ? Math.min(rowHeight, offset) : offset
   const canConfirmFromDom = Boolean(itemElementSelector && getItemElementKey)
 
   const restoreFromDomElement = (): boolean => {
@@ -75,7 +92,7 @@ export function runVirtualizedScrollAnchorRestore<
     }
     const scrollRect = el.getBoundingClientRect()
     const rect = element.getBoundingClientRect()
-    const desiredTop = scrollRect.top - offset
+    const desiredTop = scrollRect.top - offsetWithinRow(rect.height)
     const delta = rect.top - desiredTop
     if (Math.abs(delta) > 1) {
       // Why: this scroll write is still part of restore; keep the target
@@ -99,7 +116,10 @@ export function runVirtualizedScrollAnchorRestore<
       return false
     }
     const maxScrollTop = Math.max(0, el.scrollHeight - el.clientHeight)
-    const nextScrollTop = Math.min(maxScrollTop, Math.max(0, item.start + offset))
+    const nextScrollTop = Math.min(
+      maxScrollTop,
+      Math.max(0, item.start + offsetWithinRow(item.size))
+    )
     if (Math.abs(el.scrollTop - nextScrollTop) > 1) {
       programmaticScrollMarks?.mark(nextScrollTop)
       el.scrollTop = nextScrollTop

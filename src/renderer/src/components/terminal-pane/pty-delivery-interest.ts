@@ -35,8 +35,3 @@ export function acquirePtyDeliveryInterest(ptyId: string): () => void {
     }
   }
 }
-
-/** Test seam: drop ref counts between tests (no IPC is sent). */
-export function _resetPtyDeliveryInterestForTest(): void {
-  ptyDeliveryInterestRefCounts.clear()
-}

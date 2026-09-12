@@ -1,12 +1,12 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { OrchestrationDb } from './db'
 import { reconcileLifecycleMessage } from './lifecycle-reconciliation'
-import {
-  Coordinator,
-  DISPATCH_STALE_THRESHOLD,
-  parseAllowStaleBaseFromSpec,
-  type CoordinatorRuntime
-} from './coordinator'
+import { Coordinator } from './coordinator'
+import type { CoordinatorRuntime } from './coordinator-runtime-contract'
+import { DISPATCH_STALE_THRESHOLD } from './coordinator-stale-base-flag'
+import { createRootDispatch } from './db/root-dispatch-test-fixture'
+
+const runId = 'run_legacy_local'
 
 type DriftResult = {
   base: string
@@ -91,6 +91,7 @@ function insertWorkerDone(
   }
   const from = params.from ?? dispatch?.assignee_handle ?? 'term_unknown'
   db.insertMessage({
+    runId,
     from,
     to: params.to ?? 'coord',
     subject: 'Done',
@@ -98,6 +99,7 @@ function insertWorkerDone(
     payload: JSON.stringify({
       taskId: params.taskId,
       dispatchId,
+      outcome: 'succeeded',
       ...(params.filesModified ? { filesModified: params.filesModified } : {})
     }),
     senderPaneKey:
@@ -129,7 +131,10 @@ describe('Coordinator', () => {
     runtime.cliCommand = 'orca-ide'
     runtime.terminals = [{ handle: 'term_a', worktreeId: 'wt1', connected: true, writable: true }]
 
-    const task = db.createTask({ spec: 'implement feature' })
+    const task = db.createTask({
+      runId,
+      spec: 'implement feature'
+    })
 
     // Simulate worker_done arriving after dispatch
     const coordinator = new Coordinator(db, runtime, {
@@ -164,7 +169,10 @@ describe('Coordinator', () => {
       getTerminalPaneKey: (handle: string) => (handle === 'term_a' ? 'tab_a:leaf_a' : null)
     })
 
-    const task = db.createTask({ spec: 'implement feature' })
+    const task = db.createTask({
+      runId,
+      spec: 'implement feature'
+    })
     const coordinator = new Coordinator(db, withPaneLookup, {
       spec: 'build it',
       coordinatorHandle: 'coord',
@@ -176,6 +184,45 @@ describe('Coordinator', () => {
     })
 
     expect(db.getDispatchContext(task.id)?.assignee_pane_key).toBe('tab_a:leaf_a')
+    expect(db.getDispatchContext(task.id)?.process_incarnation).toBeNull()
+
+    insertWorkerDone(db, { taskId: task.id })
+    await runPromise
+  })
+
+  it('records authenticated process authority for automatic dispatch', async () => {
+    db = new OrchestrationDb(':memory:')
+    const runtime = createMockRuntime()
+    runtime.terminals = [{ handle: 'term_a', worktreeId: 'wt1', connected: true, writable: true }]
+    const withAuthority = Object.assign(runtime, {
+      getOrchestrationDispatchAuthority: (handle: string) =>
+        handle === 'term_a'
+          ? {
+              paneKey: 'tab_a:leaf_a',
+              processIncarnation: 'pty_a:incarnation-a',
+              launchTokenHash: 'launch-token-hash'
+            }
+          : null
+    })
+    const task = db.createTask({
+      runId,
+      spec: 'implement feature'
+    })
+    const coordinator = new Coordinator(db, withAuthority, {
+      spec: 'build it',
+      coordinatorHandle: 'coord',
+      pollIntervalMs: 50
+    })
+    const runPromise = coordinator.run()
+    await new Promise((r) => {
+      setTimeout(r, 100)
+    })
+
+    expect(db.getDispatchContext(task.id)).toMatchObject({
+      assignee_pane_key: 'tab_a:leaf_a',
+      process_incarnation: 'pty_a:incarnation-a',
+      launch_token_hash: 'launch-token-hash'
+    })
 
     insertWorkerDone(db, { taskId: task.id })
     await runPromise
@@ -185,14 +232,18 @@ describe('Coordinator', () => {
     db = new OrchestrationDb(':memory:')
     const runtime = createMockRuntime()
 
-    const task = db.createTask({ spec: 'send-driven completion' })
-    const dispatch = db.createDispatchContext(task.id, 'term_a')
+    const task = db.createTask({
+      runId,
+      spec: 'send-driven completion'
+    })
+    const dispatch = createRootDispatch(db, task.id, 'term_a')
     const msg = db.insertMessage({
+      runId,
       from: 'term_a',
       to: 'coord',
       subject: 'Done',
       type: 'worker_done',
-      payload: JSON.stringify({ taskId: task.id, dispatchId: dispatch.id })
+      payload: JSON.stringify({ taskId: task.id, dispatchId: dispatch.id, outcome: 'succeeded' })
     })
 
     reconcileLifecycleMessage(db, msg)
@@ -212,10 +263,18 @@ describe('Coordinator', () => {
     db = new OrchestrationDb(':memory:')
     const runtime = createMockRuntime()
 
-    const task = db.createTask({ spec: 'duplicate completion' })
-    const dispatch = db.createDispatchContext(task.id, 'term_a')
-    const payload = JSON.stringify({ taskId: task.id, dispatchId: dispatch.id })
+    const task = db.createTask({
+      runId,
+      spec: 'duplicate completion'
+    })
+    const dispatch = createRootDispatch(db, task.id, 'term_a')
+    const payload = JSON.stringify({
+      taskId: task.id,
+      dispatchId: dispatch.id,
+      outcome: 'succeeded'
+    })
     const first = db.insertMessage({
+      runId,
       from: 'term_a',
       to: 'coord',
       subject: 'Done',
@@ -223,6 +282,7 @@ describe('Coordinator', () => {
       payload
     })
     db.insertMessage({
+      runId,
       from: 'term_a',
       to: 'coord',
       subject: 'Done again',
@@ -247,7 +307,7 @@ describe('Coordinator', () => {
     db = new OrchestrationDb(':memory:')
     const runtime = createMockRuntime()
 
-    const task = db.createTask({ spec: 'work' })
+    const task = db.createTask({ runId, spec: 'work' })
 
     const coordinator = new Coordinator(db, runtime, {
       spec: 'go',
@@ -279,7 +339,10 @@ describe('Coordinator', () => {
       { handle: 'term_b', worktreeId: 'wt1', connected: true, writable: true }
     ]
 
-    const task = db.createTask({ spec: 'risky work' })
+    const task = db.createTask({
+      runId,
+      spec: 'risky work'
+    })
 
     const coordinator = new Coordinator(db, runtime, {
       spec: 'go',
@@ -294,12 +357,15 @@ describe('Coordinator', () => {
       await new Promise((r) => {
         setTimeout(r, 100)
       })
+      const dispatch = db.getDispatchContext(task.id)
+      expect(dispatch).toBeDefined()
       db.insertMessage({
-        from: `term_${i === 0 ? 'a' : 'b'}`,
+        runId,
+        from: dispatch?.assignee_handle ?? 'missing-worker',
         to: 'coord',
         subject: `Failed attempt ${i + 1}`,
         type: 'escalation',
-        payload: JSON.stringify({ taskId: task.id })
+        payload: JSON.stringify({ taskId: task.id, dispatchId: dispatch!.id })
       })
     }
 
@@ -316,7 +382,10 @@ describe('Coordinator', () => {
       throw new Error('terminal_not_writable')
     }
 
-    const task = db.createTask({ spec: 'cannot dispatch' })
+    const task = db.createTask({
+      runId,
+      spec: 'cannot dispatch'
+    })
     const coordinator = new Coordinator(db, runtime, {
       spec: 'go',
       coordinatorHandle: 'coord',
@@ -335,7 +404,10 @@ describe('Coordinator', () => {
     const runtime = createMockRuntime()
     runtime.terminals = [{ handle: 'term_a', worktreeId: 'wt1', connected: true, writable: true }]
 
-    const task = db.createTask({ spec: 'needs approval' })
+    const task = db.createTask({
+      runId,
+      spec: 'needs approval'
+    })
 
     const coordinator = new Coordinator(db, runtime, {
       spec: 'go',
@@ -351,13 +423,17 @@ describe('Coordinator', () => {
     })
 
     // Worker sends decision gate
+    const dispatch = db.getDispatchContext(task.id)
+    expect(dispatch).toBeDefined()
     db.insertMessage({
+      runId,
       from: 'term_a',
       to: 'coord',
       subject: 'Need approval',
       type: 'decision_gate',
       payload: JSON.stringify({
         taskId: task.id,
+        dispatchId: dispatch!.id,
         question: 'Proceed with destructive migration?',
         options: ['yes', 'no']
       })
@@ -394,8 +470,12 @@ describe('Coordinator', () => {
     const runtime = createMockRuntime()
     runtime.terminals = [{ handle: 'term_a', worktreeId: 'wt1', connected: true, writable: true }]
 
-    const t1 = db.createTask({ spec: 'first' })
-    const t2 = db.createTask({ spec: 'second', deps: [t1.id] })
+    const t1 = db.createTask({ runId, spec: 'first' })
+    const t2 = db.createTask({
+      runId,
+      spec: 'second',
+      deps: [t1.id]
+    })
 
     expect(t2.status).toBe('pending')
 
@@ -445,9 +525,9 @@ describe('Coordinator', () => {
       { handle: 'term_c', worktreeId: 'wt1', connected: true, writable: true }
     ]
 
-    const t1 = db.createTask({ spec: 'one' })
-    const t2 = db.createTask({ spec: 'two' })
-    const t3 = db.createTask({ spec: 'three' })
+    const t1 = db.createTask({ runId, spec: 'one' })
+    const t2 = db.createTask({ runId, spec: 'two' })
+    const t3 = db.createTask({ runId, spec: 'three' })
 
     const coordinator = new Coordinator(db, runtime, {
       spec: 'go',
@@ -483,8 +563,8 @@ describe('Coordinator', () => {
     const runtime = createMockRuntime()
     // No terminals available so dispatchReadyTasks creates one and we can
     // drive the stale-scan deterministically via SQL backdating.
-    const task = db.createTask({ spec: 'work' })
-    const ctx = db.createDispatchContext(task.id, 'term_stale')
+    const task = db.createTask({ runId, spec: 'work' })
+    const ctx = createRootDispatch(db, task.id, 'term_stale')
 
     // Backdate dispatched_at and last_heartbeat_at beyond the 10-min threshold
     // so getStaleDispatches returns this row on the first tick.
@@ -522,8 +602,8 @@ describe('Coordinator', () => {
     const runtime = createMockRuntime()
     runtime.terminals = [{ handle: 'term_a', worktreeId: 'wt1', connected: true, writable: true }]
 
-    const task = db.createTask({ spec: 'work' })
-    const ctx = db.createDispatchContext(task.id, 'term_a')
+    const task = db.createTask({ runId, spec: 'work' })
+    const ctx = createRootDispatch(db, task.id, 'term_a')
 
     const coordinator = new Coordinator(db, runtime, {
       spec: 'go',
@@ -534,6 +614,7 @@ describe('Coordinator', () => {
     const runPromise = coordinator.run()
 
     db.insertMessage({
+      runId,
       from: 'term_a',
       to: 'coord',
       subject: 'alive',
@@ -559,17 +640,25 @@ describe('Coordinator', () => {
     const runtime = createMockRuntime()
     const logs: string[] = []
 
-    const task = db.createTask({ spec: 'retry-sensitive work' })
-    const staleCtx = db.createDispatchContext(task.id, 'term_old')
+    const task = db.createTask({
+      runId,
+      spec: 'retry-sensitive work'
+    })
+    const staleCtx = createRootDispatch(db, task.id, 'term_old')
     db.failDispatch(staleCtx.id, 'retry elsewhere')
-    const activeCtx = db.createDispatchContext(task.id, 'term_current')
+    const activeCtx = createRootDispatch(db, task.id, 'term_current')
 
     db.insertMessage({
+      runId,
       from: 'term_old',
       to: 'coord',
       subject: 'Late done',
       type: 'worker_done',
-      payload: JSON.stringify({ taskId: task.id, dispatchId: staleCtx.id })
+      payload: JSON.stringify({
+        taskId: task.id,
+        dispatchId: staleCtx.id,
+        outcome: 'succeeded'
+      })
     })
 
     const staleCoordinator = new Coordinator(db, runtime, {
@@ -612,16 +701,20 @@ describe('Coordinator', () => {
     const runtime = createMockRuntime()
     const logs: string[] = []
 
-    const task = db.createTask({ spec: 'owned work' })
+    const task = db.createTask({
+      runId,
+      spec: 'owned work'
+    })
     const leafId = '11111111-1111-4111-8111-111111111111'
-    const ctx = db.createDispatchContext(task.id, 'term_owner', `tab_before:${leafId}`)
+    const ctx = createRootDispatch(db, task.id, 'term_owner', `tab_before:${leafId}`)
 
     db.insertMessage({
+      runId,
       from: 'term_reminted',
       to: 'coord',
       subject: 'Done after restart',
       type: 'worker_done',
-      payload: JSON.stringify({ taskId: task.id, dispatchId: ctx.id }),
+      payload: JSON.stringify({ taskId: task.id, dispatchId: ctx.id, outcome: 'succeeded' }),
       senderPaneKey: `tab_after:${leafId}`
     })
 
@@ -642,7 +735,7 @@ describe('Coordinator', () => {
   it('can be stopped', async () => {
     db = new OrchestrationDb(':memory:')
     const runtime = createMockRuntime()
-    db.createTask({ spec: 'never finishes' })
+    db.createTask({ runId, spec: 'never finishes' })
 
     const coordinator = new Coordinator(db, runtime, {
       spec: 'go',
@@ -672,7 +765,10 @@ describe('Coordinator', () => {
         recentSubjects: ['fix A', 'fix B', 'fix C']
       })
 
-      const task = db.createTask({ spec: 'do the work' })
+      const task = db.createTask({
+        runId,
+        spec: 'do the work'
+      })
 
       const coordinator = new Coordinator(db, runtime, {
         spec: 'go',
@@ -708,7 +804,10 @@ describe('Coordinator', () => {
         recentSubjects: ['fix A']
       })
 
-      const task = db.createTask({ spec: 'do the work' })
+      const task = db.createTask({
+        runId,
+        spec: 'do the work'
+      })
 
       const coordinator = new Coordinator(db, runtime, {
         spec: 'go',
@@ -748,7 +847,7 @@ describe('Coordinator', () => {
 
       const spec = `Investigate issue #42
 allow-stale-base: true`
-      const task = db.createTask({ spec })
+      const task = db.createTask({ runId, spec })
 
       const coordinator = new Coordinator(db, runtime, {
         spec: 'go',
@@ -781,7 +880,10 @@ allow-stale-base: true`
       runtime.terminals = [{ handle: 'term_a', worktreeId: 'wt1', connected: true, writable: true }]
       runtime.setProbeDrift(null)
 
-      const task = db.createTask({ spec: 'do the work' })
+      const task = db.createTask({
+        runId,
+        spec: 'do the work'
+      })
 
       const coordinator = new Coordinator(db, runtime, {
         spec: 'go',
@@ -810,7 +912,10 @@ allow-stale-base: true`
       runtime.terminals = [{ handle: 'term_a', worktreeId: 'wt1', connected: true, writable: true }]
       const logs: string[] = []
 
-      const task = db.createTask({ spec: 'do the work' })
+      const task = db.createTask({
+        runId,
+        spec: 'do the work'
+      })
 
       const coordinator = new Coordinator(db, runtime, {
         spec: 'go',
@@ -841,7 +946,10 @@ allow-stale-base: true`
       runtime.terminals = [{ handle: 'term_a', worktreeId: 'wt1', connected: true, writable: true }]
       runtime.throwProbeDrift = new Error('boom')
 
-      const task = db.createTask({ spec: 'do the work' })
+      const task = db.createTask({
+        runId,
+        spec: 'do the work'
+      })
 
       const coordinator = new Coordinator(db, runtime, {
         spec: 'go',
@@ -862,55 +970,5 @@ allow-stale-base: true`
       const sent = runtime.sentMessages.find((m) => m.handle === 'term_a')
       expect(sent!.text).not.toContain('--- BASE DRIFT ---')
     })
-  })
-})
-
-describe('parseAllowStaleBaseFromSpec', () => {
-  it('matches canonical form on its own line and strips it', () => {
-    const spec = `Do the work
-allow-stale-base: true`
-    const { allowStale, strippedSpec } = parseAllowStaleBaseFromSpec(spec)
-    expect(allowStale).toBe(true)
-    expect(strippedSpec).toBe('Do the work\n')
-    expect(strippedSpec).not.toContain('allow-stale-base')
-  })
-
-  it('matches case-insensitively', () => {
-    const spec = `Do the work
-Allow-Stale-Base: TRUE`
-    const { allowStale, strippedSpec } = parseAllowStaleBaseFromSpec(spec)
-    expect(allowStale).toBe(true)
-    expect(strippedSpec).not.toMatch(/[Aa]llow-[Ss]tale-[Bb]ase/)
-  })
-
-  it('does not match allow-stale-base: false', () => {
-    const spec = `Do the work
-allow-stale-base: false`
-    const { allowStale, strippedSpec } = parseAllowStaleBaseFromSpec(spec)
-    expect(allowStale).toBe(false)
-    expect(strippedSpec).toBe(spec)
-  })
-
-  it('does not match allow-stale-base: truthy', () => {
-    const spec = `Do the work
-allow-stale-base: truthy`
-    const { allowStale, strippedSpec } = parseAllowStaleBaseFromSpec(spec)
-    expect(allowStale).toBe(false)
-    expect(strippedSpec).toBe(spec)
-  })
-
-  it('does not match the flag embedded inside a sentence', () => {
-    const spec = 'we allow-stale-base: true sometimes'
-    const { allowStale, strippedSpec } = parseAllowStaleBaseFromSpec(spec)
-    expect(allowStale).toBe(false)
-    expect(strippedSpec).toBe(spec)
-  })
-
-  it('handles the flag as the last line with no trailing newline', () => {
-    const spec = 'line 1\nallow-stale-base: true'
-    const { allowStale, strippedSpec } = parseAllowStaleBaseFromSpec(spec)
-    expect(allowStale).toBe(true)
-    expect(strippedSpec).toBe('line 1\n')
-    expect(strippedSpec.endsWith('allow-stale-base: true')).toBe(false)
   })
 })

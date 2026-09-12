@@ -1,4 +1,5 @@
-import type { SearchOptions, SearchResult } from '../../shared/types'
+import { SearchSubprocessLineAccumulator } from '../../shared/search-subprocess-lines'
+import type { SearchOptions, SearchResult } from '../../shared/code-search-types'
 import {
   buildGitGrepArgs,
   buildSubmatchRegex,
@@ -7,7 +8,11 @@ import {
   ingestGitGrepLine,
   SEARCH_TIMEOUT_MS
 } from '../../shared/text-search'
-import { gitSpawn } from '../git/runner'
+import { gitSpawnAfterWindowsEnvironmentReady } from '../git/runner'
+import {
+  isWslLinkedWorktreeGitRoutingCandidate,
+  prepareWslLinkedWorktreeGitRouting
+} from '../git/wsl-linked-worktree-git-routing'
 
 /**
  * Fallback text search using git grep. Used when rg is not available.
@@ -16,24 +21,28 @@ import { gitSpawn } from '../git/runner'
  * is launched from a desktop entry (which inherits a minimal system PATH).
  * git grep is always available since this is a git-focused app.
  */
-export function searchWithGitGrep(
+export async function searchWithGitGrep(
   rootPath: string,
   args: SearchOptions,
   maxResults: number,
   localGitOptions: { wslDistro?: string } = {}
 ): Promise<SearchResult> {
+  if (isWslLinkedWorktreeGitRoutingCandidate(rootPath, localGitOptions.wslDistro)) {
+    await prepareWslLinkedWorktreeGitRouting(rootPath, localGitOptions.wslDistro)
+  }
+  const gitArgs = buildGitGrepArgs(args.query, args)
+  const child = await gitSpawnAfterWindowsEnvironmentReady(gitArgs, {
+    cwd: rootPath,
+    admissionTier: 'interactive',
+    ...(localGitOptions.wslDistro ? { wslDistro: localGitOptions.wslDistro } : {}),
+    stdio: ['ignore', 'pipe', 'pipe']
+  })
   return new Promise((resolve) => {
-    const gitArgs = buildGitGrepArgs(args.query, args)
     const matchRegex = buildSubmatchRegex(args.query, args)
     const acc = createAccumulator()
-    let stdoutBuffer = ''
+    const lines = new SearchSubprocessLineAccumulator(Number.MAX_SAFE_INTEGER)
     let done = false
 
-    const child = gitSpawn(gitArgs, {
-      cwd: rootPath,
-      ...(localGitOptions.wslDistro ? { wslDistro: localGitOptions.wslDistro } : {}),
-      stdio: ['ignore', 'pipe', 'pipe']
-    })
     let killTimeout: ReturnType<typeof setTimeout>
 
     function resolveOnce(): void {
@@ -41,6 +50,7 @@ export function searchWithGitGrep(
         return
       }
       done = true
+      lines.clear()
       clearTimeout(killTimeout)
       // Why: child.kill() is advisory. If git ignores it, detach our
       // closures so repeated fallback searches do not retain old scans.
@@ -59,12 +69,7 @@ export function searchWithGitGrep(
     }
 
     function handleStdoutData(chunk: string): void {
-      stdoutBuffer += chunk
-      const lines = stdoutBuffer.split('\n')
-      stdoutBuffer = lines.pop() ?? ''
-      for (const l of lines) {
-        processLine(l)
-      }
+      lines.push(chunk, processLine)
     }
 
     function handleStderrData(): void {
@@ -76,8 +81,9 @@ export function searchWithGitGrep(
     }
 
     function handleClose(): void {
-      if (stdoutBuffer) {
-        processLine(stdoutBuffer)
+      const tail = lines.finish()
+      if (tail !== null) {
+        processLine(tail)
       }
       resolveOnce()
     }

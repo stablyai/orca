@@ -1,8 +1,10 @@
 import type { AiVaultSession } from '../../../src/shared/ai-vault-types'
 import {
   buildAiVaultResumeCommand,
-  buildAiVaultResumeShellCommand
-} from '../../../src/shared/ai-vault-types'
+  buildAiVaultResumeShellCommand,
+  realHomeCodexResumeEnvDeletion
+} from '../../../src/shared/ai-vault-resume-command'
+import { RESUME_RPC_TIMEOUT_MS } from './ai-vault-resume-preparation'
 import { isResumableTuiAgent } from '../../../src/shared/agent-session-resume'
 import type { SleepingAgentLaunchConfig } from '../../../src/shared/agent-session-resume'
 import { buildAgentResumeStartupPlan } from '../../../src/shared/tui-agent-startup'
@@ -10,7 +12,8 @@ import {
   resolveTuiAgentLaunchArgs,
   resolveTuiAgentLaunchEnv
 } from '../../../src/shared/tui-agent-launch-defaults'
-import type { TuiAgent } from '../../../src/shared/types'
+import { normalizeAiVaultResumeFilePath } from '../../../src/shared/ai-vault-resume-path'
+import type { TuiAgent } from '../../../src/shared/tui-agent'
 import { parseWslUncPath } from '../../../src/shared/wsl-paths'
 import { resolveWindowsShellStartupFamily } from '../../../src/shared/windows-terminal-shell'
 import type { RpcClient } from '../transport/rpc-client'
@@ -20,20 +23,6 @@ import {
   type MobileReviewTerminalTab
 } from './mobile-diff-review-rpc'
 import type { MobileAiVaultResumeTargetStatus } from '../agent-history/agent-history-resume-target'
-
-const NODE_PLATFORMS = new Set<NodeJS.Platform>([
-  'aix',
-  'android',
-  'darwin',
-  'freebsd',
-  'haiku',
-  'linux',
-  'openbsd',
-  'sunos',
-  'win32',
-  'cygwin',
-  'netbsd'
-])
 
 export function buildMobileAiVaultResumeCommand(args: {
   session: Pick<AiVaultSession, 'agent' | 'sessionId' | 'cwd' | 'codexHome'> &
@@ -53,7 +42,7 @@ export function buildMobileAiVaultResumeCommand(args: {
     sessionId: args.session.sessionId,
     // Why: OMP resumes by absolute transcript path (custom OMP dir / WSL-store
     // sessions miss on an id lookup), so mobile forwards it like desktop does.
-    resumeFilePath: args.session.filePath,
+    resumeFilePath: normalizeAiVaultResumeFilePath(args.session.filePath, args.hostPlatform),
     cwd: args.session.cwd,
     platform: args.hostPlatform,
     commandOverride: args.commandOverride,
@@ -71,6 +60,7 @@ export type MobileAiVaultResumeSettings = {
 export type MobileAiVaultResumeLaunch = {
   command: string
   env?: Record<string, string>
+  envToDelete?: string[]
   launchConfig?: SleepingAgentLaunchConfig
   launchAgent?: TuiAgent
 }
@@ -91,6 +81,7 @@ export function buildMobileAiVaultResumeLaunch(args: {
     args.settings?.agentCmdOverrides
   )
   const commandOverride = cmdOverrides[args.session.agent] ?? null
+  const resumeFilePath = normalizeAiVaultResumeFilePath(args.session.filePath, args.hostPlatform)
   if (isResumableTuiAgent(args.session.agent)) {
     const startupPlan = buildAgentResumeStartupPlan({
       agent: args.session.agent,
@@ -99,18 +90,35 @@ export function buildMobileAiVaultResumeLaunch(args: {
       platform: args.hostPlatform,
       shell,
       agentArgs: resolveTuiAgentLaunchArgs(args.session.agent, args.settings?.agentDefaultArgs),
-      agentEnv: resolveTuiAgentLaunchEnv(args.session.agent, args.settings?.agentDefaultEnv)
+      agentEnv: resolveTuiAgentLaunchEnv(args.session.agent, args.settings?.agentDefaultEnv),
+      ...(args.session.agent === 'omp' && resumeFilePath
+        ? { ompResumeFilePath: resumeFilePath }
+        : {})
     })
     if (startupPlan) {
       return {
-        command: buildAiVaultResumeShellCommand({
-          resumeCommand: startupPlan.launchCommand,
-          cwd: args.session.cwd,
-          platform: args.hostPlatform,
-          codexHome,
-          shell
-        }),
+        command:
+          args.session.agent === 'omp'
+            ? buildMobileAiVaultResumeCommand({
+                session: {
+                  ...args.session,
+                  ...(resumeFilePath ? { filePath: resumeFilePath } : {})
+                },
+                hostPlatform: args.hostPlatform,
+                hostTerminalWindowsShell: args.hostTerminalWindowsShell,
+                commandOverride: startupPlan.launchConfig.agentCommand
+              })
+            : buildAiVaultResumeShellCommand({
+                resumeCommand: startupPlan.launchCommand,
+                cwd: args.session.cwd,
+                platform: args.hostPlatform,
+                codexHome,
+                shell
+              }),
         ...(startupPlan.env ? { env: startupPlan.env } : {}),
+        // Why: the resume command is typed into the created pane, so the bare
+        // real-home override must strip Codex homes at pane spawn like desktop.
+        ...realHomeCodexResumeEnvDeletion(args.session),
         launchConfig: startupPlan.launchConfig,
         launchAgent: startupPlan.agent
       }
@@ -122,7 +130,8 @@ export function buildMobileAiVaultResumeLaunch(args: {
       hostPlatform: args.hostPlatform,
       hostTerminalWindowsShell: args.hostTerminalWindowsShell,
       commandOverride
-    })
+    }),
+    ...realHomeCodexResumeEnvDeletion(args.session)
   }
 }
 
@@ -141,10 +150,6 @@ function normalizeMobileAiVaultResumeCommandOverrides(
   return normalized
 }
 
-// Why: without an explicit timeout, a socket drop mid-resume parks the request
-// on the reconnect waiter for the full reconnect budget, pinning the spinner.
-export const RESUME_RPC_TIMEOUT_MS = 30_000
-
 export async function resumeAiVaultSessionInTerminal(
   client: Pick<RpcClient, 'sendRequest'>,
   worktreeId: string,
@@ -155,9 +160,13 @@ export async function resumeAiVaultSessionInTerminal(
     {
       worktree: `id:${worktreeId}`,
       ...(launch.env ? { env: launch.env } : {}),
+      ...(launch.envToDelete ? { envToDelete: launch.envToDelete } : {}),
       ...(launch.launchConfig ? { launchConfig: launch.launchConfig } : {}),
       ...(launch.launchAgent ? { launchAgent: launch.launchAgent } : {}),
-      ...(launch.clientMutationId ? { clientMutationId: launch.clientMutationId } : {})
+      ...(launch.clientMutationId ? { clientMutationId: launch.clientMutationId } : {}),
+      activate: false,
+      select: true,
+      navigation: 'caller'
     },
     { timeoutMs: RESUME_RPC_TIMEOUT_MS }
   )
@@ -212,16 +221,6 @@ export function createMobileAiVaultResumeMutationRegistry(
       bySessionId.delete(sessionId)
     }
   }
-}
-
-export function readMobileRuntimeHostPlatform(statusResult: unknown): NodeJS.Platform | null {
-  if (!statusResult || typeof statusResult !== 'object') {
-    return null
-  }
-  const hostPlatform = (statusResult as { hostPlatform?: unknown }).hostPlatform
-  return typeof hostPlatform === 'string' && NODE_PLATFORMS.has(hostPlatform as NodeJS.Platform)
-    ? (hostPlatform as NodeJS.Platform)
-    : null
 }
 
 export function readMobileRuntimeTerminalWindowsShell(statusResult: unknown): string | null {

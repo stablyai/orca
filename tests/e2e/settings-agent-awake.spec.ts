@@ -1,8 +1,9 @@
 import { randomUUID } from 'node:crypto'
+import { runProcess } from '../../src/shared/child-process/run-process'
 import type { ElectronApplication, Page } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
 import { waitForSessionReady } from './helpers/store'
-import type { GlobalSettings } from '../../src/shared/types'
+import type { GlobalSettings } from '../../src/shared/global-settings-types'
 import { readHookEndpoint } from './helpers/agent-hook-endpoint'
 
 type AwakeProbeSnapshot = {
@@ -104,6 +105,19 @@ async function readPowerSaveBlockerProbe(
   })
 }
 
+async function readMacosSleepAssertionPids(electronApp: ElectronApplication): Promise<number[]> {
+  const result = await runProcess({
+    program: '/usr/bin/pgrep',
+    args: ['-P', String(electronApp.process().pid), '-f', '^/usr/bin/caffeinate -i -s$'],
+    maxOutputBytes: 4_096
+  })
+  if (result.code === 1) {
+    return []
+  }
+  expect(result.code, result.stderr).toBe(0)
+  return result.stdout.trim().split(/\s+/).filter(Boolean).map(Number)
+}
+
 async function postCodexHookEvent(
   electronApp: ElectronApplication,
   options: {
@@ -139,44 +153,46 @@ test.describe('Agent awake setting', () => {
     await waitForSessionReady(orcaPage)
   })
 
-  test('can be toggled from Agents settings and persists through IPC', async ({ orcaPage }) => {
+  test('can be changed from Agents settings and persists through IPC', async ({ orcaPage }) => {
     await openSettings(orcaPage)
     await dismissTransientAnnouncement(orcaPage)
     await orcaPage.getByPlaceholder('Search settings').fill('awake')
 
-    await expect(
-      orcaPage.getByText('Keep computer awake while agents are working').first()
-    ).toBeVisible()
+    await expect(orcaPage.getByText('Keep computer awake').first()).toBeVisible()
 
-    const keepAwakeSwitch = orcaPage.getByRole('switch', {
-      name: 'Keep computer awake while agents are working'
+    const keepAwakeModes = orcaPage.getByRole('radiogroup', {
+      name: 'Keep computer awake'
     })
+    const offMode = keepAwakeModes.getByRole('radio', { name: 'Off' })
+    const agentMode = keepAwakeModes.getByRole('radio', { name: 'Agent' })
 
-    await expect(keepAwakeSwitch).toHaveAttribute('aria-checked', 'false')
-    await keepAwakeSwitch.click()
-    await expect(keepAwakeSwitch).toHaveAttribute('aria-checked', 'true')
+    await expect(offMode).toHaveAttribute('aria-checked', 'true')
+    await agentMode.click()
+    await expect(agentMode).toHaveAttribute('aria-checked', 'true')
     await expect
-      .poll(async () => (await getSettings(orcaPage)).keepComputerAwakeWhileAgentsRun, {
+      .poll(async () => (await getSettings(orcaPage)).computerAwakeMode, {
         timeout: 5_000,
-        message: 'keep-awake setting did not persist after enabling'
+        message: 'keep-awake mode did not persist after selecting Agent'
       })
-      .toBe(true)
+      .toBe('auto')
 
-    await keepAwakeSwitch.click()
-    await expect(keepAwakeSwitch).toHaveAttribute('aria-checked', 'false')
+    await offMode.click()
+    await expect(offMode).toHaveAttribute('aria-checked', 'true')
     await expect
-      .poll(async () => (await getSettings(orcaPage)).keepComputerAwakeWhileAgentsRun, {
+      .poll(async () => (await getSettings(orcaPage)).computerAwakeMode, {
         timeout: 5_000,
-        message: 'keep-awake setting did not persist after disabling'
+        message: 'keep-awake mode did not persist after selecting Off'
       })
-      .toBe(false)
+      .toBe('off')
   })
 
   test('keeps the OS awake only while a hook-reported agent is working', async ({
     electronApp,
     orcaPage
   }) => {
-    await installPowerSaveBlockerProbe(electronApp)
+    if (process.platform !== 'darwin') {
+      await installPowerSaveBlockerProbe(electronApp)
+    }
     await setKeepAwake(orcaPage, true)
 
     const tabId = 'e2e-awake-tab'
@@ -187,24 +203,33 @@ test.describe('Agent awake setting', () => {
       eventName: 'UserPromptSubmit'
     })
 
-    await expect
-      .poll(async () => await readPowerSaveBlockerProbe(electronApp), {
-        timeout: 5_000,
-        message: 'powerSaveBlocker did not start for the working agent'
-      })
-      .toEqual(
-        expect.objectContaining({
-          activeIds: expect.arrayContaining([expect.any(Number)]),
-          starts: expect.arrayContaining([
-            expect.objectContaining({ type: 'prevent-display-sleep' })
-          ])
+    await expect(
+      orcaPage.getByRole('button', { name: 'Keep computer awake, Agent · Active' })
+    ).toBeVisible()
+    let startedIds: number[] = []
+    if (process.platform === 'darwin') {
+      // macOS uses an app-owned caffeinate assertion instead of Electron's display blocker.
+      await expect
+        .poll(() => readMacosSleepAssertionPids(electronApp), { timeout: 5_000 })
+        .not.toEqual([])
+    } else {
+      await expect
+        .poll(async () => await readPowerSaveBlockerProbe(electronApp), {
+          timeout: 5_000,
+          message: 'powerSaveBlocker did not start for the working agent'
         })
-      )
+        .toEqual(
+          expect.objectContaining({
+            activeIds: expect.arrayContaining([expect.any(Number)]),
+            starts: expect.arrayContaining([
+              expect.objectContaining({ type: 'prevent-display-sleep' })
+            ])
+          })
+        )
 
-    const startedIds = (await readPowerSaveBlockerProbe(electronApp)).starts.map(
-      (start) => start.id
-    )
-    expect(startedIds.length).toBeGreaterThan(0)
+      startedIds = (await readPowerSaveBlockerProbe(electronApp)).starts.map((start) => start.id)
+      expect(startedIds.length).toBeGreaterThan(0)
+    }
 
     await postCodexHookEvent(electronApp, {
       paneKey,
@@ -212,6 +237,15 @@ test.describe('Agent awake setting', () => {
       eventName: 'Stop'
     })
 
+    await expect(
+      orcaPage.getByRole('button', { name: 'Keep computer awake, Agent · Inactive' })
+    ).toBeVisible()
+    if (process.platform === 'darwin') {
+      await expect
+        .poll(() => readMacosSleepAssertionPids(electronApp), { timeout: 5_000 })
+        .toEqual([])
+      return
+    }
     await expect
       .poll(async () => await readPowerSaveBlockerProbe(electronApp), {
         timeout: 5_000,

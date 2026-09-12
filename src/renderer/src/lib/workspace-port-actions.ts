@@ -1,23 +1,31 @@
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import type { useAppStore } from '@/store'
 import {
+  assertRuntimeEnvironmentCapability,
   callRuntimeRpc,
   RuntimeRpcCallError,
   type RuntimeClientTarget
 } from '@/runtime/runtime-rpc-client'
 import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
-import { parseExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
 import type {
   WorkspacePort,
   WorkspacePortKillResult,
   WorkspacePortScanResult
 } from '../../../shared/workspace-ports'
 import type { LocalhostWorktreeLabelRoute } from '../../../shared/localhost-worktree-labels'
+import { runWorkspacePortScanForTarget } from './workspace-port-scan-client'
 import { browserUrlForPort } from './workspace-port-urls'
+import { BROWSER_SCREENCAST_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
+import { RUNTIME_BROWSER_UNAVAILABLE_MESSAGE } from './client-creation-action-policy'
 
 export { addressForPort } from './workspace-port-urls'
 
 const WORKSPACE_PORT_STOP_SETTLE_MS = 500
+const WORKSPACE_PORT_TARGET_UNAVAILABLE_REASON =
+  'Workspace ports are unavailable for this execution host.'
+
+/** Projection key for the merged multi-host view; never a per-host scan key. */
+export const WORKSPACE_PORT_ALL_HOSTS_SCAN_KEY = 'all-hosts:all'
 
 export function canStopWorkspacePort(
   port: WorkspacePort
@@ -29,13 +37,17 @@ type BrowserTabCreator = ReturnType<typeof useAppStore.getState>['createBrowserT
 type RemoteBrowserPageHandleSetter = ReturnType<
   typeof useAppStore.getState
 >['setRemoteBrowserPageHandle']
-type WorkspacePortScanSetter = ReturnType<typeof useAppStore.getState>['setWorkspacePortScan']
-type WorkspacePortScanByKeySetter = ReturnType<
-  typeof useAppStore.getState
->['setWorkspacePortScanForKey']
 type WorkspacePortScanRefreshingSetter = ReturnType<
   typeof useAppStore.getState
 >['setWorkspacePortScanRefreshing']
+type ReplaceWorkspacePortScansSetter = ReturnType<
+  typeof useAppStore.getState
+>['replaceWorkspacePortScans']
+
+export type WorkspacePortScanPublisher = {
+  replaceWorkspacePortScans: ReplaceWorkspacePortScansSetter
+  getWorkspacePortScansByKey: () => Record<string, WorkspacePortScanResult>
+}
 
 function delay(ms: number): Promise<void> {
   return new Promise((resolve) => window.setTimeout(resolve, ms))
@@ -90,12 +102,15 @@ export function goToWorkspacePortOwner(port: WorkspacePort): boolean {
 export async function openWorkspacePortInBrowser(args: {
   port: WorkspacePort
   activeWorktreeId?: string | null
-  runtimeTarget: RuntimeClientTarget
+  runtimeTarget: RuntimeClientTarget | null
   createBrowserTab: BrowserTabCreator
   setRemoteBrowserPageHandle: RemoteBrowserPageHandleSetter
   openInOrcaBrowser?: boolean
   localhostLabelRoute?: LocalhostWorktreeLabelRoute | null
 }): Promise<{ ok: true } | { ok: false; reason: string }> {
+  if (!args.runtimeTarget) {
+    return { ok: false, reason: WORKSPACE_PORT_TARGET_UNAVAILABLE_REASON }
+  }
   const rawUrl = browserUrlForPort(args.port)
   let url = rawUrl
   if (args.runtimeTarget.kind === 'local' && args.localhostLabelRoute) {
@@ -120,16 +135,26 @@ export async function openWorkspacePortInBrowser(args: {
   if (!worktreeId) {
     return { ok: false, reason: 'No workspace selected for the browser.' }
   }
-  activateAndRevealWorktree(worktreeId)
+  // Why: the browser tab opened below is this jump's surface; seeding a shell would add a
+  // PTY the user never asked for in a workspace whose last terminal they closed.
+  activateAndRevealWorktree(worktreeId, { providesInitialSurface: true })
   if (args.runtimeTarget.kind === 'environment') {
     try {
+      await assertRuntimeEnvironmentCapability(
+        args.runtimeTarget.environmentId,
+        BROWSER_SCREENCAST_RUNTIME_CAPABILITY,
+        RUNTIME_BROWSER_UNAVAILABLE_MESSAGE
+      )
       const remotePage = await callRuntimeRpc<{ browserPageId: string }>(
         args.runtimeTarget,
         'browser.tabCreate',
         { worktree: toRuntimeWorktreeSelector(worktreeId), url },
         { timeoutMs: 30_000 }
       )
-      const tab = args.createBrowserTab(worktreeId, url, { activate: true })
+      const tab = args.createBrowserTab(worktreeId, url, {
+        activate: true,
+        browserRuntimeEnvironmentId: args.runtimeTarget.environmentId
+      })
       if (!tab.activePageId) {
         return { ok: false, reason: 'Failed to create a browser page.' }
       }
@@ -143,44 +168,47 @@ export async function openWorkspacePortInBrowser(args: {
       return { ok: false, reason: message || 'Failed to open remote browser.' }
     }
   }
-  args.createBrowserTab(worktreeId, url, { activate: true })
-  return { ok: true }
-}
-
-export async function refreshWorkspacePortScanState(args: {
-  runtimeTarget: RuntimeClientTarget
-  setWorkspacePortScan: WorkspacePortScanSetter
-  setWorkspacePortScanRefreshing: WorkspacePortScanRefreshingSetter
-}): Promise<WorkspacePortScanResult> {
-  args.setWorkspacePortScanRefreshing(true)
   try {
-    const scan = await scanWorkspacePortsForTarget(args.runtimeTarget)
-    args.setWorkspacePortScan({
-      key: workspacePortScanKeyForTarget(args.runtimeTarget),
-      result: scan
-    })
-    return scan
-  } finally {
-    args.setWorkspacePortScanRefreshing(false)
+    args.createBrowserTab(worktreeId, url, { activate: true })
+    return { ok: true }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    return { ok: false, reason: message || 'Failed to open browser.' }
   }
 }
 
-export async function refreshWorkspacePortScanAfterStop(args: {
-  runtimeTarget: RuntimeClientTarget
-  setWorkspacePortScan: WorkspacePortScanSetter
-  setWorkspacePortScanForKey?: WorkspacePortScanByKeySetter
-  setWorkspacePortScanRefreshing: WorkspacePortScanRefreshingSetter
-  getWorkspacePortScansByKey?: () => Record<string, WorkspacePortScanResult>
-}): Promise<{ ok: true } | { ok: false; reason: string }> {
+/**
+ * Stores one host's scan and republishes the aggregate the status bar reads.
+ * Why: a single-host publish used to overwrite that aggregate, so every other
+ * host's ports vanished from the count until the next background poll. One
+ * replaceWorkspacePortScans update (not setWorkspacePortScan) keeps the synthetic
+ * all-hosts key out of workspacePortScansByKey, where re-merging it would
+ * duplicate rows — and notifies subscribers once instead of twice for one scan.
+ */
+export function publishWorkspacePortScanForHost(
+  args: WorkspacePortScanPublisher & { scanKey: string; scan: WorkspacePortScanResult }
+): void {
+  const scansByKey = { ...args.getWorkspacePortScansByKey(), [args.scanKey]: args.scan }
+  const merged = mergeWorkspacePortScans(scansByKey)
+  args.replaceWorkspacePortScans(scansByKey, {
+    key: Object.keys(scansByKey).length > 1 ? WORKSPACE_PORT_ALL_HOSTS_SCAN_KEY : args.scanKey,
+    result: merged ?? args.scan
+  })
+}
+
+/** Re-scans one host after a port stop (immediately, then settled) and republishes the aggregate. */
+export async function refreshWorkspacePortScanAfterStop(
+  args: WorkspacePortScanPublisher & {
+    runtimeTarget: RuntimeClientTarget | null
+    setWorkspacePortScanRefreshing: WorkspacePortScanRefreshingSetter
+  }
+): Promise<{ ok: true } | { ok: false; reason: string }> {
+  if (!args.runtimeTarget) {
+    return { ok: false, reason: WORKSPACE_PORT_TARGET_UNAVAILABLE_REASON }
+  }
   const scanKey = workspacePortScanKeyForTarget(args.runtimeTarget)
   const publishScan = (scan: WorkspacePortScanResult): void => {
-    args.setWorkspacePortScanForKey?.(scanKey, scan)
-    const currentScans = args.getWorkspacePortScansByKey?.() ?? {}
-    const merged = mergeWorkspacePortScans({ ...currentScans, [scanKey]: scan })
-    args.setWorkspacePortScan({
-      key: merged && Object.keys(currentScans).length > 0 ? 'all-hosts:all' : scanKey,
-      result: merged ?? scan
-    })
+    publishWorkspacePortScanForHost({ ...args, scanKey, scan })
   }
   args.setWorkspacePortScanRefreshing(true)
   try {
@@ -213,19 +241,6 @@ export async function refreshWorkspacePortScanAfterStop(args: {
 
 export function workspacePortRuntimeTargetKey(target: RuntimeClientTarget): string {
   return target.kind === 'local' ? 'local' : `environment:${target.environmentId}`
-}
-
-export function runtimeTargetForExecutionHostId(
-  hostId: ExecutionHostId
-): RuntimeClientTarget | null {
-  const parsed = parseExecutionHostId(hostId)
-  if (parsed?.kind === 'local') {
-    return { kind: 'local' }
-  }
-  if (parsed?.kind === 'runtime') {
-    return { kind: 'environment', environmentId: parsed.environmentId }
-  }
-  return null
 }
 
 export function workspacePortScanKeyForTarget(target: RuntimeClientTarget): string {
@@ -271,31 +286,6 @@ function workspacePortScanRequestKey(target: RuntimeClientTarget, repoId?: strin
   return JSON.stringify([workspacePortRuntimeTargetKey(target), repoId ?? null])
 }
 
-async function runWorkspacePortScanForTarget(
-  target: RuntimeClientTarget,
-  repoId?: string
-): Promise<WorkspacePortScanResult> {
-  const params = repoId ? { repoId } : {}
-  if (target.kind === 'local') {
-    return window.api.workspacePorts.scan(params)
-  }
-  try {
-    return await callRuntimeRpc<WorkspacePortScanResult>(target, 'workspacePorts.scan', params, {
-      timeoutMs: 15_000
-    })
-  } catch (error) {
-    if (error instanceof RuntimeRpcCallError && error.code === 'method_not_found') {
-      return {
-        platform: 'unknown',
-        scannedAt: Date.now(),
-        ports: [],
-        unavailableReason: 'The connected runtime does not support workspace port management yet.'
-      }
-    }
-    throw error
-  }
-}
-
 export async function scanWorkspacePortsForTarget(
   target: RuntimeClientTarget,
   repoId?: string
@@ -319,9 +309,12 @@ export async function scanWorkspacePortsForTarget(
 }
 
 export async function killWorkspacePortForTarget(
-  target: RuntimeClientTarget,
+  target: RuntimeClientTarget | null,
   args: { repoId: string; pid: number; port: number }
 ): Promise<WorkspacePortKillResult> {
+  if (!target) {
+    return { ok: false, reason: WORKSPACE_PORT_TARGET_UNAVAILABLE_REASON }
+  }
   if (target.kind === 'local') {
     return window.api.workspacePorts.kill(args)
   }

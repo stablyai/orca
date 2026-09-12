@@ -1,5 +1,8 @@
 import { randomUUID } from 'node:crypto'
-import type { BrowserCertificateFailure, BrowserCertificateProceedResult } from '../../shared/types'
+import type {
+  BrowserCertificateFailure,
+  BrowserCertificateProceedResult
+} from '../../shared/browser-workspace-types'
 import {
   isEligibleLocalCertificateHost,
   toSecureCertificateEndpoint

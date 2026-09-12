@@ -1,4 +1,5 @@
 import { isTailscaleEndpoint } from '../../../src/shared/remote-runtime-tailscale-hint'
+import type { MobileConnectionPath } from './stable-logical-rpc-client'
 import type { ConnectionState } from './types'
 
 // Why: thresholds for escalating connection UX from neutral
@@ -28,6 +29,10 @@ const STALE_SINCE_LAST_CONNECT_MS = 60_000
 // instead of leaving the user staring at a generic "Can't connect".
 const TAILSCALE_HINT = 'check Tailscale'
 
+// No hint field: the remedy is the label, and appending "— check Tailscale" to
+// it would be wrong advice for a desktop that is reachable but signed out.
+const SIGNED_OUT_LABEL = 'Desktop signed out — sign in to Orca on your desktop to reconnect'
+
 export type ConnectionVerdict =
   | { kind: 'normal'; label: string }
   | { kind: 'warning'; label: string; hint?: string } // "Can't connect"
@@ -49,29 +54,64 @@ export function classifyConnection(args: {
   // Optional pinned host endpoint — enables the Tailscale hint on
   // warning/unreachable verdicts. Callers without it get plain labels.
   endpoint?: string | null
+  pendingPath?: MobileConnectionPath | null
+  // The desktop has repeatedly refused this device's relay credential — retrying
+  // cannot fix it, so it outranks any "still connecting" reading (STA-4681).
+  pairingRejected?: boolean
+  // The relay says the desktop's last control close named its own Orca Cloud
+  // sign-out. Retrying is still correct and still happens on the same cadence,
+  // but only the desktop's owner can end it, so the label has to say so.
+  hostSignedOut?: boolean
   nowMs?: number
 }): ConnectionVerdict {
   const { state, reconnectAttempts, lastConnectedAt } = args
   const now = args.nowMs ?? Date.now()
   const hint = isTailscaleEndpoint(args.endpoint) ? TAILSCALE_HINT : undefined
 
-  if (state === 'auth-failed') {
-    return { kind: 'auth-failed', label: 'Auth failed' }
+  // Why: auth-failed means the desktop no longer recognizes this pairing (e.g. it
+  // lost its device registry) — retrying can't fix it, only re-pairing can, so say so.
+  if (state === 'auth-failed' || (args.pairingRejected && state !== 'connected')) {
+    return { kind: 'auth-failed', label: 'Pairing invalid — re-pair with your desktop' }
   }
 
-  // Connected / connecting / handshaking are normal.
   if (state === 'connected') {
     return { kind: 'normal', label: 'Connected' }
   }
-  if (state === 'connecting' || state === 'handshaking') {
-    return { kind: 'normal', label: 'Connecting…' }
+
+  // Ahead of the attempt thresholds: this is evidence, not an inference from a
+  // failure streak, and waiting twelve dials to show it wastes the whole point.
+  // Below auth-failed because a revoked pairing cannot be fixed by signing in.
+  if (args.hostSignedOut) {
+    return {
+      kind: 'unreachable',
+      label: SIGNED_OUT_LABEL,
+      reason: lastConnectedAt == null ? 'never-connected' : 'stale'
+    }
+  }
+
+  // A disconnected pending path can survive a cleared retry timer during a
+  // lifecycle race. Only narrate Relay while dialing or after a retry has
+  // recorded progress; otherwise the idle transport must read Disconnected.
+  if (args.pendingPath === 'relay' && (state !== 'disconnected' || reconnectAttempts > 0)) {
+    if (reconnectAttempts >= UNREACHABLE_ATTEMPTS) {
+      if (lastConnectedAt == null) {
+        return { kind: 'unreachable', label: "Can't connect via Relay", reason: 'never-connected' }
+      }
+      if (now - lastConnectedAt >= STALE_SINCE_LAST_CONNECT_MS) {
+        return { kind: 'unreachable', label: "Can't connect via Relay", reason: 'stale' }
+      }
+    }
+    return { kind: 'normal', label: 'Connecting via Relay…' }
   }
 
   if (state === 'disconnected') {
     return { kind: 'normal', label: 'Disconnected' }
   }
 
-  // state === 'reconnecting' from here.
+  // connecting / handshaking / reconnecting from here. The gates apply to all
+  // three: every redial re-enters 'connecting', and letting that revert an
+  // escalated verdict to "Connecting…" hid the failure loop behind a reassuring
+  // label for most of each cycle (issue #10119).
   if (reconnectAttempts >= UNREACHABLE_ATTEMPTS) {
     if (lastConnectedAt == null) {
       return {
@@ -95,7 +135,7 @@ export function classifyConnection(args: {
     return { kind: 'warning', label: "Can't connect", hint }
   }
 
-  return { kind: 'normal', label: 'Reconnecting…' }
+  return { kind: 'normal', label: state === 'reconnecting' ? 'Reconnecting…' : 'Connecting…' }
 }
 
 // Why: single place that turns a verdict into display text so every screen

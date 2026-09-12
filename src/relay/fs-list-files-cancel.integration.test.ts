@@ -54,7 +54,6 @@ vi.mock('./fs-handler-utils', async (importOriginal) => {
   const original = (await importOriginal()) as Record<string, unknown>
   return {
     ...original,
-    checkRgAvailable: () => Promise.resolve(true),
     listFilesWithRg: fakeListFiles
   }
 })

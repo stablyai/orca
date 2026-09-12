@@ -1,11 +1,11 @@
 import { basename, extname } from 'node:path'
 import {
   aiVaultAgentLabel,
-  buildAiVaultResumeCommand,
   type AiVaultAgent,
   type AiVaultSession,
   type AiVaultSessionPreviewMessage
 } from '../../shared/ai-vault-types'
+import { buildAiVaultResumeCommand } from '../../shared/ai-vault-resume-command'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../shared/execution-host'
 import type {
   FileWithMtime,
@@ -13,11 +13,26 @@ import type {
   SessionAccumulator
 } from './session-scanner-types'
 import {
+  extractFullFirstUserPromptText,
+  normalizeFullFirstUserPromptText,
+  shouldCaptureFullFirstUserPrompt
+} from './session-scanner-first-user-prompt'
+import {
   extractPreviewContentText,
   extractString,
   normalizePreviewText,
   timestampMs
 } from './session-scanner-values'
+import {
+  NO_TRANSCRIPT_MESSAGES,
+  type TranscriptMessageSink,
+  type TranscriptSessionIdentity
+} from './session-transcript-consumers'
+import {
+  boundedText,
+  transcriptMessageRole,
+  transcriptMessagesFromContent
+} from './session-transcript-message-content'
 
 const SESSION_PREVIEW_MESSAGE_LIMIT = 5
 
@@ -25,9 +40,12 @@ export function createAccumulator(args: {
   agent: AiVaultAgent
   file: FileWithMtime
   sessionId: string
+  // Where every decoded message goes; absent for one-shot parses with no reader.
+  messages?: TranscriptMessageSink
 }): SessionAccumulator {
   return {
     agent: args.agent,
+    messages: args.messages ?? NO_TRANSCRIPT_MESSAGES,
     sessionId: args.sessionId,
     title: null,
     fallbackTitle: null,
@@ -41,9 +59,34 @@ export function createAccumulator(args: {
     messageCount: 0,
     totalTokens: 0,
     previewMessages: [],
+    previewMessagesTruncated: false,
+    firstUserPrompt: null,
+    lastUserPrompt: null,
     queuedMessageCount: 0,
     subagentTranscriptCount: 0,
     latestTimestampMs: 0
+  }
+}
+
+/**
+ * The session identity a fold holds right now. Null until it has an id, which
+ * every supported format writes in the opening lines of the transcript.
+ */
+export function accumulatorSessionIdentity(
+  accumulator: SessionAccumulator
+): TranscriptSessionIdentity | null {
+  const sessionId = accumulator.sessionId.trim()
+  if (!sessionId) {
+    return null
+  }
+  return {
+    sessionId,
+    cwd: accumulator.cwd,
+    // The generated fallback is `finalizeSession`'s, not this one's: a title
+    // that is still absent mid-read is better said to be absent.
+    title: accumulator.title ?? accumulator.fallbackTitle,
+    createdAt: accumulator.createdAt,
+    updatedAt: accumulator.updatedAt
   }
 }
 
@@ -60,6 +103,7 @@ export function accumulatorFoldResumeState(
 ): ResumableSessionParseState {
   return {
     consumeLine: (line) => consumeRecordLine(accumulator, line),
+    identity: () => accumulatorSessionIdentity(accumulator),
     clone: () =>
       accumulatorFoldResumeState(cloneSessionAccumulator(accumulator), consumeRecordLine),
     touchFile: (file) => {
@@ -67,6 +111,9 @@ export function accumulatorFoldResumeState(
     },
     // Finalize a snapshot: the live accumulator (and its preview array) keeps
     // accumulating appended lines after this session object is handed out.
+    // A sibling file's metadata is merged onto this result by the parse cache,
+    // never into the fold, so re-merging it later starts from what the
+    // transcript alone said (see session-scanner-sidecar-enrichment.ts).
     finalize: (platform, options) =>
       finalizeSession(cloneSessionAccumulator(accumulator), platform, options)
   }
@@ -88,7 +135,7 @@ export function finalizeSession(
   const title =
     accumulator.title ||
     accumulator.fallbackTitle ||
-    `${aiVaultAgentLabel(accumulator.agent)} ${sessionId.slice(0, 8)}`
+    generatedSessionTitle(accumulator.agent, sessionId)
 
   const executionHostId = options.executionHostId ?? LOCAL_EXECUTION_HOST_ID
 
@@ -112,6 +159,9 @@ export function finalizeSession(
     messageCount: accumulator.messageCount,
     totalTokens: accumulator.totalTokens,
     previewMessages: accumulator.previewMessages,
+    ...(accumulator.previewMessagesTruncated ? { previewMessagesTruncated: true } : {}),
+    ...(accumulator.firstUserPrompt ? { firstUserPrompt: accumulator.firstUserPrompt } : {}),
+    ...(accumulator.lastUserPrompt ? { lastUserPrompt: accumulator.lastUserPrompt } : {}),
     queuedMessageCount: accumulator.queuedMessageCount,
     subagentTranscriptCount: accumulator.subagentTranscriptCount,
     resumeCommand: buildAiVaultResumeCommand({
@@ -124,6 +174,15 @@ export function finalizeSession(
     }),
     subagent: null
   }
+}
+
+/**
+ * The title a session gets when neither the transcript nor the agent named it.
+ * Exported so a later merge can tell "the fold found no title" from a real one
+ * without re-deriving the string (session-scanner-sidecar-enrichment.ts).
+ */
+export function generatedSessionTitle(agent: AiVaultAgent, sessionId: string): string {
+  return `${aiVaultAgentLabel(agent)} ${sessionId.slice(0, 8)}`
 }
 
 export function updateTimeline(accumulator: SessionAccumulator, timestamp: unknown): void {
@@ -147,8 +206,24 @@ export function addPreviewMessage(
     role: AiVaultSessionPreviewMessage['role']
     text: string | null
     timestamp?: unknown
+    // Why: Claude meta/injected turns still preview, but must not seed the
+    // copyable first-prompt row.
+    seedFirstUserPrompt?: boolean
+    // Set false by callers that already published this record's messages.
+    publishMessage?: boolean
   }
 ): void {
+  if (args.publishMessage !== false && accumulator.messages.active) {
+    publishTranscriptMessage(accumulator, args.role, args.text, args.timestamp)
+  }
+  // Seeded before the preview-empty return so the copy body never depends on
+  // preview-only normalization rules.
+  seedFullFirstUserPrompt(
+    accumulator,
+    args.role,
+    () => (args.text ? normalizeFullFirstUserPromptText(args.text) : null),
+    args.seedFirstUserPrompt
+  )
   const text = normalizePreviewText(args.text ?? '')
   if (!text) {
     return
@@ -160,6 +235,7 @@ export function addPreviewMessage(
   })
   if (accumulator.previewMessages.length > SESSION_PREVIEW_MESSAGE_LIMIT) {
     accumulator.previewMessages.shift()
+    accumulator.previewMessagesTruncated = true
   }
 }
 
@@ -167,13 +243,70 @@ export function addPreviewContent(
   accumulator: SessionAccumulator,
   role: AiVaultSessionPreviewMessage['role'],
   content: unknown,
-  timestamp?: unknown
+  timestamp?: unknown,
+  options?: { seedFirstUserPrompt?: boolean }
 ): void {
+  seedFullFirstUserPrompt(
+    accumulator,
+    role,
+    () => extractFullFirstUserPromptText(content),
+    options?.seedFirstUserPrompt
+  )
+  // Published from the content value, not the preview string: a consumer needs
+  // the whole turn, including the tool blocks the 220-char preview drops.
+  if (accumulator.messages.active) {
+    for (const message of transcriptMessagesFromContent(role, content, timestampIso(timestamp))) {
+      accumulator.messages.push(message)
+    }
+  }
   addPreviewMessage(accumulator, {
     role,
     text: extractPreviewContentText(content),
-    timestamp
+    timestamp,
+    // Content path already seeded above when capture is enabled.
+    seedFirstUserPrompt: false,
+    publishMessage: false
   })
+}
+
+/** One already-flattened turn; the content path publishes per block instead. */
+function publishTranscriptMessage(
+  accumulator: SessionAccumulator,
+  role: AiVaultSessionPreviewMessage['role'],
+  text: string | null,
+  timestamp: unknown
+): void {
+  const messageRole = transcriptMessageRole(role)
+  const messageText = text === null ? null : boundedText(text)
+  if (messageRole && messageText) {
+    accumulator.messages.push({
+      role: messageRole,
+      text: messageText,
+      timestamp: timestampIso(timestamp)
+    })
+  }
+}
+
+/**
+ * Seed the copyable first prompt from the first real user turn. `fullText` is a
+ * thunk so list scans (capture mode `none`) never pay the extraction cost.
+ */
+export function seedFullFirstUserPrompt(
+  accumulator: SessionAccumulator,
+  role: AiVaultSessionPreviewMessage['role'],
+  fullText: () => string | null,
+  seedFirstUserPrompt?: boolean
+): void {
+  // Why: list scans never store firstUserPrompt (payload/perf). Only the
+  // on-demand full-capture path seeds the untruncated copy body.
+  if (
+    role === 'user' &&
+    seedFirstUserPrompt !== false &&
+    !accumulator.firstUserPrompt &&
+    shouldCaptureFullFirstUserPrompt()
+  ) {
+    accumulator.firstUserPrompt = fullText()
+  }
 }
 
 export function timestampIso(value: unknown): string | null {
@@ -185,16 +318,23 @@ export function updateLatestLocation(
   accumulator: SessionAccumulator,
   record: Record<string, unknown>
 ): void {
+  // Why: a session's representative cwd is its START directory, not its latest.
+  // `claude --resume <id>` only finds the transcript under the project dir keyed
+  // by the start cwd, and history grouping/filtering key off the session origin;
+  // a later drifted cwd broke resume for sessions that changed directory (#9361).
+  // Transcripts are append-only, so the first record carrying a cwd is the start.
+  if (accumulator.cwd === null) {
+    const startCwd = extractString(record.cwd)
+    if (startCwd) {
+      accumulator.cwd = startCwd
+    }
+  }
   const timestamp = extractString(record.timestamp)
   const parsed = timestamp ? Date.parse(timestamp) : accumulator.latestTimestampMs
   if (!Number.isFinite(parsed) || parsed < accumulator.latestTimestampMs) {
     return
   }
-  const cwd = extractString(record.cwd)
   const branch = extractString(record.gitBranch)
-  if (cwd) {
-    accumulator.cwd = cwd
-  }
   if (branch) {
     accumulator.branch = branch
   }

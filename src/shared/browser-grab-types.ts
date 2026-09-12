@@ -121,7 +121,11 @@ export type BrowserSetGrabModeArgs = {
 }
 
 /** Why a grab IPC call was rejected before the operation could start. */
-export type BrowserGrabRejectReason = 'not-ready' | 'not-authorized' | 'already-active'
+export type BrowserGrabRejectReason =
+  | 'not-ready'
+  | 'not-authorized'
+  | 'already-active'
+  | 'injection-failed'
 
 export type BrowserSetGrabModeResult = { ok: true } | { ok: false; reason: BrowserGrabRejectReason }
 

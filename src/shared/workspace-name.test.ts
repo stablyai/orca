@@ -95,8 +95,8 @@ describe('getWorkspaceIntentName', () => {
         }
       })
     ).toEqual({
-      displayName: 'Issue 2635 - Fix',
-      seedName: 'issue-2635-fix'
+      displayName: 'Fix Issue 2635',
+      seedName: 'fix-issue-2635'
     })
   })
 
@@ -111,8 +111,8 @@ describe('getWorkspaceIntentName', () => {
         }
       })
     ).toEqual({
-      displayName: 'PR 1234 - Review',
-      seedName: 'pr-1234-review'
+      displayName: 'Review PR 1234',
+      seedName: 'review-pr-1234'
     })
     expect(
       getWorkspaceIntentName({
@@ -125,8 +125,8 @@ describe('getWorkspaceIntentName', () => {
         }
       })
     ).toEqual({
-      displayName: 'MR 77 - Fix',
-      seedName: 'mr-77-fix'
+      displayName: 'Fix MR 77',
+      seedName: 'fix-mr-77'
     })
   })
 

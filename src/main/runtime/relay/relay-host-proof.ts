@@ -1,10 +1,18 @@
-import { createHmac, timingSafeEqual } from 'node:crypto'
-import nacl from 'tweetnacl'
+import {
+  encodeText,
+  encodeUint64,
+  equalBytes,
+  hostChallengeAckProof,
+  openHostChallengeEnvelope,
+  parseHostChallengeTranscript,
+  readTranscriptUint64
+} from '../host-challenge-envelope'
 
 const HOST_PROOF_TRANSCRIPT_DOMAIN = 'orca-relay-host-proof/v1'
 const HOST_CHALLENGE_PLAINTEXT_DOMAIN = 'orca-relay-host-challenge/v1'
-const textEncoder = new TextEncoder()
-const textDecoder = new TextDecoder()
+// Covers routine NTP drift without extending the signed challenge window.
+const RELAY_HOST_PROOF_CLOCK_SKEW_MS = 30_000
+const MAX_HOST_PROOF_CHALLENGE_WINDOW_MS = 10_000
 
 export type RelayHostChallenge = {
   challengeId: string
@@ -26,61 +34,8 @@ export type RelayHostProofContext = {
   previousGeneration?: number
   resumeRequested: boolean
   now?: () => number
-}
-
-function decodeCanonicalBase64(value: string, expectedBytes: number): Uint8Array | null {
-  if (!/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(value)) {
-    return null
-  }
-  const decoded = Buffer.from(value, 'base64')
-  return decoded.byteLength === expectedBytes && decoded.toString('base64') === value
-    ? decoded
-    : null
-}
-
-function uint64(value: number): Uint8Array {
-  const bytes = new Uint8Array(8)
-  new DataView(bytes.buffer).setBigUint64(0, BigInt(value), false)
-  return bytes
-}
-
-function equal(left: Uint8Array | undefined, right: Uint8Array): boolean {
-  return Boolean(left && left.byteLength === right.byteLength && timingSafeEqual(left, right))
-}
-
-function parseTranscript(transcript: Uint8Array): Map<string, Uint8Array> | null {
-  const fields = new Map<string, Uint8Array>()
-  const view = new DataView(transcript.buffer, transcript.byteOffset, transcript.byteLength)
-  let offset = 0
-  try {
-    while (offset < transcript.byteLength) {
-      const nameLength = view.getUint32(offset, false)
-      offset += 4
-      const name = textDecoder.decode(transcript.slice(offset, offset + nameLength))
-      offset += nameLength
-      const valueLength = view.getUint32(offset, false)
-      offset += 4
-      if (fields.has(name) || offset + valueLength > transcript.byteLength) {
-        return null
-      }
-      fields.set(name, transcript.slice(offset, offset + valueLength))
-      offset += valueLength
-    }
-  } catch {
-    return null
-  }
-  return offset === transcript.byteLength ? fields : null
-}
-
-function readUint64(value: Uint8Array | undefined): number | null {
-  if (!value || value.byteLength !== 8) {
-    return null
-  }
-  const parsed = new DataView(value.buffer, value.byteOffset, value.byteLength).getBigUint64(
-    0,
-    false
-  )
-  return parsed <= BigInt(Number.MAX_SAFE_INTEGER) ? Number(parsed) : null
+  /** Reports the failing check by name only; never receives field values. */
+  onInvalid?: (reason: string) => void
 }
 
 function validateTranscript(
@@ -90,77 +45,96 @@ function validateTranscript(
   relayKey: Uint8Array,
   nonce: Uint8Array
 ): boolean {
-  const fields = parseTranscript(transcript)
+  const fields = parseHostChallengeTranscript(transcript)
   if (!fields || fields.size !== 16) {
+    context.onInvalid?.('transcript-structure')
     return false
   }
   const now = (context.now ?? Date.now)()
-  const issuedAt = readUint64(fields.get('issuedAt'))
-  const expiresAt = readUint64(fields.get('expiresAt'))
+  const issuedAt = readTranscriptUint64(fields.get('issuedAt'))
+  const expiresAt = readTranscriptUint64(fields.get('expiresAt'))
   const previousGeneration = fields.get('previousGeneration')
   const expectedPrevious =
-    context.previousGeneration === undefined ? new Uint8Array() : uint64(context.previousGeneration)
-  return (
-    issuedAt !== null &&
-    issuedAt <= now &&
-    now <= challenge.expiresAt &&
-    challenge.expiresAt - issuedAt <= 10_000 &&
-    expiresAt === challenge.expiresAt &&
-    equal(fields.get('protocol'), textEncoder.encode(HOST_PROOF_TRANSCRIPT_DOMAIN)) &&
-    equal(fields.get('version'), new Uint8Array([1])) &&
-    equal(fields.get('relayOrigin'), textEncoder.encode(context.relayOrigin)) &&
-    equal(fields.get('relayEphemeralPublicKey'), relayKey) &&
-    equal(fields.get('challengeNonce'), nonce) &&
-    equal(fields.get('challengeId'), textEncoder.encode(challenge.challengeId)) &&
-    equal(fields.get('userId'), textEncoder.encode(context.userId)) &&
-    equal(fields.get('profileId'), textEncoder.encode(context.profileId)) &&
-    equal(fields.get('organizationId'), textEncoder.encode(context.organizationId)) &&
-    equal(fields.get('relayHostId'), textEncoder.encode(context.relayHostId)) &&
-    equal(fields.get('hostPublicKey'), context.hostPublicKey) &&
-    equal(fields.get('assignmentEpoch'), uint64(context.assignmentEpoch)) &&
-    equal(previousGeneration, expectedPrevious) &&
-    equal(fields.get('resumeRequested'), new Uint8Array([context.resumeRequested ? 1 : 0]))
-  )
+    context.previousGeneration === undefined
+      ? new Uint8Array()
+      : encodeUint64(context.previousGeneration)
+  // Main's 30s skew bounds with named-check reporting kept from the incident
+  // instrumentation; deltas are relative offsets only, never absolute values.
+  const checks: [string, boolean][] = [
+    ['issuedAt-readable', issuedAt !== null],
+    [
+      `issuedAt-not-future(d=${issuedAt === null ? 'n/a' : issuedAt - now}ms)`,
+      issuedAt === null || issuedAt - RELAY_HOST_PROOF_CLOCK_SKEW_MS <= now
+    ],
+    [
+      `not-expired(d=${challenge.expiresAt - now}ms)`,
+      now - RELAY_HOST_PROOF_CLOCK_SKEW_MS <= challenge.expiresAt
+    ],
+    ['issuedAt-before-expiry', issuedAt === null || issuedAt <= challenge.expiresAt],
+    [
+      `window(w=${issuedAt === null ? 'n/a' : challenge.expiresAt - issuedAt}ms)`,
+      issuedAt === null || challenge.expiresAt - issuedAt <= MAX_HOST_PROOF_CHALLENGE_WINDOW_MS
+    ],
+    ['expiry-consistent', expiresAt === challenge.expiresAt],
+    ['protocol', equalBytes(fields.get('protocol'), encodeText(HOST_PROOF_TRANSCRIPT_DOMAIN))],
+    ['version', equalBytes(fields.get('version'), new Uint8Array([1]))],
+    ['relayOrigin', equalBytes(fields.get('relayOrigin'), encodeText(context.relayOrigin))],
+    ['relayEphemeralPublicKey', equalBytes(fields.get('relayEphemeralPublicKey'), relayKey)],
+    ['challengeNonce', equalBytes(fields.get('challengeNonce'), nonce)],
+    ['challengeId', equalBytes(fields.get('challengeId'), encodeText(challenge.challengeId))],
+    ['userId', equalBytes(fields.get('userId'), encodeText(context.userId))],
+    ['profileId', equalBytes(fields.get('profileId'), encodeText(context.profileId))],
+    [
+      'organizationId',
+      equalBytes(fields.get('organizationId'), encodeText(context.organizationId))
+    ],
+    ['relayHostId', equalBytes(fields.get('relayHostId'), encodeText(context.relayHostId))],
+    ['hostPublicKey', equalBytes(fields.get('hostPublicKey'), context.hostPublicKey)],
+    [
+      'assignmentEpoch',
+      equalBytes(fields.get('assignmentEpoch'), encodeUint64(context.assignmentEpoch))
+    ],
+    ['previousGeneration', equalBytes(previousGeneration, expectedPrevious)],
+    [
+      'resumeRequested',
+      equalBytes(fields.get('resumeRequested'), new Uint8Array([context.resumeRequested ? 1 : 0]))
+    ]
+  ]
+  const failed = checks.filter(([, ok]) => !ok).map(([name]) => name)
+  if (failed.length > 0) {
+    context.onInvalid?.(`transcript:${failed.join('+')}`)
+    return false
+  }
+  return true
 }
 
 export function answerRelayHostChallenge(
   challenge: RelayHostChallenge,
   context: RelayHostProofContext
 ): string | null {
-  const relayKey = decodeCanonicalBase64(challenge.relayEphemeralPublicKeyB64, 32)
-  const nonce = decodeCanonicalBase64(challenge.nonceB64, 24)
-  const ciphertext = Buffer.from(challenge.ciphertextB64, 'base64')
-  if (!relayKey || !nonce || ciphertext.toString('base64') !== challenge.ciphertextB64) {
-    return null
-  }
-  const plaintext = nacl.box.open(ciphertext, nonce, relayKey, context.hostSecretKey)
-  if (!plaintext) {
-    return null
-  }
-  const domain = textEncoder.encode(`${HOST_CHALLENGE_PLAINTEXT_DOMAIN}\0`)
+  const envelope = openHostChallengeEnvelope({
+    peerEphemeralPublicKeyB64: challenge.relayEphemeralPublicKeyB64,
+    nonceB64: challenge.nonceB64,
+    ciphertextB64: challenge.ciphertextB64,
+    hostSecretKey: context.hostSecretKey,
+    plaintextDomain: HOST_CHALLENGE_PLAINTEXT_DOMAIN,
+    onInvalid: context.onInvalid
+  })
   if (
-    !equal(plaintext.slice(0, domain.byteLength), domain) ||
-    plaintext.byteLength < domain.byteLength + 36
+    !envelope ||
+    !validateTranscript(
+      envelope.transcript,
+      challenge,
+      context,
+      envelope.peerEphemeralPublicKey,
+      envelope.nonce
+    )
   ) {
     return null
   }
-  const transcriptLength = new DataView(
-    plaintext.buffer,
-    plaintext.byteOffset + domain.byteLength,
-    4
-  ).getUint32(0, false)
-  const transcriptStart = domain.byteLength + 4
-  const secretStart = transcriptStart + transcriptLength
-  if (secretStart + 32 !== plaintext.byteLength) {
-    return null
-  }
-  const transcript = plaintext.slice(transcriptStart, secretStart)
-  if (!validateTranscript(transcript, challenge, context, relayKey, nonce)) {
-    return null
-  }
-  const secret = plaintext.slice(secretStart)
-  return createHmac('sha256', secret)
-    .update(textEncoder.encode(`${HOST_PROOF_TRANSCRIPT_DOMAIN}\0ack\0`))
-    .update(transcript)
-    .digest('base64')
+  return hostChallengeAckProof({
+    secret: envelope.secret,
+    transcript: envelope.transcript,
+    proofDomain: HOST_PROOF_TRANSCRIPT_DOMAIN
+  })
 }

@@ -5,7 +5,8 @@
  * These functions depend only on their arguments (plus `rg` being on PATH),
  * so they are straightforward to test independently.
  */
-import { spawn, execFile } from 'node:child_process'
+import { SearchSubprocessLineAccumulator } from '../shared/search-subprocess-lines'
+import { spawn } from 'node:child_process'
 import { open } from 'node:fs/promises'
 import {
   buildRgArgs,
@@ -15,7 +16,14 @@ import {
   SEARCH_TIMEOUT_MS as SHARED_SEARCH_TIMEOUT_MS
 } from '../shared/text-search'
 import { IMAGE_FILE_MIME_TYPES } from '../shared/image-file-extensions'
-import type { SearchResult as SharedSearchResult } from '../shared/types'
+import type { SearchResult as SharedSearchResult } from '../shared/code-search-types'
+import {
+  absorbPendingRipgrepSpawnError,
+  isRipgrepUnavailableAfterLaunchFailure,
+  isRipgrepUnavailableExit,
+  killSpawnedRipgrepProcess,
+  RipgrepUnavailableError
+} from '../shared/ripgrep-process-availability'
 
 // ─── Constants ───────────────────────────────────────────────────────
 
@@ -89,11 +97,14 @@ export function searchWithRg(
   query: string,
   opts: SearchOptions
 ): Promise<SearchResult> {
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     const rgArgs = buildRgArgs(query, rootPath, opts)
     const acc = createAccumulator()
-    let buffer = ''
+    const lines = new SearchSubprocessLineAccumulator(Number.MAX_SAFE_INTEGER)
     let resolved = false
+    let processErrorObserved = false
+    let unavailableExitObserved = false
+    let launchFailureCheck: Promise<void> | null = null
 
     // Why: spawn can throw synchronously on invalid options (e.g. bad cwd),
     // which would leak out of the `new Promise` executor and leave the
@@ -117,6 +128,7 @@ export function searchWithRg(
         return
       }
       resolved = true
+      lines.clear()
       clearTimeout(killTimeout)
       // Why: child.kill() is advisory over SSH; detach listeners if the
       // process ignores timeout kill so old searches cannot retain closures.
@@ -124,23 +136,53 @@ export function searchWithRg(
       child.stderr!.off('data', handleStderrData)
       child.off('error', handleError)
       child.off('close', handleClose)
+      absorbPendingRipgrepSpawnError(child, {
+        errorObserved: processErrorObserved,
+        unavailableExitObserved
+      })
       resolve(finalize(acc))
+    }
+
+    function rejectUnavailable(): void {
+      if (resolved) {
+        return
+      }
+      resolved = true
+      lines.clear()
+      clearTimeout(killTimeout)
+      child.stdout!.off('data', handleStdoutData)
+      child.stderr!.off('data', handleStderrData)
+      child.off('error', handleError)
+      child.off('close', handleClose)
+      absorbPendingRipgrepSpawnError(child, {
+        errorObserved: processErrorObserved,
+        unavailableExitObserved
+      })
+      reject(new RipgrepUnavailableError())
+    }
+
+    function settleLaunchFailure(): void {
+      if (launchFailureCheck) {
+        return
+      }
+      launchFailureCheck = isRipgrepUnavailableAfterLaunchFailure(rootPath).then((unavailable) => {
+        if (unavailable) {
+          rejectUnavailable()
+        } else {
+          resolveOnce()
+        }
+      })
     }
 
     function processLine(line: string): void {
       const verdict = ingestRgJsonLine(line, rootPath, acc, opts.maxResults)
       if (verdict === 'stop') {
-        child.kill()
+        killSpawnedRipgrepProcess(child)
       }
     }
 
     function handleStdoutData(chunk: string): void {
-      buffer += chunk
-      const lines = buffer.split('\n')
-      buffer = lines.pop() ?? ''
-      for (const line of lines) {
-        processLine(line)
-      }
+      lines.push(chunk, processLine)
     }
 
     function handleStderrData(): void {
@@ -148,12 +190,27 @@ export function searchWithRg(
     }
 
     function handleError(): void {
+      processErrorObserved = true
+      if (isRipgrepUnavailableExit(child, null, null)) {
+        settleLaunchFailure()
+        return
+      }
       resolveOnce()
     }
 
-    function handleClose(): void {
-      if (buffer) {
-        processLine(buffer)
+    function handleClose(code: number | null, signal: NodeJS.Signals | null): void {
+      if (
+        isRipgrepUnavailableExit(child, code, signal, {
+          classifyNativeLauncherExit: true
+        })
+      ) {
+        unavailableExitObserved = true
+        settleLaunchFailure()
+        return
+      }
+      const tail = lines.finish()
+      if (tail !== null) {
+        processLine(tail)
       }
       resolveOnce()
     }
@@ -166,55 +223,9 @@ export function searchWithRg(
 
     killTimeout = setTimeout(() => {
       acc.truncated = true
-      child.kill()
+      killSpawnedRipgrepProcess(child)
       resolveOnce()
     }, SEARCH_TIMEOUT_MS)
-  })
-}
-
-// ─── rg availability check ──────────────────────────────────────────
-
-// Why no cache: `rg --version` is a sub-10ms local spawn, and caching the
-// result caused a footgun — a negative cache persisted across rg installs
-// (forcing a relay restart), while a positive cache could mask an rg that
-// was uninstalled or broken mid-session. The `settled` flag below closes
-// the original race between 'error' and 'close' that the cache was added
-// to paper over, so re-checking per call is both simpler and safer.
-const RG_AVAILABILITY_TIMEOUT_MS = 5000
-
-export function checkRgAvailable(): Promise<boolean> {
-  return new Promise((resolve) => {
-    let settled = false
-    const child = execFile('rg', ['--version'])
-    let timeout: ReturnType<typeof setTimeout> | null = null
-    const cleanup = (): void => {
-      if (timeout) {
-        clearTimeout(timeout)
-        timeout = null
-      }
-      child.off('error', onError)
-      child.off('close', onClose)
-    }
-    const settle = (available: boolean, options?: { kill?: boolean }): void => {
-      if (settled) {
-        return
-      }
-      settled = true
-      cleanup()
-      if (options?.kill) {
-        child.kill()
-      }
-      resolve(available)
-    }
-    const onError = (): void => settle(false)
-    const onClose = (code: number | null): void => settle(code === 0)
-
-    child.once('error', onError)
-    child.once('close', onClose)
-    timeout = setTimeout(() => settle(false, { kill: true }), RG_AVAILABILITY_TIMEOUT_MS)
-    if (typeof timeout.unref === 'function') {
-      timeout.unref()
-    }
   })
 }
 

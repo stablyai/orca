@@ -1,4 +1,6 @@
-import type { GlobalSettings, Repo, Worktree } from './types'
+import type { GlobalSettings } from './global-settings-types'
+import type { Repo } from './repo-types'
+import type { Worktree } from './worktree/types'
 
 export const LOCAL_EXECUTION_HOST_ID = 'local'
 export const ALL_EXECUTION_HOSTS_SCOPE = 'all'
@@ -79,6 +81,11 @@ export function parseExecutionHostId(value: string | null | undefined): ParsedEx
     if (!encoded) {
       return null
     }
+    // `|` must stay out of a host id: composeWorktreeHostIdentity uses it as its delimiter and
+    // splits at the first one, so an unencoded pipe would rebind an alias to a different host.
+    if (encoded.includes('|')) {
+      return null
+    }
     try {
       const targetId = decodeURIComponent(encoded)
       return targetId ? { kind: 'ssh', id: `ssh:${encoded}`, targetId } : null
@@ -89,6 +96,9 @@ export function parseExecutionHostId(value: string | null | undefined): ParsedEx
   if (normalized.startsWith('runtime:')) {
     const encoded = normalized.slice('runtime:'.length)
     if (!encoded) {
+      return null
+    }
+    if (encoded.includes('|')) {
       return null
     }
     try {
@@ -111,6 +121,12 @@ export function normalizeExecutionHostScope(value: string | null | undefined): E
     return ALL_EXECUTION_HOSTS_SCOPE
   }
   return normalizeExecutionHostId(normalized) ?? ALL_EXECUTION_HOSTS_SCOPE
+}
+
+// An omitted scope on a request means this host, not a fan-out. Callers and the
+// renderer share this so both agree on which requests answer with a merge.
+export function requestedExecutionHostScope(value: string | null | undefined): ExecutionHostScope {
+  return normalizeExecutionHostScope(value ?? LOCAL_EXECUTION_HOST_ID)
 }
 
 export function normalizeVisibleExecutionHostIds(
@@ -150,6 +166,44 @@ export function getRepoExecutionHostId(
   return connectionId ? toSshExecutionHostId(connectionId) : LOCAL_EXECUTION_HOST_ID
 }
 
+export function getSshTargetIdForExecutionHost(
+  executionHostId: string | null | undefined
+): string | null {
+  const parsed = parseExecutionHostId(executionHostId)
+  return parsed?.kind === 'ssh' ? parsed.targetId : null
+}
+
+// Why: SSH ownership has two spellings on a repo row — the legacy `connectionId`
+// field and the unified `executionHostId`. Routing that reads the raw field answers
+// "local" for a row that only carries `ssh:<target>`, which runs a remote operation
+// on the client. Resolve the host first, then read the connection off it.
+//
+// The two hosts that are not themselves SSH are not the same case:
+//
+//   - `local` has no SSH namespace to nest in, so a surviving `connectionId` is a row
+//     contradicting itself — the shape main's `resolveRepoOwnershipEvidence` calls
+//     `contradictory`. Answering with it hands out an SSH connection for a row that declares
+//     itself local.
+//   - `runtime:<env>` is a different machine with its own SSH targets, and a nested one appears
+//     only in this field (`repoWithFetchedOwner` spreads it through). It is not dialable on its
+//     own, but it is addressable as the pair (environmentId, targetId) — which is how the
+//     renderer reads it, recovering the environment from the worktree and looking the target up
+//     inside it (`selectRuntimeAwareSshStatus`). Dropping it makes a nested-SSH workspace read
+//     as local, which is what decides whether a transcript is read on this client.
+//
+// So this answers "which SSH target holds this row's files", not "which connection may this
+// client dial". `getSshTargetIdForExecutionHost` answers the latter; callers routing a
+// client-local PTY or Git provider want that one instead.
+export function getRepoSshConnectionId(
+  repo: Pick<Repo, 'connectionId' | 'executionHostId'>
+): string | null {
+  const host = parseExecutionHostId(getRepoExecutionHostId(repo))
+  if (host?.kind === 'ssh') {
+    return host.targetId
+  }
+  return host?.kind === 'runtime' ? normalizeHostPart(repo.connectionId) : null
+}
+
 export function getWorktreeExecutionHostId(
   worktree: Pick<Worktree, 'hostId'>,
   repo: Pick<Repo, 'connectionId' | 'executionHostId'> | undefined,
@@ -172,13 +226,18 @@ export function getSettingsFocusedExecutionHostId(
     : LOCAL_EXECUTION_HOST_ID
 }
 
-export function getExecutionHostLabel(id: ExecutionHostScope): string {
+export function getExecutionHostLabel(id: ExecutionHostScope | null | undefined): string {
   if (id === ALL_EXECUTION_HOSTS_SCOPE) {
     return 'All hosts'
   }
   const parsed = parseExecutionHostId(id)
   if (!parsed) {
-    return 'All hosts'
+    // Not "All hosts": an id that names no host is one *unknown* host, and answering with the
+    // everything-scope label shows an unroutable row as though it were on every host.
+    // Plain English like every other label in this module (`Local Mac`, `This computer`,
+    // `All hosts`) — none of them resolve through the renderer's i18n catalog, so a lone
+    // translated string here would read inconsistently.
+    return 'Unknown host'
   }
   switch (parsed.kind) {
     case 'local':
