@@ -530,6 +530,79 @@ describe('disposeDivider', () => {
   })
 })
 
+describe('divider double-click equalize (#9644)', () => {
+  it('exposes a hover/a11y hint so the sash gesture is discoverable', () => {
+    const attrs = new Map<string, string>()
+    const divider = {
+      style: { setProperty: vi.fn() } as unknown as CSSStyleDeclaration,
+      classList: { add: vi.fn(), remove: vi.fn() },
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      setPointerCapture: vi.fn(),
+      hasPointerCapture: vi.fn(() => false),
+      releasePointerCapture: vi.fn(),
+      setAttribute: vi.fn((name: string, value: string) => {
+        attrs.set(name, value)
+      }),
+      previousElementSibling: null,
+      nextElementSibling: null,
+      title: ''
+    } as unknown as HTMLElement
+    vi.stubGlobal('document', {
+      createElement: vi.fn(() => divider)
+    })
+    vi.stubGlobal('requestAnimationFrame', vi.fn())
+    vi.stubGlobal('cancelAnimationFrame', vi.fn())
+
+    createDivider(true, {}, { refitPanesUnder: vi.fn() })
+
+    expect(divider.title).toContain('Double-click')
+    expect(attrs.get('role')).toBe('separator')
+    expect(attrs.get('aria-orientation')).toBe('vertical')
+    expect(attrs.get('aria-label')).toContain('Double-click')
+  })
+
+  it('equalizes the two panes that share the sash and refits them', () => {
+    const listeners = new Map<string, EventListener>()
+    const previousPane = createSizedPaneElement({ width: 300, height: 200 })
+    previousPane.style.flex = '3 1 0%'
+    const nextPane = createSizedPaneElement({ width: 100, height: 200 })
+    nextPane.style.flex = '1 1 0%'
+    const divider = {
+      style: { setProperty: vi.fn() },
+      classList: { add: vi.fn(), remove: vi.fn() },
+      addEventListener: vi.fn((event: string, listener: EventListener) => {
+        listeners.set(event, listener)
+      }),
+      removeEventListener: vi.fn(),
+      setPointerCapture: vi.fn(),
+      hasPointerCapture: vi.fn(() => false),
+      releasePointerCapture: vi.fn(),
+      setAttribute: vi.fn(),
+      previousElementSibling: previousPane,
+      nextElementSibling: nextPane,
+      title: ''
+    } as unknown as HTMLElement
+    vi.stubGlobal('document', {
+      createElement: vi.fn(() => divider)
+    })
+    vi.stubGlobal('requestAnimationFrame', vi.fn())
+    vi.stubGlobal('cancelAnimationFrame', vi.fn())
+    const refitPanesUnder = vi.fn()
+    const onLayoutChanged = vi.fn()
+
+    createDivider(true, {}, { refitPanesUnder, onLayoutChanged })
+    listeners.get('dblclick')?.(new Event('dblclick') as unknown as Event)
+
+    // Why: pair weight 3+1=4 → each half is 2 so other panes in a group keep space.
+    expect(previousPane.style.flex).toBe('2 1 0%')
+    expect(nextPane.style.flex).toBe('2 1 0%')
+    expect(refitPanesUnder).toHaveBeenCalledWith(previousPane)
+    expect(refitPanesUnder).toHaveBeenCalledWith(nextPane)
+    expect(onLayoutChanged).toHaveBeenCalled()
+  })
+})
+
 function createPointerEvent(args: Partial<PointerEvent>): PointerEvent {
   return {
     preventDefault: vi.fn(),
