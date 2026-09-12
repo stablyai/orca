@@ -3,6 +3,13 @@ import { expect, test } from './helpers/orca-app'
 import { ensureTerminalVisible, waitForSessionReady } from './helpers/store'
 import { waitForActivePaneHookDescriptor } from './helpers/terminal'
 import { readHookEndpoint } from './helpers/agent-hook-endpoint'
+import {
+  configureGoldenStubAgent,
+  getGoldenStubAgentLaunchEnv,
+  launchGoldenStubAgentFromNewTab
+} from './helpers/golden-stub-agent'
+
+test.use({ launchEnv: getGoldenStubAgentLaunchEnv() })
 
 test('connects a note through native context and displays hook delivery without a Send action', async ({
   orcaPage,
@@ -10,7 +17,6 @@ test('connects a note through native context and displays hook delivery without 
 }, testInfo) => {
   await waitForSessionReady(orcaPage)
   await ensureTerminalVisible(orcaPage)
-  const pane = await waitForActivePaneHookDescriptor(orcaPage)
   await orcaPage.evaluate(async () => {
     await window.__store!.getState().updateSettings({
       agentStatusHooksEnabled: true,
@@ -19,8 +25,15 @@ test('connects a note through native context and displays hook delivery without 
       tabAutoGenerateTitle: false
     })
   })
+  await configureGoldenStubAgent(orcaPage)
+  await launchGoldenStubAgentFromNewTab(orcaPage)
+  const pane = await waitForActivePaneHookDescriptor(orcaPage)
   const endpoint = await readHookEndpoint(electronApp)
-  const launchToken = randomUUID()
+  const launchToken = await orcaPage.evaluate(
+    (key) => window.__store!.getState().agentLaunchConfigByPaneKey[key]?.identity.launchToken,
+    pane.paneKey
+  )
+  expect(launchToken).toBeTruthy()
   const sessionId = randomUUID()
   const hook = async () => {
     const response = await fetch(`http://127.0.0.1:${endpoint.port}/hook/codex`, {
@@ -43,6 +56,7 @@ test('connects a note through native context and displays hook delivery without 
         }
       })
     })
+    expect(response.ok).toBe(true)
     await response.text()
   }
   await hook()

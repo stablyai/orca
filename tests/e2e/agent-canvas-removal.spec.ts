@@ -6,7 +6,7 @@ for (const closeVia of ['canvas', 'tab-strip']) {
     orcaPage
   }, testInfo) => {
     const errors: string[] = []
-    orcaPage.on('pageerror', (error) => errors.push(error.message))
+    orcaPage.on('pageerror', (error) => errors.push(error.stack ?? error.message))
     await waitForSessionReady(orcaPage)
     const worktreeId = await waitForActiveWorktree(orcaPage)
     const ids = await orcaPage.evaluate((worktreeId) => {

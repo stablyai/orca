@@ -149,7 +149,8 @@ test('uses a live Orca browser inside the canvas without recreating its guest', 
       .getByRole('button', { name: 'Remove from canvas', exact: true })
       .click()
     await expect(card).toHaveCount(0)
-    await expect(pane).not.toBeVisible()
+    await expect(pane).toHaveCSS('opacity', '0')
+    await expect(pane).toHaveCSS('pointer-events', 'none')
     await orcaPage.locator('[data-agent-canvas-surface]').press('ControlOrMeta+z')
     await expect(guest).toBeVisible()
     expect(
