@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { create } from 'zustand'
 import type { RuntimeHostStatusSnapshot } from '../../../../shared/runtime-host-status'
 import type { RuntimeStatus } from '../../../../shared/runtime-types'
-import { buildRuntimeSessionMirrorEnvironmentKey } from '@/runtime/use-runtime-session-mirror-environment-key'
+import { buildRuntimeSessionMirrorEnvironmentKeys } from '@/runtime/use-runtime-session-mirror-environment-key'
 import {
   clearRuntimeEnvironmentConnectionGenerationsForTests,
   createRuntimeStatusSlice,
@@ -53,9 +53,9 @@ function makeSnapshot(
   }
 }
 
-/** The mirror-subscription effect dependency, rebuilt from the slice's current state. */
-function mirrorKey(store: Store): string {
-  return buildRuntimeSessionMirrorEnvironmentKey({
+/** The mirror-subscription effect dependencies, rebuilt from the slice's current state. */
+function mirrorKeys(store: Store): ReturnType<typeof buildRuntimeSessionMirrorEnvironmentKeys> {
+  return buildRuntimeSessionMirrorEnvironmentKeys({
     activeRuntimeEnvironmentId: ENVIRONMENT_ID,
     repos: [],
     worktreesByRepo: {},
@@ -64,7 +64,7 @@ function mirrorKey(store: Store): string {
     restoredRuntimeHostIdByWorkspaceSessionKey: {},
     runtimeEnvironments: store.getState().runtimeEnvironments,
     runtimeStatusByEnvironmentId: store.getState().runtimeStatusByEnvironmentId
-  } as Parameters<typeof buildRuntimeSessionMirrorEnvironmentKey>[0])
+  } as Parameters<typeof buildRuntimeSessionMirrorEnvironmentKeys>[0])
 }
 
 function seedEnvironment(store: Store): void {
@@ -96,44 +96,44 @@ afterEach(() => {
 })
 
 describe('regaining contact is its own mirror-recovery trigger', () => {
-  // The mirror subscription is (re)installed by the effect in
-  // web-session-tabs-sync/use-web-session-tabs-sync.ts, keyed on
-  // useRuntimeSessionMirrorEnvironmentKey(). Before this change the only thing that
-  // moved that key across an outage was the target being dropped and re-added — the
-  // teardown was the recovery. Holding the target through the outage strands the mirror
-  // unless regaining contact moves the key on its own.
-  it('advances the connection generation when a host answers again after an outage', () => {
+  // The mirror subscriptions are (re)installed by the effects in
+  // web-session-tabs-sync/use-web-session-tabs-sync.ts. Holding the target through the outage
+  // strands them unless regaining contact triggers a reinstall, but the connection generation
+  // cannot be that trigger: it is the mirror's cache key, and moving it rebuilds the mirror
+  // (#19647). The two live on separate values, and this suite pins each to its own edge.
+  it('advances the contact epoch, not the connection generation, when a host answers again', () => {
     const store = createSliceStore()
     seedEnvironment(store)
 
     store.getState().applyRuntimeHostStatusSnapshot(makeSnapshot(1, { verification: 'verified' }))
     const connectedGeneration = getRuntimeEnvironmentConnectionGeneration(ENVIRONMENT_ID)
-    const connectedKey = mirrorKey(store)
-    expect(connectedKey).not.toBe('')
+    const connected = mirrorKeys(store)
+    expect(connected.environmentKey).not.toBe('')
 
     store
       .getState()
       .applyRuntimeHostStatusSnapshot(makeSnapshot(2, { verification: 'unavailable' }))
     expect(getRuntimeEnvironmentConnectionGeneration(ENVIRONMENT_ID)).toBe(connectedGeneration)
-    expect(mirrorKey(store)).toBe(connectedKey)
+    expect(mirrorKeys(store)).toEqual(connected)
 
     store.getState().applyRuntimeHostStatusSnapshot(makeSnapshot(3, { verification: 'verified' }))
-    expect(getRuntimeEnvironmentConnectionGeneration(ENVIRONMENT_ID)).toBe(connectedGeneration + 1)
-    expect(mirrorKey(store)).not.toBe(connectedKey)
+    expect(getRuntimeEnvironmentConnectionGeneration(ENVIRONMENT_ID)).toBe(connectedGeneration)
+    expect(mirrorKeys(store).environmentKey).toBe(connected.environmentKey)
+    expect(mirrorKeys(store).resubscribeSignal).not.toBe(connected.resubscribeSignal)
   })
 
-  it('does not advance the generation while the host keeps answering', () => {
+  it('does not advance either value while the host keeps answering', () => {
     const store = createSliceStore()
     seedEnvironment(store)
 
     store.getState().applyRuntimeHostStatusSnapshot(makeSnapshot(1, { verification: 'verified' }))
     const connectedGeneration = getRuntimeEnvironmentConnectionGeneration(ENVIRONMENT_ID)
-    const connectedKey = mirrorKey(store)
+    const connected = mirrorKeys(store)
 
     store.getState().applyRuntimeHostStatusSnapshot(makeSnapshot(2, { verification: 'verified' }))
 
     expect(getRuntimeEnvironmentConnectionGeneration(ENVIRONMENT_ID)).toBe(connectedGeneration)
-    expect(mirrorKey(store)).toBe(connectedKey)
+    expect(mirrorKeys(store)).toEqual(connected)
   })
 
   it('leaves a first publication with no prior entry on its original generation', () => {
@@ -148,7 +148,7 @@ describe('regaining contact is its own mirror-recovery trigger', () => {
     expect(getRuntimeEnvironmentConnectionGeneration(ENVIRONMENT_ID)).toBe(before)
   })
 
-  it('advances once, not twice, when the runtime restarted during the outage', () => {
+  it('advances the generation when the runtime restarted during the outage', () => {
     const store = createSliceStore()
     seedEnvironment(store)
 

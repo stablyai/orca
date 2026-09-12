@@ -24,6 +24,7 @@ export function applyRuntimeHostStatusSnapshot(
     snapshot,
     checkedAt: snapshot.checkedAt,
     connectionGeneration: previous?.connectionGeneration,
+    hostContactEpoch: previous?.hostContactEpoch,
     status: snapshot.verification === 'verified' && !snapshot.retired ? snapshot.status : null,
     remoteControl: snapshot.remoteControl
   }

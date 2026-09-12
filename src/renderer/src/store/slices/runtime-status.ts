@@ -198,13 +198,7 @@ export const createRuntimeStatusSlice: StateCreator<AppState, [], [], RuntimeSta
       // already issued against this very connection — a startup worktree scan that had
       // already answered was discarded, leaving those repos absent until an unrelated
       // refresh (#19241).
-      // Why also on a same-runtime return: regaining contact is a new connection epoch, and
-      // it is the session mirror's "the host is back" trigger. The mirror used to be rebuilt
-      // as a side effect of having been destroyed when contact was lost; now that it is held
-      // through the outage, only this edge restores its subscription.
-      const reconnectedAfterLostContact = status.status !== null && previous?.status === null
-      const connectionChanged =
-        previous !== undefined && (runtimeSessionStarted || reconnectedAfterLostContact)
+      const connectionChanged = previous !== undefined && runtimeSessionStarted
       const activeEnvironmentId = s.settings?.activeRuntimeEnvironmentId?.trim()
       const connectionGeneration = connectionChanged
         ? runtimeStatusConnectionGeneration.advanceRuntimeEnvironmentConnectionGeneration(
@@ -215,12 +209,20 @@ export const createRuntimeStatusSlice: StateCreator<AppState, [], [], RuntimeSta
           runtimeStatusConnectionGeneration.getRuntimeEnvironmentConnectionGeneration(
             environmentId
           ))
+      // A same-runtime return is not a new connection, so it must not move the generation the
+      // mirror is keyed on. It still needs its own "the host is back" edge: the streams died with
+      // the transport, an 'end' frame resubscribes nothing, and the parking layer retries only a
+      // rejected subscribe. This counter is that edge, read only as a subscription-effect dep.
+      const reconnectedAfterLostContact = status.status !== null && previous?.status === null
+      const hostContactEpoch =
+        (previous?.hostContactEpoch ?? status.hostContactEpoch ?? 0) +
+        (reconnectedAfterLostContact ? 1 : 0)
       // Why the session flag and not `connectionChanged`: integration-readiness caches key
       // off the runtime session, for which a first publication is a real transition.
       if (activeEnvironmentId === environmentId && (sessionEnded || runtimeSessionStarted)) {
         bumpProviderRuntimeSessionGeneration()
       }
-      const nextEntry = { ...status, connectionGeneration }
+      const nextEntry = { ...status, connectionGeneration, hostContactEpoch }
       const currentEntry = s.runtimeStatusByEnvironmentId.get(environmentId)
       // Why: an unchanged re-probe must not invalidate every Map subscriber. Real
       // transitions change `status` or advance `connectionGeneration`, so they still write.
@@ -304,7 +306,10 @@ export const createRuntimeStatusSlice: StateCreator<AppState, [], [], RuntimeSta
         // flows are still delivering. Keep the live verdict; the connection's status owner (#20003)
         // holds the last verdict and retries until a real answer. A first-contact failure (no prior
         // live status) still records null so host coverage completes. #19647
-        if (entry.status === null && get().runtimeStatusByEnvironmentId.get(environmentId)?.status) {
+        if (
+          entry.status === null &&
+          get().runtimeStatusByEnvironmentId.get(environmentId)?.status
+        ) {
           return
         }
         // Why: setRuntimeEnvironmentStatus drops any stale compat failure on a non-null

@@ -18,7 +18,10 @@ vi.mock('./web-session-terminal-handle-events', async (importOriginal) => {
 vi.mock('./use-runtime-session-mirror-environment-key', async () => {
   const { frameOrderingMocks } = await import('./host-session-mirror-frame-fixtures')
   return {
-    useRuntimeSessionMirrorEnvironmentKey: frameOrderingMocks.runtimeSessionMirrorEnvironmentKey
+    useRuntimeSessionMirrorEnvironmentKeys: () => ({
+      environmentKey: frameOrderingMocks.runtimeSessionMirrorEnvironmentKey(),
+      resubscribeSignal: ''
+    })
   }
 })
 
