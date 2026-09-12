@@ -276,6 +276,23 @@ jobs:
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: node .github/scripts/check-root-directory-entries.mjs "$BASE_SHA" "$HEAD_SHA"
 
+  # Why unconditional: oxfmt formats markdown, and a docs-only PR skips
+  # static_analysis, so the formatter check there would never see docs/**.
+  formatting:
+    name: formatting
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: ./.github/actions/install-node-dependencies
+
+      - name: Check formatting
+        run: pnpm exec oxfmt --check .
+
   typecheck:
     needs: [code_paths]
     if: needs.code_paths.outputs.typecheck == 'true'
@@ -961,6 +978,7 @@ jobs:
       - code_paths
       - static_analysis
       - root_directory_guard
+      - formatting
       - typecheck
       - git_compatibility
       - codex_index_heal_contract
@@ -990,6 +1008,7 @@ jobs:
           STATIC_ANALYSIS: ${{ needs.static_analysis.result }}
           STATIC_ANALYSIS_SHOULD_RUN: ${{ needs.code_paths.outputs.static_analysis }}
           ROOT_DIRECTORY_GUARD: ${{ needs.root_directory_guard.result }}
+          FORMATTING: ${{ needs.formatting.result }}
           TYPECHECK: ${{ needs.typecheck.result }}
           TYPECHECK_SHOULD_RUN: ${{ needs.code_paths.outputs.typecheck }}
           GIT_COMPATIBILITY: ${{ needs.git_compatibility.result }}
@@ -1017,6 +1036,9 @@ jobs:
             exit 1
           fi
           if [ "$ROOT_DIRECTORY_GUARD" != "success" ]; then
+            exit 1
+          fi
+          if [ "$FORMATTING" != "success" ]; then
             exit 1
           fi
           if [ "$SHOULD_RUN" != "true" ]; then
