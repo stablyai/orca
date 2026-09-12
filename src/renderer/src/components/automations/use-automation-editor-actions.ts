@@ -32,7 +32,14 @@ export function useAutomationEditorActions({
   destination: AutomationsPageDestinationState
   destinationForm: AutomationsPageDestinationFormState
 }) {
-  const { defaultAgent, worktreesByRepo, repoMap, fetchWorktrees, repos } = store
+  const {
+    defaultAgent,
+    defaultCustomAgentProfileId,
+    worktreesByRepo,
+    repoMap,
+    fetchWorktrees,
+    repos
+  } = store
   const {
     editRequestRef,
     setEditingAutomationId,
@@ -63,6 +70,7 @@ export function useAutomationEditorActions({
       name: '',
       prompt: '',
       agentId: defaultAgent,
+      customAgentProfileId: defaultCustomAgentProfileId,
       projectId: target.projectId,
       workspaceMode: 'existing',
       workspaceId: target.workspaceId,
@@ -87,6 +95,8 @@ export function useAutomationEditorActions({
           time: template.time ?? baseDraft.time,
           dayOfWeek: template.dayOfWeek ?? baseDraft.dayOfWeek,
           agentId: template.agentId ?? baseDraft.agentId,
+          customAgentProfileId:
+            template.agentId === undefined ? baseDraft.customAgentProfileId : null,
           missedRunGraceMinutes: template.missedRunGraceMinutes ?? baseDraft.missedRunGraceMinutes
         }
       : baseDraft

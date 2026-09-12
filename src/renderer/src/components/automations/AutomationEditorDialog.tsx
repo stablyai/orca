@@ -11,6 +11,10 @@ import type { OrcaHooks } from '../../../../shared/orca-yaml-hook-types'
 import type { ProjectHostSetup } from '../../../../shared/project-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
+import {
+  isCustomAgentProfileEnabled,
+  normalizeCustomAgentProfiles
+} from '../../../../shared/custom-agent-profile'
 import type { SetupDecision } from '../../../../shared/worktree/create-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { closeUnfocusedMonacoFindOrPreventDialogDismiss } from '@/components/editor/monaco-find-widget'
@@ -38,6 +42,7 @@ export type AutomationDraft = {
   name: string
   prompt: string
   agentId: TuiAgent
+  customAgentProfileId: string | null
   projectId: string
   workspaceMode: AutomationWorkspaceMode
   workspaceId: string
@@ -137,6 +142,20 @@ export function AutomationEditorDialog({
       (agent) => enabledIds.has(agent.id) || agent.id === draft.agentId
     )
   }, [draft.agentId, settings?.disabledTuiAgents])
+  const visibleCustomAgents = React.useMemo(
+    () =>
+      normalizeCustomAgentProfiles(settings?.customAgentProfiles).flatMap((profile) => {
+        const baseAgent = profile.baseAgent
+        if (
+          !baseAgent ||
+          (!isCustomAgentProfileEnabled(profile) && profile.id !== draft.customAgentProfileId)
+        ) {
+          return []
+        }
+        return [{ id: profile.id, label: profile.name, cmd: profile.executable, baseAgent }]
+      }),
+    [draft.customAgentProfileId, settings?.customAgentProfiles]
+  )
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -202,6 +221,7 @@ export function AutomationEditorDialog({
             settings={settings}
             draft={draft}
             visibleAgents={visibleAgents}
+            visibleCustomAgents={visibleCustomAgents}
             pickerTriggerClassName={AUTOMATION_EDITOR_PICKER_TRIGGER_CLASS}
             segmentedGroupClassName={AUTOMATION_EDITOR_SEGMENTED_GROUP_CLASS}
             segmentedItemClassName={AUTOMATION_EDITOR_SEGMENTED_ITEM_CLASS}

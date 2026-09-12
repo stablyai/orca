@@ -41,7 +41,6 @@ import {
 import { AutomationListLastRunCell } from './AutomationListLastRunCell'
 import { formatAutomationDateTimeWithRelative } from './automation-page-parts'
 import { getAutomationTargetAvailability } from './automation-target-availability'
-import { getAgentLabel } from './automation-draft-model'
 import type { AutomationListRow } from './automation-list-row-identity'
 import {
   formatAutomationCost,
@@ -57,6 +56,7 @@ import {
 import { isPortaledRowMenuClick, isRowActivationKey } from '@/lib/list-row-interaction'
 import { AutomationListStatusCell } from './AutomationListStatusCell'
 import { translate } from '@/i18n/i18n'
+import { useAutomationAgentLabel } from './use-automation-agent-label'
 
 export type AutomationListLocalRowProps = {
   row: AutomationListRow
@@ -135,6 +135,7 @@ export function AutomationListLocalRow({
   onToggle,
   onDelete
 }: AutomationListLocalRowProps): React.JSX.Element {
+  const getAutomationAgentLabel = useAutomationAgentLabel()
   const allows = (row: AutomationListRow, action: AutomationRowAction): boolean =>
     isActionEnabled?.(row, action) ?? true
   const { automation } = row
@@ -160,7 +161,7 @@ export function AutomationListLocalRow({
     ? formatAutomationDateTimeWithRelative(automation.nextRunAt, relativeNow)
     : translate('auto.components.automations.enablement.paused', 'Paused')
   const isSelected = isSelectedLocal && selectedRowKey === row.key
-  const agentLabel = getAgentLabel(automation.agentId)
+  const agentLabel = getAutomationAgentLabel(automation)
   const hostId =
     automation.runContext?.hostId ??
     (automationRepo ? getRepoExecutionHostId(automationRepo) : null)
