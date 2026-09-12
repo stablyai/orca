@@ -143,6 +143,8 @@ export type GlobalSettings = {
   terminalActivePaneOpacity: number
   terminalPaneOpacityTransitionMs: number
   terminalDividerThicknessPx: number
+  terminalActivePaneBorderEnabled?: boolean
+  terminalActivePaneBorderColor?: string
   terminalBackgroundOpacity?: number
   /** xterm minimumContrastRatio floor for terminal panes (#10754). Undefined keeps the automatic,
    *  background-luminance-gated floor (3 dark / 4.5 light); 1 disables contrast correction so TUIs

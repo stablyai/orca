@@ -7373,7 +7373,11 @@
           "e90afcc44f": "apagado",
           "16c471ee03": "activado",
           "typographyAdvanced": "Tipografía",
-          "dimUnfocusedPanes": "Atenuar paneles sin foco."
+          "dimUnfocusedPanes": "Atenuar paneles sin foco.",
+          "activePaneBorder": "Borde del panel activo",
+          "activePaneBorderDesc": "Resalta con un borde el panel enfocado. Usa el grosor configurado para los divisores.",
+          "activePaneBorderColor": "Color del borde del panel activo",
+          "activePaneBorderColorDesc": "Color del borde del panel enfocado."
         },
         "TerminalFontSizeSetting": {
           "9b5252c85a": "px",
@@ -9132,6 +9136,11 @@
             "e58d4040d0": "Grosor de la línea divisoria del panel.",
             "2d5ab88b7c": "Grosor del divisor",
             "6c4c85ba43": "oscurecimiento",
+            "activePaneBorder": "Borde del panel activo",
+            "activePaneBorderDescription": "Resalta el panel enfocado con el color que elijas.",
+            "border": "borde",
+            "outline": "contorno",
+            "highlight": "resaltar",
             "18dd5026c6": "Opacidad aplicada a los paneles que no están activos actualmente.",
             "72bbcbd1dd": "Opacidad del panel inactivo",
             "d4f7d1ce5c": "Opacidad del cursor del terminal.",

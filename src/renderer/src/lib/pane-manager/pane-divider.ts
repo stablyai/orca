@@ -1,4 +1,4 @@
-import type { PaneStyleOptions, ManagedPaneInternal } from './pane-manager-types'
+import type { PaneStyleOptions } from './pane-manager-types'
 import { attachDividerDrag, disposeDividerDrag, type DividerCallbacks } from './pane-divider-drag'
 export { createDividerFlexFrameScheduler } from './pane-divider-drag'
 
@@ -6,11 +6,12 @@ export { createDividerFlexFrameScheduler } from './pane-divider-drag'
 // Divider creation & drag-to-resize
 // ---------------------------------------------------------------------------
 
+export const DIVIDER_HIT_PADDING = 3
+
 /** Total hit area size = visible thickness + invisible padding on each side */
 export function getDividerHitSize(styleOptions: PaneStyleOptions): number {
   const thickness = styleOptions.dividerThicknessPx ?? 4
-  const HIT_PADDING = 3
-  return thickness + HIT_PADDING * 2
+  return thickness + DIVIDER_HIT_PADDING * 2
 }
 
 export function createDivider(
@@ -68,22 +69,6 @@ export function applyDividerStyles(root: HTMLElement, styleOptions: PaneStyleOpt
     // Extension amount lets ::after reach the center of perpendicular
     // dividers so intersecting splits visually connect.
     el.style.setProperty('--divider-extension', `${hitSize / 2}px`)
-  }
-}
-
-export function applyPaneOpacity(
-  panes: Iterable<ManagedPaneInternal>,
-  activePaneId: number | null,
-  styleOptions: PaneStyleOptions
-): void {
-  const { activePaneOpacity = 1, inactivePaneOpacity = 1, opacityTransitionMs = 0 } = styleOptions
-
-  const transition = opacityTransitionMs > 0 ? `opacity ${opacityTransitionMs}ms ease` : ''
-
-  for (const pane of panes) {
-    const isActive = pane.id === activePaneId
-    pane.container.style.opacity = String(isActive ? activePaneOpacity : inactivePaneOpacity)
-    pane.container.style.transition = transition
   }
 }
 

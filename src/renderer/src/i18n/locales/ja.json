@@ -7395,7 +7395,11 @@
           "e90afcc44f": "オフ",
           "16c471ee03": "オン",
           "typographyAdvanced": "タイポグラフィ",
-          "dimUnfocusedPanes": "フォーカスされていないペインを暗くします。"
+          "dimUnfocusedPanes": "フォーカスされていないペインを暗くします。",
+          "activePaneBorder": "アクティブペインの枠線",
+          "activePaneBorderDesc": "フォーカス中のペインを枠線で囲みます。太さは上の分割線の太さに合わせます。",
+          "activePaneBorderColor": "アクティブペインの枠線の色",
+          "activePaneBorderColorDesc": "フォーカス中のペインの枠線の色です。"
         },
         "TerminalFontSizeSetting": {
           "9b5252c85a": "ピクセル",
@@ -9168,6 +9172,11 @@
             "e58d4040d0": "ペイン分割線の太さ。",
             "2d5ab88b7c": "ディバイダーの厚さ",
             "6c4c85ba43": "調光",
+            "activePaneBorder": "アクティブペインの枠線",
+            "activePaneBorderDescription": "フォーカス中のペインを、指定した色の枠線で囲みます。",
+            "border": "枠線",
+            "outline": "アウトライン",
+            "highlight": "ハイライト",
             "18dd5026c6": "現在アクティブではないペインに不透明度が適用されます。",
             "72bbcbd1dd": "非アクティブなペインの不透明度",
             "d4f7d1ce5c": "ターミナルカーソルの不透明度。",

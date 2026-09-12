@@ -23,7 +23,8 @@ vi.mock('./pane-split-scroll', () => ({
   scheduleSplitScrollRestore: vi.fn()
 }))
 vi.mock('./pane-drag-reorder', () => ({ updateMultiPaneState: vi.fn() }))
-vi.mock('./pane-divider', () => ({ applyDividerStyles: vi.fn(), applyPaneOpacity: vi.fn() }))
+vi.mock('./pane-divider', () => ({ applyDividerStyles: vi.fn() }))
+vi.mock('./pane-active-border', () => ({ applyActivePaneStyles: vi.fn() }))
 
 import {
   closeManagedPane,

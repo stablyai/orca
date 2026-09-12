@@ -1,6 +1,7 @@
 import type { DragReorderCallbacks } from './pane-drag-reorder'
 import type { PaneManagerHost } from './pane-manager-host'
-import { applyDividerStyles, applyPaneOpacity, createDivider } from './pane-divider'
+import { applyDividerStyles, createDivider } from './pane-divider'
+import { applyActivePaneStyles } from './pane-active-border'
 import { refitPanesUnder, safeFit } from './pane-tree-ops'
 
 export function createManagedPaneDivider(host: PaneManagerHost, isVertical: boolean): HTMLElement {
@@ -18,8 +19,13 @@ export function createPaneDragCallbacks(host: PaneManagerHost): DragReorderCallb
     getStyleOptions: () => host.getStyleOptions(),
     isDestroyed: () => host.isDestroyed(),
     safeFit,
-    applyPaneOpacity: () =>
-      applyPaneOpacity(host.panes.values(), host.getActivePaneId(), host.getStyleOptions()),
+    applyActivePaneStyles: () =>
+      applyActivePaneStyles(
+        host.root,
+        host.panes.values(),
+        host.getActivePaneId(),
+        host.getStyleOptions()
+      ),
     applyDividerStyles: () => applyDividerStyles(host.root, host.getStyleOptions()),
     refitPanesUnder: (el: HTMLElement) => refitPanesUnder(el, host.panes),
     requestPaneReparentFrame: (callback: FrameRequestCallback) => {

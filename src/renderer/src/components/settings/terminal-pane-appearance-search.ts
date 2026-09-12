@@ -30,6 +30,24 @@ export const getTerminalPaneAppearanceSearchEntries = createLocalizedCatalog(() 
       ...translateSearchKeyword('auto.components.settings.terminal.search.781f49d942', 'divider'),
       ...translateSearchKeyword('auto.components.settings.terminal.search.f637a7dee9', 'thickness')
     ]
+  },
+  {
+    title: translate(
+      'auto.components.settings.terminal.search.activePaneBorder',
+      'Active Pane Border'
+    ),
+    description: translate(
+      'auto.components.settings.terminal.search.activePaneBorderDescription',
+      'Outline the focused pane in a color you pick.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.terminal.search.846a7a1204', 'pane'),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.border', 'border'),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.outline', 'outline'),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.f036794286', 'active'),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.f5d1e3d472', 'focus'),
+      ...translateSearchKeyword('auto.components.settings.terminal.search.highlight', 'highlight')
+    ]
   }
 ])
 

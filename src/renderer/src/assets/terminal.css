@@ -115,6 +115,20 @@
   );
 }
 
+/* Geometry and stroke are set inline by pane-active-border.ts. A lone pane is
+   trivially the active one, so only splits show the marker. */
+.pane-active-border {
+  display: none;
+  position: absolute;
+  pointer-events: none;
+  z-index: 30;
+  border-style: solid;
+}
+
+.has-multiple-panes > .pane-active-border {
+  display: block;
+}
+
 /* ── Pane drag handle ─────────────────────────────────── */
 
 .pane-drag-handle {

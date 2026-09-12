@@ -7363,7 +7363,11 @@
           "e90afcc44f": "끔",
           "16c471ee03": "켜짐",
           "typographyAdvanced": "타이포그래피",
-          "dimUnfocusedPanes": "포커스되지 않은 창을 흐리게 표시합니다."
+          "dimUnfocusedPanes": "포커스되지 않은 창을 흐리게 표시합니다.",
+          "activePaneBorder": "활성 창 테두리",
+          "activePaneBorderDesc": "포커스된 창에 테두리를 표시합니다. 두께는 위 구분선 두께를 따릅니다.",
+          "activePaneBorderColor": "활성 창 테두리 색상",
+          "activePaneBorderColorDesc": "포커스된 창 테두리의 색상입니다."
         },
         "TerminalFontSizeSetting": {
           "9b5252c85a": "px",
@@ -9122,6 +9126,11 @@
             "e58d4040d0": "창 구분선의 두께입니다.",
             "2d5ab88b7c": "구분선 두께",
             "6c4c85ba43": "디밍",
+            "activePaneBorder": "활성 창 테두리",
+            "activePaneBorderDescription": "포커스된 창의 테두리를 원하는 색상으로 표시합니다.",
+            "border": "테두리",
+            "outline": "외곽선",
+            "highlight": "강조",
             "18dd5026c6": "현재 활성화되지 않은 창에 불투명도가 적용됩니다.",
             "72bbcbd1dd": "비활성 창 불투명도",
             "d4f7d1ce5c": "terminal 커서의 불투명도입니다.",
