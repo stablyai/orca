@@ -34,6 +34,28 @@ vi.mock('@/components/worktree-base-fallback-notice', () => ({
 beforeEach(resetWorktreeSliceModuleMemory)
 
 describe('removeWorktree state cleanup', () => {
+  it('refuses cancellation cleanup after another instance replaces the worktree', async () => {
+    const store = createTestStore()
+    const replacement = makeWorktree({
+      id: 'repo1::/path/reused',
+      repoId: 'repo1',
+      instanceId: 'new-instance'
+    })
+    store.setState({ worktreesByRepo: { repo1: [replacement] } } as Partial<AppState>)
+    const result = await store
+      .getState()
+      .removeWorktree({ id: replacement.id, executionHostId: 'local' }, true, {
+        skipArchiveHooks: true,
+        expectedInstanceId: 'original-instance'
+      })
+    expect(result).toEqual({
+      ok: false,
+      error: 'Workspace instance changed before cancellation cleanup.'
+    })
+    expect(mockApi.worktrees.remove).not.toHaveBeenCalled()
+    expect(store.getState().worktreesByRepo.repo1).toEqual([replacement])
+  })
+
   beforeEach(() => {
     vi.clearAllMocks()
     resetRemoteRuntimeMocks()

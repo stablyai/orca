@@ -15,6 +15,7 @@ import {
 } from '@/lib/worktree-operation-route'
 import {
   beginHostQualifiedRemoval,
+  assertWorktreeRemovalInstance,
   completeSameIdHostScopedRemoval,
   findWorktreeOnConfirmedHost,
   prepareHostScopedRemovalCompletion,
@@ -90,21 +91,23 @@ export function createRemoveWorktree(
 
     try {
       // Why: forget-local touches no remote, so there's no archive hook to run or trust prompt needed.
-      const skipArchive = forgetLocalOnly
-        ? true
-        : (await ensureHooksConfirmed(
-            get(),
-            getRepoIdFromWorktreeId(worktreeId),
-            'archive',
-            hostId,
-            removalRoute?.runtimeEnvironmentId
-          )) === 'skip'
+      const skipArchive =
+        forgetLocalOnly || options?.skipArchiveHooks === true
+          ? true
+          : (await ensureHooksConfirmed(
+              get(),
+              getRepoIdFromWorktreeId(worktreeId),
+              'archive',
+              hostId,
+              removalRoute?.runtimeEnvironmentId
+            )) === 'skip'
 
       const worktreeBeforeRemoval = findWorktreeOnConfirmedHost(
         get,
         worktreeId,
         requiredExecutionHostId
       )
+      assertWorktreeRemovalInstance(worktreeBeforeRemoval, options?.expectedInstanceId)
       const terminalPtyIdsBeforeRemoval = (get().tabsByWorktree[worktreeId] ?? []).flatMap(
         (tab) => get().ptyIdsByTabId[tab.id] ?? []
       )
