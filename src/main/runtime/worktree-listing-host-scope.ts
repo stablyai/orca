@@ -1,5 +1,9 @@
 import type { Repo } from '../../shared/repo-types'
-import { getRepoExecutionHostId, type ExecutionHostId } from '../../shared/execution-host'
+import {
+  getRepoExecutionHostId,
+  LOCAL_EXECUTION_HOST_ID,
+  type ExecutionHostId
+} from '../../shared/execution-host'
 import { selectHostBalancedPage } from '../../shared/host-balanced-listing-page'
 import type { RuntimeListingHostScope } from '../../shared/runtime-listing-host-scope'
 
@@ -23,7 +27,7 @@ export function buildWorktreeListingPage<TRow extends { hostId?: ExecutionHostId
   totalCount: number
   truncated: boolean
 } {
-  const page = selectHostBalancedPage(rows, limit, (row) => row.hostId)
+  const page = selectHostBalancedPage(rows, limit, (row) => row.hostId ?? LOCAL_EXECUTION_HOST_ID)
   return {
     worktrees: page,
     hostScope: buildWorktreeListingHostScope({
@@ -49,16 +53,16 @@ export function buildWorktreeListingHostScope(args: {
   /** Hosts this runtime has configured repos or workspaces on, even if they contributed no rows. */
   knownHostIds: Iterable<ExecutionHostId>
 }): RuntimeListingHostScope {
+  const normalizeHostId = (hostId: ExecutionHostId | undefined) => hostId ?? LOCAL_EXECUTION_HOST_ID
   const covered = new Set<ExecutionHostId>()
   for (const hostId of args.pageHostIds) {
-    if (hostId) {
-      covered.add(hostId)
-    }
+    covered.add(normalizeHostId(hostId))
   }
   const omitted = new Set<ExecutionHostId>()
   for (const hostId of [...args.matchedHostIds, ...args.knownHostIds]) {
-    if (hostId && !covered.has(hostId)) {
-      omitted.add(hostId)
+    const normalized = normalizeHostId(hostId)
+    if (!covered.has(normalized)) {
+      omitted.add(normalized)
     }
   }
   return { hostIds: [...covered].sort(), omittedHostIds: [...omitted].sort() }

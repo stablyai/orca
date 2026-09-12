@@ -88,6 +88,7 @@ export function buildRuntimeWorktreePsSummaries(args: {
       workspaceKind: 'folder-workspace',
       worktreeId: worktree.id,
       repoId: worktree.repoId,
+      ...(worktree.hostId ? { hostId: worktree.hostId } : {}),
       repo: projectGroup.name,
       path: worktree.path,
       branch: worktree.branch,

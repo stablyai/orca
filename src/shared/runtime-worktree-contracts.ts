@@ -125,6 +125,8 @@ export type RuntimeWorktreeRemoveResult = RemoveWorktreeResult & {
   warning?: string
 }
 
+export type RuntimeWorktreeListHostScope = RuntimeListingHostScope
+
 export type RuntimeWorktreePsResult = {
   worktrees: RuntimeWorktreePsSummary[]
   totalCount: number
