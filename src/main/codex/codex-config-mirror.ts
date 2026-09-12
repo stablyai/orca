@@ -6,7 +6,11 @@ import {
   writeFileAtomicallyIfUnchanged
 } from '../codex-accounts/fs-utils'
 import { getOrcaManagedCodexHomePath, getSystemCodexHomePath } from './codex-home-paths'
-import { rewriteRelativePathConfigValues } from './codex-config-path-reference-rewrite'
+import { CODEX_CONFIG_FILE_MODE, enforceCodexConfigFileMode } from './codex-config-file-mode'
+import {
+  rewriteHomeLocalConfigValues,
+  rewriteRelativePathConfigValues
+} from './codex-config-path-reference-rewrite'
 import { normalizeDeprecatedCodexHookFeatureFlag } from './config-toml-deprecated-hook-flag'
 import { parseWslUncPath } from '../../shared/wsl-paths'
 import {
@@ -53,6 +57,15 @@ export function syncSystemConfigIntoManagedCodexHome(
     if (stalledStatus.state === 'stalled') {
       reportCodexConfigSyncOutcome(homes.runtimeHomePath, stalledStatus)
     }
+    // Why here and not above the return: a stalled promotion leaves the runtime config in place,
+    // and the repair below never runs on this path — so a file already at 0644 stayed there for
+    // as long as the stall lasted, backup included. Same shape as the blank-source return, whose
+    // repair moved above it for the same reason. Scoped to this branch deliberately: the
+    // indeterminate return further down has its own refusal semantics and is left alone.
+    enforceCodexConfigFileMode(
+      join(homes.runtimeHomePath, 'config.toml'),
+      warnCodexConfigModeRepair
+    )
     return
   }
   let mirrorResult: CodexConfigMirrorResult
@@ -124,6 +137,11 @@ export function syncSystemConfigIntoLegacySharedCodexHome(
   }
   const rawSystemConfig =
     systemConfigObservation.kind === 'present' ? systemConfigObservation.value : ''
+  // Before the blank-source return, not after: this lane is the only repairer
+  // of the retired home, and an absent or 0-byte source is exactly when it must
+  // still run. Both the config and its backup are full-content copies, so a
+  // missing source would otherwise leave two world-readable ones indefinitely.
+  enforceCodexConfigFileMode(runtimeConfigPath, warnCodexConfigModeRepair)
   // Why: a missing cloud-synced source is not proof the user cleared config.
   if (rawSystemConfig.trim() === '') {
     return
@@ -140,15 +158,23 @@ export function syncSystemConfigIntoLegacySharedCodexHome(
     runtimeConfigBeforeMirror !== null
       ? mergeSystemCodexConfigIntoRuntime(
           runtimeConfigBeforeMirror,
-          prepareSystemConfigForRuntimeMirror(rawSystemConfig, sourceConfigDir)
+          prepareSystemConfigForRuntimeMirror(rawSystemConfig, sourceConfigDir, {
+            sourceHomePath: homes.systemHomePath,
+            runtimeHomePath: homes.runtimeHomePath
+          })
         )
-      : prepareSystemConfigForFreshRuntimeMirror(rawSystemConfig, sourceConfigDir)
+      : prepareSystemConfigForFreshRuntimeMirror(rawSystemConfig, sourceConfigDir, {
+          sourceHomePath: homes.systemHomePath,
+          runtimeHomePath: homes.runtimeHomePath
+        })
   if (runtimeConfigBeforeMirror === nextRuntimeConfig) {
     return
   }
   // Why: stage first, then compare immediately before replace so a retained
   // Codex trust write during mirror preparation wins.
-  writeFileAtomicallyIfUnchanged(runtimeConfigPath, runtimeConfigBeforeMirror, nextRuntimeConfig)
+  writeFileAtomicallyIfUnchanged(runtimeConfigPath, runtimeConfigBeforeMirror, nextRuntimeConfig, {
+    mode: CODEX_CONFIG_FILE_MODE
+  })
 }
 
 type CodexConfigMirrorResult =
@@ -175,6 +201,9 @@ function syncSystemConfigIntoManagedCodexHomeUnsafe(
     return { status: 'refused-indeterminate', error: runtimeConfigObservation.error }
   }
   const runtimeConfigExists = runtimeConfigObservation.kind === 'present'
+  // Unconditional for the same reason as the legacy lane above: an orphan
+  // backup outlives its primary, and the fresh-write branch below never repairs.
+  enforceCodexConfigFileMode(runtimeConfigPath, warnCodexConfigModeRepair)
   const rawSystemConfig =
     systemConfigObservation.kind === 'present' ? systemConfigObservation.value : ''
   // Why: a missing or blank source is not an authoritative empty config. Merging
@@ -190,12 +219,19 @@ function syncSystemConfigIntoManagedCodexHomeUnsafe(
   if (!runtimeConfigExists) {
     writeFileAtomically(
       runtimeConfigPath,
-      prepareSystemConfigForFreshRuntimeMirror(rawSystemConfig, sourceConfigDir)
+      prepareSystemConfigForFreshRuntimeMirror(rawSystemConfig, sourceConfigDir, {
+        sourceHomePath: systemHomePath,
+        runtimeHomePath
+      }),
+      { mode: CODEX_CONFIG_FILE_MODE }
     )
     return { status: 'mirrored', preservedConflictKeys: new Set() }
   }
 
-  const systemConfig = prepareSystemConfigForRuntimeMirror(rawSystemConfig, sourceConfigDir)
+  const systemConfig = prepareSystemConfigForRuntimeMirror(rawSystemConfig, sourceConfigDir, {
+    sourceHomePath: systemHomePath,
+    runtimeHomePath
+  })
   // Why: reuse the bytes already observed above rather than re-reading. A second
   // read could succeed where the first failed and re-open the gap this closes.
   const runtimeConfig = runtimeConfigObservation.value
@@ -204,7 +240,7 @@ function syncSystemConfigIntoManagedCodexHomeUnsafe(
     promotionPlan.runtimeValuesToPreserve
   )
   if (preserved.content !== runtimeConfig) {
-    writeFileAtomically(runtimeConfigPath, preserved.content)
+    writeFileAtomically(runtimeConfigPath, preserved.content, { mode: CODEX_CONFIG_FILE_MODE })
   }
   return { status: 'mirrored', preservedConflictKeys: preserved.keys }
 }
@@ -220,11 +256,33 @@ export function resolveCodexConfigMirrorSourceDirectory(
   )
 }
 
-function prepareSystemConfigForRuntimeMirror(config: string, systemConfigDir: string): string {
-  return rewriteRelativePathConfigValues(
+function warnCodexConfigModeRepair(message: string): void {
+  console.warn('[codex-config] config file mode repair failed:', message)
+}
+
+export type CodexConfigMirrorHomes = {
+  sourceHomePath: string
+  runtimeHomePath: string
+}
+
+/**
+ * `homes` is required, not optional: dropping it silently disables the
+ * home-local rewrite — the user-visible half of #18682 — while every unit test
+ * still passes. `null` is the explicit way to say "no home-local rewrite here".
+ */
+function prepareSystemConfigForRuntimeMirror(
+  config: string,
+  systemConfigDir: string,
+  homes: CodexConfigMirrorHomes | null
+): string {
+  const anchored = rewriteRelativePathConfigValues(
     normalizeDeprecatedCodexHookFeatureFlag(config),
     systemConfigDir
   )
+  if (!homes) {
+    return anchored
+  }
+  return rewriteHomeLocalConfigValues(anchored, homes.sourceHomePath, homes.runtimeHomePath)
 }
 
 // Why: trust blocks reference a hooks.json path, so system-home hook trust
@@ -233,9 +291,12 @@ function prepareSystemConfigForRuntimeMirror(config: string, systemConfigDir: st
 // Linux-side ~/.codex the config resolves against inside the distro.
 export function prepareSystemConfigForFreshRuntimeMirror(
   config: string,
-  systemConfigDir: string
+  systemConfigDir: string,
+  homes: CodexConfigMirrorHomes | null
 ): string {
-  return stripRuntimeOwnedTomlSections(prepareSystemConfigForRuntimeMirror(config, systemConfigDir))
+  return stripRuntimeOwnedTomlSections(
+    prepareSystemConfigForRuntimeMirror(config, systemConfigDir, homes)
+  )
 }
 
 function mergeSystemCodexConfigIntoRuntime(runtimeConfig: string, systemConfig: string): string {

@@ -37,7 +37,7 @@ export function writeTomlConfigAtomically(configPath: string, contents: string):
   }
 }
 
-function resolveTomlWritePath(configPath: string): string {
+export function resolveTomlWritePath(configPath: string): string {
   let isSymlink = false
   try {
     isSymlink = lstatSync(configPath).isSymbolicLink()
