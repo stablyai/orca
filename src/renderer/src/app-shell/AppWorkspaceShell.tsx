@@ -5,6 +5,7 @@ import Sidebar from '../components/Sidebar'
 import RightSidebar from '../components/right-sidebar'
 import { RecoverableRenderErrorBoundary } from '../components/error-boundaries/RecoverableRenderErrorBoundary'
 import { FloatingTerminalToggleButton } from '../components/floating-terminal/FloatingTerminalToggleButton'
+import { AgentDashboardDock } from '../components/dashboard/AgentDashboardDock'
 import { TerminalWorkbenchContainer } from '../components/TerminalWorkbenchContainer'
 import type { VirtualizedScrollAnchor } from '../hooks/useVirtualizedScrollAnchor'
 import { TitlebarLeftControls } from './TitlebarLeftControls'
@@ -177,7 +178,9 @@ export function AppWorkspaceShell(props: {
                     {layout.showRightSidebarControls ? <RightSidebarToggle /> : null}
                   </div>
                 )}
-                <div className="flex flex-1 min-w-0 min-h-0 flex-col">
+                {/* The dock reserves window chrome above; lower tab strips need no floating-header spacer. */}
+                <div className="flex flex-1 min-w-0 min-h-0 flex-col has-[[data-agent-dashboard-dock]]:[--collapsed-sidebar-header-width:0px]">
+                  <AgentDashboardDock reserveTitlebarSpace={layout.workspaceChromeActive} />
                   {layout.shouldMountTerminalWorkbench ? (
                     <TerminalWorkbenchContainer isVisible={layout.terminalWorkbenchVisible}>
                       <Suspense fallback={null}>

@@ -442,6 +442,8 @@ export type GlobalSettings = {
   agentsSidebarMigratedFromExperimental?: boolean
   /** How the Agent Dashboard opens: an in-window companion board or a separate pop-out window. Defaults to in-window. */
   experimentalAgentDashboardMode?: AgentDashboardMode
+  /** Keeps the in-window dashboard above the workspace instead of opening a sidebar sheet. */
+  experimentalAgentDashboardDocked?: boolean
   /** Includes stale quiet agents as a fourth Agent Dashboard column. */
   experimentalAgentDashboardShowIdle?: boolean
   /** One-shot migration guard for defaulting the Agents view off; later explicit opt-ins persist normally. */

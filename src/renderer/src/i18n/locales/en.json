@@ -7039,7 +7039,7 @@
             "copy": "Adds an Agent Dashboard entry to the left sidebar. Monitor agents that need you, are working, or are done, with optional idle agents.",
             "toggleLabel": "Toggle Agent Dashboard",
             "modeLabel": "Open as",
-            "modeCopy": "Show the dashboard as an in-window board beside the sidebar or a separate pop-out window.",
+            "modeCopy": "Show the dashboard inside the app or in a separate pop-out window.",
             "modeAriaLabel": "Agent Dashboard open mode",
             "modeInWindow": "In-window",
             "modePopout": "Pop-out"
@@ -17697,6 +17697,8 @@
     "total": "{{count}} total",
     "close": "Close dashboard",
     "settings": {
+      "dockAbove": "Dock above workspace",
+      "dockAboveCopy": "Keep the board visible above your workspace, including when the sidebar is closed.",
       "showIdle": "Show idle agents",
       "showIdleCopy": "Include agents that have gone quiet for 30 minutes without reporting completion. Hidden by default."
     },
@@ -17749,6 +17751,7 @@
       "clear": "Clear search",
       "results": "{{shown}} of {{total}} shown"
     },
+    "dockedLabel": "Docked Agent Dashboard",
     "settingsLabel": "Agent Dashboard settings",
     "host": {
       "sshNamed": "SSH host · {{host}}",

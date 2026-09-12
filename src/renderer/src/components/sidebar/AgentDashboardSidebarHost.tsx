@@ -18,26 +18,27 @@ export default function AgentDashboardSidebarHost({
   leftSidebarStyle,
   statusBarVisible
 }: AgentDashboardSidebarHostProps): React.JSX.Element | null {
+  const docked = useAppStore((s) => s.settings?.experimentalAgentDashboardDocked === true)
   const drawerOpen = useAppStore((s) => s.agentDashboardDrawerOpen)
   const setDrawerOpen = useAppStore((s) => s.setAgentDashboardDrawerOpen)
 
   useEffect(() => {
-    if (!sidebarOpen && drawerOpen) {
+    if (!docked && !sidebarOpen && drawerOpen) {
       setDrawerOpen(false)
     }
-  }, [drawerOpen, setDrawerOpen, sidebarOpen])
+  }, [docked, drawerOpen, setDrawerOpen, sidebarOpen])
   useEffect(() => {
-    if (drawerOpen) {
+    if (!docked && drawerOpen) {
       closeWorkspaceBoard()
     }
-  }, [closeWorkspaceBoard, drawerOpen])
+  }, [closeWorkspaceBoard, docked, drawerOpen])
   useEffect(() => {
-    if (workspaceBoardOpen) {
+    if (!docked && workspaceBoardOpen) {
       setDrawerOpen(false)
     }
-  }, [setDrawerOpen, workspaceBoardOpen])
+  }, [docked, setDrawerOpen, workspaceBoardOpen])
 
-  return sidebarOpen ? (
+  return sidebarOpen && !docked ? (
     <AgentDashboardDrawer leftSidebarStyle={leftSidebarStyle} statusBarVisible={statusBarVisible} />
   ) : null
 }
