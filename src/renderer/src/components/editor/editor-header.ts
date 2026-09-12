@@ -4,8 +4,6 @@ import type { GitStatusEntry } from '../../../../shared/git-status-types'
 import { getEditorDisplayLabel } from './editor-labels'
 
 export type EditorHeaderCopyState = {
-  copyText: string | null
-  copyToastLabel: string
   pathLabel: string
   pathTitle: string
 }
@@ -22,8 +20,6 @@ export function shouldShowEditorPanelHeader(file: OpenFile, isCombinedDiff: bool
 export function getEditorHeaderCopyState(file: OpenFile): EditorHeaderCopyState {
   if (file.mode === 'conflict-review') {
     return {
-      copyText: file.filePath,
-      copyToastLabel: 'Worktree path copied',
       pathLabel: 'Conflict Review',
       pathTitle: file.filePath
     }
@@ -32,8 +28,6 @@ export function getEditorHeaderCopyState(file: OpenFile): EditorHeaderCopyState 
   if (file.mode === 'check-details') {
     const label = file.checkRunDetails?.check.name ?? 'Check details'
     return {
-      copyText: null,
-      copyToastLabel: 'Check details copied',
       pathLabel: label,
       pathTitle: label
     }
@@ -48,8 +42,6 @@ export function getEditorHeaderCopyState(file: OpenFile): EditorHeaderCopyState 
 
   if (isCombinedDiff) {
     return {
-      copyText: file.filePath,
-      copyToastLabel: 'Worktree path copied',
       pathLabel: file.relativePath,
       pathTitle: file.filePath
     }
@@ -58,8 +50,6 @@ export function getEditorHeaderCopyState(file: OpenFile): EditorHeaderCopyState 
   const displayLabel = getEditorDisplayLabel(file, 'fullPath')
 
   return {
-    copyText: file.filePath,
-    copyToastLabel: 'File path copied',
     pathLabel: displayLabel,
     pathTitle: displayLabel
   }
