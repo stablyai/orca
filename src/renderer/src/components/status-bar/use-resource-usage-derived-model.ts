@@ -17,6 +17,7 @@ import {
   getResourceMemoryMetricCopy
 } from './resource-memory-metric-copy'
 import { formatMemory } from './resource-usage-metrics'
+import { findAmbiguousWorktreeIds, findDuplicateIds } from '../../lib/unified-tab-host-ownership'
 
 export function useResourceUsageDerivedModel({
   open,
@@ -26,6 +27,7 @@ export function useResourceUsageDerivedModel({
   runtimePaneTitlesByTabId,
   repos,
   allWorktrees,
+  projectGroups,
   browserTabsByWorktree,
   workspaceSessionReady,
   sessionCount,
@@ -41,6 +43,7 @@ export function useResourceUsageDerivedModel({
   runtimePaneTitlesByTabId: AppState['runtimePaneTitlesByTabId']
   repos: AppState['repos']
   allWorktrees: Worktree[]
+  projectGroups: AppState['projectGroups']
   browserTabsByWorktree: AppState['browserTabsByWorktree']
   workspaceSessionReady: boolean
   sessionCount: number
@@ -57,8 +60,14 @@ export function useResourceUsageDerivedModel({
         map.set(repo.id, display)
       }
     }
+    const ambiguousGroupIds = findDuplicateIds(projectGroups)
+    for (const group of projectGroups) {
+      if (!ambiguousGroupIds.has(group.id)) {
+        map.set(`folder-workspace:${group.id}`, group.name)
+      }
+    }
     return map
-  }, [repos])
+  }, [repos, projectGroups])
 
   // Why: non-null connectionId is the only honest "remote" signal (SSH PTYs run remote); build from the store, not a missing memory sample.
   const repoConnectionIdById = useMemo(() => {
@@ -79,10 +88,15 @@ export function useResourceUsageDerivedModel({
     return map
   }, [repos])
 
-  const worktreeById = useMemo(
-    () => new Map(allWorktrees.map((worktree) => [worktree.id, worktree])),
-    [allWorktrees]
-  )
+  const worktreeById = useMemo(() => {
+    // A bare resource identity cannot choose between the same workspace id on different hosts.
+    const ambiguousIds = findAmbiguousWorktreeIds(allWorktrees)
+    return new Map(
+      allWorktrees
+        .filter((worktree) => !ambiguousIds.has(worktree.id))
+        .map((worktree) => [worktree.id, worktree])
+    )
+  }, [allWorktrees])
 
   // Why: skip the merge when closed; the always-mounted segment recomputing on every keystroke-driven store mutation made the app laggy.
   const unifiedRepos = useMemo(
