@@ -199,15 +199,17 @@ function structuredAgentLaunchState(
   const identity = launchIdentity(worktreeId, agent, options.resumeFrom)
   const existing = pendingStructuredLaunchesByIdentity.get(identity)
   if (existing) {
-    if (existing.visibilityUnknown) {
+    if (existing.visibilityUnknown && options.reconcileUnknownLaunch !== false) {
       existing.callers.outcome = 'pending'
       existing.promise = reconcileUnknownLaunch(existing)
       trackLaunchSettlement(existing, existing.promise)
-      trackStructuredLaunchFailureToast(
-        existing.intent.agent,
-        existing.promise,
-        existing.callers.refusalSettlement.promise
-      )
+      if (options.notifyFailure !== false) {
+        trackStructuredLaunchFailureToast(
+          existing.intent.agent,
+          existing.promise,
+          existing.callers.refusalSettlement.promise
+        )
+      }
       notifyStructuredLaunchListeners()
     }
     const joined = joinLaunchDelivery(options, existing.promptDelivery)
@@ -273,11 +275,13 @@ function structuredAgentLaunchState(
   pendingStructuredLaunchesByIdentity.set(identity, state)
   notifyStructuredLaunchListeners()
   trackLaunchSettlement(state, state.promise)
-  trackStructuredLaunchFailureToast(
-    state.intent.agent,
-    state.promise,
-    state.callers.refusalSettlement.promise
-  )
+  if (options.notifyFailure !== false) {
+    trackStructuredLaunchFailureToast(
+      state.intent.agent,
+      state.promise,
+      state.callers.refusalSettlement.promise
+    )
+  }
   return {
     state,
     caller

@@ -1,8 +1,4 @@
-import { useAppStore } from '@/store'
 import type { AgentStartupPlan } from '@/lib/tui-agent-startup'
-import { planLaunchAgentStartupPrompt } from '@/lib/launch-agent-startup-prompt-plan'
-import { CLIENT_PLATFORM } from '@/lib/new-workspace'
-import { getAgentLaunchPlatformForRepo } from '@/lib/agent-launch-platform'
 import { persistAgentLaunchTabOrder } from '@/lib/launch-agent-tab-order'
 import { tuiAgentToAgentKind } from '@/lib/telemetry'
 import { createPasteReadinessTimeoutNotice } from '@/lib/launch-agent-paste-timeout-notice'
@@ -10,28 +6,22 @@ import {
   deliverLaunchPromptToAgentTab,
   seedNativeChatLaunchDraftForAgentTab
 } from '@/lib/agent-launch-prompt-delivery'
-import { initialAgentTabViewModeProps } from '@/lib/native-chat-initial-view-mode'
-import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
-import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import { isWebRuntimeSessionActive } from '@/runtime/web-runtime-session'
 import { launchAgentInWebHostTab } from '@/lib/launch-agent-web-host-tab'
-import {
-  resolveTuiAgentLaunchArgs,
-  resolveTuiAgentLaunchEnv
-} from '../../../shared/tui-agent-launch-defaults'
-import { resolveLocalWindowsAgentStartupShell } from '../../../shared/windows-terminal-shell'
-import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
 import { seedCommandCodeSubmittedPromptStatus } from '@/lib/command-code-prompt-status-seed'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import type { LaunchSource } from '../../../shared/telemetry-events'
-import { getConnectionIdFromState } from '@/lib/connection-context'
-import { resolveInitialNativeChatSessionOptions } from '@/components/native-chat/native-chat-launch-session-options'
+import type { SessionOptionValue } from '../../../shared/native-chat-session-options'
 import { seedNativeChatAppliedSessionOptions } from '@/components/native-chat/native-chat-session-option-cache'
-import { launchAgentInStructuredNewTab } from '@/lib/launch-agent-in-new-tab-structured'
-import type { StructuredAgentLaunchSettlement } from '@/lib/structured-agent-launch-settlement'
+import type { AgentSessionLaunchOutcome } from '@/lib/launch-agent-session'
+import { launchAgentSession } from '@/lib/launch-agent-session'
 import { workspaceKindForWorktreeId } from '@/lib/agent-launch-route-input'
 import { planAgentSessionLaunch } from '@/lib/agent-session-launch-plan'
+import { prepareAgentInNewTabLaunch } from '@/lib/launch-agent-new-tab-preparation'
+
+export { prepareAgentInNewTabLaunch } from '@/lib/launch-agent-new-tab-preparation'
+export type { PreparedAgentInNewTabLaunch } from '@/lib/launch-agent-new-tab-preparation'
 
 export type LaunchAgentInNewTabArgs = {
   agent: TuiAgent
@@ -43,6 +33,7 @@ export type LaunchAgentInNewTabArgs = {
   /** Optional CLI arguments appended to the selected agent command. */
   agentArgs?: string | null
   initialCwd?: string | null
+  initialSessionOptions?: Readonly<Record<string, SessionOptionValue>>
   /** How to deliver the prompt: `draft` leaves it editable, `submit-after-ready` sends it once the TUI is ready. */
   promptDelivery?: 'auto-submit' | 'draft' | 'submit-after-ready'
   /** Telemetry surface that initiated this launch. Defaults to the tab-bar quick-launch entry point. */
@@ -64,7 +55,7 @@ export type LaunchAgentInNewTabResult = {
   promptDeliveryResult?: Promise<{ delivered: boolean; failureNotified: boolean }>
   /** Structured route only: what the launch did once it settled, including whether the terminal
    *  fallback ran. The call itself stays synchronous. */
-  structuredSettlement?: Promise<StructuredAgentLaunchSettlement>
+  structuredSettlement?: Promise<AgentSessionLaunchOutcome>
 } | null
 
 export function shouldQueueTerminalFocusAfterMenuClose(
@@ -83,15 +74,11 @@ export function shouldQueueTerminalFocusAfterMenuClose(
  *
  * Returns `null` when no startup plan can be built (e.g. a whitespace-only prompt).
  */
-function launchAgentInNewTabInternal(
-  args: LaunchAgentInNewTabArgs,
-  forceLegacy = false
-): LaunchAgentInNewTabResult {
+function launchAgentInNewTabInternal(args: LaunchAgentInNewTabArgs): LaunchAgentInNewTabResult {
   const {
     agent,
     worktreeId,
     groupId,
-    prompt,
     agentArgs,
     initialCwd,
     promptDelivery = 'auto-submit',
@@ -100,72 +87,22 @@ function launchAgentInNewTabInternal(
     launchPlatform,
     onPromptDelivered
   } = args
-  const store = useAppStore.getState()
-  const worktree = store.allWorktrees?.().find((entry: { id: string }) => entry.id === worktreeId)
-  const repo = worktree ? store.repos?.find((entry) => entry.id === worktree.repoId) : null
-  // Why: `store.repos.find` is host-blind and the same repo id can exist on local, SSH and runtime
-  // hosts, so the row it returns can belong to a different host than the worktree names (#11163).
-  // The shared resolver answers from the worktree's own host; `undefined` (rival rows disagree) is
-  // not evidence of a remote, and main rejects that launch anyway.
-  const worktreeSshConnectionId = getConnectionIdFromState(store, worktreeId)
-  const resolvedLaunchPlatform =
-    launchPlatform ??
-    (repo
-      ? getAgentLaunchPlatformForRepo(
-          repo,
-          worktreeSshConnectionId
-            ? undefined
-            : getLocalProjectExecutionRuntimeContext(store, worktreeId)
-        )
-      : CLIENT_PLATFORM)
-  // Why: SSH remotes deploy the shim as plain `orca`, so skip the Linux-only `orca-ide` rename for remote launches.
-  const isRemote = Boolean(worktreeSshConnectionId)
-  const queuedShell = resolveLocalWindowsAgentStartupShell({
-    platform: resolvedLaunchPlatform,
-    isRemote,
-    terminalWindowsShell: store.settings?.terminalWindowsShell
-  })
-  const cmdOverrides = store.settings?.agentCmdOverrides ?? {}
-  const effectiveAgentArgs =
-    agentArgs !== undefined
-      ? agentArgs
-      : resolveTuiAgentLaunchArgs(agent, store.settings?.agentDefaultArgs)
-  const agentEnv = resolveTuiAgentLaunchEnv(agent, store.settings?.agentDefaultEnv)
-  const trimmedPrompt = prompt?.trim() ?? ''
-  const hasPrompt = trimmedPrompt.length > 0
-  const isFollowupPath = TUI_AGENT_CONFIG[agent].promptInjectionMode === 'stdin-after-start'
-  // Why: the remote host can't infer this client's draft/default view choice, so decide it here for paired tabs too.
-  const viewModePromptDelivery =
-    hasPrompt && isFollowupPath && promptDelivery === 'auto-submit' ? 'draft' : promptDelivery
-  const initialViewModeOptions = {
-    agent,
-    promptDelivery: viewModePromptDelivery,
-    launchDraftText: trimmedPrompt,
-    nativeChatTranscriptIsLocalReadable:
-      isNativeChatTranscriptLocalReadable(worktreeSshConnectionId)
-  }
-  const initialViewModeProps = initialAgentTabViewModeProps(store.settings, initialViewModeOptions)
-  const startupPlanBase = {
-    agent,
-    cmdOverrides,
-    platform: resolvedLaunchPlatform,
-    shell: queuedShell,
-    isRemote,
-    agentArgs: effectiveAgentArgs,
-    agentEnv,
-    sessionOptions: resolveInitialNativeChatSessionOptions(store.settings, initialViewModeOptions)
-  }
-  const { startupPlan, pasteDraftAfterLaunch, submitPastedPrompt } = planLaunchAgentStartupPrompt({
-    base: startupPlanBase,
-    prompt: trimmedPrompt,
-    promptDelivery,
-    isFollowupPath
-  })
+  const prepared = prepareAgentInNewTabLaunch(args)
   let promptDeliveryResult: Promise<{ delivered: boolean; failureNotified: boolean }> | undefined
 
-  if (!startupPlan) {
+  if (!prepared) {
     return null
   }
+  const {
+    store,
+    trimmedPrompt,
+    hasPrompt,
+    viewModePromptDelivery,
+    initialViewModeProps,
+    startupPlan,
+    pasteDraftAfterLaunch,
+    submitPastedPrompt
+  } = prepared
 
   const runtimeEnvironmentId = getRuntimeEnvironmentIdForWorktree(store, worktreeId)
   if (isWebRuntimeSessionActive(runtimeEnvironmentId)) {
@@ -196,31 +133,50 @@ function launchAgentInNewTabInternal(
     }
   }
 
-  // Why: the legacy re-entry is the plan's own fallback; deciding a route again would loop.
-  const plan = forceLegacy
-    ? null
-    : planAgentSessionLaunch(store, {
-        agent,
-        workspace: { kind: workspaceKindForWorktreeId(worktreeId), worktreeId },
-        prompt: trimmedPrompt,
-        promptDelivery: viewModePromptDelivery,
-        tuiCustomization: { cwd: initialCwd, agentArgs },
-        initialSessionOptions: startupPlan.sessionOptions,
-        onPromptDelivered
-      })
+  const plan = planAgentSessionLaunch(store, {
+    agent,
+    workspace: { kind: workspaceKindForWorktreeId(worktreeId), worktreeId },
+    prompt: trimmedPrompt,
+    promptDelivery: viewModePromptDelivery,
+    tuiCustomization: { cwd: initialCwd, agentArgs },
+    initialSessionOptions: startupPlan.sessionOptions,
+    onPromptDelivered
+  })
   if (plan?.route === 'structured-native-chat') {
-    const structured = launchAgentInStructuredNewTab({
-      plan,
-      legacyLaunch: () => launchAgentInNewTabInternal(args, true)
+    const structuredSettlement = launchAgentSession({
+      agent,
+      workspaceId: worktreeId,
+      ...(groupId ? { groupId } : {}),
+      prompt: trimmedPrompt,
+      promptDelivery: viewModePromptDelivery,
+      tuiCustomization: { cwd: initialCwd, agentArgs },
+      ...(launchPlatform ? { launchPlatform } : {}),
+      initialSessionOptions: startupPlan.sessionOptions,
+      onPromptDelivered,
+      launchPlan: plan,
+      visibility: 'reveal',
+      launchSource: launchSource ?? 'tab_bar_quick_launch'
+    }).then((outcome) => {
+      // Preserve the synchronous launcher's diagnostic for failures that no caller awaits.
+      if (outcome.kind === 'failed') {
+        console.error('Structured agent launch failed', outcome.error)
+      }
+      return outcome
     })
     return {
       tabId: null,
       startupPlan,
       pasteDraftAfterLaunch: false,
       focusAfterMenuClose: 'structured-session',
-      structuredSettlement: structured.structuredSettlement,
-      ...(structured.promptDeliveryResult
-        ? { promptDeliveryResult: structured.promptDeliveryResult }
+      structuredSettlement,
+      ...(hasPrompt && promptDelivery !== 'draft'
+        ? {
+            promptDeliveryResult: structuredSettlement.then(async (outcome) =>
+              'promptDeliveryResult' in outcome && outcome.promptDeliveryResult
+                ? outcome.promptDeliveryResult
+                : { delivered: false, failureNotified: true }
+            )
+          }
         : {})
     }
   }

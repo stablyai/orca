@@ -255,15 +255,15 @@ export async function startAgentSessionFork(fork: PreparedAgentSessionFork): Pro
     notifyForkOpened()
     return true
   }
-  // Why: the fresh worktree has no tabs yet; without the opt-out activation seeds a shell beside
-  // the structured tab that is still on its way.
+  // The launcher owns the first surface; this activation only reveals setup/default tabs while
+  // guaranteeing that no blank shell is seeded beside the pending structured chat.
   activateAndRevealWorktree(forkWorktreeId, {
     sidebarRevealBehavior: 'auto',
     providesInitialSurface: true
   })
   const settlement = await result.structuredSettlement
   // Why: a refusal whose terminal fallback opened nothing is the structured twin of a null launch.
-  if (settlement.kind === 'refused-then-legacy' && settlement.primaryTabId === null) {
+  if (settlement.kind === 'terminal' && settlement.viaRefusal && settlement.tabId === null) {
     return copyAgentSessionForkContext(fork)
   }
   // Why: the worktree already exists, so a false return would keep the dialog open and a second

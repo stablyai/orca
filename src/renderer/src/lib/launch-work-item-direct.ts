@@ -34,12 +34,10 @@ import type { LaunchWorkItemDirectArgs } from '@/lib/launch-work-item-direct-typ
 import { resolveSourceControlLaunchPlatform } from '@/lib/source-control-launch-platform'
 import { getSettingsForRepoRuntimeOwner } from '@/lib/repo-runtime-owner'
 import { getLocalRepoProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
-import { settleDirectWorkItemStructuredLaunch } from '@/lib/launch-work-item-direct-agent-routing'
+import { planAgentSessionLaunch } from '@/lib/agent-session-launch-plan'
 import { prepareDirectWorkItemAgentLaunch } from '@/lib/launch-work-item-direct-route-preparation'
-import {
-  planAgentSessionLaunch,
-  type AgentSessionLaunchPlan
-} from '@/lib/agent-session-launch-plan'
+import { settleDirectWorkItemStructuredLaunch } from '@/lib/launch-work-item-direct-agent-routing'
+import type { AgentSessionLaunchPlan } from '@/lib/agent-session-launch-plan'
 
 /**
  * "Use" flow: create the workspace, activate it, launch the default agent,
@@ -164,9 +162,9 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
   let startupPlan = null as ReturnType<typeof buildDirectWorkItemAgentStartupPlan>['startupPlan']
   let effectiveAgent: TuiAgent | null = null
   let draftLaunchedNatively = false
-  let plan: AgentSessionLaunchPlan | null = null
   const draftContent = await getDirectWorkItemDraftContent(item, repoConnectionId)
   let startupPlanFailed = false
+  let launchPlan: AgentSessionLaunchPlan | null = null
   try {
     const result = await store.createWorktree(
       repoId,
@@ -227,7 +225,7 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
     startupPlan = launchPreparation.startupPlan
     draftLaunchedNatively = launchPreparation.draftLaunchedNatively
     startupPlanFailed = launchPreparation.startupPlanFailed
-    plan = launchPreparation.plan
+    launchPlan = launchPreparation.plan
 
     const activation = activateAndRevealWorktree(worktreeId, {
       sidebarRevealBehavior: 'auto',
@@ -258,30 +256,45 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
   store.setSidebarOpen(true)
 
   const structuredResult = await settleDirectWorkItemStructuredLaunch({
-    plan,
+    plan: launchPlan,
     worktreeId,
     workspacePath: worktreePath,
     connectionId: repoConnectionId,
     primaryTabId,
     startupPlan,
-    launchSource
+    launchSource,
+    agentArgs,
+    launchPlatform: args.launchPlatform
   })
-  if (structuredResult.visibilityUnknown || structuredResult.failed) {
-    // Why: callers hang irreversible follow-up work off a `true` here, so a structured launch that
-    // opened no surface must not report the workspace as started.
+  // A structured refusal's terminal fallback already prepared, spawned, and delivered the prompt
+  // through launchAgentSession; do not seed or paste it again in the legacy tail below.
+  const promptHandledByStructuredLauncher =
+    launchPlan?.route === 'structured-native-chat' && !structuredResult.structuredLaunch
+  if (structuredResult.structuredLaunch) {
+    if (structuredResult.completed) {
+      return true
+    }
+    if (structuredResult.visibilityUnknown || structuredResult.failed) {
+      return false
+    }
+    primaryTabId = structuredResult.primaryTabId
+  }
+
+  if (structuredResult.failed) {
     return false
   }
-  if (structuredResult.completed) {
-    return true
-  }
-  primaryTabId = structuredResult.primaryTabId
 
   if (startupPlanFailed) {
     toast.error(agentLaunchCommandErrorMessage())
     return false
   }
 
-  if (primaryTabId && effectiveAgent && promptDelivery === 'draft') {
+  if (
+    !promptHandledByStructuredLauncher &&
+    primaryTabId &&
+    effectiveAgent &&
+    promptDelivery === 'draft'
+  ) {
     // Why: the draft rides in on argv or the startup payload, so no paste runs
     // below; mirror it into chat the way the new-tab launcher does.
     seedNativeChatLaunchDraftForAgentTab({
@@ -291,21 +304,24 @@ export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Prom
     })
   }
   if (
+    !promptHandledByStructuredLauncher &&
     primaryTabId &&
     startupPlan &&
     !draftLaunchedNatively &&
     !(promptDelivery === 'draft' && startupPlan.draftPrompt)
   ) {
     const submit = promptDelivery === 'submit-after-ready'
-    const agent = startupPlan.agent
-    void deliverLaunchPromptToAgentTab({
+    const delivery = deliverLaunchPromptToAgentTab({
       tabId: primaryTabId,
-      agent,
+      agent: startupPlan.agent,
       content: draftContent,
       submit,
       forcePaste: submit,
-      onTimeout: () => notifyDirectWorkItemAgentStartTimeout(agent, submit)
+      onTimeout: () => notifyDirectWorkItemAgentStartTimeout(startupPlan.agent, submit)
     })
+    void delivery.catch((error) =>
+      console.error('Prompt delivery failed after direct launch', error)
+    )
   }
   return true
 }

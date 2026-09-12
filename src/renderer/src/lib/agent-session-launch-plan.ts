@@ -21,8 +21,12 @@ import {
 import type { StructuredAgentLaunchOptions } from '@/lib/structured-agent-session-launch'
 
 export type AgentSessionLaunchRequest = AgentLaunchRouteArgs & {
+  /** Require structured native chat instead of applying the user's default route. */
+  routeIntent?: 'structured-native-chat'
   resumeFrom?: StructuredAgentSessionResumeSource
   onPromptDelivered?: () => void
+  notifyFailure?: boolean
+  reconcileUnknownLaunch?: boolean
 }
 
 /**
@@ -38,6 +42,8 @@ export type AgentSessionLaunchVerdict = {
   promptDelivery?: NativeChatLaunchPromptDelivery
   resumeFrom?: StructuredAgentSessionResumeSource
   onPromptDelivered?: () => void
+  notifyFailure?: boolean
+  reconcileUnknownLaunch?: boolean
 }
 
 export type AgentSessionStructuredFeasibilityRequest = AgentLaunchRouteArgs & {
@@ -64,7 +70,11 @@ function structuredLaunchOptions(verdict: AgentSessionLaunchVerdict): Structured
     ...(verdict.prompt !== undefined ? { prompt: verdict.prompt } : {}),
     ...(verdict.promptDelivery ? { promptDelivery: verdict.promptDelivery } : {}),
     ...(verdict.resumeFrom ? { resumeFrom: verdict.resumeFrom } : {}),
-    ...(verdict.onPromptDelivered ? { onPromptDelivered: verdict.onPromptDelivered } : {})
+    ...(verdict.onPromptDelivered ? { onPromptDelivered: verdict.onPromptDelivered } : {}),
+    ...(verdict.notifyFailure !== undefined ? { notifyFailure: verdict.notifyFailure } : {}),
+    ...(verdict.reconcileUnknownLaunch !== undefined
+      ? { reconcileUnknownLaunch: verdict.reconcileUnknownLaunch }
+      : {})
   }
 }
 
@@ -118,12 +128,17 @@ export function planAgentSessionLaunch(
   request: AgentSessionLaunchRequest
 ): AgentSessionLaunchPlan {
   return adoptAgentSessionLaunchVerdict({
-    route: resolveAgentLaunchRoute(buildAgentLaunchRouteInput(store, request)),
+    route:
+      request.routeIntent ?? resolveAgentLaunchRoute(buildAgentLaunchRouteInput(store, request)),
     agent: request.agent,
     ...(request.workspace.worktreeId ? { worktreeId: request.workspace.worktreeId } : {}),
     ...(request.prompt !== undefined ? { prompt: request.prompt } : {}),
     ...(request.promptDelivery ? { promptDelivery: request.promptDelivery } : {}),
     ...(request.resumeFrom ? { resumeFrom: request.resumeFrom } : {}),
-    ...(request.onPromptDelivered ? { onPromptDelivered: request.onPromptDelivered } : {})
+    ...(request.onPromptDelivered ? { onPromptDelivered: request.onPromptDelivered } : {}),
+    ...(request.notifyFailure !== undefined ? { notifyFailure: request.notifyFailure } : {}),
+    ...(request.reconcileUnknownLaunch !== undefined
+      ? { reconcileUnknownLaunch: request.reconcileUnknownLaunch }
+      : {})
   })
 }

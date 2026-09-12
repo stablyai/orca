@@ -4,15 +4,12 @@ import type { LaunchSource } from '../../../shared/telemetry-events'
 import type { AppState } from '@/store/types'
 import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
 import { isTuiAgentEnabled, pickTuiAgent } from '../../../shared/tui-agent-selection'
-import { activateAndRevealWorktree } from '@/lib/worktree-activation'
-import {
-  buildDirectWorkItemAgentStartupPlan,
-  buildDirectWorkItemStartupOpts
-} from '@/lib/launch-work-item-direct-agent'
+import { buildDirectWorkItemAgentStartupPlan } from '@/lib/launch-work-item-direct-agent'
 import type { AgentSessionLaunchPlan } from '@/lib/agent-session-launch-plan'
 import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
 import { resolveSourceControlLaunchPlatform } from '@/lib/source-control-launch-platform'
 import { preflightAgentTrust } from '@/lib/agent-trust-preflight'
+import { launchAgentSession } from '@/lib/launch-agent-session'
 
 export function buildDirectWorkItemStartup(args: {
   agent: TuiAgent | null
@@ -110,6 +107,8 @@ export async function settleDirectWorkItemStructuredLaunch(args: {
   primaryTabId: string | null
   startupPlan: AgentStartupPlan | null
   launchSource: LaunchSource
+  agentArgs?: string | null
+  launchPlatform?: NodeJS.Platform
 }): Promise<{
   completed: boolean
   structuredLaunch: boolean
@@ -139,27 +138,18 @@ export async function settleDirectWorkItemStructuredLaunch(args: {
     failed: true,
     primaryTabId: null
   }
-  let settlement: Awaited<ReturnType<typeof plan.launch>>
+  let settlement: Awaited<ReturnType<typeof launchAgentSession>>
   try {
-    settlement = await plan.launch({
-      legacyFallback: async () => {
-        await preflightAgentTrust({
-          agent,
-          workspacePath: args.workspacePath,
-          connectionId: args.connectionId
-        })
-        const activation = activateAndRevealWorktree(args.worktreeId, {
-          sidebarRevealBehavior: 'auto',
-          createNewTerminalForStartup: true,
-          ...buildDirectWorkItemStartupOpts(
-            agent,
-            args.startupPlan,
-            args.launchSource,
-            plan.promptDelivery === 'draft' ? plan.prompt : undefined
-          )
-        })
-        return { activation, primaryTabId: activation === false ? null : activation.primaryTabId }
-      }
+    settlement = await launchAgentSession({
+      agent,
+      workspaceId: args.worktreeId,
+      prompt: plan.prompt,
+      ...(plan.promptDelivery ? { promptDelivery: plan.promptDelivery } : {}),
+      ...(args.agentArgs !== undefined ? { tuiCustomization: { agentArgs: args.agentArgs } } : {}),
+      ...(args.launchPlatform ? { launchPlatform: args.launchPlatform } : {}),
+      launchPlan: plan,
+      visibility: 'reveal',
+      launchSource: args.launchSource
     })
   } catch {
     // Why: this runs outside the caller's try, so an escaped throw would surface as an unhandled
@@ -178,13 +168,13 @@ export async function settleDirectWorkItemStructuredLaunch(args: {
         failed: false,
         primaryTabId: args.primaryTabId
       }
-    case 'refused-then-legacy':
+    case 'terminal':
       return {
         completed: false,
         structuredLaunch: false,
         visibilityUnknown: false,
-        failed: false,
-        primaryTabId: settlement.primaryTabId
+        failed: settlement.tabId === null,
+        primaryTabId: settlement.tabId
       }
     case 'visibility-unknown':
       return {

@@ -218,7 +218,7 @@ export function ensureWorktreeHasInitialTerminal(
     (sequencedStartup?.telemetry
       ? (agentKindToTuiAgent(sequencedStartup.telemetry.agent_kind) ?? undefined)
       : undefined)
-  const terminalTab = store.createTab(worktreeId, undefined, undefined, {
+  const terminalTab = store.createTab(worktreeId, opts?.targetGroupId, undefined, {
     pendingActivationSpawn: true,
     ...(launchAgent
       ? {

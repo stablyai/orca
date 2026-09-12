@@ -51,7 +51,8 @@ export type ActivateAndRevealResult = {
 function ensureFolderWorkspaceInitialTerminal(
   folderWorkspace: FolderWorkspace,
   startup?: WorktreeStartupPayload,
-  providesInitialSurface?: boolean
+  providesInitialSurface?: boolean,
+  targetGroupId?: string
 ): string | null {
   if (providesInitialSurface === true && startup === undefined) {
     return null
@@ -65,7 +66,10 @@ function ensureFolderWorkspaceInitialTerminal(
     undefined,
     undefined,
     undefined,
-    { reseedEmptiedWorkspace: providesInitialSurface !== true }
+    {
+      reseedEmptiedWorkspace: providesInitialSurface !== true,
+      ...(targetGroupId ? { targetGroupId } : {})
+    }
   )
   return primaryTabId
 }
@@ -83,6 +87,7 @@ export function activateAndRevealFolderWorkspace(
   opts?: WorktreeActivationSurfaceSelection & {
     sidebarRevealBehavior?: PendingSidebarWorktreeReveal['behavior']
     revealInSidebar?: boolean
+    targetGroupId?: string
     startup?: WorktreeStartupPayload
     runtimeEnvironmentId?: string | null
     executionHostId?: ExecutionHostId
@@ -156,7 +161,12 @@ export function activateAndRevealFolderWorkspace(
   }
   const primaryTabId = shouldGateAgentActivation
     ? null
-    : ensureFolderWorkspaceInitialTerminal(folderWorkspace, opts?.startup, providesInitialSurface)
+    : ensureFolderWorkspaceInitialTerminal(
+        folderWorkspace,
+        opts?.startup,
+        providesInitialSurface,
+        opts?.targetGroupId
+      )
 
   if (opts?.revealInSidebar !== false) {
     state.revealWorktreeInSidebar(
@@ -267,6 +277,7 @@ export function activateAndRevealWorktree(
           opts?.issueCommand,
           opts?.defaultTabs,
           {
+            ...(opts?.targetGroupId ? { targetGroupId: opts.targetGroupId } : {}),
             ...(opts?.backendStartupTerminalSpawned ? { backendStartupTerminalSpawned: true } : {}),
             ...(opts?.createNewTerminalForStartup ? { createNewTerminalForStartup: true } : {}),
             ...(providesInitialSurface ? { callerProvidesSurface: true } : {}),
@@ -330,12 +341,7 @@ export function activateAndRevealWorktree(
  */
 export function activateAndRevealWorkspace(
   workspaceId: string,
-  opts?: WorktreeActivationSurfaceSelection & {
-    executionHostId?: ExecutionHostId
-    revealInSidebar?: boolean
-    /** Worktree-only: folder workspaces are never filter-hidden. */
-    clearSidebarFilters?: boolean
-  }
+  opts?: WorktreeActivationOptions
 ): ActivateAndRevealResult | false {
   const workspaceScope = parseWorkspaceKey(workspaceId)
   if (workspaceScope?.type !== 'folder') {
