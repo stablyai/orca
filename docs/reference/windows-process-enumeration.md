@@ -583,8 +583,8 @@ breakaway hands the whole tree its escape. The per-PTY job therefore omits
 `BREAKAWAY_OK` whenever `msys-2.0.dll` or `cygwin1.dll` sits on the shell's DLL
 search path — beside the executable, or under `usr/bin` for Git's `bin`
 launcher. Native shells keep explicit breakaway. Denying it costs Cygwin
-nothing, because it *pre-checks* the limit rather than retrying, so no spawn
-fails; but a *native* program that passes `CREATE_BREAKAWAY_FROM_JOB` itself
+nothing, because it _pre-checks_ the limit rather than retrying, so no spawn
+fails; but a _native_ program that passes `CREATE_BREAKAWAY_FROM_JOB` itself
 inside such a pane now gets `ERROR_ACCESS_DENIED`. `nohup` and `disown` are
 unaffected — they are Cygwin signal/session concepts, unrelated to job
 membership. The daemon's host job is unchanged.
