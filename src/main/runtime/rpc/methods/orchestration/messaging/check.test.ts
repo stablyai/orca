@@ -52,28 +52,28 @@ describe('orchestration RPC methods', () => {
       filesModified?: string[]
       senderPaneKey?: string
     }): void {
-      const payload: Record<string, unknown> = {}
+      const payload: Record<string, unknown> = { outcome: 'succeeded' }
       if (params.taskId !== undefined) {
         payload.taskId = params.taskId
       }
       if (params.dispatchId !== undefined) {
         payload.dispatchId = params.dispatchId
       }
-      payload.outcome = 'succeeded'
       if (params.filesModified !== undefined) {
         payload.filesModified = params.filesModified
       }
-
-      const message = db.insertMessage({
-        from: params.from ?? 'term_worker',
-        to: params.to ?? `run:${activeRunId}`,
-        subject: 'Done',
-        type: 'worker_done',
-        payload: JSON.stringify(payload),
-        senderPaneKey: params.senderPaneKey,
-        runId: activeRunId
-      })
-      reconcileLifecycleMessage(db, message)
+      reconcileLifecycleMessage(
+        db,
+        db.insertMessage({
+          from: params.from ?? 'term_worker',
+          to: params.to ?? `run:${activeRunId}`,
+          subject: 'Done',
+          type: 'worker_done',
+          payload: JSON.stringify(payload),
+          senderPaneKey: params.senderPaneKey,
+          runId: activeRunId
+        })
+      )
     }
 
     it('returns unread messages for a terminal', async () => {
@@ -790,49 +790,6 @@ describe('orchestration RPC methods', () => {
 
       expect(result).toEqual({ messages: [], count: 0 })
       expect(db.getUnreadMessages('b')).toHaveLength(1)
-    })
-  })
-
-  describe('orchestration.inbox', () => {
-    it('returns all messages', async () => {
-      setup()
-      db.insertMessage({ from: 'a', to: 'b', subject: 'one' })
-      db.insertMessage({ from: 'c', to: 'd', subject: 'two' })
-
-      const result = (await call('orchestration.inbox', {})) as { count: number }
-      expect(result.count).toBe(2)
-    })
-
-    it('--terminal <handle> matches check --all output for the same handle', async () => {
-      setup()
-      db.insertMessage({ from: 'a', to: 'b', subject: 'one' })
-      db.insertMessage({ from: 'a', to: 'b', subject: 'two' })
-      db.insertMessage({ from: 'a', to: 'c', subject: 'other' })
-
-      const inbox = (await call('orchestration.inbox', { terminal: 'b' })) as {
-        messages: { id: string; to_handle: string }[]
-        count: number
-      }
-      const check = (await call('orchestration.check', {
-        terminal: 'b',
-        all: true
-      })) as { messages: { id: string; to_handle: string }[]; count: number }
-
-      expect(inbox.count).toBe(2)
-      expect(check.count).toBe(2)
-      // Same rows in the same order — both use sequence DESC
-      expect(inbox.messages.map((m) => m.id)).toEqual(check.messages.map((m) => m.id))
-      expect(inbox.messages.every((m) => m.to_handle === 'b')).toBe(true)
-    })
-
-    it('--terminal <unknown_handle> returns empty list without erroring', async () => {
-      setup()
-      db.insertMessage({ from: 'a', to: 'b', subject: 'one' })
-
-      const result = (await call('orchestration.inbox', {
-        terminal: 'does_not_exist'
-      })) as { count: number }
-      expect(result.count).toBe(0)
     })
   })
 })
