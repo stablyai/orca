@@ -417,4 +417,94 @@ describe('ClaudeAccountService credential capture', () => {
     })
     expect(settings.claudeManagedAccounts[0].email).toBe('new@example.com')
   })
+
+  it('keeps successful reauthentication when the follow-up usage refresh fails', async () => {
+    setPlatform('linux')
+    tempDir = CLAUDE_SERVICE_TEST_ROOT
+    rmSync(tempDir, { recursive: true, force: true })
+    const managedAuthPath = join(tempDir, 'claude-accounts', 'account-1', 'auth')
+    mkdirSync(managedAuthPath, { recursive: true })
+    writeFileSync(join(managedAuthPath, '.orca-managed-claude-auth'), 'account-1\n', 'utf-8')
+    writeFileSync(join(managedAuthPath, '.credentials.json'), '{"old":true}\n', 'utf-8')
+    writeFileSync(join(managedAuthPath, 'oauth-account.json'), '{"oldOauth":true}\n', 'utf-8')
+    let settings = {
+      claudeManagedAccounts: [
+        {
+          id: 'account-1',
+          email: 'old@example.com',
+          managedAuthPath,
+          authMethod: 'subscription-oauth',
+          organizationUuid: null,
+          organizationName: null,
+          createdAt: 1,
+          updatedAt: 1,
+          lastAuthenticatedAt: 1
+        }
+      ],
+      activeClaudeManagedAccountId: 'account-1'
+    }
+    const store = {
+      getSettings: vi.fn(() => settings),
+      updateSettings: vi.fn((updates: Partial<typeof settings>) => {
+        settings = { ...settings, ...updates }
+        return settings
+      })
+    }
+    const runtimeAuth = {
+      clearLastWrittenCredentialsJson: vi.fn(),
+      syncForCurrentSelection: vi.fn(async () => {}),
+      forceMaterializeCurrentSelectionForRollback: vi.fn(async () => {})
+    }
+    const refreshError = new Error('Claude plan usage is unavailable for this Claude CLI session.')
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const rateLimits = {
+      evictInactiveClaudeCache: vi.fn(),
+      refreshForClaudeAccountChange: vi.fn(async () => {
+        throw refreshError
+      })
+    }
+    const { ClaudeAccountService } = await import('./service')
+    const service = new ClaudeAccountService(
+      store as never,
+      rateLimits as never,
+      runtimeAuth as never
+    )
+    ;(
+      service as unknown as {
+        runClaudeLoginAndCapture(): Promise<{
+          credentialsJson: string
+          oauthAccount: unknown
+          identity: { email: string; organizationUuid: null; organizationName: null }
+        }>
+      }
+    ).runClaudeLoginAndCapture = vi.fn(async () => ({
+      credentialsJson: '{"new":true}\n',
+      oauthAccount: { newOauth: true },
+      identity: { email: 'new@example.com', organizationUuid: null, organizationName: null }
+    }))
+
+    await expect(service.reauthenticateAccount('account-1')).resolves.toEqual(
+      expect.objectContaining({ activeAccountId: 'account-1' })
+    )
+
+    expect(readFileSync(join(managedAuthPath, '.credentials.json'), 'utf-8')).toBe('{"new":true}\n')
+    expect(JSON.parse(readFileSync(join(managedAuthPath, 'oauth-account.json'), 'utf-8'))).toEqual({
+      newOauth: true
+    })
+    expect(settings.claudeManagedAccounts[0]).toMatchObject({
+      email: 'new@example.com',
+      updatedAt: expect.any(Number),
+      lastAuthenticatedAt: expect.any(Number)
+    })
+    expect(settings.claudeManagedAccounts[0].updatedAt).toBeGreaterThan(1)
+    expect(settings.claudeManagedAccounts[0].lastAuthenticatedAt).toBeGreaterThan(1)
+    expect(runtimeAuth.forceMaterializeCurrentSelectionForRollback).not.toHaveBeenCalled()
+    await vi.waitFor(() =>
+      expect(warn).toHaveBeenCalledWith(
+        '[claude-accounts] Failed to refresh Claude usage after reauthentication:',
+        refreshError
+      )
+    )
+    warn.mockRestore()
+  })
 })
