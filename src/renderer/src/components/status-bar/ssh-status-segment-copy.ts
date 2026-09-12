@@ -22,10 +22,10 @@ export function workspaceSyncProblemLabel(phase: string | undefined): string {
   return phase === 'conflict'
     ? translate(
         'auto.components.status.bar.SshStatusSegment.workspaceConflict',
-        'Workspace conflict'
+        'Workspace layout conflict'
       )
     : translate(
         'auto.components.status.bar.SshStatusSegment.workspaceSyncError',
-        'Workspace sync error'
+        'Workspace layout unavailable'
       )
 }
