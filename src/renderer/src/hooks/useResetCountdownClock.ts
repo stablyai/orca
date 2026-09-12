@@ -20,12 +20,30 @@ function parseResetTimesKey(key: string): number[] {
  * Returns a `now` timestamp that advances whenever the soonest reset countdown
  * label is due to change. Pass the window `resetsAt` values; feed the returned
  * `now` into the label formatter so it stays live.
+ *
+ * `planExtraWakes` lets a caller whose own readings move faster than the
+ * countdown name additional wake-up times. It is re-run against the fresh clock
+ * on every tick, so it stays a plain function of `now` rather than something the
+ * caller has to keep in state.
  */
-export function useResetCountdownClock(resetTimes: readonly (number | null | undefined)[]): number {
+export function useResetCountdownClock(
+  resetTimes: readonly (number | null | undefined)[],
+  planExtraWakes?: (now: number) => readonly (number | null | undefined)[]
+): number {
   const [scheduledNow, setScheduledNow] = useState(() => Date.now())
   const key = useMemo(() => resetTimesKey(resetTimes), [resetTimes])
   const times = useMemo(() => parseResetTimesKey(key), [key])
   const previousKeyRef = useRef(key)
+  // Why: key the timeout on the planned instants rather than the planner's
+  // identity. An inline closure would reschedule every render; the planner's
+  // own inputs (a window's usedPercent, say) can change on a refresh that
+  // leaves resetsAt alone, and that has to reschedule.
+  const extraKey = useMemo(
+    () => resetTimesKey(planExtraWakes?.(scheduledNow) ?? []),
+    [planExtraWakes, scheduledNow]
+  )
+  const extraTimes = useMemo(() => parseResetTimesKey(extraKey), [extraKey])
+
   // Why: when the set of reset times changes, refresh `now` before paint so the
   // label reflects the new window without a stale intermediate frame.
   useLayoutEffect(() => {
@@ -37,13 +55,20 @@ export function useResetCountdownClock(resetTimes: readonly (number | null | und
   }, [key])
 
   useEffect(() => {
-    const delayMs = getResetCountdownNextTickDelay(scheduledNow, times)
+    let delayMs = getResetCountdownNextTickDelay(scheduledNow, times)
+    for (const wakeAt of extraTimes) {
+      if (wakeAt <= scheduledNow) {
+        continue
+      }
+      const extraDelayMs = wakeAt - scheduledNow
+      delayMs = delayMs === null ? extraDelayMs : Math.min(delayMs, extraDelayMs)
+    }
     if (delayMs === null) {
       return
     }
     const timeout = window.setTimeout(() => setScheduledNow(Date.now()), delayMs)
     return () => window.clearTimeout(timeout)
-  }, [scheduledNow, times])
+  }, [scheduledNow, times, extraTimes])
 
   return scheduledNow
 }
