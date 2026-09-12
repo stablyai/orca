@@ -283,22 +283,20 @@ export function MountedBottomDrawer({
       }
     })
 
-  const drawerStyle = useAnimatedStyle(() => {
-    // Why: fill mode already shrinks height by the keyboard inset and lifts via
-    // marginBottom (layout). Also subtracting keyboardOffset here would double-
-    // count and park the dock under the keys (input hidden).
-    const keyboardShift = fillAvailable ? 0 : keyboardOffset.value
-    return {
-      transform: [
-        {
-          translateY:
-            interpolate(progress.value, [0, 1], [screenHeight, 0], Extrapolation.CLAMP) +
-            translateY.value -
-            keyboardShift
-        }
-      ]
-    }
-  })
+  const keyboardLayoutStyle = useAnimatedStyle(() => ({
+    // Why: layout lift keeps native hit/accessibility frames aligned with the rendered drawer.
+    marginBottom: keyboardOffset.value
+  }))
+
+  const drawerStyle = useAnimatedStyle(() => ({
+    transform: [
+      {
+        translateY:
+          interpolate(progress.value, [0, 1], [screenHeight, 0], Extrapolation.CLAMP) +
+          translateY.value
+      }
+    ]
+  }))
 
   const backdropStyle = useAnimatedStyle(() => {
     const dragFade = interpolate(translateY.value, [0, 300], [1, 0], Extrapolation.CLAMP)
@@ -389,15 +387,12 @@ export function MountedBottomDrawer({
                 width: '100%',
                 maxWidth: isWideLayout ? modalMaxWidth : undefined,
                 maxHeight: screenHeight - insets.top - spacing.lg,
-                // Why: fill sheets shrink height AND lift with marginBottom so the
-                // bottom edge sits on the keyboard top (height alone still leaves
-                // the dock in the keyboard’s footprint). Non-fill sheets keep
-                // the legacy translateY keyboard shift instead.
                 height: fillHeight,
                 marginBottom: fillAvailable ? keyboardInset : 0,
                 paddingBottom:
                   fillAvailable && keyboardInset > 0 ? spacing.sm : insets.bottom + spacing.lg
               },
+              fillAvailable ? null : keyboardLayoutStyle,
               drawerStyle
             ]}
           >
