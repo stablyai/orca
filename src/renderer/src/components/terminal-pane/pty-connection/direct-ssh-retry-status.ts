@@ -32,6 +32,7 @@ import {
   registerRendererOwnedAgentStatusPane
 } from '../renderer-owned-agent-status-registry'
 
+import { createInteractiveEchoLatencyTracker } from './interactive-echo-latency'
 import { DIRECT_SSH_PANE_RETRY_SETTLEMENT_TIMEOUT_MS } from './pty-connect-limits'
 import { isRemoteRuntimePtyId } from './paired-parked-terminal-restore'
 import { resolveLatestAgentDoneStartedAt } from './agent-done-started-at'
@@ -265,6 +266,7 @@ export function installDirectSshRetryStatus(session: ConnectPanePtySession): voi
   session.hadExistingPaneTransportAtConnect = session.deps.paneTransportsRef.current.size > 0
   session.lastTerminalInputAt = Number.NEGATIVE_INFINITY
   session.lastInteractiveRedrawInputAt = Number.NEGATIVE_INFINITY
+  session.interactiveEchoLatency = createInteractiveEchoLatencyTracker()
   session.hasReceivedPtyOutput = false
   session.deferredReattachLiveData = null
   session.reattachLiveDataDeferralDepth = 0
@@ -275,7 +277,9 @@ export function installDirectSshRetryStatus(session: ConnectPanePtySession): voi
     session.markInteractiveRedrawInput()
   }
   session.markInteractiveRedrawInput = (): void => {
-    session.lastInteractiveRedrawInputAt = performance.now()
+    const now = performance.now()
+    session.lastInteractiveRedrawInputAt = now
+    session.interactiveEchoLatency.recordInput(now)
     // Why: input must probe a wedged xterm even when the PTY produces no renderer output.
     requestTerminalWritePipelineProbe(session.pane.terminal)
   }
