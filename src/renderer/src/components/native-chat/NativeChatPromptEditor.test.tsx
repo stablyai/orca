@@ -34,7 +34,10 @@ describe('native chat skill editor', () => {
   it('renders only picker insertions as pills and serializes the exact invocation', () => {
     const { input, container } = setup('Please $rev')
     act(() => input.insertSkill!(7, 11, '$review'))
-    expect(container.querySelector('[data-native-chat-skill]')?.textContent).toBe('Review')
+    const pill = container.querySelector('[data-native-chat-skill]')
+    expect(pill?.textContent).toBe('Review')
+    expect(pill?.classList.contains('text-xs')).toBe(true)
+    expect(pill?.classList.contains('text-sm')).toBe(false)
     expect(input.value).toBe('Please $review ')
     expect(input.selectionStart).toBe(15)
     act(() => {
