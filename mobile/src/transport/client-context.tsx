@@ -19,6 +19,7 @@ import {
 } from './host-client-acquisition-registry'
 import { HostOpenRetryScheduler } from './host-open-retry-scheduler'
 import { openHostClientEntry, type HostClientStoreEntry } from './host-entry-opener'
+import { forceReconnectAnswered } from './force-reconnect-verification'
 import { shouldPreserveActiveRelay } from './relay-reconnect-preservation'
 import { recordConnectionRevival } from './persisted-connection-log-store'
 import {
@@ -273,9 +274,21 @@ export function RpcClientProvider({ children }: { children: ReactNode }) {
       }
       // Why: Retry must read amber for the whole reopen, not grey-then-amber.
       notifyHostState(hostId, 'connecting')
-      await openEntry(hostId, true)
+      const reopened = await openEntry(hostId, true)
+      if (!reopened || storeRef.current.get(hostId) !== reopened) {
+        return
+      }
+      if (await forceReconnectAnswered(reopened.client)) {
+        return
+      }
+      // Why: #10385 — a fresh socket that never answers a control RPC must not be
+      // reported as success. Close it so the UI stops claiming connected instead of
+      // leaving the user a green card they cannot use.
+      if (storeRef.current.get(hostId) === reopened) {
+        closeEntry(hostId, { forgetPrimedHost: false, preserveAcquisitions: true })
+      }
     },
-    [openEntry]
+    [closeEntry, openEntry]
   )
 
   const selectors = useMemo(

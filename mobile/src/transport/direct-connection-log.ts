@@ -39,7 +39,7 @@ export class DirectConnectionLog {
     this.emit(
       'error',
       'Connection health check failed',
-      `${evidence.reason}; ${evidence.missedProbes}/${evidence.missedProbeLimit} probes missed; last authenticated activity ${evidence.lastInboundAgeMs}ms ago`,
+      `${evidence.reason}; ${evidence.missedProbes}/${evidence.missedProbeLimit} probes missed; last authenticated activity ${evidence.lastInboundAgeMs}ms ago; last control response ${evidence.lastControlResponseAgeMs}ms ago`,
       { code: 'liveness-timeout' }
     )
   }

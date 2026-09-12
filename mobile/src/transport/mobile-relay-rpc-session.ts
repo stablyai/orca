@@ -163,7 +163,7 @@ export function connectMobileRelayRpcSession(args: {
         code: 'liveness-timeout',
         path: 'relay',
         message: 'Relay health check failed',
-        detail: `${evidence.reason}; ${evidence.missedProbes}/${evidence.missedProbeLimit} probes missed; last authenticated activity ${evidence.lastInboundAgeMs}ms ago`
+        detail: `${evidence.reason}; ${evidence.missedProbes}/${evidence.missedProbeLimit} probes missed; last authenticated activity ${evidence.lastInboundAgeMs}ms ago; last control response ${evidence.lastControlResponseAgeMs}ms ago`
       })
     },
     terminate: () => fail(new Error('relay session liveness timeout'))
@@ -213,6 +213,10 @@ export function connectMobileRelayRpcSession(args: {
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         pending.drop(id)
+        // Why: relay runs no idle probe (#14333 keeps an idle session silent), so a
+        // stalled application RPC is the only signal that the control channel died.
+        // Confirm with a probe rather than tearing the session down on one timeout.
+        livenessWatchdog.probeNow(livenessIdentity)
         // Why: the frame was written long ago — the desktop may have processed it.
         reject(markRpcDeliveryUnknown(new Error(`relay RPC timed out: ${method}`)))
       }, timeoutMs)
@@ -238,6 +242,12 @@ export function connectMobileRelayRpcSession(args: {
     }
     if (!isRpcResponse(value)) {
       return
+    }
+    // Why: a `streaming` frame is a subscription push the desktop sends on its own.
+    // Only a non-streaming reply answers a request we sent, so only that proves the
+    // control channel still works.
+    if (!(value.ok && value.streaming === true)) {
+      livenessWatchdog.noteControlResponse(livenessIdentity)
     }
     if (pending.settle(value)) {
       return

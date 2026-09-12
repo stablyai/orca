@@ -367,6 +367,78 @@ describe('useHostClient', () => {
     }
   })
 
+  // Regression (#10385): reopening the socket proves only that the desktop accepted
+  // a connection. Reporting success on a transport that never answers a control RPC
+  // is what left the reporter with a green card and an unusable session.
+  it('does not leave Force Reconnect connected when the reopened host never answers', async () => {
+    const first = makeFakeClient('connected')
+    const second = makeFakeClient('connected')
+    second.sendRequest = vi.fn().mockRejectedValue(new Error('Request timed out: status.get'))
+    connectMock.mockReturnValueOnce(first).mockReturnValueOnce(second)
+    loadHostsMock.mockResolvedValue([HOST])
+
+    const states: ConnectionState[] = []
+    let forceReconnect: ((hostId: string) => Promise<void>) | null = null
+    let renderer: ReactTestRenderer | null = null
+    function Probe(): null {
+      forceReconnect = useForceReconnect()
+      states.push(useHostClient(HOST.id).state)
+      return null
+    }
+    try {
+      await act(async () => {
+        renderer = create(createElement(RpcClientProvider, null, createElement(Probe)))
+        await Promise.resolve()
+      })
+
+      await act(async () => {
+        await forceReconnect?.(HOST.id)
+      })
+
+      expect(second.sendRequest).toHaveBeenCalledWith(
+        'status.get',
+        undefined,
+        expect.objectContaining({ timeoutMs: 15_000 })
+      )
+      expect(second.closeMock).toHaveBeenCalled()
+      expect(states.at(-1)).not.toBe('connected')
+    } finally {
+      act(() => renderer?.unmount())
+    }
+  })
+
+  it('keeps Force Reconnect connected once the reopened host answers', async () => {
+    const first = makeFakeClient('connected')
+    const second = makeFakeClient('connected')
+    second.sendRequest = vi.fn().mockResolvedValue({ id: '1', ok: true, result: {} })
+    connectMock.mockReturnValueOnce(first).mockReturnValueOnce(second)
+    loadHostsMock.mockResolvedValue([HOST])
+
+    const states: ConnectionState[] = []
+    let forceReconnect: ((hostId: string) => Promise<void>) | null = null
+    let renderer: ReactTestRenderer | null = null
+    function Probe(): null {
+      forceReconnect = useForceReconnect()
+      states.push(useHostClient(HOST.id).state)
+      return null
+    }
+    try {
+      await act(async () => {
+        renderer = create(createElement(RpcClientProvider, null, createElement(Probe)))
+        await Promise.resolve()
+      })
+
+      await act(async () => {
+        await forceReconnect?.(HOST.id)
+      })
+
+      expect(second.closeMock).not.toHaveBeenCalled()
+      expect(states.at(-1)).toBe('connected')
+    } finally {
+      act(() => renderer?.unmount())
+    }
+  })
+
   it('nudges an existing Relay session instead of starting a fresh direct dial', async () => {
     const relayClient = makeFakeClient('disconnected', 'relay')
     connectMock.mockReturnValue(relayClient)

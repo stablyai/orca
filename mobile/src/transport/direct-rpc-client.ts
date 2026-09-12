@@ -96,6 +96,7 @@ export class DirectRpcClient implements RpcClient {
       onRpcResponse: (response) => this.handleRpcResponse(response),
       onBinary: (bytes) => this.streams.handleBinary(bytes),
       onAuthenticatedInbound: (session) => this.liveness.noteAuthenticatedInbound(session),
+      onControlResponseInbound: (session) => this.liveness.noteControlResponse(session),
       onClosed: (session, closeCode) => this.socketClose.handle(session, closeCode),
       onForcedClose: (session) => this.socketClose.forceClose(session)
     })
@@ -177,9 +178,7 @@ export class DirectRpcClient implements RpcClient {
     }
     if (this.getState() === 'connected') {
       console.log('[net] foreground — probing live connection')
-      if (this.livenessSession) {
-        this.liveness.probeNow(this.livenessSession)
-      }
+      this.liveness.probeNow(this.livenessSession)
       return
     }
     const dialing = this.socketSession

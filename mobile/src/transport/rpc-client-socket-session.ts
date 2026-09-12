@@ -32,6 +32,7 @@ type SocketSessionOptions = {
   onBinary: (bytes: Uint8Array) => void
   onAnyInbound: (receivedAt: number) => void
   onAuthenticatedInbound: (session: RpcClientSocketSession) => void
+  onControlResponseInbound: (session: RpcClientSocketSession) => void
   onClosed: (session: RpcClientSocketSession, closeCode?: number) => void
   onForcedClose: (session: RpcClientSocketSession) => void
 }
@@ -196,6 +197,12 @@ export class RpcClientSocketSession {
       return
     }
     if (isRpcResponse(response)) {
+      // Why: a `streaming` frame is a subscription push the host sends on its own.
+      // Only a non-streaming reply answers a request we sent, so only that proves
+      // the control channel still works.
+      if (!(response.ok && response.streaming === true)) {
+        this.options.onControlResponseInbound(this)
+      }
       this.options.onRpcResponse(response)
     }
   }
