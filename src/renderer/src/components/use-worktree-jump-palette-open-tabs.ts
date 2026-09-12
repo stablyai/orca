@@ -96,8 +96,7 @@ export function useWorktreeJumpPaletteOpenTabs({
       activeBrowserTabId,
       activeWorktreeId,
       activeWorkspaceExecutionHostId,
-      activeTabType,
-      unifiedTabsByWorktree
+      activeTabType
     })
   }, [
     paletteStatusInputsActive,
@@ -111,7 +110,6 @@ export function useWorktreeJumpPaletteOpenTabs({
     browserSortedWorktrees,
     repoByHostIdentity,
     repoMap,
-    unifiedTabsByWorktree,
     worktreeOrder
   ])
   const browserMatches = useMemo(
