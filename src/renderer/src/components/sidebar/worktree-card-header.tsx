@@ -81,6 +81,7 @@ export function WorktreeCardHeader({
   const {
     showPinnedRepoIcon,
     showInlineRepoBadge,
+    showProjectNameLabel,
     showHeaderActions,
     showTitleRowPrimary,
     showDeleteQuickAction,
@@ -164,6 +165,18 @@ export function WorktreeCardHeader({
               iconClassName="size-3"
             />
           </RepoIdentityChip>
+        )}
+
+        {/* Why: board lanes mix projects; name the project inline so cards whose
+            title is just the branch (every primary reads main/master) stay distinct.
+            The adjacent chip already tooltips the full name, so a bounded truncate is safe. */}
+        {showProjectNameLabel && repo && (
+          <span
+            className="max-w-[8rem] shrink-0 truncate text-[11px] font-medium leading-5 text-muted-foreground"
+            data-worktree-card-project-name=""
+          >
+            {repo.displayName}
+          </span>
         )}
 
         {/* Why: unread alert lives in the left status lane; title-row contrast comes from weight and dimmed read titles. */}

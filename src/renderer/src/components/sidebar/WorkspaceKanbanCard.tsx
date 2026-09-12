@@ -67,6 +67,9 @@ function WorkspaceKanbanCard({
         repo={repo}
         isActive={isActive}
         isMultiSelected={isSelected}
+        // Why: board lanes mix projects, so name the project on the card even in
+        // icon-only card styles; the sidebar keeps the chip-only treatment.
+        showProjectName
         selectedWorktrees={contextWorktrees}
         nativeDragEnabled={nativeDragEnabled}
         onActivate={onActivate}
