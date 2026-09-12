@@ -7,7 +7,6 @@ export {
   buildNativeChatAttachmentBytes,
   buildNativeChatAttachmentWrites,
   buildNativeChatPasteBytes,
-  formatNativeChatFileReference,
   isMultilineDraft
 } from '../../../../shared/native-chat-paste-bytes'
 

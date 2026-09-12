@@ -35,9 +35,28 @@ export function buildNativeChatPasteBytes(text: string): string {
   return sanitizeBracketedPasteText(text)
 }
 
+/** True when unframed bytes would be interpreted as keys rather than pasted
+ *  literally: CR/LF submits the turn, and the other control bytes (TAB, C0, DEL)
+ *  act as keys. ESC is deliberately excluded — `sanitizeBracketedPasteText`
+ *  already neutralises it, so framing is not what defends that byte. */
+export function needsBracketedFraming(text: string): boolean {
+  for (const character of text) {
+    const code = character.charCodeAt(0)
+    if (code === 27) {
+      continue
+    }
+    if (code < 32 || code === 127) {
+      return true
+    }
+  }
+  return false
+}
+
 export function formatNativeChatFileReference(filePath: string): string {
   const escaped = filePath.replace(/"/g, '\\"')
-  return /\s/.test(filePath) ? `@"${escaped}"` : `@${filePath}`
+  // Why: a quote forces quoting too. Escaping only makes sense inside a quoted
+  // token, so an unquoted `@a\"b` would hand the parser a stray escape.
+  return /[\s"]/.test(filePath) ? `@"${escaped}"` : `@${filePath}`
 }
 
 /**
@@ -53,9 +72,13 @@ export function buildNativeChatAttachmentBytes(
   form: NativeChatAttachmentForm
 ): string {
   if (form === 'file-reference') {
-    // Why: an unframed write is keystrokes, so a filename holding CR/LF would
-    // submit the turn early. buildNativeChatPasteBytes already frames those.
-    return buildNativeChatPasteBytes(formatNativeChatFileReference(filePath))
+    const reference = formatNativeChatFileReference(filePath)
+    // Why: an unframed write is keystrokes, so CR/LF would submit the turn early
+    // and a TAB or other control byte in a file name would act as a key. Frame
+    // anything that is not safely literal; sanitize the rest.
+    return needsBracketedFraming(reference)
+      ? wrapTerminalBracketedPasteText(reference)
+      : sanitizeBracketedPasteText(reference)
   }
   return wrapTerminalBracketedPasteText(filePath)
 }
