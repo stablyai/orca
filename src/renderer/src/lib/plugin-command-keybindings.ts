@@ -58,10 +58,25 @@ export function findPluginCommandForKeybinding(
   input: KeybindingInput,
   platform: NodeJS.Platform,
   overrides: KeybindingOverrides | undefined,
-  hasActiveWorktree: boolean
+  hasActiveWorktree: boolean,
+  options: { requireAllowInTerminal?: boolean } = {}
 ): ActivePluginCommand | null {
   for (const command of commands) {
     if (command.context === 'worktree' && !hasActiveWorktree) {
+      continue
+    }
+    // Why (#15642): terminal focus only honors chords that explicitly opted in,
+    // so plugin bindings keep out of the terminal's own shortcut authority by
+    // default. The opt-in path matches the binding's own (already
+    // schema-normalized) key rather than the override-resolved list, because
+    // per-binding consent cannot be inferred from a command-level override.
+    if (options.requireAllowInTerminal) {
+      const terminalEligible = command.keybindings
+        .filter((keybinding) => keybinding.allowInTerminal === true)
+        .some((keybinding) => keybindingMatchesInput(keybinding.key, input, platform))
+      if (terminalEligible) {
+        return command
+      }
       continue
     }
     const matches = getEffectivePluginCommandKeybindings(command, platform, overrides).some(

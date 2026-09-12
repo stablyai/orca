@@ -51,7 +51,7 @@ export type PluginHostListEntry = {
     title: string
     context: 'global' | 'worktree'
     handler: { type: 'built-in'; action: string } | { type: 'worker' }
-    keybindings: { key: string; when: 'global' | 'worktree' }[]
+    keybindings: { key: string; when: 'global' | 'worktree'; allowInTerminal?: boolean }[]
   }[]
   hasWorker: boolean
   vmRecipes?: {

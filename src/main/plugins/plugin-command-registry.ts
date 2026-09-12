@@ -17,6 +17,8 @@ import {
 export type PluginCommandKeybinding = {
   key: string
   when: 'global' | 'worktree'
+  /** Explicit opt-in to fire while focus is in a terminal (#15642). */
+  allowInTerminal?: boolean
 }
 
 export type PluginCommandRegistration = {
@@ -155,7 +157,8 @@ function keybindingsForCommand(
     .filter((keybinding) => keybinding.command === command.id)
     .map((keybinding) => ({
       key: keybinding.key,
-      when: keybinding.when ?? command.context ?? 'global'
+      when: keybinding.when ?? command.context ?? 'global',
+      ...(keybinding.allowInTerminal ? { allowInTerminal: true } : {})
     }))
 }
 
