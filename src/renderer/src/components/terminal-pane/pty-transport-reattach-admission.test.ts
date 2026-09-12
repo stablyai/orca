@@ -153,7 +153,10 @@ describe('createIpcPtyTransport', () => {
     const onDataCallback = vi.fn()
     const onExitCallback = vi.fn()
     spawn.mockResolvedValueOnce({ id: 'pty-fresh-fallback', sessionExpired: true })
-    const transport = createIpcPtyTransport({ onPtySpawn })
+    // Built the way installPtyInputRecovery builds it: every real pane supplies
+    // retainDisposedSpawn, and for a live pane refusing its own id it answers "retain". The refusal
+    // must kill anyway — this transport is the pane's only one, so nothing else owns the PTY.
+    const transport = createIpcPtyTransport({ onPtySpawn, retainDisposedSpawn: () => true })
 
     const result = await transport.connect({
       url: '',
@@ -184,7 +187,7 @@ describe('createIpcPtyTransport', () => {
     const retirementError = new Error('provider shutdown refused')
     spawn.mockResolvedValueOnce({ id: 'pty-fresh-fallback', sessionExpired: true })
     kill.mockRejectedValueOnce(retirementError)
-    const transport = createIpcPtyTransport({ onPtySpawn })
+    const transport = createIpcPtyTransport({ onPtySpawn, retainDisposedSpawn: () => true })
 
     await expect(
       transport.connect({

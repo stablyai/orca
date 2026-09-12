@@ -221,6 +221,36 @@ describe('connectPanePty', () => {
     expect(deps.onPtyErrorRef.current).not.toHaveBeenCalled()
   })
 
+  // The disposed-spawn kill in ipc-pty-connect asks this callback before retiring a PTY; it must
+  // answer from the live store, or a remounted pane's shell dies under it.
+  it('lets a disposed spawn survive while the pane surface still exists in the store', async () => {
+    const { connectPanePty } = await import('./pty-connection')
+    const transport = createMockTransport()
+    transportFactoryQueue.push(transport)
+    const deps = createDeps({ tabId: 'tab-retain-disposed-spawn' })
+    mockStoreState = {
+      ...mockStoreState,
+      tabsByWorktree: { 'wt-1': [{ id: 'tab-retain-disposed-spawn', ptyId: null }] }
+    }
+
+    connectPanePty(createPane(1) as never, createManager(1) as never, deps as never)
+    await flushAsyncTicks()
+
+    const retain = createdTransportOptions[0]?.retainDisposedSpawn as (() => boolean) | undefined
+    expect(retain?.()).toBe(true)
+    mockStoreState = {
+      ...mockStoreState,
+      deleteStateByWorktreeId: { 'wt-1': { isDeleting: true, phase: 'deleting' } }
+    }
+    expect(retain?.()).toBe(false)
+    mockStoreState = {
+      ...mockStoreState,
+      deleteStateByWorktreeId: {},
+      tabsByWorktree: { 'wt-1': [] }
+    }
+    expect(retain?.()).toBe(false)
+  })
+
   it('fresh-spawns normally when the pane worktree is not being deleted', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const transport = createMockTransport()

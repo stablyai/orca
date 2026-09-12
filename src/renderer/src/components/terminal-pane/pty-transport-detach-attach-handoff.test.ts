@@ -169,6 +169,46 @@ describe('createIpcPtyTransport', () => {
     expect(transport.getPtyId()).toBeNull()
   })
 
+  // A pane remounted mid-spawn is handed the same PTY by main's pane-spawn reservation, so a kill
+  // from the disposed transport lands on the successor's shell. The surface owner decides.
+  it('keeps a fresh spawn that resolves after destroy when the pane surface still owns it', async () => {
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    const kill = window.api.pty.kill as unknown as ReturnType<typeof vi.fn>
+    let resolveSpawn: (result: { id: string }) => void = () => {}
+    vi.mocked(window.api.pty.spawn).mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveSpawn = resolve
+        }) as never
+    )
+    const transport = createIpcPtyTransport({ retainDisposedSpawn: () => true })
+    const pending = transport.connect({ url: '', callbacks: {} })
+    await transport.destroy?.()
+    resolveSpawn({ id: 'pty-shared-with-successor' })
+
+    await expect(pending).resolves.toBeUndefined()
+    expect(kill).not.toHaveBeenCalled()
+  })
+
+  it('still kills a fresh spawn that resolves after destroy when nothing owns the surface', async () => {
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    const kill = window.api.pty.kill as unknown as ReturnType<typeof vi.fn>
+    let resolveSpawn: (result: { id: string }) => void = () => {}
+    vi.mocked(window.api.pty.spawn).mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveSpawn = resolve
+        }) as never
+    )
+    const transport = createIpcPtyTransport({ retainDisposedSpawn: () => false })
+    const pending = transport.connect({ url: '', callbacks: {} })
+    await transport.destroy?.()
+    resolveSpawn({ id: 'pty-orphaned' })
+
+    await expect(pending).resolves.toBeUndefined()
+    expect(kill).toHaveBeenCalledWith('pty-orphaned')
+  })
+
   it('drops the exit observer when abandoning an obsolete reattach without killing it', async () => {
     const { createIpcPtyTransport } = await import('./pty-transport')
     const onPtyExit = vi.fn()
