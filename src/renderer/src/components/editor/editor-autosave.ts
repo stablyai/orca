@@ -16,6 +16,7 @@ export const ORCA_EDITOR_SAVE_AND_CLOSE_EVENT = 'orca:save-and-close'
 export const ORCA_EDITOR_FILE_SAVED_EVENT = 'orca:editor-file-saved'
 export const ORCA_EDITOR_REQUEST_CMD_SAVE_EVENT = 'orca:editor-request-cmd-save'
 export const ORCA_EDITOR_REQUEST_FILE_CLOSE_EVENT = 'orca:editor-request-file-close'
+export const ORCA_EDITOR_REQUEST_FILE_RELOAD_EVENT = 'orca:editor-request-file-reload'
 
 export type EditorPathMutationTarget = {
   worktreeId: string
@@ -52,6 +53,10 @@ export type EditorFileSavedDetail = {
 }
 
 export type EditorRequestFileCloseDetail = {
+  fileId: string
+}
+
+export type EditorRequestFileReloadDetail = {
   fileId: string
 }
 
@@ -215,6 +220,17 @@ export async function requestEditorFileSave(target: EditorSaveFileTarget): Promi
 export function requestEditorFileClose(fileId: string): void {
   window.dispatchEvent(
     new CustomEvent<EditorRequestFileCloseDetail>(ORCA_EDITOR_REQUEST_FILE_CLOSE_EVENT, {
+      detail: { fileId }
+    })
+  )
+}
+
+// CONTRACT: dispatched only after any unsaved draft has been discarded (see
+// requestEditorTabDiskReload) — consumers reload without a dirty skip, because
+// their openFiles snapshot can still say dirty before that store write renders.
+export function requestEditorFileReload(fileId: string): void {
+  window.dispatchEvent(
+    new CustomEvent<EditorRequestFileReloadDetail>(ORCA_EDITOR_REQUEST_FILE_RELOAD_EVENT, {
       detail: { fileId }
     })
   )

@@ -4,7 +4,10 @@ import { act, useLayoutEffect, useRef, useState } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { OpenFile } from '@/store/slices/editor'
-import { ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT } from './editor-autosave'
+import {
+  ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT,
+  ORCA_EDITOR_REQUEST_FILE_RELOAD_EVENT
+} from './editor-autosave'
 import type { DiffContent, FileContent } from './editor-panel-content-types'
 import { useEditorPanelExternalContentEvents } from './useEditorPanelExternalContentEvents'
 
@@ -83,6 +86,14 @@ function dispatchExternalChange(relativePath: string): void {
           relativePath
         }
       })
+    )
+  })
+}
+
+function dispatchReloadRequest(fileId: string): void {
+  act(() => {
+    window.dispatchEvent(
+      new CustomEvent(ORCA_EDITOR_REQUEST_FILE_RELOAD_EVENT, { detail: { fileId } })
     )
   })
 }
@@ -238,5 +249,88 @@ describe('useEditorPanelExternalContentEvents', () => {
     const previewOptions = previewCalls.loadFile.mock.calls[0]?.[4]
     expect(sourceOptions?.externalEventGeneration).toBeTypeOf('number')
     expect(previewOptions?.externalEventGeneration).toBe(sourceOptions?.externalEventGeneration)
+  })
+
+  describe('reload requests', () => {
+    it('force-reloads the visible owner', () => {
+      const file = makeFile('reloaded')
+      const calls = makeCalls()
+
+      act(() => {
+        root.render(
+          <ExternalContentProbe activeFileId={file.id} calls={calls} isVisible openFiles={[file]} />
+        )
+      })
+      dispatchReloadRequest(file.id)
+
+      expect(calls.loadFile).toHaveBeenCalledOnce()
+      expect(calls.loadFile.mock.calls[0]?.[4]?.force).toBe(true)
+      expect(calls.invalidateDiff).toHaveBeenCalledExactlyOnceWith([file.id])
+    })
+
+    it('invalidates a hidden panel without reloading until reveal', () => {
+      const file = makeFile('reloaded')
+      const calls = makeCalls()
+
+      act(() => {
+        root.render(
+          <ExternalContentProbe
+            activeFileId={file.id}
+            calls={calls}
+            isVisible={false}
+            openFiles={[file]}
+          />
+        )
+      })
+      dispatchReloadRequest(file.id)
+
+      expect(calls.loadFile).not.toHaveBeenCalled()
+      expect(calls.invalidate).toHaveBeenCalledExactlyOnceWith([file.id])
+    })
+
+    it('reloads a still-dirty snapshot — the dispatcher already discarded the draft', () => {
+      const file = makeFile('reloaded', { isDirty: true })
+      const calls = makeCalls()
+
+      act(() => {
+        root.render(
+          <ExternalContentProbe activeFileId={file.id} calls={calls} isVisible openFiles={[file]} />
+        )
+      })
+      dispatchReloadRequest(file.id)
+
+      expect(calls.loadFile).toHaveBeenCalledOnce()
+    })
+
+    it('reloads the diff body for an unstaged diff tab', () => {
+      const file = makeFile('reloaded', { mode: 'diff', diffSource: 'unstaged' })
+      const calls = makeCalls()
+
+      act(() => {
+        root.render(
+          <ExternalContentProbe activeFileId={file.id} calls={calls} isVisible openFiles={[file]} />
+        )
+      })
+      dispatchReloadRequest(file.id)
+
+      expect(calls.loadFile).not.toHaveBeenCalled()
+      expect(calls.loadDiff).toHaveBeenCalledOnce()
+      expect(calls.loadDiff.mock.calls[0]?.[1]?.force).toBe(true)
+    })
+
+    it('ignores requests for files this panel does not hold', () => {
+      const file = makeFile('reloaded')
+      const calls = makeCalls()
+
+      act(() => {
+        root.render(
+          <ExternalContentProbe activeFileId={file.id} calls={calls} isVisible openFiles={[file]} />
+        )
+      })
+      dispatchReloadRequest('unknown-file')
+
+      expect(calls.loadFile).not.toHaveBeenCalled()
+      expect(calls.invalidate).not.toHaveBeenCalled()
+    })
   })
 })
