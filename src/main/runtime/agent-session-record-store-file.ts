@@ -15,17 +15,14 @@ import {
   isAgentSessionOperationRow,
   type AgentSessionOperationRow
 } from '../../shared/agent-session-operation-ledger'
-import {
-  AGENT_SESSION_RECORD_SCHEMA_VERSION,
-  isAgentSessionRecord,
-  type AgentSessionRecord
-} from '../../shared/agent-session-record'
+import type { AgentSessionRecord } from '../../shared/agent-session-record'
 import {
   copyFileDurable,
   durableWriteTempPath,
   renameDurable,
   writeTempFileDurable
 } from '../durable-file-write'
+import { readAgentSessionRecord } from './agent-session-record-read-repair'
 import { parseVisibleSessionIds } from './agent-session-visible-tab-index'
 import { serializeAgentSessionStoreState } from './agent-session-store-serialization'
 
@@ -144,20 +141,13 @@ function parseState(
   let needsRewrite = false
   if (typeof file.records === 'object' && file.records !== null) {
     for (const [sessionId, value] of Object.entries(file.records)) {
-      const record = isAgentSessionRecord(value) ? value : null
-      if (record?.sessionId === sessionId) {
-        state.records.set(sessionId, record)
+      const read = readAgentSessionRecord(sessionId, value)
+      if (read.record) {
+        state.records.set(sessionId, read.record)
+        // A repaired record must be re-persisted, or the next load repairs it again.
+        needsRewrite ||= read.repaired && schemaVersion === AGENT_SESSION_STORE_SCHEMA_VERSION
       } else {
-        const valueSchemaVersion =
-          typeof value === 'object' &&
-          value !== null &&
-          (value as { schemaVersion?: unknown }).schemaVersion
-        const reason = record
-          ? 'record_key_session_id_mismatch'
-          : valueSchemaVersion === AGENT_SESSION_RECORD_SCHEMA_VERSION
-            ? 'current_shape_invalid'
-            : 'unsupported_schema'
-        state.unreadableRecords.set(sessionId, { reason, raw: value })
+        state.unreadableRecords.set(sessionId, { reason: read.reason, raw: value })
         needsRewrite ||= schemaVersion === AGENT_SESSION_STORE_SCHEMA_VERSION
       }
     }
