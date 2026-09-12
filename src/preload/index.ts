@@ -73,6 +73,7 @@ import { codexUsageApi } from './api/codex-usage-bridge'
 import { openCodeUsageApi } from './api/open-code-usage-bridge'
 import { aiVaultApi } from './api/ai-vault-bridge'
 import { nativeChatApi } from './api/native-chat-bridge'
+import { sqliteApi } from './api/sqlite-database-bridge'
 import { runtimeApi } from './api/runtime-bridge'
 import { runtimeEnvironmentsApi } from './api/runtime-environments-bridge'
 import { rateLimitsApi } from './api/rate-limits-bridge'
@@ -171,6 +172,7 @@ const api = {
   openCodeUsage: openCodeUsageApi,
   aiVault: aiVaultApi,
   nativeChat: nativeChatApi,
+  sqlite: sqliteApi,
   runtime: runtimeApi,
   runtimeEnvironments: runtimeEnvironmentsApi,
   rateLimits: rateLimitsApi,
