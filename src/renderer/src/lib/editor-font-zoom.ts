@@ -1,4 +1,5 @@
 import { normalizeTerminalFontWeight } from '../../../shared/terminal-fonts'
+import { getRendererAppPlatform } from './renderer-app-platform'
 
 const EDITOR_FONT_ZOOM_MIN = -6
 const EDITOR_FONT_ZOOM_MAX = 18
@@ -88,4 +89,41 @@ export function resolveEditorFontOptions(settings?: EditorFontSettings | null): 
     fontFamily: resolveEditorFontFamily(settings),
     fontWeight: resolveEditorFontWeight(settings)
   }
+}
+
+/** Monaco reads 0 as "compute the line height from the font size". */
+export const EDITOR_LINE_HEIGHT_AUTO = 0
+export const EDITOR_LINE_HEIGHT_MIN = 1
+export const EDITOR_LINE_HEIGHT_MAX = 3
+export const EDITOR_LINE_HEIGHT_STEP = 0.1
+
+/**
+ * Monaco's GOLDEN_LINE_HEIGHT_RATIO — the multiplier it applies when no line height
+ * is set. Mirrored here so the setting can show what "automatic" resolves to.
+ */
+export function monacoAutomaticLineHeightRatio(
+  platform: NodeJS.Platform = getRendererAppPlatform()
+): number {
+  return platform === 'darwin' ? 1.5 : 1.35
+}
+
+export function normalizeEditorLineHeight(lineHeight: number | null | undefined): number {
+  if (typeof lineHeight !== 'number' || !Number.isFinite(lineHeight) || lineHeight <= 0) {
+    return EDITOR_LINE_HEIGHT_AUTO
+  }
+
+  return (
+    Math.round(
+      Math.min(EDITOR_LINE_HEIGHT_MAX, Math.max(EDITOR_LINE_HEIGHT_MIN, lineHeight)) * 10
+    ) / 10
+  )
+}
+
+/**
+ * Why a multiplier rather than pixels: Monaco treats a value between 0 and 8 as a
+ * multiple of the font size, which is the same shape as the terminal's Line Height,
+ * so the two settings stay comparable while editor zoom keeps working.
+ */
+export function resolveEditorLineHeight(settings?: { editorLineHeight?: number } | null): number {
+  return normalizeEditorLineHeight(settings?.editorLineHeight)
 }

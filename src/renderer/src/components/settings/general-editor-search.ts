@@ -64,6 +64,24 @@ export const getGeneralEditorSearchEntries = createLocalizedCatalog(() => [
     ]
   },
   {
+    title: translate(
+      'auto.components.settings.general.search.editorLineHeight',
+      'Editor Line Height'
+    ),
+    description: translate(
+      'auto.components.settings.general.search.editorLineHeightDesc',
+      'Line spacing in file editors, as a multiple of the font size. Leave empty to keep the editor default.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.general.search.e1ee631696', 'editor'),
+      ...translateSearchKeyword(
+        'auto.components.settings.general.search.editorLineHeightKw',
+        'line height'
+      ),
+      ...translateSearchKeyword('auto.components.settings.general.search.3ca5ab78a5', 'code')
+    ]
+  },
+  {
     title: translate('auto.components.settings.general.search.e61157e926', 'Editor Word Wrap'),
     description: translate(
       'auto.components.settings.general.search.005be5c699',

@@ -8,7 +8,8 @@ import '@/lib/monaco-setup'
 import {
   computeEditorFontSize,
   resolveEditorFontFamily,
-  resolveEditorFontWeight
+  resolveEditorFontWeight,
+  resolveEditorLineHeight
 } from '@/lib/editor-font-zoom'
 
 import { useContextualCopySetup } from './useContextualCopySetup'
@@ -99,6 +100,7 @@ export default function MonacoEditor({
   )
   const editorFontFamily = resolveEditorFontFamily(settings)
   const editorFontWeight = resolveEditorFontWeight(settings)
+  const editorLineHeight = resolveEditorLineHeight(settings)
   const editorWordWrap = settings?.editorWordWrap
   const estimatedAutoHeight = useMemo(() => {
     if (!autoHeight) {
@@ -169,9 +171,10 @@ export default function MonacoEditor({
       fontSize: editorFontSize,
       fontFamily: editorFontFamily,
       fontWeight: editorFontWeight,
+      lineHeight: editorLineHeight,
       ...buildFileEditorWordWrapOptions(editorWordWrap)
     })
-  }, [editorFontFamily, editorFontWeight, editorFontSize, editorWordWrap])
+  }, [editorFontFamily, editorFontWeight, editorLineHeight, editorFontSize, editorWordWrap])
 
   const decorations = useMonacoEditorDecorations({
     editorRef,
@@ -254,6 +257,7 @@ export default function MonacoEditor({
           fontSize: editorFontSize,
           fontFamily: editorFontFamily,
           fontWeight: editorFontWeight,
+          lineHeight: editorLineHeight,
           lineNumbers: 'on',
           renderLineHighlight: 'line',
           automaticLayout: true,

@@ -21,6 +21,7 @@ import { DiffShowWhitespaceSetting } from './DiffShowWhitespaceSetting'
 import { EditorWordWrapSetting } from './EditorWordWrapSetting'
 import { EditorFontFamilySetting } from './EditorFontFamilySetting'
 import { EditorFontWeightSetting } from './EditorFontWeightSetting'
+import { EditorLineHeightSetting } from './EditorLineHeightSetting'
 import {
   createAutoSaveDelayDraftState,
   resolveAutoSaveDelayDraftState,
@@ -233,6 +234,8 @@ export function GeneralEditorSettingsSection({
       />
 
       <EditorFontWeightSetting settings={settings} updateSettings={updateSettings} />
+
+      <EditorLineHeightSetting settings={settings} updateSettings={updateSettings} />
 
       <EditorWordWrapSetting settings={settings} updateSettings={updateSettings} />
 

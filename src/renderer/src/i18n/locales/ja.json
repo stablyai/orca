@@ -8431,7 +8431,9 @@
             "externalWorktrees": "外部ワークツリー",
             "externalWorktreesDescription": "Orca 外で作成されたワークツリーをデフォルトで表示するかどうかを選択します。",
             "editorFontWeight": "エディターフォントの太さ",
-            "editorFontWeightDesc": "ファイルエディターと差分ビューで使用されるフォントの太さ。空の場合はターミナルフォントの太さに従います。"
+            "editorFontWeightDesc": "ファイルエディターと差分ビューで使用されるフォントの太さ。空の場合はターミナルフォントの太さに従います。",
+            "editorLineHeight": "エディターの行の高さ",
+            "editorLineHeightDesc": "ファイルエディターの行間。フォントサイズの倍数で指定します。空の場合はエディターの既定値を使用します。"
           }
         },
         "git": {
@@ -9866,6 +9868,10 @@
         "EditorFontWeightSetting": {
           "title": "エディターフォントの太さ",
           "description": "ファイルエディターと差分ビューで使用されるフォントの太さ。空の場合はターミナルフォントの太さに従います。"
+        },
+        "EditorLineHeightSetting": {
+          "title": "エディターの行の高さ",
+          "description": "ファイルエディターの行間。フォントサイズの倍数で指定します。空の場合はエディターの既定値を使用します。"
         },
         "GeneralRemoteServerUpdates": {
           "serverCount": "ペアリング済みサーバー {{value0}} 台",

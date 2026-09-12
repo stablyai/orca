@@ -9655,7 +9655,10 @@
             "afa37a34e1": "close",
             "editorFontWeight": "Editor Font Weight",
             "editorFontWeightDesc": "Weight used by file editors and diff views. Leave empty to follow the terminal font weight.",
-            "editorFontWeightKw": "weight"
+            "editorFontWeightKw": "weight",
+            "editorLineHeight": "Editor Line Height",
+            "editorLineHeightDesc": "Line spacing in file editors, as a multiple of the font size. Leave empty to keep the editor default.",
+            "editorLineHeightKw": "line height"
           }
         },
         "git": {
@@ -11167,6 +11170,10 @@
         "EditorFontWeightSetting": {
           "title": "Editor Font Weight",
           "description": "Weight used by file editors and diff views. Leave empty to follow the terminal font weight."
+        },
+        "EditorLineHeightSetting": {
+          "title": "Editor Line Height",
+          "description": "Line spacing in file editors, as a multiple of the font size. Leave empty to keep the editor default."
         },
         "GeneralRemoteServerUpdates": {
           "serverCount": "{{value0}} paired servers",

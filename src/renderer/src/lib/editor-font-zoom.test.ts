@@ -5,7 +5,10 @@ import {
   computeEditorFontSize,
   resolveEditorFontFamily,
   resolveEditorFontFamilyOrInherit,
-  resolveEditorFontWeight
+  resolveEditorFontWeight,
+  monacoAutomaticLineHeightRatio,
+  normalizeEditorLineHeight,
+  resolveEditorLineHeight
 } from './editor-font-zoom'
 
 describe('editor font zoom', () => {
@@ -86,5 +89,37 @@ describe('resolveEditorFontWeight', () => {
   it('clamps out-of-range overrides into the supported 100-900 band', () => {
     expect(resolveEditorFontWeight({ editorFontWeight: 5000 })).toBe('900')
     expect(resolveEditorFontWeight({ editorFontWeight: 50 })).toBe('100')
+  })
+})
+
+describe('resolveEditorLineHeight', () => {
+  // Monaco reads 0 as "compute from the font size", so an unset setting must stay 0
+  // rather than re-flowing every open file the first time this ships.
+  it('stays on Monaco automatic spacing when unset', () => {
+    expect(resolveEditorLineHeight(undefined)).toBe(0)
+    expect(resolveEditorLineHeight({})).toBe(0)
+    expect(resolveEditorLineHeight({ editorLineHeight: 0 })).toBe(0)
+  })
+
+  it('passes an opted-in multiplier through', () => {
+    expect(resolveEditorLineHeight({ editorLineHeight: 1.2 })).toBe(1.2)
+  })
+
+  it('clamps out-of-range values into the supported band', () => {
+    expect(normalizeEditorLineHeight(9)).toBe(3)
+    expect(normalizeEditorLineHeight(0.2)).toBe(1)
+  })
+
+  it('rejects values Monaco would misread as absolute pixels', () => {
+    expect(normalizeEditorLineHeight(Number.NaN)).toBe(0)
+    expect(normalizeEditorLineHeight(-4)).toBe(0)
+  })
+})
+
+describe('monacoAutomaticLineHeightRatio', () => {
+  it('mirrors Monaco GOLDEN_LINE_HEIGHT_RATIO per platform', () => {
+    expect(monacoAutomaticLineHeightRatio('darwin')).toBe(1.5)
+    expect(monacoAutomaticLineHeightRatio('linux')).toBe(1.35)
+    expect(monacoAutomaticLineHeightRatio('win32')).toBe(1.35)
   })
 })
