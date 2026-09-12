@@ -25,7 +25,11 @@ function finalizeResolvedMultiplexPty(
   // Why: a competing subscribe may own this streamId after the PTY await; detach it so an orphaned view subscriber can't silence the model responder (terminal-query-authority.md).
   state.detachStream(request.streamId, null)
   if (state.streams.size >= TERMINAL_MULTIPLEX_MAX_ACTIVE_STREAMS_PER_CONNECTION) {
-    state.sendStreamError(request.streamId, TERMINAL_MULTIPLEX_STREAM_LIMIT_ERROR)
+    state.sendStreamError(request.streamId, TERMINAL_MULTIPLEX_STREAM_LIMIT_ERROR, {
+      active_stream_count: state.streams.size,
+      pending_pty_wait_count: state.pendingPtyWaitControllers.size,
+      max_stream_count: TERMINAL_MULTIPLEX_MAX_ACTIVE_STREAMS_PER_CONNECTION
+    })
     state.emit({ type: 'end', streamId: request.streamId })
     return null
   }
@@ -53,7 +57,11 @@ export function resolveMultiplexSubscribePty(
     return finalizeResolvedMultiplexPty(state, request, leaf)
   }
   if (pendingPtyWaitControllers.size >= TERMINAL_MULTIPLEX_MAX_PENDING_PTY_WAITS_PER_CONNECTION) {
-    state.sendStreamError(request.streamId, TERMINAL_MULTIPLEX_STREAM_LIMIT_ERROR)
+    state.sendStreamError(request.streamId, TERMINAL_MULTIPLEX_STREAM_LIMIT_ERROR, {
+      active_stream_count: state.streams.size,
+      pending_pty_wait_count: pendingPtyWaitControllers.size,
+      max_stream_count: TERMINAL_MULTIPLEX_MAX_PENDING_PTY_WAITS_PER_CONNECTION
+    })
     emit({ type: 'end', streamId: request.streamId })
     return null
   }
