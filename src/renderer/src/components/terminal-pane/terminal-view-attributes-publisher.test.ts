@@ -148,6 +148,7 @@ describe('applyTerminalAppearance publication', () => {
     return {
       getPanes: () => panes,
       setPaneLigaturesEnabled: vi.fn(),
+      setPaneInlineImagesEnabled: vi.fn(),
       setPaneStyleOptions: vi.fn()
     } as unknown as PaneManager
   }

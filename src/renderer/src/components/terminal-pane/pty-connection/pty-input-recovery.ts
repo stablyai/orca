@@ -12,6 +12,7 @@ import { requestTerminalPaneRecovery } from '../terminal-pane-recovery'
 import { getSystemPrefersDark } from '@/lib/terminal-theme'
 import { resolveTerminalColorSchemeMode } from '../../../../../shared/terminal-color-scheme-protocol'
 import { discardTerminalOutput } from '@/lib/pane-manager/pane-terminal-output-scheduler'
+import { terminalRendersInlineImages } from '@/lib/pane-manager/pane-inline-images'
 import {
   CONPTY_DA1_RESPONSE,
   createTerminalPixelSizeQueryResponder,
@@ -22,6 +23,7 @@ import { isRemoteRuntimePtyId } from './paired-parked-terminal-restore'
 import { TRANSPORT_CONNECT_SETTLE_GRACE_MS } from './pty-connect-limits'
 
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
+import { resolveTerminalInlineImagesEnabled } from '../../../../../shared/terminal-inline-images-settings'
 
 /** Transport creation, terminal capability replies, viewport claims, and undeliverable-input recovery. */
 export function installPtyInputRecovery(session: ConnectPanePtySession): void {
@@ -192,6 +194,12 @@ export function installPtyInputRecovery(session: ConnectPanePtySession): void {
     // (#7329), so send immediately.
     sendInput: session.sendDesktopQueryReplyImmediate,
     isReplaying: () => isPaneReplaying(session.deps.replayingPanesRef, session.pane.id),
+    // Advertise Sixel in DA1 only when the decoder is actually attached: the setting
+    // can be on while the lazy chunk is still loading or after it failed to load, and
+    // a false positive makes a feature-detecting tool emit DCS that nothing renders.
+    sixelSupported: () =>
+      resolveTerminalInlineImagesEnabled(useAppStore.getState().settings?.terminalInlineImages) &&
+      terminalRendersInlineImages(session.pane.terminal),
     ...(session.isNativeWindowsConpty ? { da1Response: CONPTY_DA1_RESPONSE } : {})
   })
   session.respondToTerminalPixelSizeQueries = createTerminalPixelSizeQueryResponder(

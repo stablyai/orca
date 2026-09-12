@@ -1,0 +1,315 @@
+diff --git a/src/IIPHandler.ts b/src/IIPHandler.ts
+index 559b907416eb38318f439d060d7f89311ed34c7e..8541b4b0ea0d6b451aaae49007d69df64c5bd088 100644
+--- a/src/IIPHandler.ts
++++ b/src/IIPHandler.ts
+@@ -34,6 +34,7 @@ const DEFAULT_HEADER: IHeaderFields = {
+ 
+ 
+ export class IIPHandler implements IOscHandler, IResetHandler {
++  private _generation = 0;
+   private _aborted = false;
+   private _hp = new HeaderParser();
+   private _header: IHeaderFields = DEFAULT_HEADER;
+@@ -55,6 +56,7 @@ export class IIPHandler implements IOscHandler, IResetHandler {
+   }
+ 
+   public reset(): void {
++    this._generation++;
+     this._hp.reset();
+     this._dec.release();
+     this._qoiDec.release();
+@@ -198,8 +200,13 @@ export class IIPHandler implements IOscHandler, IResetHandler {
+       blob = new Blob([this._dec.data8], { type: metrics.mime });
+     }
+     this._dec.release();
++    const generation = this._generation;
+     return createImageBitmap(blob, { resizeWidth: w, resizeHeight: h })
+       .then(bm => {
++        if (generation !== this._generation) {
++          bm.close();
++          return true;
++        }
+         this._storage.addImage(bm);
+         return true;
+       })
+diff --git a/src/ImageAddon.ts b/src/ImageAddon.ts
+index 8fd39543118cd420e36c1614c1af370b6c7bbfbb..0c44d2a81642113417bf8dc10a4faa76d7cc5864 100644
+--- a/src/ImageAddon.ts
++++ b/src/ImageAddon.ts
+@@ -113,6 +113,7 @@ export class ImageAddon implements ITerminalAddon, IImageApi {
+   }
+ 
+   public dispose(): void {
++    for (const handler of this._handlers.values()) handler.reset();
+     for (const obj of this._disposables) {
+       obj.dispose();
+     }
+diff --git a/src/ImageRenderer.ts b/src/ImageRenderer.ts
+index 5854efaec1fdf9dfcb886023542998a563b6d2f2..3afaf9bd63ffd7a4cdf32bf0ac24cf33a8aa814f 100644
+--- a/src/ImageRenderer.ts
++++ b/src/ImageRenderer.ts
+@@ -186,16 +186,17 @@ export class ImageRenderer extends Disposable implements IDisposable {
+ 
+     this._rescaleImage(imgSpec, width, height);
+     const img = imgSpec.actual!;
+-    const cols = Math.ceil(img.width / width);
++    const { width: sourceWidth, height: sourceHeight } = imgSpec.actualCellSize;
++    const cols = Math.ceil(img.width / sourceWidth);
+ 
+-    const sx = (tileId % cols) * width;
+-    const sy = Math.floor(tileId / cols) * height;
++    const sx = (tileId % cols) * sourceWidth;
++    const sy = Math.floor(tileId / cols) * sourceHeight;
+     const dx = col * width;
+     const dy = row * height;
+ 
+     // safari bug: never access image source out of bounds
+-    const finalWidth = count * width + sx > img.width ? img.width - sx : count * width;
+-    const finalHeight = sy + height > img.height ? img.height - sy : height;
++    const finalWidth = count * sourceWidth + sx > img.width ? img.width - sx : count * sourceWidth;
++    const finalHeight = sy + sourceHeight > img.height ? img.height - sy : sourceHeight;
+ 
+     // Floor all pixel offsets to get stable tile mapping without any overflows.
+     // Note: For not pixel perfect aligned cells like in the DOM renderer
+@@ -204,7 +205,7 @@ export class ImageRenderer extends Disposable implements IDisposable {
+     ctx.drawImage(
+       img,
+       Math.floor(sx), Math.floor(sy), Math.ceil(finalWidth), Math.ceil(finalHeight),
+-      Math.floor(dx), Math.floor(dy), Math.ceil(finalWidth), Math.ceil(finalHeight)
++      Math.floor(dx), Math.floor(dy), Math.ceil(finalWidth * width / sourceWidth), Math.ceil(finalHeight * height / sourceHeight)
+     );
+   }
+ 
+@@ -219,19 +220,20 @@ export class ImageRenderer extends Disposable implements IDisposable {
+     }
+     this._rescaleImage(imgSpec, width, height);
+     const img = imgSpec.actual!;
+-    const cols = Math.ceil(img.width / width);
+-    const sx = (tileId % cols) * width;
+-    const sy = Math.floor(tileId / cols) * height;
+-    const finalWidth = width + sx > img.width ? img.width - sx : width;
+-    const finalHeight = sy + height > img.height ? img.height - sy : height;
+-
+-    const canvas = ImageRenderer.createCanvas(this.document, finalWidth, finalHeight);
++    const { width: sourceWidth, height: sourceHeight } = imgSpec.actualCellSize;
++    const cols = Math.ceil(img.width / sourceWidth);
++    const sx = (tileId % cols) * sourceWidth;
++    const sy = Math.floor(tileId / cols) * sourceHeight;
++    const finalWidth = sourceWidth + sx > img.width ? img.width - sx : sourceWidth;
++    const finalHeight = sy + sourceHeight > img.height ? img.height - sy : sourceHeight;
++
++    const canvas = ImageRenderer.createCanvas(this.document, Math.ceil(finalWidth * width / sourceWidth), Math.ceil(finalHeight * height / sourceHeight));
+     const ctx = canvas.getContext('2d');
+     if (ctx) {
+       ctx.drawImage(
+         img,
+         Math.floor(sx), Math.floor(sy), Math.floor(finalWidth), Math.floor(finalHeight),
+-        0, 0, Math.floor(finalWidth), Math.floor(finalHeight)
++        0, 0, canvas.width, canvas.height
+       );
+       return canvas;
+     }
+@@ -299,11 +301,16 @@ export class ImageRenderer extends Disposable implements IDisposable {
+       spec.actualCellSize.height = originalHeight;
+       return;
+     }
+-    const canvas = ImageRenderer.createCanvas(
+-      this.document,
+-      Math.ceil(spec.orig!.width * currentWidth / originalWidth),
+-      Math.ceil(spec.orig!.height * currentHeight / originalHeight)
+-    );
++    const scaledWidth = Math.ceil(spec.orig!.width * currentWidth / originalWidth);
++    const scaledHeight = Math.ceil(spec.orig!.height * currentHeight / originalHeight);
++    // Upscale visible tiles directly; a full zoomed copy can dwarf the image budget.
++    if (scaledWidth * scaledHeight > spec.orig!.width * spec.orig!.height) {
++      spec.actual = spec.orig;
++      spec.actualCellSize.width = originalWidth;
++      spec.actualCellSize.height = originalHeight;
++      return;
++    }
++    const canvas = ImageRenderer.createCanvas(this.document, scaledWidth, scaledHeight);
+     const ctx = canvas.getContext('2d');
+     if (ctx) {
+       ctx.drawImage(spec.orig!, 0, 0, canvas.width, canvas.height);
+@@ -415,7 +422,11 @@ export class ImageRenderer extends Disposable implements IDisposable {
+     for (let i = 0; i < width; i += bWidth) {
+       ctx2.drawImage(blueprint, i, 0);
+     }
+-    ImageRenderer.createImageBitmap(this._placeholder).then(bitmap => this._placeholderBitmap = bitmap);
++    const placeholder = this._placeholder;
++    ImageRenderer.createImageBitmap(placeholder).then(bitmap => {
++      if (this._placeholder !== placeholder) bitmap?.close();
++      else this._placeholderBitmap = bitmap;
++    }).catch(() => {});
+   }
+ 
+   public get document(): Document | undefined {
+diff --git a/src/kitty/KittyGraphicsHandler.ts b/src/kitty/KittyGraphicsHandler.ts
+index de889dfff75d9ecc8ab47a025e6989ffe75bb202..02f0ddd75d30abeab2de029487a0ae900b9f32b9 100644
+--- a/src/kitty/KittyGraphicsHandler.ts
++++ b/src/kitty/KittyGraphicsHandler.ts
+@@ -7,6 +7,7 @@ import { IDisposable } from '@xterm/xterm';
+ import { IApcHandler, IImageAddonOptions, IResetHandler, ITerminalExt, ImageLayer } from '../Types';
+ import { ImageRenderer } from '../ImageRenderer';
+ import { CELL_SIZE_DEFAULT } from '../ImageStorage';
++import { imageType } from '../IIPMetrics';
+ import { KittyImageStorage } from './KittyImageStorage';
+ import Base64Decoder, { type DecodeStatus } from 'xterm-wasm-parts/lib/base64/Base64Decoder.wasm';
+ import {
+@@ -37,6 +38,7 @@ const DECODER_OK = Constants.DECODER_OK as unknown as DecodeStatus.OK;
+ // Kitty graphics protocol handler with streaming base64 decoding.
+ export class KittyGraphicsHandler implements IApcHandler, IResetHandler, IDisposable {
+   private _aborted = false;
++  private _generation = 0;
+   private _decodeError = false;
+ 
+   private _activeDecoder: Base64Decoder | null = null;
+@@ -80,6 +82,7 @@ export class KittyGraphicsHandler implements IApcHandler, IResetHandler, IDispos
+   }
+ 
+   public reset(): void {
++    this._generation++;
+     this._cleanupAllPending();
+     if (this._activeDecoder) {
+       this._activeDecoder.release();
+@@ -200,6 +203,18 @@ export class KittyGraphicsHandler implements IApcHandler, IResetHandler, IDispos
+       this._activeDecoder = pending.decoder;
+     }
+     if (!this._activeDecoder) {
++      // Budget WASM capacity, including one page of decoder state and rounding.
++      const decoderCapacity = this._maxEncodedBytes + 131072;
++      const maxPending = Math.max(1, Math.floor(this._opts.storageLimit * 1000000 / decoderCapacity));
++      while (this._pendingTransmissions.size >= maxPending) {
++        const oldest = this._pendingTransmissions.entries().next().value;
++        if (!oldest) break;
++        oldest[1].decoder.release();
++        this._removePendingEntry(oldest[0]);
++        if (oldest[1].cmd.id !== undefined) {
++          this._sendResponse(oldest[1].cmd.id, 'ENOMEM:pending image budget exceeded', oldest[1].cmd.quiet ?? 0);
++        }
++      }
+       this._activeDecoder = new Base64Decoder(Constants.DECODER_KEEP_DATA, this._maxEncodedBytes, this._initialEncodedBytes);
+       this._activeDecoder.init();
+     }
+@@ -550,9 +565,11 @@ export class KittyGraphicsHandler implements IApcHandler, IResetHandler, IDispos
+   }
+ 
+   private async _decodeAndDisplay(image: IKittyImageData, cmd: IKittyCommand): Promise<void> {
++    const generation = this._generation;
+     let bitmap: ImageBitmap | undefined = await this._createBitmap(image);
+ 
+     try {
++      if (generation !== this._generation) throw new Error('image decode canceled');
+       const cropX = Math.max(0, cmd.x ?? 0);
+       const cropY = Math.max(0, cmd.y ?? 0);
+       const cropW = cmd.sourceWidth || (bitmap.width - cropX);
+@@ -660,6 +677,7 @@ export class KittyGraphicsHandler implements IApcHandler, IResetHandler, IDispos
+         }
+       }
+ 
++      if (generation !== this._generation) throw new Error('image decode canceled');
+       const zIndex = cmd.zIndex ?? 0;
+       this._kittyStorage.addImage(image.id, bitmap, true, layer, zIndex);
+       bitmap = undefined;  // ownership transferred to storage
+@@ -693,6 +711,12 @@ export class KittyGraphicsHandler implements IApcHandler, IResetHandler, IDispos
+     }
+ 
+     if (image.format === KittyFormat.PNG) {
++      const metrics = imageType(bytes);
++      // IHDR dimensions are parsed with signed shifts, so a value >= 0x80000000 comes
++      // back negative and a bare `>` pixel-limit test passes it; require positive.
++      if (metrics.mime !== 'image/png' || !(metrics.width > 0) || !(metrics.height > 0) || metrics.width * metrics.height > this._opts.pixelLimit) {
++        throw new RangeError('PNG exceeds pixel limit or has invalid dimensions');
++      }
+       const blob = new Blob([bytes as BlobPart], { type: 'image/png' });
+       if (!window.createImageBitmap) {
+         const url = URL.createObjectURL(blob);
+@@ -775,27 +799,45 @@ export class KittyGraphicsHandler implements IApcHandler, IResetHandler, IDispos
+   private async _decompressZlib(compressed: Uint8Array): Promise<Uint8Array> {
+     try {
+       return await this._decompress(compressed, 'deflate');
+-    } catch {
++    } catch (error) {
++      if (error instanceof RangeError) throw error;
+       return await this._decompress(compressed, 'deflate-raw');
+     }
+   }
+ 
+   private async _decompress(compressed: Uint8Array, format: 'deflate' | 'deflate-raw'): Promise<Uint8Array> {
+-    const ds = new DecompressionStream(format);
+-    const writer = ds.writable.getWriter();
+-    writer.write(compressed as BufferSource);
+-    writer.close();
+-
++    const limit = Math.min(this._opts.kittySizeLimit, this._opts.pixelLimit * 4, this._opts.storageLimit * 1000000);
++    let offsetIn = 0;
++    // Bound inflation within one native transform before its output is budgeted.
++    const source = new ReadableStream<BufferSource>({
++      pull(controller) {
++        if (offsetIn >= compressed.length) {
++          controller.close();
++          return;
++        }
++        const end = Math.min(offsetIn + 4096, compressed.length);
++        controller.enqueue(new Uint8Array(compressed.subarray(offsetIn, end)));
++        offsetIn = end;
++      }
++    });
++    const reader = source.pipeThrough(new DecompressionStream(format)).getReader();
+     const chunks: Uint8Array[] = [];
+-    const reader = ds.readable.getReader();
+-
+-    while (true) {
+-      const { done, value } = await reader.read();
+-      if (done) break;
+-      chunks.push(value);
++    let totalLength = 0;
++    try {
++      while (true) {
++        const { done, value } = await reader.read();
++        if (done) break;
++        totalLength += value.byteLength;
++        if (totalLength > limit) {
++          await reader.cancel().catch(() => {});
++          throw new RangeError('decompressed image exceeds byte limit');
++        }
++        chunks.push(value);
++      }
++    } finally {
++      reader.releaseLock();
+     }
+ 
+-    const totalLength = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
+     const result = new Uint8Array(totalLength);
+     let offset = 0;
+     for (const chunk of chunks) {
+diff --git a/src/kitty/KittyImageStorage.ts b/src/kitty/KittyImageStorage.ts
+index 1f5c09ec9e2700f8f6dbd8436a1802217dfc99ef..016943a77c7e8e27da5899d54cd48d82761a87c8 100644
+--- a/src/kitty/KittyImageStorage.ts
++++ b/src/kitty/KittyImageStorage.ts
+@@ -83,6 +83,25 @@ export class KittyImageStorage implements IDisposable {
+       this._evictUndisplayedImages();
+     }
+ 
++    // Encoded images awaiting placement are outside ImageStorage's pixel budget.
++    // Unplaced payloads are evicted first so a new upload cannot erase a visible
++    // image while abandoned blobs still hold budget; placed ones go only when
++    // that is not enough, because the byte cap is a hard bound. The new image is
++    // always stored, so an oversized one overshoots by at most one payload
++    // (itself bounded by kittySizeLimit) rather than being dropped after an OK ack.
++    const byteLimit = this._storage.getLimit() * 1000000;
++    this._images.delete(imageId);
++    let retainedBytes = 0;
++    for (const image of this._images.values()) retainedBytes += image.data.size;
++    for (const evictPlaced of [false, true]) {
++      for (const [oldestId, image] of this._images) {
++        if (retainedBytes + imageData.data.size <= byteLimit) break;
++        if (this._kittyIdToStorageId.has(oldestId) !== evictPlaced) continue;
++        retainedBytes -= image.data.size;
++        this.deleteById(oldestId);
++      }
++    }
++
+     this._images.set(imageId, {
+       ...imageData,
+       id: imageId

@@ -111,6 +111,31 @@
           "args": ["run", "esbuild-package"]
         }
       ]
+    },
+    {
+      "name": "@xterm/addon-image",
+      "version": "0.10.0-beta.300",
+      "packageDir": "addons/addon-image",
+      "sourcePatch": "config/patches/xterm-src/@xterm__addon-image@0.10.0-beta.300.src.patch",
+      "patch": "config/patches/@xterm__addon-image@0.10.0-beta.300.patch",
+      "generatedPaths": ["lib/"],
+      "build": [
+        {
+          "cwd": "../..",
+          "command": "npm",
+          "args": ["run", "build"]
+        },
+        {
+          "cwd": ".",
+          "command": "npm",
+          "args": ["run", "package"]
+        },
+        {
+          "cwd": "../..",
+          "command": "npm",
+          "args": ["run", "esbuild-package"]
+        }
+      ]
     }
   ],
   "forbiddenBuildScripts": {

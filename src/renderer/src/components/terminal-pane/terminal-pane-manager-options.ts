@@ -29,6 +29,7 @@ import {
 } from './terminal-pane-lifecycle-primitives'
 import { resolveTerminalLayoutActiveLeafId } from './terminal-layout-leaf-ids'
 import type { TerminalPaneManagerOptionsContext } from './terminal-pane-mount-context'
+import { resolveTerminalInlineImagesEnabled } from '../../../../shared/terminal-inline-images-settings'
 
 /** Builds the imperative PaneManager option bag from the mount context. */
 export function createTerminalPaneManagerOptions(
@@ -109,6 +110,8 @@ export function createTerminalPaneManagerOptions(
         settingsRef.current?.terminalLigatures,
         settingsRef.current?.terminalFontFamily
       ),
+    terminalInlineImagesEnabled: () =>
+      resolveTerminalInlineImagesEnabled(settingsRef.current?.terminalInlineImages),
     terminalOptions: () => {
       const currentSettings = settingsRef.current
       const terminalFontWeights = resolveTerminalFontWeights(

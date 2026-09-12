@@ -56,6 +56,7 @@ overrides:
   monaco-editor>dompurify: 3.4.14
 
 patchedDependencies:
+  '@xterm/addon-image@0.10.0-beta.300': config/patches/@xterm__addon-image@0.10.0-beta.300.patch
   node-pty@1.1.0: config/patches/node-pty@1.1.0.patch
   '@xterm/addon-ligatures@0.11.0-beta.300': config/patches/@xterm__addon-ligatures@0.11.0-beta.300.patch
   '@xterm/addon-webgl@0.20.0-beta.299': config/patches/@xterm__addon-webgl@0.20.0-beta.299.patch

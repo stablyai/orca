@@ -11841,6 +11841,10 @@
           "targetDescription": "Higher values increase contrast where possible. Background colors stay unchanged.",
           "subtle": "Subtle",
           "strong": "Strong"
+        },
+        "TerminalRenderingSection": {
+          "6d4c55bacc": "Inline Images",
+          "fffab5890b": "Display images directly in the terminal using SIXEL, iTerm2 (IIP), and Kitty graphics protocols."
         }
       },
       "right": {

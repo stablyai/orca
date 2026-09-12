@@ -129,6 +129,11 @@ export type GlobalSettings = {
    *  - `'on'` / `'off'`: explicit override. Never changes when the user
    *    switches fonts, so "off" always stays off. */
   terminalLigatures: 'auto' | 'on' | 'off'
+  /** Whether inline terminal images are rendered via `@xterm/addon-image`
+   *  (SIXEL, iTerm2 IIP, and Kitty graphics). The addon is lazy-loaded and its
+   *  canvas layers are only created once a pane actually receives an image, so
+   *  idle panes pay no cost when this is on. */
+  terminalInlineImages: boolean
   terminalCursorStyle: 'bar' | 'block' | 'underline'
   /** One-shot migration guard for moving inherited cursor defaults to block. */
   terminalCursorStyleDefaultedToBlock?: boolean

@@ -161,6 +161,7 @@ describe('applyTerminalAppearance theme assignment', () => {
       // wrapper per call over a shared terminal — per-pane state must survive that.
       getPanes: () => panes.map((pane) => ({ ...pane })),
       setPaneLigaturesEnabled: vi.fn(),
+      setPaneInlineImagesEnabled: vi.fn(),
       setPaneStyleOptions: vi.fn()
     } as unknown as PaneManager
   }
@@ -437,6 +438,7 @@ describe('publishTerminalViewAttributesAtAppStart', () => {
       const manager = {
         getPanes: () => [],
         setPaneLigaturesEnabled: vi.fn(),
+        setPaneInlineImagesEnabled: vi.fn(),
         setPaneStyleOptions: vi.fn()
       } as unknown as PaneManager
       applyTerminalAppearance(
