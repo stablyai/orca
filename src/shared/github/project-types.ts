@@ -5,6 +5,13 @@
 // would obscure ownership of the Project surface.
 
 export type GitHubProjectViewLayout = 'TABLE_LAYOUT' | 'BOARD_LAYOUT' | 'ROADMAP_LAYOUT'
+
+/** Allowlist shared by the host gate, tab strip, and picker — raw.layout is
+ *  cast unchecked, so an unknown future GitHub layout must fail this check
+ *  everywhere at once rather than drifting per call site. */
+export function isRenderableProjectViewLayout(layout: string): boolean {
+  return layout === 'TABLE_LAYOUT' || layout === 'BOARD_LAYOUT' || layout === 'ROADMAP_LAYOUT'
+}
 export type GitHubProjectOwnerType = 'organization' | 'user'
 
 // Why: anything outside this union must render as an empty cell — the
@@ -88,6 +95,10 @@ export type GitHubProjectView = {
   fields: GitHubProjectField[]
   groupByFields: GitHubProjectField[]
   sortByFields: GitHubProjectSort[]
+  /** Board-layout column field(s). Optional for wire compat — older hosts
+   *  don't send it, and hosts fall back to omitting it when the GraphQL
+   *  schema lacks `verticalGroupByFields` (older GHES). */
+  verticalGroupByFields?: GitHubProjectField[]
 }
 
 export type GitHubProjectUser = {

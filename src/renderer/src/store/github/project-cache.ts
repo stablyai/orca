@@ -11,7 +11,13 @@ export function optimisticFieldValueFromMutation(
   fieldId: string,
   value: GitHubProjectFieldMutationValue
 ): GitHubProjectTable['rows'][number]['fieldValuesByFieldId'][string] | null {
-  const field = table.selectedView.fields.find((f) => f.id === fieldId)
+  // Why: a board's column field need not be a visible view field — without the
+  // vertical/group config in this lookup, board drops patch empty-named chips.
+  const field = [
+    ...table.selectedView.fields,
+    ...(table.selectedView.verticalGroupByFields ?? []),
+    ...table.selectedView.groupByFields
+  ].find((f) => f.id === fieldId)
   switch (value.kind) {
     case 'single-select': {
       if (field?.kind === 'single-select') {
