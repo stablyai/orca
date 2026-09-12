@@ -133,7 +133,7 @@ export function WorktreeSymlinksSection({
           <p className="text-xs text-muted-foreground">
             {translate(
               'auto.components.settings.WorktreeSymlinksSection.7ff265071d',
-              'When a new worktree is created, each path listed here is APFS clone-copied on macOS when possible, otherwise symlinked from the primary checkout.'
+              'New worktrees get private copy-on-write copies when supported by their host filesystem. Otherwise, these paths link to the primary checkout and share edits.'
             )}
           </p>
         </div>

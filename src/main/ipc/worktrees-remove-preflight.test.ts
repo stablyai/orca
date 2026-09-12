@@ -14,8 +14,11 @@ import {
   getSshPtyProviderMock
 } from './worktrees-test-module-mocks'
 import { handlers, setupWorktreeHandlers, store } from './worktrees-test-harness'
-import { mockKnownFeatureWorktree } from './worktrees-test-fixtures'
+import { inspectWslWorktreeSharedLinks } from './wsl-worktree-path-materialization'
+import { mockSelectedWslProjectRuntime, mockKnownFeatureWorktree } from './worktrees-test-fixtures'
 import type { WorktreeRuntimeStub } from './worktrees-test-runtime-stub'
+
+vi.mock('./wsl-worktree-path-materialization', () => ({ inspectWslWorktreeSharedLinks: vi.fn() }))
 
 vi.mock('electron', async () =>
   (await import('./worktrees-test-module-mocks')).electronModuleMock()
@@ -104,6 +107,37 @@ describe('registerWorktreeHandlers', () => {
 
   beforeEach(() => {
     runtimeStub = setupWorktreeHandlers()
+  })
+
+  it('inspects WSL links before teardown and removes them only after teardown', async () => {
+    mockSelectedWslProjectRuntime()
+    mockKnownFeatureWorktree()
+    vi.mocked(inspectWslWorktreeSharedLinks).mockResolvedValue(['deps'])
+    await handlers['worktrees:remove'](null, { worktreeId: 'repo-1::/workspace/feature-wt' })
+    expect(inspectWslWorktreeSharedLinks).toHaveBeenNthCalledWith(
+      1,
+      'Ubuntu',
+      '/workspace/repo',
+      '/workspace/feature-wt',
+      []
+    )
+    expect(inspectWslWorktreeSharedLinks).toHaveBeenNthCalledWith(
+      2,
+      'Ubuntu',
+      '/workspace/repo',
+      '/workspace/feature-wt',
+      [],
+      true
+    )
+    expect(assertWorktreeCleanForRemovalMock).toHaveBeenCalledWith('/workspace/feature-wt', false, {
+      wslDistro: 'Ubuntu',
+      ignoredUntrackedPaths: ['deps']
+    })
+    expect(removeWorktreeLinkedPathsMock).not.toHaveBeenCalled()
+    const calls = vi.mocked(inspectWslWorktreeSharedLinks).mock.invocationCallOrder
+    expect(calls[0]).toBeLessThan(assertWorktreeCleanForRemovalMock.mock.invocationCallOrder[0])
+    expect(calls[1]).toBeGreaterThan(killAllProcessesForWorktreeMock.mock.invocationCallOrder[0])
+    expect(calls[1]).toBeLessThan(removeWorktreeMock.mock.invocationCallOrder[0])
   })
 
   it('fails dirty non-force deletes before PTY teardown', async () => {

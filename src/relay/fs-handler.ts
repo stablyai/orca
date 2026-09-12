@@ -1,6 +1,7 @@
 import { tmpdir } from 'node:os'
 import type { RelayDispatcher, RequestContext } from './dispatcher'
 import type { RelayContext } from './context'
+import { materializeRelayWorktreePaths } from './worktree-path-materialization'
 // Why: RelayContext is accepted in the constructor for protocol back-compat
 // (see docs/relay-fs-allowlist-removal.md), but no longer consulted on FS ops.
 import { expandTilde } from './context'
@@ -98,11 +99,13 @@ export class FsHandler {
     this.dispatcher.onRequest('fs.rename', (p) => renameRelayPath(p))
     this.dispatcher.onRequest('fs.renameNoClobber', (p) => renameRelayPathNoClobber(p))
     this.dispatcher.onRequest('fs.copy', (p) => copyRelayPath(p))
+    this.dispatcher.onRequest('fs.materializeWorktreePaths', materializeRelayWorktreePaths)
     this.dispatcher.onRequest('fs.realpath', (p) => realpathRelayPath(p))
     this.dispatcher.onRequest('fs.search', (p) => this.search(p))
     this.dispatcher.onRequest('fs.getCapabilities', async () => ({
       quickOpenSearchVersion: 1,
-      rangedReadVersion: 1
+      rangedReadVersion: 1,
+      worktreeMaterializationVersion: 1
     }))
     this.dispatcher.onRequest('fs.listFiles', (p, c) => this.listFiles(p, c))
     this.dispatcher.onRequest('fs.workspaceSpaceScan', (p, c) => this.workspaceSpaceScan(p, c))

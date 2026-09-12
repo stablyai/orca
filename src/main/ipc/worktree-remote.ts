@@ -1,3 +1,4 @@
+import { materializeWslWorktreePaths } from './wsl-worktree-path-materialization'
 /* eslint-disable max-lines */
 // Why: worktree create helpers (local + remote) split out of worktrees.ts; the cohesive create flow runs this file just over the per-file line limit.
 
@@ -134,6 +135,7 @@ import {
   createWorktreeSharedPaths
 } from './worktree-symlinks'
 import { formatWorktreeIncludeCopyWarning } from './worktree-include-copy-budget'
+import { materializeSshWorktreePaths } from './ssh-worktree-path-materialization'
 import { resolveWorktreeIncludePaths } from '../git/worktree-include-file'
 import { resolveWorktreeSharedDirectories } from '../git/worktree-shared-directories'
 import { normalizeSparseDirectories } from './sparse-checkout-directories'
@@ -2234,7 +2236,9 @@ export async function createRemoteWorktree(
     now
   )
 
-  // Why: shared/symlink paths, `orca.yaml` shared directories, and `.worktreeinclude` copies are local-only; remote (SSH) support needs a new relay method + auth surface, so all are skipped here.
+  const pathMaterializationWarning = await timing.time('materialize_workspace_paths', () =>
+    materializeSshWorktreePaths(fsProvider, repo.path, created.path, repo.symlinkPaths ?? [])
+  )
 
   let setup: CreateWorktreeResult['setup']
   let defaultTabs: CreateWorktreeResult['defaultTabs']
@@ -2289,6 +2293,7 @@ export async function createRemoteWorktree(
     },
     ...(worktreeLineage ? { lineage: worktreeLineage } : {}),
     ...(workspaceLineage ? { workspaceLineage } : {}),
+    ...(pathMaterializationWarning ? { warning: pathMaterializationWarning } : {}),
     ...(setup ? { setup } : {}),
     ...(defaultTabs ? { defaultTabs } : {}),
     ...(localBaseRefRefresh ? { localBaseRefRefresh } : {}),
@@ -2940,45 +2945,54 @@ export async function createLocalWorktree(
     registerCreatedWorktreeRoot(store, repo.id, created.path)
   }
 
-  // Why: link user-configured shared paths (e.g. `node_modules`, `.env`) before setup runs so setup scripts see them in place.
-  const symlinkPaths = repo.symlinkPaths ?? []
-  if (symlinkPaths.length > 0) {
-    await timing.time('create_symlinks', async () => {
-      await createWorktreeLinkedPaths(repo.path, created.path, symlinkPaths)
-    })
-  }
-
-  // Why: project-level `orca.yaml` shared directories add to (never replace) the per-user
-  // setting, so a repo's shared dirs reach every teammate (issue #10451).
-  const [sharedDirectories, includePaths] = await Promise.all([
-    timing.time('resolve_shared_directories', () =>
-      resolveWorktreeSharedDirectories(repo.path, localWorktreeGitOptions)
-    ),
-    timing.time('resolve_worktreeinclude', () =>
-      resolveWorktreeIncludePaths(repo.path, localWorktreeGitOptions)
-    )
-  ])
-  if (sharedDirectories.length > 0) {
-    await timing.time('create_shared_directories', async () => {
-      await createWorktreeSharedPaths(repo.path, created.path, sharedDirectories)
-    })
-  }
-
-  // Why: project-level `.worktreeinclude` travels with the repo (issue #7549); copy semantics
-  // (never symlink) so each worktree owns its files. Paths already linked above are skipped.
   let includeCopyWarning: string | undefined
-  if (includePaths.length > 0) {
-    await timing.time('copy_worktreeinclude', async () => {
-      const skippedIncludePaths = await createWorktreeCopiedPaths(
-        repo.path,
-        created.path,
-        includePaths
+  if (localWorktreeGitOptions.wslDistro) {
+    includeCopyWarning = await materializeWslWorktreePaths(
+      localWorktreeGitOptions.wslDistro,
+      repo.path,
+      created.path,
+      repo.symlinkPaths ?? []
+    )
+  } else {
+    // Why: link user-configured shared paths (e.g. `node_modules`, `.env`) before setup runs so setup scripts see them in place.
+    const symlinkPaths = repo.symlinkPaths ?? []
+    if (symlinkPaths.length > 0) {
+      await timing.time('create_symlinks', async () => {
+        await createWorktreeLinkedPaths(repo.path, created.path, symlinkPaths)
+      })
+    }
+
+    // Why: project-level `orca.yaml` shared directories add to (never replace) the per-user
+    // setting, so a repo's shared dirs reach every teammate (issue #10451).
+    const [sharedDirectories, includePaths] = await Promise.all([
+      timing.time('resolve_shared_directories', () =>
+        resolveWorktreeSharedDirectories(repo.path, localWorktreeGitOptions)
+      ),
+      timing.time('resolve_worktreeinclude', () =>
+        resolveWorktreeIncludePaths(repo.path, localWorktreeGitOptions)
       )
-      includeCopyWarning = formatWorktreeIncludeCopyWarning(skippedIncludePaths)
-      if (includeCopyWarning) {
-        console.warn(`[worktree-include] ${includeCopyWarning}`)
-      }
-    })
+    ])
+    if (sharedDirectories.length > 0) {
+      await timing.time('create_shared_directories', async () => {
+        await createWorktreeSharedPaths(repo.path, created.path, sharedDirectories)
+      })
+    }
+
+    // Why: project-level `.worktreeinclude` travels with the repo (issue #7549); copy semantics
+    // (never symlink) so each worktree owns its files. Paths already linked above are skipped.
+    if (includePaths.length > 0) {
+      await timing.time('copy_worktreeinclude', async () => {
+        const skippedIncludePaths = await createWorktreeCopiedPaths(
+          repo.path,
+          created.path,
+          includePaths
+        )
+        includeCopyWarning = formatWorktreeIncludeCopyWarning(skippedIncludePaths)
+        if (includeCopyWarning) {
+          console.warn(`[worktree-include] ${includeCopyWarning}`)
+        }
+      })
+    }
   }
 
   // Why: the worktree's base-branch `orca.yaml` is authoritative; we don't re-gate on content parity with the primary checkout since benign divergence silently disabled setup (#1280).

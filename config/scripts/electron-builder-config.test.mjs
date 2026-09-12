@@ -207,6 +207,17 @@ describe('electron-builder config', () => {
     )
   })
 
+  it('ships the native workspace clone helper beside the macOS executable', () => {
+    expect(electronBuilderConfig.mac.extraFiles).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          from: 'native/workspace-cow-macos/.build/release/orca-workspace-cow',
+          to: 'MacOS/orca-workspace-cow'
+        })
+      ])
+    )
+  })
+
   it('unpacks the compiled CommonJS boundary with CLI runtime files', () => {
     expect(electronBuilderConfig.asarUnpack).toEqual(
       expect.arrayContaining([

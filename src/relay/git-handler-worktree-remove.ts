@@ -1,3 +1,6 @@
+import { resolveRelayRemovableSharedLinks } from './worktree-shared-link-removal'
+import { getBlockingUntrackedStatusEntries } from '../shared/worktree-removal-status'
+import { removeWorktreeLinkedPaths } from '../main/ipc/worktree-symlinks'
 import * as path from 'node:path'
 import type { RemoveWorktreeResult } from '../shared/worktree/create-types'
 import { isBranchCheckedOutInWorktreeError } from '../shared/git-branch-delete-refusal'
@@ -129,6 +132,21 @@ export async function removeWorktreeOp(
   const branchHead = removedWorktree?.head ?? ''
 
   assertWorktreeUnlockedForRemoval(removedWorktree)
+
+  const links = await resolveRelayRemovableSharedLinks(git, worktreePath, params.sharedLinks)
+  if (links.length > 0) {
+    if (!force) {
+      const { stdout } = await git(
+        ['status', '--porcelain', '-z', '--untracked-files=all'],
+        worktreePath
+      )
+      const blocking = getBlockingUntrackedStatusEntries(stdout, links)
+      if (blocking.length) {
+        throw new Error(`Worktree has uncommitted or untracked changes.\n${blocking.join('\n')}`)
+      }
+    }
+    await removeWorktreeLinkedPaths(worktreePath, links)
+  }
 
   const args = ['worktree', 'remove']
   if (force) {

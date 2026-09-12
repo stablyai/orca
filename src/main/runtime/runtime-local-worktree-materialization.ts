@@ -1,3 +1,4 @@
+import { materializeWslWorktreePaths } from '../ipc/wsl-worktree-path-materialization'
 import { randomUUID } from 'node:crypto'
 import { getRepoExecutionHostId } from '../../shared/execution-host'
 import { getProjectHostSetupWorktreeMeta } from '../../shared/project-host-setup-lookup'
@@ -131,6 +132,16 @@ export async function materializeRuntimeLocalWorktree<T>(args: {
     hostId: meta.hostId ?? getRepoExecutionHostId(repo)
   }
   const metadataResult = args.onMetadataPersisted(worktree)
+
+  if (localWorktreeGitOptions.wslDistro) {
+    const includeCopyWarning = await materializeWslWorktreePaths(
+      localWorktreeGitOptions.wslDistro,
+      repo.path,
+      created.path,
+      repo.symlinkPaths ?? []
+    )
+    return { worktree, metadataResult, ...(includeCopyWarning ? { includeCopyWarning } : {}) }
+  }
 
   if ((repo.symlinkPaths ?? []).length > 0) {
     await createWorktreeLinkedPaths(repo.path, created.path, repo.symlinkPaths ?? [])
