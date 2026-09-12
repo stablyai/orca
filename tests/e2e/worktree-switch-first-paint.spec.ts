@@ -372,7 +372,12 @@ function median(values: readonly number[]): number {
   return sorted.length % 2 === 0 ? (sorted[middle - 1] + sorted[middle]) / 2 : sorted[middle]
 }
 
-test.describe('Worktree switch first paint', () => {
+// Linux needs a mapped window for animation frames after reload; run on an isolated display.
+test.describe('Worktree switch first paint @headful', () => {
+  test.skip(
+    process.env.ORCA_BACKGROUND_LAUNCH === '1',
+    'First-paint measurement requires a mapped window'
+  )
   test('repaints an unmounted worktree within the switch budget', async ({
     orcaPage,
     testRepoPath
