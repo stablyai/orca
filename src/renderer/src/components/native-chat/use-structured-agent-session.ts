@@ -36,8 +36,9 @@ import {
 } from './structured-agent-session-message-projection'
 import { structuredSessionBackgroundTasksView } from './structured-session-background-tasks-view'
 import { useStructuredAgentSessionMessages } from './use-structured-agent-session-messages'
-import { selectStructuredAgentTurnActivity } from './native-chat-turn-activity'
+import { selectStructuredAgentTurnActivity } from '../../../../shared/native-chat-turn-activity'
 import { enqueueSessionOptionSettingsWrite } from './native-chat-session-option-settings-write'
+import { useStructuredAgentTurnTiming } from './use-structured-agent-turn-timing'
 
 export type { StructuredPromptItem } from './structured-agent-session-message-projection'
 
@@ -91,6 +92,7 @@ export function useStructuredAgentSession(args: {
     () => selectStructuredAgentTurnActivity(state.items, turnId, state.activity),
     [state.activity, state.items, turnId]
   )
+  const turnTiming = useStructuredAgentTurnTiming(state, turnId)
   const backgroundTasks = structuredSessionBackgroundTasksView(state.backgroundTasks, turnId)
 
   useEffect(() => {
@@ -213,6 +215,8 @@ export function useStructuredAgentSession(args: {
       !commandPending.current && outboxController.send(...input),
     retry: outboxController.retry,
     isWorking,
+    workingStartedAt: turnTiming.workingStartedAt,
+    settledTurns: turnTiming.settledTurns,
     turnActivity,
     backgroundTasks,
     turnId,

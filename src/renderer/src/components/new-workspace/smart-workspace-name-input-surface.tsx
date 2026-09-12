@@ -192,6 +192,8 @@ export function renderSmartWorkspaceNameInput(
             applyEmojiReplacement(completedEmoji)
             return
           }
+          // A pending emoji caret frame would otherwise yank the caret back mid-typing.
+          cancelLocalInputFocusFrame()
           onValueChange(nextValue)
           setEmojiCursor(nextCursor)
           if (!disabled && mode !== 'text') {

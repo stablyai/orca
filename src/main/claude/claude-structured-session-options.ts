@@ -149,6 +149,28 @@ export async function readClaudeModelEffortLevels(
   }
 }
 
+/**
+ * Whether the catalog admits the model, matched by alias or resolved id so a pick
+ * stored as either one is found. The permissive case lives here rather than at the
+ * call site: every caller must treat an unidentified catalog the same way, and one
+ * that forgot would refuse every model on a CLI that cannot answer.
+ */
+export async function claudeCatalogAdmitsModel(
+  session: ClaudeSession,
+  modelId: string,
+  timeoutMs: number | undefined
+): Promise<boolean> {
+  const catalog = await session.connection.supportedModels({ timeoutMs }).catch(() => null)
+  const models = listedModels(catalog ? { models: catalog } : null)
+  // An empty list identifies no model, so it is not evidence against one — a live
+  // CLI predating `list_models` would otherwise have every model refused under it.
+  // Do not turn this into a refusal.
+  return (
+    models.length === 0 ||
+    models.some((model) => model.id === modelId || model.resolvedModel === modelId)
+  )
+}
+
 export async function readClaudeStructuredSessionOptions(
   session: ClaudeSession,
   timeoutMs: number | undefined

@@ -178,9 +178,9 @@ export class OrcaRuntimeWithPtyReplacementDurableRetirement extends OrcaRuntimeW
     }
     const paneKeys = this.collectPaneKeysForPty(ptyId)
     if (paneKeys.size > 0) {
-      // The rows belong to a process the host itself replaced, so their live claims cannot be
-      // stamped onto the successor handle. The resume remnant is preserved deliberately.
-      this.reconcileAgentStatusForEndedProcessFn?.(paneKeys, { preserveResumeIdentity: true })
+      // The admission's provider-generation reset already retired this pane's live claims with
+      // `preserveResumeIdentity`, so the remnant it left is what has to be fenced here — the rows
+      // belong to a process the host itself replaced and cannot be stamped onto the successor.
       this.rememberRetiredPaneEvidence(ptyId, paneKeys)
     }
   }

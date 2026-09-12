@@ -27,12 +27,34 @@ export const NO_TRANSCRIPT_MESSAGES: TranscriptMessageSink = {
   push: () => undefined
 }
 
+/**
+ * What a parser has decoded about the session so far, mid-read.
+ *
+ * Provisional by construction: it is read before the file ends, so a title can
+ * still change and a timestamp can still move. Every field the transcript
+ * formats put in their opening lines, which is what a consumer that has to
+ * commit before the read finishes needs to name what it is holding.
+ */
+export type TranscriptSessionIdentity = {
+  sessionId: string
+  cwd: string | null
+  title: string | null
+  createdAt: string | null
+  updatedAt: string | null
+}
+
 export type TranscriptReadStart = {
   candidate: SessionFileCandidate
   /** `replace`: the whole file is being re-read; `append`: a resumed read. */
   mode: 'replace' | 'append'
   /** Byte offset the messages of this read continue from. */
   previousByteOffset: number
+  /**
+   * The session identity decoded so far, or null before the parser has an id.
+   * Called during the read, never here: nothing is decoded yet when a read
+   * begins. Absent when the read has no resumable parse state to ask.
+   */
+  identity?: () => TranscriptSessionIdentity | null
 }
 
 export type TranscriptReadOutcome = {

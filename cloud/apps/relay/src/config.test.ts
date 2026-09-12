@@ -25,6 +25,17 @@ function cellEnvironment(capacity: number): NodeJS.ProcessEnv {
 }
 
 describe('GCE relay capacity configuration', () => {
+  it('defaults optional region correction off and bounds the cohort', () => {
+    const env = cellEnvironment(4_000)
+    expect(loadRelayConfig(env).regionCorrectionCohortPercent).toBe(0)
+    env.ORCA_RELAY_REGION_CORRECTION_COHORT_PERCENT = '5'
+    expect(loadRelayConfig(env).regionCorrectionCohortPercent).toBe(5)
+    for (const invalid of ['-1', '101', '1.5', 'not-a-number']) {
+      env.ORCA_RELAY_REGION_CORRECTION_COHORT_PERCENT = invalid
+      expect(() => loadRelayConfig(env)).toThrow()
+    }
+  })
+
   it('requires distinct dedicated admin identities and accepts omitted values', () => {
     const env = cellEnvironment(4_000)
     expect(loadRelayConfig(env)).toMatchObject({

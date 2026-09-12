@@ -96,12 +96,15 @@ export type RuntimeTerminalAgentStatusEvent = {
   tabId?: string
   worktreeId?: string
   connectionId?: string | null
+  /** The pane's terminal handle, when it is bound to one. Stamped on the stored row so a
+   *  reader can rejoin it to the terminal after the pane key moved. */
+  terminalHandle?: string
   payload: ParsedAgentStatusPayload
 }
 
 export type HookLiveAgentRow = Pick<
   RuntimeAgentRowSnapshot,
-  'payload' | 'updatedAt' | 'stateStartedAt' | 'worktreeId'
+  'payload' | 'updatedAt' | 'evidenceObservedAt' | 'stateStartedAt' | 'worktreeId'
 >
 
 export type RuntimePtyDataAdmission = Readonly<{

@@ -138,7 +138,12 @@ export class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWithGetUnper
     this.clientEvents.clearPtyTitleGate(ptyId)
   }
 
-  protected resetTrackedTerminalStateForProviderGeneration(ptyId: string): void {
+  /** `preserveResumeIdentity` is the replacement case: the pane survives its process, so the
+   *  successor's pane keeps the retired row's resume remnant (see `retireReplacedPtyDurableIdentity`). */
+  protected resetTrackedTerminalStateForProviderGeneration(
+    ptyId: string,
+    options: { preserveResumeIdentity?: boolean } = {}
+  ): void {
     // Why: a replacement daemon session can reuse the PTY id, but title/parser
     // state from the prior process must not bleed into its snapshots or chunks.
     this.disposePtyTitleTracker(ptyId)
@@ -173,8 +178,14 @@ export class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWithGetUnper
       leaf.waitBlockedAt = null
       leaf.tailWaitState = undefined
     }
+    if (options.preserveResumeIdentity === true) {
+      this.reconcileAgentStatusForEndedProcessFn?.(this.collectAgentStatusPaneKeysForPty(ptyId), {
+        preserveResumeIdentity: true
+      })
+    } else {
+      this.reconcileAgentStatusForEndedProcessFn?.(this.collectAgentStatusPaneKeysForPty(ptyId))
+    }
     this.primeWaitBlockedBaselineFromSeededTail(ptyId)
-    this.clearAgentRowSnapshotsForPty(ptyId)
   }
 
   protected setTerminalSideEffectConsumerAvailable(available: boolean): void {

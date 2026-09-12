@@ -3,6 +3,7 @@ import { getBrowserPlatform } from './web-storage'
 
 export function createNotificationsApi(): NonNullable<Partial<PreloadApi>['notifications']> {
   return {
+    getDesktopAwayState: async () => undefined,
     dispatch: () => Promise.resolve({ delivered: false, reason: 'not-supported' }),
     dismiss: () => Promise.resolve({ dismissed: 0 }),
     openSystemSettings: () => Promise.resolve(),

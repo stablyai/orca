@@ -149,7 +149,9 @@ export class OrcaRuntimeWithPtyObservationAdmission extends OrcaRuntimeWithPtyRe
       // Retire predecessor runtime automatic applicability first, then apply the
       // winning capsule — so an early successor title identical to the
       // predecessor's survives the retirement.
-      this.resetTrackedTerminalStateForProviderGeneration(ptyId)
+      // Why preserve: the replacement owns this pane's history, so the retired row keeps its
+      // resume remnant and the successor's projection fences only the row instance itself.
+      this.resetTrackedTerminalStateForProviderGeneration(ptyId, { preserveResumeIdentity: true })
       this.deferredPtyObservationGenerationResets.delete(ptyId)
       if (capsule) {
         installPromotedPtyObservationCapsule(
@@ -211,7 +213,9 @@ export class OrcaRuntimeWithPtyObservationAdmission extends OrcaRuntimeWithPtyRe
     ) {
       return null
     }
-    this.resetTrackedTerminalStateForProviderGeneration(ptyId)
+    // Why preserve: a same-pane replacement keeps the pane resumable, so the reset leaves the
+    // retired row's resume remnant for the registration commit to fence rather than drop.
+    this.resetTrackedTerminalStateForProviderGeneration(ptyId, { preserveResumeIdentity: true })
     this.deferredPtyObservationGenerationResets.delete(ptyId)
     return previouslyAdmitted
   }

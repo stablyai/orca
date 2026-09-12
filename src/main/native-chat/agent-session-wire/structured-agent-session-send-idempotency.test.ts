@@ -43,7 +43,7 @@ describe('structured send idempotency', () => {
     }
     const input = { clientMessageId: 'retry-id', payloadFingerprint: 'fingerprint', body }
     await journal.appendSubmission({ ...input, fence: 1 })
-    await journal.markPendingSubmissionsUnknown(2)
+    await journal.markPendingSubmissionsUnknown(2, 'provider_write_failed: broken pipe')
     const originalItem = journal.snapshot().items[0]
     const publish = vi.fn()
     const dispatch = vi.fn(async () => {

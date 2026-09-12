@@ -3,7 +3,7 @@
 // Session lists read turn state from here instead of replaying transcripts: one stream per client
 // covers every session, and unlike a transcript subscription it retains none of them.
 
-import { defineStreamingMethod, type RpcAnyMethod, type RpcContext } from '../core'
+import { defineStreamingMethod, type RpcContext } from '../core'
 import { requireStructuredHost as requireHost } from './structured-agent-session-gate'
 import { structuredAgentSessionStatusSubscriptionId } from './structured-agent-session-subscription-id'
 
@@ -41,7 +41,7 @@ export function bindStructuredAgentSessionStream(
   return { isClosed: () => closed }
 }
 
-export const STRUCTURED_AGENT_SESSION_STATUS_METHODS: RpcAnyMethod[] = [
+export const STRUCTURED_AGENT_SESSION_STATUS_METHODS = [
   defineStreamingMethod({
     name: 'agentSession.subscribeStatus',
     params: null,

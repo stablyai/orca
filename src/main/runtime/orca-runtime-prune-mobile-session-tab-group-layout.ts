@@ -1,4 +1,5 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
+import { selectFreshAgentRowForMobileTab } from './runtime-hook-agent-row-selection'
 import { OrcaRuntimeWithScheduleMobileSessionTabsChanged } from './orca-runtime-schedule-mobile-session-tabs-changed'
 import type { TabGroupLayoutNode } from '../../shared/tab-types'
 import type {
@@ -93,12 +94,13 @@ export class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends OrcaRuntime
       getLiveBrowserTabs: (worktreeId) => this.getLiveBrowserTabsByPageId(worktreeId),
       getProviderSessionRows: (paneKey) => this.getAgentProviderSessionRowsForPaneFn?.(paneKey),
       getProviderSessionSnapshot: () => this.getAgentProviderSessionSnapshotFn?.() ?? [],
+      getStatusSnapshot: () => this.getAgentStatusSnapshotFn?.() ?? [],
       getRetiredPaneEvidence: (paneKey) => this.getRetiredPaneEvidence(paneKey),
       getLeafKey: (tabId, leafId) => this.getLeafKey(tabId, leafId),
       findPty: (worktreeId, tab, options) =>
         this.findPtyForMobileTerminalTab(worktreeId, tab, options),
-      getRetainedStatus: (paneKey, pty, tab) =>
-        this.getFreshRetainedAgentStatusForMobileTab(paneKey, pty, tab),
+      getRetainedStatus: (paneKey, pty, tab, getRows) =>
+        this.getFreshRetainedAgentStatusForMobileTab(paneKey, pty, tab, getRows),
       getTrackedTitle: (ptyId) => this.getUnpersistedTrackedTitleForPty(ptyId),
       issuePtyHandle: (pty) => this.issuePtyHandle(pty),
       recordPty: (ptyId, worktreeId, state) => this.recordPtyWorktree(ptyId, worktreeId, state),
@@ -130,9 +132,30 @@ export class OrcaRuntimeWithPruneMobileSessionTabGroupLayout extends OrcaRuntime
   protected getFreshRetainedAgentStatusForMobileTab(
     paneKey: string,
     pty: RuntimePtyWorktreeRecord | null,
-    tab: RuntimeMobileSessionTerminalTab
+    _tab: RuntimeMobileSessionTerminalTab,
+    getRows: (paneKey: string, terminalHandle: string | null) => AgentStatusIpcPayload[]
   ): RuntimeAgentRowSnapshot | null {
-    return this.agentRows.getFreshForMobile(paneKey, pty, tab)
+    const paneMatch = selectFreshAgentRowForMobileTab({
+      paneKey,
+      terminalHandle: null,
+      hookRows: getRows(paneKey, null)
+    })
+    if (paneMatch || !pty) {
+      return paneMatch
+    }
+    // Why: the OSC producer can stamp a leaf or incarnation handle; use the same non-minting
+    // inventory as worktree.ps so a tab-id remint can rejoin the still-live central row.
+    for (const terminalHandle of this.getExistingTerminalHandlesForPtyId(pty.ptyId)) {
+      const handleMatch = selectFreshAgentRowForMobileTab({
+        paneKey,
+        terminalHandle,
+        hookRows: getRows(paneKey, terminalHandle)
+      })
+      if (handleMatch) {
+        return handleMatch
+      }
+    }
+    return null
   }
 
   protected findPtyForMobileTerminalTab(

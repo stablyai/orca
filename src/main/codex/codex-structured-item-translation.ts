@@ -85,6 +85,10 @@ export type CodexJournalItem = {
   handled: boolean
 }
 
+function reasoningMessageBody(text: string): AgentJournalItemBody {
+  return { kind: 'message', role: 'reasoning', blocks: [{ type: 'text', text }] }
+}
+
 function commandItem(item: CodexThreadItem): CodexJournalItem {
   const output = readFirstString(item, ['aggregatedOutput', 'aggregated_output'])
   const bounded = output === null ? null : boundInlineText(output, DEFAULT_JOURNAL_PAYLOAD_LIMITS)
@@ -93,6 +97,7 @@ function commandItem(item: CodexThreadItem): CodexJournalItem {
     body: {
       kind: 'tool-call',
       name: parsed?.name ?? 'shell',
+      callId: item.id,
       // Raw command and cwd stay so the expanded view still shows what ran.
       input: boundToolInput(
         { command: item.command ?? null, cwd: item.cwd ?? null, ...parsed?.fields },
@@ -120,6 +125,7 @@ function fileChangeItem(item: CodexThreadItem): CodexJournalItem {
       body: {
         kind: 'tool-call',
         name: 'apply_patch',
+        callId: item.id,
         input: boundToolInput({ changes: item.changes ?? null }, DEFAULT_JOURNAL_PAYLOAD_LIMITS),
         state: commandState(item)
       },
@@ -171,6 +177,7 @@ function mcpToolCallItem(item: CodexThreadItem): CodexJournalItem {
     body: {
       kind: 'tool-call',
       name: mcpToolCallName(item),
+      callId: item.id,
       ...(server && tool ? { mcpIdentity: { server, tool } } : {}),
       input: boundToolInput(mcpToolArguments(item.arguments), DEFAULT_JOURNAL_PAYLOAD_LIMITS),
       state: failure === null ? commandState(item) : 'failed',
@@ -213,6 +220,7 @@ function webSearchItem(item: CodexThreadItem): CodexJournalItem {
     body: {
       kind: 'tool-call',
       name: 'web_search',
+      callId: item.id,
       ...(results.length > 0 ? { webSearchResults: results } : {}),
       input: boundToolInput(webSearchInput(item), DEFAULT_JOURNAL_PAYLOAD_LIMITS),
       state: item.action === null || item.action === undefined ? 'running' : 'completed',
@@ -268,7 +276,7 @@ export function codexJournalItem(item: CodexThreadItem): CodexJournalItem {
       handled: true
     }
   }
-  if (item.type === 'reasoning' || item.type === 'plan') {
+  if (item.type === 'reasoning') {
     const text =
       readTextContent(item, 'text') ??
       readTextContent(item, 'summary') ??
@@ -277,7 +285,7 @@ export function codexJournalItem(item: CodexThreadItem): CodexJournalItem {
       body:
         text === null
           ? null
-          : { kind: 'status', text: boundInlineText(text, DEFAULT_JOURNAL_PAYLOAD_LIMITS).text },
+          : reasoningMessageBody(boundInlineText(text, DEFAULT_JOURNAL_PAYLOAD_LIMITS).text),
       handled: true
     }
   }
@@ -327,5 +335,11 @@ export function codexStreamingJournalItem(item: CodexThreadItem, text: string): 
     }
   }
   const bounded = boundInlineText(text, DEFAULT_JOURNAL_PAYLOAD_LIMITS)
-  return { body: { kind: 'status', text: bounded.text }, handled: true }
+  return {
+    body:
+      item.type === 'reasoning'
+        ? reasoningMessageBody(bounded.text)
+        : { kind: 'status', text: bounded.text },
+    handled: true
+  }
 }

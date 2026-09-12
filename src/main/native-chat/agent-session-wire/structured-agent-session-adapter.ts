@@ -91,6 +91,13 @@ export function isAgentSessionPreSpawnError(error: unknown): error is AgentSessi
 export type AgentSessionDispatchOutcome =
   /** The provider owns the turn now, under this identity. */
   | { state: 'accepted'; providerIdentity: AgentJournalItemIdentity }
+  /**
+   * The provider transport took the message; identity settles later, out of band.
+   * The submission stays `pending`: a message queued behind a running turn is
+   * acknowledged only when that turn starts, so elapsed time is not evidence of
+   * anything and never promotes this to `unknown`.
+   */
+  | { state: 'admitted' }
   | { state: 'rejected'; reason: string }
   /** The call did not settle. Never re-send on the user's behalf. */
   | { state: 'unknown'; reason: string }
@@ -102,6 +109,8 @@ export type StructuredAgentSessionLifecycleEvent = {
   cause: 'unexpected-exit' | 'requested-close'
   fence: number
   acquisitionGeneration: string
+  /** Host receipt of the child exit, retained across settlement retries. */
+  observedAt?: number
   /** Translator could not admit terminal rows; host recovery must append its bounded fallback. */
   settlementRetryRequired?: boolean
 }

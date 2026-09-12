@@ -21,7 +21,11 @@ import {
   type MobileRelayDirectUpgradeJournal
 } from './mobile-relay-direct-upgrade-journal'
 import type { RpcClient } from './rpc-client'
-import type { HostProfile, RpcResponse } from './types'
+import type { HostProfile } from './types'
+import {
+  isMethodNotFoundRefusal,
+  requireRpcResultOrThrowCodedError
+} from './rpc-acceptance-policies'
 
 export type MobileRelayDirectUpgradeResult = {
   host: HostProfile
@@ -79,11 +83,13 @@ export async function upgradeDirectMobileRelay(args: {
     reqId: journal.reqId,
     newResumeTokenHash: journal.pendingResumeTokenHash
   })
-  if (isMethodNotFound(provisionResponse)) {
+  if (isMethodNotFoundRefusal(provisionResponse)) {
     await dependencies.clearJournal(args.host.id)
     return null
   }
-  const installed = DeviceCredentialInstalledSchema.parse(requireSuccess(provisionResponse))
+  const installed = DeviceCredentialInstalledSchema.parse(
+    requireRpcResultOrThrowCodedError(provisionResponse)
+  )
   assertDirectInstall(journal, installed)
   const reconciled = await getEndpoints(args.client, journal.reqId)
   if (reconciled === 'method-not-found') {
@@ -136,10 +142,10 @@ async function getEndpoints(
   installReqId: string
 ): Promise<PairingGetEndpointsResult | 'method-not-found'> {
   const response = await client.sendRequest('pairing.getEndpoints', { installReqId })
-  if (isMethodNotFound(response)) {
+  if (isMethodNotFoundRefusal(response)) {
     return 'method-not-found'
   }
-  return PairingGetEndpointsResultSchema.parse(requireSuccess(response))
+  return PairingGetEndpointsResultSchema.parse(requireRpcResultOrThrowCodedError(response))
 }
 
 function assertDirectInstall(
@@ -161,15 +167,4 @@ function assertCommitted(
   ) {
     throw new Error('relay credential install was not authoritatively reconciled')
   }
-}
-
-function requireSuccess(response: RpcResponse): unknown {
-  if (!response.ok) {
-    throw new Error(`${response.error.code}: ${response.error.message}`)
-  }
-  return response.result
-}
-
-function isMethodNotFound(response: RpcResponse): boolean {
-  return !response.ok && response.error.code === 'method_not_found'
 }

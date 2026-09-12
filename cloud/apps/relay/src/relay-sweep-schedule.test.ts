@@ -19,7 +19,7 @@ describe('sweep schedule jitter', () => {
     expect(SWEEP_JITTER_FRACTION).toBeGreaterThan(0)
   })
 
-  it('jitters the regional rehome dispatch tick, which every director runs each second', () => {
+  it('jitters the six-second regional rehome dispatch tick across directors', () => {
     const timers: number[] = []
     const setIntervalSpy = vi
       .spyOn(globalThis, 'setInterval')
@@ -35,14 +35,14 @@ describe('sweep schedule jitter', () => {
           rehomeAudience: 'https://rehome.example.test',
           rehomeDirectorServiceAccount: 'rehome@example.test'
         } as never,
-        { claimRegionalRehome: async () => null } as never,
+        { selectIdleRegionalRehomeCandidates: async () => [] } as never,
         { random: () => 0.5, safetySnapshot: () => ({}) as never }
       )
     } finally {
       setIntervalSpy.mockRestore()
     }
 
-    expect(timers).toEqual([1_100])
+    expect(timers).toEqual([6_600])
   })
 
   // Why: index.ts boots a server on import, so its wiring can only be read.

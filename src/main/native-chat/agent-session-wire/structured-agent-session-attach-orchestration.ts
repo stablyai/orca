@@ -22,6 +22,7 @@ import {
 } from './structured-agent-session-launch-env'
 import { refuseAgentSessionMutation } from './structured-agent-session-mutation-admission'
 import { retryPendingStructuredAgentSessionSettlement } from './structured-agent-session-settlement-retry'
+import { settleStaleRunningTurnsOnAcquire } from './structured-agent-session-stale-turn-verdict'
 import type { StructuredAgentSessionAttachContext } from './structured-agent-session-attach-context'
 import { forgetStructuredAgentSession } from './structured-agent-session-host-lifetime'
 import type { DeferredStructuredAgentSessionEventSink } from './structured-agent-session-event-sink'
@@ -95,13 +96,22 @@ export function attachStructuredAgentSession(
         eventSink.close()
         context.runtimeState.discardEventSink(sessionId)
       },
-      onAttached: async (attached, acquisitionGeneration) => {
+      onAttached: async (attached, acquisitionGeneration, acquiredOwner) => {
         const fence = context.deps.store.getRecord(sessionId)?.lease.runtimeFence ?? 0
         const previous = context.sessions.get(sessionId)
         const previousFence = previous?.fence
         // Site 8: the provisional journal has no owner until the map takes it,
         // and the barrier below throws by design.
         try {
+          if (acquiredOwner) {
+            // Before the drain: the buffered events are the new child's, never a stale row's.
+            await settleStaleRunningTurnsOnAcquire({
+              journal: attached.journal,
+              sessionId,
+              fence,
+              acquisitionGeneration
+            })
+          }
           await bindAndDrain(eventSink, attached.journal, fence, (activity) =>
             context.subscribers.publish(sessionId, attached.journal, activity)
           )

@@ -1,7 +1,7 @@
 import {
   buildRegistry,
   isStreamingMethod,
-  type RpcAnyMethod,
+  type RpcAnyMethodDeclaration,
   type RpcEnvelopeMeta,
   type RpcRegistry,
   type RpcRequest,
@@ -24,7 +24,10 @@ import { parseRpcRequestParams } from './dispatcher-request-parsing'
 import { RpcStreamingDispatcher } from './rpc-streaming-dispatcher'
 import { invokeDispatcherUnaryMethod } from './dispatcher-unary-method-invocation'
 
-export type DispatcherOptions = { runtime: OrcaRuntimeService; methods?: readonly RpcAnyMethod[] }
+export type DispatcherOptions = {
+  runtime: OrcaRuntimeService
+  methods?: readonly RpcAnyMethodDeclaration[]
+}
 
 type DispatchCallOptions = RpcDispatchStreamingOptions
 

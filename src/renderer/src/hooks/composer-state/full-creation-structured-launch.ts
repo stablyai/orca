@@ -1,47 +1,43 @@
-import { isAgentSessionHandleProvider } from '../../../../shared/agent-session-provider-handle'
-import type { TuiAgent } from '../../../../shared/tui-agent'
-import type { ActivateAndRevealResult } from '@/lib/worktree-activation'
-import { startStructuredAgentLaunch } from '@/lib/structured-agent-session-launch'
-import { StructuredAgentSessionCreateRefusalError } from '@/lib/launch-structured-agent-session'
+import type { AgentSessionLaunchPlan } from '@/lib/agent-session-launch-plan'
+import type { WorktreeStartupPayload } from '@/lib/worktree-startup-payload'
+import { activateAndRevealWorktree } from '@/lib/worktree-activation'
+import type { StructuredAgentLaunchSettlement } from '@/lib/structured-agent-launch-settlement'
 import { activateStructuredAgentSessionById } from '@/lib/structured-agent-session-tab-activation'
+import type { TuiAgent } from '../../../../shared/tui-agent'
 
-type Activation = ActivateAndRevealResult | false
-
+/** Full-create dialog: the structured launch plus what this flow did before structured chat
+ *  existed. Returns null when the plan's route is not structured. */
 export async function settleFullCreationStructuredLaunch(args: {
-  structuredLaunch: boolean
+  /** Planned before the worktree existed; `worktreeId` names the one that was created. */
+  plan: AgentSessionLaunchPlan
   agent: TuiAgent
   worktreeId: string
-  prompt: string
-  initialActivation: Activation
-  onDefinitiveRefusal: () => Activation | Promise<Activation>
-}): Promise<{
-  structuredLaunchAccepted: boolean
-  visibilityUnknown: boolean
-  activation: Activation
-}> {
-  let activation = args.initialActivation
-  let structuredLaunchAccepted = args.structuredLaunch
-  if (!args.structuredLaunch || !isAgentSessionHandleProvider(args.agent)) {
-    return { structuredLaunchAccepted, visibilityUnknown: false, activation }
-  }
-
-  const launch = startStructuredAgentLaunch(args.worktreeId, args.agent, { prompt: args.prompt })
-  const refusalFallback = launch.claimDefinitiveRefusalFallback(async () => {
-    structuredLaunchAccepted = false
-    activation = await args.onDefinitiveRefusal()
-  })
-  try {
-    const receipt = await launch.launchResult
-    activateStructuredAgentSessionById({
-      worktreeId: args.worktreeId,
-      sessionId: receipt.sessionId
-    })
-  } catch (error) {
-    if (error instanceof StructuredAgentSessionCreateRefusalError) {
-      await refusalFallback
-    } else if (launch.isVisibilityUnknown()) {
-      return { structuredLaunchAccepted, visibilityUnknown: true, activation }
-    }
-  }
-  return { structuredLaunchAccepted, visibilityUnknown: false, activation }
+  startup: WorktreeStartupPayload | undefined
+  pendingFirstAgentMessageRename: boolean
+  applyWorktreeMeta: (
+    worktreeId: string,
+    meta: { pendingFirstAgentMessageRename: boolean }
+  ) => Promise<void>
+}): Promise<StructuredAgentLaunchSettlement | null> {
+  return args.plan.launch(
+    {
+      legacyFallback: async () => {
+        if (args.pendingFirstAgentMessageRename) {
+          await args
+            .applyWorktreeMeta(args.worktreeId, { pendingFirstAgentMessageRename: true })
+            .catch(() => undefined)
+        }
+        const activation = activateAndRevealWorktree(args.worktreeId, {
+          sidebarRevealBehavior: 'auto',
+          agent: args.agent,
+          createNewTerminalForStartup: true,
+          ...(args.startup ? { startup: args.startup } : {})
+        })
+        return { activation, primaryTabId: activation === false ? null : activation.primaryTabId }
+      },
+      onStructuredReady: (sessionId) =>
+        activateStructuredAgentSessionById({ worktreeId: args.worktreeId, sessionId })
+    },
+    { worktreeId: args.worktreeId }
+  )
 }

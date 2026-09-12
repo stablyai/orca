@@ -7,5 +7,6 @@ overrides:
   xcode>uuid: 11.1.1
 
 patchedDependencies:
+  expo-notifications@55.0.27: patches/expo-notifications@55.0.27.patch
   react-native-webview@13.16.2: patches/react-native-webview@13.16.2.patch
   react-native@0.83.10: patches/react-native@0.83.10.patch

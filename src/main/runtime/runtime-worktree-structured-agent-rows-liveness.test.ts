@@ -115,8 +115,11 @@ function worktreeFor(store: AgentHookServer): RuntimeWorktreePsSummary {
     workingTerminalEvidenceByWorktreeId: new Map(),
     rowSources: collectRuntimeWorktreeAgentSources({
       mirroredWorktreeIdByTabId: new Map(),
-      connectedPtyEvidence: { tabIds: new Set(), paneKeys: new Set(), ptyIds: new Set() },
-      retainedSnapshots: [],
+      connectedPtyEvidence: {
+        tabIds: new Set(),
+        paneKeys: new Set(),
+        ptyIdByTerminalHandle: new Map()
+      },
       hookSnapshots: store.getStatusSnapshot()
     }),
     orchestrationByPaneKey: null,

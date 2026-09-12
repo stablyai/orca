@@ -4,7 +4,7 @@ import { mergeWorktreeSummaryStatus } from './runtime-worktree-status-projection
 import type { RuntimeWorktreeSummaryPathIndex } from './runtime-worktree-summary-paths'
 import type { RuntimeWorkingTerminalEvidence } from './runtime-worktree-ps-activity'
 import type { RuntimeWorktreeAgentSource } from './runtime-worktree-agent-source'
-export type { RuntimeAgentRowSnapshot } from './runtime-worktree-pty-agent-sources'
+export type { RuntimeAgentRowSnapshot } from './runtime-hook-agent-row-selection'
 
 type OrchestrationDisplay = {
   taskTitle?: string | null

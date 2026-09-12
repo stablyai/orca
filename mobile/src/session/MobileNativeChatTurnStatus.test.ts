@@ -7,18 +7,8 @@ vi.mock('react-native', async () => {
   const Text = ({ children, ...props }: { children?: unknown }): unknown =>
     React.createElement('Text', props, children)
   return {
-    Animated: {
-      Text,
-      Value: class {
-        constructor(private value: number) {}
-        setValue(next: number): void {
-          this.value = next
-        }
-      },
-      loop: (animation: unknown) => animation,
-      sequence: () => ({ start: vi.fn(), stop: vi.fn() }),
-      timing: () => ({ start: vi.fn(), stop: vi.fn() })
-    },
+    ActivityIndicator: (props: Record<string, unknown>) =>
+      React.createElement('ActivityIndicator', props),
     Pressable: ({ children, ...props }: { children?: unknown }) =>
       React.createElement('Pressable', props, children),
     Text,
@@ -49,6 +39,7 @@ describe('MobileNativeChatTurnStatus', () => {
     startedAt: number | null
     thinking: boolean
     workedSeconds?: number | null
+    activityText?: string | null
     expanded?: boolean
     onToggleExpanded?: () => void
   }): ReactTestRenderer {
@@ -61,12 +52,16 @@ describe('MobileNativeChatTurnStatus', () => {
   const labels = (node: ReactTestInstance): string[] =>
     node.findAllByType('Text' as never).map((text) => String(text.children.join('')))
 
-  it('reads "Thinking" before the turn produces output', () => {
+  const spinners = (node: ReactTestInstance): ReactTestInstance[] =>
+    node.findAllByType('ActivityIndicator' as never)
+
+  it('reads "Thinking" beside one spinner while the turn reasons', () => {
     const tree = render({ startedAt: Date.now(), thinking: true })
     expect(labels(tree.root)).toEqual(['Thinking'])
+    expect(spinners(tree.root)).toHaveLength(1)
   })
 
-  it('counts up once the turn is producing output', () => {
+  it('counts up on that same single row when the turn is not reasoning', () => {
     const startedAt = Date.now()
     const tree = render({ startedAt, thinking: false })
     expect(labels(tree.root)).toEqual(['Working for 0s'])
@@ -74,6 +69,19 @@ describe('MobileNativeChatTurnStatus', () => {
       vi.advanceTimersByTime(12_000)
     })
     expect(labels(tree.root)).toEqual(['Working for 12s'])
+    expect(spinners(tree.root)).toHaveLength(1)
+  })
+
+  it('lets provider activity text beat both fallbacks and hold the clock', () => {
+    const tree = render({
+      startedAt: Date.now(),
+      thinking: true,
+      activityText: 'Running pnpm test'
+    })
+    expect(labels(tree.root)).toEqual(['Running pnpm test'])
+    expect(spinners(tree.root)).toHaveLength(1)
+    // No label consumes the duration, so nothing schedules a tick for it.
+    expect(vi.getTimerCount()).toBe(0)
   })
 
   it('settles to a tappable "Worked for" row that toggles the turn', () => {
@@ -98,9 +106,10 @@ describe('MobileNativeChatTurnStatus', () => {
     expect(labels(tree.root)).toEqual(['Worked for 5s'])
   })
 
-  it('holds no interval once the turn has settled', () => {
-    render({ startedAt: Date.now(), thinking: false, workedSeconds: 5 })
+  it('holds no interval, and no spinner, once the turn has settled', () => {
+    const tree = render({ startedAt: Date.now(), thinking: false, workedSeconds: 5 })
     expect(vi.getTimerCount()).toBe(0)
+    expect(spinners(tree.root)).toHaveLength(0)
   })
 
   it('announces the live row to assistive tech', () => {

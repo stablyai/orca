@@ -8,6 +8,7 @@ import type {
   AgentSessionJournalIdentity
 } from '../../../shared/agent-session-journal-types'
 import {
+  agentJournalItemKey,
   boundJournalKeyComponent,
   MAX_JOURNAL_KEY_COMPONENT_CHARS
 } from '../../../shared/agent-session-journal-item-key'
@@ -94,6 +95,21 @@ describe('sequences', () => {
     expect(results.map((result) => result.revision)).toEqual([1, 2, 3])
     expect(journal.snapshot().items).toHaveLength(1)
     expect(journal.snapshot().items[0]?.revision).toBe(3)
+  })
+
+  it('visits reduced items at their creation sequence without promoting an older revision', async () => {
+    const journal = await open()
+    await journal.appendItem(item(0), body('first'), { fence: 1 })
+    const latest = await journal.appendItem(item(1), body('second'), { fence: 1 })
+    await journal.appendItem(item(0), body('first revised'), { fence: 1 })
+    const visited: { itemId: string; sequence: number }[] = []
+
+    journal.visitItems((itemId, sequence) => visited.push({ itemId, sequence }))
+
+    expect(visited).toEqual([
+      { itemId: agentJournalItemKey(item(0)), sequence: 2 },
+      { itemId: latest.itemId, sequence: latest.cursor.sequence }
+    ])
   })
 
   it('preserves an oversized identity and its raw digest-form mimic across reopen', async () => {

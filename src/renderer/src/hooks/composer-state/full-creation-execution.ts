@@ -19,9 +19,7 @@ export type FullCreationExecutionInput = Pick<
   | 'resolvedInitialWorkspaceStatus'
   | 'selectedRepoExecutionHostId'
   | 'selectedRepoIsGit'
-  | 'selectedRepoIsRemote'
   | 'setSidebarOpen'
-  | 'settings'
   | 'sparseEnabled'
   | 'taskSourceContext'
   | 'telemetrySource'
@@ -38,11 +36,8 @@ import { createBrowserUuid } from '@/lib/browser-uuid'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { seedNativeChatAppliedSessionOptions } from '@/components/native-chat/native-chat-session-option-cache'
 import { queueWorkspaceActivationTerminalFocus } from '@/lib/workspace-activation-terminal-focus'
-import {
-  hasExplicitTuiLaunchCustomization,
-  resolveAgentLaunchRoute
-} from '@/lib/agent-launch-routing'
-import { readLocalRuntimeCapabilitiesOrUnknown } from '@/runtime/local-runtime-capabilities'
+import { useAppStore } from '@/store'
+import { planAgentSessionLaunch } from '@/lib/agent-session-launch-plan'
 import { settleFullCreationStructuredLaunch } from './full-creation-structured-launch'
 import { finalizeFullCreation } from './full-creation-finalization'
 import { buildFullCreationIssueCommand } from './full-creation-issue-command'
@@ -67,9 +62,7 @@ export function useFullCreationExecution(input: FullCreationExecutionInput) {
     resolvedInitialWorkspaceStatus,
     selectedRepoExecutionHostId,
     selectedRepoIsGit,
-    selectedRepoIsRemote,
     setSidebarOpen,
-    settings,
     sparseEnabled,
     taskSourceContext,
     telemetrySource,
@@ -136,19 +129,18 @@ export function useFullCreationExecution(input: FullCreationExecutionInput) {
         return
       }
 
-      const agentLaunchRoute = resolveAgentLaunchRoute({
+      const launchPlan = planAgentSessionLaunch(useAppStore.getState(), {
         agent: tuiAgent,
-        settings,
-        executionHostId: selectedRepoExecutionHostId ?? 'local',
-        hostCapabilities: readLocalRuntimeCapabilitiesOrUnknown(),
-        workspaceKind: selectedRepoIsGit ? 'git-worktree' : 'folder',
+        workspace: {
+          kind: selectedRepoIsGit ? 'git-worktree' : 'folder',
+          repoId,
+          executionHostId: selectedRepoExecutionHostId ?? undefined
+        },
+        prompt: startupPlan?.draftPrompt ?? submitStartupPrompt,
         promptDelivery: startupPlan?.draftPrompt ? 'draft' : 'auto-submit',
-        launchText: startupPlan?.draftPrompt ?? submitStartupPrompt,
-        nativeChatTranscriptIsLocalReadable: !selectedRepoIsRemote,
-        requiresTuiLaunchCustomization: hasExplicitTuiLaunchCustomization(settings, tuiAgent),
         initialSessionOptions: startupPlan?.sessionOptions
       })
-      const structuredLaunch = agentLaunchRoute === 'structured-native-chat'
+      const structuredLaunch = launchPlan.route === 'structured-native-chat'
       const effectiveBackendStartup = structuredLaunch ? undefined : backendStartup
 
       const result = await createWorktree(
@@ -227,6 +219,7 @@ export function useFullCreationExecution(input: FullCreationExecutionInput) {
 
       const initialActivation = activateAndRevealWorktree(worktree.id, {
         sidebarRevealBehavior: 'auto',
+        agent: tuiAgent,
         setup: result.setup,
         defaultTabs: result.defaultTabs,
         issueCommand,
@@ -235,32 +228,29 @@ export function useFullCreationExecution(input: FullCreationExecutionInput) {
         ...(structuredLaunch ? { providesInitialSurface: true } : {})
       })
 
-      const { structuredLaunchAccepted, visibilityUnknown, activation } =
-        await settleFullCreationStructuredLaunch({
-          structuredLaunch,
-          agent: tuiAgent,
-          worktreeId: worktree.id,
-          prompt: startupPlan?.draftPrompt ?? submitStartupPrompt,
-          initialActivation,
-          onDefinitiveRefusal: async () => {
-            if (pendingFirstAgentMessageRename) {
-              await applyWorktreeMeta(worktree.id, { pendingFirstAgentMessageRename: true }).catch(
-                () => undefined
-              )
-            }
-            return activateAndRevealWorktree(worktree.id, {
-              sidebarRevealBehavior: 'auto',
-              createNewTerminalForStartup: true,
-              ...(startup ? { startup } : {})
-            })
-          }
-        })
+      const settlement = await settleFullCreationStructuredLaunch({
+        plan: launchPlan,
+        agent: tuiAgent,
+        worktreeId: worktree.id,
+        startup,
+        pendingFirstAgentMessageRename,
+        applyWorktreeMeta
+      })
 
-      if (visibilityUnknown) {
+      // Why: both leave the workspace revealed and the composer text intact; the launch layer has
+      // already toasted a failure, and an unknown outcome reconciles on the next click.
+      if (settlement?.kind === 'visibility-unknown' || settlement?.kind === 'failed') {
         setSidebarOpen(true)
         onCreated?.()
         return
       }
+      const structuredLaunchAccepted = settlement?.kind === 'structured'
+      // Why: the workspace was already activated before launch; the fallback's activation, when
+      // present, supersedes it.
+      const activation =
+        settlement?.kind === 'refused-then-legacy'
+          ? (settlement.activation ?? initialActivation)
+          : initialActivation
 
       if (!structuredLaunchAccepted && startupPlan) {
         const optionScopeKey =
@@ -307,9 +297,7 @@ export function useFullCreationExecution(input: FullCreationExecutionInput) {
       resolvedInitialWorkspaceStatus,
       selectedRepoExecutionHostId,
       selectedRepoIsGit,
-      selectedRepoIsRemote,
       setSidebarOpen,
-      settings,
       sparseEnabled,
       taskSourceContext,
       telemetrySource,

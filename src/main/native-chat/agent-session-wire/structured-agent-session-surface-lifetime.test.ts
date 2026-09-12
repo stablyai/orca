@@ -14,6 +14,7 @@ import type {
   AgentSessionMutationEnvelope,
   AgentSessionSubscribeEvent
 } from '../../../shared/agent-session-wire'
+import { AGENT_SESSION_UNATTACHED_REFUSAL_CODE } from '../../../shared/structured-agent-session-read-refusal'
 import { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import type { StructuredAgentSessionEventSink } from './structured-agent-session-event-sink'
@@ -180,6 +181,25 @@ describe('a chat that closes', () => {
     expect(host.hasSession(SESSION)).toBe(true)
   })
 
+  // The pane outlives the close by a few frames — a workspace delete closes the chats inside it
+  // while their panes are still mounted — so whatever a read raises in that window is what the user
+  // sees. This is the code the client narrows on to keep that window off the pane; a host that
+  // starts raising a different one there puts the red error back.
+  it('answers a read from the pane that outlived it with the code the client treats as transitional', async () => {
+    await attach()
+    await host.hold(SESSION, SURFACE)
+
+    await host.close(SESSION)
+
+    expect(host.hasSession(SESSION)).toBe(false)
+    expect(() => host.history({ sessionId: SESSION, direction: 'tail' })).toThrow(
+      AGENT_SESSION_UNATTACHED_REFUSAL_CODE
+    )
+    expect(() =>
+      host.subscribe({ id: 'sub-1', sessionId: SESSION, emit: () => undefined })
+    ).toThrow(AGENT_SESSION_UNATTACHED_REFUSAL_CODE)
+  })
+
   it('does not lose the session to a release the client sent twice', async () => {
     await attach()
     await host.hold(SESSION, SURFACE)
@@ -192,6 +212,28 @@ describe('a chat that closes', () => {
 
     expect(closeSession).not.toHaveBeenCalled()
     expect(host.hasSession(SESSION)).toBe(true)
+  })
+
+  it('releases a compatibility wait when the session is evicted', async () => {
+    await attach()
+    dispatch.mockResolvedValueOnce({ state: 'admitted' })
+    const body = hostTestMessage('pending until close')
+    const result = await host.send(CALLER, {
+      envelope: envelope('agentSession.send', { body }),
+      body
+    })
+    expect(result).toMatchObject({
+      ok: true,
+      value: { submission: { dispatchState: 'pending' } }
+    })
+    if (!result.ok) {
+      throw new Error('send was refused')
+    }
+    const settlement = host.waitForSendSettlement(SESSION, result.value.clientMessageId)
+
+    await host.close(SESSION)
+
+    await expect(settlement).resolves.toBeUndefined()
   })
 })
 
@@ -274,6 +316,38 @@ describe('a session evicted and opened again', () => {
 })
 
 describe('an unexpected provider exit', () => {
+  it('publishes terminal settlement to a waiting older client', async () => {
+    await attach()
+    dispatch.mockResolvedValueOnce({ state: 'admitted' })
+    const body = hostTestMessage('pending until provider exit')
+    const result = await host.send(CALLER, {
+      envelope: envelope('agentSession.send', { body }),
+      body
+    })
+    expect(result).toMatchObject({
+      ok: true,
+      value: { submission: { dispatchState: 'pending' } }
+    })
+    if (!result.ok) {
+      throw new Error('send was refused')
+    }
+    const settlement = host.waitForSendSettlement(SESSION, result.value.clientMessageId)
+    const exitedFence = store.getRecord(SESSION)?.lease.runtimeFence ?? 0
+
+    await host.handleAdapterEvent({
+      type: 'ended',
+      sessionId: SESSION,
+      reason: 'provider exited',
+      cause: 'unexpected-exit',
+      fence: exitedFence,
+      acquisitionGeneration: 'generation-1'
+    })
+
+    await expect(settlement).resolves.toMatchObject({
+      value: { submission: { dispatchState: 'unknown' } }
+    })
+  })
+
   it('turns a journal sink failure into observed-exit settlement and lease release', async () => {
     await attach()
     const session = (

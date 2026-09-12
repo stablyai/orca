@@ -261,4 +261,49 @@ describe('mobile + Codex tab creation routing', () => {
       expect(scope.showToast).toHaveBeenCalledWith('create outcome ambiguous', 1800)
     }
   )
+  // Why: pty exhaustion, a disabled agent and an unresolved worktree owner all arrived as the
+  // same 'Failed to create terminal', leaving the empty session with nothing to act on.
+  it('surfaces the host reason instead of a generic terminal-create error', async () => {
+    const client = clientReturning({
+      ok: false,
+      error: {
+        code: 'runtime_error',
+        message: 'Your system cannot allocate any more pty devices.'
+      }
+    })
+    const scope = createScope(client)
+    let actions: ReturnType<typeof useMobileSessionTerminalCreateActions> | undefined
+    function Harness() {
+      actions = useMobileSessionTerminalCreateActions(scope as never)
+      return null
+    }
+    await act(async () => {
+      renderer = create(createElement(Harness))
+    })
+    await act(async () => {
+      await actions?.handleCreateTerminal()
+    })
+
+    expect(scope.setCreateError).toHaveBeenCalledWith(
+      'Your system cannot allocate any more pty devices.'
+    )
+  })
+
+  it('falls back to the generic message when the host gives no reason', async () => {
+    const client = clientReturning({ ok: false, error: { code: 'runtime_error', message: '' } })
+    const scope = createScope(client)
+    let actions: ReturnType<typeof useMobileSessionTerminalCreateActions> | undefined
+    function Harness() {
+      actions = useMobileSessionTerminalCreateActions(scope as never)
+      return null
+    }
+    await act(async () => {
+      renderer = create(createElement(Harness))
+    })
+    await act(async () => {
+      await actions?.handleCreateTerminal()
+    })
+
+    expect(scope.setCreateError).toHaveBeenCalledWith('Failed to create terminal')
+  })
 })

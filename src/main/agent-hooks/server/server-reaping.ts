@@ -114,6 +114,7 @@ export abstract class AgentHookServerReaping extends AgentHookServerTabCleanup {
         }
       }
       this.state.lastStatusByPaneKey.set(paneKey, reconciled)
+      this.commitStatusRowMutation(enriched, reconciled)
     }
     if (changedPanes > 0) {
       this.scheduleStatusPersist()

@@ -24,13 +24,15 @@ export function handleCodexSessionExit(input: {
     input.prompts?.clear()
     return false
   }
+  session.exitObservedAt ??= Date.now()
   const event: StructuredAgentSessionLifecycleEvent = {
     type: 'ended',
     sessionId: input.sessionId,
     reason: input.error.message,
     cause: session.requestedClose ? 'requested-close' : 'unexpected-exit',
     fence: session.fence,
-    acquisitionGeneration: session.acquisitionGeneration
+    acquisitionGeneration: session.acquisitionGeneration,
+    observedAt: session.exitObservedAt
   } as const
   // A synchronous sink rejection (usually backpressure) is handed to host
   // recovery, which appends the bounded fallback before reacquisition.

@@ -39,6 +39,12 @@ import {
 import { ClaudeSubagentRoster } from './claude-subagent-roster'
 import { createClaudeStreamedBlockRegistry } from './claude-streamed-block-identity'
 import { createClaudeStreamedTextCheckpoints } from './claude-streamed-text-checkpoints'
+import {
+  claudeTurnEndForResult,
+  claudeTurnLifecycleItem,
+  type ClaudeCurrentTurn,
+  type ClaudeTurnEnd
+} from './claude-turn-lifecycle-item'
 
 export type ClaudeJournalTranslatorDeps = {
   sink: StructuredAgentSessionEventSink
@@ -71,23 +77,14 @@ export function createClaudeSessionJournalTranslator(
     : null
 }
 
-function lifecycleIdentity(sessionId: string, turnId: string): AgentJournalItemIdentity {
-  return {
-    provider: 'legacy',
-    agent: 'claude',
-    sessionId,
-    recordId: `turn-lifecycle:${turnId}`
-  }
-}
-
 export function createClaudeJournalTranslator(
   deps: ClaudeJournalTranslatorDeps
 ): ClaudeJournalTranslator {
   const tools = new Map<string, ClaudeToolUse>()
   const promptItems = new Map<string, AgentJournalItemIdentity[]>()
   const streamedBlocks = createClaudeStreamedBlockRegistry()
-  let currentTurn: { sessionId: string; turnId: string } | null = null
-  const groupKeyOf = (turn: { sessionId: string; turnId: string } | null): string | null =>
+  let currentTurn: ClaudeCurrentTurn | null = null
+  const groupKeyOf = (turn: ClaudeCurrentTurn | null): string | null =>
     turn ? `${turn.sessionId}:${turn.turnId}` : null
   const providerFallback = createClaudeProviderFrameFallback(
     deps.sink,
@@ -106,21 +103,11 @@ export function createClaudeJournalTranslator(
     }
   })
 
-  const publishLifecycle = (sessionId: string, turnId: string, running: boolean): void => {
-    const identity = lifecycleIdentity(sessionId, turnId)
-    if (running) {
-      deps.sink.appendItem(identity, {
-        kind: 'status',
-        text: 'Claude is working…',
-        turnLifecycle: { turnId, state: 'running' }
-      })
-    } else {
-      deps.sink.appendTombstone(identity)
-    }
+  const publishLifecycle = (turn: ClaudeCurrentTurn, end?: ClaudeTurnEnd): void => {
+    const item = claudeTurnLifecycleItem(turn, end)
+    deps.sink.appendItem(item.identity, item.body, item.options)
     // Preserve first-work evidence when completion arrives before the journal drains.
-    deps.sink.publish({
-      coalescingKey: running ? `turn-start:${sessionId}:${turnId}` : 'publish'
-    })
+    deps.sink.publish({ coalescingKey: item.publishCoalescingKey })
   }
 
   const publishActivity = (kind: string, payload: unknown): void => {
@@ -142,7 +129,11 @@ export function createClaudeJournalTranslator(
     return true
   }
 
-  const handleMessage = (message: Record<string, unknown>, startsTurn: boolean): boolean => {
+  const handleMessage = (
+    message: Record<string, unknown>,
+    startsTurn: boolean,
+    observedAt: number
+  ): boolean => {
     const envelope = readClaudeMessageEnvelope(message)
     if (!envelope) {
       return false
@@ -189,8 +180,11 @@ export function createClaudeJournalTranslator(
     const thinking = claudeThinkingText(outputEnvelope)
     if (thinking) {
       deps.sink.appendItem(claudeThinkingIdentity(envelope.sessionId, envelope.uuid), {
-        kind: 'status',
-        text: boundInlineText(thinking, DEFAULT_JOURNAL_PAYLOAD_LIMITS).text
+        kind: 'message',
+        role: 'reasoning',
+        blocks: [
+          { type: 'text', text: boundInlineText(thinking, DEFAULT_JOURNAL_PAYLOAD_LIMITS).text }
+        ]
       })
       changed = true
     }
@@ -205,10 +199,16 @@ export function createClaudeJournalTranslator(
         // A new turn starting is the only end the previous one gets when its
         // result never arrives; settling it later would sweep THIS turn.
         subagents.settleTurn(groupKeyOf(currentTurn))
-        publishLifecycle(currentTurn.sessionId, currentTurn.turnId, false)
+        publishLifecycle(currentTurn, { state: 'interrupted', completedAt: observedAt })
       }
-      currentTurn = { sessionId: envelope.sessionId, turnId: envelope.uuid }
-      publishLifecycle(envelope.sessionId, envelope.uuid, true)
+      currentTurn = {
+        sessionId: envelope.sessionId,
+        turnId: envelope.uuid,
+        startedAt: observedAt,
+        // A user echo lands on its own message identity, so this is the user row's key.
+        userItemId: agentJournalItemKey(identity)
+      }
+      publishLifecycle(currentTurn)
       deps.sink.setActivity?.(null)
     }
     if (changed) {
@@ -248,7 +248,11 @@ export function createClaudeJournalTranslator(
         // No event will ever settle a child once the provider is gone.
         subagents.settleSession()
         if (currentTurn) {
-          publishLifecycle(currentTurn.sessionId, currentTurn.turnId, false)
+          // The host saw the child end, so the turn's end is observed, not lost.
+          publishLifecycle(currentTurn, {
+            state: 'interrupted',
+            completedAt: event.observedAt ?? Date.now()
+          })
           currentTurn = null
         }
         deps.sink.setActivity?.(null)
@@ -271,7 +275,10 @@ export function createClaudeJournalTranslator(
         // reported as working will never be settled by an event.
         subagents.settleTurn(groupKeyOf(currentTurn))
         if (currentTurn) {
-          publishLifecycle(currentTurn.sessionId, currentTurn.turnId, false)
+          publishLifecycle(
+            currentTurn,
+            claudeTurnEndForResult(event.message, event.observedAt ?? Date.now())
+          )
           currentTurn = null
         }
         deps.sink.setActivity?.(null)
@@ -291,7 +298,9 @@ export function createClaudeJournalTranslator(
         // fallback below still drops the raw frame instead of printing an opcode.
         subagents.observeSystemFrame(event.message)
         const kind = claudeProviderFrameKind(event.message)
-        if (!handleMessage(event.message, event.startsTurn === true)) {
+        if (
+          !handleMessage(event.message, event.startsTurn === true, event.observedAt ?? Date.now())
+        ) {
           providerFallback.append(kind, event.message)
         }
         publishActivity(kind, event.message)
