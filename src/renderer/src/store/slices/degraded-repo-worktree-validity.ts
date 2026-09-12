@@ -8,7 +8,7 @@ type WorktreeValidityCatalog = {
   repos: readonly Pick<Repo, 'id'>[]
   worktreesByRepo: Readonly<Record<string, readonly Pick<Worktree, 'id'>[]>>
   detectedWorktreesByRepo?: Readonly<
-    Record<string, Pick<DetectedWorktreeListResult, 'authoritative'> | undefined>
+    Record<string, Pick<DetectedWorktreeListResult, 'authoritative' | 'worktrees'> | undefined>
   >
 }
 
@@ -60,9 +60,21 @@ export function buildValidWorktreeIdsForSessionHydration(
       .filter(([, detected]) => detected?.authoritative)
       .map(([repoId]) => repoId)
   )
+  // Why (#15227): worktreesByRepo is the sidebar catalog, which drops worktrees hidden by
+  // visibility settings; an authoritative scan still lists them. Detection, not display, is
+  // the existence signal — otherwise hiding a worktree reads as deleting it.
+  const authoritativelyDetectedWorktreeIds = new Set(
+    Object.values(detectedWorktreesByRepo).flatMap((detected) =>
+      detected?.authoritative ? detected.worktrees.map((worktree) => worktree.id) : []
+    )
+  )
 
   for (const worktreeId of persistedWorktreeIds) {
     if (validWorktreeIds.has(worktreeId) || parseWorkspaceKey(worktreeId)?.type === 'folder') {
+      continue
+    }
+    if (authoritativelyDetectedWorktreeIds.has(worktreeId)) {
+      validWorktreeIds.add(worktreeId)
       continue
     }
     const repoId = getRepoIdFromWorktreeId(worktreeId)
