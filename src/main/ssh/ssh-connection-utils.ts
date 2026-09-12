@@ -176,7 +176,7 @@ export function createSshOperationAbortError(): Error & { name: string } {
   return error
 }
 
-type BuildConnectConfigOptions = {
+export type BuildConnectConfigOptions = {
   includeAgent?: boolean
   includePrivateKey?: boolean
 }
@@ -201,8 +201,7 @@ export function buildConnectConfig(
     port: effectivePort,
     username: effectiveUser,
     readyTimeout: CONNECT_TIMEOUT_MS,
-    keepaliveInterval: 15_000,
-    tryKeyboard: true
+    keepaliveInterval: 15_000
   }
 
   const shouldIncludeAgent = options.includeAgent ?? true
@@ -217,14 +216,28 @@ export function buildConnectConfig(
     config.agentForward = true
   }
 
+  // Every key this target can offer. The agent-first attempt narrows it to the unencrypted explicit
+  // ones and leaves the rest — default-name and encrypted keys — to the retries below.
+  const availableKeys = resolvePrivateKeys(target, resolved)
   const keys =
     (options.includePrivateKey ?? !agent)
-      ? resolvePrivateKeys(target, resolved)
+      ? availableKeys
       : resolveUnencryptedExplicitPrivateKeys(target, resolved)
+
+  // Why: keyboard-interactive is the last rung of THIS attempt's queue, but a deferred key is only
+  // tried an attempt later. Offering the challenge now puts the host's password dialog in front of
+  // a key that still authenticates, and answering it is what fails the attempt the retry waits for.
+  // Whichever attempt carries the last of the keys offers the challenge — expressed through the
+  // auth queue, not this flag: ssh2 silently discards a string method it did not pre-clear through
+  // tryKeyboard, which would also kill the challenge when a host demands it as a second factor
+  // after a key partial-succeeds.
+  config.tryKeyboard = true
+
   configurePrivateKeyAuthentication(
     config as ConnectConfig,
     keys,
-    findEncryptedPrivateKeyPath(keys)
+    findEncryptedPrivateKeyPath(keys),
+    { deferKeyboardInteractive: availableKeys.length !== keys.length }
   )
 
   return config as ConnectConfig

@@ -1,7 +1,8 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import type { ConnectConfig } from 'ssh2'
 import {
   clientInstances,
   emitSshEvent,
@@ -9,7 +10,11 @@ import {
   resetSshConnectionMocks,
   ssh2Mock
 } from './ssh-connection-test-harness'
-import { createCallbacks, createTarget } from './ssh-connection-test-fixtures'
+import {
+  createCallbacks,
+  createTarget,
+  walkInitialAuthLadder
+} from './ssh-connection-test-fixtures'
 import { SshConnection } from './ssh-connection'
 import { resolveWithSshG } from './ssh-config-parser'
 
@@ -95,6 +100,37 @@ describe('SshConnection', () => {
       expect(initialConfig.privateKey).toBeUndefined()
       expect(fallbackConfig.agent).toBeUndefined()
       expect(fallbackConfig.privateKey).toEqual(Buffer.from('test-key'))
+    } finally {
+      rmSync(tempDir, { recursive: true, force: true })
+    }
+  })
+
+  it('holds the keyboard-interactive challenge until the deferred default key has been tried', async () => {
+    vi.stubEnv('SSH_AUTH_SOCK', '/tmp/agent.sock')
+    const tempDir = mkdtempSync(join(tmpdir(), 'orca-ssh-home-'))
+    mkdirSync(join(tempDir, '.ssh'))
+    writeFileSync(join(tempDir, '.ssh', 'id_rsa'), 'default-key')
+    vi.stubEnv('HOME', tempDir)
+    vi.stubEnv('USERPROFILE', tempDir)
+    ssh2Mock.connectSequence = [new Error('All configured authentication methods failed'), 'ready']
+
+    try {
+      const onCredentialRequest = vi.fn()
+      const conn = new SshConnection(createTarget(), createCallbacks({ onCredentialRequest }))
+
+      await conn.connect()
+
+      expect(clientInstances).toHaveLength(2)
+      // The agent-first attempt defers ~/.ssh/id_rsa, so its ladder ends at the agent: answering
+      // the host's password challenge there would preempt the key that actually authenticates.
+      expect(walkInitialAuthLadder(clientInstances[0].lastConnectConfig as ConnectConfig)).toEqual([
+        'none',
+        'agent'
+      ])
+      expect(clientInstances[1].lastConnectConfig).toMatchObject({
+        privateKey: Buffer.from('default-key')
+      })
+      expect(onCredentialRequest).not.toHaveBeenCalled()
     } finally {
       rmSync(tempDir, { recursive: true, force: true })
     }
@@ -225,6 +261,11 @@ describe('SshConnection', () => {
 
   it('answers bounded keyboard-interactive challenges such as Duo 2FA', async () => {
     vi.useFakeTimers()
+    // A key-less home, so this asserts the challenge is answered rather than whether the developer's
+    // own ~/.ssh/id_* deferred it to the no-agent retry.
+    const tempDir = mkdtempSync(join(tmpdir(), 'orca-ssh-home-'))
+    vi.stubEnv('HOME', tempDir)
+    vi.stubEnv('USERPROFILE', tempDir)
     const onCredentialRequest = vi.fn().mockResolvedValueOnce('1').mockResolvedValueOnce('123456')
     try {
       const conn = new SshConnection(createTarget(), createCallbacks({ onCredentialRequest }))
@@ -269,6 +310,7 @@ describe('SshConnection', () => {
       await connected
     } finally {
       vi.useRealTimers()
+      rmSync(tempDir, { recursive: true, force: true })
     }
   })
 
