@@ -6846,7 +6846,10 @@
           "cliSkillTerminalTitle": "CLI skill setup",
           "cliSkillTerminalAria": "CLI skill install terminal",
           "installFailureUnknownReason": "Orca could not finish CLI registration and reported no reason.",
-          "installFailureConflictRemedy": "Remove {{value0}} and register again if it is no longer needed."
+          "installFailureConflictRemedy": "Remove {{value0}} and register again if it is no longer needed.",
+          "6f894ef9c2": "Show in Finder",
+          "cbe55e4d48": "Show in Explorer",
+          "9fd4023db0": "Show in File Manager"
         },
         "CliSkillRuntimeSetup": {
           "04325573f8": "WSL",

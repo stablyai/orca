@@ -5815,7 +5815,10 @@
           "14444243ba": "¿Eliminar `{{value0}}` de PATH?",
           "5d432fe44d": "instalado",
           "8a9b784c60": "desactualizado",
-          "d363e5929b": "Comprobando registro de CLI..."
+          "d363e5929b": "Comprobando registro de CLI...",
+          "6f894ef9c2": "Mostrar en Finder",
+          "cbe55e4d48": "Mostrar en el Explorador de archivos",
+          "9fd4023db0": "Mostrar en el gestor de archivos"
         },
         "CliSkillRuntimeSetup": {
           "04325573f8": "WSL",
