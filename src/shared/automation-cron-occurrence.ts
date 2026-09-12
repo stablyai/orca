@@ -9,9 +9,12 @@ export function startOfLocalDay(timestamp: number): number {
   return date.getTime()
 }
 
+/**
+ * Floors to the start of the minute in absolute time. Pure UTC arithmetic:
+ * recomposing local wall-clock fields would resolve an ambiguous DST
+ * fall-back minute to the earlier offset, moving the result backwards.
+ */
 export function floorToMinute(timestamp: number): number {
-  // Why: recomposing local wall-clock fields resolves an ambiguous DST fall-back minute to the
-  // earlier offset, moving the result backwards in absolute time.
   return timestamp - (timestamp % 60_000)
 }
 

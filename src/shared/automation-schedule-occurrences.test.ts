@@ -2,18 +2,25 @@ import { afterAll, describe, expect, it } from 'vitest'
 import { floorToMinute } from './automation-cron-occurrence'
 import { nextAutomationOccurrenceAfter } from './automation-schedule-occurrences'
 
+// Why: Node on Windows ignores runtime TZ changes; skip there instead of failing opaquely.
+const originalTz = process.env.TZ
 process.env.TZ = 'America/New_York'
 
-const originalTz = process.env.TZ
-
-// Why: Node on Windows ignores runtime TZ changes, so the suite self-checks instead of failing opaquely.
+/** Whether the TZ override above actually took effect for this process. */
 function newYorkTzApplied(): boolean {
   return new Date('2026-11-01T01:30:00-04:00').getTimezoneOffset() === 240
 }
 
-afterAll(() => {
-  process.env.TZ = originalTz
-})
+/** Restore the process timezone exactly as it started (unset stays unset). */
+function restoreOriginalTimezone(): void {
+  if (originalTz === undefined) {
+    delete process.env.TZ
+  } else {
+    process.env.TZ = originalTz
+  }
+}
+
+afterAll(restoreOriginalTimezone)
 
 describe.skipIf(!newYorkTzApplied())('automation schedule occurrences across DST', () => {
   const dtstart = new Date('2026-10-31T12:00:00-04:00').getTime()
