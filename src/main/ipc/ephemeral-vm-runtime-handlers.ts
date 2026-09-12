@@ -1,4 +1,5 @@
 import { app, ipcMain } from 'electron'
+import { toRuntimeExecutionHostId } from '../../shared/execution-host'
 import type { Store } from '../persistence'
 import {
   listEphemeralVmRuntimes,
@@ -107,7 +108,8 @@ export function registerEphemeralVmRuntimeHandlers(store: Store): void {
       }
       if (result.ok && runtime.runtimeEnvironmentId) {
         try {
-          removeEnvironment(userDataPath, runtime.runtimeEnvironmentId)
+          const removed = removeEnvironment(userDataPath, runtime.runtimeEnvironmentId)
+          store.deleteHostWorkspaceSession(toRuntimeExecutionHostId(removed.id))
         } catch {
           // Cleanup of provider resources matters more than hiding a stale local
           // environment row; users can still remove that manually.

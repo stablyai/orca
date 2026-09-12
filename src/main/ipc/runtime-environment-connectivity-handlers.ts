@@ -1,4 +1,5 @@
 import { ipcMain } from 'electron'
+import { toRuntimeExecutionHostId } from '../../shared/execution-host'
 import {
   addEnvironmentFromPairingCode,
   listEnvironments,
@@ -105,6 +106,7 @@ export function registerRuntimeEnvironmentConnectivityHandlers({
         throw new Error('Choose another Active Server in Advanced before removing this server.')
       }
       const removed = removeEnvironment(getUserDataPath(), args.selector)
+      store.deleteHostWorkspaceSession(toRuntimeExecutionHostId(removed.id))
       clearRuntimeEnvironmentCapabilityEvidence(removed.id)
       clearRuntimeEnvironmentManualDisconnect(removed.id)
       const retiring = Promise.resolve(invalidateTransport(removed.id))

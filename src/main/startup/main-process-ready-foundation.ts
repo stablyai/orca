@@ -28,6 +28,7 @@ import {
   seedLiveClaudePtysFromPersistence
 } from '../claude-accounts/live-pty-gate'
 import { applyAppIcon } from '../app-icon'
+import { selfHealRuntimeHostWorkspaceSessions } from '../runtime-environment-host-session-self-heal'
 import {
   shouldSuppressDevEducation,
   suppressDevEducationForStore
@@ -139,6 +140,7 @@ export async function initializeReadyFoundation(): Promise<void> {
     storageAuthority: state.isServeMode ? 'runtime' : 'desktop'
   })
   state.store = store
+  selfHealRuntimeHostWorkspaceSessions({ store, userDataPath: app.getPath('userData') })
   // Why: create pending readiness before the guard can observe the default session.
   // Why parked on state instead of awaited here: Dock/Launchpad launches don't inherit shell
   // proxy env vars, so the persisted proxy must land before any app-owned network fetcher runs —
