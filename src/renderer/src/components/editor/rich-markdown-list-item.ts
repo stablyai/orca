@@ -31,8 +31,11 @@ function paragraphLineCount(node: JSONContent): number {
   if ((first as { type?: string } | undefined)?.type !== 'paragraph') {
     return 1
   }
-  const content = (first as { content?: { text?: string }[] }).content ?? []
-  const text = content.map((child) => child.text ?? '').join('')
+  const content = (first as { content?: { type?: string; text?: string }[] }).content ?? []
+  // Why: a hard break renders `  \n`, so it adds a line the JSON carries no text for.
+  const text = content
+    .map((child) => (child.type === 'hardBreak' ? '\n' : (child.text ?? '')))
+    .join('')
   return text.split('\n').length
 }
 

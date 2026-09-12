@@ -78,3 +78,34 @@ describe('list continuation round trip', () => {
     expect(roundTrip(roundTrip(roundTrip(source)))).toContain('write-up')
   })
 })
+
+describe('hard break inside a list item', () => {
+  it.each([
+    ['1. line1  \n   line2', 3],
+    ['10. line1  \n    line2', 4],
+    ['100. line1  \n     line2', 5],
+    ['- line1  \n  line2', 2]
+  ])('gives %j the item content column of %i', (source) => {
+    expect(roundTrip(source)).toBe(source)
+  })
+
+  it.each([['1. line1  \n   line2'], ['10. line1  \n    line2'], ['- line1  \n  line2']])(
+    'keeps %j stable across three cycles',
+    (source) => {
+      let current = source
+      for (let cycle = 0; cycle < 3; cycle += 1) {
+        current = roundTrip(current)
+      }
+      expect(current).toBe(source)
+    }
+  )
+
+  it('indents an unindented hard-break continuation to the content column', () => {
+    expect(roundTrip('1. line1  \nline2')).toBe('1. line1  \n   line2')
+    expect(roundTrip('10. line1  \nline2')).toBe('10. line1  \n    line2')
+  })
+
+  it('gives every hard-break line the same column', () => {
+    expect(roundTrip('1. line1  \n   line2  \n   line3')).toBe('1. line1  \n   line2  \n   line3')
+  })
+})
