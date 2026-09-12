@@ -3,6 +3,25 @@ import { platformBindings } from './definitions-support'
 
 export const KEYBINDING_DEFINITION_CORE_4: readonly KeybindingDefinition[] = [
   {
+    id: 'editor.copyPath',
+    title: 'Copy file path',
+    group: 'Editors',
+    scope: 'editor',
+    searchKeywords: ['shortcut', 'editor', 'copy', 'path', 'absolute'],
+    // Why unbound: Mod+Alt+C already belongs to editor.copyContext in this scope,
+    // and every near neighbour is either taken or AltGr text input off macOS.
+    defaultBindings: { darwin: [], linux: [], win32: [] }
+  },
+  {
+    id: 'editor.copyRelativePath',
+    title: 'Copy relative file path',
+    group: 'Editors',
+    scope: 'editor',
+    searchKeywords: ['shortcut', 'editor', 'copy', 'relative', 'path'],
+    // Matches fileExplorer.copyRelativePath; the scopes never both hold focus.
+    defaultBindings: platformBindings(['Mod+Alt+Shift+C'])
+  },
+  {
     id: 'terminal.clearPaneTitle',
     title: 'Clear Pane Title',
     group: 'Terminal Panes',
