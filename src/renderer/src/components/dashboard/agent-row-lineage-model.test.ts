@@ -141,3 +141,41 @@ describe('buildAgentRowLineageTree', () => {
     expect(tree.childPaneKeys.size).toBe(0)
   })
 })
+
+describe('unreachable lineage cleanup', () => {
+  it('bounds pane-key reads while flattening disconnected cycles', () => {
+    let paneKeyReads = 0
+    const root = makeRow('root')
+    const cycles = Array.from({ length: 200 }, (_, index) => {
+      const row = makeRow(`cycle-${index}`, { parentPaneKey: `cycle-${index ^ 1}` })
+      Object.defineProperty(row, 'paneKey', {
+        get() {
+          paneKeyReads++
+          return `cycle-${index}`
+        }
+      })
+      return row
+    })
+    const tree = buildAgentRowLineageTree([root, ...cycles])
+    const measuredReads = paneKeyReads
+    expect(tree.rootRows).toEqual([root, ...cycles])
+    expect(tree.childrenByParentPaneKey.size).toBe(0)
+    expect(tree.childPaneKeys.size).toBe(0)
+    expect(measuredReads).toBeLessThanOrEqual(cycles.length * 20)
+  })
+
+  it('preserves reachable edges and promotes the first disconnected duplicate in input order', () => {
+    const root = makeRow('root')
+    const child = makeRow('child', { parentPaneKey: 'root' })
+    const first = makeRow('cycle-a', { parentPaneKey: 'cycle-b' })
+    const second = makeRow('cycle-b', { parentPaneKey: 'cycle-a' })
+    const duplicate = makeRow('cycle-a', { parentPaneKey: 'cycle-b' })
+    const descendant = makeRow('descendant', { parentPaneKey: 'cycle-b' })
+    const tree = buildAgentRowLineageTree([first, root, child, second, duplicate, descendant])
+
+    expect(tree.rootRows).toEqual([root, first, second, descendant])
+    expect(tree.rootRows[1]).toBe(first)
+    expect([...tree.childrenByParentPaneKey]).toEqual([['root', [child]]])
+    expect([...tree.childPaneKeys]).toEqual(['child'])
+  })
+})
