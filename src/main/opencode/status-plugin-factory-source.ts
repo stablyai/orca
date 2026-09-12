@@ -212,13 +212,14 @@ export function getStatusPluginFactorySource(options: { emitSessionStart: boolea
     '  };',
     '};',
     '',
-    '// Why: OpenCode also resolves plugins through the module default export, and that',
-    '// loader rejects the module unless the default exposes `server()` ("must default',
-    '// export an object with server()"). `setup()` does not satisfy it. Keep the named',
-    '// export so the factory-based loader still finds the same instance.',
+    '// Why: module exports must satisfy every OpenCode plugin loader. OpenCode 1.18.x',
+    '// reads the default export `server()`; OpenCode 2.x requires a default definition',
+    '// with `id` plus `setup()`. Keep both: `server` for 1.18.x and `setup`, which adapts',
+    '// the V2 event stream onto the V1 events this engine consumes, for 2.x.',
     'export default {',
     '  id: "orca-opencode-status",',
     '  server: OrcaOpenCodeStatusPlugin,',
+    '  setup: (ctx) => setupOrcaV2Compat(ctx),',
     '};',
     ''
   ]

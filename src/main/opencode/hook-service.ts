@@ -20,6 +20,7 @@ import { getStatusPluginPostSource } from './status-plugin-post-source'
 import { getStatusPluginDeliverySource } from './status-plugin-delivery-source'
 import { getStatusPluginOwnershipSource } from './status-plugin-ownership-source'
 import { getStatusPluginLifecycleSource } from './status-plugin-lifecycle-source'
+import { getStatusPluginV2CompatSource } from './status-plugin-v2-compat-source'
 import { getStatusPluginFactorySource } from './status-plugin-factory-source'
 
 const ORCA_OPENCODE_PLUGIN_FILE = 'orca-opencode-status.js'
@@ -61,6 +62,7 @@ export function getOpenCodeFamilyPluginSource(
     ...getStatusPluginDeliverySource(),
     ...getStatusPluginOwnershipSource(),
     ...getStatusPluginLifecycleSource(),
+    ...getStatusPluginV2CompatSource(),
     ...getStatusPluginFactorySource(options)
   ].join('\n')
 }
