@@ -186,6 +186,9 @@ export async function attachJournal(input: {
   params: AgentSessionAttachParams
   journalRoot: string
   adapter: StructuredAgentSessionAdapter
+  /** Provider history sampled before a new child is acquired. `null` means the
+   *  adapter had no usable history; omit to read lazily for direct callers. */
+  providerHistoryWindow?: ProviderHistoryWindow | null
 }): Promise<AttachedJournal> {
   const identity = journalIdentityFor(input.record, input.params)
   const fence = input.record.lease.runtimeFence
@@ -209,7 +212,11 @@ export async function attachJournal(input: {
       adapter: input.adapter,
       identity,
       journal: opened.journal,
-      fence
+      fence,
+      accountHome: input.record.accountHome,
+      ...(Object.hasOwn(input, 'providerHistoryWindow')
+        ? { history: input.providerHistoryWindow }
+        : {})
     })
     return {
       ...opened,
@@ -232,15 +239,22 @@ async function reconcileAgainstProviderHistory(input: {
   identity: AgentSessionJournalIdentity
   journal: AgentSessionJournal
   fence: number
+  accountHome: AgentSessionAccountHome
+  history?: ProviderHistoryWindow | null
 }): Promise<string[]> {
-  if (!input.adapter.providerHistoryWindow) {
-    return []
-  }
-  let history: ProviderHistoryWindow | null
-  try {
-    history = await input.adapter.providerHistoryWindow({ identity: input.identity })
-  } catch {
-    return []
+  let history = input.history
+  if (history === undefined) {
+    if (!input.adapter.providerHistoryWindow) {
+      return []
+    }
+    try {
+      history = await input.adapter.providerHistoryWindow({
+        identity: input.identity,
+        accountHome: input.accountHome
+      })
+    } catch {
+      return []
+    }
   }
   if (!history) {
     return []

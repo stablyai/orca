@@ -32,8 +32,9 @@ function comparableBody(body: AgentJournalMessageItem | undefined): boolean {
   return (
     body?.kind === 'message' &&
     body.role === 'user' &&
-    body.blocks.length > 0 &&
-    body.blocks.every((block) => block.type === 'text')
+    body.blocks.length === 1 &&
+    body.blocks[0]?.type === 'text' &&
+    body.blocks[0].text.trim().length > 0
   )
 }
 
@@ -55,7 +56,16 @@ function unseenHistory(
   journal: AgentSessionJournal,
   history: ProviderHistoryWindow
 ): ProviderHistoryWindow {
-  const committed = new Set(journal.snapshot().items.map((item) => item.itemId))
+  const snapshot = journal.snapshot()
+  const committed = new Set(snapshot.items.map((item) => item.itemId))
+  // Accepted submissions alias their provider item to the optimistic `orca:*`
+  // row, so the rendered item id alone does not identify the provider history
+  // already consumed by the journal.
+  for (const submission of snapshot.submissions) {
+    if (submission.dispatchState === 'accepted' && submission.providerItemId) {
+      committed.add(submission.providerItemId)
+    }
+  }
   return {
     ...history,
     items: history.items.filter((item) => !committed.has(agentJournalItemKey(item.identity)))

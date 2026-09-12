@@ -1,14 +1,22 @@
 // The Claude half of restart reconciliation: which transcript records become
 // evidence, and when the read may be called boundary-consistent at all.
 
-import { describe, expect, it } from 'vitest'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { structuredAgentSessionSendBody } from '../../shared/structured-agent-session-outbox'
 import { structuredAgentSessionPayloadFingerprint } from '../../shared/structured-agent-session-mutation'
 import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session-mutation-envelope'
-import { claudeProviderHistoryWindowFromJsonl } from './claude-structured-history-window'
+import {
+  claudeProviderHistoryWindowFromJsonl,
+  resolveClaudeProviderHistoryWindow
+} from './claude-structured-history-window'
 
 const PROVIDER_SESSION = 'provider-1'
 const ORCA_SESSION = 'session-1'
+
+let accountHome: string
 
 type Row = Record<string, unknown>
 
@@ -49,7 +57,39 @@ function sendFingerprint(text: string): string {
 
 const ANCHOR = prompt('anchor', null, 'earlier turn')
 
+beforeEach(async () => {
+  accountHome = await mkdtemp(join(tmpdir(), 'orca-claude-history-window-'))
+})
+
+afterEach(async () => {
+  await rm(accountHome, { recursive: true, force: true })
+})
+
 describe('claudeProviderHistoryWindowFromJsonl', () => {
+  it('resolves history from the session account home, not the process default', async () => {
+    const transcriptPath = join(accountHome, 'projects', 'work', `${PROVIDER_SESSION}.jsonl`)
+    await mkdir(join(accountHome, 'projects', 'work'), { recursive: true })
+    await writeFile(
+      transcriptPath,
+      jsonl([ANCHOR, prompt('u-1', 'anchor', 'ship it')], 'u-1'),
+      'utf8'
+    )
+
+    const window = await resolveClaudeProviderHistoryWindow({
+      identity: {
+        sessionId: ORCA_SESSION,
+        workspaceId: 'workspace-1',
+        hostId: 'host-1',
+        agent: 'claude',
+        providerHandle: { kind: 'claude', sessionId: PROVIDER_SESSION, leafUuid: 'anchor' }
+      },
+      accountHomePath: accountHome,
+      hasLiveSession: false
+    })
+
+    expect(window?.items.map((item) => item.providerItemId)).toEqual(['u-1'])
+  })
+
   it('pins the renderer and host fingerprint functions to the same digest', () => {
     // The renderer computes a send's fingerprint with one, the host admission gate
     // validates it with the other, and the window matches with the host's. A
@@ -89,6 +129,15 @@ describe('claudeProviderHistoryWindowFromJsonl', () => {
     const asString = read(jsonl([ANCHOR, prompt('u-1', 'anchor', 'ship it')], 'u-1'), 'anchor')
 
     expect(asString.items[0]?.payloadFingerprint).toBe(sendFingerprint('ship it'))
+  })
+
+  it('preserves leading whitespace when fingerprinting a text block', () => {
+    const contents = jsonl(
+      [ANCHOR, prompt('u-1', 'anchor', [{ type: 'text', text: '  ship it' }])],
+      'u-1'
+    )
+
+    expect(read(contents, 'anchor').items[0]?.payloadFingerprint).toBe(sendFingerprint('  ship it'))
   })
 
   it('excludes everything before the anchor', () => {

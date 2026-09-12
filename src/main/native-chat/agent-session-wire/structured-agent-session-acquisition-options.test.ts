@@ -4,9 +4,13 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
 import type { AgentSessionOptionsResult } from '../../../shared/agent-session-wire'
+import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
 import { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
+import { digestPayload } from '../agent-session-journal/journal-payload-bounds'
+import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
+import type { ProviderHistoryWindow } from '../agent-session-journal/journal-submission-reconciler'
 import {
   attachFingerprintFields,
   type AgentSessionAttachParams
@@ -103,6 +107,108 @@ function expectSettledAttachLease(record: AgentSessionRecord | null): void {
 }
 
 describe('structured session acquisition options', () => {
+  it('samples provider history before acquiring a replacement child', async () => {
+    root = await mkdtemp(join(tmpdir(), 'orca-history-before-acquire-'))
+    const initialStore = await AgentSessionRecordStore.open({
+      directory: join(root, 'store'),
+      hostId: 'local'
+    })
+    let childAcquired = false
+    const historyWindow = (): ProviderHistoryWindow => ({
+      items: [],
+      boundaryConsistent: true,
+      turnInFlight: childAcquired
+    })
+    const withHistory = (origin: 'created' | 'resumed'): StructuredAgentSessionAdapter => {
+      const sessionAdapter = adapter({ origin })
+      const acquire = vi.mocked(sessionAdapter.acquire)
+      acquire.mockImplementation(async (input) => {
+        childAcquired = true
+        return {
+          process: {
+            hostId: 'local',
+            pid: 4242,
+            processStartTimeMs: NOW,
+            spawnToken: input.spawnToken
+          },
+          link: {
+            linkId: `${origin}-link`,
+            handle: { provider: 'codex', threadId: 'legacy-thread' },
+            origin,
+            mintedAtFence: input.fence,
+            observedAt: NOW
+          }
+        }
+      })
+      sessionAdapter.providerHistoryWindow = vi.fn(async () => historyWindow())
+      return sessionAdapter
+    }
+
+    let firstJournal: AgentSessionJournal | undefined
+    const first = await performAttach({
+      store: initialStore,
+      adapter: withHistory('created'),
+      journalRoot: root,
+      authority: {
+        spawnToken: 'spawn-a',
+        claimKeyId: 'key-1',
+        handoffOperationId: CREATE_OPERATION,
+        probe: { outcome: 'reservation-unused' }
+      },
+      callerKey: 'client-1',
+      params: attachParams(CREATE_OPERATION, null),
+      now: () => NOW,
+      onAttached: (attached) => {
+        firstJournal = attached.journal
+      }
+    })
+    expect(first).toMatchObject({ ok: true })
+    await firstJournal!.appendSubmission({
+      clientMessageId: 'crashed-send',
+      payloadFingerprint: digestPayload('deploy the thing'),
+      body: {
+        kind: 'message',
+        role: 'user',
+        blocks: [{ type: 'text', text: 'deploy the thing' }]
+      } satisfies AgentJournalMessageItem,
+      fence: 1
+    })
+    await firstJournal!.close()
+    const store = await AgentSessionRecordStore.open({
+      directory: join(root, 'store'),
+      hostId: 'local'
+    })
+    await store.reconcileOnRestart({
+      probe: async () => ({ outcome: 'pid-absent' }),
+      now: NOW + 1
+    })
+    childAcquired = false
+    const releasedFence = store.getRecord(SESSION)?.lease.runtimeFence ?? 0
+
+    const second = await performAttach({
+      store,
+      adapter: withHistory('resumed'),
+      journalRoot: root,
+      authority: {
+        spawnToken: 'spawn-b',
+        claimKeyId: 'key-1',
+        handoffOperationId: RESUME_OPERATION,
+        probe: { outcome: 'reservation-unused' }
+      },
+      callerKey: 'client-1',
+      params: attachParams(RESUME_OPERATION, releasedFence),
+      now: () => NOW + 1,
+      onAttached: () => {}
+    })
+
+    expect(second).toMatchObject({ ok: true, value: { unconfirmedClientMessageIds: [] } })
+    expect(second).toMatchObject({
+      value: {
+        page: { submissions: [{ clientMessageId: 'crashed-send', dispatchState: 'rejected' }] }
+      }
+    })
+  })
+
   it('persists create defaults before the first provider acquisition', async () => {
     root = await mkdtemp(join(tmpdir(), 'orca-create-options-'))
     const store = await AgentSessionRecordStore.open({

@@ -174,6 +174,29 @@ describe('reconcileJournalSubmissionsAgainstHistory', () => {
     expect(journal.submissions()[0]?.dispatchState).toBe('unknown')
   })
 
+  it('leaves multi-block text sends unknown because Claude joins them before recording history', async () => {
+    const journal = await reopenAfterCrash(
+      {
+        kind: 'message',
+        role: 'user',
+        blocks: [
+          { type: 'text', text: 'first' },
+          { type: 'text', text: 'second' }
+        ]
+      },
+      'first\nsecond'
+    )
+
+    const settled = await reconcileJournalSubmissionsAgainstHistory({
+      journal,
+      fence: 2,
+      history: window([history('uuid-1', 'first\nsecond')])
+    })
+
+    expect(settled).toEqual([])
+    expect(journal.submissions()[0]?.dispatchState).toBe('unknown')
+  })
+
   it('does not let an item the journal already committed stand in for a new send', async () => {
     const journal = await open()
     // An identical message, delivered and committed BEFORE the one that crashed.
@@ -196,6 +219,42 @@ describe('reconcileJournalSubmissionsAgainstHistory', () => {
     })
 
     expect(restarted.submissions()[0]?.dispatchState).toBe('rejected')
+  })
+
+  it('does not let an older accepted provider item stand in for a new identical send', async () => {
+    const journal = await open()
+    await journal.appendSubmission({
+      clientMessageId: 'cm_old',
+      payloadFingerprint: digestPayload('deploy the thing'),
+      body: userMessage('deploy the thing'),
+      fence: 1
+    })
+    await journal.resolveDispatch({
+      clientMessageId: 'cm_old',
+      state: 'accepted',
+      providerIdentity: claudeIdentity('uuid-old'),
+      fence: 1
+    })
+    await journal.appendSubmission({
+      clientMessageId: 'cm_new',
+      payloadFingerprint: digestPayload('deploy the thing'),
+      body: userMessage('deploy the thing'),
+      fence: 1
+    })
+    const restarted = await open()
+    await restarted.markPendingSubmissionsUnknown(2)
+
+    await reconcileJournalSubmissionsAgainstHistory({
+      journal: restarted,
+      fence: 2,
+      history: window([history('uuid-old', 'deploy the thing')])
+    })
+
+    expect(restarted.submissions().map((entry) => entry.dispatchState)).toEqual([
+      'accepted',
+      'rejected'
+    ])
+    expect(restarted.submissions()[1]?.reason).toBe('not_delivered')
   })
 
   it('leaves two identical unsettled sends unknown rather than guessing between them', async () => {

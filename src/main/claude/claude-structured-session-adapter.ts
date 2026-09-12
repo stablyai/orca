@@ -33,6 +33,7 @@ import {
 import { readClaudeTranscriptLeafWithReproof } from './claude-transcript-branch-proof'
 import type { AgentSessionBackgroundTaskState } from '../../shared/agent-session-wire'
 import type { AgentSessionJournalIdentity } from '../../shared/agent-session-journal-types'
+import type { AgentSessionAccountHome } from '../../shared/agent-session-record'
 import { resolveClaudeProviderHistoryWindow } from './claude-structured-history-window'
 
 export type { ClaudeStructuredLaunch } from './claude-structured-launch-resolution'
@@ -166,12 +167,17 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
     return exit.settlementPromise
   }
 
-  /** Restart reconciliation reads the transcript a resume replays; only this map
-   *  can say whether a child is still appending to it. */
-  providerHistoryWindow = (input: { identity: AgentSessionJournalIdentity }) =>
+  /** Restart reconciliation reads the transcript a resume replays; these maps
+   *  can say whether a child is still appending to it or awaiting tree proof. */
+  providerHistoryWindow = (input: {
+    identity: AgentSessionJournalIdentity
+    accountHome: AgentSessionAccountHome
+  }) =>
     resolveClaudeProviderHistoryWindow({
       identity: input.identity,
-      hasLiveSession: this.sessions.has(input.identity.sessionId)
+      accountHomePath: input.accountHome.path,
+      hasLiveSession:
+        this.sessions.has(input.identity.sessionId) || this.exits.has(input.identity.sessionId)
     })
 
   private async persistSessionHandle(sessionId: string, session: ClaudeSession): Promise<void> {

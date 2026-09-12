@@ -13,6 +13,7 @@
 // boundary rather than an empty window, because the two decide opposite things.
 
 import { readFile, stat } from 'node:fs/promises'
+import { join } from 'node:path'
 import type { AgentSessionJournalIdentity } from '../../shared/agent-session-journal-types'
 import { resolveSessionFilePath } from '../native-chat/session-file-resolver'
 import type {
@@ -52,6 +53,33 @@ function isPlainTextPart(part: unknown): boolean {
   return Boolean(part) && typeof part === 'object' && (part as TranscriptRecord).type === 'text'
 }
 
+/** Recover the text bytes Claude received; the shared decoder trims for display. */
+function rawTextParts(content: unknown): string[] | null {
+  if (typeof content === 'string') {
+    return content.trim() ? [content] : []
+  }
+  if (!Array.isArray(content)) {
+    return []
+  }
+  const parts: string[] = []
+  for (const part of content) {
+    if (typeof part === 'string') {
+      if (part.trim()) {
+        parts.push(part)
+      }
+      continue
+    }
+    const record = part && typeof part === 'object' ? (part as TranscriptRecord) : null
+    if (!record || record.type !== 'text' || typeof record.text !== 'string') {
+      return null
+    }
+    if (record.text.trim()) {
+      parts.push(record.text)
+    }
+  }
+  return parts
+}
+
 /**
  * A user record Orca could itself have submitted. Everything the harness injects
  * is excluded, because a fingerprint computed over machinery would claim a
@@ -87,11 +115,19 @@ function claudePromptBlocks(record: TranscriptRecord): NativeChatBlock[] | null 
   if (blocks.length === 0 || blocks.some((block) => block.type !== 'text')) {
     return null
   }
-  const [first] = blocks
+  const rawTexts = rawTextParts(content)
+  if (rawTexts === null || rawTexts.length !== blocks.length) {
+    return null
+  }
+  const preservedBlocks = blocks.map((block, index) => ({
+    ...block,
+    text: rawTexts[index]!
+  }))
+  const [first] = preservedBlocks
   if (first?.type !== 'text' || isKnownHarnessInjectedUserTurnText(first.text)) {
     return null
   }
-  return blocks
+  return preservedBlocks
 }
 
 /**
@@ -214,13 +250,16 @@ export function claudeProviderHistoryWindowFromJsonl(input: {
  */
 export async function resolveClaudeProviderHistoryWindow(input: {
   identity: AgentSessionJournalIdentity
+  accountHomePath: string
   hasLiveSession: boolean
 }): Promise<ProviderHistoryWindow | null> {
   const handle = input.identity.providerHandle
   if (handle.kind !== 'claude') {
     return null
   }
-  const transcriptPath = await resolveSessionFilePath('claude', handle.sessionId)
+  const transcriptPath = await resolveSessionFilePath('claude', handle.sessionId, {
+    claudeProjectsDir: join(input.accountHomePath, 'projects')
+  })
   if (!transcriptPath) {
     return null
   }

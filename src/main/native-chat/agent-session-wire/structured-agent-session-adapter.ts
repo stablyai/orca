@@ -18,6 +18,7 @@ import type {
 } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionProviderHandleLink } from '../../../shared/agent-session-provider-handle'
 import type {
+  AgentSessionAccountHome,
   AgentSessionExecutionLocation,
   AgentSessionProcessIdentity
 } from '../../../shared/agent-session-record'
@@ -228,6 +229,7 @@ export type StructuredAgentSessionAdapter = {
    *  history; an omitted window leaves every unsettled submission `unknown`. */
   providerHistoryWindow?(input: {
     identity: AgentSessionJournalIdentity
+    accountHome: AgentSessionAccountHome
   }): Promise<ProviderHistoryWindow | null>
   /** Gracefully stops the structured owner after its event stream is drained. */
   /** Returns true only after the provider child exit is proven. */
