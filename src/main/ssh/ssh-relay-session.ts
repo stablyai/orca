@@ -2776,7 +2776,8 @@ export class SshRelaySession {
         ptyId: appPtyId,
         incarnationId,
         ...(mayCreate ? {} : { mayCreate: false }),
-        mayReviveRetiredSurface: false
+        mayReviveRetiredSurface: false,
+        origin: 'relay_reattach'
       })
       if (bound === false) {
         // Topology absence alone is not authority to kill a process, but neither refusal may
