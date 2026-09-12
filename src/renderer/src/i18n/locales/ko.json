@@ -8397,7 +8397,9 @@
             "editorFontFamily": "편집기 글꼴",
             "editorFontFamilyDesc": "파일 편집기 및 diff 보기에서 사용되는 글꼴입니다. 비워두면 터미널 글꼴을 따릅니다.",
             "externalWorktrees": "외부 작업 트리",
-            "externalWorktreesDescription": "Orca 외부에서 만든 작업 트리를 기본적으로 표시할지 선택합니다."
+            "externalWorktreesDescription": "Orca 외부에서 만든 작업 트리를 기본적으로 표시할지 선택합니다.",
+            "editorFontWeight": "편집기 글꼴 두께",
+            "editorFontWeightDesc": "파일 편집기 및 diff 보기에서 사용되는 글꼴 두께입니다. 비워두면 터미널 글꼴 두께를 따릅니다."
           }
         },
         "git": {
@@ -9865,6 +9867,11 @@
           "title": "편집기 글꼴",
           "description": "파일 편집기 및 diff 보기에서 사용되는 글꼴입니다. 비워두면 터미널 글꼴을 따릅니다.",
           "placeholder": "터미널 글꼴과 동일"
+        },
+        "EditorFontWeightSetting": {
+          "title": "편집기 글꼴 두께",
+          "description": "파일 편집기 및 diff 보기에서 사용되는 글꼴 두께입니다. 비워두면 터미널 글꼴 두께를 따릅니다.",
+          "placeholder": "터미널 글꼴 두께와 동일"
         },
         "GeneralRemoteServerUpdates": {
           "serverCount": "{{value0}} paired servers",

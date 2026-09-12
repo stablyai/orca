@@ -21,13 +21,19 @@ export function EditorFontWeightSetting({
 }: EditorFontWeightSettingProps): React.JSX.Element {
   const editorFontWeight = settings.editorFontWeight
 
-  // Why NaN when unset: NumberField renders an empty input — and therefore the
-  // "same as terminal" placeholder — for a non-finite value, which is what tells
-  // the user the editor is still inheriting rather than pinned to its own weight.
+  // Why undefined when unset: NumberField documents undefined as the empty state
+  // that pairs with `placeholder` and `onClear`, which is what shows the user the
+  // editor is still inheriting rather than pinned to its own weight.
   const value =
     typeof editorFontWeight === 'number' && editorFontWeight > 0
       ? normalizeTerminalFontWeight(editorFontWeight)
-      : Number.NaN
+      : undefined
+
+  // Why the terminal weight as the shown default: this setting has no fixed default
+  // of its own — leaving it empty inherits whatever the terminal is on — so surfacing
+  // the live inherited number reads like the terminal's own weight field instead of
+  // leaving the user to guess what "same as terminal" currently resolves to.
+  const inheritedWeight = normalizeTerminalFontWeight(settings.terminalFontWeight)
 
   return (
     <SearchableSetting
@@ -51,6 +57,7 @@ export function EditorFontWeightSetting({
           'Weight used by file editors and diff views. Leave empty to follow the terminal font weight.'
         )}
         value={value}
+        defaultValue={inheritedWeight}
         min={TERMINAL_FONT_WEIGHT_MIN}
         max={TERMINAL_FONT_WEIGHT_MAX}
         step={TERMINAL_FONT_WEIGHT_STEP}

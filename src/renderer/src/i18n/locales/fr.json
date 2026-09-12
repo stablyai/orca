@@ -9253,7 +9253,9 @@
             "editorFontFamily": "Police de l'éditeur",
             "editorFontFamilyDesc": "Police utilisée par les éditeurs de fichiers et les vues de diff. Laissez vide pour suivre la police du terminal.",
             "externalWorktrees": "Worktrees externes",
-            "externalWorktreesDescription": "Choisissez si les worktrees créés en dehors d'Orca apparaissent par défaut."
+            "externalWorktreesDescription": "Choisissez si les worktrees créés en dehors d'Orca apparaissent par défaut.",
+            "editorFontWeight": "Graisse de la police de l'éditeur",
+            "editorFontWeightDesc": "Graisse utilisée par les éditeurs de fichiers et les vues de diff. Laissez vide pour suivre la graisse de la police du terminal."
           }
         },
         "git": {
@@ -10693,6 +10695,11 @@
           "title": "Police de l'éditeur",
           "description": "Police utilisée par les éditeurs de fichiers et les vues de diff. Laissez vide pour suivre la police du terminal.",
           "placeholder": "Identique à la police du terminal"
+        },
+        "EditorFontWeightSetting": {
+          "title": "Graisse de la police de l'éditeur",
+          "description": "Graisse utilisée par les éditeurs de fichiers et les vues de diff. Laissez vide pour suivre la graisse de la police du terminal.",
+          "placeholder": "Identique à la graisse du terminal"
         },
         "GeneralRemoteServerUpdates": {
           "serverCount": "{{value0}} serveurs jumelés",

@@ -8462,7 +8462,9 @@
             "editorFontFamily": "编辑器字体",
             "editorFontFamilyDesc": "文件编辑器和差异视图使用的字体，留空则跟随终端字体。",
             "externalWorktrees": "外部工作树",
-            "externalWorktreesDescription": "选择是否默认显示在 Orca 外部创建的工作树。"
+            "externalWorktreesDescription": "选择是否默认显示在 Orca 外部创建的工作树。",
+            "editorFontWeight": "编辑器字体粗细",
+            "editorFontWeightDesc": "文件编辑器和差异视图使用的字体粗细，留空则跟随终端字体粗细。"
           }
         },
         "git": {
@@ -9930,6 +9932,11 @@
           "title": "编辑器字体",
           "description": "文件编辑器和差异视图使用的字体，留空则跟随终端字体。",
           "placeholder": "与终端字体相同"
+        },
+        "EditorFontWeightSetting": {
+          "title": "编辑器字体粗细",
+          "description": "文件编辑器和差异视图使用的字体粗细，留空则跟随终端字体粗细。",
+          "placeholder": "与终端字体粗细相同"
         },
         "GeneralRemoteServerUpdates": {
           "serverCount": "{{value0}} paired servers",
