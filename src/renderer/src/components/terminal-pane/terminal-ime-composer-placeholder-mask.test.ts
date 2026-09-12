@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import { Terminal } from '@xterm/xterm'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import * as cursorContext from '../../../../shared/terminal-cursor-line-context'
 import {
   installTerminalImeComposerPlaceholderMask,
   TERMINAL_IME_COMPOSER_PLACEHOLDER_CLASS
@@ -129,7 +130,56 @@ describe('terminal IME composer placeholder mask', () => {
     rig.compose()
 
     expect(rig.element.classList.contains(TERMINAL_IME_COMPOSER_PLACEHOLDER_CLASS)).toBe(true)
-    expect(rig.compositionView.querySelector('.xterm-composition-remainder')).not.toBeNull()
+    expect(rig.compositionView.querySelector('.xterm-composition-remainder')).toBeNull()
+    expect(rig.element.querySelector('.xterm-composition-mask')).not.toBeNull()
+  })
+
+  it.each([
+    ['RGB', '\x1b[48;2;57;59;65m', '#393b41'],
+    ['light RGB', '\x1b[48;2;240;240;240m', '#f0f0f0'],
+    ['palette', '\x1b[48;5;236m', '#303030'],
+    ['inverse', '\x1b[38;2;57;59;65m\x1b[7m', '#393b41']
+  ])(
+    'clears the placeholder using its %s cell background without sending input',
+    async (_case, sgr, background) => {
+      const rig = openTerminal()
+      await rig.write(codexPlaceholderFrame().replace('\x1b[1m›', `${sgr}\x1b[1m›`))
+      const original = rig.terminal.buffer.active.getLine(0)?.translateToString(true)
+      const onData = vi.fn()
+      rig.terminal.onData(onData)
+
+      rig.compose('ni')
+
+      expect(rig.compositionView.querySelector('.xterm-composition-remainder')).toBeNull()
+      expect(rig.compositionView.textContent).not.toContain(CODEX_PLACEHOLDER)
+      expect(rig.compositionView.style.backgroundColor).toBe(background)
+      const piece = rig.element.querySelector<HTMLElement>('.xterm-composition-mask > div')
+      expect(piece?.style.backgroundColor).toBe(background)
+      expect(rig.terminal.buffer.active.getLine(0)?.translateToString(true)).toBe(original)
+      expect(onData).not.toHaveBeenCalled()
+
+      rig.textarea.value = ''
+      await rig.endComposition('')
+      expect(rig.element.querySelector('.xterm-composition-mask')).toBeNull()
+      expect(rig.terminal.buffer.active.getLine(0)?.translateToString(true)).toBe(original)
+      expect(onData).not.toHaveBeenCalled()
+    }
+  )
+
+  it('clears wrapped placeholder rows and removes the mask after one committed input', async () => {
+    const rig = openTerminal()
+    rig.terminal.resize(20, 12)
+    await rig.write(codexPlaceholderFrame())
+    const onData = vi.fn()
+    rig.terminal.onData(onData)
+
+    rig.compose('ni')
+
+    expect(rig.compositionView.querySelector('.xterm-composition-remainder')).toBeNull()
+    expect(rig.element.querySelector('.xterm-composition-mask')?.children).toHaveLength(2)
+    await rig.endComposition('你')
+    expect(rig.element.querySelector('.xterm-composition-mask')).toBeNull()
+    expect(onData.mock.calls).toEqual([['你']])
   })
 
   it.each([
@@ -215,11 +265,50 @@ describe('terminal IME composer placeholder mask', () => {
       `\x1b[K\x1b[2m${ordinaryDimOutput}\x1b[22m\x1b[${ordinaryDimOutput.length}D`
     )
     expect(rig.element.classList.contains(TERMINAL_IME_COMPOSER_PLACEHOLDER_CLASS)).toBe(false)
+    expect(rig.compositionView.querySelector('.xterm-composition-remainder')?.textContent).toBe(
+      ordinaryDimOutput
+    )
+    expect(rig.element.querySelector('.xterm-composition-mask')).toBeNull()
 
     await rig.writeAwaitingRender(
       `\x1b[K\x1b[2m${CODEX_PLACEHOLDER}\x1b[22m\x1b[${CODEX_PLACEHOLDER.length}D`
     )
     expect(rig.element.classList.contains(TERMINAL_IME_COMPOSER_PLACEHOLDER_CLASS)).toBe(true)
+  })
+
+  it('reads context once per render-time decision and stops after disposal', async () => {
+    const rig = openTerminal()
+    await rig.writeAwaitingRender(codexPlaceholderFrame())
+    rig.compose()
+    await nextEventLoop()
+    const readContext = vi.spyOn(cursorContext, 'readTerminalCursorLineContext')
+    const decisions: boolean[] = []
+    rig.element.addEventListener('xterm-composition-remainder', (event) => {
+      decisions.push(event.defaultPrevented)
+    })
+
+    for (const [text, masked] of [
+      ['Background task', false],
+      [CODEX_PLACEHOLDER, true]
+    ] as const) {
+      readContext.mockClear()
+      decisions.length = 0
+      await rig.writeAwaitingRender(`\x1b[K\x1b[2m${text}\x1b[22m\x1b[${text.length}D`)
+      expect(decisions.length).toBeGreaterThan(0)
+      expect(decisions.at(-1)).toBe(masked)
+      expect(readContext).toHaveBeenCalledTimes(decisions.length)
+      expect(rig.element.classList.contains(TERMINAL_IME_COMPOSER_PLACEHOLDER_CLASS)).toBe(masked)
+    }
+
+    rig.disposeMask()
+    readContext.mockClear()
+    decisions.length = 0
+    dispatchSession(rig, XTERM_COMPOSITION_SESSION_START_EVENT, 99)
+    await rig.writeAwaitingRender(codexPlaceholderFrame())
+    expect(readContext).not.toHaveBeenCalled()
+    expect(decisions.length).toBeGreaterThan(0)
+    expect(decisions.every((decision) => !decision)).toBe(true)
+    expect(rig.element.classList.contains(TERMINAL_IME_COMPOSER_PLACEHOLDER_CLASS)).toBe(false)
   })
 
   it('clears ownership on composition end, blur, and disposal', async () => {
