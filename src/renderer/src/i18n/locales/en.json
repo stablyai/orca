@@ -6033,7 +6033,7 @@
         "WorktreeParentPickerPopover": {
           "failedSetParent": "Failed to set parent worktree",
           "current": "Current",
-          "searchPlaceholder": "Search worktrees...",
+          "searchPlaceholder": "Search for worktrees...",
           "empty": "No matching eligible worktrees.",
           "setParentFor": "Set parent for"
         },
@@ -6168,7 +6168,7 @@
         "WorkspaceKanbanSearchField": {
           "bdb753c78d": "No workspaces match",
           "4d96c209d6": "{{value0}} of {{value1}} workspaces match",
-          "c0cd6bdf6c": "Search workspaces",
+          "c0cd6bdf6c": "Search for workspaces...",
           "3b7ea51793": "Clear search",
           "7f1c2e94a5": "Search text is too long — the board is unfiltered",
           "9a4d0f6b21": "Too long"
@@ -16243,7 +16243,6 @@
           "8c3b621ddf": "Project",
           "4a3986b200": "Status",
           "770d458144": "Group by",
-          "795cbf26e2": "Filter...",
           "4616ea39fd": "Jump to workspace",
           "markThreadRead": "Mark thread as read",
           "59b131fbd9": "Mark thread unread",
@@ -16254,6 +16253,7 @@
           "clearCompleted": "Clear completed",
           "none": "None",
           "search": "Search",
+          "searchAgent": "Search for agents...",
           "showUnreadOnly": "Show unread only",
           "showChildAgents": "Show child agents",
           "activityOptions": "Activity options",
@@ -16880,7 +16880,7 @@
         "label": "Parent worktree",
         "noParent": "No parent",
         "description": "Nests this workspace under another in the sidebar. Does not change the base branch.",
-        "searchPlaceholder": "Search workspaces...",
+        "searchPlaceholder": "Search for worktrees...",
         "noMatches": "No matches."
       },
       "browserPane": {
