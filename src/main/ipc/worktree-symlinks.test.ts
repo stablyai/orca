@@ -24,6 +24,7 @@ import {
   removeWorktreeLinkedPaths,
   removeWorktreeSymlinks
 } from './worktree-symlinks'
+import { RefsCloneUnavailableError } from './worktree-refs-clone'
 
 type WorktreeLinkedPathOptionsForTest = NonNullable<Parameters<typeof createWorktreeLinkedPaths>[3]>
 type ApfsCloneDepsForTest = NonNullable<WorktreeLinkedPathOptionsForTest['apfsCloneDeps']>
@@ -231,6 +232,43 @@ describe('createWorktreeSymlinks', () => {
     )
     expect(lstatSync(join(worktree, '.env')).isSymbolicLink()).toBe(false)
     expect(statSync(join(worktree, '.env')).isFile()).toBe(true)
+  })
+
+  it('uses ReFS block cloning for configured paths on Windows', async () => {
+    writeFileSync(join(primary, '.env'), 'SECRET=1\n')
+    const cloneWorktreePath = vi.fn(async (_source: string, target: string) => {
+      writeFileSync(target, 'CLONED=1\n')
+    })
+
+    await createWorktreeLinkedPaths(primary, worktree, ['.env'], {
+      platform: 'win32',
+      cloneWorktreePath
+    })
+
+    expect(cloneWorktreePath).toHaveBeenCalledWith(
+      join(primary, '.env'),
+      join(worktree, '.env'),
+      false
+    )
+    expect(lstatSync(join(worktree, '.env')).isSymbolicLink()).toBe(false)
+    expect(readFileSync(join(worktree, '.env'), 'utf8')).toBe('CLONED=1\n')
+  })
+
+  it('falls back to a junction when Windows ReFS block cloning is unavailable', async () => {
+    mkdirSync(join(primary, 'node_modules'))
+    writeFileSync(join(primary, 'node_modules', 'marker'), 'installed')
+    const cloneWorktreePath = vi.fn(async () => {
+      throw new RefsCloneUnavailableError('not same-volume ReFS')
+    })
+
+    await createWorktreeLinkedPaths(primary, worktree, ['node_modules'], {
+      platform: 'win32',
+      cloneWorktreePath
+    })
+
+    expect(cloneWorktreePath).toHaveBeenCalledTimes(1)
+    expect(lstatSync(join(worktree, 'node_modules')).isSymbolicLink()).toBe(true)
+    expect(readFileSync(join(worktree, 'node_modules', 'marker'), 'utf8')).toBe('installed')
   })
 
   it('does not overwrite a file target that appears before APFS clone-copy is published', async () => {
@@ -453,6 +491,19 @@ describe('createWorktreeSharedPaths', () => {
 
     await createWorktreeSharedPaths(primary, worktree, ['node_modules'], {
       platform: 'darwin',
+      cloneWorktreePath
+    })
+
+    expect(cloneWorktreePath).not.toHaveBeenCalled()
+    expect(lstatSync(join(worktree, 'node_modules')).isSymbolicLink()).toBe(true)
+  })
+
+  it('shares on Windows without invoking ReFS block cloning', async () => {
+    mkdirSync(join(primary, 'node_modules'))
+    const cloneWorktreePath = vi.fn()
+
+    await createWorktreeSharedPaths(primary, worktree, ['node_modules'], {
+      platform: 'win32',
       cloneWorktreePath
     })
 
