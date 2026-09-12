@@ -1,6 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { connect } from './rpc-client'
 import { isRpcDeliveryUnknown } from './rpc-delivery-ambiguity'
+import {
+  createStableLogicalRpcClient,
+  isLogicalClientCutoverError,
+  LogicalClientCutoverError
+} from './stable-logical-rpc-client'
 
 vi.mock('./e2ee', () => ({
   generateKeyPair: () => ({
@@ -72,7 +77,7 @@ function hasSentRequest(socket: MockWebSocket, method: string): boolean {
 
 function connectAuthenticated(): { client: ReturnType<typeof connect>; socket: MockWebSocket } {
   const client = connect('ws://desktop.invalid', 'token', 'server-key')
-  const socket = mockSockets[0]!
+  const socket = mockSockets[mockSockets.length - 1]!
   socket.open()
   socket.receive(JSON.stringify({ type: 'e2ee_ready' }))
   socket.receive('encrypted:{"type":"e2ee_authenticated"}')
@@ -92,6 +97,52 @@ describe('mobile rpc-client delivery ambiguity marking', () => {
   afterEach(() => {
     vi.useRealTimers()
     globalThis.WebSocket = originalWebSocket
+  })
+
+  it.each([true, false])(
+    'preserves physical delivery evidence at the cutover caller (sent=%s)',
+    async (sent) => {
+      const physical = sent
+        ? connectAuthenticated()
+        : {
+            client: connect('ws://desktop.invalid', 'token', 'server-key'),
+            socket: mockSockets[0]!
+          }
+      const client = createStableLogicalRpcClient(physical.client, 'lan')
+      const replacement = connectAuthenticated()
+      const requestError = client
+        .sendRequest('worktree.create', { name: 'new' })
+        .catch((error: unknown) => error)
+      await Promise.resolve()
+      expect(hasSentRequest(physical.socket, 'worktree.create')).toBe(sent)
+
+      await client.migrateTo(replacement.client, 'relay')
+
+      const error = await requestError
+      expect(isLogicalClientCutoverError(error)).toBe(true)
+      expect(isRpcDeliveryUnknown(error)).toBe(sent)
+      expect(error).toBeInstanceOf(LogicalClientCutoverError)
+      expect(isRpcDeliveryUnknown((error as Error).cause)).toBe(sent)
+      expect(hasSentRequest(replacement.socket, 'worktree.create')).toBe(false)
+      expect(
+        physical.socket.sent.filter((payload) => payload.includes('worktree.create'))
+      ).toHaveLength(sent ? 1 : 0)
+      client.close()
+    }
+  )
+
+  it('recognizes a cutover by class even when its message changes', () => {
+    const error = new LogicalClientCutoverError()
+    error.message = 'wrapped migration'
+    expect(isLogicalClientCutoverError(error)).toBe(true)
+  })
+
+  it('recognizes a cutover message from another bundle copy', () => {
+    expect(isLogicalClientCutoverError(new Error('RPC interrupted by connection migration'))).toBe(
+      true
+    )
+    expect(isLogicalClientCutoverError(new Error('Client closed'))).toBe(false)
+    expect(isLogicalClientCutoverError('RPC interrupted by connection migration')).toBe(false)
   })
 
   it('marks in-flight requests as delivery-unknown when the socket drops', async () => {
