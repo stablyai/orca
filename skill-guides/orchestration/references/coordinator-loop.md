@@ -9,7 +9,7 @@ need separate workspaces.
 ORCA orchestration run-create --objective "<goal>"
 ORCA orchestration task-create --spec "<dependent work>" --deps <json_array>
 ORCA orchestration task-list --ready --brief
-ORCA orchestration worker-start --task <task_id> --worktree current --agent codex
+ORCA orchestration worker-start --task <task_id> --worktree current
 ```
 
 On every wake, start the Tasks `task-list --ready` shows.

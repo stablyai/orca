@@ -7,8 +7,10 @@ Retry a failed or stopped attempt on the same Task; `--spec` would create a new
 one. Placement is not inherited:
 
 ```text
-ORCA orchestration worker-start --task <task_id> --retry-of <dispatch_id> --worktree <placement> --agent <agent>
+ORCA orchestration worker-start --task <task_id> --retry-of <dispatch_id> --worktree <placement>
 ```
+
+Add `--agent` only when the Settings default agent is not wanted.
 
 `worker-stop` exits 1 with `stop_unknown` when it cannot prove the agent
 stopped; check `worker-show` before acting again.

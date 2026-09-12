@@ -40,12 +40,8 @@ export function validateFederatedWorkerStartPlacement(
   if (params.terminal && params.agent) {
     throw new OrchestrationError('invalid_argument', TERMINAL_WITH_AGENT_REFUSAL)
   }
-  if (!params.terminal && !params.agent) {
-    throw new OrchestrationError(
-      'agent_unconfigured',
-      'A configured --agent is required when remote worker-start creates a terminal.'
-    )
-  }
+  // Why: an omitted --agent uses the worker host's Settings default, and only that host can
+  // resolve a configured command alias, so the name is validated there.
 }
 
 export function prepareLocalWorkerStart(args: {
@@ -79,7 +75,8 @@ export function prepareLocalWorkerStart(args: {
     agent: params.agent,
     model: params.model,
     effort: params.effort,
-    missingAgentMessage: 'A configured --agent is required when worker-start creates a terminal.'
+    missingAgentMessage:
+      'An enabled --agent (or an enabled default agent in Settings) is required when worker-start creates a terminal.'
   })
 }
 
@@ -124,7 +121,7 @@ export function prepareFederationAttachmentWorkerStart(args: {
     model: params.model,
     effort: params.effort,
     missingAgentMessage:
-      'A configured --agent is required when federated worker-start creates a terminal.'
+      'An enabled --agent (or an enabled default agent in Settings) is required when federated worker-start creates a terminal.'
   })
 }
 
@@ -138,11 +135,19 @@ function resolveWorkerStartAgent(args: {
   effort?: string
   missingAgentMessage: string
 }): { agent: TuiAgent | undefined; launch: WorkerStartLaunch } {
-  const agent = args.agent
-    ? isTuiAgent(args.agent)
-      ? args.agent
-      : args.runtime.resolveOrchestrationAgentLauncher?.(args.agent)
-    : undefined
+  const agent = args.terminal
+    ? undefined
+    : args.agent === undefined
+      ? resolveDefaultWorkerAgent(args.runtime)
+      : resolveNamedWorkerAgent(args.runtime, args.agent)
+  // Why: only an omitted --agent falls back to the Settings default; a mistyped, empty, or
+  // unconfigured name must fail rather than silently launch a different agent.
+  if (!args.terminal && args.agent !== undefined && !agent) {
+    throw new OrchestrationError(
+      'agent_unconfigured',
+      `--agent "${args.agent}" is not an agent id or a configured command alias.`
+    )
+  }
   if (!args.terminal && !agent) {
     throw new OrchestrationError('agent_unconfigured', args.missingAgentMessage)
   }
@@ -166,4 +171,15 @@ function resolveWorkerStartAgent(args: {
       receipt: createWorkerLaunchReceipt({ agent: null })
     }
   }
+}
+
+function resolveNamedWorkerAgent(runtime: OrcaRuntimeService, name: string): TuiAgent | undefined {
+  if (isTuiAgent(name)) {
+    return name
+  }
+  return name ? runtime.resolveOrchestrationAgentLauncher?.(name) : undefined
+}
+
+function resolveDefaultWorkerAgent(runtime: OrcaRuntimeService): TuiAgent | undefined {
+  return runtime.resolveDefaultOrchestrationAgent() ?? undefined
 }
