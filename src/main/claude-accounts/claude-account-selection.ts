@@ -48,15 +48,16 @@ export class ClaudeAccountSelection {
         this.store.updateSettings({
           activeClaudeManagedAccountId: nextActiveId,
           activeClaudeManagedAccountIdsByRuntime: nextSelection
-        })
+        }, { notifyListeners: true })
         await this.syncRuntimeAuth(target)
-        this.store.updateSettings({ claudeManagedAccounts: nextAccounts })
+        // Why: an external removal must also broadcast the roster, or the renderer keeps the removed account until an unrelated refetch.
+        this.store.updateSettings({ claudeManagedAccounts: nextAccounts }, { notifyListeners: true })
       } else {
         this.store.updateSettings({
           claudeManagedAccounts: nextAccounts,
           activeClaudeManagedAccountId: nextActiveId,
           activeClaudeManagedAccountIdsByRuntime: nextSelection
-        })
+        }, { notifyListeners: true })
         await this.syncRuntimeAuth(target)
       }
       await this.removeManagedAuth(accountId, account.managedAuthPath)
@@ -103,7 +104,7 @@ export class ClaudeAccountSelection {
       activeClaudeManagedAccountId:
         effectiveTarget?.runtime === 'wsl' ? nextSelection.host : accountId,
       activeClaudeManagedAccountIdsByRuntime: nextSelection
-    })
+    }, { notifyListeners: true })
     try {
       await this.syncRuntimeAuth(effectiveTarget)
       await this.rateLimits.refreshForClaudeAccountChange(outgoingAccountId, effectiveTarget)
@@ -141,7 +142,7 @@ export class ClaudeAccountSelection {
       claudeManagedAccounts: settings.claudeManagedAccounts,
       activeClaudeManagedAccountId: settings.activeClaudeManagedAccountId,
       activeClaudeManagedAccountIdsByRuntime: settings.activeClaudeManagedAccountIdsByRuntime
-    })
+    }, { notifyListeners: true })
   }
 
   async syncRuntimeAuth(
@@ -170,7 +171,7 @@ export class ClaudeAccountSelection {
       this.store.updateSettings({
         activeClaudeManagedAccountId: nextSelection.host,
         activeClaudeManagedAccountIdsByRuntime: nextSelection
-      })
+      }, { notifyListeners: true })
     }
   }
 }

@@ -76,7 +76,7 @@ export class CodexAccountSelection {
       codexManagedAccounts: nextAccounts,
       activeCodexManagedAccountId: nextActiveId,
       activeCodexManagedAccountIdsByRuntime: nextSelection
-    })
+    }, { notifyListeners: true })
     this.dependencies.runtimeHome.syncForCurrentSelection()
     if (account.managedHomeRuntime === 'host' && nextSelection.host === null) {
       this.dependencies.lifecycle.onHostSystemDefaultSelected?.()
@@ -127,7 +127,7 @@ export class CodexAccountSelection {
       activeCodexManagedAccountId:
         effectiveTarget?.runtime === 'wsl' ? nextSelection.host : accountId,
       activeCodexManagedAccountIdsByRuntime: nextSelection
-    })
+    }, { notifyListeners: true })
     this.dependencies.configMirror.safeSyncToManagedHomes()
     this.dependencies.runtimeHome.syncForCurrentSelection(effectiveTarget)
     if (
@@ -157,7 +157,7 @@ export class CodexAccountSelection {
     this.dependencies.store.updateSettings({
       activeCodexManagedAccountId: nextSelection.host,
       activeCodexManagedAccountIdsByRuntime: nextSelection
-    })
+    }, { notifyListeners: true })
     if (selection.host !== null && nextSelection.host === null) {
       this.dependencies.lifecycle.onHostSystemDefaultSelected?.()
     }

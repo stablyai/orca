@@ -106,6 +106,12 @@ describe('ClaudeAccountService credential capture', () => {
       claudeManagedAccounts: [],
       activeClaudeManagedAccountId: null
     })
+    // Why: an external removal must broadcast the roster write too, or the renderer
+    // keeps the removed account in its settings cache until an unrelated refetch.
+    expect(store.updateSettings).toHaveBeenCalledWith(
+      expect.objectContaining({ claudeManagedAccounts: [] }),
+      { notifyListeners: true }
+    )
   })
 
   it('switches the active Claude account while PTYs are live', async () => {
@@ -188,6 +194,11 @@ describe('ClaudeAccountService credential capture', () => {
     expect(rateLimits.refreshForClaudeAccountChange).toHaveBeenCalledWith('account-1', {
       runtime: 'host'
     })
+    // Why: mobile/CLI-initiated switches have no renderer-side refetch, so the write must broadcast.
+    expect(store.updateSettings).toHaveBeenCalledWith(
+      expect.objectContaining({ activeClaudeManagedAccountId: 'account-2' }),
+      { notifyListeners: true }
+    )
   })
 
   it('restores the previous selection when a Claude account switch fails', async () => {
