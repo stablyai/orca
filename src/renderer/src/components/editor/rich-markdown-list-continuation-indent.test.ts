@@ -19,6 +19,21 @@ function roundTrip(source: string): string {
   }
 }
 
+function documentContent(source: string): JSONContent[] {
+  const codec = createRichMarkdownEditorCodec()
+  const editor = new Editor({
+    element: null,
+    extensions: createRichMarkdownExtensions({ codec }),
+    content: encodeRawMarkdownHtmlForRichEditor(source, codec),
+    contentType: 'markdown'
+  })
+  try {
+    return editor.getJSON().content ?? []
+  } finally {
+    editor.destroy()
+  }
+}
+
 const SHAPES = [
   ['9. Single digit item and words here\n   and must stay inside item 9.'],
   ['10. Two digit item and words here\n    and must stay inside item 10.'],
@@ -140,5 +155,60 @@ describe('nested ordered list continuation', () => {
   ])('re-indents the lazy continuation in %j to its item content column', (source, expected) => {
     expect(roundTrip(source)).toBe(expected)
     expect(roundTrip(expected)).toBe(expected)
+  })
+})
+
+describe('block context inside an ordered list', () => {
+  it.each([
+    ['1. parent\n   ```\n   1. literal\n   ```'],
+    ['1. parent\n   ```\n   not a list\n   ```\n2. sibling'],
+    ['1. parent\n   ```js\n   const a = 1\n   ```']
+  ])('keeps the fenced code in %j literal', (source) => {
+    expect(roundTrip(source)).toBe(source)
+  })
+
+  it("reads a fence after a blank line as code at the item's column", () => {
+    // Why: the serializer emits a tight item, so the blank separator is dropped
+    // while the fence keeps the item's content column.
+    expect(roundTrip('1. parent\n\n   ```\n   1. literal\n   ```')).toBe(
+      '1. parent\n   ```\n   1. literal\n   ```'
+    )
+  })
+
+  it('reads a tilde-fenced list marker as code rather than an item', () => {
+    // Why: the serializer spells every fence with backticks, so only the content
+    // of the block is round-tripped here.
+    expect(roundTrip('1. parent\n   ~~~\n   2. literal\n   ~~~')).toBe(
+      '1. parent\n   ```\n   2. literal\n   ```'
+    )
+  })
+
+  it('ends the list at a post-blank line no frame owns', () => {
+    expect(roundTrip('1. item\n\n  outside')).toBe('1. item\n\n  outside')
+  })
+
+  it.each([['1. item\n\n       code'], ['1. item\n\n       code\n\n   after']])(
+    'keeps the indented code in %j a code block',
+    (source) => {
+      const [list] = documentContent(source)
+      const item = (list.content ?? [])[0]
+
+      expect((item.content ?? []).map((child) => child.type)).toContain('codeBlock')
+    }
+  )
+
+  it.each([['0. zero\n1. one'], ['0. only'], ['0. zero\n1. one\n2. two']])(
+    'preserves the start value in %j',
+    (source) => {
+      expect(roundTrip(source)).toBe(source)
+    }
+  )
+
+  it.each([['0. zero\n1. one'], ['0. only']])('keeps %j stable across three cycles', (source) => {
+    let current = source
+    for (let cycle = 0; cycle < 3; cycle += 1) {
+      current = roundTrip(current)
+    }
+    expect(current).toBe(source)
   })
 })

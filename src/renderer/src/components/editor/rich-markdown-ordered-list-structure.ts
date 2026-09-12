@@ -5,6 +5,33 @@ import type { Lexer, Token, Tokens } from 'marked'
 const ORDERED_ITEM = /^(\s*)(\d+)\.(\s+)(.*)$/
 const INDENTED_LINE = /^\s/
 const BLOCK_CONTENT_LINE = /^([-+*]\s+|\d+\.\s+|>\s?|```|~~~)/
+// Why: a fence is at least three of its character, and the closing fence may not
+// be shorter than the one that opened it (CommonMark section 4.5).
+const FENCE = /^(\s*)(`{3,}|~{3,})(.*)$/
+
+type OpenFence = { marker: string; length: number; indent: number }
+
+/**
+ * Tracks whether the scan sits inside a fenced code block, so a line that looks
+ * like a list marker is read as code. The opener's info string may not contain a
+ * backtick, and only a fence of the same character and at least the same length
+ * closes it.
+ */
+function nextFence(fence: OpenFence | undefined, line: string): OpenFence | undefined {
+  const match = line.match(FENCE)
+  if (!match) {
+    return fence
+  }
+  const [, indent, marker, rest] = match
+  if (fence === undefined) {
+    if (marker.startsWith('`') && rest.includes('`')) {
+      return undefined
+    }
+    return { marker: marker[0], length: marker.length, indent: indent.length }
+  }
+  const closes = marker[0] === fence.marker && marker.length >= fence.length && rest.trim() === ''
+  return closes ? undefined : fence
+}
 
 /** An ordered item under construction, with the lines that belong to it. */
 type CollectedItem = {
@@ -32,9 +59,12 @@ function collectOrderedItems(lines: string[]): [CollectedItem[], number] {
   const stack: OpenFrame[] = []
   let index = 0
   let sawBlank = false
+  let fence: OpenFence | undefined
   while (index < lines.length) {
     const line = lines[index]
-    const match = line.match(ORDERED_ITEM)
+    const openFence = fence
+    fence = nextFence(fence, line)
+    const match = openFence === undefined ? line.match(ORDERED_ITEM) : null
     if (match) {
       const [, indent, number, gap, content] = match
       const itemIndent = indent.length
@@ -63,13 +93,13 @@ function collectOrderedItems(lines: string[]): [CollectedItem[], number] {
     if (innermost === undefined) {
       break
     }
-    if (line.trim() === '') {
+    if (openFence === undefined && line.trim() === '') {
       appendToItem(innermost.item, '', line)
       sawBlank = true
       index += 1
       continue
     }
-    if (!INDENTED_LINE.test(line)) {
+    if (openFence === undefined && !INDENTED_LINE.test(line)) {
       // Why: an unindented line after a blank one is outside the list entirely.
       if (sawBlank) {
         break
@@ -82,13 +112,13 @@ function collectOrderedItems(lines: string[]): [CollectedItem[], number] {
     // Why: without an intervening blank line the line lazily continues the
     // innermost open item's paragraph whatever its own indent, so only a line
     // after a blank one may be claimed by an outer item.
-    let owner = innermost
-    if (sawBlank) {
-      owner = stack[0]
-      for (const frame of stack) {
-        if (leading >= frame.column) {
-          owner = frame
-        }
+    let owner: OpenFrame | undefined = innermost
+    if (sawBlank && openFence === undefined) {
+      // Why: a line indented less than every frame's content column belongs to no
+      // item, which ends the list rather than joining its outermost one.
+      owner = stack.findLast((frame) => leading >= frame.column)
+      if (owner === undefined) {
+        break
       }
     }
     appendToItem(owner.item, line.slice(Math.min(owner.column, leading)), line)
@@ -138,6 +168,27 @@ function splitItemContent(contentLines: string[]): {
   return { paragraphLines, blockLines }
 }
 
+/**
+ * Drops the blank lines that separate a block from what precedes it, and any
+ * trailing whitespace, keeping the leading indentation of the first content line.
+ * Four columns of it makes an indented code block, so trimming the block whole
+ * turns that code into a paragraph.
+ */
+function trimBlockText(lines: string[]): string {
+  let start = 0
+  while (start < lines.length && lines[start].trim() === '') {
+    start += 1
+  }
+  let end = lines.length
+  while (end > start && lines[end - 1].trim() === '') {
+    end -= 1
+  }
+  return lines
+    .slice(start, end)
+    .map((line) => line.trimEnd())
+    .join('\n')
+}
+
 /** Turns the collected items at one nesting level into `list_item` tokens. */
 function buildListItems(
   items: CollectedItem[],
@@ -163,7 +214,7 @@ function buildListItems(
         tokens: lexer.inlineTokens(mainText)
       } as Tokens.Paragraph)
     }
-    const blockText = blockLines.join('\n').trim()
+    const blockText = trimBlockText(blockLines)
     if (blockText) {
       tokens.push(...lexer.blockTokens(blockText))
     }
@@ -186,7 +237,7 @@ function buildListItems(
     }
     // Why: content after a nested list belongs to the same item but must follow
     // the nested list token so the item's children keep their source order.
-    const trailingText = item.trailingLines.join('\n').trim()
+    const trailingText = trimBlockText(item.trailingLines)
     if (trailingText) {
       tokens.push(...lexer.blockTokens(trailingText))
     }
@@ -218,7 +269,7 @@ export function tokenizeOrderedList(source: string, lexer: Lexer): Tokens.List |
   return {
     type: 'list',
     ordered: true,
-    start: items[0].number || 1,
+    start: items[0].number,
     loose: false,
     items: listItems,
     raw: lines.slice(0, consumed).join('\n')
