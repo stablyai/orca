@@ -5,6 +5,7 @@ import type { SshGitProvider } from '../providers/ssh-git-provider'
 import { cleanupUnusedWorktreePushTargetRemoteSsh } from '../ipc/worktree-remote'
 import type { RuntimeStore } from './runtime-store-contract'
 import type { RuntimeWorktreeRemovalTarget } from './runtime-worktree-selection'
+import { gateRemovalWhereArchiveHookCannotRun } from '../worktree-archive-hook-gate'
 
 export async function removeRuntimeRegisteredRemoteWorktree(args: {
   repo: Repo
@@ -15,6 +16,8 @@ export async function removeRuntimeRegisteredRemoteWorktree(args: {
   provider: SshGitProvider
   /** From the resolved removal route; `repo.connectionId!` answered null for an `ssh:`-only row. */
   connectionId: string
+  /** #19334: this path runs no archive hook, so the gate below decides what that means. */
+  runHooks: boolean
   force: boolean
   allowUnverifiedPtyStop: boolean
   deleteBranch: boolean
@@ -29,8 +32,15 @@ export async function removeRuntimeRegisteredRemoteWorktree(args: {
     fallbackHead: string | undefined
   ) => RemoveWorktreeResult
   finishRemoval: (result: RemoveWorktreeResult) => void
-}): Promise<RemoveWorktreeResult> {
+}): Promise<RemoveWorktreeResult & { warning?: string }> {
   const { repo, target, registeredWorktree, provider, connectionId } = args
+  // Precondition, before anything is stopped or deleted: no archive hook runs here, so a removal
+  // that asked for one refuses rather than deleting with the archive step silently skipped.
+  const hookWarning = gateRemovalWhereArchiveHookCannotRun({
+    repo,
+    worktreePath: registeredWorktree.path,
+    runHooks: args.runHooks
+  })
   const removeOptions = !args.deleteBranch ? { deleteBranch: args.deleteBranch } : {}
   const gate = await args.acquireWatcherRemoval(registeredWorktree.path, connectionId)
   let rawResult: RemoveWorktreeResult | undefined
@@ -54,5 +64,5 @@ export async function removeRuntimeRegisteredRemoteWorktree(args: {
   )
   await args.deleteHistory()
   args.finishRemoval(result)
-  return result
+  return hookWarning ? { ...result, warning: hookWarning } : result
 }

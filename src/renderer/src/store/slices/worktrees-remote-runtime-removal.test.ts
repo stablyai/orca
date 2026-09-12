@@ -601,6 +601,8 @@ describe('worktree remote runtime mutations', () => {
       force: undefined,
       // Why (#11960): an ordinary remove never waives the PTY-stop proof.
       allowUnverifiedPtyStop: false,
+      // Why (#19334): nor a failed archive hook — only the explicit "Delete anyway" retry does.
+      allowFailedArchiveHook: false,
       skipArchive: false
     })
     expect(runtimeEnvironmentCall).not.toHaveBeenCalled()

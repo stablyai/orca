@@ -1,6 +1,5 @@
 import { readFileSync, existsSync } from 'node:fs'
 import { join } from 'node:path'
-import { exec } from 'node:child_process'
 import { parseOrcaYaml } from '../shared/orca-yaml'
 import { resolveHookCommandSourcePolicy } from '../shared/hook-command-source-policy'
 import { getEffectiveHooksFromConfig } from './effective-hook-config'
@@ -15,6 +14,7 @@ import type { HookRuntimeTarget } from './hook-runtime-target'
 import type { OrcaHooks } from '../shared/orca-yaml-hook-types'
 import type { Repo } from '../shared/repo-types'
 import type { ProjectExecutionRuntimeResolution } from '../shared/project-execution-runtime'
+import { runHookScriptWithDeadline } from './hook-script-deadline'
 
 const HOOK_TIMEOUT = 120_000 // 2 minutes
 
@@ -121,7 +121,9 @@ export function runHook(
   repo: Repo,
   hooksPath?: string,
   projectRuntime?: ProjectExecutionRuntimeResolution | HookRuntimeTarget
-): Promise<{ success: boolean; output: string }> {
+  // Why (#19334): an absent exitCode means no exit was ever observed. The archive-hook removal
+  // gate reads that as `unverifiable` rather than folding it into a zero.
+): Promise<{ success: boolean; output: string; exitCode?: number }> {
   const hooks = getEffectiveHooks(repo, hooksPath)
   const script = hooks?.scripts[hookName]
 
@@ -176,7 +178,11 @@ export function runHook(
         if (result.code !== 0) {
           const message = `Command failed with exit code ${result.code}.`
           console.error(`[hooks] ${hookName} hook failed in ${cwd}:`, message)
-          return { success: false, output: `${result.stdout}\n${result.stderr}\n${message}`.trim() }
+          return {
+            success: false,
+            output: `${result.stdout}\n${result.stderr}\n${message}`.trim(),
+            ...(typeof result.code === 'number' ? { exitCode: result.code } : {})
+          }
         }
         console.log(`[hooks] ${hookName} hook completed in ${cwd}`)
         return { success: true, output: `${result.stdout}\n${result.stderr}`.trim() }
@@ -191,31 +197,27 @@ export function runHook(
   const shellHookEnv: NodeJS.ProcessEnv = { ...process.env, ...getSetupEnvVars(repo, cwd) }
   dropIncoherentCondaActivationEnv(shellHookEnv)
 
-  return new Promise((resolve) => {
-    exec(
-      script,
-      {
-        cwd,
-        timeout: HOOK_TIMEOUT,
-        shell: getHookShell(),
-        // Why: hooks run unattended; block Git Credential Manager's interactive prompt while keeping cached auth (issue #7652).
-        env: promptGuardShellEnv(shellHookEnv)
-      },
-      (error, stdout, stderr) => {
-        if (error) {
-          console.error(`[hooks] ${hookName} hook failed in ${cwd}:`, error.message)
-          resolve({
-            success: false,
-            output: `${stdout}\n${stderr}\n${error.message}`.trim()
-          })
-        } else {
-          console.log(`[hooks] ${hookName} hook completed in ${cwd}`)
-          resolve({
-            success: true,
-            output: `${stdout}\n${stderr}`.trim()
-          })
+  return runHookScriptWithDeadline({
+    script,
+    cwd,
+    shell: getHookShell(),
+    // Why: hooks run unattended; block Git Credential Manager's interactive prompt while keeping cached auth (issue #7652).
+    env: promptGuardShellEnv(shellHookEnv),
+    timeoutMs: HOOK_TIMEOUT
+  }).then((result) => {
+    if (result.success) {
+      console.log(`[hooks] ${hookName} hook completed in ${cwd}`)
+    } else {
+      console.error(`[hooks] ${hookName} hook failed in ${cwd}:`, result.output)
+    }
+    // A clean run reports exitCode 0; the gate only reads the field on failure, and keeping it off
+    // the success shape preserves the existing contract.
+    return result.success
+      ? { success: true, output: result.output }
+      : {
+          success: false,
+          output: result.output,
+          ...(result.exitCode !== undefined ? { exitCode: result.exitCode } : {})
         }
-      }
-    )
   })
 }

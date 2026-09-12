@@ -11,6 +11,8 @@ import { resolveWorktreeRemovalMetadata } from '../../../worktree-removal-repo-o
 import { findRegisteredDeletableWorktree } from '../../../worktree-removal-safety'
 import { removeStaleLocalWorktreeRegistrationAfterFilesystemRemoval } from '../../../local-worktree-removal-recovery'
 import { runHook } from '../../../hooks'
+import type { ArchiveHookOverride } from '../../../../shared/worktree/archive-hook-removal-gate'
+import { gateWorktreeRemovalOnArchiveHook } from '../../../worktree-archive-hook-gate'
 import { withWorktreeRemoveStageSpan } from '../../../observability/instrumentation'
 import {
   cleanupUnusedWorktreePushTargetRemote,
@@ -124,10 +126,24 @@ export async function executeWorktreeRemoval(
     return removalResult ?? {}
   }
 
-  const hooks = await getArchiveHooksForRemoval(repo)
+  const { hooks, hookConfigUnreadable } = await getArchiveHooksForRemoval(repo)
+
+  // Why a warning and not a refusal (#19334 / S2): an unreadable orca.yaml means we cannot tell a
+  // repo with no archive hook from one whose hook we failed to see, and the SSH read crosses an RPC
+  // boundary that does not preserve ENOENT. Failing closed on that signal would refuse removal for
+  // every SSH repo that simply has no orca.yaml — a far larger regression than the gap it closes.
+  // Making this blocking needs a provider contract that reports "absent" distinctly from "failed".
+  let hookConfigWarning: string | undefined
+  if (hookConfigUnreadable && !args.skipArchive) {
+    hookConfigWarning = `Could not read orca.yaml for ${canonicalWorktreePath} on the execution host; if an archive hook is configured there, it did not run.`
+    console.warn(`[hooks] ${hookConfigWarning}`)
+  }
 
   const archiveScript = hooks?.scripts.archive
 
+  // Precondition, not an advisory (#19334): both branches below stop PTYs and delete the
+  // checkout, so a hook failure has to throw here — before either is reached.
+  let archiveHookOverride: ArchiveHookOverride | undefined
   if (archiveScript && !args.skipArchive) {
     // Why the branch on connectionId: this block is shared by both flows, so a hardcoded
     // 'remote' would file every local archive hook under the SSH breakdown.
@@ -144,38 +160,44 @@ export async function executeWorktreeRemoval(
               undefined,
               localWorktreeGitOptions
             )
-        if (!result.success) {
-          console.error(`[hooks] archive hook failed for ${canonicalWorktreePath}:`, result.output)
-        }
+        archiveHookOverride = gateWorktreeRemovalOnArchiveHook({
+          worktreePath: canonicalWorktreePath,
+          result,
+          allowFailure: args.allowFailedArchiveHook === true
+        })
       }
     )
   }
 
   const remoteConnectionId = repo.connectionId ?? undefined
-  if (remoteConnectionId) {
-    return removeRegisteredRemoteWorktree(
-      context,
-      args,
-      repo,
-      repoId,
-      canonicalWorktreePath,
-      removalHostId,
-      registeredWorktree,
-      removedPushTarget,
-      provider!,
-      deleteBranch
-    )
+  const result = remoteConnectionId
+    ? await removeRegisteredRemoteWorktree(
+        context,
+        args,
+        repo,
+        repoId,
+        canonicalWorktreePath,
+        removalHostId,
+        registeredWorktree,
+        removedPushTarget,
+        provider!,
+        deleteBranch
+      )
+    : await removeRegisteredLocalWorktree(
+        context,
+        args,
+        repo,
+        repoId,
+        canonicalWorktreePath,
+        removalHostId,
+        removedPushTarget,
+        localWorktreeGitOptions,
+        hasLocalWorktreeGitOptions,
+        deleteBranch
+      )
+  return {
+    ...result,
+    ...(archiveHookOverride ? { archiveHookOverride } : {}),
+    ...(hookConfigWarning ? { warning: hookConfigWarning } : {})
   }
-  return removeRegisteredLocalWorktree(
-    context,
-    args,
-    repo,
-    repoId,
-    canonicalWorktreePath,
-    removalHostId,
-    removedPushTarget,
-    localWorktreeGitOptions,
-    hasLocalWorktreeGitOptions,
-    deleteBranch
-  )
 }

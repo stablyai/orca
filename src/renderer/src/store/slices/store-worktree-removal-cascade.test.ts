@@ -382,6 +382,9 @@ describe('removeWorktree cascade', () => {
     const worktreeId = 'repo1::/workspace/feature-wt'
     const error =
       "Error invoking remote method 'worktrees:remove': Error: Failed to delete worktree at /workspace/feature-wt. ?? scratch.txt"
+    // The IPC wrapper is stripped before the message is shown; classification still reads the
+    // wrapped input (#19334).
+    const displayed = 'Failed to delete worktree at /workspace/feature-wt. ?? scratch.txt'
 
     mockApi.worktrees.remove.mockRejectedValueOnce(new Error(error))
 
@@ -396,10 +399,10 @@ describe('removeWorktree cascade', () => {
 
     const result = await store.getState().removeWorktree({ id: worktreeId, executionHostId: null })
 
-    expect(result).toEqual({ ok: false, error })
+    expect(result).toEqual({ ok: false, error: displayed })
     expect(store.getState().deleteStateByWorktreeId[worktreeId]).toEqual({
       isDeleting: false,
-      error,
+      error: displayed,
       canForceDelete: true,
       forceDeleteReason: 'dirty'
     })
@@ -467,6 +470,9 @@ describe('removeWorktree cascade', () => {
     const worktreeId = 'repo1::/workspace/deleted-wt'
     const error =
       "Error invoking remote method 'worktrees:remove': Error: Worktree is no longer registered with Git and its directory is already gone."
+    // The IPC wrapper is stripped before the message is shown; classification still reads the
+    // wrapped input (#19334).
+    const displayed = 'Worktree is no longer registered with Git and its directory is already gone.'
 
     mockApi.worktrees.remove.mockRejectedValueOnce(new Error(error))
 
@@ -481,10 +487,10 @@ describe('removeWorktree cascade', () => {
 
     const result = await store.getState().removeWorktree({ id: worktreeId, executionHostId: null })
 
-    expect(result).toEqual({ ok: false, error })
+    expect(result).toEqual({ ok: false, error: displayed })
     expect(store.getState().deleteStateByWorktreeId[worktreeId]).toEqual({
       isDeleting: false,
-      error,
+      error: displayed,
       canForceDelete: true,
       forceDeleteReason: 'missing-registration'
     })
@@ -584,6 +590,9 @@ describe('removeWorktree cascade', () => {
     const worktreeId = 'repo1::/path/wt1'
     const error =
       "Error invoking remote method 'worktrees:remove': Error: SSH filesystem provider unavailable"
+    // The IPC wrapper is stripped before the message is shown; classification still reads the
+    // wrapped input (#19334).
+    const displayed = 'SSH filesystem provider unavailable'
 
     mockApi.worktrees.remove.mockRejectedValueOnce(new Error(error))
 
@@ -598,10 +607,10 @@ describe('removeWorktree cascade', () => {
 
     const result = await store.getState().removeWorktree({ id: worktreeId, executionHostId: null })
 
-    expect(result).toEqual({ ok: false, error })
+    expect(result).toEqual({ ok: false, error: displayed })
     expect(store.getState().deleteStateByWorktreeId[worktreeId]).toEqual({
       isDeleting: false,
-      error,
+      error: displayed,
       canForceDelete: false,
       forceDeleteReason: null
     })
@@ -617,6 +626,8 @@ describe('removeWorktree cascade', () => {
       const store = createTestStore()
       const worktreeId = 'repo1::/path/wt1'
       const error = `Error invoking remote method 'runtime-environments:call': Error: ${runtimeFailure}`
+      // The wrapper is stripped for display; the runtime failure text is what the user sees.
+      const displayed = runtimeFailure
 
       mockApi.runtimeEnvironments.call.mockImplementation((args: { method: string }) => {
         const compatibility = createCompatibleRuntimeStatusResponseIfNeeded(args)
@@ -648,10 +659,10 @@ describe('removeWorktree cascade', () => {
         .getState()
         .removeWorktree({ id: worktreeId, executionHostId: null })
 
-      expect(result).toEqual({ ok: false, error })
+      expect(result).toEqual({ ok: false, error: displayed })
       expect(store.getState().deleteStateByWorktreeId[worktreeId]).toEqual({
         isDeleting: false,
-        error,
+        error: displayed,
         canForceDelete: false,
         forceDeleteReason: null
       })

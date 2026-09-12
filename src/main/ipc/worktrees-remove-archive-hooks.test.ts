@@ -14,6 +14,12 @@ import {
 } from './worktrees-test-module-mocks'
 import { handlers, setupWorktreeHandlers, store } from './worktrees-test-harness'
 import { mockKnownFeatureWorktree } from './worktrees-test-fixtures'
+import {
+  ARCHIVE_HOOK_FAILED_REMOVAL_CODE,
+  WorktreeArchiveHookFailedError
+} from '../../shared/worktree/archive-hook-removal-gate'
+import type { RemoveWorktreeResult } from '../../shared/worktree/create-types'
+import type { RemoveWorktreeArgs } from './worktrees/ipc-context-schemas'
 import type { WorktreeRuntimeStub } from './worktrees-test-runtime-stub'
 
 vi.mock('electron', async () =>
@@ -97,6 +103,27 @@ vi.mock('../runtime/worktree-teardown', async () =>
   (await import('./worktrees-test-module-mocks')).worktreeTeardownModuleMock()
 )
 vi.mock('./pty', async () => (await import('./worktrees-test-module-mocks')).ptyModuleMock())
+
+// The shared IPC surface types every handler as returning `unknown`; removal's contract is
+// narrower, and #19334's whole point is that a caller can name and branch on it.
+async function removeWorktreeViaIpc(args: RemoveWorktreeArgs): Promise<RemoveWorktreeResult> {
+  return (await handlers['worktrees:remove'](null, args)) as RemoveWorktreeResult
+}
+
+/** Narrows through the exported error class — the same branch a real caller would write. */
+async function expectArchiveHookRefusal(
+  args: RemoveWorktreeArgs
+): Promise<WorktreeArchiveHookFailedError> {
+  try {
+    await removeWorktreeViaIpc(args)
+  } catch (error) {
+    if (error instanceof WorktreeArchiveHookFailedError) {
+      return error
+    }
+    throw error
+  }
+  throw new Error(`expected removal of ${args.worktreeId} to be refused by the archive hook`)
+}
 
 describe('registerWorktreeHandlers', () => {
   let runtimeStub: WorktreeRuntimeStub
@@ -443,7 +470,8 @@ describe('registerWorktreeHandlers', () => {
     expect(provider.removeWorktree).toHaveBeenCalledWith('/remote/feature-wt', true)
   })
 
-  it('continues SSH worktree removal when the archive hook fails', async () => {
+  // Was "continues SSH worktree removal when the archive hook fails" (#19334): it now refuses.
+  it('refuses SSH worktree removal when the remote archive hook exits non-zero', async () => {
     const repo = {
       id: 'repo-ssh',
       path: '/remote/repo',
@@ -453,7 +481,6 @@ describe('registerWorktreeHandlers', () => {
       connectionId: 'conn-1',
       worktreeBaseRef: null
     }
-    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
     const provider = {
       listWorktrees: vi.fn().mockResolvedValue([
         {
@@ -492,21 +519,18 @@ describe('registerWorktreeHandlers', () => {
     getSshFilesystemProviderMock.mockReturnValue(fsProvider)
     getEffectiveHooksFromConfigMock.mockReturnValue({ scripts: { archive: 'exit 7' } })
 
-    try {
-      await handlers['worktrees:remove'](null, {
-        worktreeId: 'repo-ssh::/remote/feature-wt'
-      })
-      expect(provider.removeWorktree).toHaveBeenCalledWith('/remote/feature-wt', undefined)
-      expect(consoleErrorSpy).toHaveBeenCalledWith(
-        '[hooks] archive hook failed for /remote/feature-wt:',
-        expect.stringContaining('archive hook exited 7')
-      )
-    } finally {
-      consoleErrorSpy.mockRestore()
-    }
+    const refusal = await expectArchiveHookRefusal({
+      worktreeId: 'repo-ssh::/remote/feature-wt'
+    })
+
+    expect(refusal.code).toBe(ARCHIVE_HOOK_FAILED_REMOVAL_CODE)
+    expect(refusal.data).toMatchObject({ outcome: 'exited', exitCode: 7 })
+    expect(provider.worktreeIsClean).not.toHaveBeenCalled()
+    expect(provider.removeWorktree).not.toHaveBeenCalled()
+    expect(store.removeWorktreeMeta).not.toHaveBeenCalled()
   })
 
-  it('continues SSH worktree removal when archive hook execution rejects', async () => {
+  it('does not read a lost SSH connection as an archive hook that passed', async () => {
     const repo = {
       id: 'repo-ssh',
       path: '/remote/repo',
@@ -516,7 +540,6 @@ describe('registerWorktreeHandlers', () => {
       connectionId: 'conn-1',
       worktreeBaseRef: null
     }
-    const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
     const provider = {
       listWorktrees: vi.fn().mockResolvedValue([
         {
@@ -550,18 +573,15 @@ describe('registerWorktreeHandlers', () => {
     getSshFilesystemProviderMock.mockReturnValue(fsProvider)
     getEffectiveHooksFromConfigMock.mockReturnValue({ scripts: { archive: 'echo archived' } })
 
-    try {
-      await handlers['worktrees:remove'](null, {
-        worktreeId: 'repo-ssh::/remote/feature-wt'
-      })
-      expect(provider.removeWorktree).toHaveBeenCalledWith('/remote/feature-wt', undefined)
-      expect(consoleErrorSpy).toHaveBeenCalledWith(
-        '[hooks] archive hook failed for /remote/feature-wt:',
-        'relay disconnected'
-      )
-    } finally {
-      consoleErrorSpy.mockRestore()
-    }
+    const refusal = await expectArchiveHookRefusal({
+      worktreeId: 'repo-ssh::/remote/feature-wt'
+    })
+
+    // Loss of contact is `unverifiable`, never evidence the hook succeeded.
+    expect(refusal.data).toMatchObject({ outcome: 'unverifiable' })
+    expect(refusal.data.exitCode).toBeUndefined()
+    expect(provider.removeWorktree).not.toHaveBeenCalled()
+    expect(store.removeWorktreeMeta).not.toHaveBeenCalled()
   })
 
   it('uses cmd.exe for archive hooks on Windows-like SSH worktree paths', async () => {
@@ -680,5 +700,117 @@ describe('registerWorktreeHandlers', () => {
 
     expect(provider.execNonInteractive).not.toHaveBeenCalled()
     expect(provider.removeWorktree).toHaveBeenCalledWith('/remote/feature-wt', undefined)
+  })
+
+  // Regression cover for #19334: a failed archive hook is a blocking precondition, not an advisory.
+  it('refuses removal and mutates nothing when the local archive hook exits 23', async () => {
+    mockKnownFeatureWorktree()
+    removeWorktreeMock.mockResolvedValue(undefined)
+    getEffectiveHooksMock.mockReturnValue({
+      scripts: { archive: 'echo archived' }
+    })
+    runHookMock.mockResolvedValue({
+      success: false,
+      output: 'backup target unreachable',
+      exitCode: 23
+    })
+
+    const refusal = await expectArchiveHookRefusal({
+      worktreeId: 'repo-1::/workspace/feature-wt'
+    })
+
+    expect(refusal.code).toBe(ARCHIVE_HOOK_FAILED_REMOVAL_CODE)
+    expect(refusal.data).toEqual({
+      worktreePath: '/workspace/feature-wt',
+      outcome: 'exited',
+      exitCode: 23,
+      output: 'backup target unreachable'
+    })
+    expect(killAllProcessesForWorktreeMock).not.toHaveBeenCalled()
+    expect(assertWorktreeCleanForRemovalMock).not.toHaveBeenCalled()
+    expect(removeWorktreeMock).not.toHaveBeenCalled()
+    expect(removeWorktreeLinkedPathsMock).not.toHaveBeenCalled()
+    expect(store.removeWorktreeMeta).not.toHaveBeenCalled()
+  })
+
+  it('classifies a local archive hook that never reported an exit as unverifiable', async () => {
+    mockKnownFeatureWorktree()
+    getEffectiveHooksMock.mockReturnValue({
+      scripts: { archive: 'echo archived' }
+    })
+    runHookMock.mockResolvedValue({
+      success: false,
+      output: 'Hook timed out after 120000ms.'
+    })
+
+    const refusal = await expectArchiveHookRefusal({
+      worktreeId: 'repo-1::/workspace/feature-wt'
+    })
+
+    expect(refusal.data).toEqual({
+      worktreePath: '/workspace/feature-wt',
+      outcome: 'unverifiable',
+      output: 'Hook timed out after 120000ms.'
+    })
+    expect(removeWorktreeMock).not.toHaveBeenCalled()
+    expect(store.removeWorktreeMeta).not.toHaveBeenCalled()
+  })
+
+  it('removes and records the waiver when a failed archive hook is explicitly overridden', async () => {
+    mockKnownFeatureWorktree()
+    removeWorktreeMock.mockResolvedValue({})
+    getEffectiveHooksMock.mockReturnValue({
+      scripts: { archive: 'echo archived' }
+    })
+    runHookMock.mockResolvedValue({
+      success: false,
+      output: 'boom',
+      exitCode: 23
+    })
+
+    const result = await removeWorktreeViaIpc({
+      worktreeId: 'repo-1::/workspace/feature-wt',
+      allowFailedArchiveHook: true
+    })
+
+    expect(result.archiveHookOverride).toEqual({
+      worktreePath: '/workspace/feature-wt',
+      outcome: 'exited',
+      exitCode: 23,
+      output: 'boom',
+      overridden: true
+    })
+    expect(removeWorktreeMock).toHaveBeenCalled()
+  })
+
+  // The folder-workspace path runs no archive hook at all (no Git removal step), so the gate has
+  // nothing to evaluate there. Pinned so a future hook added to that path is a deliberate change.
+  it('removes a folder workspace without consulting the archive hook', async () => {
+    const repo = {
+      id: 'repo-folder',
+      path: '/workspace/folder-project',
+      displayName: 'folder',
+      badgeColor: '#000',
+      addedAt: 0,
+      kind: 'folder' as const,
+      worktreeBaseRef: null
+    }
+    store.getRepos.mockReturnValue([repo])
+    store.getRepo.mockReturnValue(repo)
+    getEffectiveHooksMock.mockReturnValue({ scripts: { archive: 'exit 23' } })
+    runHookMock.mockResolvedValue({
+      success: false,
+      output: 'boom',
+      exitCode: 23
+    })
+
+    const result = await removeWorktreeViaIpc({
+      worktreeId: 'repo-folder::/workspace/folder-project/nested'
+    })
+
+    expect(result).toEqual({})
+    expect(runHookMock).not.toHaveBeenCalled()
+    expect(removeWorktreeMock).not.toHaveBeenCalled()
+    expect(store.removeWorktreeMeta).toHaveBeenCalled()
   })
 })

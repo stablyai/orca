@@ -7,6 +7,8 @@ import { ensureHooksConfirmed } from '@/lib/ensure-hooks-confirmed'
 import { getActiveRuntimeTarget } from '../../../../runtime/runtime-rpc-client'
 import { forgetHugeRepoWarningDismissalsForWorktrees } from '@/lib/source-control-huge-repo-warning-dismissals'
 import { forgetWorktreeSleepIntent } from '@/lib/worktree-sleep-intent'
+import { readableIpcErrorMessage } from '@/lib/ipc-error'
+import { isArchiveHookRemovalError } from '../../../../../../shared/worktree/archive-hook-removal-gate'
 import { showPreservedBranchToast } from '@/components/sidebar/preserved-branch-toast'
 import {
   resolveWorktreeOperationRouteResult,
@@ -297,13 +299,18 @@ export function createRemoveWorktree(
     } catch (err) {
       // Why: git refusing a non-force delete for dirty/untracked files is a handled user decision, not an app error.
       console.warn('Failed to remove worktree:', err)
-      const error = err instanceof Error ? err.message : String(err)
+      // The raw message arrives wrapped in Electron's IPC channel and class names; this string is
+      // read by a user in a toast, and the refusal sentence has to lead it.
+      const error = readableIpcErrorMessage(err instanceof Error ? err.message : String(err))
       const forceDeleteReason = classifyWorktreeForceDeleteReason(
         error,
         force,
         options?.allowUnverifiedPtyStop === true
       )
       const locked = isLockedWorktreeRemovalError(error)
+      // Why (#19334): the refusal is the only failure a retry can clear by waiving rather than by
+      // fixing state, so the toast needs to know it may offer that choice.
+      const canWaiveArchiveHook = isArchiveHookRemovalError(error)
       set((s) => ({
         deleteStateByWorktreeId: {
           ...s.deleteStateByWorktreeId,
@@ -313,6 +320,7 @@ export function createRemoveWorktree(
             error,
             canForceDelete: forceDeleteReason !== null,
             forceDeleteReason,
+            ...(canWaiveArchiveHook ? { canWaiveArchiveHook: true } : {}),
             ...(locked ? { lockReason: getLockedWorktreeRemovalReason(error) } : {})
           }
         }

@@ -29,13 +29,13 @@ describe('worktree.rm host qualification', () => {
       makeRequest({ worktree: 'id:wt-1', hostId: 'local', force: true, runHooks: false })
     )
 
-    expect(runtime.removeManagedWorktree).toHaveBeenCalledWith(
-      'id:wt-1',
-      true,
-      false,
-      false,
-      'local'
-    )
+    expect(runtime.removeManagedWorktree).toHaveBeenCalledWith('id:wt-1', {
+      force: true,
+      runHooks: false,
+      allowUnverifiedPtyStop: false,
+      allowFailedArchiveHook: false,
+      hostId: 'local'
+    })
     expect(response).toMatchObject({ ok: true, result: { removed: true } })
   })
 
@@ -52,13 +52,13 @@ describe('worktree.rm host qualification', () => {
       })
     )
 
-    expect(runtime.removeManagedWorktree).toHaveBeenCalledWith(
-      `id:${WORKTREE_ID}`,
-      true,
-      false,
-      false,
-      'local'
-    )
+    expect(runtime.removeManagedWorktree).toHaveBeenCalledWith(`id:${WORKTREE_ID}`, {
+      force: true,
+      runHooks: false,
+      allowUnverifiedPtyStop: false,
+      allowFailedArchiveHook: false,
+      hostId: 'local'
+    })
     expect(response).toMatchObject({ ok: true, result: { removed: true } })
   })
 
@@ -75,13 +75,13 @@ describe('worktree.rm host qualification', () => {
       })
     )
 
-    expect(runtime.removeManagedWorktree).toHaveBeenCalledWith(
-      `id:${WORKTREE_ID}`,
-      true,
-      false,
-      false,
-      'runtime:env-1'
-    )
+    expect(runtime.removeManagedWorktree).toHaveBeenCalledWith(`id:${WORKTREE_ID}`, {
+      force: true,
+      runHooks: false,
+      allowUnverifiedPtyStop: false,
+      allowFailedArchiveHook: false,
+      hostId: 'runtime:env-1'
+    })
   })
 
   it('fails closed when the repo id carries both spellings', async () => {
@@ -117,13 +117,13 @@ describe('worktree.rm host qualification', () => {
       })
     )
 
-    expect(runtime.removeManagedWorktree).toHaveBeenCalledWith(
-      `id:${WORKTREE_ID}`,
-      true,
-      false,
-      false,
-      'ssh:target-a'
-    )
+    expect(runtime.removeManagedWorktree).toHaveBeenCalledWith(`id:${WORKTREE_ID}`, {
+      force: true,
+      runHooks: false,
+      allowUnverifiedPtyStop: false,
+      allowFailedArchiveHook: false,
+      hostId: 'ssh:target-a'
+    })
   })
 
   it.each([['bogus'], ['ssh:'], ['runtime:'], [''], [null], [42]])(
@@ -151,13 +151,13 @@ describe('worktree.rm host qualification', () => {
     )
 
     expect(runtime.showManagedWorktree).toHaveBeenCalledWith('id:wt-1')
-    expect(runtime.removeManagedWorktree).toHaveBeenCalledWith(
-      'id:wt-1',
-      true,
-      false,
-      false,
-      'local'
-    )
+    expect(runtime.removeManagedWorktree).toHaveBeenCalledWith('id:wt-1', {
+      force: true,
+      runHooks: false,
+      allowUnverifiedPtyStop: false,
+      allowFailedArchiveHook: false,
+      hostId: 'local'
+    })
     expect(response).toMatchObject({ ok: true, result: { removed: true } })
   })
 
@@ -205,13 +205,12 @@ describe('worktree.rm host qualification', () => {
     expect(response).toMatchObject({ ok: true, result: { removed: true } })
     // Unqualified on purpose: removeManagedWorktree owns the stale-row path and
     // still refuses on its own if the id turns out to have two owners.
-    expect(runtime.removeManagedWorktree).toHaveBeenCalledWith(
-      'id:wt-gone',
-      true,
-      false,
-      false,
-      undefined
-    )
+    expect(runtime.removeManagedWorktree).toHaveBeenCalledWith('id:wt-gone', {
+      force: true,
+      runHooks: false,
+      allowUnverifiedPtyStop: false,
+      allowFailedArchiveHook: false
+    })
   })
 
   it('propagates a non-missing lookup failure instead of deleting unqualified', async () => {

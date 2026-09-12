@@ -71,10 +71,45 @@ export function runWorktreeDeleteWithToast(
       showDeleteWorktreeFailureToast({
         error: result.error,
         canForceDelete,
+        canWaiveArchiveHook: state?.canWaiveArchiveHook === true,
         forceDeleteReason: state?.forceDeleteReason ?? null,
         lockReason: state?.lockReason ?? null,
         hasKnownChanges,
         onViewChanges: () => viewWorktreeDiff(worktreeId, target.executionHostId),
+        // Why (#19334): re-runs the archive hook and waives the failure this time, so the waiver
+        // is an informed choice made after reading the refusal -- not something `force` implied.
+        onDeleteAnyway: () => {
+          const commitWaivedFocus = prepareActiveWorktreeFocusAfterDelete(worktreeId)
+          useAppStore
+            .getState()
+            .removeWorktree(target, options.force === true, { allowFailedArchiveHook: true })
+            .then((waivedResult) => {
+              if (!waivedResult.ok) {
+                toast.error(
+                  translate(
+                    'auto.components.sidebar.delete.worktree.flow.ae57cbf6e4',
+                    'Failed to delete workspace'
+                  ),
+                  { description: waivedResult.error }
+                )
+                return
+              }
+              commitWaivedFocus()
+              // Same channel as the Force Delete retry below: it means "a retry started from this
+              // toast completed the delete", and callers hang their bookkeeping off it. Without
+              // this a batch or Space-panel delete keeps showing the workspace it just removed.
+              options.onForceDeleted?.(target)
+            })
+            .catch((err: unknown) => {
+              toast.error(
+                translate(
+                  'auto.components.sidebar.delete.worktree.flow.ae57cbf6e4',
+                  'Failed to delete workspace'
+                ),
+                { description: err instanceof Error ? err.message : String(err) }
+              )
+            })
+        },
         onForceDelete: () => {
           // Recapture focus because the user may have navigated while the toast was open.
           const commitForceFocus = prepareActiveWorktreeFocusAfterDelete(worktreeId)

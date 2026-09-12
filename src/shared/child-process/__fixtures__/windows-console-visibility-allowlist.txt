@@ -23,7 +23,7 @@ main/emulator/serve-sim-runtime-materializer.ts
 main/emulator/simctl-simulator-devices.ts
 main/emulator/simulator-app-visibility.ts
 main/external-editor-launch.ts
-main/hooks.ts
+main/hook-script-deadline.ts
 main/ipc/app.ts
 main/ipc/developer-permissions.ts
 main/ipc/macos-keyboard-layout-snapshot.ts

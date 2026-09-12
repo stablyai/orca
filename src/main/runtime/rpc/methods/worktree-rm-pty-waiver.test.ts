@@ -35,13 +35,13 @@ describe('worktree.rm PTY-stop waiver', () => {
       }
     } satisfies RpcRequest)
 
-    expect(runtime.removeManagedWorktree).toHaveBeenCalledWith(
-      'id:wt-1',
-      true,
-      false,
-      true,
-      'local'
-    )
+    expect(runtime.removeManagedWorktree).toHaveBeenCalledWith('id:wt-1', {
+      force: true,
+      runHooks: false,
+      allowUnverifiedPtyStop: true,
+      allowFailedArchiveHook: false,
+      hostId: 'local'
+    })
   })
 
   it('does not infer a waiver from force alone', async () => {
@@ -55,13 +55,13 @@ describe('worktree.rm PTY-stop waiver', () => {
       params: { worktree: 'id:wt-1', hostId: 'local', force: true, runHooks: false }
     } satisfies RpcRequest)
 
-    expect(runtime.removeManagedWorktree).toHaveBeenCalledWith(
-      'id:wt-1',
-      true,
-      false,
-      false,
-      'local'
-    )
+    expect(runtime.removeManagedWorktree).toHaveBeenCalledWith('id:wt-1', {
+      force: true,
+      runHooks: false,
+      allowUnverifiedPtyStop: false,
+      allowFailedArchiveHook: false,
+      hostId: 'local'
+    })
   })
 
   it('resolves the host before forwarding an unqualified removal', async () => {
@@ -76,12 +76,67 @@ describe('worktree.rm PTY-stop waiver', () => {
     } satisfies RpcRequest)
 
     expect(runtime.showManagedWorktree).toHaveBeenCalledWith('id:wt-1')
-    expect(runtime.removeManagedWorktree).toHaveBeenCalledWith(
-      'id:wt-1',
-      true,
-      false,
-      false,
-      'ssh:builder'
-    )
+    expect(runtime.removeManagedWorktree).toHaveBeenCalledWith('id:wt-1', {
+      force: true,
+      runHooks: false,
+      allowUnverifiedPtyStop: false,
+      allowFailedArchiveHook: false,
+      hostId: 'ssh:builder'
+    })
+  })
+})
+
+// Why (#19334): same shape, same reason — a FAILED archive hook blocks removal, and waiving that
+// is its own explicit decision. `force` must not carry it either.
+describe('worktree.rm archive-hook waiver', () => {
+  it('forwards an explicit archive-hook waiver to the runtime', async () => {
+    const runtime = makeRuntime()
+    const dispatcher = new RpcDispatcher({ runtime, methods: WORKTREE_METHODS })
+
+    await dispatcher.dispatch({
+      id: 'req-1',
+      authToken: 'tok',
+      method: 'worktree.rm',
+      params: {
+        worktree: 'id:wt-1',
+        hostId: 'local',
+        runHooks: true,
+        allowFailedArchiveHook: true
+      }
+    } satisfies RpcRequest)
+
+    expect(runtime.removeManagedWorktree).toHaveBeenCalledWith('id:wt-1', {
+      force: false,
+      runHooks: true,
+      allowUnverifiedPtyStop: false,
+      allowFailedArchiveHook: true,
+      hostId: 'local'
+    })
+  })
+
+  it('does not infer an archive-hook waiver from force', async () => {
+    const runtime = makeRuntime()
+    const dispatcher = new RpcDispatcher({ runtime, methods: WORKTREE_METHODS })
+
+    await dispatcher.dispatch({
+      id: 'req-1',
+      authToken: 'tok',
+      method: 'worktree.rm',
+      params: {
+        worktree: 'id:wt-1',
+        hostId: 'local',
+        force: true,
+        allowUnverifiedPtyStop: true,
+        runHooks: true
+      }
+    } satisfies RpcRequest)
+
+    expect(runtime.removeManagedWorktree).toHaveBeenCalledWith('id:wt-1', {
+      force: true,
+      runHooks: true,
+      allowUnverifiedPtyStop: true,
+      allowFailedArchiveHook: false,
+      hostId: 'local'
+    })
   })
 })
