@@ -3,6 +3,7 @@ import type { PtySpawnResult } from '../../../providers/types'
 import { LocalPtyProvider } from '../../../providers/local-pty-provider'
 import { isValidTerminalTabId } from '../../../../shared/terminal-tab-id'
 import { isTerminalLeafId } from '../../../../shared/stable-pane-id'
+import { recoverMissingSshPtyProvider } from '../provider/missing-ssh-pty-provider-recovery'
 import { getAppPtyId, getProvider, getRelayPtyId } from '../provider/registry'
 import { buildPtyHostEnv } from '../host-env/assembly'
 import {
@@ -54,6 +55,12 @@ export async function prepareRuntimePtySpawn(
     }
   }
   ctx.cwd = ctx.deps.resolvePtySpawnStartupCwd(args.worktreeId, args.cwd)
+  // Why: same relay re-attach as the renderer spawn path — `orca terminal create` on a
+  // runtime-owned workspace after an app restart must not fail on the provider miss.
+  const providerRecovery = recoverMissingSshPtyProvider(args.connectionId)
+  if (providerRecovery) {
+    await providerRecovery
+  }
   ctx.provider = getProvider(args.connectionId)
   const freshSpawnRecovery = ctx.preAdoptedStablePane
     ? undefined
