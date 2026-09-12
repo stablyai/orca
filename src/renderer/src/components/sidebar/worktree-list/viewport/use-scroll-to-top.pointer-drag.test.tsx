@@ -35,7 +35,7 @@ afterEach(() => {
   document.body.replaceChildren()
 })
 
-describe('useWorktreeListScrollToTop', () => {
+describe('useWorktreeListScrollToTop pointer drag', () => {
   it('ignores fast programmatic scrolling', () => {
     const element = createScroller()
     let now = 0

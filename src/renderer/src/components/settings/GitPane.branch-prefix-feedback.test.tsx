@@ -37,7 +37,7 @@ function gitUsernamePrefixSettings(): GlobalSettings {
   }
 }
 
-describe('GitPane branch prefix feedback', () => {
+describe('GitPane branch-prefix feedback', () => {
   it('previews the resulting branch name and drops a redundant trailing slash', () => {
     const html = renderGitPane(customPrefixSettings('team/'))
     expect(html).toContain('team/feature')

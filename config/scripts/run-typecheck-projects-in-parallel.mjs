@@ -2,18 +2,45 @@ import { spawn } from 'node:child_process'
 import { availableParallelism } from 'node:os'
 import { fileURLToPath } from 'node:url'
 
-// The three projects overlap heavily in src/shared but have no build dependency on
-// each other, so tsc can check them concurrently instead of in a `&&` chain.
-const projects = ['tsconfig.node.json', 'tsconfig.tc.cli.json', 'tsconfig.tc.web.json']
 const repoRoot = fileURLToPath(new URL('../..', import.meta.url))
 const tsc = fileURLToPath(new URL('../../node_modules/typescript/bin/tsc', import.meta.url))
 
-// Why serialize on a single-core runner: three tsc processes there thrash rather than overlap.
-const concurrent = availableParallelism() > 1
+// The projects overlap but have no build dependency, so they can check concurrently.
+const projects = [
+  {
+    name: 'tsconfig.node.json',
+    args: [tsc, '--noEmit', '-p', 'config/tsconfig.node.json']
+  },
+  {
+    name: 'tsconfig.tc.cli.json',
+    args: [tsc, '--noEmit', '-p', 'config/tsconfig.tc.cli.json']
+  },
+  {
+    name: 'tsconfig.tc.web.json',
+    args: [tsc, '--noEmit', '-p', 'config/tsconfig.tc.web.json']
+  },
+  {
+    name: 'tsconfig.tooling.json',
+    args: [tsc, '--noEmit', '-p', 'config/tsconfig.tooling.json']
+  },
+  {
+    name: 'tsconfig.e2e.json',
+    args: [
+      'config/scripts/typecheck-diagnostic-baseline.mjs',
+      '--project',
+      'config/tsconfig.e2e.json',
+      '--baseline',
+      'config/typecheck-e2e-diagnostics.json'
+    ]
+  }
+]
+
+// Keep the original three-process ceiling; each additional project holds a full compiler graph.
+const maxConcurrent = Math.min(availableParallelism(), 3)
 
 function checkProject(project) {
   return new Promise((resolve, reject) => {
-    const child = spawn(process.execPath, [tsc, '--noEmit', '-p', `config/${project}`], {
+    const child = spawn(process.execPath, project.args, {
       cwd: repoRoot,
       stdio: 'inherit'
     })
@@ -21,9 +48,9 @@ function checkProject(project) {
     child.on('error', reject)
     child.on('exit', (code, signal) => {
       if (signal) {
-        reject(new Error(`tsc ${project} exited with signal ${signal}`))
+        reject(new Error(`${project.name} exited with signal ${signal}`))
       } else if (code !== 0) {
-        reject(new Error(`tsc ${project} exited with code ${code}`))
+        reject(new Error(`${project.name} exited with code ${code}`))
       } else {
         resolve()
       }
@@ -31,12 +58,12 @@ function checkProject(project) {
   })
 }
 
-let failures = []
-if (concurrent) {
-  const results = await Promise.allSettled(projects.map(checkProject))
-  failures = results.filter((result) => result.status === 'rejected').map((result) => result.reason)
-} else {
-  for (const project of projects) {
+const failures = []
+let nextProject = 0
+async function runProjectWorker() {
+  while (nextProject < projects.length) {
+    const project = projects[nextProject]
+    nextProject += 1
     try {
       await checkProject(project)
     } catch (error) {
@@ -44,6 +71,9 @@ if (concurrent) {
     }
   }
 }
+await Promise.all(
+  Array.from({ length: Math.min(maxConcurrent, projects.length) }, runProjectWorker)
+)
 
 if (failures.length > 0) {
   for (const failure of failures) {
