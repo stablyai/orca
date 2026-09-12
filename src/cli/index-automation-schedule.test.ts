@@ -88,6 +88,11 @@ describe('orca cli worktree awareness', () => {
 
   it.each([
     {
+      name: 'unsupported RRULE interval',
+      args: ['--trigger', 'FREQ=WEEKLY;INTERVAL=2;BYDAY=SU'],
+      message: 'Invalid automation trigger'
+    },
+    {
       name: 'day on daily preset',
       args: ['--trigger', 'daily', '--day', '2'],
       message: '--day can only be used with the weekly automation preset'

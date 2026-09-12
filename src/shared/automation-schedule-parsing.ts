@@ -1,5 +1,6 @@
 import type { AutomationSchedulePreset } from './automations-types'
 import { cronHasPossibleOccurrence } from './automation-cron-occurrence'
+import { parseRruleEntries } from './automation-rrule-fields'
 
 import { isClipboardTextByteLengthOverLimit } from './clipboard-text'
 
@@ -58,26 +59,25 @@ const DAY_NAMES: Record<string, number> = {
 }
 
 function parseRrule(rrule: string): ParsedRrule {
-  const entries = new Map<string, string>()
-  for (const part of rrule.split(';')) {
-    const [key, value] = part.split('=')
-    if (key && value) {
-      entries.set(key.toUpperCase(), value)
-    }
-  }
+  const entries = parseRruleEntries(rrule)
   const freq = entries.get('FREQ')
   if (freq !== 'HOURLY' && freq !== 'DAILY' && freq !== 'WEEKLY') {
     throw new Error('Unsupported automation recurrence.')
   }
-  const byHour = Number(entries.get('BYHOUR') ?? '9')
-  const byMinute = Number(entries.get('BYMINUTE') ?? '0')
-  if (!Number.isInteger(byHour) || byHour < 0 || byHour > 23) {
+  if ((freq !== 'WEEKLY' && entries.has('BYDAY')) || (freq === 'HOURLY' && entries.has('BYHOUR'))) {
+    throw new Error('Unsupported recurrence field for this frequency.')
+  }
+  const hour = entries.get('BYHOUR') ?? '9'
+  const minute = entries.get('BYMINUTE') ?? '0'
+  const byHour = Number(hour)
+  const byMinute = Number(minute)
+  if (!/^\d{1,2}$/.test(hour) || byHour > 23) {
     throw new Error('Invalid recurrence hour.')
   }
-  if (!Number.isInteger(byMinute) || byMinute < 0 || byMinute > 59) {
+  if (!/^\d{1,2}$/.test(minute) || byMinute > 59) {
     throw new Error('Invalid recurrence minute.')
   }
-  const byDay = (entries.get('BYDAY') ?? '').split(',').filter(Boolean)
+  const byDay = entries.get('BYDAY')?.split(',') ?? []
   if (
     freq === 'WEEKLY' &&
     (byDay.length === 0 ||
