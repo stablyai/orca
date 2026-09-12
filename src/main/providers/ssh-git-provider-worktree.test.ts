@@ -21,6 +21,26 @@ describe('SshGitProvider', () => {
     provider = new SshGitProvider('conn-1', mux as never)
   })
 
+  it('sends shared-link context to the host and preserves an older host dirty verdict', async () => {
+    const sharedLinks = { source: '/home/user/repo', paths: ['deps'] }
+    mux.request.mockResolvedValue({ clean: false, stdout: '?? deps\n' })
+    await expect(provider.worktreeIsClean('/home/user/feature', { sharedLinks })).resolves.toEqual({
+      clean: false,
+      stdout: '?? deps\n'
+    })
+    expect(mux.request).toHaveBeenCalledWith('git.worktreeIsClean', {
+      worktreePath: '/home/user/feature',
+      sharedLinks
+    })
+    mux.request.mockResolvedValue({})
+    await provider.removeWorktree('/home/user/feature', false, { sharedLinks })
+    expect(mux.request).toHaveBeenLastCalledWith('git.removeWorktree', {
+      worktreePath: '/home/user/feature',
+      force: false,
+      sharedLinks
+    })
+  })
+
   it('listWorktrees sends git.listWorktrees request', async () => {
     const worktrees = [
       {

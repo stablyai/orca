@@ -5,6 +5,7 @@ import type {
 } from '../../shared/doc-preview-file-access'
 import type { DirEntry, FsChangeEvent } from '../../shared/filesystem-entry-types'
 import type { WorkspaceSpaceDirectoryScanResult } from '../../shared/workspace-space-types'
+import type { WorktreePathMaterializationResult } from '../../shared/worktree-path-materialization'
 
 export type FileStat = {
   size: number
@@ -50,6 +51,11 @@ export class FileRangeReadUnsupportedError extends Error {
 }
 
 export type IFilesystemProvider = {
+  materializeWorktreePaths?(
+    source: string,
+    target: string,
+    linkedPaths: readonly string[]
+  ): Promise<WorktreePathMaterializationResult>
   readDir(dirPath: string): Promise<DirEntry[]>
   readFile(filePath: string, limits?: FileReadLimits): Promise<FileReadResult>
   readDocPreviewFile?(request: DocPreviewFileAccessRequest): Promise<DocPreviewFileAccessResult>

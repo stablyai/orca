@@ -49,6 +49,7 @@ export type RelayArtifact = {
 export const RELAY_WINDOWS_PROCESS_TREE_FILENAME = 'windows-process-tree.node'
 
 export const RELAY_ARTIFACTS: readonly RelayArtifact[] = [
+  { filename: 'orca-workspace-cow', optional: true },
   { filename: 'relay.js' },
   { filename: 'relay-watcher.js', daemonServiceChild: true },
   { filename: 'relay-ai-vault-service.js', daemonServiceChild: true },

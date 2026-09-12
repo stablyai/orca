@@ -314,7 +314,9 @@ describe('registerWorktreeHandlers', () => {
         ORCA_WORKTREE_PATH: '/remote/feature-wt'
       })
     )
-    expect(provider.removeWorktree).toHaveBeenCalledWith('/remote/feature-wt', undefined)
+    expect(provider.removeWorktree).toHaveBeenCalledWith('/remote/feature-wt', undefined, {
+      sharedLinks: { source: '/remote/repo', paths: [] }
+    })
     expect(runtimeStub.closeFileWatchersForRemoval).toHaveBeenCalledWith(
       '/remote/feature-wt',
       'conn-1'
@@ -440,7 +442,9 @@ describe('registerWorktreeHandlers', () => {
     })
 
     expect(provider.worktreeIsClean).not.toHaveBeenCalled()
-    expect(provider.removeWorktree).toHaveBeenCalledWith('/remote/feature-wt', true)
+    expect(provider.removeWorktree).toHaveBeenCalledWith('/remote/feature-wt', true, {
+      sharedLinks: { source: '/remote/repo', paths: [] }
+    })
   })
 
   it('continues SSH worktree removal when the archive hook fails', async () => {
@@ -496,7 +500,9 @@ describe('registerWorktreeHandlers', () => {
       await handlers['worktrees:remove'](null, {
         worktreeId: 'repo-ssh::/remote/feature-wt'
       })
-      expect(provider.removeWorktree).toHaveBeenCalledWith('/remote/feature-wt', undefined)
+      expect(provider.removeWorktree).toHaveBeenCalledWith('/remote/feature-wt', undefined, {
+        sharedLinks: { source: '/remote/repo', paths: [] }
+      })
       expect(consoleErrorSpy).toHaveBeenCalledWith(
         '[hooks] archive hook failed for /remote/feature-wt:',
         expect.stringContaining('archive hook exited 7')
@@ -554,7 +560,9 @@ describe('registerWorktreeHandlers', () => {
       await handlers['worktrees:remove'](null, {
         worktreeId: 'repo-ssh::/remote/feature-wt'
       })
-      expect(provider.removeWorktree).toHaveBeenCalledWith('/remote/feature-wt', undefined)
+      expect(provider.removeWorktree).toHaveBeenCalledWith('/remote/feature-wt', undefined, {
+        sharedLinks: { source: '/remote/repo', paths: [] }
+      })
       expect(consoleErrorSpy).toHaveBeenCalledWith(
         '[hooks] archive hook failed for /remote/feature-wt:',
         'relay disconnected'
@@ -679,6 +687,8 @@ describe('registerWorktreeHandlers', () => {
     })
 
     expect(provider.execNonInteractive).not.toHaveBeenCalled()
-    expect(provider.removeWorktree).toHaveBeenCalledWith('/remote/feature-wt', undefined)
+    expect(provider.removeWorktree).toHaveBeenCalledWith('/remote/feature-wt', undefined, {
+      sharedLinks: { source: '/remote/repo', paths: [] }
+    })
   })
 })

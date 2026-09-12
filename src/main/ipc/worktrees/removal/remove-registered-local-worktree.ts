@@ -1,3 +1,4 @@
+import { inspectWslWorktreeSharedLinks } from '../../wsl-worktree-path-materialization'
 import type { Repo } from '../../../../shared/repo-types'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { RemoveWorktreeResult } from '../../../../shared/worktree/create-types'
@@ -85,10 +86,17 @@ export async function removeRegisteredLocalWorktree(
   // Why: `orca.yaml` shared directories are symlinked in too, and a
   // directory-only ignore rule leaves those links untracked, so removal must
   // tolerate and unlink them exactly like the per-user shared paths.
-  const linkedPaths = getWorktreeSharedLinkPaths(repo)
+  const linkedPaths = localWorktreeGitOptions.wslDistro ? [] : getWorktreeSharedLinkPaths(repo)
   const ignoredLinkedPaths = args.force
     ? []
-    : await findExistingWorktreeSymlinkPaths(canonicalWorktreePath, linkedPaths)
+    : localWorktreeGitOptions.wslDistro
+      ? await inspectWslWorktreeSharedLinks(
+          localWorktreeGitOptions.wslDistro,
+          repo.path,
+          canonicalWorktreePath,
+          repo.symlinkPaths ?? []
+        )
+      : await findExistingWorktreeSymlinkPaths(canonicalWorktreePath, linkedPaths)
   try {
     await (hasLocalWorktreeGitOptions
       ? assertWorktreeCleanForRemoval(canonicalWorktreePath, args.force ?? false, {
@@ -122,7 +130,15 @@ export async function removeRegisteredLocalWorktree(
     })
 
     // Why: preflight only ignored these paths, not mutated them; keep watcher installs fenced through Git removal.
-    if (linkedPaths.length > 0) {
+    if (localWorktreeGitOptions.wslDistro) {
+      await inspectWslWorktreeSharedLinks(
+        localWorktreeGitOptions.wslDistro,
+        repo.path,
+        canonicalWorktreePath,
+        repo.symlinkPaths ?? [],
+        true
+      )
+    } else if (linkedPaths.length > 0) {
       await removeWorktreeLinkedPaths(canonicalWorktreePath, linkedPaths)
     }
 

@@ -31,7 +31,10 @@ export async function removeRuntimeRegisteredRemoteWorktree(args: {
   finishRemoval: (result: RemoveWorktreeResult) => void
 }): Promise<RemoveWorktreeResult> {
   const { repo, target, registeredWorktree, provider, connectionId } = args
-  const removeOptions = !args.deleteBranch ? { deleteBranch: args.deleteBranch } : {}
+  const removeOptions = {
+    sharedLinks: { source: repo.path, paths: repo.symlinkPaths ?? [] },
+    ...(!args.deleteBranch ? { deleteBranch: args.deleteBranch } : {})
+  }
   const gate = await args.acquireWatcherRemoval(registeredWorktree.path, connectionId)
   let rawResult: RemoveWorktreeResult | undefined
   let completed = false

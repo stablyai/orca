@@ -1,3 +1,4 @@
+import type { WorktreeSharedLinks } from '../../shared/worktree-path-materialization'
 import type {
   GitBranchCompareResult,
   GitCommitCompareResult,
@@ -87,7 +88,11 @@ export type IGitProvider = {
   removeWorktree(
     worktreePath: string,
     force?: boolean,
-    options?: { deleteBranch?: boolean; forceBranchDelete?: boolean }
+    options?: {
+      deleteBranch?: boolean
+      forceBranchDelete?: boolean
+      sharedLinks?: WorktreeSharedLinks
+    }
   ): Promise<RemoveWorktreeResult>
   renameCurrentBranch?(worktreePath: string, newBranch: string): Promise<void>
   forceDeletePreservedBranch?(
@@ -106,6 +111,6 @@ export type IGitProvider = {
   getRemoteCommitUrl(worktreePath: string, sha: string): Promise<string | null>
   worktreeIsClean(
     worktreePath: string,
-    options?: { includeUntracked?: boolean }
+    options?: { includeUntracked?: boolean; sharedLinks?: WorktreeSharedLinks }
   ): Promise<{ clean: boolean; stdout?: string }>
 }

@@ -1,5 +1,7 @@
-import { lstat, readdir } from 'node:fs/promises'
+import type { Dirent } from 'node:fs'
+import { lstat, readdir, stat } from 'node:fs/promises'
 import { join } from 'node:path'
+import { mapWithConcurrency } from '../../shared/map-with-concurrency'
 
 /** Ceiling on what one worktree materialization may copy, measured before any
  *  bytes are written. Both limits are cumulative across the whole run, so a
@@ -11,7 +13,8 @@ export type WorktreeCopyBudget = {
 
 // Why: `.worktreeinclude` is a repo-authored list, and a repo that lists
 // `node_modules` freezes worktree creation for minutes behind an inline copy
-// (macOS gets a cheap APFS clone; Linux/Windows get a full `fs.cp`). These
+// (macOS gets a cheap APFS clone and Linux a reflink where the filesystem has
+// one; everywhere else it is a full `fs.cp`). These
 // limits clear real payloads — `.env` files, `.vscode/`, small build caches —
 // and refuse dependency trees. The entry limit matters as much as the byte
 // limit: 200k tiny files are slow to copy even though they weigh little.
@@ -37,15 +40,16 @@ export type WorktreeCopySizeVerdict =
 
 export type SkippedWorktreeCopyPath = {
   path: string
-  reason: WorktreeCopyBudgetExceededReason
+  reason: WorktreeCopyBudgetExceededReason | 'interrupted' | 'failed'
+  termination?: 'exited' | 'unverifiable'
   /** The copy was abandoned after it had started, so leftovers may remain —
    *  "copy it in manually" would then merge into a half-populated directory. */
   mayBePartial?: boolean
 }
 
 export type WorktreeCopyAdmitOptions = {
-  /** False when the backend clones copy-on-write (APFS `clonefile`), where
-   *  bytes cost nothing and only inode count is real work. */
+  /** False when the backend clones copy-on-write (APFS `clonefile`, Linux
+   *  `FICLONE`), where bytes cost nothing and only inode count is real work. */
   bytesAreCopied?: boolean
 }
 
@@ -58,10 +62,11 @@ export type WorktreeCopyBudgetTracker = {
    *  measurement walk and written after it, so concurrent callers would both
    *  size against the same stale pool and could jointly bust the budget. */
   admit: (source: string, options?: WorktreeCopyAdmitOptions) => Promise<WorktreeCopySizeVerdict>
-  /** Bill bytes that were measured but not charged, because the copy was
-   *  expected to clone and then didn't. Returns false if they no longer fit,
-   *  in which case the caller must not run the copy. */
-  chargeBytes: (bytes: number) => boolean
+  /** Bill a source whose bytes were never measured, because the copy was
+   *  expected to clone and then didn't. Sizes it now — the clone path skips
+   *  per-file stats — and returns false if the bytes no longer fit, in which
+   *  case the caller must not run the copy. */
+  chargeSourceBytes: (source: string) => Promise<boolean>
 }
 
 type MeasuredCopySize = {
@@ -72,6 +77,11 @@ type MeasuredCopySize = {
   walked: number
 }
 
+// Why: file sizes are only needed when bytes will actually be charged, and
+// then one stat per file is the floor; spreading them over the threadpool
+// keeps a 19k-file tree from paying 19k serial round trips.
+const COPY_SIZE_STAT_CONCURRENCY = 16
+
 async function measureCopySize(
   source: string,
   remainingBytes: number,
@@ -80,43 +90,85 @@ async function measureCopySize(
 ): Promise<MeasuredCopySize> {
   let bytes = 0
   let entries = 0
+  const entryLimit = Math.min(remainingEntries, remainingWalk)
+  const overEntries = (): MeasuredCopySize => {
+    // Why: attribute to whichever ceiling actually bound. Blaming the file
+    // limit for a walk that earlier entries used up would quote the user a
+    // limit this entry never approached.
+    const reason = remainingWalk < remainingEntries ? 'sizing' : 'entries'
+    return { verdict: { withinBudget: false, reason }, walked: entries }
+  }
+  const overBytes = (): MeasuredCopySize => ({
+    verdict: { withinBudget: false, reason: 'bytes' },
+    walked: entries
+  })
+  // Why: a copy-on-write clone charges no bytes, so its walk needs no sizes —
+  // one readdir per directory, no per-file stat at all.
+  const sizesNeeded = Number.isFinite(remainingBytes)
+
+  let rootStats: Awaited<ReturnType<typeof lstat>>
+  try {
+    rootStats = await lstat(source)
+  } catch {
+    // Raced away between the walk and now — the copy will skip it too.
+    return { verdict: { withinBudget: true, bytes, entries }, walked: entries }
+  }
+  entries += 1
+  if (entries > entryLimit) {
+    return overEntries()
+  }
+  if (!rootStats.isDirectory()) {
+    // Why: both copy backends reproduce a symlink as a symlink rather than
+    // following it, so a symlinked root has no bytes to charge.
+    if (!rootStats.isSymbolicLink()) {
+      bytes = rootStats.size
+      if (bytes > remainingBytes) {
+        return overBytes()
+      }
+    }
+    return { verdict: { withinBudget: true, bytes, entries }, walked: entries }
+  }
+
   const pending: string[] = [source]
   while (pending.length > 0) {
-    const current = pending.pop() as string
-    let stats: Awaited<ReturnType<typeof lstat>>
+    const directory = pending.pop() as string
+    let dirents: Dirent[]
     try {
-      stats = await lstat(current)
+      dirents = await readdir(directory, { withFileTypes: true })
     } catch {
-      // Raced away between the walk and now — the copy will skip it too.
+      // Unreadable directory — nothing measurable, and the copy will report it.
       continue
     }
-    entries += 1
-    if (entries > Math.min(remainingEntries, remainingWalk)) {
-      // Why: attribute to whichever ceiling actually bound. Blaming the file
-      // limit for a walk that earlier entries used up would quote the user a
-      // limit this entry never approached.
-      const reason = remainingWalk < remainingEntries ? 'sizing' : 'entries'
-      return { verdict: { withinBudget: false, reason }, walked: entries }
-    }
-    // Why: both copy backends reproduce a nested symlink as a symlink rather
-    // than following it, so walking through one would double-count a shared
-    // target and could loop forever on a cycle.
-    if (stats.isSymbolicLink()) {
-      continue
-    }
-    if (stats.isDirectory()) {
-      try {
-        for (const name of await readdir(current)) {
-          pending.push(join(current, name))
-        }
-      } catch {
-        // Unreadable directory — nothing measurable, and the copy will report it.
+    const files: string[] = []
+    for (const dirent of dirents) {
+      entries += 1
+      if (entries > entryLimit) {
+        return overEntries()
       }
+      if (dirent.isDirectory()) {
+        pending.push(join(directory, dirent.name))
+      } else if (dirent.isFile()) {
+        files.push(join(directory, dirent.name))
+      }
+      // Why: a nested symlink is reproduced as a symlink, never walked through
+      // — it would double-count a shared target and could loop on a cycle.
+    }
+    if (!sizesNeeded || files.length === 0) {
       continue
     }
-    bytes += stats.size
+    const sizes = await mapWithConcurrency(files, COPY_SIZE_STAT_CONCURRENCY, async (file) => {
+      try {
+        return (await stat(file)).size
+      } catch {
+        // Raced away between readdir and now — the copy will skip it too.
+        return 0
+      }
+    })
+    for (const size of sizes) {
+      bytes += size
+    }
     if (bytes > remainingBytes) {
-      return { verdict: { withinBudget: false, reason: 'bytes' }, walked: entries }
+      return overBytes()
     }
   }
   return { verdict: { withinBudget: true, bytes, entries }, walked: entries }
@@ -156,11 +208,21 @@ export function createWorktreeCopyBudgetTracker(
       }
       return verdict
     },
-    chargeBytes: (bytes) => {
-      if (bytes > remainingBytes) {
+    chargeSourceBytes: async (source) => {
+      if (remainingWalk <= 0) {
         return false
       }
-      remainingBytes -= bytes
+      const { verdict, walked } = await measureCopySize(
+        source,
+        remainingBytes,
+        Number.POSITIVE_INFINITY,
+        remainingWalk
+      )
+      remainingWalk -= walked
+      if (!verdict.withinBudget) {
+        return false
+      }
+      remainingBytes -= verdict.bytes
       return true
     }
   }
@@ -201,7 +263,9 @@ export function formatWorktreeIncludeCopyWarning(
   const pronoun = (count: number): string => (count === 1 ? 'it' : 'them')
   // Why: an entry refused because earlier ones exhausted the sizing walk never
   // approached the limits itself, so quoting them at the user would be a lie.
-  const overBudget = skipped.filter((entry) => entry.reason !== 'sizing')
+  const overBudget = skipped.filter(
+    (entry) => entry.reason === 'bytes' || entry.reason === 'entries'
+  )
   const unsized = skipped.filter((entry) => entry.reason === 'sizing')
   const sentences: string[] = []
   if (overBudget.length > 0) {
@@ -210,6 +274,21 @@ export function formatWorktreeIncludeCopyWarning(
         `${formatByteLimit(budget.maxBytes)} / ${budget.maxEntries.toLocaleString('en-US')} ` +
         `file limit that keeps workspace creation responsive.`
     )
+  }
+  const failed = skipped.filter((entry) => entry.reason === 'failed')
+  if (failed.length > 0) {
+    sentences.push(
+      `${describe(failed)}: materialization failed or the destination was unsafe. Check the workspace paths and permissions before retrying.`
+    )
+  }
+  const interrupted = skipped.filter((entry) => entry.reason === 'interrupted')
+  if (interrupted.length > 0) {
+    sentences.push(`Cloning .worktreeinclude ${nameList(interrupted)} was interrupted.`)
+    if (interrupted.some((entry) => entry.termination === 'unverifiable')) {
+      sentences.push(
+        'Process termination is unverifiable; copying may still be running. Confirm it has exited before changing these paths.'
+      )
+    }
   }
   const partial = skipped.filter((entry) => entry.mayBePartial)
   if (unsized.length > 0) {
@@ -225,8 +304,10 @@ export function formatWorktreeIncludeCopyWarning(
         `${pronoun(partial.length)} before reusing this workspace.`
     )
   }
-  sentences.push(
-    `Copy ${pronoun(skipped.length)} in manually if this workspace needs ${pronoun(skipped.length)}.`
-  )
+  if (!interrupted.some((entry) => entry.termination === 'unverifiable')) {
+    sentences.push(
+      `Copy ${pronoun(skipped.length)} in manually if this workspace needs ${pronoun(skipped.length)}.`
+    )
+  }
   return sentences.join(' ')
 }

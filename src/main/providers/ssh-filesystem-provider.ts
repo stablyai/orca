@@ -1,3 +1,4 @@
+import { requestSshWorktreeMaterialization } from './ssh-worktree-materialization'
 import type { SshChannelMultiplexer } from '../ssh/ssh-channel-multiplexer'
 import { isMethodNotFoundError, readFileViaStream } from '../ssh/ssh-filesystem-stream-reader'
 import { uploadBuffer } from '../ssh/sftp-upload'
@@ -41,6 +42,9 @@ import {
 import { readSshDocPreviewFile } from './ssh-filesystem-doc-preview'
 const WORKSPACE_SPACE_SCAN_TIMEOUT_MS = 130_000
 export class SshFilesystemProvider implements IFilesystemProvider {
+  materializeWorktreePaths(source: string, target: string, linkedPaths: readonly string[]) {
+    return requestSshWorktreeMaterialization(this.mux, source, target, linkedPaths)
+  }
   private connectionId: string
   private mux: SshChannelMultiplexer
   private watchListeners = new Map<string, WatchRegistration>()

@@ -1,3 +1,4 @@
+import { inspectWslWorktreeSharedLinks } from '../ipc/wsl-worktree-path-materialization'
 import type { GitPushTarget, GitWorktreeInfo } from '../../shared/worktree/types'
 import type { RemoveWorktreeResult } from '../../shared/worktree/create-types'
 import type { Repo } from '../../shared/repo-types'
@@ -91,10 +92,17 @@ export async function removeRuntimeRegisteredLocalWorktree(args: {
     throw new Error(formatWorktreeRemovalError(error, canonicalPath, args.force))
   }
 
-  const linkedPaths = getWorktreeSharedLinkPaths(repo)
+  const linkedPaths = localOptions.wslDistro ? [] : getWorktreeSharedLinkPaths(repo)
   const ignoredLinkedPaths = args.force
     ? []
-    : await findExistingWorktreeSymlinkPaths(canonicalPath, linkedPaths)
+    : localOptions.wslDistro
+      ? await inspectWslWorktreeSharedLinks(
+          localOptions.wslDistro,
+          repo.path,
+          canonicalPath,
+          repo.symlinkPaths ?? []
+        )
+      : await findExistingWorktreeSymlinkPaths(canonicalPath, linkedPaths)
   try {
     await (args.hasLocalOptions
       ? assertWorktreeCleanForRemoval(canonicalPath, args.force, {
@@ -117,7 +125,15 @@ export async function removeRuntimeRegisteredLocalWorktree(args: {
   let completed = false
   try {
     await args.stopPtys()
-    if (linkedPaths.length > 0) {
+    if (localOptions.wslDistro) {
+      await inspectWslWorktreeSharedLinks(
+        localOptions.wslDistro,
+        repo.path,
+        canonicalPath,
+        repo.symlinkPaths ?? [],
+        true
+      )
+    } else if (linkedPaths.length > 0) {
       await removeWorktreeLinkedPaths(canonicalPath, linkedPaths)
     }
     try {

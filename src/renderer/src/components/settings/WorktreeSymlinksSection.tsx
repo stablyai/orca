@@ -101,7 +101,7 @@ export function WorktreeSymlinksSection({
     <SearchableSetting
       title={translate(
         'auto.components.settings.WorktreeSymlinksSection.4755f120b6',
-        'Worktree Shared Paths'
+        'Paths for New Worktrees'
       )}
       description={translate(
         'auto.components.settings.WorktreeSymlinksSection.b07ef5a8b6',
@@ -127,13 +127,13 @@ export function WorktreeSymlinksSection({
           <h3 className="text-sm font-semibold">
             {translate(
               'auto.components.settings.WorktreeSymlinksSection.4755f120b6',
-              'Worktree Shared Paths'
+              'Paths for New Worktrees'
             )}
           </h3>
           <p className="text-xs text-muted-foreground">
             {translate(
               'auto.components.settings.WorktreeSymlinksSection.7ff265071d',
-              'When a new worktree is created, each path listed here is APFS clone-copied on macOS when possible, otherwise symlinked from the primary checkout.'
+              'New worktrees get private copy-on-write copies when supported by their host filesystem. Otherwise, these paths link to the primary checkout and share edits.'
             )}
           </p>
         </div>
@@ -217,7 +217,7 @@ export function WorktreeSymlinksSection({
         <div className="rounded-xl border border-dashed border-border/60 bg-background/60 px-4 py-6 text-sm text-muted-foreground">
           {translate(
             'auto.components.settings.WorktreeSymlinksSection.31ebab5403',
-            'No shared paths configured for this repository.'
+            'No paths configured for this repository.'
           )}
         </div>
       ) : (
@@ -231,7 +231,7 @@ export function WorktreeSymlinksSection({
                 <h4 className="text-sm font-medium">
                   {translate(
                     'auto.components.settings.WorktreeSymlinksSection.b814c618e2',
-                    'Linked paths'
+                    'Configured paths'
                   )}
                 </h4>
                 <span className="text-[11px] text-muted-foreground">

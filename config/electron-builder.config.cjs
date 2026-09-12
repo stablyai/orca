@@ -390,6 +390,11 @@ module.exports = {
         'orca-keyboard-layout',
         context.packager
       )
+      await signMacStandaloneHelper(
+        join(resourcesDir, '..', 'MacOS', 'orca-workspace-cow'),
+        'orca-workspace-cow',
+        context.packager
+      )
     }
   },
   win: {
@@ -528,6 +533,10 @@ module.exports = {
       {
         from: 'native/keyboard-layout-macos/.build/release/orca-keyboard-layout',
         to: 'MacOS/orca-keyboard-layout'
+      },
+      {
+        from: 'native/workspace-cow-macos/.build/release/orca-workspace-cow',
+        to: 'MacOS/orca-workspace-cow'
       }
     ],
     target: [
