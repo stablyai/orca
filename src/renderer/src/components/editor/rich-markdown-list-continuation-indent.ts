@@ -14,9 +14,9 @@ export function orderedContentColumn(line: string): number | null {
 
 /**
  * Rewrites each ordered item's continuation lines to the two-column indent the
- * upstream tokenizer assumes. It slices a constant two columns past the item's
- * indent, which strands a space under a two-digit marker and deletes real
- * characters once the indent has eroded below the slice width.
+ * base tokenizer assumes. That tokenizer slices a constant two columns past the
+ * item's indent, which strands a space under a two-digit marker and eats real
+ * characters once the indent sits below the slice width.
  */
 export function normalizeOrderedContinuationIndent(source: string): string {
   const lines = source.split('\n')
