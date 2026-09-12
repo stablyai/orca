@@ -1,4 +1,8 @@
-import { getRepoExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
+import {
+  getRepoExecutionHostId,
+  parseExecutionHostId,
+  type ExecutionHostId
+} from '../../../shared/execution-host'
 
 type RepoDisplayLabelItem = {
   path: string
@@ -36,6 +40,20 @@ function hasDuplicateLabels(labels: readonly string[]): boolean {
   return new Set(labels).size !== labels.length
 }
 
+/** Compact host role for project headers when the same name exists on multiple hosts. */
+export function getRepoDisplayHostRole(
+  item: Pick<RepoDisplayLabelItem, 'connectionId' | 'executionHostId'>
+): 'Local' | 'SSH' | 'Remote' {
+  const parsed = parseExecutionHostId(getRepoExecutionHostId(item))
+  if (!parsed || parsed.kind === 'local') {
+    return 'Local'
+  }
+  if (parsed.kind === 'ssh') {
+    return 'SSH'
+  }
+  return 'Remote'
+}
+
 export function getRepoDisplayLabelsByPath(
   items: readonly RepoDisplayLabelItem[]
 ): Map<string, string> {
@@ -54,19 +72,32 @@ export function getRepoDisplayLabelsByPath(
     if (collidingItems.length < 2) {
       continue
     }
-    const maxDepth = Math.max(
-      ...collidingItems.map((item) => normalizePathSegments(item.path).length)
-    )
-    let depth = 1
-    let nextLabels = collidingItems.map((item) => labelForDepth(item, depth))
-    while (depth < maxDepth && hasDuplicateLabels(nextLabels)) {
-      depth += 1
-      nextLabels = collidingItems.map((item) => labelForDepth(item, depth))
+    // Why: same path+name across local/remote cannot be disambiguated by parent
+    // path alone (#13221). Path-expand within each host role first so two Local
+    // apis stay payments/api vs billing/api, then append Local/SSH/Remote when
+    // the collision group spans more than one role.
+    const hostRoles = new Set(collidingItems.map((item) => getRepoDisplayHostRole(item)))
+    const appendHostRole = hostRoles.size > 1
+    const itemsByRole = new Map<string, RepoDisplayLabelItem[]>()
+    for (const item of collidingItems) {
+      const role = getRepoDisplayHostRole(item)
+      const group = itemsByRole.get(role) ?? []
+      group.push(item)
+      itemsByRole.set(role, group)
     }
-    collidingItems.forEach((item, index) => {
-      labels.set(getRepoDisplayLabelKey(item), nextLabels[index] ?? item.displayName)
-    })
+    for (const [role, roleItems] of itemsByRole) {
+      const maxDepth = Math.max(...roleItems.map((item) => normalizePathSegments(item.path).length))
+      let depth = 1
+      let nextLabels = roleItems.map((item) => labelForDepth(item, depth))
+      while (depth < maxDepth && hasDuplicateLabels(nextLabels)) {
+        depth += 1
+        nextLabels = roleItems.map((item) => labelForDepth(item, depth))
+      }
+      roleItems.forEach((item, index) => {
+        const base = nextLabels[index] ?? item.displayName
+        labels.set(getRepoDisplayLabelKey(item), appendHostRole ? `${base} · ${role}` : base)
+      })
+    }
   }
-
   return labels
 }
