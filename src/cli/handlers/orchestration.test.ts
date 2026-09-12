@@ -532,7 +532,19 @@ describe('orchestration timeout flag validation', () => {
       ])
     )
 
-    expect(printResult).toHaveBeenCalledWith(response, true, expect.any(Function))
+    expect(printResult).toHaveBeenCalledWith(
+      {
+        ...response,
+        result: expect.objectContaining({
+          answer: 'yes',
+          messageId: 'msg_1',
+          outcome: 'answered',
+          pending: false
+        })
+      },
+      true,
+      expect.any(Function)
+    )
     expect(logSpy).not.toHaveBeenCalled()
   })
 

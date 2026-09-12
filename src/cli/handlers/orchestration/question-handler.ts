@@ -4,6 +4,7 @@ import { printResult } from '../../format'
 import { renderCommand } from '../../orchestration-mutation-recovery'
 import { RuntimeClientError } from '../../runtime-client'
 import { resolveOrchestrationCliExecutable } from '../../runtime/orchestration-recovery-command'
+import { withOrchestrationAskOutcome } from '../../../shared/orchestration-ask-outcome'
 import {
   clampOrchestrationAskTimeoutMs,
   resolveOrchestrationAskClientTimeoutMs
@@ -68,9 +69,11 @@ export const ORCHESTRATION_QUESTION_HANDLER: Record<string, CommandHandler> = {
         orchestrationCapability: getOptionalStringFlag(flags, 'dispatch-capability')
       }
     )
-    // Why: same {ok, result} envelope as every sibling verb; ask used to print a bare object.
+    // Why: engines need first-class outcome/pending so exit 1 timeout is not an
+    // internal error (#13184). Keep main's {ok, result} envelope; classify inside result.
+    const askResult = { ...result, result: withOrchestrationAskOutcome(result.result) }
     if (json) {
-      printResult(result, true, () => '')
+      printResult(askResult, true, () => '')
     } else if (result.result.legacyCompatibility?.resumeRequired) {
       console.log(`Question ${result.result.messageId} committed.`)
       console.log(`Resume with: ${result.result.legacyCompatibility.resumeCommand}`)
