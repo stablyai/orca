@@ -196,6 +196,12 @@ export type GlobalSettings = {
   httpProxyUrl?: string
   /** Optional semicolon/comma/newline-separated bypass rules for httpProxyUrl. */
   httpProxyBypassRules?: string
+  /**
+   * Optional absolute path to a PEM CA bundle for a TLS-intercepting proxy.
+   * Trusted by Orca's own sessions and exported to agent CLIs as
+   * NODE_EXTRA_CA_CERTS.
+   */
+  httpProxyCaPath?: string
   /** Why: corporate TLS-intercepting proxies can break HTTP/2 downloads; opt-in Chromium process-wide HTTP/1.1 switch. */
   electronHttp1CompatibilityMode?: boolean
   /** Opt-in in-app browsing (isolated guest surface); default keeps links opening in the system browser. */

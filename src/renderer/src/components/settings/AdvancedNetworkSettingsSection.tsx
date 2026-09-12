@@ -2,7 +2,24 @@ import type React from 'react'
 import { useState } from 'react'
 import { ChevronDown } from 'lucide-react'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import { normalizeProxyBypassRules, normalizeProxyUrl } from '../../../../shared/network-proxy'
+import {
+  normalizeProxyBypassRules,
+  normalizeProxyCaPath,
+  normalizeProxyUrl
+} from '../../../../shared/network-proxy'
+import {
+  createHttpProxyBypassRulesDraftState,
+  createHttpProxyCaPathDraftState,
+  createHttpProxyUrlDraftState,
+  resolveHttpProxyBypassRulesDraftState,
+  resolveHttpProxyCaPathDraftState,
+  resolveHttpProxyUrlDraftState,
+  setHttpProxyCaPathDraftErrorState,
+  setHttpProxyUrlDraftErrorState,
+  updateHttpProxyBypassRulesDraftState,
+  updateHttpProxyCaPathDraftState,
+  updateHttpProxyUrlDraftState
+} from './advanced-network-proxy-drafts'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '../../store'
 import { Button } from '../ui/button'
@@ -24,94 +41,30 @@ export function shouldOpenNetworkProxyConfig(searchQuery: string): boolean {
 
 /** A configured proxy should also reveal the fields, so users see the value. */
 export function hasConfiguredNetworkProxy(settings: GlobalSettings): boolean {
-  return Boolean(settings.httpProxyUrl?.trim() || settings.httpProxyBypassRules?.trim())
+  return Boolean(
+    settings.httpProxyUrl?.trim() ||
+    settings.httpProxyBypassRules?.trim() ||
+    settings.httpProxyCaPath?.trim()
+  )
 }
 
-export type HttpProxyUrlDraftState = {
-  sourceValue: string
-  draft: string
-  error: string | null
+// Re-exported: the draft reducers moved to their own module, but this file
+// stays their public entry point for tests and any future importer.
+export {
+  createHttpProxyBypassRulesDraftState,
+  createHttpProxyCaPathDraftState,
+  createHttpProxyUrlDraftState,
+  setHttpProxyCaPathDraftErrorState,
+  setHttpProxyUrlDraftErrorState,
+  updateHttpProxyBypassRulesDraftState,
+  updateHttpProxyCaPathDraftState,
+  updateHttpProxyUrlDraftState
 }
-
-export function createHttpProxyUrlDraftState(
-  httpProxyUrl: string | undefined
-): HttpProxyUrlDraftState {
-  const sourceValue = httpProxyUrl ?? ''
-  return {
-    sourceValue,
-    draft: sourceValue,
-    error: null
-  }
-}
-
-function resolveHttpProxyUrlDraftState(
-  state: HttpProxyUrlDraftState,
-  httpProxyUrl: string | undefined
-): HttpProxyUrlDraftState {
-  const sourceValue = httpProxyUrl ?? ''
-  return state.sourceValue === sourceValue ? state : createHttpProxyUrlDraftState(httpProxyUrl)
-}
-
-export function updateHttpProxyUrlDraftState(
-  state: HttpProxyUrlDraftState,
-  httpProxyUrl: string | undefined,
-  draft: string
-): HttpProxyUrlDraftState {
-  return {
-    // Why: settings persistence is async, so edits after an external settings
-    // reload must build on the latest persisted proxy source.
-    ...resolveHttpProxyUrlDraftState(state, httpProxyUrl),
-    draft,
-    error: null
-  }
-}
-
-export function setHttpProxyUrlDraftErrorState(
-  state: HttpProxyUrlDraftState,
-  httpProxyUrl: string | undefined,
-  error: string
-): HttpProxyUrlDraftState {
-  return {
-    ...resolveHttpProxyUrlDraftState(state, httpProxyUrl),
-    error
-  }
-}
-
-export type HttpProxyBypassRulesDraftState = {
-  sourceValue: string
-  draft: string
-}
-
-export function createHttpProxyBypassRulesDraftState(
-  httpProxyBypassRules: string | undefined
-): HttpProxyBypassRulesDraftState {
-  const sourceValue = httpProxyBypassRules ?? ''
-  return {
-    sourceValue,
-    draft: sourceValue
-  }
-}
-
-function resolveHttpProxyBypassRulesDraftState(
-  state: HttpProxyBypassRulesDraftState,
-  httpProxyBypassRules: string | undefined
-): HttpProxyBypassRulesDraftState {
-  const sourceValue = httpProxyBypassRules ?? ''
-  return state.sourceValue === sourceValue
-    ? state
-    : createHttpProxyBypassRulesDraftState(httpProxyBypassRules)
-}
-
-export function updateHttpProxyBypassRulesDraftState(
-  state: HttpProxyBypassRulesDraftState,
-  httpProxyBypassRules: string | undefined,
-  draft: string
-): HttpProxyBypassRulesDraftState {
-  return {
-    ...resolveHttpProxyBypassRulesDraftState(state, httpProxyBypassRules),
-    draft
-  }
-}
+export type {
+  HttpProxyBypassRulesDraftState,
+  HttpProxyCaPathDraftState,
+  HttpProxyUrlDraftState
+} from './advanced-network-proxy-drafts'
 
 type AdvancedNetworkSettingsSectionProps = {
   settings: GlobalSettings
@@ -135,6 +88,9 @@ export function AdvancedNetworkSettingsSection({
   )
   const [httpProxyBypassRulesDraftState, setHttpProxyBypassRulesDraftState] = useState(() =>
     createHttpProxyBypassRulesDraftState(settings.httpProxyBypassRules)
+  )
+  const [httpProxyCaPathDraftState, setHttpProxyCaPathDraftState] = useState(() =>
+    createHttpProxyCaPathDraftState(settings.httpProxyCaPath)
   )
 
   const resolvedHttpProxyUrlDraftState = resolveHttpProxyUrlDraftState(
@@ -160,6 +116,17 @@ export function AdvancedNetworkSettingsSection({
   }
   const httpProxyBypassRulesDraft = resolvedHttpProxyBypassRulesDraftState.draft
 
+  const resolvedHttpProxyCaPathDraftState = resolveHttpProxyCaPathDraftState(
+    httpProxyCaPathDraftState,
+    settings.httpProxyCaPath
+  )
+  if (resolvedHttpProxyCaPathDraftState !== httpProxyCaPathDraftState) {
+    // Why: same reconcile-before-paint contract as the two fields above.
+    setHttpProxyCaPathDraftState(resolvedHttpProxyCaPathDraftState)
+  }
+  const httpProxyCaPathDraft = resolvedHttpProxyCaPathDraftState.draft
+  const httpProxyCaPathError = resolvedHttpProxyCaPathDraftState.error
+
   const updateHttpProxyUrlDraft = (draft: string): void => {
     setHttpProxyUrlDraftState((current) =>
       updateHttpProxyUrlDraftState(current, settings.httpProxyUrl, draft)
@@ -170,6 +137,28 @@ export function AdvancedNetworkSettingsSection({
     setHttpProxyBypassRulesDraftState((current) =>
       updateHttpProxyBypassRulesDraftState(current, settings.httpProxyBypassRules, draft)
     )
+  }
+
+  const updateHttpProxyCaPathDraft = (draft: string): void => {
+    setHttpProxyCaPathDraftState((current) =>
+      updateHttpProxyCaPathDraftState(current, settings.httpProxyCaPath, draft)
+    )
+  }
+
+  const commitHttpProxyCaPath = (): void => {
+    const normalized = normalizeProxyCaPath(httpProxyCaPathDraft)
+    if (!normalized.ok) {
+      setHttpProxyCaPathDraftState((current) =>
+        setHttpProxyCaPathDraftErrorState(current, settings.httpProxyCaPath, normalized.message)
+      )
+      return
+    }
+    setHttpProxyCaPathDraftState((current) =>
+      updateHttpProxyCaPathDraftState(current, settings.httpProxyCaPath, normalized.value)
+    )
+    if (normalized.value !== (settings.httpProxyCaPath ?? '')) {
+      updateSettings({ httpProxyCaPath: normalized.value })
+    }
   }
 
   const commitHttpProxyUrl = (): void => {
@@ -330,6 +319,46 @@ export function AdvancedNetworkSettingsSection({
                   'Optional. Separate hosts with commas, semicolons, or new lines.'
                 )}
               </p>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="settings-http-proxy-ca-path">
+                {translate(
+                  'auto.components.settings.AdvancedNetworkSettingsSection.proxyCaPath',
+                  'Proxy CA Certificate'
+                )}
+              </Label>
+              <Input
+                id="settings-http-proxy-ca-path"
+                value={httpProxyCaPathDraft}
+                onChange={(e) => updateHttpProxyCaPathDraft(e.target.value)}
+                onBlur={commitHttpProxyCaPath}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.currentTarget.blur()
+                  }
+                }}
+                placeholder={translate(
+                  'auto.components.settings.AdvancedNetworkSettingsSection.proxyCaPathPlaceholder',
+                  '/etc/ssl/certs/corporate-proxy-ca.pem'
+                )}
+                autoCapitalize="none"
+                autoCorrect="off"
+                autoComplete="off"
+                spellCheck={false}
+                aria-invalid={httpProxyCaPathError ? true : undefined}
+                className="font-mono text-xs"
+              />
+              {httpProxyCaPathError ? (
+                <p className="text-xs text-destructive">{httpProxyCaPathError}</p>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  {translate(
+                    'auto.components.settings.AdvancedNetworkSettingsSection.proxyCaPathHelp',
+                    'Optional. Absolute path to a PEM bundle, for a proxy that intercepts TLS. Trusted by Orca and passed to agents as NODE_EXTRA_CA_CERTS.'
+                  )}
+                </p>
+              )}
             </div>
           </div>
         </CollapsibleContent>

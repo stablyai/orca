@@ -7116,7 +7116,10 @@
           "823e0f15b1": "Proxy URL for Orca network requests and local terminal children.",
           "d93c7cd531": "Configure app-level network routing.",
           "c46cdbbd4e": "Network",
-          "configureProxy": "Configure proxy"
+          "configureProxy": "Configure proxy",
+          "proxyCaPath": "Proxy CA Certificate",
+          "proxyCaPathPlaceholder": "/etc/ssl/certs/corporate-proxy-ca.pem",
+          "proxyCaPathHelp": "Optional. Absolute path to a PEM bundle, for a proxy that intercepts TLS. Trusted by Orca and passed to agents as NODE_EXTRA_CA_CERTS."
         },
         "GeneralPane": {
           "d58fccfd84": "Navigation",
@@ -9652,7 +9655,12 @@
             "sidebar": "sidebar",
             "867dddea41": "pinned",
             "5250cf0e48": "pin",
-            "afa37a34e1": "close"
+            "afa37a34e1": "close",
+            "proxyCa": "ca",
+            "proxyCertificate": "certificate",
+            "proxyMitm": "mitm",
+            "proxyTls": "tls",
+            "proxyNodeExtraCaCerts": "node_extra_ca_certs"
           }
         },
         "git": {
