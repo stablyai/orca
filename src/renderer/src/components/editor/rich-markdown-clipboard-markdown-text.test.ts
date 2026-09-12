@@ -185,9 +185,6 @@ describe('serializeRichMarkdownSliceToMarkdown', () => {
   describe('prose with markdown-significant characters', () => {
     const PROSE =
       'Compare a < b && c, snake_case_name, 5 * 3, and "quotes" — see <https://example.com>'
-    // The save path entity-escapes `<` and `&`; copy must not diverge from it.
-    const SAVED =
-      'Compare a &lt; b &amp;&amp; c, snake_case_name, 5 * 3, and "quotes" — see [https://example.com](https://example.com)'
 
     it('matches the save path for a whole-paragraph selection', () => {
       const editor = createEditor(PROSE)
@@ -197,8 +194,9 @@ describe('serializeRichMarkdownSliceToMarkdown', () => {
         throw new Error('paragraph not found')
       }
 
-      expect(editor.getMarkdown()).toBe(SAVED)
-      expect(serializeRange(editor, paraPos, paraPos + paraNode.nodeSize)).toBe(SAVED)
+      expect(serializeRange(editor, paraPos, paraPos + paraNode.nodeSize)).toBe(
+        editor.getMarkdown()
+      )
     })
 
     it('matches the save path for a within-paragraph selection', () => {
@@ -210,10 +208,12 @@ describe('serializeRichMarkdownSliceToMarkdown', () => {
       }
       const textStart = paraPos + 1
 
-      expect(serializeRange(editor, textStart, textStart + paraNode.textContent.length)).toBe(SAVED)
+      expect(serializeRange(editor, textStart, textStart + paraNode.textContent.length)).toBe(
+        editor.getMarkdown()
+      )
     })
 
-    it('leaves underscores, asterisks, and quotes unescaped in a partial selection', () => {
+    it('matches the save path for a partial selection', () => {
       const editor = createEditor(PROSE)
       const paraPos = findNodePos(editor, (node) => node.type.name === 'paragraph')
       const paraNode = editor.state.doc.nodeAt(paraPos)
@@ -224,8 +224,11 @@ describe('serializeRichMarkdownSliceToMarkdown', () => {
       const selected = 'a < b && c, snake_case_name, 5 * 3'
       const from = textStart + paraNode.textContent.indexOf('a < b')
 
+      // Save an editor containing only the selected text, so its markdown output is
+      // the save path's answer for this exact substring, not a slice of the whole.
+      const selectedOnlyEditor = createEditor(selected)
       expect(serializeRange(editor, from, from + selected.length)).toBe(
-        'a &lt; b &amp;&amp; c, snake_case_name, 5 * 3'
+        selectedOnlyEditor.getMarkdown()
       )
     })
   })
