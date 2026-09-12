@@ -37,7 +37,9 @@ export function createBrowserPageCreateActions(
         undefined,
         options?.docLocation
       )
-      if (!options?.browserRuntimeEnvironmentId && !options?.docLocation) {
+      // Runtime-backed pages are streamed, not locally driven, but they still need the pane
+      // mounted to start that stream — #19633 admitted only local pages and left them deferred.
+      if (!options?.docLocation) {
         admitBrowserPageMount(page.id)
       }
 
