@@ -253,7 +253,9 @@ export function createAutomationDispatchCompletion(args: {
     },
     settlePendingAfterDispatch: async () => {
       dispatchMarked = true
-      if (pendingDone) {
+      if (pendingExitCode !== null && isProvenProcessExit(pendingExitCode)) {
+        await markExitResult(pendingExitCode)
+      } else if (pendingDone) {
         await markCompletionResult()
       } else if (pendingExitCode !== null) {
         await markExitResult(pendingExitCode)

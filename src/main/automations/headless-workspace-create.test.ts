@@ -72,6 +72,7 @@ describe('headless automation workspace create args', () => {
       activate: false,
       createdWithAgent: 'codex',
       startupAgent: 'codex',
+      codexAutomationStateId: 'run-1',
       startupPrompt: 'Review changes',
       telemetrySource: 'unknown',
       automationProvenance: {
@@ -88,6 +89,20 @@ describe('headless automation workspace create args', () => {
         hostId: 'ssh:ssh-target-1'
       }
     })
+  })
+
+  it('does not add Codex state isolation to non-Codex automation agents', () => {
+    const args = buildHeadlessAutomationWorktreeCreateArgs({
+      automation: { ...automation, agentId: 'claude' },
+      run: {
+        id: 'run-1',
+        title: 'Nightly review run',
+        scheduledFor: Date.UTC(2026, 0, 2, 3, 4, 5)
+      },
+      repo
+    })
+
+    expect(args).not.toHaveProperty('codexAutomationStateId')
   })
 
   it('falls back to skip for legacy automations without a saved setup decision', () => {

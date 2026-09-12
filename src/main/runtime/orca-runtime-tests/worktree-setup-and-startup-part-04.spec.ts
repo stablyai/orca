@@ -16,6 +16,52 @@ import type { WorktreeMeta } from '../orca-runtime-test-mocks.spec'
 import { TEST_REPO_ID, makeWorktreeMeta, store } from '../orca-runtime-test-fixtures.spec'
 
 describe('OrcaRuntimeService', () => {
+  it('isolates headless Codex automation state outside the worktree', async () => {
+    const runtimeStore = {
+      ...store,
+      getSettings: () => ({
+        ...store.getSettings(),
+        agentCmdOverrides: {},
+        agentDefaultArgs: { codex: '--dangerously-bypass-approvals-and-sandbox' }
+      })
+    }
+    const runtime = new OrcaRuntimeService(runtimeStore as never)
+    const spawn = vi.fn().mockResolvedValue({ id: 'pty-codex-automation' })
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => 'codex'
+    })
+
+    computeWorktreePathMock.mockReturnValue('/tmp/workspaces/runtime-codex-automation')
+    ensurePathWithinWorkspaceMock.mockReturnValue('/tmp/workspaces/runtime-codex-automation')
+    vi.mocked(listWorktrees).mockResolvedValue([
+      {
+        path: '/tmp/workspaces/runtime-codex-automation',
+        head: 'def',
+        branch: 'runtime-codex-automation',
+        isBare: false,
+        isMainWorktree: false
+      }
+    ])
+
+    await runtime.createManagedWorktree({
+      repoSelector: TEST_REPO_ID,
+      name: 'runtime-codex-automation',
+      startupAgent: 'codex',
+      startupPrompt: 'run automation',
+      codexAutomationStateId: 'run-1'
+    })
+
+    const command = (spawn.mock.calls[0]?.[0] as { command?: string } | undefined)?.command
+    expect(command).toContain("'--dangerously-bypass-approvals-and-sandbox'")
+    expect(command).toMatch(
+      /'-c' 'sqlite_home=~\/.orca\/tmp\/codex-automation\/run-1-[a-f0-9]{32}'/
+    )
+    expect(command).toContain("'run automation'")
+  })
+
   it('sends follow-up prompts for CLI-created stdin-after-start startup agents', async () => {
     const metaById: Record<string, WorktreeMeta> = {}
     const runtimeStore = {

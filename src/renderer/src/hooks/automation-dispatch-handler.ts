@@ -11,6 +11,7 @@ import type {
   AutomationDispatchResult
 } from '../../../shared/automations-types'
 import { createAutomationDispatchCompletion } from './automation-dispatch-completion'
+import { resolveAutomationAgentArgs } from '../../../shared/tui-agent-launch-defaults'
 import {
   prepareAutomationDispatchWorkspace,
   resolveAutomationDispatchWorkspace
@@ -170,6 +171,15 @@ export async function handleAutomationDispatchRequest({
       prompt: automation.prompt,
       launchSource: 'unknown',
       title: run.title,
+      ...(automation.agentId === 'codex'
+        ? {
+            agentArgsOverride: resolveAutomationAgentArgs(
+              'codex',
+              state.settings?.agentDefaultArgs,
+              run.id
+            )
+          }
+        : {}),
       onData: completion.appendOutput,
       onAgentStatus: (payload) => {
         completion.captureAssistantMessage(payload.lastAssistantMessage)

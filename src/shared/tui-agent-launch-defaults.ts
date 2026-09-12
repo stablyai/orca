@@ -1,6 +1,7 @@
 import { isTuiAgent } from './tui-agent-config'
 import { YOLO_TUI_AGENT_ARGS, YOLO_TUI_AGENT_ENV } from './tui-agent-permissions'
 import type { TuiAgent } from './tui-agent'
+import { sha256 } from './sha256'
 
 const UNSUPPORTED_TUI_AGENT_ARGS: Partial<Record<TuiAgent, readonly string[]>> = {
   opencode: ['--dangerously-skip-permissions'],
@@ -101,4 +102,27 @@ export function resolveTuiAgentLaunchEnv(
     return { ...configuredEnv[agent] }
   }
   return getTuiAgentDefaultEnv(agent)
+}
+
+const CODEX_AUTOMATION_STATE_ROOT = '~/.orca/tmp/codex-automation'
+
+function normalizeCodexAutomationStateId(runId: string): string {
+  const readable = runId.replace(/[^a-zA-Z0-9_-]/g, '-').slice(0, 64) || 'run'
+  const digest = Array.from(sha256(new TextEncoder().encode(runId)).slice(0, 16), (byte) =>
+    byte.toString(16).padStart(2, '0')
+  ).join('')
+  return `${readable}-${digest}`
+}
+
+export function resolveAutomationAgentArgs(
+  agent: TuiAgent,
+  configuredArgs: Partial<Record<TuiAgent, string>> | null | undefined,
+  codexAutomationStateId?: string
+): string {
+  const defaultArgs = resolveTuiAgentLaunchArgs(agent, configuredArgs)
+  if (agent !== 'codex' || !codexAutomationStateId) {
+    return defaultArgs
+  }
+  const statePath = `${CODEX_AUTOMATION_STATE_ROOT}/${normalizeCodexAutomationStateId(codexAutomationStateId)}`
+  return `${defaultArgs} -c sqlite_home='${statePath}'`.trim()
 }
