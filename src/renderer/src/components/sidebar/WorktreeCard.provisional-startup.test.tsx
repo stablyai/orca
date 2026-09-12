@@ -233,6 +233,36 @@ describe('WorktreeCard provisional startup rows', () => {
     expect(markup).toContain('live-branch')
   })
 
+  it('holds rows that carry no git evidence even when the catalog reads authoritative', async () => {
+    // Appended fallback rows inherit a settled repo-level flag by design, so the row
+    // itself has to prove it was scanned. #20119
+    detectedWorktreesByRepo = { 'repo-1': makeDetected(true) }
+    const markup = await renderCard({
+      displayName: 'hetzner-vps',
+      branch: '',
+      head: '',
+      displayNameMode: 'automatic'
+    })
+
+    expect(markup).toContain('data-worktree-card-title-placeholder=""')
+    expect(markup).toContain('data-worktree-card-identity-placeholder=""')
+  })
+
+  it('leaves bare checkouts settled since they can never resolve a branch', async () => {
+    detectedWorktreesByRepo = { 'repo-1': makeDetected(true) }
+    const markup = await renderCard({
+      displayName: 'bare-repo',
+      branch: '',
+      head: '',
+      isBare: true,
+      displayNameMode: 'automatic'
+    })
+
+    expect(markup).not.toContain('data-worktree-card-title-placeholder=""')
+    expect(markup).not.toContain('data-worktree-card-identity-placeholder=""')
+    expect(getInlineRenameTitleText(markup)).toContain('bare-repo')
+  })
+
   it('reserves the identity slot alongside existing host meta', async () => {
     const markup = await renderCard(
       { displayName: 'hetzner-vps', branch: '', head: '', displayNameMode: 'automatic' },
