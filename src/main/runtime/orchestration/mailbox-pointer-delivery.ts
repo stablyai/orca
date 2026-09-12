@@ -37,17 +37,24 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
     if (!terminalHandle) {
       return
     }
-    try {
-      const leaf = this.deps.getLiveLeafForHandle(terminalHandle)
-      if (leaf.lastAgentStatus !== 'idle' || !leaf.lastAgentStatusObservedLive) {
+    const liveLeaf = this.tryLiveLeafForHandle(terminalHandle)
+    if (liveLeaf) {
+      if (liveLeaf.lastAgentStatus !== 'idle' || !liveLeaf.lastAgentStatusObservedLive) {
         return
       }
-      const mailboxHandle = this.deps.mailboxOwner.resolve(leaf, handle)
+      const mailboxHandle = this.deps.mailboxOwner.resolve(liveLeaf, handle)
       if (mailboxHandle) {
-        this.deliver(leaf, { mailboxHandle, reservedTypes })
+        this.deliver(liveLeaf, { mailboxHandle, reservedTypes })
       }
-    } catch {
-      // Persisted mail remains available to explicit check or a later idle edge.
+      return
+    }
+    const leaf = this.deps.getLiveBackgroundPtyLeafForHandle?.(terminalHandle)
+    if (!leaf || leaf.lastAgentStatus !== 'idle' || leaf.lastAgentStatusObservedLive !== true) {
+      return
+    }
+    const mailboxHandle = this.deps.mailboxOwner.resolve(leaf, handle, { terminalHandle })
+    if (mailboxHandle) {
+      this.deliver(leaf, { mailboxHandle, reservedTypes })
     }
   }
 
@@ -64,7 +71,7 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
     if (!db || (!mailboxHandle.startsWith('run:') && !mailboxHandle.startsWith('dispatch:'))) {
       return
     }
-    if (!this.deps.getTerminalHandleForLeafKey(this.leafKey(leaf))) {
+    if (!this.terminalHandleForMailboxLeaf(leaf)) {
       return
     }
     if (db.hasOutstandingMailboxDelivery?.(mailboxHandle)) {
@@ -263,6 +270,21 @@ export class OrchestrationMailboxPointerDelivery<TWaiter extends OrchestrationMe
         // Durable mail remains available to explicit check or a later idle edge.
       }
     })
+  }
+
+  private tryLiveLeafForHandle(terminalHandle: string): OrchestrationMailboxLeaf | null {
+    try {
+      return this.deps.getLiveLeafForHandle(terminalHandle)
+    } catch {
+      return null
+    }
+  }
+
+  private terminalHandleForMailboxLeaf(leaf: OrchestrationMailboxLeaf): string | undefined {
+    return (
+      this.deps.getTerminalHandleForMailboxLeaf?.(leaf) ??
+      this.deps.getTerminalHandleForLeafKey(this.leafKey(leaf))
+    )
   }
 
   private leafKey(leaf: OrchestrationMailboxLeaf): string {

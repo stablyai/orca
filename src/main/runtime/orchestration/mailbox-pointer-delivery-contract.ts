@@ -22,10 +22,13 @@ export type PointerDeliveryDependencies<TWaiter extends OrchestrationMessageWait
   getLeaf: (leafKey: string) => OrchestrationMailboxLeaf | undefined
   getLeafKey: (tabId: string, leafId: string) => string
   getLiveLeafForHandle: (handle: string) => OrchestrationMailboxLeaf
+  /** Synthetic background-PTY handles never appear as renderer leaves. */
+  getLiveBackgroundPtyLeafForHandle?: (handle: string) => OrchestrationMailboxLeaf | null
   getMessageWaiters: (mailboxHandle: string) => ReadonlySet<TWaiter> | undefined
   getTabTitle: (tabId: string) => string | null | undefined
   getCliCommand: (terminalHandle: string) => OrchestrationCliCommand
   getTerminalHandleForLeafKey: (leafKey: string) => string | undefined
+  getTerminalHandleForMailboxLeaf?: (leaf: OrchestrationMailboxLeaf) => string | undefined
   resolveSubmitTarget: (
     leaf: OrchestrationMailboxLeaf,
     ptyId: string

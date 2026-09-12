@@ -31,6 +31,7 @@ export class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWithGetUnper
     if (pty) {
       const prevStatus = pty.lastAgentStatus
       const prevTitle = pty.lastOscTitle
+      const prevObservedLive = pty.lastAgentStatusObservedLive
       const observedAt = this.nextTitleObservationSequence()
       const observedAtEpochMs = identityOnlyTitle ? null : Date.now()
       pty.lastOscTitle = recordedTitle
@@ -60,6 +61,17 @@ export class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWithGetUnper
       ptyRecordChanged = prevTitle !== recordedTitle || prevStatus !== agentStatus
       if (agentStatus === 'idle' && prevStatus !== 'idle') {
         this.resolvePtyTuiIdleWaiters(pty, ptyId)
+      }
+      // Why: renderer-leaf delivery never sees synthetic background PTY handles.
+      if (
+        agentStatus === 'idle' &&
+        (prevStatus !== 'idle' || !prevObservedLive) &&
+        this.getLeavesForPty(ptyId).length === 0
+      ) {
+        const handle = this.handleByPtyId.get(ptyId)
+        if (handle) {
+          this.deliverPendingMessagesForHandle(handle)
+        }
       }
       const shouldDelayMobileSnapshot =
         ptyRecordChanged &&
