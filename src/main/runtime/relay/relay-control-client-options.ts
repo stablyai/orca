@@ -21,5 +21,8 @@ export type RelayControlClientOptions = {
   onPendingChanged?: () => void
   createSocket?: (url: string, relayJwt: string) => WebSocket
   connectDeadlineMs?: number
+  // Why: settable apart from connectDeadlineMs so a test can stall the connect
+  // phase alone and prove which of the two bounds fired.
+  handshakeTimeoutMs?: number
   silenceLimitMs?: number
 }
