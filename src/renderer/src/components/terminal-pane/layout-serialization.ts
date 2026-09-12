@@ -231,7 +231,10 @@ export function replayTerminalLayout(
 
     const createdPane = manager.splitPane(paneId, node.direction as TerminalPaneSplitDirection, {
       ratio: node.ratio,
-      leafId: getLeftmostLeafId(node.second)
+      leafId: getLeftmostLeafId(node.second),
+      // Why: a replay reproduces the saved tree exactly; an unset ratio means
+      // "the two halves were even", not "re-balance against the whole tree".
+      preserveSiblingSizes: true
     })
     if (!createdPane) {
       restoreNode(node.first, paneId)

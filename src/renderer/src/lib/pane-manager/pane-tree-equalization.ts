@@ -36,7 +36,7 @@ function getEqualizeWeight(
   return weight
 }
 
-export function equalizePaneSplitSizes(root: HTMLElement | null): boolean {
+function walkEqualizedPaneSplitSizes(root: HTMLElement | null, apply: boolean): boolean {
   if (!root) {
     return false
   }
@@ -57,7 +57,9 @@ export function equalizePaneSplitSizes(root: HTMLElement | null): boolean {
         const weight = getEqualizeWeight(child, direction, weights)
         const nextFlex = `${weight} 1 0%`
         if (child.style.flex !== nextFlex) {
-          child.style.flex = nextFlex
+          if (apply) {
+            child.style.flex = nextFlex
+          }
           changed = true
         }
       }
@@ -70,4 +72,14 @@ export function equalizePaneSplitSizes(root: HTMLElement | null): boolean {
 
   visit(root)
   return changed
+}
+
+export function equalizePaneSplitSizes(root: HTMLElement | null): boolean {
+  return walkEqualizedPaneSplitSizes(root, true)
+}
+
+/** True when every split already renders its panes at equal shares — i.e. no
+ *  divider has been dragged and no ratio was restored. */
+export function arePaneSplitSizesEqualized(root: HTMLElement | null): boolean {
+  return !walkEqualizedPaneSplitSizes(root, false)
 }
