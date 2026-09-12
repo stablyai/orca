@@ -5,6 +5,10 @@ import { release, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { randomUUID } from 'node:crypto'
 import { connectMacOSProviderSocket } from './macos-native-provider-socket'
+import {
+  reapMacOSProviderProcess,
+  type MacOSProviderProcessOwner
+} from './macos-native-provider-process-reaping'
 import { RuntimeClientError } from './runtime-client-error'
 
 const HELPER_CONNECT_TIMEOUT_MS = 10_000
@@ -65,10 +69,12 @@ export function consumeNativeProviderLines(
 
 export async function startMacOSNativeProviderSocket({
   helperExecutablePath,
-  isCurrent
+  isCurrent,
+  providerProcess
 }: {
   helperExecutablePath: string
   isCurrent: (socketPath: string) => boolean
+  providerProcess: MacOSProviderProcessOwner
 }): Promise<StartedMacOSProviderSocket> {
   const socketDirectory = mkdtempSync(join(tmpdir(), 'orca-computer-use-'))
   chmodSync(socketDirectory, 0o700)
@@ -79,6 +85,9 @@ export async function startMacOSNativeProviderSocket({
   // Why: launching the nested helper via LaunchServices can make TCC evaluate
   // Orca.app as responsible; the signed helper executable owns this grant.
   const provider = spawnProvider(helperExecutablePath, socketPath, socketTokenPath)
+  // Why: own the helper from birth. Adopting only after connect leaves a window
+  // where a quit during startup strands it with nobody holding the handle.
+  providerProcess.adopt(provider)
   const providerFailure = waitForProviderLaunchFailure(provider)
   const connectAbort = new AbortController()
   try {
@@ -100,9 +109,9 @@ export async function startMacOSNativeProviderSocket({
   } catch (error) {
     connectAbort.abort()
     providerFailure.cleanup()
-    // Why: connect failures happen after spawn; terminate the detached helper
-    // so repeated startup attempts do not leave orphan providers.
-    provider.kill('SIGTERM')
+    // Why: connect failures and superseded startups both happen after spawn;
+    // escalate so a helper that ignores SIGTERM cannot outlive the attempt.
+    reapMacOSProviderProcess(provider)
     if (isCurrent(socketPath)) {
       cleanupSocketDirectory(socketDirectory)
     }
