@@ -17,6 +17,11 @@ export type EditorDraftState = {
   // Why: per-file opt-in to open an oversized markdown file in the rich editor despite the size limit.
   markdownRichModeSizeOverride: Record<string, boolean>
   setMarkdownRichModeSizeOverride: (fileId: string, enabled: boolean) => void
+  // Why: the content that made rich mode fall back to Source for this tab, so
+  // the toggle can offer Preview without re-scanning; a stale entry (content
+  // differs) reads as not faulted.
+  markdownRichModeFaultedContent: Record<string, string>
+  setMarkdownRichModeFaultedContent: (fileId: string, content: string | null) => void
   editorViewMode: Record<string, EditorViewMode>
   setEditorViewMode: (fileId: string, mode: EditorViewMode) => void
   markdownFrontmatterVisible: Record<string, boolean>
@@ -88,6 +93,26 @@ export function createEditorDraftState(set: EditorSet, _get: EditorGet): EditorD
         }
         return {
           markdownRichModeSizeOverride: { ...s.markdownRichModeSizeOverride, [fileId]: true }
+        }
+      }),
+
+    // Rich-mode fallback fault, per tab
+    markdownRichModeFaultedContent: {},
+    setMarkdownRichModeFaultedContent: (fileId, content) =>
+      set((s) => {
+        if (content === null) {
+          if (!(fileId in s.markdownRichModeFaultedContent)) {
+            return s
+          }
+          const next = { ...s.markdownRichModeFaultedContent }
+          delete next[fileId]
+          return { markdownRichModeFaultedContent: next }
+        }
+        if (s.markdownRichModeFaultedContent[fileId] === content) {
+          return s
+        }
+        return {
+          markdownRichModeFaultedContent: { ...s.markdownRichModeFaultedContent, [fileId]: content }
         }
       }),
 

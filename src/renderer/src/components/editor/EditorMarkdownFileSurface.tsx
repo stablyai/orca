@@ -25,6 +25,7 @@ export function EditorMarkdownFileSurface({
   markdownAnnotationsEnabled,
   markdownDocuments,
   getMarkdownSourceLineOffset,
+  onOpenMarkdownPreview,
   handleContentChange,
   handleDirtyStateHint,
   monacoEditor
@@ -41,6 +42,7 @@ export function EditorMarkdownFileSurface({
   markdownAnnotationsEnabled: boolean
   markdownDocuments: MarkdownDocumentsController
   getMarkdownSourceLineOffset: (frontMatterRaw: string) => number
+  onOpenMarkdownPreview?: () => void
   handleContentChange: (content: string) => void
   handleDirtyStateHint: (dirty: boolean) => void
   monacoEditor: React.JSX.Element
@@ -68,6 +70,17 @@ export function EditorMarkdownFileSurface({
       <div className="flex h-full min-h-0 flex-col">
         <div className="flex items-center gap-3 border-b border-border/60 bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
           <span className="min-w-0 flex-1">{richFallbackMessage}</span>
+          {onOpenMarkdownPreview ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="xs"
+              className="shrink-0"
+              onClick={onOpenMarkdownPreview}
+            >
+              {translate('editor.richMarkdown.openPreview', 'Open preview')}
+            </Button>
+          ) : null}
           {isSizeFallback ? (
             <Button
               type="button"

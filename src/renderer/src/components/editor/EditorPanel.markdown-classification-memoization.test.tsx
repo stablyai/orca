@@ -278,6 +278,28 @@ describe('EditorPanel markdown classification memoization', () => {
     expect(probe.eligibility).toHaveBeenCalledTimes(1)
   })
 
+  it('records a rich-mode fault in the store once Rich view falls back, and clears it on recovery', async () => {
+    contentState.fileContents = {
+      [FILE_PATH]: { content: MARKDOWN_WITH_REFERENCE_LINKS, isBinary: false }
+    }
+    useAppStore.setState({
+      editorDrafts: { [FILE_PATH]: MARKDOWN_WITH_REFERENCE_LINKS }
+    })
+    await act(async () => root.render(<EditorPanel />))
+    await flushEffects()
+
+    expect(useAppStore.getState().markdownRichModeFaultedContent[FILE_PATH]).toBe(
+      MARKDOWN_WITH_REFERENCE_LINKS
+    )
+
+    await act(async () => {
+      useAppStore.getState().setEditorDraft(FILE_PATH, MARKDOWN_WITH_HTML)
+    })
+    await flushEffects()
+
+    expect(useAppStore.getState().markdownRichModeFaultedContent[FILE_PATH]).toBeUndefined()
+  })
+
   it('keeps the content-change callback identity stable across content loads', async () => {
     await act(async () => root.render(<EditorPanel />))
     await flushEffects()

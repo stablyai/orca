@@ -16,6 +16,7 @@ import { useClosedEditorTabCleanup } from './useClosedEditorTabCleanup'
 import { useEditorCmdSaveRequest } from './useEditorCmdSaveRequest'
 import { useEditorPanelContentState } from './useEditorPanelContentState'
 import { useMarkdownPreviewShortcut } from './useMarkdownPreviewShortcut'
+import { useMarkdownRichModeFaultTracking } from './useMarkdownRichModeFaultTracking'
 import { useUntitledFileRename } from './useUntitledFileRename'
 import { extractFrontMatter } from './markdown-frontmatter'
 import { useEditorContentChangeHandler } from './use-editor-content-change-handler'
@@ -66,6 +67,8 @@ function EditorPanelInner({
   const markdownRichModeSizeOverridden = useAppStore(
     (s) => activeFileId !== null && s.markdownRichModeSizeOverride[activeFileId] === true
   )
+  const markdownRichModeFaultedContent = useAppStore((s) => s.markdownRichModeFaultedContent)
+  const setMarkdownRichModeFaultedContent = useAppStore((s) => s.setMarkdownRichModeFaultedContent)
   const editorViewMode = useAppStore((s) => s.editorViewMode)
   const setEditorViewMode = useAppStore((s) => s.setEditorViewMode)
   const openFile = useAppStore((s) => s.openFile)
@@ -205,20 +208,31 @@ function EditorPanelInner({
     }
   }, [activeFile, clearCopiedPathToastResetTimer])
 
-  if (!activeFile) {
+  const model = activeFile
+    ? getEditorPanelRenderModel({
+        activeFile,
+        fileContents,
+        editorDrafts,
+        gitStatusEntries,
+        gitBranchEntries,
+        markdownViewMode,
+        markdownRichModeSizeOverridden,
+        markdownRichModeFaultedContent,
+        isChangesMode,
+        canOpenWorkspaceFileBrowser
+      })
+    : null
+  useMarkdownRichModeFaultTracking({
+    fileId: activeFile?.id ?? null,
+    mdViewMode: model?.mdViewMode ?? 'source',
+    inlineMarkdownRenderState: model?.inlineMarkdownRenderState ?? null,
+    inlineMarkdownContent: model?.inlineMarkdownContent ?? null,
+    setMarkdownRichModeFaultedContent
+  })
+
+  if (!activeFile || !model) {
     return null
   }
-  const model = getEditorPanelRenderModel({
-    activeFile,
-    fileContents,
-    editorDrafts,
-    gitStatusEntries,
-    gitBranchEntries,
-    markdownViewMode,
-    markdownRichModeSizeOverridden,
-    isChangesMode,
-    canOpenWorkspaceFileBrowser
-  })
 
   const handleOpenPreviewToSide = (): void => {
     const state = useAppStore.getState()
@@ -251,21 +265,6 @@ function EditorPanelInner({
       setMarkdownViewMode(activeFile.filePath, preferredMarkdownViewMode)
     }
   }
-  const handleEditorToggleChange = (next: EditorToggleValue): void => {
-    const fileId = activeFile.id
-    if (activeFile.mode === 'diff' && model.isMarkdown && next === 'rich') {
-      handleOpenDiffTargetFile('rich')
-      return
-    }
-    if (next === 'changes') {
-      setEditorViewMode(fileId, 'changes')
-      return
-    }
-    setEditorViewMode(fileId, 'edit')
-    if (next !== 'edit') {
-      setMarkdownViewMode(fileId, next)
-    }
-  }
   const handleOpenMarkdownPreview = (): void => {
     openMarkdownPreview(
       {
@@ -277,6 +276,29 @@ function EditorPanelInner({
       },
       { sourceFileId: activeFile.id }
     )
+  }
+  const handleEditorToggleChange = (next: EditorToggleValue): void => {
+    const fileId = activeFile.id
+    if (activeFile.mode === 'diff' && model.isMarkdown && next === 'rich') {
+      handleOpenDiffTargetFile('rich')
+      return
+    }
+    if (next === 'changes') {
+      setEditorViewMode(fileId, 'changes')
+      return
+    }
+    // Why: the toggle only offers 'preview' as a fallback affordance (rich mode
+    // couldn't render this content); it opens the existing dedicated preview
+    // tab rather than a real edit-tab render mode, since 'edit' tabs never
+    // render read-only preview inline (see getMarkdownRenderMode).
+    if (next === 'preview') {
+      handleOpenMarkdownPreview()
+      return
+    }
+    setEditorViewMode(fileId, 'edit')
+    if (next !== 'edit') {
+      setMarkdownViewMode(fileId, next)
+    }
   }
   const handleOpenContainingFolder = (): void => {
     // Why: virtual editor tabs use synthetic ids instead of on-disk paths.

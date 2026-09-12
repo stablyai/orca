@@ -51,6 +51,7 @@ export function EditorEditFileSurface({
   markdownDocuments,
   getConflictNavigation,
   getMarkdownSourceLineOffset,
+  onOpenMarkdownPreview,
   handleContentChange,
   handleDirtyStateHint,
   handleSave,
@@ -82,6 +83,7 @@ export function EditorEditFileSurface({
   markdownDocuments: MarkdownDocumentsController
   getConflictNavigation: (file: OpenFile, content: string) => EditorConflictNavigation | undefined
   getMarkdownSourceLineOffset: (frontMatterRaw: string) => number
+  onOpenMarkdownPreview?: () => void
   handleContentChange: (content: string) => void
   handleDirtyStateHint: (dirty: boolean) => void
   handleSave: (content: string) => Promise<boolean>
@@ -220,6 +222,7 @@ export function EditorEditFileSurface({
       markdownAnnotationsEnabled={markdownAnnotationsEnabled}
       markdownDocuments={markdownDocuments}
       getMarkdownSourceLineOffset={getMarkdownSourceLineOffset}
+      onOpenMarkdownPreview={onOpenMarkdownPreview}
       handleContentChange={handleContentChange}
       handleDirtyStateHint={handleDirtyStateHint}
       monacoEditor={monacoEditor}

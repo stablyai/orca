@@ -167,6 +167,7 @@ export function createTestStore() {
         editorDrafts: {},
         markdownViewMode: {},
         markdownRichModeSizeOverride: {},
+        markdownRichModeFaultedContent: {},
         editorViewMode: {},
         showDotfilesByWorktree: {},
         expandedDirs: {},
