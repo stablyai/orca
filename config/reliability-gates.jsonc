@@ -11,6 +11,77 @@
   },
   "gates": [
     {
+      "id": "agent-session.journal-streaming-replay",
+      "title": "Journal replay bounds obsolete revision memory without changing recovery",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "agent-session-runtime",
+      "layer": "runtime-unit",
+      "surfaces": ["structured chat journal replay", "structured chat recovery"],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local", "remote-runtime"],
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": ["local"],
+      "coverageNotes": "Production SQLite and reducer tests on macOS. Execution-host-local storage behavior is shared by remote runtimes; no live SSH or Windows/Linux run. PTY, daemon, WSL process launch, transport framing and mobile rendering are unaffected.",
+      "motivatingLinks": [
+        "https://github.com/stablyai/orca/blob/main/src/main/native-chat/agent-session-journal/journal-open.ts"
+      ],
+      "invariant": "Replay preserves latest revisions, original item order, fences, aliases, submissions, repair precedence, read-only schema latching and cursor cleanup while retaining live items rather than all historical bodies.",
+      "oracle": "Replay 2,048 16 KiB revisions into one latest item with less than 8 MiB sampled live heap growth; preserve prefix and future-schema latching after a gap, malformed suffix repair precedence, and release SQLite read cursors on early exit. Existing journal and subscriber tests cover replayed content and recovery.",
+      "commands": [
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/native-chat/agent-session-journal src/main/native-chat/agent-session-wire/agent-session-history-page.test.ts src/main/native-chat/agent-session-wire/agent-session-history-forward-read-budget.test.ts src/main/native-chat/agent-session-wire/structured-agent-session-subscribers.test.ts src/main/native-chat/agent-session-wire/agent-session-journal-recovery.test.ts",
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/native-chat/agent-session-journal/journal-streaming-replay.test.ts src/main/native-chat/agent-session-journal/journal-corruption-repair.test.ts"
+      ],
+      "testFiles": [
+        "src/main/native-chat/agent-session-journal/journal-streaming-replay.test.ts",
+        "src/main/native-chat/agent-session-journal/journal-corruption-repair.test.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/main/native-chat/agent-session-journal/journal-streaming-replay.test.ts",
+          "assertions": [
+            "releases superseded revision bodies while reducing a long journal",
+            "keeps the prefix but latches read-only for a future row beyond a gap",
+            "keeps gap repair precedence when a later row is malformed",
+            "rejects an unanchored prefix before a later gap"
+          ]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-09-11",
+          "runner": "local",
+          "platform": "macos",
+          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/native-chat/agent-session-journal src/main/native-chat/agent-session-wire/agent-session-history-page.test.ts src/main/native-chat/agent-session-wire/agent-session-history-forward-read-budget.test.ts src/main/native-chat/agent-session-wire/structured-agent-session-subscribers.test.ts src/main/native-chat/agent-session-wire/agent-session-journal-recovery.test.ts",
+          "result": "passed",
+          "durationSeconds": 7.71,
+          "summary": "245 tests passed across 22 files. Retained-heap oracle fails on baseline at 68.6 MB and passes under 8 MiB with streaming; gap/schema and cursor-cleanup assertions passed."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 30,
+        "scope": "Unit fixtures; p95 not established."
+      },
+      "flakeHistory": {
+        "status": "not-started",
+        "evidence": "Local candidate validation only; no CI soak."
+      },
+      "redGreenEvidence": {
+        "status": "complete",
+        "evidence": "Production-function AB/BA benchmark samples 132.6 MB live heap in baseline vs 88-92 KB with streaming on a 66.7 MB revision-heavy journal. The retained-heap unit test fails against the original code and passes with streaming; value and cursor assertions pass in both implementations."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "Synchronous SQLite iteration and immediate reduction retain reduced state plus the current row. No cooperative await pins the cursor; no new polling, subprocess, provider call or wire change."
+      },
+      "knownGaps": [
+        "No Windows/Linux runtime execution or real remote-host validation.",
+        "Latest live message bodies still require memory proportional to their total size; this removes superseded-history retention, not live-history storage."
+      ],
+      "promotionCriteria": ["Retain red/green heap and value assertions and complete CI soak."],
+      "demotionRule": "Keep experimental until cross-platform and soak evidence; investigate failures without weakening content or memory assertions."
+    },
+    {
       "id": "runtime.connection-owned-host-status",
       "title": "Host status recovers with its owning connection",
       "maturity": "experimental",
