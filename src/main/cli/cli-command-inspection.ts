@@ -5,7 +5,7 @@ import type { CliInstallMethod, CliInstallStatus } from '../../shared/cli-instal
 import { isAppImageExtractedLauncherPath } from './appimage-extracted-root'
 import { DEV_COMMAND_NAME, DEV_LAUNCHER_DIR } from './cli-install-constants'
 import { buildWindowsForwarder, extractManagedUnixLauncherTarget } from './cli-dev-launcher'
-import { isMissingError } from './cli-install-errors'
+import { isMissingError, isPermissionError } from './cli-install-errors'
 import { CliInstallLocation } from './cli-install-location'
 import { isPathInsideOrEqual, samePathEntry } from './cli-install-path-format'
 import { extractLegacyAppImageCliWrapperTarget } from './legacy-appimage-cli-wrapper'
@@ -52,7 +52,24 @@ export class CliCommandInspection extends CliInstallLocation {
         })
       }
 
-      const currentTarget = await readlink(commandPath)
+      let currentTarget: string
+      try {
+        currentTarget = await readlink(commandPath)
+      } catch (error) {
+        // Why: macOS enforces symlink mode on readlink; a 0700 root-owned CLI link crashes Settings.
+        if (isPermissionError(error)) {
+          return this.buildStatus({
+            commandPath,
+            launcherPath,
+            installMethod: 'symlink',
+            supported: true,
+            state: 'stale',
+            currentTarget: null,
+            detail: `${commandPath} exists but cannot be read. Re-register the CLI to replace it.`
+          })
+        }
+        throw error
+      }
       const resolvedCurrentTarget = resolve(dirname(commandPath), currentTarget)
       const resolvedLauncher = resolve(launcherPath)
       const isInstalled = resolvedCurrentTarget === resolvedLauncher && existsSync(resolvedLauncher)
