@@ -11,6 +11,30 @@ const decode = (line: string, id: string) => ({
 })
 
 describe('decodeTranscriptStream', () => {
+  it.each([true, false])('preserves chunked record offsets with trailing=%s', async (trailing) => {
+    const first = `${'long record '.repeat(10_000)}😀`
+    const prefix = `\r\n${first}\r\n\n`
+    const partial = 'unfinished é'
+    const bytes = Buffer.from(prefix + partial)
+    const chunks: Buffer[] = []
+    for (let offset = 0; offset < bytes.length; offset += 1024) {
+      chunks.push(bytes.subarray(offset, offset + 1024))
+    }
+    const result = await decodeTranscriptStream(
+      Readable.from(chunks),
+      '/chat.jsonl',
+      100,
+      decode,
+      trailing
+    )
+    expect(result.messages.map((message) => message.blocks[0])).toEqual([
+      { type: 'text', text: first },
+      ...(trailing ? [{ type: 'text', text: partial }] : [])
+    ])
+    expect(result.messages[0]?.id).toBe('/chat.jsonl:0000000000000102')
+    expect(result.consumedBytes).toBe(trailing ? bytes.length : Buffer.byteLength(prefix))
+  })
+
   it('uses identical absolute byte ids for full and incremental reads', async () => {
     const prefix = '{"first":"é"}\r\n'
     const appended = '{"second":true}\n'
