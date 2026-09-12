@@ -319,7 +319,8 @@ jobs:
           timeout_minutes: 45
           max_attempts: 2
           retry_wait_seconds: 30
-          command: node config/scripts/ensure-native-runtime.mjs --runtime=electron && ORCA_MAC_DAILY=1 pnpm exec electron-builder --config config/electron-builder.config.cjs --mac --publish always
+          # afterSign rejects passkey entitlements/profiles and proves the signed app launches before any upload.
+          command: node config/scripts/ensure-native-runtime.mjs --runtime=electron && ORCA_BACKGROUND_LAUNCH=1 ORCA_MAC_DAILY=1 pnpm exec electron-builder --config config/electron-builder.config.cjs --mac --publish always
         env:
           # Why: electron-builder's github publisher targets the repo named in the
           # config; the token must therefore carry write access to orca-daily.

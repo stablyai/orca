@@ -39,6 +39,7 @@ import {
 import { installDocPreviewProtocolHandler } from '../browser/doc-preview-protocol'
 import { registerDocPreviewGrantHandlers } from '../ipc/doc-preview-grant-ipc'
 import { initializeBrowserSessionsForApp } from '../browser/browser-session-startup'
+import { enablePlatformPasskeys } from '../browser/browser-platform-passkeys-macos'
 import { browserSessionRegistry } from '../browser/browser-session-registry'
 import { logStartupMilestone } from './startup-diagnostics'
 import { writeHttp1CompatibilityMarker } from './http1-compatibility-marker'
@@ -267,6 +268,13 @@ export async function initializeReadyFoundation(): Promise<void> {
   // Why: the preview session is protocol-scoped, so the handler must exist before any preview webview attaches.
   installDocPreviewProtocolHandler()
   registerDocPreviewGrantHandlers()
+  // Why here: configureWebAuthn is process-wide and must run after `ready`; before any guest can issue a passkey request.
+  const platformPasskeys = enablePlatformPasskeys(app)
+  if (platformPasskeys.status === 'failed') {
+    console.warn('[browser] Touch ID passkey authenticator unavailable:', platformPasskeys.error)
+  } else if (platformPasskeys.status === 'enabled') {
+    console.log('[browser] Touch ID passkey authenticator enabled')
+  }
   // Why: browser sessions serve desktop webviews and runtime profile commands, so init at app startup rather than via a renderer IPC path.
   initializeBrowserSessionsForApp({
     orcaProfileId: profile.profile.id,

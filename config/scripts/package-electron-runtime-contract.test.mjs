@@ -172,7 +172,7 @@ describe('Electron runtime package contract', () => {
         command.indexOf('electron-builder')
       )
     }
-    expect(macReleaseCommand).toContain(' && ORCA_MAC_RELEASE=1 ')
+    expect(macReleaseCommand).toContain(' && ORCA_BACKGROUND_LAUNCH=1 ORCA_MAC_RELEASE=1 ')
     expect(releaseCommands.get('linux-x64')).toContain(' && pnpm exec electron-builder ')
     expect(releaseCommands.get('linux-x64')).toContain('--linux AppImage deb rpm --x64')
     expect(releaseCommands.get('linux-arm64')).toContain('ORCA_LINUX_ARM64_RELEASE=1')

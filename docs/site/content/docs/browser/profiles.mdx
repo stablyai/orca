@@ -17,7 +17,15 @@ You can also create a no-spoof profile from the CLI with `orca tab profile creat
 
 Import cookies from Chrome or Edge (or from a cookie file) into a profile from Settings or the browser toolbar. Orca replaces existing cookies only for domains included in the import, so sign-ins for unrelated sites in the same profile stay intact. Google cookies are excluded — import menus show **Google logins aren't imported** and tell you to **Sign in to Google directly in Orca.** After an import that skipped Google cookies, a separate warning names the host that ran the import: open a browser in Orca on that host with the same profile, then sign in.
 
-When a site requests a discoverable passkey from a USB security key and the key offers multiple accounts, Orca opens an account picker instead of silently canceling the sign-in. Choose the account you want or cancel the request. Platform passkeys stored by the operating system are not available in Orca yet; this flow is for external FIDO security keys.
+## Passkeys
+
+Sites can sign you in with a passkey inside Orca's browser. What is available depends on the platform:
+
+- **macOS**: USB security keys are supported. Touch ID passkeys are disabled in all Orca builds because the required signing profile can prevent the app from launching when it expires. Passkeys stored in iCloud Keychain or a password manager are not offered to sites in Orca. Use a security key or the site's other sign-in method.
+- **Windows**: Windows handles passkey requests natively, so Windows Hello, security keys, and a phone via QR code all work as they do in other browsers.
+- **Linux**: USB security keys only.
+
+USB security keys work on every platform. When an authenticator offers more than one account for a site, Orca opens an account picker instead of silently canceling the sign-in. Choose the account you want or cancel the request.
 
 ## Use a profile
 
