@@ -28,6 +28,7 @@ import {
   clampPdfViewPosition,
   createPdfViewPositionRecorder
 } from './pdf-view-position'
+import { usePdfZoomInput } from './use-pdf-zoom-input'
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl
 
@@ -327,6 +328,18 @@ export default function PdfViewer({
     applyPdfScalePreference(viewer, 'page-width', SCALE_BOUNDS)
   }, [])
 
+  const setContainerRef = usePdfZoomInput({
+    containerRef,
+    filePath,
+    keybindings,
+    scaleBounds: SCALE_BOUNDS,
+    scalePreferenceRef,
+    viewerRef: pdfViewerRef,
+    zoomIn,
+    zoomOut,
+    zoomReset
+  })
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent): void => {
       const platform = getShortcutPlatform()
@@ -334,22 +347,11 @@ export default function PdfViewer({
         e.preventDefault()
         e.stopPropagation()
         setFindOpen(true)
-        return
-      }
-      if (keybindingMatchesAction('zoom.in', e, platform, keybindings)) {
-        e.preventDefault()
-        zoomIn()
-      } else if (keybindingMatchesAction('zoom.out', e, platform, keybindings)) {
-        e.preventDefault()
-        zoomOut()
-      } else if (keybindingMatchesAction('zoom.reset', e, platform, keybindings)) {
-        e.preventDefault()
-        zoomReset()
       }
     }
     window.addEventListener('keydown', handleKeyDown, true)
     return () => window.removeEventListener('keydown', handleKeyDown, true)
-  }, [keybindings, zoomIn, zoomOut, zoomReset])
+  }, [keybindings])
 
   const zoomPercent = Math.round(scale * 100)
 
@@ -381,7 +383,7 @@ export default function PdfViewer({
             carries positioning and background since all:revert nullifies classes. */}
         <div style={{ all: 'revert' }}>
           <div
-            ref={containerRef}
+            ref={setContainerRef}
             style={{
               position: 'absolute',
               inset: '0',
