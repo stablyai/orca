@@ -16949,6 +16949,11 @@
       },
       "gitlabIpcTimeout": {
         "timedOut": "Timed out talking to GitLab."
+      },
+      "runtimeUsageOwnerClient": {
+        "unsupportedHost": "{{host}} does not report provider usage. Update the remote Orca server to see it here.",
+        "contactLost": "Lost contact with {{host}}. Showing the last usage it reported.",
+        "unreachableHost": "Could not read provider usage from {{host}}: {{reason}}"
       }
     },
     "ssh": {
