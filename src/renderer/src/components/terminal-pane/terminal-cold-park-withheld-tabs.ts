@@ -2,9 +2,9 @@
  * Last gate between a cold-park candidate and an unmounted pane.
  *
  * Two reasons withhold a tab, both settling on the safe mounted side: the byte
- * watchers cannot cover it, or a verdict-flip burst pinned it. The pin deadline
- * is returned because it is also the only remaining recheck wakeup once damping
- * has stopped the churn that was waking the parking effect.
+ * watchers cannot cover it, or a verdict-flip pin (burst or notice-limit) holds
+ * it. The pin deadline is returned because it is also the only remaining recheck
+ * wakeup once damping has stopped the churn that was waking the parking effect.
  */
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import {
