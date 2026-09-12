@@ -1,3 +1,5 @@
+import { replaceHtmlComments } from '../../../../src/shared/html-comment-replacement'
+
 // Tiny, dependency-free markdown model for PR comment bodies. We render GitHub
 // markdown without a third-party RN markdown library (the previous dependency hung
 // the JS thread when a comment list mounted). Scope is deliberately small — the
@@ -49,7 +51,7 @@ export function stripHtmlTags(text: string): string {
 
 export function parseMarkdownBlocks(content: string): MarkdownBlock[] {
   // Drop HTML comments and normalize <br> before block parsing.
-  const cleaned = content.replace(/<!--[\s\S]*?-->/g, '').replace(/<br\s*\/?>/gi, '\n')
+  const cleaned = replaceHtmlComments(content).replace(/<br\s*\/?>/gi, '\n')
   return parseSegment(cleaned)
 }
 
