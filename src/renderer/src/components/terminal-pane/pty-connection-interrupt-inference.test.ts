@@ -413,7 +413,7 @@ describe('connectPanePty', () => {
     })
   })
 
-  it('marks bracketed paste as stale after acknowledged Ctrl+C input', async () => {
+  it('keeps bracketed paste for single-line text after acknowledged Ctrl+C input', async () => {
     const { connectPanePty } = await import('./pty-connection')
     const { pasteTerminalText } = await import('./terminal-bracketed-paste')
     const transport = createMockTransport()
@@ -438,7 +438,7 @@ describe('connectPanePty', () => {
     await flushAsyncTicks()
     pasteTerminalText(pane.terminal as never, 'a69ce28e1d092e0c8825cd1a109ac36409962bc1')
 
-    expect(observedIgnoreValues).toEqual([true])
+    expect(observedIgnoreValues).toEqual([false])
     expect(pane.terminal.options.ignoreBracketedPasteMode).toBe(false)
   })
 
