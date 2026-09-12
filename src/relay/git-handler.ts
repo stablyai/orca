@@ -15,10 +15,12 @@ import { clearGitStatusLineStatsCache } from '../shared/git-status-line-stats-ca
 import { invalidateGitBranchLineTotalInFlight } from '../shared/git-branch-line-total'
 import { buildRelayGitEnv, buildRelayUnattendedGitEnv } from './relay-command-env'
 import { getGitCloneFailureMessage } from '../shared/git-clone-failure-message'
+import { buildConfiguredProxyEnv } from '../shared/network-proxy'
 import type {
   GitHandlerCommandOptions,
   GitHandlerCommandResult,
-  GitHandlerWatcherRegistry
+  GitHandlerWatcherRegistry,
+  GitCloneProxyOptions
 } from './git-handler-operation-context'
 import { createGitHandlerOperationSet } from './git-handler-operation-set'
 import { registerGitHandlers } from './git-handler-registration'
@@ -90,8 +92,8 @@ export class GitHandler {
       git: (args, cwd, opts) =>
         opts === undefined ? this.git(args, cwd) : this.git(args, cwd, opts),
       gitBuffer: (args, cwd) => this.gitBuffer(args, cwd),
-      spawnClone: (args, cwd, progressId, context) =>
-        this.spawnClone(args, cwd, progressId, context),
+      spawnClone: (args, cwd, progressId, proxy, context) =>
+        this.spawnClone(args, cwd, progressId, proxy, context),
       clearGitMutationReadCaches: () => this.clearGitMutationReadCaches(),
       runWithGitReadCacheClear: (run) => this.runWithGitReadCacheClear(run),
       maybeStreamResponse: (result, params, context) =>
@@ -197,16 +199,26 @@ export class GitHandler {
     return stdout
   }
 
+  /**
+   * Spawn `git clone` on the relay host, merging the forwarded proxy into the
+   * unattended git env (env only — never argv), and stream progress back over
+   * `git.cloneProgress`.
+   */
   private async spawnClone(
     args: string[],
     cwd: string,
     progressId: string,
+    proxy: GitCloneProxyOptions | undefined,
     context?: RequestContext
   ): Promise<{ stdout: string; stderr: string }> {
+    const proxyEnv = buildConfiguredProxyEnv({
+      httpProxyUrl: proxy?.proxyUrl,
+      httpProxyBypassRules: proxy?.proxyBypassRules
+    })
     return await new Promise((resolve, reject) => {
       const child = spawn('git', args, {
         cwd: expandTilde(cwd),
-        env: buildRelayUnattendedGitEnv(),
+        env: { ...buildRelayUnattendedGitEnv(), ...proxyEnv },
         stdio: ['ignore', 'pipe', 'pipe']
       })
       let stdout = ''

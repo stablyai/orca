@@ -115,6 +115,9 @@ export type RuntimeStore = {
     terminalMainSideEffectAuthority?: GlobalSettings['terminalMainSideEffectAuthority']
     terminalHiddenDeliveryGate?: GlobalSettings['terminalHiddenDeliveryGate']
     terminalModelQueryAuthority?: GlobalSettings['terminalModelQueryAuthority']
+    // Why: git clone honors the app's configured proxy (see gitCloneEnvWithProxy).
+    httpProxyUrl?: GlobalSettings['httpProxyUrl']
+    httpProxyBypassRules?: GlobalSettings['httpProxyBypassRules']
     worktreeVisibilityDefaults?: GlobalSettings['worktreeVisibilityDefaults']
     hostSettingOverrides?: GlobalSettings['hostSettingOverrides']
     agentSkillSharingEnabled?: GlobalSettings['agentSkillSharingEnabled']
