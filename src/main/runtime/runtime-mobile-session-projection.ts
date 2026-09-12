@@ -89,14 +89,14 @@ export function projectRuntimeMobileSessionTabs(
   for (const tab of snapshot.tabs) {
     if (tab.type === 'browser') {
       const liveTab = tab.browserPageId ? liveBrowserTabsByPageId.get(tab.browserPageId) : undefined
-      if (!liveTab) {
+      if (!liveTab && !host.isRendererOwnedMobileBrowserTab(snapshot, tab)) {
         continue
       }
-      // Why: renderer snapshots lag BrowserView teardown/process swaps; only surface pages the browser bridge can still route to.
+      // Why: renderer snapshots stay authoritative while unmounted; only headless/client tabs need a live bridge page.
       tabs.push({
         ...tab,
-        title: liveTab.title || tab.title,
-        url: liveTab.url || tab.url,
+        title: liveTab?.title || tab.title,
+        url: liveTab?.url || tab.url,
         // Why: bridge "active" means active BrowserView/webContents, not active Orca tab; preserve the renderer's session focus.
         isActive: tab.isActive
       })

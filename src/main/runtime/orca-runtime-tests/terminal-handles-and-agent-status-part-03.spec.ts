@@ -552,7 +552,7 @@ describe('OrcaRuntimeService', () => {
     ])
   })
 
-  it('omits stale browser session tabs that no longer have live webContents', async () => {
+  it('keeps renderer browser tabs without live webContents but filters stale headless tabs', async () => {
     const runtime = new OrcaRuntimeService(store)
     const tabList = vi.fn(() => ({
       tabs: [
@@ -573,7 +573,7 @@ describe('OrcaRuntimeService', () => {
       mobileSessionTabs: [
         {
           worktree: TEST_WORKTREE_ID,
-          publicationEpoch: 'epoch-1',
+          publicationEpoch: 'renderer-epoch-1',
           snapshotVersion: 1,
           activeGroupId: 'group-1',
           activeTabId: 'browser-unified-stale',
@@ -614,6 +614,39 @@ describe('OrcaRuntimeService', () => {
     expect(result.tabs).toEqual([
       expect.objectContaining({
         type: 'browser',
+        id: 'browser-unified-stale',
+        browserPageId: 'browser-page-stale',
+        url: 'about:blank',
+        title: 'Dead Browser',
+        isActive: true
+      }),
+      expect.objectContaining({
+        type: 'browser',
+        id: 'browser-unified-live',
+        browserPageId: 'browser-page-live',
+        url: 'https://live.example/',
+        title: 'Live Browser',
+        isActive: false
+      })
+    ])
+    expect(result.activeTabId).toBe('browser-unified-stale')
+    expect(result.activeTabType).toBe('browser')
+
+    const rendererSnapshot = runtime['mobileSessionTabsByWorktree'].get(TEST_WORKTREE_ID)!
+    expect([...runtime['collectPublicMobileSessionTabIds'](rendererSnapshot)]).toEqual([
+      'browser-unified-stale',
+      'browser-workspace-stale',
+      'browser-unified-live',
+      'browser-workspace-live'
+    ])
+
+    const headlessSnapshot = { ...rendererSnapshot, publicationEpoch: 'headless:epoch-1' }
+    runtime['mobileSessionTabsByWorktree'].set(TEST_WORKTREE_ID, headlessSnapshot)
+    const headlessResult = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
+
+    expect(headlessResult.tabs).toEqual([
+      expect.objectContaining({
+        type: 'browser',
         id: 'browser-unified-live',
         browserPageId: 'browser-page-live',
         url: 'https://live.example/',
@@ -621,7 +654,9 @@ describe('OrcaRuntimeService', () => {
         isActive: true
       })
     ])
-    expect(result.activeTabId).toBe('browser-unified-live')
-    expect(result.activeTabType).toBe('browser')
+    expect([...runtime['collectPublicMobileSessionTabIds'](headlessSnapshot)]).toEqual([
+      'browser-unified-live',
+      'browser-workspace-live'
+    ])
   })
 })
