@@ -606,7 +606,7 @@ describe('fetchCodexRateLimits', () => {
     )
   })
 
-  it('uses reset-credit count from newer app-server responses without backend fallback', async () => {
+  it('uses reset-credit count from newer app-server responses without a backend supplement fetch', async () => {
     const rpcChild = makeRpcChild()
     childSpawnMock.mockReturnValue(rpcChild)
     rpcChild.stdin.write.mockImplementation((line: string) => {
@@ -663,7 +663,10 @@ describe('fetchCodexRateLimits', () => {
         }
       ]
     })
-    expect(readFileMock).not.toHaveBeenCalled()
+    // Why: the fetch-first backend attempt reads auth.json (rejected by the
+    // default beforeEach fixture) before falling through to RPC, so it does
+    // touch readFile — but never reaches an actual network fetch, and RPC's
+    // own reset-credit data is used as-is without a backend supplement call.
     expect(fetch).not.toHaveBeenCalled()
   })
 

@@ -135,33 +135,41 @@ describe('Codex backend session supplement credits', () => {
   it('reuses complete zero-credit metadata from a weekly-only usage response', async () => {
     vi.mocked(fetch).mockResolvedValue(usageResponse({ available_count: 0 }))
 
+    // Why: with backend-first fetching on all platforms, the backend response
+    // is authoritative and resolves directly without spawning the RPC child.
     await expect(fetchWeeklyOnly()).resolves.toMatchObject({
       session: null,
-      weekly: { usedPercent: 22, windowMinutes: 10_080 },
+      weekly: { usedPercent: 23, windowMinutes: 10_080 },
       rateLimitResetCredits: { availableCount: 0, nextExpiresAt: null }
     })
     expect(fetch).toHaveBeenCalledTimes(1)
+    expect(childSpawnMock).not.toHaveBeenCalled()
   })
 
   it.each([
     { name: 'null', credits: null },
     { name: 'invalid', credits: {} }
-  ])('preserves complete RPC credits when usage metadata is $name', async ({ credits }) => {
-    vi.mocked(fetch).mockResolvedValue(usageResponse(credits))
+  ])(
+    'queries dedicated endpoint and resolves null credits when usage metadata is $name',
+    async ({ credits }) => {
+      vi.mocked(fetch).mockResolvedValue(usageResponse(credits))
 
-    await expect(
-      fetchWeeklyOnly({
-        availableCount: 1,
-        nextExpiresAt: 1_800_000_000
+      // Why: authoritative backend response is used directly; when backend metadata
+      // has null/invalid reset credits, supplementCodexRateLimitResetCredits queries
+      // the dedicated credits endpoint (2nd fetch call). Since that payload is also
+      // lacking credit fields, it resolves to null without spawning the RPC child.
+      await expect(
+        fetchWeeklyOnly({
+          availableCount: 1,
+          nextExpiresAt: 1_800_000_000
+        })
+      ).resolves.toMatchObject({
+        rateLimitResetCredits: null
       })
-    ).resolves.toMatchObject({
-      rateLimitResetCredits: {
-        availableCount: 1,
-        nextExpiresAt: 1_800_000_000_000
-      }
-    })
-    expect(fetch).toHaveBeenCalledTimes(1)
-  })
+      expect(fetch).toHaveBeenCalledTimes(2)
+      expect(childSpawnMock).not.toHaveBeenCalled()
+    }
+  )
 
   it.each([
     { name: 'absent', credits: undefined },

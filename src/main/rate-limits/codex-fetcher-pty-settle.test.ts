@@ -1,13 +1,18 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { childSpawnMock, resolveCodexCommandMock, ptySpawnMock } = vi.hoisted(() => ({
+const { childSpawnMock, resolveCodexCommandMock, ptySpawnMock, readFileMock } = vi.hoisted(() => ({
   childSpawnMock: vi.fn(),
   resolveCodexCommandMock: vi.fn(),
-  ptySpawnMock: vi.fn()
+  ptySpawnMock: vi.fn(),
+  readFileMock: vi.fn()
 }))
 
 vi.mock('node:child_process', () => ({
   spawn: childSpawnMock
+}))
+
+vi.mock('node:fs/promises', () => ({
+  readFile: readFileMock
 }))
 
 vi.mock('../codex-cli/command', () => ({
@@ -34,6 +39,12 @@ describe('fetchCodexRateLimits PTY settle timers', () => {
     vi.useFakeTimers()
     vi.clearAllMocks()
     resolveCodexCommandMock.mockReturnValue('codex')
+    readFileMock.mockRejectedValue(new Error('no auth fixture'))
+    vi.stubGlobal('fetch', vi.fn())
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
   })
 
   it('coalesces the PTY fallback status settle timer while output keeps streaming', async () => {
