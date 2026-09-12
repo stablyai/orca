@@ -1,3 +1,4 @@
+import { createMarkdownInlineMatcher, type MarkdownInlineMatch } from './markdown-inline-matcher'
 import { MobileSelectableText } from './MobileSelectableText'
 import {
   Fragment,
@@ -104,12 +105,15 @@ function renderTextRun(
 
 function renderInline(text: string, onOpenFile?: (pathText: string) => void): ReactNode[] {
   const parts: ReactNode[] = []
-  const pattern =
-    /(!\[[^\]]*\]\([^)]+\)|`[^`]+`|~~[^~]+~~|\*\*[^*]+\*\*|__[^_]+__|\*[^*\n]+\*|_[^_\n]+_|\[[^\]]+\]\([^)]+\)|https?:\/\/[^\s<]+)/g
+  const pattern = createMarkdownInlineMatcher(
+    text,
+    /(`[^`]+`|~~[^~]+~~|\*\*[^*]+\*\*|__[^_]+__|\*[^*\n]+\*|_[^_\n]+_|https?:\/\/[^\s<]+)/g,
+    true
+  )
   let pendingStart = 0
-  let match: RegExpExecArray | null
+  let match: MarkdownInlineMatch | null
 
-  while ((match = pattern.exec(text))) {
+  while ((match = pattern.exec())) {
     const token = match[0]
     // Intraword `_` runs (snake_case, dunder tails) are literal text per
     // CommonMark; leaving them unflushed keeps surrounding file paths whole

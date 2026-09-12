@@ -1,3 +1,5 @@
+import { createMarkdownInlineMatcher } from '../markdown-inline-matcher'
+
 // Tiny, dependency-free markdown model for PR comment bodies. We render GitHub
 // markdown without a third-party RN markdown library (the previous dependency hung
 // the JS thread when a comment list mounted). Scope is deliberately small — the
@@ -234,23 +236,25 @@ function parseAlignRow(line: string): CellAlign[] {
 
 // Inline emphasis/code/link tokenizer. Walks the string once, longest-match first,
 // emitting plain-text runs between matches. Unbalanced markers stay literal text.
-const INLINE = /(`[^`]+`)|(\*\*[^*]+\*\*)|(__[^_]+__)|(\*[^*]+\*)|(_[^_]+_)|(\[[^\]]+\]\([^)]+\))/
+const INLINE = /(`[^`]+`)|(\*\*[^*]+\*\*)|(__[^_]+__)|(\*[^*]+\*)|(_[^_]+_)/g
 
 export function parseInline(text: string): InlineToken[] {
   const tokens: InlineToken[] = []
   // Strip residual inline HTML tags (<b>, <kbd>, <sub>, …) so they don't render
   // literally; emphasis/code/links below are markdown, not HTML, so this is safe.
-  let rest = stripHtmlTags(text)
+  const plain = stripHtmlTags(text)
+  const matcher = createMarkdownInlineMatcher(plain, INLINE)
+  let cursor = 0
   let guard = 0
-  while (rest.length > 0 && guard < 5000) {
+  while (cursor < plain.length && guard < 5000) {
     guard += 1
-    const m = INLINE.exec(rest)
+    const m = matcher.exec()
     if (!m || m.index === undefined) {
-      tokens.push({ kind: 'text', text: rest })
+      tokens.push({ kind: 'text', text: plain.slice(cursor) })
       break
     }
-    if (m.index > 0) {
-      tokens.push({ kind: 'text', text: rest.slice(0, m.index) })
+    if (m.index > cursor) {
+      tokens.push({ kind: 'text', text: plain.slice(cursor, m.index) })
     }
     const token = m[0]
     if (token.startsWith('`')) {
@@ -267,7 +271,7 @@ export function parseInline(text: string): InlineToken[] {
     } else {
       tokens.push({ kind: 'italic', text: token.slice(1, -1) })
     }
-    rest = rest.slice(m.index + token.length)
+    cursor = matcher.lastIndex
   }
   return tokens
 }
