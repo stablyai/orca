@@ -1,0 +1,9 @@
+{
+  "capturedAt": "2026-09-11T06:13:00.364Z",
+  "platform": "darwin",
+  "command": ["agy"],
+  "cols": 120,
+  "rows": 40,
+  "note": "agy TUI 1.2.0; recording stopped after the turn ended and the composer returned, with the process still alive. This account's API key cannot complete a turn, so the turn ends in a backend error",
+  "exitCode": 0
+}

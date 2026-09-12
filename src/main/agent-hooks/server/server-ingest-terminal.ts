@@ -1,6 +1,6 @@
 import { track } from '../../telemetry/client'
 import { MAX_PANE_KEY_LEN } from '../../../shared/agent-hook-listener/listener-limits'
-import { parsePaneKey } from '../../../shared/stable-pane-id'
+import { parseLegacyNumericPaneKey, parsePaneKey } from '../../../shared/stable-pane-id'
 import { terminalStatusPayloadMatchesHook } from '../../../shared/agent-terminal-status-equivalence'
 import type { ParsedAgentStatusPayload } from '../../../shared/agent-status-types'
 import type { EnrichedAgentHookEventPayload } from './server-types'
@@ -8,32 +8,40 @@ import { AgentHookServerIngestNormalization } from './server-ingest-normalizatio
 
 export abstract class AgentHookServerIngestTerminal extends AgentHookServerIngestNormalization {
   ingestTerminalStatus(event: {
+    ptyId?: string
     paneKey: string
     tabId?: string
     worktreeId?: string
     connectionId?: string | null
+    terminalHandle?: string
     payload: ParsedAgentStatusPayload
   }): void {
     const physicalPaneKey = event.paneKey.trim()
-    const paneKey = this.resolvePaneKeyAlias(physicalPaneKey)
+    let paneKey = this.resolvePaneKeyAlias(physicalPaneKey)
     const parsedPaneKey = parsePaneKey(paneKey)
+    const legacyPaneKey = parseLegacyNumericPaneKey(paneKey)
     if (paneKey.length === 0) {
       track('agent_hook_unattributed', { reason: 'empty_pane_key' })
       return
     }
-    if (paneKey.length > MAX_PANE_KEY_LEN || !parsedPaneKey) {
-      return
-    }
     const reportedTabId =
       event.tabId !== undefined && event.tabId.trim().length > 0 ? event.tabId.trim() : undefined
-    if (
-      paneKey === physicalPaneKey &&
-      reportedTabId !== undefined &&
-      reportedTabId !== parsedPaneKey.tabId
-    ) {
+    const runtimeOwnedLegacyPane = Boolean(
+      legacyPaneKey &&
+      event.ptyId?.trim() &&
+      event.terminalHandle?.trim() &&
+      reportedTabId === legacyPaneKey.tabId
+    )
+    // Legacy rows are accepted only from the in-process PTY ingress with both runtime identities;
+    // HTTP and relay paths still require a stable pane key or a registered alias.
+    if (paneKey.length > MAX_PANE_KEY_LEN || (!parsedPaneKey && !runtimeOwnedLegacyPane)) {
       return
     }
-    const tabId = paneKey !== physicalPaneKey ? parsedPaneKey.tabId : reportedTabId
+    const paneTabId = parsedPaneKey?.tabId ?? legacyPaneKey?.tabId
+    if (paneKey === physicalPaneKey && reportedTabId !== undefined && reportedTabId !== paneTabId) {
+      return
+    }
+    const tabId = paneKey !== physicalPaneKey ? parsedPaneKey?.tabId : reportedTabId
     if (this.getAgentStatusDisposition(paneKey) !== 'accept') {
       return
     }
@@ -45,6 +53,31 @@ export abstract class AgentHookServerIngestTerminal extends AgentHookServerInges
       typeof event.connectionId === 'string' && event.connectionId.trim().length > 0
         ? event.connectionId.trim()
         : null
+    const terminalHandle =
+      typeof event.terminalHandle === 'string' && event.terminalHandle.trim().length > 0
+        ? event.terminalHandle.trim()
+        : undefined
+    let mutationBefore: EnrichedAgentHookEventPayload | undefined
+    const indexedPaneKey = terminalHandle
+      ? this.getStatusPaneKeyForTerminalHandle(terminalHandle)
+      : undefined
+    if (indexedPaneKey && indexedPaneKey !== paneKey) {
+      const indexedStatus = this.state.lastStatusByPaneKey.get(indexedPaneKey) as
+        | EnrichedAgentHookEventPayload
+        | undefined
+      if (
+        indexedStatus &&
+        indexedStatus.terminalHandle === terminalHandle &&
+        this.sameTerminalOwner(indexedStatus, { connectionId, worktreeId })
+      ) {
+        mutationBefore = indexedStatus
+        this.transferPaneAuthority(indexedPaneKey, paneKey, event.ptyId, Date.now(), {
+          authorityVerified: true,
+          emitStatusRowMutation: false
+        })
+        paneKey = this.resolvePaneKeyAlias(paneKey)
+      }
+    }
     const previous = this.state.lastStatusByPaneKey.get(paneKey) as
       | EnrichedAgentHookEventPayload
       | undefined
@@ -54,6 +87,10 @@ export abstract class AgentHookServerIngestTerminal extends AgentHookServerInges
       event.payload.agentType === 'claude'
     ) {
       // Why: OSC has no child identity or lead boundary, so it cannot replace a persisted child-only proof before the lifecycle hook arrives.
+      if (mutationBefore !== undefined) {
+        this.commitStatusRowMutation(mutationBefore, previous)
+        this.emitEnrichedStatus(previous)
+      }
       return
     }
     // Why: preserve the hook-completed turn stamp while OSC repaints the current state.
@@ -65,8 +102,14 @@ export abstract class AgentHookServerIngestTerminal extends AgentHookServerInges
       previous?.connectionId === connectionId &&
       previous.tabId === tabId &&
       previous.worktreeId === worktreeId &&
+      // Why in the unchanged gate: the handle is a join key readers match on, so a pane that
+      // only just acquired one (or moved to another) must still refresh the row it is stamped on.
+      previous.terminalHandle === (terminalHandle ?? previous.terminalHandle) &&
       terminalStatusPayloadMatchesHook(previous.payload, event.payload, preserveActiveTurnStamp)
     ) {
+      // A handle-authority transfer is a new pane observation even when its payload is a
+      // duplicate; enriched subscribers must capture the replacement pane identity.
+      this.refreshTerminalStatusEvidence(previous, mutationBefore, mutationBefore !== undefined)
       return
     }
     // Why: the OSC 9999 wire payload has no providerSession field at all, so an OSC observation is
@@ -95,10 +138,13 @@ export abstract class AgentHookServerIngestTerminal extends AgentHookServerInges
         worktreeId,
         connectionId,
         ...(preservedProviderSession ? { providerSession: preservedProviderSession } : {}),
+        ...(terminalHandle ? { terminalHandle } : {}),
         payload: event.payload
       },
       undefined,
-      'osc'
+      'osc',
+      undefined,
+      mutationBefore
     )
   }
 }

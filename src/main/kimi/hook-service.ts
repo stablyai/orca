@@ -51,6 +51,10 @@ function getConfigPath(): string {
 // single curl-based script body works on every platform.
 const MANAGED_SCRIPT_FILE_NAME = 'kimi-hook.sh'
 
+// Ownership test for every managed-block path: status, install, remove and the
+// bounded orphan recovery all agree on what counts as an Orca-written hook.
+const isManagedKimiCommand = createManagedCommandMatcher(MANAGED_SCRIPT_FILE_NAME)
+
 function getManagedScriptPath(): string {
   return getSharedManagedScriptPath(MANAGED_SCRIPT_FILE_NAME)
 }
@@ -194,8 +198,7 @@ export class KimiHookService {
         detail: 'Could not read Kimi config.toml'
       }
     }
-    const isManagedCommand = createManagedCommandMatcher(MANAGED_SCRIPT_FILE_NAME)
-    return buildStatus(readManagedKimiHookEvents(text, isManagedCommand), configPath)
+    return buildStatus(readManagedKimiHookEvents(text, isManagedKimiCommand), configPath)
   }
 
   install(): AgentHookInstallStatus {
@@ -214,7 +217,7 @@ export class KimiHookService {
     const command = getManagedCommand(scriptPath)
     // Write the script first so config.toml never points at a missing script.
     writeManagedScript(scriptPath, getManagedScript())
-    writeConfigToml(configPath, applyManagedKimiHooks(text, command))
+    writeConfigToml(configPath, applyManagedKimiHooks(text, command, isManagedKimiCommand))
     return this.getStatus()
   }
 
@@ -235,7 +238,11 @@ export class KimiHookService {
       const command = wrapPosixHookCommand(remoteScriptPath)
       // Write the script first so config.toml never points at a missing script.
       await writeManagedScriptRemote(sftp, remoteScriptPath, getManagedScript('posix'))
-      await writeTextFileRemoteAtomic(sftp, remoteConfigPath, applyManagedKimiHooks(text, command))
+      await writeTextFileRemoteAtomic(
+        sftp,
+        remoteConfigPath,
+        applyManagedKimiHooks(text, command, isManagedKimiCommand)
+      )
       return {
         agent: 'kimi',
         state: 'installed',
@@ -266,7 +273,7 @@ export class KimiHookService {
         detail: 'Could not read Kimi config.toml'
       }
     }
-    const { text: nextText, changed } = removeManagedKimiHooks(text)
+    const { text: nextText, changed } = removeManagedKimiHooks(text, isManagedKimiCommand)
     if (changed) {
       writeConfigToml(configPath, nextText)
     }

@@ -28,6 +28,8 @@ export function useMobileNativeChatTurnDisclosure({
   isWorking,
   workingStartedAt,
   settledTurns,
+  thinking = false,
+  activityText = null,
   scopeKey
 }: {
   messages: readonly NativeChatMessage[]
@@ -36,12 +38,16 @@ export function useMobileNativeChatTurnDisclosure({
   workingStartedAt?: number | null
   /** Host-recorded durations; they outrank whatever this client observed. */
   settledTurns?: NativeChatSettledTurns | null
+  /** Whether the turn is reasoning right now, derived from its journal content. */
+  thinking?: boolean
+  /** What the provider says the live turn is doing; outranks the other labels. */
+  activityText?: string | null
   /** Host/worktree/tab identity for timing and disclosure isolation. */
   scopeKey: string
 }): {
   active: NativeChatTurnStatus | null
-  /** True when the live turn has no user message to hang its status row under. */
-  activeTurnIsUnanchored: boolean
+  /** The live turn's provider activity copy, for the footer row. */
+  activeActivityText: string | null
   onToggleTurn: (turnKey: string) => void
   resolveRow: (index: number, message: NativeChatMessage) => MobileNativeChatTurnRow
 } {
@@ -51,6 +57,7 @@ export function useMobileNativeChatTurnDisclosure({
     isWorking,
     workingStartedAt,
     settledTurns,
+    thinking,
     scopeKey
   })
   const [expandedTurns, setExpandedTurns] = useState<{
@@ -93,17 +100,16 @@ export function useMobileNativeChatTurnDisclosure({
   }, [enabled, messages])
 
   const { active, activeTurnKey, completedByTurn } = turnStatuses
+  const activeActivityText = enabled && isWorking ? (activityText ?? null) : null
   const resolveRow = useCallback(
     (index: number, message: NativeChatMessage): MobileNativeChatTurnRow => {
       const turnKey = turnKeys[index]
       const turnStatus =
         !enabled || message.role !== 'user'
           ? null
-          : turnKey === activeTurnKey
-            ? active
-            : turnKey
-              ? (completedByTurn[turnKey] ?? null)
-              : null
+          : turnKey
+            ? (completedByTurn[turnKey] ?? null)
+            : null
       return {
         turnStatus,
         turnExpanded: turnKey ? expandedTurnIds.has(turnKey) : false,
@@ -120,15 +126,14 @@ export function useMobileNativeChatTurnDisclosure({
             (turnKey === undefined && activeTurnKey === MOBILE_UNANCHORED_TURN_KEY))
       }
     },
-    [turnKeys, enabled, activeTurnKey, active, completedByTurn, expandedTurnIds, isWorking]
+    [turnKeys, enabled, activeTurnKey, completedByTurn, expandedTurnIds, isWorking]
   )
 
   return {
     active,
+    activeActivityText,
     /** Stable for a given chat scope, so it never disturbs a row's memo. */
     onToggleTurn: toggleExpandedTurn,
-    activeTurnIsUnanchored:
-      enabled && active != null && activeTurnKey === MOBILE_UNANCHORED_TURN_KEY,
     resolveRow
   }
 }

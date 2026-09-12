@@ -68,7 +68,7 @@ export function AddRemoteHostDialog({
   const setSshTargetsMetadata = useAppStore((s) => s.setSshTargetsMetadata)
   const recordSshRepoReadoptions = useAppStore((s) => s.recordSshRepoReadoptions)
   const setRuntimeEnvironments = useAppStore((s) => s.setRuntimeEnvironments)
-  const setRuntimeEnvironmentStatus = useAppStore((s) => s.setRuntimeEnvironmentStatus)
+  const readRuntimeHostStatusSnapshots = useAppStore((s) => s.readRuntimeHostStatusSnapshots)
   const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
 
   const busy = isSaving || isBulkImporting || resolvingConfigAlias !== null
@@ -283,10 +283,7 @@ export function AddRemoteHostDialog({
       }
       const environments = await window.api.runtimeEnvironments.list()
       setRuntimeEnvironments(environments)
-      setRuntimeEnvironmentStatus(result.environment.id, {
-        status: result.runtimeStatus,
-        checkedAt: Date.now()
-      })
+      await readRuntimeHostStatusSnapshots()
       toast.success(
         translate('auto.components.sidebar.AddRemoteHostDialog.serverSaved', 'Remote server added.')
       )

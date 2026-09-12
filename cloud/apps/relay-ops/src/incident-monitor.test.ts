@@ -273,6 +273,26 @@ describe('incident monitor evaluator', () => {
     )
   })
 
+  it('allows at most three unexpected director errors per five minutes without relaxing other gates', () => {
+    for (const errors of [1, 2, 3]) {
+      const sample = healthySample()
+      sample.sources['cloud-monitoring']!.signals['director.errors'] = signal(errors)
+      expect(evaluateIncidentSample(sample, startedAt).status).toBe('green')
+    }
+    const excess = healthySample()
+    excess.sources['cloud-monitoring']!.signals['director.errors'] = signal(4)
+    expect(evaluateIncidentSample(excess, startedAt).failures).toContainEqual(
+      expect.objectContaining({ signal: 'director.errors', observed: 4, threshold: 3 })
+    )
+    const auth = healthySample()
+    auth.sources['cloud-monitoring']!.signals['auth.errors'] = signal(1)
+    expect(evaluateIncidentSample(auth, startedAt).status).toBe('freeze')
+    const pressure = healthySample()
+    pressure.sources['cloud-monitoring']!.signals['director.errors'] = signal(1)
+    pressure.sources['cloud-monitoring']!.signals['cloud_sql.cpu'] = signal(0.81)
+    expect(evaluateIncidentSample(pressure, startedAt).status).toBe('freeze')
+  })
+
   it('freezes on SQL, director, relay pool, heartbeat, and migration breaches', () => {
     const sample = healthySample()
     sample.sources['cloud-monitoring']!.signals['cloud_sql.cpu'] = signal(0.81)

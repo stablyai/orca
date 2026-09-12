@@ -420,7 +420,7 @@ describe('host rewind', () => {
     expect(await host.rewind(caller, params(target))).toMatchObject({ ok: true })
   })
 
-  it('keeps the host-stamped turn rows before the boundary through a Codex provider hydration', async () => {
+  it('keeps host-stamped turn and goal rows through a Codex provider hydration', async () => {
     expect(await host.attach(caller, hostTestAttachParams(null))).toMatchObject({ ok: true })
     const message = (turnId: string) => ({
       provider: 'codex' as const,
@@ -434,6 +434,19 @@ describe('host rewind', () => {
       sessionId: HOST_TEST_SESSION,
       recordId: `turn-lifecycle:${turnId}`
     })
+    const goalRow = {
+      provider: 'orca' as const,
+      clientMessageId: `codex-goal:${'a'.repeat(64)}:${'b'.repeat(64)}:${'c'.repeat(64)}`
+    }
+    const goalBody = {
+      kind: 'status' as const,
+      text: 'Goal set: Keep the retained evidence.',
+      providerFrame: {
+        provider: 'codex',
+        kind: 'notification:thread/goal/updated',
+        payload: { head: '{}', byteLength: 2, digest: 'd'.repeat(64), truncated: false }
+      }
+    }
     const keptTurn = {
       kind: 'turn' as const,
       turnId: 'kept',
@@ -444,6 +457,7 @@ describe('host rewind', () => {
       durationMs: 5_000
     }
     sink.appendItem(message('kept'), hostTestMessage('kept'))
+    sink.appendItem(goalRow, goalBody)
     sink.appendItem(turnRow('kept'), keptTurn)
     sink.appendItem(message('drop'), hostTestMessage('drop'))
     sink.appendItem(turnRow('drop'), { ...keptTurn, turnId: 'drop', durationMs: 1_000 })
@@ -465,7 +479,62 @@ describe('host rewind', () => {
       host.journalSnapshot(HOST_TEST_SESSION).items.map(({ itemId, body }) => ({ itemId, body }))
     ).toEqual([
       { itemId: agentJournalItemKey(message('kept')), body: hostTestMessage('kept from provider') },
+      { itemId: agentJournalItemKey(goalRow), body: goalBody },
       { itemId: agentJournalItemKey(turnRow('kept')), body: keptTurn }
+    ])
+    expect(store.getRecord(HOST_TEST_SESSION)?.rewind?.phase).toBe('completed')
+  })
+
+  it('keeps a host goal row when interrupted Codex rewind recovery rebuilds provider history', async () => {
+    expect(await host.attach(caller, hostTestAttachParams(null))).toMatchObject({ ok: true })
+    const message = (turnId: string) => ({
+      provider: 'codex' as const,
+      threadId: HOST_TEST_THREAD,
+      turnId,
+      ordinal: 0
+    })
+    const goalRow = {
+      provider: 'orca' as const,
+      clientMessageId: `codex-goal:${'1'.repeat(64)}:${'2'.repeat(64)}:${'3'.repeat(64)}`
+    }
+    const goalBody = {
+      kind: 'status' as const,
+      text: 'Goal set: Survive recovery.',
+      providerFrame: {
+        provider: 'codex',
+        kind: 'notification:thread/goal/updated',
+        payload: { head: '{}', byteLength: 2, digest: '4'.repeat(64), truncated: false }
+      }
+    }
+    sink.appendItem(message('kept'), hostTestMessage('kept'))
+    sink.appendItem(goalRow, goalBody)
+    sink.appendItem(message('drop'), hostTestMessage('drop'))
+    sink.appendItem(message('tip'), { ...hostTestMessage('tip'), role: 'assistant' })
+    await host.flushStreamedEvents(HOST_TEST_SESSION)
+    rewind.mockImplementationOnce(async (input) => {
+      await input.onReverted?.()
+      throw new Error('lost after provider revert')
+    })
+
+    await expect(host.rewind(caller, params(agentJournalItemKey(message('drop'))))).rejects.toThrow(
+      'lost after provider revert'
+    )
+    recoverRewind.mockResolvedValueOnce({
+      ok: true,
+      items: [{ identity: message('kept'), body: hostTestMessage('kept from recovery') }]
+    })
+    expect(
+      await host.attach(
+        caller,
+        hostTestAttachParams(store.getRecord(HOST_TEST_SESSION)!.lease.runtimeFence)
+      )
+    ).toMatchObject({ ok: true })
+
+    expect(
+      host.journalSnapshot(HOST_TEST_SESSION).items.map(({ itemId, body }) => ({ itemId, body }))
+    ).toEqual([
+      { itemId: agentJournalItemKey(message('kept')), body: hostTestMessage('kept from recovery') },
+      { itemId: agentJournalItemKey(goalRow), body: goalBody }
     ])
     expect(store.getRecord(HOST_TEST_SESSION)?.rewind?.phase).toBe('completed')
   })

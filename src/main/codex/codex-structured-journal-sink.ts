@@ -4,6 +4,7 @@ import type {
 } from '../../shared/agent-session-journal-types'
 import type {
   StructuredAgentSessionEventSink,
+  StructuredAgentSessionLifecycleIdentityResolver,
   StructuredAgentSessionSinkAdmission
 } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import type { CodexPendingJournalPrompt } from './codex-structured-journal-settlement'
@@ -26,6 +27,21 @@ export function appendCodexLifecycleItem(
   }
   sink.appendItem(identity, body, { lifecycle: true })
   return CODEX_JOURNAL_ADMITTED
+}
+
+export function appendCodexLifecycleTransition(
+  sink: StructuredAgentSessionEventSink,
+  identitySizeBound: AgentJournalItemIdentity,
+  body: AgentJournalItemBody,
+  resolveIdentity: StructuredAgentSessionLifecycleIdentityResolver
+): CodexJournalTranslationAdmission {
+  if (sink.tryAppendLifecycleTransition) {
+    return criticalAdmission(
+      sink.tryAppendLifecycleTransition(identitySizeBound, body, resolveIdentity)
+    )
+  }
+  const admission = appendCodexLifecycleItem(sink, identitySizeBound, body)
+  return admission.accepted ? publishCodexLifecycle(sink) : admission
 }
 
 export function publishCodexLifecycle(

@@ -212,8 +212,11 @@ export function buildSecondaryCommitMessageAgentSpecs({
       id: 'antigravity',
       label: 'Antigravity',
       binary: 'agy',
-      promptDelivery: 'stdin',
-      buildArgs: ({ model }) => ['--print', '--sandbox', '--model', model],
+      // agy's --print takes the prompt as its value (#19539, #14059). Deliver on argv
+      // using `--print=<value>` so a leading-dash prompt binds to the flag instead of
+      // being parsed as its own option, and --sandbox/--model stay separate options.
+      promptDelivery: 'argv',
+      buildArgs: ({ prompt, model }) => [`--print=${prompt}`, '--sandbox', '--model', model],
       modelSource: 'dynamic',
       modelDiscovery: { binary: 'agy', args: ['models'], parse: parseAntigravityModels },
       models: [

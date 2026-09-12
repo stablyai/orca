@@ -219,10 +219,10 @@ export function HostScreenOverlays({ controller }: { controller: HostScreenContr
         onVisibleChange={(visible) => {
           state.newWorktreeModalVisibleRef.current = visible
         }}
-        onCreated={(worktreeId, worktreeName) => {
+        onCreated={(worktreeId, worktreeName, warning) => {
           void catalog.fetchWorktrees({ allowDuringModal: true })
           actions.navigateFromHostList(
-            hostNewWorktreeSessionRoute(hostId, worktreeId, worktreeName)
+            hostNewWorktreeSessionRoute(hostId, worktreeId, worktreeName, warning)
           )
         }}
         onRouteVisibleChange={actions.setShowNewWorktreeVisible}

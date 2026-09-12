@@ -1,14 +1,7 @@
 import { createHash, randomUUID } from 'node:crypto'
-import {
-  existsSync,
-  lstatSync,
-  mkdirSync,
-  readdirSync,
-  renameSync,
-  unlinkSync,
-  writeFileSync
-} from 'node:fs'
-import { join } from 'node:path'
+import { existsSync, lstatSync, readdirSync, renameSync, unlinkSync, writeFileSync } from 'node:fs'
+import { join, resolve } from 'node:path'
+import { ensurePrivateDir, PRIVATE_FILE_MODE } from './daemon-private-file-modes'
 import { getHistorySessionDirName } from './history-paths'
 
 const QUARANTINE_DIR_NAME = '.recovery-quarantine'
@@ -33,6 +26,39 @@ export function isTerminalHistoryQuarantineEntry(name: string): boolean {
 export function getTerminalHistoryQuarantineOwnerDir(basePath: string, sessionId: string): string {
   const sessionHash = createHash('sha256').update(sessionId).digest('hex')
   return join(basePath, QUARANTINE_DIR_NAME, sessionHash)
+}
+
+// Why process-wide and not a HistoryManager field: the freeze lives in this process's memory while
+// the backlog permission sweep walks the same tree from an unrelated module, and its chmod moves the
+// `mode`/`ctimeMs` that fingerprintTerminalHistorySession hashes. Refcounted because the legacy and
+// current daemon adapters each hold their own HistoryManager over one base path.
+const recoveryFrozenSessionDirs = new Map<string, number>()
+
+export function markTerminalHistorySessionRecoveryFrozen(sessionDir: string): void {
+  const key = resolve(sessionDir)
+  recoveryFrozenSessionDirs.set(key, (recoveryFrozenSessionDirs.get(key) ?? 0) + 1)
+}
+
+export function unmarkTerminalHistorySessionRecoveryFrozen(sessionDir: string): void {
+  const key = resolve(sessionDir)
+  const held = recoveryFrozenSessionDirs.get(key)
+  if (held === undefined) {
+    return
+  }
+  if (held > 1) {
+    recoveryFrozenSessionDirs.set(key, held - 1)
+  } else {
+    recoveryFrozenSessionDirs.delete(key)
+  }
+}
+
+/** True while a session tree must not be touched by anything outside its own recovery handshake:
+ *  an open freeze holds a fingerprint of it, or a failed quarantine left it fail-closed on disk. */
+export function isTerminalHistorySessionDirRecoveryProtected(sessionDir: string): boolean {
+  return (
+    recoveryFrozenSessionDirs.has(resolve(sessionDir)) ||
+    existsSync(join(sessionDir, RECOVERY_PROTECTION_MARKER))
+  )
 }
 
 export function hasTerminalHistoryRecoveryProtection(basePath: string, sessionId: string): boolean {
@@ -83,8 +109,8 @@ export function quarantineTerminalHistorySession(
   const sessionDir = join(basePath, getHistorySessionDirName(sessionId))
   const ownerDir = getTerminalHistoryQuarantineOwnerDir(basePath, sessionId)
   // Why: if rename is blocked, a later adapter must not attach a writer to the unreadable generation.
-  writeFileSync(join(sessionDir, RECOVERY_PROTECTION_MARKER), '')
-  mkdirSync(ownerDir, { recursive: true })
+  writeFileSync(join(sessionDir, RECOVERY_PROTECTION_MARKER), '', { mode: PRIVATE_FILE_MODE })
+  ensurePrivateDir(ownerDir)
   const quarantineDir = join(ownerDir, randomUUID())
   renameSync(sessionDir, quarantineDir)
   return quarantineDir

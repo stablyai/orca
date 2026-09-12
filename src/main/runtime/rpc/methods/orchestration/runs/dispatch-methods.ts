@@ -1,4 +1,4 @@
-import { defineMethod, type RpcMethod } from '../../../core'
+import { defineMethod } from '../../../core'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { buildDispatchPreamble } from '../../../../orchestration/preamble'
 import { resolveDispatchCreator } from './dispatch-creator'
@@ -10,7 +10,7 @@ import {
 import { resolveRunScope } from './run-scope'
 import { DispatchParams, DispatchShowParams } from '../schemas'
 
-export const ORCHESTRATION_DISPATCH_METHODS: RpcMethod[] = [
+export const ORCHESTRATION_DISPATCH_METHODS = [
   defineMethod({
     name: 'orchestration.dispatch',
     params: DispatchParams,

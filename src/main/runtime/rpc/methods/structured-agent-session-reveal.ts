@@ -12,7 +12,7 @@
 import { isAgentSessionWireRefusalCode } from '../../../../shared/agent-session-wire'
 import type { StructuredAgentSessionReveal } from '../../../native-chat/agent-session-wire/structured-agent-session-host-types'
 import { refuseAgentSessionMutation } from '../../../native-chat/agent-session-wire/structured-agent-session-mutation-admission'
-import { defineMethod, type RpcAnyMethod } from '../core'
+import { defineMethod } from '../core'
 import {
   ensureStructuredHostInstalled,
   requireStructuredCapability,
@@ -20,7 +20,7 @@ import {
 } from './structured-agent-session-gate'
 import { OptionsParams } from './structured-agent-session-schemas'
 
-export const STRUCTURED_AGENT_SESSION_REVEAL_METHODS: RpcAnyMethod[] = [
+export const STRUCTURED_AGENT_SESSION_REVEAL_METHODS = [
   defineMethod({
     name: 'agentSession.reveal',
     params: OptionsParams,

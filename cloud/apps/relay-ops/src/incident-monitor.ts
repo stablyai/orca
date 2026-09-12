@@ -101,7 +101,8 @@ export const INCIDENT_MONITOR_THRESHOLDS = {
   directorCpuUtilization: 0.8,
   directorMemoryUtilization: 0.8,
   directorConcurrency: 64,
-  directorErrors: 0,
+  // Sparse connection timeouts must not block a healthy rollout; four/5min still freezes.
+  directorErrors: 3,
   authErrors: 0,
   // Why: 800 exceeded the 600 hard cap, so this could never trigger on a capped cell. 500 is
   // the ordinary admission limit a cell actually stops at (600 cap - 100 control-rebind reserve).

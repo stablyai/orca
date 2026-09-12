@@ -1,4 +1,8 @@
 import type * as Monaco from 'monaco-editor'
+import {
+  restOfLineWithinEmbedBudget,
+  tagCloseWithinEmbedBudget
+} from './monarch-embed-entry-budget'
 
 type MonacoModule = typeof Monaco
 
@@ -38,7 +42,18 @@ export const svelteMonarchLanguage: Monaco.languages.IMonarchLanguage = {
         { token: 'keyword.control', switchTo: '@svelteExpressionEnter' }
       ],
       [/\{(?=[^#:/@])/, { token: 'delimiter.curly', switchTo: '@svelteExpressionEnter' }],
-      [/(?=.)/, { token: '', switchTo: '@markup', nextEmbedded: 'html' }]
+      // `@rematch` is required: on a zero-width match Monarch's progress check
+      // `continue`s and silently drops a pending `nextEmbedded` for any other
+      // token, leaving `markup` without the html embed its pop rules assume.
+      [
+        restOfLineWithinEmbedBudget,
+        { token: '@rematch', switchTo: '@markup', nextEmbedded: 'html' }
+      ],
+      // Past the budget: same structure, no embed, so the rest of the line
+      // cannot deepen the recursion.
+      [/<\/?[A-Za-z][^>]*>/, 'tag'],
+      [/[^<{]+/, ''],
+      [/./, '']
     ],
     // html-embedded markup state. INVARIANT: whenever we are in `markup`, the
     // html embed is active. Every state that pops back to markup routes
@@ -88,7 +103,14 @@ export const svelteMonarchLanguage: Monaco.languages.IMonarchLanguage = {
     // switches to `markup`. `@rematch` short-circuits Monarch's progress
     // check — a zero-width match that stays in the same state and stack
     // depth otherwise throws "no progress in tokenizer".
-    markupReenter: [[/(?=.)/, { token: '@rematch', switchTo: '@markup', nextEmbedded: 'html' }]],
+    markupReenter: [
+      [
+        restOfLineWithinEmbedBudget,
+        { token: '@rematch', switchTo: '@markup', nextEmbedded: 'html' }
+      ],
+      // Over budget: `root` carries the same structural rules without embeds.
+      [/(?=.)/, { token: '@rematch', switchTo: '@root' }]
+    ],
     comment: [
       [/-->/, { token: 'comment', switchTo: '@markupReenter' }],
       [/[^-]+/, 'comment'],
@@ -105,23 +127,44 @@ export const svelteMonarchLanguage: Monaco.languages.IMonarchLanguage = {
       // Empty expression `{}`: entry popped the html embed, but we never
       // entered the typescript embed, so only the state needs to unwind.
       [/\}/, { token: 'delimiter.curly', switchTo: '@markupReenter' }],
-      [/(?=.)/, { token: '', switchTo: '@svelteExpression', nextEmbedded: 'typescript' }]
+      [
+        restOfLineWithinEmbedBudget,
+        { token: '@rematch', switchTo: '@svelteExpression', nextEmbedded: 'typescript' }
+      ],
+      [/(?=.)/, { token: '@rematch', switchTo: '@svelteExpressionPlain' }]
     ],
     svelteExpression: [
       [/\}/, { token: 'delimiter.curly', switchTo: '@markupReenter', nextEmbedded: '@pop' }]
     ],
+    // Same expression, no typescript embed: reached only past the budget.
+    svelteExpressionPlain: [
+      [/\}/, { token: 'delimiter.curly', switchTo: '@markupReenter' }],
+      [/[^}]+/, '']
+    ],
     svelteBlockExpressionEnter: [
       [/\}/, { token: 'keyword.control', switchTo: '@markupReenter' }],
-      [/(?=.)/, { token: '', switchTo: '@svelteBlockExpression', nextEmbedded: 'typescript' }]
+      [
+        restOfLineWithinEmbedBudget,
+        { token: '@rematch', switchTo: '@svelteBlockExpression', nextEmbedded: 'typescript' }
+      ],
+      [/(?=.)/, { token: '@rematch', switchTo: '@svelteBlockExpressionPlain' }]
     ],
     svelteBlockExpression: [
       [/\}/, { token: 'keyword.control', switchTo: '@markupReenter', nextEmbedded: '@pop' }]
+    ],
+    svelteBlockExpressionPlain: [
+      [/\}/, { token: 'keyword.control', switchTo: '@markupReenter' }],
+      [/[^}]+/, '']
     ],
     scriptOpen: [
       // Self-closing `<script/>` didn't enter an embed, but it might have been
       // entered from markup (which popped html on entry). Re-enter uniformly.
       [/\/>/, { token: 'tag', switchTo: '@markupReenter' }],
-      [/>/, { token: 'tag', switchTo: '@scriptBody.$S2', nextEmbedded: '$S2' }],
+      [
+        tagCloseWithinEmbedBudget,
+        { token: 'tag', switchTo: '@scriptBody.$S2', nextEmbedded: '$S2' }
+      ],
+      [/>/, { token: 'tag', switchTo: '@scriptBodyPlain.$S2' }],
       [/lang(?=\s*=)/, { token: 'attribute.name', switchTo: '@scriptLangBeforeEquals.$S2' }],
       { include: '@tagAttributes' }
     ],
@@ -151,9 +194,24 @@ export const svelteMonarchLanguage: Monaco.languages.IMonarchLanguage = {
     scriptBody: [
       [/<\/script\s*>/, { token: 'tag', switchTo: '@markupReenter', nextEmbedded: '@pop' }]
     ],
+    // Over-budget mirror of the body: re-enters `$S2` as soon as the rest of
+    // the line fits, so a long opening line does not grey out the whole block.
+    scriptBodyPlain: [
+      [/<\/script\s*>/, { token: 'tag', switchTo: '@markupReenter' }],
+      [
+        restOfLineWithinEmbedBudget,
+        { token: '@rematch', switchTo: '@scriptBody.$S2', nextEmbedded: '$S2' }
+      ],
+      [/[^<]+/, ''],
+      [/./, '']
+    ],
     styleOpen: [
       [/\/>/, { token: 'tag', switchTo: '@markupReenter' }],
-      [/>/, { token: 'tag', switchTo: '@styleBody.$S2', nextEmbedded: '$S2' }],
+      [
+        tagCloseWithinEmbedBudget,
+        { token: 'tag', switchTo: '@styleBody.$S2', nextEmbedded: '$S2' }
+      ],
+      [/>/, { token: 'tag', switchTo: '@styleBodyPlain.$S2' }],
       [/lang(?=\s*=)/, { token: 'attribute.name', switchTo: '@styleLangBeforeEquals.$S2' }],
       { include: '@tagAttributes' }
     ],
@@ -182,6 +240,15 @@ export const svelteMonarchLanguage: Monaco.languages.IMonarchLanguage = {
     ],
     styleBody: [
       [/<\/style\s*>/, { token: 'tag', switchTo: '@markupReenter', nextEmbedded: '@pop' }]
+    ],
+    styleBodyPlain: [
+      [/<\/style\s*>/, { token: 'tag', switchTo: '@markupReenter' }],
+      [
+        restOfLineWithinEmbedBudget,
+        { token: '@rematch', switchTo: '@styleBody.$S2', nextEmbedded: '$S2' }
+      ],
+      [/[^<]+/, ''],
+      [/./, '']
     ],
     tagAttributes: [
       [/[^\s/>=]+/, 'attribute.name'],

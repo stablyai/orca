@@ -6,7 +6,12 @@ import { ClaudeSlashCommandCatalog } from './claude-slash-command-catalog'
 
 function sessionFor(setModel: ClaudeSession['connection']['setModel']): ClaudeSession {
   return {
-    connection: { setModel } as ClaudeSession['connection'],
+    // An empty catalog identifies no model, so the pre-flight refuses nothing and
+    // this stays a test about fencing.
+    connection: {
+      setModel,
+      supportedModels: async (): Promise<unknown[]> => []
+    } as ClaudeSession['connection'],
     providerSessionId: 'provider-session',
     claudeConfigDir: '/accounts/claude',
     leafUuid: null,

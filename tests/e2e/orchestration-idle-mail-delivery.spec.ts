@@ -653,7 +653,12 @@ test.describe('orchestration delivery to a cold-parked agent', () => {
   const parkingDelayMs = 500
 
   test.use({
-    orcaAppExtraEnv: { ORCA_E2E_TERMINAL_PARKING_DELAY_MS: String(parkingDelayMs) }
+    orcaAppExtraEnv: {
+      ORCA_E2E_TERMINAL_PARKING_DELAY_MS: String(parkingDelayMs),
+      // The working-title round trip (PTY -> daemon -> main) must beat the Enter
+      // timer; 500ms is a production heuristic, not a budget CI can honour.
+      ORCA_E2E_ORCHESTRATION_POINTER_ENTER_DELAY_MS: '5000'
+    }
   })
 
   test('keeps one pointer and one idempotent prompt on the same parked PTY', async ({

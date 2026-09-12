@@ -3,7 +3,7 @@ import { FolderOpen } from 'lucide-react'
 import { RepoBadgeMark } from '@/components/repo/RepoBadgeLabel'
 import { cn } from '@/lib/utils'
 import type { NewWorkspaceProjectOption } from '@/lib/new-workspace-project-options'
-import { splitDetailForElision } from './project-combobox-matching'
+import { splitPathHeadForElision } from '@/lib/path-head-elision'
 
 /** Identity mark shared by the field and every row, so a project reads the same in both. */
 export function ProjectOptionMark({
@@ -70,7 +70,8 @@ export function ProjectOptionDetail({
   hits?: readonly number[]
   className?: string
 }): React.JSX.Element {
-  const split = splitDetailForElision(detail)
+  const ranges = hits?.map((index) => ({ start: index, end: index + 1 }))
+  const split = splitPathHeadForElision(detail, ranges)
   if (!split) {
     return (
       <span className={cn('min-w-0 truncate', className)} title={detail}>
@@ -80,9 +81,14 @@ export function ProjectOptionDetail({
   }
   return (
     <span className={cn('flex min-w-0 items-baseline overflow-hidden', className)} title={detail}>
-      {/* Head collapses first; the tail only truncates once the head is gone. */}
       <span className="min-w-0 shrink-[999] truncate">{split.head}</span>
-      <span className="min-w-0 shrink truncate">/{split.tail}</span>
+      <span className="min-w-0 shrink truncate">
+        {split.tailRanges.length > 0 ? (
+          <MatchedText text={split.tail} hits={split.tailRanges.map((range) => range.start)} />
+        ) : (
+          split.tail
+        )}
+      </span>
     </span>
   )
 }

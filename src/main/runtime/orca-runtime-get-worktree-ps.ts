@@ -96,6 +96,7 @@ export class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithStructuredAgent
         missingIds: missingRuntimeWorktreeIds,
         ptysById: this.ptysById,
         tabs: this.tabs,
+        getTerminalHandlesForPty: (ptyId) => this.getExistingTerminalHandlesForPtyId(ptyId),
         getSummary: (summaryMap, pathIndex, missingIds, worktreeId) =>
           this.getSummaryForRuntimeWorktreeId(summaryMap, pathIndex, missingIds, worktreeId)
       })
@@ -107,7 +108,6 @@ export class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithStructuredAgent
       rowSources: collectRuntimeWorktreeAgentSources({
         mirroredWorktreeIdByTabId,
         connectedPtyEvidence,
-        retainedSnapshots: this.agentRows.values(),
         // Structured sessions are in here too: the host publishes them into the same store.
         hookSnapshots: this.getAgentStatusSnapshotFn?.() ?? []
       }),

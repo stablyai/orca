@@ -13,6 +13,7 @@ import type {
   AgentSessionMutationResult,
   AgentSessionWireRefusal
 } from '../../../shared/agent-session-wire'
+import { AGENT_SESSION_UNATTACHED_REFUSAL_CODE } from '../../../shared/structured-agent-session-read-refusal'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
@@ -21,8 +22,10 @@ import { runSettledAgentSessionMutation } from './structured-agent-session-opera
 import { resolveAgentSessionReplayOutcome } from './structured-agent-session-replay-outcome'
 import type { AgentSessionTurnContext } from './structured-agent-session-turns'
 
+// The code is shared with the client so a read that refuses this way can be told apart from a
+// transcript that failed to load; the two must never drift apart.
 export const AGENT_SESSION_NOT_ATTACHED: AgentSessionWireRefusal = {
-  code: 'agent_session_ownership_unknown',
+  code: AGENT_SESSION_UNATTACHED_REFUSAL_CODE,
   message: 'This host holds no attached session by that id.'
 }
 

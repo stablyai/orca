@@ -87,18 +87,21 @@ export function canaryAuthority(input) {
 }
 
 export function verifyCanaryAuthority(authority, expected, repositoryRoot) {
+  const selectorGeneration = Number(expected.selectorGeneration)
   if (
     authority?.v !== 1 ||
     !/^[0-9a-f]{40}$/.test(authority.commitSha ?? '') ||
     authority.runId !== expected.runId ||
     authority.targetDigest !== expected.targetDigest ||
     authority.rollbackDigest !== expected.rollbackDigest ||
-    authority.selectorGeneration !== Number(expected.selectorGeneration) ||
+    !Number.isSafeInteger(authority.selectorGeneration) ||
+    authority.selectorGeneration < 0 ||
+    !Number.isSafeInteger(selectorGeneration) ||
+    selectorGeneration < authority.selectorGeneration ||
     authority.rehomeGeneration !== Number(expected.rehomeGeneration) ||
     !SAME_CAP_CELLS.includes(authority.cellId)
   ) throw new Error('canary authority does not match this batch')
-  // The batch dispatch resolves main after the canary sealed, so bind to the same code, not the
-  // same SHA; every field above still pins this batch to that exact canary.
+  // Each cell checks exact live selector state; later batches may reuse this control epoch's canary.
   requireSameEvidenceCode({
     sealedSha: authority.commitSha,
     currentSha: expected.commitSha,

@@ -2,7 +2,6 @@ import { useCallback, useEffect, useState } from 'react'
 import { ExternalLink, Star, X } from 'lucide-react'
 import { Card } from './ui/card'
 import { Button } from './ui/button'
-import { useAppStore } from '../store'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { translate } from '@/i18n/i18n'
 
@@ -25,12 +24,6 @@ export function StarNagCard(): React.JSX.Element | null {
   const [busy, setBusy] = useState(false)
   const [mode, setMode] = useState<StarNagMode>('gh')
   const mountedRef = useMountedRef()
-  // Why: UpdateCard lives at the same bottom-right slot. When it is visible
-  // (any non-idle / non-not-available state), stack the star-nag card above
-  // it instead of overlapping — we must not cover a pending update prompt
-  // because that's a higher-priority action.
-  const updateStatus = useAppStore((s) => s.updateStatus)
-  const updateCardVisible = updateStatus.state !== 'idle' && updateStatus.state !== 'not-available'
 
   useEffect(() => {
     const unsubscribeShow = window.api.starNag.onShow((payload) => {
@@ -147,15 +140,7 @@ export function StarNagCard(): React.JSX.Element | null {
   }
 
   return (
-    <div
-      // Why: when UpdateCard is up, it occupies bottom-10. Raise the star-nag
-      // card above it so both are visible — the update action stays on top
-      // visually (it's the higher-priority one) and the star-nag sits above.
-      className={`fixed right-4 z-40 w-[360px] max-w-[calc(100vw-32px)]
-      max-[480px]:left-4 max-[480px]:right-4 max-[480px]:w-auto ${
-        updateCardVisible ? 'bottom-[220px]' : 'bottom-10'
-      }`}
-    >
+    <div>
       <Card className="py-0 gap-0" role="complementary" aria-labelledby="star-nag-heading">
         <div className="flex flex-col gap-2.5 p-3.5">
           <div className="flex items-start justify-between gap-2">

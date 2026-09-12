@@ -3,7 +3,10 @@ import type { AiVaultSession } from '../../shared/ai-vault-types'
 import { parseAgentSessionFile, parserPublishesMessages } from './session-scanner-agent-parser'
 import { consumeCompleteJsonlLines } from './session-scanner-jsonl-reader'
 import type { ResumableSessionParseState, SessionFileCandidate } from './session-scanner-types'
-import type { SessionParseResumePoint } from './session-parse-cache-store'
+import {
+  invalidateSessionParseCacheEntry,
+  type SessionParseResumePoint
+} from './session-parse-cache-store'
 import { TranscriptMessageChannel } from './session-transcript-channel'
 
 const NEWLINE_BYTE = 0x0a
@@ -27,6 +30,24 @@ export type ResumableTranscriptRead = {
   session: AiVaultSession | null
   /** The fold to resume from next time, and the channel bound to it. */
   resume: SessionParseResumePoint
+}
+
+/**
+ * Ask for the next read of `path` to be a whole-file `replace`.
+ *
+ * Why this lives here: a consumer never chooses its own mode. The reader picks
+ * `append` or `replace` from the resume point the session list left behind, so a
+ * consumer that declined an append has no way to get the span it missed — with
+ * an empty index and a warm parse cache, every read arrives as `append`, every
+ * one is declined, and nothing is ever indexed. Dropping the resume point is the
+ * one lever that changes the next read's mode, and only the reader's own cache
+ * owns it.
+ *
+ * The cost is a re-parse for the session list too. That is the honest price of a
+ * second consumer being behind, and it is paid once per file rather than per scan.
+ */
+export function requestWholeTranscriptRead(path: string): void {
+  invalidateSessionParseCacheEntry(path)
 }
 
 /**
@@ -70,7 +91,10 @@ export async function readResumableTranscript(args: {
   channel.beginRead({
     candidate: args.candidate,
     mode: canResume ? 'append' : 'replace',
-    previousByteOffset: startOffset
+    previousByteOffset: startOffset,
+    // Read by a consumer during the read, not here: the fold has decoded
+    // nothing yet at this point of a whole-file read.
+    identity: () => state.identity?.() ?? null
   })
   try {
     const readResult = await consumeCompleteJsonlLines({

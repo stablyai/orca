@@ -1,4 +1,3 @@
-import type { RpcAnyMethod } from '../core'
 import { STATUS_METHODS } from './status'
 import { AI_VAULT_METHODS } from './ai-vault'
 import { AUTOMATION_METHODS } from './automations'
@@ -50,7 +49,7 @@ import { AGENT_HOOK_METHODS } from './agent-hooks'
 // Why: a flat manifest keeps registration order explicit and provides one
 // grep-point for "what methods does the RPC server expose?" — useful when
 // auditing the security boundary or wiring new CLI commands.
-export const ALL_RPC_METHODS: readonly RpcAnyMethod[] = [
+export const ALL_RPC_METHODS = [
   ...STATUS_METHODS,
   ...AGENT_HOOK_METHODS,
   ...AI_VAULT_METHODS,

@@ -92,10 +92,13 @@ function codexResponseItem(
     payload.type === 'custom_tool_call'
   ) {
     const name = extractString(payload.name) ?? 'tool'
+    const callId = extractString(payload.call_id)
     return {
       id,
       role: 'assistant',
-      blocks: [{ type: 'tool-call', name, input: codexCallInput(payload) }],
+      blocks: [
+        { type: 'tool-call', name, input: codexCallInput(payload), ...(callId ? { callId } : {}) }
+      ],
       timestamp,
       source: 'transcript'
     }
