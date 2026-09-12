@@ -134,37 +134,39 @@ export function EditorPanelShell({
           createMarkdownArtifactRequest={createMarkdownArtifactRequest}
         />
       )}
-      <Suspense fallback={<EditorLoadingFallback />}>
-        <EditorContent
-          activeFile={activeFile}
-          viewStateScopeId={activeViewStateId ?? activeFile.id}
-          fileContents={fileContents}
-          diffContents={diffContents}
-          editBuffers={editorDrafts}
-          openFiles={openFiles}
-          worktreeEntries={model.worktreeEntries}
-          resolvedLanguage={model.resolvedLanguage}
-          isMarkdown={model.isMarkdown}
-          isMermaid={model.isMermaid}
-          isCsv={model.isCsv}
-          isNotebook={model.isNotebook}
-          mdViewMode={model.mdViewMode}
-          inlineMarkdownRenderState={model.inlineMarkdownRenderState}
-          isChangesMode={model.isDiffSurface && !model.isSingleDiff}
-          sideBySide={sideBySide}
-          pendingEditorReveal={pendingEditorReveal}
-          handleContentChange={onContentChange}
-          handleContentChangeForFile={onContentChangeForFile}
-          handleDirtyStateHint={onDirtyStateHint}
-          handleSave={onSave}
-          handleSaveForFile={onSaveForFile}
-          reloadContent={onReloadContent}
-          showMarkdownTableOfContents={showMarkdownTableOfContents}
-          showMarkdownFrontmatter={markdownFrontmatterVisible}
-          onCloseMarkdownTableOfContents={onCloseMarkdownTableOfContents}
-          markdownAnnotationsEnabled={markdownAnnotationsEnabled}
-        />
-      </Suspense>
+      <div className="editor-content-pane flex min-h-0 flex-1 flex-col">
+        <Suspense fallback={<EditorLoadingFallback />}>
+          <EditorContent
+            activeFile={activeFile}
+            viewStateScopeId={activeViewStateId ?? activeFile.id}
+            fileContents={fileContents}
+            diffContents={diffContents}
+            editBuffers={editorDrafts}
+            openFiles={openFiles}
+            worktreeEntries={model.worktreeEntries}
+            resolvedLanguage={model.resolvedLanguage}
+            isMarkdown={model.isMarkdown}
+            isMermaid={model.isMermaid}
+            isCsv={model.isCsv}
+            isNotebook={model.isNotebook}
+            mdViewMode={model.mdViewMode}
+            inlineMarkdownRenderState={model.inlineMarkdownRenderState}
+            isChangesMode={model.isDiffSurface && !model.isSingleDiff}
+            sideBySide={sideBySide}
+            pendingEditorReveal={pendingEditorReveal}
+            handleContentChange={onContentChange}
+            handleContentChangeForFile={onContentChangeForFile}
+            handleDirtyStateHint={onDirtyStateHint}
+            handleSave={onSave}
+            handleSaveForFile={onSaveForFile}
+            reloadContent={onReloadContent}
+            showMarkdownTableOfContents={showMarkdownTableOfContents}
+            showMarkdownFrontmatter={markdownFrontmatterVisible}
+            onCloseMarkdownTableOfContents={onCloseMarkdownTableOfContents}
+            markdownAnnotationsEnabled={markdownAnnotationsEnabled}
+          />
+        </Suspense>
+      </div>
       <UntitledFileRenameDialog
         open={renameDialogFile !== null}
         currentName={renameDialogFile?.relativePath ?? ''}

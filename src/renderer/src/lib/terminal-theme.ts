@@ -174,6 +174,9 @@ export function resolvePaneStyleOptions(
 }
 
 export {
+  isTerminalForegroundMixReadable,
+  isTerminalForegroundReadableOnMix,
   isTerminalBackgroundLight,
+  resolveReadableTerminalForeground,
   resolveOpaqueTerminalBackground
 } from './terminal-title-contrast'

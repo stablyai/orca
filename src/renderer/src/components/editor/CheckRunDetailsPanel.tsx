@@ -291,6 +291,7 @@ export function CheckRunDetailsPanel({
                     <CommentMarkdown
                       content={details.summary}
                       variant="document"
+                      mermaidScheme="editor"
                       className="min-w-0 max-w-full overflow-hidden break-words text-sm leading-relaxed [&_a]:break-all [&_code]:break-words [&_pre]:max-w-full"
                     />
                   )}
@@ -298,6 +299,7 @@ export function CheckRunDetailsPanel({
                     <CommentMarkdown
                       content={details.text}
                       variant="document"
+                      mermaidScheme="editor"
                       className="mt-3 min-w-0 max-w-full overflow-hidden break-words text-sm leading-relaxed [&_a]:break-all [&_code]:break-words [&_pre]:max-w-full"
                     />
                   )}

@@ -1074,62 +1074,62 @@
   color: #0550ae;
 }
 
-.dark .rich-markdown-code-block-wrapper .hljs-keyword {
+.orca-editor-dark .rich-markdown-code-block-wrapper .hljs-keyword {
   color: #ff7b72;
 }
-.dark .rich-markdown-code-block-wrapper .hljs-string {
+.orca-editor-dark .rich-markdown-code-block-wrapper .hljs-string {
   color: #a5d6ff;
 }
-.dark .rich-markdown-code-block-wrapper .hljs-number {
+.orca-editor-dark .rich-markdown-code-block-wrapper .hljs-number {
   color: #79c0ff;
 }
-.dark .rich-markdown-code-block-wrapper .hljs-comment {
+.orca-editor-dark .rich-markdown-code-block-wrapper .hljs-comment {
   color: #8b949e;
   font-style: italic;
 }
-.dark .rich-markdown-code-block-wrapper .hljs-function {
+.orca-editor-dark .rich-markdown-code-block-wrapper .hljs-function {
   color: #d2a8ff;
 }
-.dark .rich-markdown-code-block-wrapper .hljs-title {
+.orca-editor-dark .rich-markdown-code-block-wrapper .hljs-title {
   color: #d2a8ff;
 }
-.dark .rich-markdown-code-block-wrapper .hljs-built_in {
+.orca-editor-dark .rich-markdown-code-block-wrapper .hljs-built_in {
   color: #79c0ff;
 }
-.dark .rich-markdown-code-block-wrapper .hljs-type {
+.orca-editor-dark .rich-markdown-code-block-wrapper .hljs-type {
   color: #79c0ff;
 }
-.dark .rich-markdown-code-block-wrapper .hljs-attr {
+.orca-editor-dark .rich-markdown-code-block-wrapper .hljs-attr {
   color: #79c0ff;
 }
-.dark .rich-markdown-code-block-wrapper .hljs-selector-class {
+.orca-editor-dark .rich-markdown-code-block-wrapper .hljs-selector-class {
   color: #79c0ff;
 }
-.dark .rich-markdown-code-block-wrapper .hljs-variable {
+.orca-editor-dark .rich-markdown-code-block-wrapper .hljs-variable {
   color: #ffa657;
 }
-.dark .rich-markdown-code-block-wrapper .hljs-meta {
+.orca-editor-dark .rich-markdown-code-block-wrapper .hljs-meta {
   color: #8b949e;
 }
-.dark .rich-markdown-code-block-wrapper .hljs-tag {
+.orca-editor-dark .rich-markdown-code-block-wrapper .hljs-tag {
   color: #7ee787;
 }
-.dark .rich-markdown-code-block-wrapper .hljs-name {
+.orca-editor-dark .rich-markdown-code-block-wrapper .hljs-name {
   color: #7ee787;
 }
-.dark .rich-markdown-code-block-wrapper .hljs-params {
+.orca-editor-dark .rich-markdown-code-block-wrapper .hljs-params {
   color: #ffa657;
 }
-.dark .rich-markdown-code-block-wrapper .hljs-literal {
+.orca-editor-dark .rich-markdown-code-block-wrapper .hljs-literal {
   color: #79c0ff;
 }
-.dark .rich-markdown-code-block-wrapper .hljs-regexp {
+.orca-editor-dark .rich-markdown-code-block-wrapper .hljs-regexp {
   color: #a5d6ff;
 }
-.dark .rich-markdown-code-block-wrapper .hljs-operator {
+.orca-editor-dark .rich-markdown-code-block-wrapper .hljs-operator {
   color: #ff7b72;
 }
-.dark .rich-markdown-code-block-wrapper .hljs-property {
+.orca-editor-dark .rich-markdown-code-block-wrapper .hljs-property {
   color: #79c0ff;
 }
 
@@ -1157,7 +1157,7 @@
   cursor: pointer;
 }
 
-.dark .rich-markdown-editor a {
+.orca-editor-dark .rich-markdown-editor a {
   color: #58a6ff;
 }
 
@@ -1172,7 +1172,7 @@
   text-underline-offset: 2px;
 }
 
-.dark .rich-markdown-editor .rich-markdown-html-superscript-link {
+.orca-editor-dark .rich-markdown-editor .rich-markdown-html-superscript-link {
   color: #58a6ff;
 }
 
@@ -1497,7 +1497,7 @@
   text-underline-offset: 2px;
 }
 
-.dark .rich-markdown-editor .rich-markdown-doc-link {
+.orca-editor-dark .rich-markdown-editor .rich-markdown-doc-link {
   color: #58a6ff;
 }
 
@@ -1525,7 +1525,7 @@
   text-underline-offset: 2px;
 }
 
-.dark .rich-markdown-editor .rich-markdown-doc-link-preview {
+.orca-editor-dark .rich-markdown-editor .rich-markdown-doc-link-preview {
   color: #58a6ff;
 }
 

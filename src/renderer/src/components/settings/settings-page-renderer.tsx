@@ -76,7 +76,6 @@ export function renderSettingsPage(context: SettingsRenderContext): React.JSX.El
       className="settings-view-shell flex min-h-0 flex-1 overflow-hidden bg-background"
     >
       <SettingsSidebar
-        settings={model.settings}
         activeSectionId={model.activeSectionId}
         generalGroups={view.generalNavGroups}
         repoSections={view.repoNavSections}

@@ -97,7 +97,7 @@ export function ConflictBanner({
           {isUnresolved ? (
             <TriangleAlert className="size-3.5 shrink-0 text-destructive" />
           ) : (
-            <CircleCheck className="size-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" />
+            <CircleCheck className="size-3.5 shrink-0 text-emerald-600 editor-dark:text-emerald-400" />
           )}
           <span className="min-w-0 truncate font-medium text-foreground">
             {label}{' '}

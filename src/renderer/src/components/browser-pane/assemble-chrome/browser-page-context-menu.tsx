@@ -15,7 +15,7 @@ import type { BrowserPageContextMenuState } from '../describe-page/browser-page-
 // `focus:` rather than `focus-visible:` — items are only ever focused programmatically
 // while the menu is open, so every focus here is keyboard navigation.
 const MENU_ITEM_CLASS =
-  'relative flex w-full cursor-default items-center gap-2 rounded-[7px] px-2 py-0.5 text-[12px] leading-5 font-medium outline-none select-none hover:bg-black/8 focus:bg-black/8 disabled:pointer-events-none disabled:opacity-50 dark:hover:bg-white/14 dark:focus:bg-white/14'
+  'relative flex w-full cursor-default items-center gap-2 rounded-[7px] px-2 py-0.5 text-[12px] leading-5 font-medium outline-none select-none hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground disabled:pointer-events-none disabled:opacity-50'
 
 export function BrowserPageContextMenu({
   browserPageId,
@@ -178,7 +178,7 @@ export function BrowserPageContextMenu({
         onKeyDown={handleMenuKeyDown}
         data-testid="browser-context-menu"
         style={{ left: contextMenu.x, top: contextMenu.y }}
-        className="fixed z-50 min-w-[13rem] overflow-hidden rounded-[11px] border border-black/14 bg-[rgba(255,255,255,0.82)] p-1 text-black shadow-[0_16px_36px_rgba(0,0,0,0.24),inset_0_1px_0_rgba(255,255,255,0.14)] backdrop-blur-2xl dark:border-white/14 dark:bg-[rgba(0,0,0,0.72)] dark:text-white dark:shadow-[0_20px_44px_rgba(0,0,0,0.42),inset_0_1px_0_rgba(255,255,255,0.04)]"
+        className="fixed z-50 min-w-[13rem] overflow-hidden rounded-[11px] border border-border bg-popover p-1 text-popover-foreground shadow-floating"
       >
         {contextMenu.linkUrl ? (
           <>

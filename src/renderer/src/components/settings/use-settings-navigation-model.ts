@@ -1,5 +1,5 @@
 import { useCallback, useMemo } from 'react'
-import { applyDocumentTheme } from '@/lib/document-theme'
+import { applyDocumentAppearance } from '@/lib/app-appearance-document'
 import { useSettingsNavigationMetadata } from '@/hooks/useSettingsNavigationMetadata'
 import type { SettingsNavInstallStatus } from '@/lib/settings-navigation-types'
 import {
@@ -36,9 +36,12 @@ export function useSettingsNavigationModel(
     }
   }
 
-  const applyTheme = useCallback((theme: 'system' | 'dark' | 'light') => {
-    applyDocumentTheme(theme)
-  }, [])
+  const applyTheme = useCallback(
+    (theme: 'system' | 'dark' | 'light') => {
+      applyDocumentAppearance(model.settings, model.systemPrefersDark, { theme })
+    },
+    [model.settings, model.systemPrefersDark]
+  )
 
   const displayedGitUsername = model.repos[0]?.gitUsername ?? ''
   const baseNavSections = useSettingsNavigationMetadata()
