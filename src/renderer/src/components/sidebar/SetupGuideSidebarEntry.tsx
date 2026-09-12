@@ -98,6 +98,7 @@ export function SetupGuideSidebarEntry(): React.JSX.Element | null {
           <SetupGuideProgressRing
             done={renderedProgress.coreDoneCount}
             total={renderedProgress.coreTotal}
+            className="text-green-600 dark:text-green-300"
             sizeClassName="size-4"
           />
           <span className="flex min-w-0 flex-1 flex-col">
