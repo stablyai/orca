@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-08-31",
+  "updatedAt": "2026-09-11",
   "policy": {
     "maturityLevels": ["experimental", "soak", "blocking", "accepted-gap", "deprecated"],
     "blockingPromotion": {
@@ -15543,6 +15543,93 @@
         "Existing perf scripts are not registered with explicit budgets or flake history."
       ],
       "demotionRule": "Cannot promote without metric artifacts and stable p95 runtime history."
+    },
+    {
+      "id": "terminal-performance.daemon-ndjson-wire-parity-and-serialization",
+      "title": "Daemon NDJSON preserves wire bytes within a serialization count budget",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "terminal-performance",
+      "layer": "daemon-provider-contract",
+      "surfaces": ["daemon stream", "NDJSON framing", "stream data batching"],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["daemon", "ssh", "remote-runtime"],
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": ["daemon"],
+      "coverageNotes": "Deterministic writer, batcher, droppability and NDJSON suites run locally on macOS with mocked socket/process boundaries. An SSH-shaped session ID is a string fixture, not SSH transport evidence. No live daemon, platform integration or mixed-version client/host pair is exercised; folder and git workspaces are not distinguished by these stream contracts.",
+      "motivatingLinks": ["src/main/daemon/daemon-stream-data-split.ts"],
+      "invariant": "Reusing an encoded unsplit metadata-free frame must preserve the previous writer's exact wire bytes and chunk boundaries while reducing that path to one encode; oversized and metadata-bearing writes retain existing semantics and transformed writes remain uncapped single frames.",
+      "oracle": "Compare emitted lines to the previous writer algorithm across byte caps, escaped and Unicode payloads, session IDs, raw lengths, sequence numbers and transformed spans; assert exact newline framing, reconstruct split payloads, check surrogate boundaries and sequence spans, and count encodeNdjson calls.",
+      "commands": [
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/daemon/daemon-stream-data-split.test.ts src/main/daemon/daemon-stream-data-batcher.test.ts src/main/daemon/daemon-stream-droppable-membership.test.ts src/main/daemon/daemon-stream-droppability-lifecycle.test.ts src/main/daemon/ndjson.test.ts"
+      ],
+      "testFiles": [
+        "src/main/daemon/daemon-stream-data-split.test.ts",
+        "src/main/daemon/daemon-stream-data-batcher.test.ts",
+        "src/main/daemon/daemon-stream-droppable-membership.test.ts",
+        "src/main/daemon/daemon-stream-droppability-lifecycle.test.ts",
+        "src/main/daemon/ndjson.test.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/main/daemon/daemon-stream-data-split.test.ts",
+          "assertions": [
+            "encodes an unsplit metadata-free frame once: %j",
+            "reuses the encoded frame exactly at the inclusive byte cap",
+            "does not add a duplicate full-data sizing probe to oversized writes",
+            "keeps transformed writes at one encode without applying the ordinary byte cap",
+            "preserves exact frames, chunk boundaries and metadata across payloads and caps",
+            "keeps JSON escaping, Unicode and newline framing byte-for-byte",
+            "keeps split frames within the byte cap and preserves code points and sequence spans"
+          ]
+        },
+        {
+          "file": "src/main/daemon/daemon-stream-data-batcher.test.ts",
+          "assertions": ["writes large stream data as parser-sized NDJSON events"]
+        },
+        {
+          "file": "src/main/daemon/ndjson.test.ts",
+          "assertions": ["measures multibyte payloads in UTF-8 bytes, not characters"]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-09-11",
+          "runner": "local",
+          "platform": "macos",
+          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/main/daemon/daemon-stream-data-split.test.ts src/main/daemon/daemon-stream-data-batcher.test.ts src/main/daemon/daemon-stream-droppable-membership.test.ts src/main/daemon/daemon-stream-droppability-lifecycle.test.ts src/main/daemon/ndjson.test.ts",
+          "result": "passed",
+          "summary": "Five daemon suites passed: 70 tests total, including the new 12-test splitter suite. Vitest reported 14.76 seconds; no app or live transport validation was performed.",
+          "durationSeconds": 14.76
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 60,
+        "scope": "Target budget for the five deterministic suites; one local Vitest run took 14.76 seconds, not an established p95. Native-runtime setup is excluded from the reported Vitest duration."
+      },
+      "flakeHistory": {
+        "status": "not-started",
+        "evidence": "Fresh local five-suite run passed; no sustained CI soak history is established."
+      },
+      "redGreenEvidence": {
+        "status": "partial",
+        "evidence": "Historical report states serialization-count tests failed against the old writer. That baseline run was not repeated for this registration; the fresh candidate run passed all 70 tests. The previous-writer oracle checks byte parity, not live cross-version compatibility."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "Unsplit metadata-free frames, including the inclusive byte-cap boundary, require exactly one encodeNdjson call; oversized writes must not exceed the previous writer's encode count; transformed writes require one encode. These are deterministic call-count budgets, not measured throughput, CPU, heap or input-latency improvements."
+      },
+      "promotionCriteria": [
+        "Capture reproducible old-writer red and candidate green artifacts for the serialization-count assertions.",
+        "Collect CI soak evidence before promotion and validate Linux/Windows runtimes and live SSH/remote and mixed-version pairs before claiming those integrations."
+      ],
+      "knownGaps": [
+        "No live daemon/Electron, Linux, Windows, WSL, SSH, remote-runtime or mixed-version client/host evidence.",
+        "The historical red run has not been independently reproduced for this registration; the parity oracle reuses current splitter/encoder helpers.",
+        "No sustained soak, measured p95, wall-clock performance benchmark or native socket backpressure guarantee.",
+        "Byte-cap assertions cover ordinary split frames at a viable cap; tiny caps and transformed frames retain legacy behavior rather than gaining a universal cap guarantee."
+      ],
+      "demotionRule": "Keep experimental until reproducible red/green and soak evidence exist; do not relax exact wire-byte, chunk-boundary or encode-count assertions to hide regressions."
     },
     {
       "id": "terminal-performance.daemon-stream-backpressure",
