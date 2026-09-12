@@ -234,6 +234,37 @@ describe('OrcaRuntimeService', () => {
     expect(closeTerminal).toHaveBeenCalledWith('laptop-tab')
   })
 
+  it('treats tab_not_found from post-kill HUB cleanup as already cleaned up', async () => {
+    const spawn = vi.fn().mockResolvedValue({ id: 'laptop-created-pty' })
+    const kill = vi.fn(() => true)
+    const closeTerminal = vi.fn()
+    const runtime = new OrcaRuntimeService(store)
+    runtime.setNotifier({ closeTerminal } as never)
+    runtime.setPtyController({
+      spawn,
+      write: () => true,
+      kill,
+      stopAndWait: async () => {
+        runtime.onPtyExit('laptop-created-pty', 0)
+        return true
+      },
+      getForegroundProcess: async () => null
+    })
+
+    const laptopTerminal = await runtime.createTerminal(`id:${TEST_WORKTREE_ID}`, {
+      tabId: 'laptop-tab',
+      leafId: HEADLESS_LEAF_ID
+    })
+
+    await expect(runtime.closeTerminal(laptopTerminal.handle)).resolves.toEqual({
+      handle: laptopTerminal.handle,
+      tabId: 'laptop-tab',
+      ptyKilled: true
+    })
+    expect(kill).not.toHaveBeenCalled()
+    expect(closeTerminal).toHaveBeenCalledWith('laptop-tab')
+  })
+
   it('waits for renderer acknowledgement before returning a whole-tab close receipt', async () => {
     const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(
       makeWorkspaceSessionWithHeadlessTerminal()

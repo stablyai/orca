@@ -9,6 +9,7 @@ import {
   normalizeCodexProjectPathForRevocationLookup,
   parseCodexProjectHeaderPath
 } from './config-toml-trust'
+import { stripManagedCodexShellProfile } from './codex-managed-shell-profile'
 
 export type TomlSection = {
   header: string
@@ -160,5 +161,7 @@ export function extractOrdinaryCodexSettings(config: string): string {
       .filter((section) => isRuntimeProjectTomlSection(section.header))
       .map((section) => getTomlSectionHeaderKey(section.header))
   )
-  return stripRuntimeOwnedTomlSections(config, projectHeaders).trimEnd()
+  return stripManagedCodexShellProfile(
+    stripRuntimeOwnedTomlSections(config, projectHeaders)
+  ).trimEnd()
 }

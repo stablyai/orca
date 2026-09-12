@@ -10,12 +10,18 @@ export function resolveTerminalOrchestrationCliCommand(args: {
   worktreeId: string
   projectRuntime?: ProjectExecutionRuntimeResolution
   runtimeCliCommand?: OrchestrationCliCommand
+  devMode?: boolean
 }): OrchestrationCliCommand {
+  // Remote execution owns its CLI surface; a local dev invocation must never
+  // inject orca-dev onto SSH hosts that only expose the relay-scoped `orca`.
   if (args.connectionId) {
     return 'orca'
   }
   if (args.runtimeCliCommand) {
     return args.runtimeCliCommand
+  }
+  if (args.devMode) {
+    return 'orca-dev'
   }
   if (args.isWsl !== null && args.isWsl !== undefined) {
     return args.isWsl ? 'orca-ide' : 'orca'

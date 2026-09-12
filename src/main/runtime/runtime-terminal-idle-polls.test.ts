@@ -71,6 +71,8 @@ describe('RuntimeTerminalIdlePolls timer budget', () => {
       getTabTitle: () => null,
       getForegroundProcess: () => null,
       getAdoptedPtyIdleStatus: () => null,
+      canResolveTuiIdleEvidence: () => true,
+      canResolveTuiIdlePromptPreview: () => false,
       resolve: (waiter, result) => resolved.push({ handle: waiter.handle, result })
     })
 
@@ -103,6 +105,8 @@ describe('RuntimeTerminalIdlePolls timer budget', () => {
       getTabTitle: () => null,
       getForegroundProcess: () => null,
       getAdoptedPtyIdleStatus: () => null,
+      canResolveTuiIdleEvidence: () => true,
+      canResolveTuiIdlePromptPreview: () => false,
       resolve: () => {}
     })
 
@@ -125,6 +129,8 @@ describe('RuntimeTerminalIdlePolls timer budget', () => {
       getTabTitle: () => null,
       getForegroundProcess: () => null,
       getAdoptedPtyIdleStatus: () => null,
+      canResolveTuiIdleEvidence: () => true,
+      canResolveTuiIdlePromptPreview: () => false,
       resolve: () => {}
     })
     const first = makeWaiter('a')
@@ -152,6 +158,8 @@ describe('RuntimeTerminalIdlePolls timer budget', () => {
           gates.push(resolve)
         }),
       getAdoptedPtyIdleStatus: () => null,
+      canResolveTuiIdleEvidence: () => true,
+      canResolveTuiIdlePromptPreview: () => false,
       resolve: (waiter) => resolved.push(waiter.handle)
     })
 

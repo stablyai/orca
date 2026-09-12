@@ -28,7 +28,10 @@ import {
 } from '../../shared/protocol-version'
 import { RemoteRuntimeCompatGate } from './remote-runtime-compat-gate'
 import { createOrchestrationCompatibilityEnvelope } from './orchestration-compatibility-envelope'
-import { getTimeoutMsParam, isWaitingCheck } from './runtime-request-timeout'
+import {
+  getTimeoutMsParam,
+  resolveMethodTimeoutMs as resolveLongPollMethodTimeoutMs
+} from './runtime-request-timeout'
 import {
   isWorkerStartTimeoutWithinTimerLimit,
   resolveWorkerStartClientTimeoutMs,
@@ -39,8 +42,6 @@ import {
   buildOrchestrationRecoveryCommand,
   resolveOrchestrationCliExecutable
 } from './orchestration-recovery-command'
-
-const LONG_POLL_CLIENT_GRACE_MS = 10_000
 
 const loadWebSocketTransport = async () => await import('./websocket-transport.js')
 
@@ -174,11 +175,6 @@ export class RuntimeClient {
     return response
   }
 
-  // Why: centralises the per-method timeout policy. Long-poll inner waiter
-  // budgets live in `params.timeoutMs`; widen the client-side socket timeout
-  // to `timeoutMs + grace` so it doesn't fire before the server has a chance
-  // to resolve. Without this, a 5 min wait would still die at the 60 s default.
-  // See design doc §3.1.
   private resolveMethodTimeoutMs(method: string, params?: unknown): number {
     if (method === 'orchestration.workerStart') {
       const requestedValue = getTimeoutMsParam(params)
@@ -192,16 +188,7 @@ export class RuntimeClient {
       const readiness = resolveWorkerStartReadinessTimeoutMs(requested)
       return Math.max(resolveWorkerStartClientTimeoutMs(readiness), this.requestTimeoutMs)
     }
-    if (
-      (method === 'orchestration.check' && isWaitingCheck(params)) ||
-      method === 'terminal.wait'
-    ) {
-      const inner = Number(getTimeoutMsParam(params))
-      if (Number.isFinite(inner) && inner > 0) {
-        return Math.max(inner + LONG_POLL_CLIENT_GRACE_MS, this.requestTimeoutMs)
-      }
-    }
-    return this.requestTimeoutMs
+    return resolveLongPollMethodTimeoutMs(method, params, this.requestTimeoutMs)
   }
 
   async getCliStatus(): Promise<RuntimeRpcSuccess<CliStatusResult>> {
@@ -275,7 +262,7 @@ export class RuntimeClient {
     if (initial.result.app.desktopWindowStatus === 'blocked') {
       throwDesktopActivationBlocked()
     }
-    launchOrcaApp()
+    launchOrcaApp(this.userDataPath)
     if (initial.result.app.desktopWindowStatus === 'available') {
       return initial
     }

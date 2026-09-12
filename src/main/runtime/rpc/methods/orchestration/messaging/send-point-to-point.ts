@@ -2,7 +2,13 @@ import type { MessagePriority, MessageType, OrchestrationDb } from '../../../../
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { reconcileLifecycleMessage } from '../../../../orchestration/lifecycle-reconciliation'
 import { bindCoordinatorMutationPayload } from '../../../../orchestration/dispatch-message-binding'
-import { isDispatchMutationMessageType, parseMessageTaskId } from '../schemas'
+import {
+  isDispatchMutationMessageType,
+  isWorkerReportOutcome,
+  parseMessageTaskId,
+  parseRemoteWorkerPayload
+} from '../schemas'
+import { getCollaborationWorkerCompletionBlock } from '../../../../collaboration/collaboration-worker-completion'
 import type { SendParams } from '../schemas'
 import { legacyWorkerDeliveryContract } from '../routing'
 import { exposeMessage } from './mailbox-message-receipt'
@@ -103,6 +109,32 @@ export function sendPointToPointMessage(args: {
         return recordReceiptForPostCommitNudge(recordMutationReceipt, receipt, () =>
           runtime.notifyMessageArrived(rejection.to_handle, rejection.type)
         )
+      }
+    }
+
+    if (msg.type === 'worker_done' && dispatch) {
+      const report = parseRemoteWorkerPayload(msg.payload ?? undefined)
+      if (
+        report.taskId === dispatch.task_id &&
+        report.dispatchId === dispatch.id &&
+        isWorkerReportOutcome(report.outcome)
+      ) {
+        const block = getCollaborationWorkerCompletionBlock(runtime, {
+          runId: dispatch.run_id,
+          taskId: dispatch.task_id,
+          outcome: report.outcome
+        })
+        if (block) {
+          const rejection =
+            db.convertLifecycleMessageToRejection(msg.id, block.code, block.reason) ?? msg
+          const receipt = withSendWarnings({
+            message: exposeMessage(rejection),
+            lifecycle: { action: 'rejected', code: block.code, reason: block.reason }
+          })
+          return recordReceiptForPostCommitNudge(recordMutationReceipt, receipt, () =>
+            runtime.notifyMessageArrived(rejection.to_handle, rejection.type)
+          )
+        }
       }
     }
 

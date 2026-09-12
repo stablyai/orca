@@ -125,6 +125,10 @@ export class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends OrcaRuntim
   }
 
   protected retirePtyAgentLaunchAuthority(ptyId: string): void {
+    // Raw chunks already apply readiness and command-finished frames in byte order.
+    if (!this.ptyTitleTrackersByPtyId.get(ptyId)?.applyingChunk) {
+      this.ompPromptReadinessByPtyId.get(ptyId)?.reset()
+    }
     const pty = this.ptysById.get(ptyId)
     if (!pty) {
       return
@@ -243,10 +247,10 @@ export class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends OrcaRuntim
       ? resolveLocalProjectRuntimeForWorktreeId(this.requireStore(), worktreeId)
       : undefined
   }
-
   getOrchestrationFleetAgentStatusSnapshot(): readonly FleetAgentStatusEvidence[] {
     return readOrchestrationFleetAgentStatusSnapshot(this)
   }
+
 
   getTerminalOrchestrationCliCommand(handle: string): OrchestrationCliCommand {
     let pty: RuntimePtyWorktreeRecord | null = null
@@ -267,7 +271,8 @@ export class OrcaRuntimeWithGetOrchestrationDispatchAuthority extends OrcaRuntim
       runtimeCliCommand: getAppEnvironment().isPackaged() ? undefined : 'orca-dev',
       projectRuntime: this.store
         ? resolveLocalProjectRuntimeForWorktreeId(this.requireStore(), pty.worktreeId)
-        : undefined
+        : undefined,
+      devMode: !getAppEnvironment().isPackaged()
     })
   }
 }

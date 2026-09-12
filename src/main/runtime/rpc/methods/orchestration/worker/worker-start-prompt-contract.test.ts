@@ -81,11 +81,24 @@ async function createPromptContractHarness(
     }
     if (outcome === 'accepted') {
       startedTurns += 1
-      runtime.onPtyData('pty-prompt', '\x1b]0;Codex working\x07', Date.now())
+      runtime.onPtyData(
+        'pty-prompt',
+        '\x1b[2K\u2022 Working (0s \u2022 esc to interrupt)\x1b[0m',
+        Date.now()
+      )
     }
   }, 'codex')
   const { runtime, handle } = fixture
-  runtime.onPtyData('pty-prompt', '\x1b]0;Codex idle\x07', Date.now())
+  runtime.onPtyData(
+    'pty-prompt',
+    [
+      ' >_ OpenAI Codex (v0.131.0)\n',
+      ' model:       gpt-5.5 high   /model to change\n',
+      ' directory:   ~/orca/workspaces/orca/cli-debug\n'
+    ].join(''),
+    Date.now()
+  )
+  await vi.advanceTimersByTimeAsync(3_000)
 
   const temporaryRoot = mkdtempSync(join(tmpdir(), 'orca-worker-prompt-contract-'))
   temporaryRoots.push(temporaryRoot)
@@ -406,6 +419,7 @@ describe('orchestration worker-start prompt contract', () => {
   })
 
   it('refuses an 8 MiB inline spec before Task, Dispatch, or terminal effects', async () => {
+    vi.useFakeTimers()
     const harness = await createPromptContractHarness('accepted')
     const tasksBefore = harness.db.listTasks().map((task) => task.id)
     const params = harness.request.params as Record<string, unknown>
