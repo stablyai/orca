@@ -51,7 +51,8 @@ import {
 import {
   createViewportGuestFactory,
   flushViewportOps,
-  GUEST_CLEAN_UA
+  GUEST_CLEAN_UA,
+  GUEST_ELECTRON_UA
 } from './browser-manager-viewport-test-fixtures'
 
 const {
@@ -63,6 +64,12 @@ const {
   webContentsFromIdMock
 } = browserMocks
 const makeViewportGuest = createViewportGuestFactory(browserMocks)
+const MOBILE_VIEWPORT_OVERRIDE = {
+  width: 375,
+  height: 667,
+  deviceScaleFactor: 2,
+  mobile: true
+} as const
 
 describe('browserManager', () => {
   beforeEach(() => {
@@ -72,6 +79,96 @@ describe('browserManager', () => {
 
   afterEach(() => {
     vi.useRealTimers()
+  })
+
+  it('resolves request identity from the guest viewport and auth state', async () => {
+    const { guest } = makeViewportGuest(4245)
+    webContentsFromIdMock.mockReturnValue(guest)
+    browserManager.attachGuestPolicies(guest as never)
+    browserManager.registerGuest({
+      browserPageId: 'tab-request-identity',
+      webContentsId: guest.id as number,
+      rendererWebContentsId
+    })
+
+    // Ablation: with no mobile preset, the clean session identity is resolved.
+    expect(
+      browserManager.resolveBrowserGuestRequestUserAgent({
+        session: guest.session as Electron.Session,
+        url: 'https://example.com/logo.png',
+        webContentsId: guest.id as number,
+        currentUserAgent: GUEST_CLEAN_UA,
+        baseUserAgent: GUEST_ELECTRON_UA
+      })
+    ).toEqual({ userAgent: GUEST_CLEAN_UA })
+
+    await browserManager.setViewportOverride('tab-request-identity', MOBILE_VIEWPORT_OVERRIDE)
+    await flushViewportOps()
+    const mobile = browserManager.resolveBrowserGuestRequestUserAgent({
+      session: guest.session as Electron.Session,
+      url: 'https://example.com/logo.png',
+      webContentsId: guest.id as number,
+      currentUserAgent: GUEST_CLEAN_UA,
+      baseUserAgent: GUEST_ELECTRON_UA
+    })
+    expect(mobile.userAgent).toContain('CriOS/134')
+    expect(mobile.userAgent).toContain('iPhone')
+    expect(mobile.userAgentMetadata).toMatchObject({
+      mobile: true,
+      platform: 'iOS',
+      model: 'iPhone'
+    })
+
+    // A service-worker request has no webContentsId; the Session is its only surviving owner.
+    const workerMobile = browserManager.resolveBrowserGuestRequestUserAgent({
+      session: guest.session as Electron.Session,
+      url: 'https://example.com/worker-beacon',
+      baseUserAgent: GUEST_ELECTRON_UA
+    })
+    expect(workerMobile.userAgent).toBe(mobile.userAgent)
+    expect(workerMobile.userAgentMetadata).toEqual(mobile.userAgentMetadata)
+
+    // Negative control: auth-document fan-out remains Firefox even while mobile emulation is active.
+    expect(
+      browserManager.resolveBrowserGuestRequestUserAgent({
+        session: guest.session as Electron.Session,
+        url: 'https://www.gstatic.com/_/signin/log',
+        webContentsId: guest.id as number,
+        currentUserAgent: GUEST_ELECTRON_UA,
+        effectiveUserAgent: googleAuthUserAgent(),
+        baseUserAgent: GUEST_ELECTRON_UA
+      })
+    ).toEqual({ userAgent: googleAuthUserAgent() })
+
+    await browserManager.setViewportOverride('tab-request-identity', null)
+    expect(
+      browserManager.resolveBrowserGuestRequestUserAgent({
+        session: guest.session as Electron.Session,
+        url: 'https://example.com/worker-beacon',
+        baseUserAgent: GUEST_ELECTRON_UA
+      })
+    ).toEqual({ userAgent: GUEST_CLEAN_UA })
+
+    await browserManager.setViewportOverride('tab-request-identity', MOBILE_VIEWPORT_OVERRIDE)
+    browserManager.unregisterGuest('tab-request-identity')
+    expect(
+      browserManager.resolveBrowserGuestRequestUserAgent({
+        session: guest.session as Electron.Session,
+        url: 'https://example.com/worker-after-tab-close',
+        baseUserAgent: GUEST_ELECTRON_UA
+      })
+    ).toEqual({ userAgent: GUEST_CLEAN_UA })
+  })
+
+  it('keeps an unscoped worker request on the desktop identity without a mobile preset', () => {
+    const { guest } = makeViewportGuest(4246)
+    expect(
+      browserManager.resolveBrowserGuestRequestUserAgent({
+        session: guest.session as Electron.Session,
+        url: 'https://example.com/desktop-worker',
+        baseUserAgent: GUEST_ELECTRON_UA
+      })
+    ).toEqual({ userAgent: GUEST_CLEAN_UA })
   })
 
   it('presents the Firefox UA on Google auth hosts and restores the base UA off them', async () => {
@@ -112,10 +209,13 @@ describe('browserManager', () => {
     setUserAgent.mockClear()
 
     didStartNavigation(null, 'https://accounts.google.com/v3/signin/identifier', false, true)
-    expect(setUserAgent).toHaveBeenLastCalledWith(googleAuthUserAgent())
+    expect(setUserAgent).not.toHaveBeenCalled()
+    expect(sendCommand).toHaveBeenCalledWith('Emulation.setUserAgentOverride', {
+      userAgent: googleAuthUserAgent()
+    })
 
-    // A redirect off the auth host must derive the CDP write from the session UA, not the stale
-    // Firefox WebContents UA installed by the direct navigation.
+    // A redirect off the auth host must derive the CDP write from the session UA, not the standing
+    // Firefox CDP override installed by the direct navigation.
     sendCommand.mockClear()
     willRedirect(null, 'https://myaccount.google.com/', false, true)
     const uaOverrideIndex = sendCommand.mock.calls.findIndex(
@@ -458,9 +558,9 @@ describe('browserManager', () => {
     )
   })
 
-  // Why: a direct load reaches did-start-navigation before the request is dispatched, so the
-  // WebContents write is safe there and must stay — CDP is the redirect-path mechanism only.
-  it('still uses the WebContents UA write for navigations that are not redirects', () => {
+  // Why: WebContents.setUserAgent() after a direct navigation starts replays that document and all
+  // of its subresources. The auth identity must use the cancel-free CDP path for direct loads too.
+  it('retargets direct auth navigation over CDP without writing the WebContents UA', () => {
     const guest = {
       id: 420,
       isDestroyed: vi.fn(() => false),
@@ -490,18 +590,14 @@ describe('browserManager', () => {
 
     didStartNavigation(null, 'https://accounts.google.com/v3/signin/identifier', false, true)
 
-    expect(guest.setUserAgent).toHaveBeenLastCalledWith(googleAuthUserAgent())
-    expect(guest.debugger.sendCommand).not.toHaveBeenCalledWith(
-      'Emulation.setUserAgentOverride',
-      expect.anything()
-    )
+    expect(guest.setUserAgent).not.toHaveBeenCalled()
+    expect(guest.debugger.sendCommand).toHaveBeenCalledWith('Emulation.setUserAgentOverride', {
+      userAgent: googleAuthUserAgent()
+    })
   })
 
-  // Why: the direct-navigation branch still writes the Firefox UA through WebContents.setUserAgent,
-  // and nothing ever restores it once the guest switches to the CDP override. A viewport preset that
-  // read getUserAgent() back as its base identity would therefore republish Firefox on every ordinary
-  // host — the wire UA saying Firefox while sec-ch-ua still says Chrome, the exact cross-layer tell
-  // this scope exists to remove.
+  // Why: a viewport preset must derive its base from the session identity, independent of the
+  // standing auth CDP override, or it can republish Firefox on an ordinary host.
   it('keeps a viewport preset on the session identity after an auth-host visit', async () => {
     const { guest, debuggerSendCommand } = makeViewportGuest(9001)
     webContentsFromIdMock.mockReturnValue(guest)
@@ -528,8 +624,10 @@ describe('browserManager', () => {
 
     didStartNavigation(null, 'https://accounts.google.com/v3/signin/identifier', false, true)
     await flushViewportOps()
-    // The direct branch pins the WebContents UA to Firefox and never restores it.
-    expect((guest.getUserAgent as () => string)()).toBe(googleAuthUserAgent())
+    expect(guest.setUserAgent).not.toHaveBeenCalled()
+    expect(debuggerSendCommand).toHaveBeenLastCalledWith('Emulation.setUserAgentOverride', {
+      userAgent: googleAuthUserAgent()
+    })
 
     willRedirect({ preventDefault: vi.fn() }, 'https://myaccount.google.com/', false, true)
     await flushViewportOps()

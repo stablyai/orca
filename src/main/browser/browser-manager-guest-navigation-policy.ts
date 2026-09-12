@@ -35,7 +35,7 @@ export abstract class BrowserManagerGuestNavigationPolicy extends BrowserManager
         return
       }
       this.updatePendingNavigationForRedirect(guest.id, url)
-      this.applyGoogleAuthUserAgent(guest, url, { duringRedirect: true })
+      this.applyGoogleAuthUserAgent(guest, url)
     }
 
     const didFailLoadHandler = (

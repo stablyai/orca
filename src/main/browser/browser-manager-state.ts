@@ -129,6 +129,9 @@ export abstract class BrowserManagerState extends BrowserManagerViewportScrollSt
   // Why: presence means the preset requires a CDP UA override (installed or in flight), so navigation
   // can re-issue it against the target URL's identity.
   protected readonly viewportUaOverrideMobileByTabId = new Map<string, boolean>()
+  // Worker requests omit webContentsId, so retain the mobile intent at the Session boundary where
+  // webRequest can still resolve it. Values contain only live tabs and are cleared with registration.
+  protected readonly mobileViewportTabIdsBySession = new Map<Electron.Session, Set<string>>()
   // Why: the confirmed CDP identity outranks getUserAgent; pending intent keeps rapid navigations
   // ordered without claiming a failed write was installed.
   protected readonly authUserAgentOverrideStateByGuestId = new Map<
@@ -162,6 +165,33 @@ export abstract class BrowserManagerState extends BrowserManagerViewportScrollSt
   protected readonly pendingDownloadIdsByGuestId = new Map<number, string[]>()
   protected readonly downloadsById = new Map<string, ActiveDownload>()
   protected readonly grabSessionController = new BrowserGrabSessionController()
+
+  protected setSessionMobileViewportIntent(
+    browserTabId: string,
+    session: Electron.Session,
+    mobile: boolean
+  ): void {
+    this.clearSessionMobileViewportIntent(browserTabId)
+    if (!mobile) {
+      return
+    }
+    const tabIds = this.mobileViewportTabIdsBySession.get(session) ?? new Set<string>()
+    tabIds.add(browserTabId)
+    this.mobileViewportTabIdsBySession.set(session, tabIds)
+  }
+
+  protected clearSessionMobileViewportIntent(browserTabId: string): void {
+    for (const [session, tabIds] of this.mobileViewportTabIdsBySession) {
+      tabIds.delete(browserTabId)
+      if (tabIds.size === 0) {
+        this.mobileViewportTabIdsBySession.delete(session)
+      }
+    }
+  }
+
+  protected hasSessionMobileViewportIntent(session: Electron.Session): boolean {
+    return (this.mobileViewportTabIdsBySession.get(session)?.size ?? 0) > 0
+  }
 
   setDictationShortcutForwardingPredicate(predicate: (() => boolean) | null): void {
     this.shouldForwardDictationShortcut = predicate

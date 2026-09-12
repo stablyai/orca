@@ -608,6 +608,46 @@ describe('BrowserSessionRegistry', () => {
       expect(modified['sec-ch-ua-mobile']).toBeUndefined()
     })
 
+    it('presents the Firefox identity on cross-host subresources referred by Google auth', () => {
+      const callback = vi.fn()
+      install()(
+        {
+          url: 'https://www.gstatic.com/accounts/signin.js',
+          referrer: 'https://accounts.google.com/v3/signin/identifier',
+          resourceType: 'script',
+          requestHeaders: {
+            'User-Agent': 'Chrome/150',
+            'sec-ch-ua': 'browser-owned',
+            'sec-ch-ua-platform': '"macOS"'
+          }
+        },
+        callback
+      )
+
+      const modified = callback.mock.calls[0][0].requestHeaders
+      expect(modified['User-Agent']).toBe(googleAuthUserAgent())
+      expect(modified['sec-ch-ua']).toBeUndefined()
+      expect(modified['sec-ch-ua-platform']).toBeUndefined()
+    })
+
+    it('keeps the session identity on a post-auth main frame referred by Google auth', () => {
+      const callback = vi.fn()
+      install()(
+        {
+          url: 'https://mail.google.com/',
+          referrer: 'https://accounts.google.com/v3/signin/identifier',
+          resourceType: 'mainFrame',
+          requestHeaders: { 'User-Agent': 'Chrome/150', 'sec-ch-ua': 'browser-owned' }
+        },
+        callback
+      )
+
+      expect(callback.mock.calls[0][0].requestHeaders).toEqual({
+        'User-Agent': 'Chrome/150',
+        'sec-ch-ua': 'browser-owned'
+      })
+    })
+
     it('keeps the session identity on Google app subdomains', () => {
       const callback = vi.fn()
       install()(
