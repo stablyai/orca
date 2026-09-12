@@ -89,7 +89,7 @@ function service(device: ReturnType<typeof pairedDevice>): DesktopRelayService {
       publicKeyB64: 'x'
     }),
     getMobileSocketWiring: () => ({ attachTransport: () => () => {} }),
-    getRelayRevokeOutbox: () => ({ pendingFor: () => [], remove: vi.fn() }),
+    getRelayRevokeOutbox: () => ({ pendingFor: () => [], demandingFor: () => [], remove: vi.fn() }),
     getDeviceRegistry: () => ({
       listDevices: () => [device],
       getDevice: () => device,

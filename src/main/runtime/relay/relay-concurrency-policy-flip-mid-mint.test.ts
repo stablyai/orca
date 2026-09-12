@@ -73,7 +73,7 @@ function service(mode: { current: MobilePairingConnectionMode }): DesktopRelaySe
       publicKeyB64: 'x'
     }),
     getMobileSocketWiring: () => ({ attachTransport: () => () => {} }),
-    getRelayRevokeOutbox: () => ({ pendingFor: () => [], remove: vi.fn() }),
+    getRelayRevokeOutbox: () => ({ pendingFor: () => [], demandingFor: () => [], remove: vi.fn() }),
     getDeviceRegistry: () => ({
       listDevices: () => [],
       getDevice: () => ({ deviceId: 'device-1', scope: 'mobile' }),

@@ -9,7 +9,7 @@ import {
   RelayRevokeOutbox,
   type RelayDeviceBinding
 } from './relay-revoke-outbox'
-import { DesktopRelayService } from './desktop-relay-service'
+import { RelayRevokeOutboxFlusher } from './relay-revoke-outbox-flush'
 
 // What this pins: a revoke that can never succeed must not hold relay demand forever.
 //
@@ -41,17 +41,15 @@ function permanentlyFailingBroker(revokeDevice: ReturnType<typeof vi.fn>) {
   return { ownerIdentityKey, hostId: relayHostId, revokeDevice } as never
 }
 
-function serviceOver(revokeOutbox: RelayRevokeOutbox, ledger: RelayDemandLedger) {
-  const service = Object.create(DesktopRelayService.prototype) as DesktopRelayService
-  Object.assign(service, {
-    revokeOutbox,
-    demandLedger: ledger,
-    coordinator: { reconcile: vi.fn(), ensureLive: vi.fn(), getActiveBroker: () => null },
-    stopped: false,
-    livenessTimer: null,
-    demandExpiryTimer: null
+// The drain DesktopRelayService runs: it builds this flusher over the same outbox and refreshes
+// demand on a drained flush. Constructing it directly keeps the assertion on the shipping code
+// without standing up a whole relay service.
+function drainOver(revokeOutbox: RelayRevokeOutbox) {
+  return new RelayRevokeOutboxFlusher({
+    outbox: revokeOutbox,
+    isHalted: () => false,
+    onDrained: () => {}
   })
-  return service as unknown as { flushRevokeOutbox: (broker: unknown) => Promise<void> }
 }
 
 describe('a revoke that can never succeed', () => {
@@ -62,11 +60,11 @@ describe('a revoke that can never succeed', () => {
     expect(ledger.hasDemand(ownerIdentityKey)).toBe(true)
 
     const revokeDevice = vi.fn().mockRejectedValue(new Error('device_not_found'))
-    const service = serviceOver(revokeOutbox, ledger)
+    const drain = drainOver(revokeOutbox)
 
     // Every reconnect re-drives the outbox against the same stable reqId.
     for (let attempt = 0; attempt < 50; attempt += 1) {
-      await service.flushRevokeOutbox(permanentlyFailingBroker(revokeDevice))
+      await drain.flushAll(permanentlyFailingBroker(revokeDevice))
     }
     // Inside the window the relay is still held up on purpose: the revoke may yet land.
     expect(ledger.hasDemand(ownerIdentityKey)).toBe(true)
@@ -78,7 +76,7 @@ describe('a revoke that can never succeed', () => {
     // nothing left to kill it, so the item stays and keeps retrying on any future connection.
     expect(revokeOutbox.pendingFor(ownerIdentityKey, relayHostId)).toHaveLength(1)
     const callsBefore = revokeDevice.mock.calls.length
-    await service.flushRevokeOutbox(permanentlyFailingBroker(revokeDevice))
+    await drain.flushAll(permanentlyFailingBroker(revokeDevice))
     expect(revokeDevice.mock.calls.length).toBe(callsBefore + 1)
   })
 
@@ -87,9 +85,9 @@ describe('a revoke that can never succeed', () => {
     const { revokeOutbox, ledger } = fixture(() => now)
     revokeOutbox.enqueue(binding('device-1'))
     const revokeDevice = vi.fn().mockResolvedValue(undefined)
-    const service = serviceOver(revokeOutbox, ledger)
+    const drain = drainOver(revokeOutbox)
 
-    await service.flushRevokeOutbox(permanentlyFailingBroker(revokeDevice))
+    await drain.flushAll(permanentlyFailingBroker(revokeDevice))
 
     expect(revokeDevice).toHaveBeenCalledTimes(1)
     expect(revokeOutbox.pendingFor(ownerIdentityKey, relayHostId)).toHaveLength(0)
