@@ -5,7 +5,7 @@ import type {
   SshTarget
 } from '../../shared/ssh-types'
 import { SSH_CONFIG_HOST_RESULT_LIMIT } from '../../shared/ssh-types'
-import { normalizeSshConfigAlias } from '../../shared/ssh-config-alias'
+import { normalizeSshConfigAlias, sshEndpointIdentity } from '../../shared/ssh-config-alias'
 import { loadUserSshConfig, type SshConfigHost } from './ssh-config-parser'
 import { resolveWithSshG, type SshResolvedConfig } from './ssh-g-config-resolution'
 
@@ -27,7 +27,10 @@ function getUserSshConfigHosts(refresh: boolean): SshConfigHost[] {
 
 export function searchSshConfigHosts(
   hosts: SshConfigHost[],
-  existingTargets: readonly Pick<SshTarget, 'configHost' | 'label'>[],
+  // Why partial: callers that only know the names still type-check, and an entry with
+  // no host yields an empty identity rather than a false match.
+  existingTargets: readonly (Pick<SshTarget, 'configHost' | 'label'> &
+    Partial<Pick<SshTarget, 'host' | 'port' | 'username'>>)[],
   query = '',
   suppressedAliases: readonly string[] = []
 ): SshConfigHostListResult {
@@ -36,6 +39,9 @@ export function searchSshConfigHosts(
       [target.configHost, target.label].map(normalizeSshConfigAlias).filter(Boolean)
     )
   )
+  // Why: the same machine can be registered twice under different names — once by IP,
+  // once from this picker — and comparing names cannot see that.
+  const existingEndpoints = new Set(existingTargets.map(sshEndpointIdentity).filter(Boolean))
   const normalizedQuery = query.trim().toLowerCase()
   const suppressedAliasSet = new Set(suppressedAliases.map(normalizeSshConfigAlias))
   const summaries: SshConfigHostSummary[] = []
@@ -50,7 +56,13 @@ export function searchSshConfigHosts(
       continue
     }
     seenAliases.add(normalizedAlias)
-    const alreadyInOrca = existingAliases.has(normalizedAlias)
+    // Why `entry.hostname` only: without HostName the candidate host degrades to the
+    // alias itself, and matching on that would just re-run the alias check.
+    const endpoint = entry.hostname
+      ? sshEndpointIdentity({ host: entry.hostname, port: entry.port, username: entry.user })
+      : ''
+    const alreadyInOrca =
+      existingAliases.has(normalizedAlias) || (endpoint !== '' && existingEndpoints.has(endpoint))
     // Why: tombstones only block passive bulk import — the picker still lists the
     // Host so deleting one Orca target never looks like "~/.ssh/config is empty".
     const previouslyRemoved = !alreadyInOrca && suppressedAliasSet.has(normalizedAlias)
@@ -76,7 +88,10 @@ export function searchSshConfigHosts(
 }
 
 export function listUserSshConfigHostSummaries(
-  existingTargets: readonly Pick<SshTarget, 'configHost' | 'label'>[],
+  // Why partial: callers that only know the names still type-check, and an entry with
+  // no host yields an empty identity rather than a false match.
+  existingTargets: readonly (Pick<SshTarget, 'configHost' | 'label'> &
+    Partial<Pick<SshTarget, 'host' | 'port' | 'username'>>)[],
   query?: string,
   suppressedAliases?: readonly string[],
   options?: { refresh?: boolean }
