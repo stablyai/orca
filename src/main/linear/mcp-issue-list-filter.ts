@@ -6,7 +6,7 @@ export function buildIssueFilter(request: LinearMcpIssueListRequest): Record<str
     filter.team = namedFilter(request.team, true)
   }
   if (request.cycle) {
-    filter.cycle = nullableNamedFilter(request.cycle)
+    filter.cycle = nullableCycleFilter(request.cycle)
   }
   if (request.label) {
     filter.labels = { some: namedFilter(request.label) }
@@ -55,8 +55,27 @@ function namedFilter(value: string, includeKey = false, includeVersion = false):
   }
 }
 
-function nullableNamedFilter(value: string): object {
-  return value === 'null' ? { null: true } : namedFilter(value)
+// Why: cycles usually have no name, only a number, so the named filter alone cannot reach
+// them. Linear's CycleFilter exposes isActive/isPrevious/isNext and number directly.
+const CYCLE_KEYWORD_FILTERS = new Map<string, object>([
+  ['current', { isActive: { eq: true } }],
+  ['active', { isActive: { eq: true } }],
+  ['previous', { isPrevious: { eq: true } }],
+  ['next', { isNext: { eq: true } }]
+])
+
+function nullableCycleFilter(value: string): object {
+  if (value === 'null') {
+    return { null: true }
+  }
+  const keyword = CYCLE_KEYWORD_FILTERS.get(value.toLocaleLowerCase())
+  if (keyword) {
+    return keyword
+  }
+  if (/^\d+$/.test(value)) {
+    return { number: { eq: Number(value) } }
+  }
+  return namedFilter(value)
 }
 
 function workflowStateFilter(value: string): object {
