@@ -210,6 +210,13 @@ describe('WorktreeCard provisional startup rows', () => {
     expect(markup).not.toContain('data-worktree-card-meta-row=""')
   })
 
+  it('holds the title for legacy rows with an omitted display name mode', async () => {
+    // Older-host merge rows can carry no mode at all while still being automatic labels.
+    const markup = await renderCard({ displayName: 'hetzner-vps', branch: '', head: '' })
+
+    expect(markup).toContain('data-worktree-card-title-placeholder=""')
+  })
+
   it('reserves the identity slot alongside existing host meta', async () => {
     const markup = await renderCard(
       { displayName: 'hetzner-vps', branch: '', head: '', displayNameMode: 'automatic' },

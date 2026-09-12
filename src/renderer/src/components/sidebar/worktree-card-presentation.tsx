@@ -119,9 +119,11 @@ export function buildWorktreeCardPresentation(card: WorktreeCardController) {
   const reserveProvisionalIdentityRow =
     showProvisionalCardTreatment && detachedHeadDisplay === null && cardProps.includes('branch')
   // Why: an automatic name is branch-derived upstream, so showing the fallback basename would
-  // change under the user; hold the title slot until the scan resolves it. #20119
+  // change under the user; hold the title slot until the scan resolves it. An omitted mode is
+  // legacy rows that predate the field and behave as automatic. #20119
   const titleIsProvisional =
-    showProvisionalCardTreatment && worktree.displayNameMode === 'automatic'
+    showProvisionalCardTreatment &&
+    (worktree.displayNameMode === undefined || worktree.displayNameMode === 'automatic')
   const hasMetaRow = baseHasMetaRow || reserveProvisionalIdentityRow
   const showHeaderActions = showTitleRowPrimary || showDeleteQuickAction
   // Why: normalize the title once so title/branch de-dupe and identity-only hover eligibility stay in sync.
