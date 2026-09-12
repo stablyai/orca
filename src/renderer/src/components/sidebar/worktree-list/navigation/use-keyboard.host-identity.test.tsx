@@ -15,13 +15,18 @@ vi.mock('@/lib/worktree-activation', () => ({
 }))
 
 vi.mock('@/store', () => {
-  const state = { keybindings: undefined, worktreeNavHistory: [], worktreeNavHistoryIndex: -1 }
+  const state = {
+    keybindings: undefined,
+    worktreeNavHistory: [] as string[],
+    worktreeNavHistoryIndex: -1
+  }
   const useAppStore = (selector: (s: typeof state) => unknown) => selector(state)
   useAppStore.getState = () => state
   return { useAppStore }
 })
 
 const { useWorktreeListKeyboardNavigation } = await import('./use-keyboard')
+const { useAppStore } = await import('@/store')
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
@@ -44,7 +49,6 @@ function localRow(id: string): HostSectionRow & { type: 'item' } {
 }
 
 const rows: HostSectionRow[] = [localRow('a'), localRow('b'), localRow('c')]
-const renderRows = rows as unknown as RenderRow[]
 
 let container: HTMLDivElement
 let root: Root
@@ -65,26 +69,53 @@ function press(direction: 'up' | 'down'): void {
   })
 }
 
-function renderProbe(activeWorktreeId: string, activeHostId: 'local' | null): void {
-  function Probe(): null {
-    useWorktreeListKeyboardNavigation({
-      rows,
-      renderRows,
-      activeWorktreeId,
-      activeWorkspaceExecutionHostId: activeHostId,
-      pinnedDisplayPolicy: 'single-location',
-      virtualizer: { scrollToIndex: () => {} } as never,
-      scrollRef: { current: null },
-      activeModal: 'none',
-      markDirectScrollInput: () => {}
-    })
-    return null
-  }
-  act(() => root.render(<Probe />))
+type ProbeProps = {
+  activeWorktreeId: string | null
+  activeHostId: 'local' | 'ssh:host-b' | null
+  probeRows: HostSectionRow[]
+}
+
+// Why a stable component: re-rendering with new props keeps the hook instance (and its
+// refs) alive the way the real sidebar does; a fresh component per render would remount.
+function Probe({ activeWorktreeId, activeHostId, probeRows }: ProbeProps): null {
+  useWorktreeListKeyboardNavigation({
+    rows: probeRows,
+    renderRows: probeRows as unknown as RenderRow[],
+    activeWorktreeId,
+    activeWorkspaceExecutionHostId: activeHostId,
+    pinnedDisplayPolicy: 'single-location',
+    virtualizer: { scrollToIndex: () => {} } as never,
+    scrollRef: { current: null },
+    activeModal: 'none',
+    markDirectScrollInput: () => {}
+  })
+  return null
+}
+
+function renderProbe(
+  activeWorktreeId: string | null,
+  activeHostId: 'local' | 'ssh:host-b' | null,
+  probeRows: HostSectionRow[] = rows
+): void {
+  act(() =>
+    root.render(
+      <Probe
+        activeWorktreeId={activeWorktreeId}
+        activeHostId={activeHostId}
+        probeRows={probeRows}
+      />
+    )
+  )
 }
 
 beforeEach(() => {
   activateAndRevealWorkspace.mockClear()
+  const navState = useAppStore.getState() as {
+    worktreeNavHistory: string[]
+    worktreeNavHistoryIndex: number
+  }
+  navState.worktreeNavHistory = []
+  navState.worktreeNavHistoryIndex = -1
   container = document.createElement('div')
   document.body.appendChild(container)
   root = createRoot(container)
@@ -120,5 +151,33 @@ describe('worktree keyboard cycling with a resolved active host', () => {
     press('down')
 
     expect(activateAndRevealWorkspace).toHaveBeenCalledWith('c', {})
+  })
+
+  it('anchors on the twin of the host that was active after a close cleared the selection', () => {
+    const sshRow = (id: string): HostSectionRow => ({
+      ...localRow(id),
+      rowKey: `row:${id}:ssh`,
+      sectionKey: 'host:ssh:host-b',
+      worktree: { id, repoId: repo.id, hostId: 'ssh:host-b' } as unknown as Worktree
+    })
+    const twinRows: HostSectionRow[] = [
+      localRow('shared'),
+      localRow('a'),
+      sshRow('shared'),
+      sshRow('b')
+    ]
+    // The user was on the SSH twin; closing its last tab clears the selection and its host.
+    renderProbe('shared', 'ssh:host-b', twinRows)
+    const navState = useAppStore.getState() as {
+      worktreeNavHistory: string[]
+      worktreeNavHistoryIndex: number
+    }
+    navState.worktreeNavHistory = ['shared']
+    navState.worktreeNavHistoryIndex = 0
+    renderProbe(null, null, twinRows)
+
+    press('down')
+
+    expect(activateAndRevealWorkspace).toHaveBeenCalledWith('b', { executionHostId: 'ssh:host-b' })
   })
 })

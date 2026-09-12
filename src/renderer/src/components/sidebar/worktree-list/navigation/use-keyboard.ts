@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 import type React from 'react'
 import type { Virtualizer } from '@tanstack/react-virtual'
 import { useAppStore } from '@/store'
@@ -13,8 +13,10 @@ import {
   getCyclableRowIdentity,
   getCyclableWorktreeRows,
   resolveActiveCycleIdentity,
+  resolveCycleAnchorExecutionHostId,
   resolveCycleAnchorWorktreeId,
-  resolveCycledWorktreeId
+  resolveCycledWorktreeId,
+  type LastActiveCycleWorkspace
 } from '../../worktree-keyboard-cycle'
 import { findPreferredRenderRowIndexForWorktreeIdentity } from './render-row-lookup'
 
@@ -61,6 +63,17 @@ export function useWorktreeListKeyboardNavigation(args: {
     markDirectScrollInput
   } = args
   const keybindings = useAppStore((s) => s.keybindings)
+  // Why a ref, not store state: only the keypress reads it, and the pair is gone from the
+  // store once a close clears the selection; nav history itself stores no host.
+  const lastActiveWorkspaceRef = useRef<LastActiveCycleWorkspace | null>(null)
+  useEffect(() => {
+    if (activeWorktreeId !== null) {
+      lastActiveWorkspaceRef.current = {
+        worktreeId: activeWorktreeId,
+        executionHostId: activeWorkspaceExecutionHostId
+      }
+    }
+  }, [activeWorktreeId, activeWorkspaceExecutionHostId])
 
   const navigateWorktree = useCallback(
     (direction: 'up' | 'down') => {
@@ -78,12 +91,17 @@ export function useWorktreeListKeyboardNavigation(args: {
       })
       const nextWorktreeIdentity = resolveCycledWorktreeId({
         worktreeIds: worktreeRows.map(getCyclableRowIdentity),
-        // A history anchor names no host, so let the row it lands on resolve one.
+        // A host-less anchor lets the first row with that id resolve one; the just-closed
+        // workspace keeps its own host so a same-id twin on another host cannot claim it.
         anchorWorktreeId: resolveActiveCycleIdentity({
           rows: worktreeRows,
           activeWorktreeId: anchorWorktreeId,
-          activeWorkspaceExecutionHostId:
-            anchorWorktreeId === activeWorktreeId ? activeWorkspaceExecutionHostId : null
+          activeWorkspaceExecutionHostId: resolveCycleAnchorExecutionHostId({
+            anchorWorktreeId,
+            activeWorktreeId,
+            activeWorkspaceExecutionHostId,
+            lastActiveWorkspace: lastActiveWorkspaceRef.current
+          })
         }),
         direction
       })

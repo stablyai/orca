@@ -6,6 +6,7 @@ import type { HostSectionRow } from './host-section-rows'
 import {
   getCyclableWorktreeIds,
   getCyclableWorktrees,
+  resolveCycleAnchorExecutionHostId,
   resolveCycleAnchorWorktreeId,
   resolveCycledWorktreeId
 } from './worktree-keyboard-cycle'
@@ -82,6 +83,46 @@ describe('resolveCycleAnchorWorktreeId', () => {
         navHistory: [],
         navHistoryIndex: -1,
         worktreeIds
+      })
+    ).toBeNull()
+  })
+})
+
+describe('resolveCycleAnchorExecutionHostId', () => {
+  const lastActiveWorkspace = { worktreeId: 'b', executionHostId: 'ssh:host-b' as const }
+
+  it('keeps the active host when the anchor is the active workspace', () => {
+    expect(
+      resolveCycleAnchorExecutionHostId({
+        anchorWorktreeId: 'b',
+        activeWorktreeId: 'b',
+        activeWorkspaceExecutionHostId: 'local',
+        lastActiveWorkspace
+      })
+    ).toBe('local')
+  })
+
+  it('recovers the host of the workspace whose close cleared the selection', () => {
+    // Why: closing the last tab nulls both the selection and its host, but the
+    // history anchor is that same workspace; without its host a same-id twin on
+    // another host would claim the anchor.
+    expect(
+      resolveCycleAnchorExecutionHostId({
+        anchorWorktreeId: 'b',
+        activeWorktreeId: null,
+        activeWorkspaceExecutionHostId: null,
+        lastActiveWorkspace
+      })
+    ).toBe('ssh:host-b')
+  })
+
+  it('names no host for a history anchor that was never the last active workspace', () => {
+    expect(
+      resolveCycleAnchorExecutionHostId({
+        anchorWorktreeId: 'a',
+        activeWorktreeId: null,
+        activeWorkspaceExecutionHostId: null,
+        lastActiveWorkspace
       })
     ).toBeNull()
   })

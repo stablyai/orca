@@ -106,6 +106,34 @@ export function resolveCycleAnchorWorktreeId(args: {
   return null
 }
 
+/** The last workspace the sidebar saw selected, kept so a history anchor can recover its host. */
+export type LastActiveCycleWorkspace = {
+  worktreeId: string
+  executionHostId: ExecutionHostId | null
+}
+
+/** Host for the cycle anchor. Closing a workspace's last tab clears both the selection and
+ *  its host, yet the history anchor it falls back to is that same workspace — without its host
+ *  a same-id twin on another host would claim the anchor. Any other history anchor names no host. */
+export function resolveCycleAnchorExecutionHostId(args: {
+  anchorWorktreeId: string | null
+  activeWorktreeId: string | null
+  activeWorkspaceExecutionHostId: ExecutionHostId | null
+  lastActiveWorkspace: LastActiveCycleWorkspace | null
+}): ExecutionHostId | null {
+  const { anchorWorktreeId, activeWorktreeId, activeWorkspaceExecutionHostId } = args
+  if (anchorWorktreeId === null) {
+    return null
+  }
+  if (anchorWorktreeId === activeWorktreeId) {
+    return activeWorkspaceExecutionHostId
+  }
+  const lastActive = args.lastActiveWorkspace
+  return lastActive && lastActive.worktreeId === anchorWorktreeId
+    ? lastActive.executionHostId
+    : null
+}
+
 /** Pick the worktree that `worktree.navigateUp` / `worktree.navigateDown` moves
  *  to, cycling within the worktrees the sidebar is currently showing. */
 export function resolveCycledWorktreeId(args: {
