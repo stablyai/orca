@@ -104,7 +104,7 @@ describe('structured mailbox pointer host', () => {
     ).resolves.toEqual({ kind: 'sent', state: expected })
     // Per-dispatch, so one worker's nudges cannot exhaust the shared operation-ledger budget.
     expect(send.mock.calls[0]![0]).toEqual({ callerKey: structuredPointerCallerKey('d1') })
-    expect(send.mock.calls[0]![1]!.retryUnknown).toBe(true)
+    expect(send.mock.calls[0]![1]!.retryUnknown).toBeUndefined()
   })
 
   it('scopes direct peer mail to the session when there is no dispatch to scope to', async () => {

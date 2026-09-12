@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-08-31",
+  "updatedAt": "2026-09-11",
   "policy": {
     "maturityLevels": ["experimental", "soak", "blocking", "accepted-gap", "deprecated"],
     "blockingPromotion": {
@@ -161,6 +161,153 @@
         "Mobile native presentation and dismissal integration belongs to the subsequent mobile PR."
       ],
       "demotionRule": "Keep experimental if lifecycle or policy assertions fail; do not weaken them to bypass platform delivery gaps."
+    },
+    {
+      "id": "agent-session.structured-send-at-most-once",
+      "title": "Ambiguous structured sends never become a second provider delivery",
+      "maturity": "experimental",
+      "protection": "partial",
+      "owner": "agent-session-runtime",
+      "layer": "shared-host-renderer-and-mobile-unit",
+      "surfaces": ["desktop native chat", "mobile native chat", "structured agent-session RPC"],
+      "platforms": ["macos", "linux", "windows"],
+      "providers": ["local", "ssh", "remote-runtime", "mobile"],
+      "coveredPlatforms": ["macos"],
+      "coveredProviders": ["local", "mobile"],
+      "coverageNotes": "Deterministic host, renderer, direct/Relay transport, and mobile hook tests cover durable identity, caller changes, journal loss, acknowledgement loss, expiry, and remount. The host code is execution-location neutral, but live SSH/remote runtimes and physical iOS/Android lifecycle are not exercised.",
+      "motivatingLinks": ["https://github.com/stablyai/orca/pull/20133"],
+      "invariant": "One structured-send operation id causes at most one provider dispatch. A recorded or transport-ambiguous send reuses that id across retry, caller reconnect, client remount, and journal recovery; only a terminal rejection may rotate to a first delivery.",
+      "oracle": "Inject adapter acknowledgement loss, RPC response loss, caller replacement, logical-client close after response, auth recovery with a written request, missing journal submissions, legacy pending rows, stale fences, operation expiry, mobile remount, and durable-journal capacity. Assert one provider dispatch or one operation id for every ambiguous retry, fresh identity only after rejection, and no eviction of ambiguous mobile ids.",
+      "commands": [
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/shared/agent-session-operation-ledger.test.ts src/shared/structured-agent-session-send-disposition.test.ts src/main/runtime/agent-session-operation-admission.test.ts src/main/native-chat/agent-session-wire/structured-agent-session-refusal-retry.test.ts src/main/native-chat/agent-session-wire/structured-agent-session-send.test.ts src/main/runtime/orchestration/structured-mailbox-pointer-delivery.test.ts src/main/runtime/orchestration/structured-mailbox-pointer-host.test.ts src/main/runtime/orchestration/structured-pointer-operation-id.test.ts src/renderer/src/components/native-chat/use-structured-agent-session-outbox.test.tsx src/renderer/src/components/native-chat/NativeChatStructuredSession.transport-probe.test.tsx src/renderer/src/components/native-chat/NativeChatStructuredSessionDelivery.test.tsx src/renderer/src/lib/launch-structured-agent-session.test.ts",
+        "ORCA_BACKGROUND_LAUNCH=1 pnpm --dir mobile test ../mobile/src/session/mobile-native-chat-image-attachment.test.ts ../mobile/src/session/use-mobile-native-chat-image-attachments.test.ts ../mobile/src/session/mobile-structured-send-operation-journal.test.ts ../mobile/src/session/mobile-structured-session-operation-retention.test.ts ../mobile/src/session/mobile-structured-send-delivery.test.ts ../mobile/src/session/use-mobile-structured-agent-session-send.test.tsx ../mobile/src/session/use-mobile-structured-agent-session.test.tsx ../mobile/src/transport/mobile-relay-rpc-session.test.ts ../mobile/src/transport/rpc-client-delivery-ambiguity.test.ts ../mobile/src/transport/stable-logical-rpc-client.test.ts"
+      ],
+      "testFiles": [
+        "src/shared/agent-session-operation-ledger.test.ts",
+        "src/shared/structured-agent-session-send-disposition.test.ts",
+        "src/main/runtime/agent-session-operation-admission.test.ts",
+        "src/main/native-chat/agent-session-wire/structured-agent-session-refusal-retry.test.ts",
+        "src/main/native-chat/agent-session-wire/structured-agent-session-send.test.ts",
+        "src/main/runtime/orchestration/structured-mailbox-pointer-delivery.test.ts",
+        "src/main/runtime/orchestration/structured-mailbox-pointer-host.test.ts",
+        "src/main/runtime/orchestration/structured-pointer-operation-id.test.ts",
+        "src/renderer/src/components/native-chat/use-structured-agent-session-outbox.test.tsx",
+        "src/renderer/src/components/native-chat/NativeChatStructuredSession.transport-probe.test.tsx",
+        "src/renderer/src/components/native-chat/NativeChatStructuredSessionDelivery.test.tsx",
+        "src/renderer/src/lib/launch-structured-agent-session.test.ts",
+        "mobile/src/session/mobile-native-chat-image-attachment.test.ts",
+        "mobile/src/session/use-mobile-native-chat-image-attachments.test.ts",
+        "mobile/src/session/mobile-structured-send-operation-journal.test.ts",
+        "mobile/src/session/mobile-structured-session-operation-retention.test.ts",
+        "mobile/src/session/mobile-structured-send-delivery.test.ts",
+        "mobile/src/session/use-mobile-structured-agent-session-send.test.tsx",
+        "mobile/src/session/use-mobile-structured-agent-session.test.tsx",
+        "mobile/src/transport/mobile-relay-rpc-session.test.ts",
+        "mobile/src/transport/rpc-client-delivery-ambiguity.test.ts",
+        "mobile/src/transport/stable-logical-rpc-client.test.ts"
+      ],
+      "assertionRefs": [
+        {
+          "file": "src/main/native-chat/agent-session-wire/structured-agent-session-send.test.ts",
+          "assertions": [
+            "never redelivers after admission survives without its journal submission",
+            "fails closed when a legacy pending row survives without its submission",
+            "never reruns an admission-only send after the caller changes",
+            "settles a submission write failure as rejected before provider dispatch"
+          ]
+        },
+        {
+          "file": "src/main/runtime/agent-session-operation-admission.test.ts",
+          "assertions": ["replays the original row after the caller identity changes"]
+        },
+        {
+          "file": "mobile/src/session/use-mobile-structured-agent-session-send.test.tsx",
+          "assertions": [
+            "keeps one id across acknowledgement loss and host unknown replays",
+            "reuses an ambiguous id after the session hook remounts",
+            "keeps an ambiguous id after the host replay window expires",
+            "reuses the original uploaded attachment identity after acknowledgement loss",
+            "rotates after a %s pre-handler RPC refusal that proves the send did not run"
+          ]
+        },
+        {
+          "file": "src/main/runtime/orchestration/structured-mailbox-pointer-delivery.test.ts",
+          "assertions": ["retries a rejected nudge on the next journal edge"]
+        },
+        {
+          "file": "src/main/runtime/orchestration/structured-pointer-operation-id.test.ts",
+          "assertions": ["never re-mints an ambiguous batch after the host replay window expires"]
+        },
+        {
+          "file": "mobile/src/transport/rpc-client-delivery-ambiguity.test.ts",
+          "assertions": [
+            "marks a written request unknown when another request triggers auth recovery"
+          ]
+        },
+        {
+          "file": "mobile/src/transport/stable-logical-rpc-client.test.ts",
+          "assertions": ["preserves a committed response when logical close wins the callback race"]
+        },
+        {
+          "file": "mobile/src/transport/mobile-relay-rpc-session.test.ts",
+          "assertions": ["keeps a synchronous pre-write relay failure definite"]
+        },
+        {
+          "file": "src/shared/structured-agent-session-send-disposition.test.ts",
+          "assertions": ["never rotates $state operation after its host tombstone expires"]
+        }
+      ],
+      "evidenceRuns": [
+        {
+          "date": "2026-09-11",
+          "runner": "local",
+          "platform": "macos",
+          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm test src/shared/agent-session-operation-ledger.test.ts src/shared/structured-agent-session-send-disposition.test.ts src/main/runtime/agent-session-operation-admission.test.ts src/main/native-chat/agent-session-wire/structured-agent-session-refusal-retry.test.ts src/main/native-chat/agent-session-wire/structured-agent-session-send.test.ts src/main/runtime/orchestration/structured-mailbox-pointer-delivery.test.ts src/main/runtime/orchestration/structured-mailbox-pointer-host.test.ts src/main/runtime/orchestration/structured-pointer-operation-id.test.ts src/renderer/src/components/native-chat/use-structured-agent-session-outbox.test.tsx src/renderer/src/components/native-chat/NativeChatStructuredSession.transport-probe.test.tsx src/renderer/src/components/native-chat/NativeChatStructuredSessionDelivery.test.tsx src/renderer/src/lib/launch-structured-agent-session.test.ts",
+          "result": "passed",
+          "durationSeconds": 25.61,
+          "summary": "Twelve focused host, shared, renderer, and orchestration files passed 133 tests."
+        },
+        {
+          "date": "2026-09-11",
+          "runner": "local",
+          "platform": "macos",
+          "command": "ORCA_BACKGROUND_LAUNCH=1 pnpm --dir mobile test ../mobile/src/session/mobile-native-chat-image-attachment.test.ts ../mobile/src/session/use-mobile-native-chat-image-attachments.test.ts ../mobile/src/session/mobile-structured-send-operation-journal.test.ts ../mobile/src/session/mobile-structured-session-operation-retention.test.ts ../mobile/src/session/mobile-structured-send-delivery.test.ts ../mobile/src/session/use-mobile-structured-agent-session-send.test.tsx ../mobile/src/session/use-mobile-structured-agent-session.test.tsx ../mobile/src/transport/mobile-relay-rpc-session.test.ts ../mobile/src/transport/rpc-client-delivery-ambiguity.test.ts ../mobile/src/transport/stable-logical-rpc-client.test.ts",
+          "result": "passed",
+          "durationSeconds": 2.62,
+          "summary": "Ten focused mobile session, attachment, and transport files passed 112 tests."
+        }
+      ],
+      "runtimeBudget": {
+        "p95Seconds": 45,
+        "scope": "Two deterministic unit commands; initial target pending CI soak."
+      },
+      "flakeHistory": {
+        "status": "not-started",
+        "evidence": "Focused local runs pass; repeated CI history is not established."
+      },
+      "redGreenEvidence": {
+        "status": "partial",
+        "evidence": "Three targeted ablations were run: spending the mobile id after acknowledgement loss made three retries use two ids; settling cross-caller recovery under the new caller left the original ledger row pending; and returning no synthetic result for an admission-only replay dispatched it as a new accepted send. The focused tests pass again with the production fixes restored; a byte-identical old-production run is not recorded."
+      },
+      "performanceBudget": {
+        "required": true,
+        "evidence": "No polling, timers, subprocesses, or provider fanout were added. Each mobile journal mutation parses the bounded journal and performs at most one full AsyncStorage rewrite; entries retain hashes, ids, and original attachment paths, cap at 4,096, and fail closed at capacity. A first host send performs three serialized whole-store durable transactions: admission, the pre-effect unknown tombstone, and final settlement. No capacity-scale host fsync or mobile AsyncStorage latency benchmark is recorded."
+      },
+      "promotionCriteria": [
+        "Soak both commands in CI with zero unexplained flakes.",
+        "Add live physical-mobile and remote-runtime interruption evidence before claiming full provider coverage."
+      ],
+      "knownGaps": [
+        "A payload-keyed mobile ambiguity cannot distinguish retrying the original send from an intentional later send with identical content. It fails closed until authoritative settlement, so the claim that retention costs no liveness is false without a durable composer-action identity.",
+        "Clearing or externally corrupting desktop localStorage or mobile AsyncStorage can erase a client-owned ambiguous identity.",
+        "An ambiguous id retained past host tombstone expiry remains safely blocked rather than becoming live again.",
+        "A host crash after premarking the operation unknown but before journal append or provider dispatch can conservatively suppress a message that never reached the provider.",
+        "A replay synthesized from an operation row whose journal submission is missing is not republished into the journal; desktop stops automatic polling but remains safely blocked on that FIFO head.",
+        "The changed send guarantee is not capability-negotiated. New mobile clients fail closed across caller-identity change, but old clients can rotate an ambiguous id against a new host, and an old mobile client can interpret an ok response carrying unknown as accepted.",
+        "An ambiguous attachment retry depends on the original host temp path remaining usable when the first request never reached the host; if it is gone, the retry rejects rather than rotating.",
+        "No live SSH, remote-runtime, physical iOS/Android, Linux, or Windows interruption run is recorded."
+      ],
+      "demotionRule": "Keep experimental or demote if any ambiguous retry changes operation id, provider dispatch count exceeds one, durable identity is evicted by age or capacity, or the focused commands flake without a diagnosed harness defect."
     },
     {
       "id": "agent-session.completed-turn-duration",

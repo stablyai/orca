@@ -116,7 +116,8 @@ export function disposeStructuredAgentSessionSendResult(
         ? requeueStructuredAgentSessionSendRefusal(
             candidate,
             result.refusal.code,
-            input.createOperationId
+            input.createOperationId,
+            input.entry.lastAttemptAt !== null
           )
         : candidate
     )
@@ -150,6 +151,18 @@ export function disposeStructuredAgentSessionSendResult(
       error: structuredAgentSessionRejectionNotice(submission.reason),
       blockedClientMessageId: input.entry.clientMessageId,
       retryWithFreshClientMessageId: input.entry.clientMessageId
+    }
+  }
+  if (submission.dispatchState === 'unknown' && submission.recovered) {
+    return {
+      entries: input.entries.map((candidate) =>
+        candidate.clientMessageId === input.entry.clientMessageId
+          ? { ...candidate, state: 'unconfirmed', retryAfterUnknownSubmittedAt: -1 }
+          : candidate
+      ),
+      error: null,
+      blockedClientMessageId: input.blockedClientMessageId,
+      retryWithFreshClientMessageId: null
     }
   }
   // `pending` is the host saying the message was written and is awaiting the

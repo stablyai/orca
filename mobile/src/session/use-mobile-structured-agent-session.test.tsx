@@ -13,6 +13,16 @@ import { formatQuestionFreeTextAnswer } from './mobile-native-chat-question'
 import { structuredSendResultFixture } from './structured-agent-send-result.test-fixture'
 import { useMobileStructuredAgentSession } from './use-mobile-structured-agent-session'
 
+const asyncStorage = vi.hoisted(() => ({
+  getItem: vi.fn(),
+  setItem: vi.fn(),
+  removeItem: vi.fn()
+}))
+
+vi.mock('@react-native-async-storage/async-storage', () => ({ default: asyncStorage }))
+
+import { resetMobileStructuredSendOperationJournalForTests } from './mobile-structured-send-operation-journal'
+
 function ok(result: unknown) {
   return { ok: true, result, _meta: { runtimeId: 'runtime-1' } }
 }
@@ -233,6 +243,7 @@ describe('useMobileStructuredAgentSession', () => {
     sendRequest,
     subscribe
   } as unknown as RpcClient
+  let storedOperations: Map<string, string>
 
   function Harness({
     sessionId = 'session-1',
@@ -259,6 +270,17 @@ describe('useMobileStructuredAgentSession', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    resetMobileStructuredSendOperationJournalForTests()
+    storedOperations = new Map()
+    asyncStorage.getItem.mockImplementation(
+      async (key: string) => storedOperations.get(key) ?? null
+    )
+    asyncStorage.setItem.mockImplementation(async (key: string, value: string) => {
+      storedOperations.set(key, value)
+    })
+    asyncStorage.removeItem.mockImplementation(async (key: string) => {
+      storedOperations.delete(key)
+    })
     sendRequest.mockImplementation(defaultSendRequest)
     listener = null
   })
@@ -677,46 +699,6 @@ describe('useMobileStructuredAgentSession', () => {
     expect(firstId).toMatch(/^\d{13}-[0-9a-f]{32}$/)
     expect(retryId).toMatch(/^\d{13}-[0-9a-f]{32}$/)
     expect(retryId).not.toBe(firstId)
-  })
-
-  it('keeps one operation id across an ambiguous send and its unknown replays', async () => {
-    act(() => {
-      renderer = create(createElement(Harness))
-    })
-    await vi.waitFor(() => expect(listener).toEqual(expect.any(Function)))
-    act(() => listener?.(snapshotEvent(3)))
-    let attempts = 0
-    sendRequest.mockImplementation(async (method, params) => {
-      if (method !== 'agentSession.send') {
-        return defaultSendRequest(method, params)
-      }
-      // Ack-loss first, then the durable row the host replays: both say the
-      // provider may have the message, so neither may release the id.
-      attempts += 1
-      if (attempts === 1) {
-        throw markRpcDeliveryUnknown(new Error('Connection closed'))
-      }
-      return sendResult('unknown')
-    })
-
-    await act(async () => {
-      expect(await hook!.sendWithOutcome('retry me')).toBe('unknown')
-      // Never 'accepted': a replayed unknown is not an acknowledgement, and
-      // reporting one clears the composer as if the message had landed.
-      expect(await hook!.sendWithOutcome('retry me')).toBe('unknown')
-      expect(await hook!.sendWithOutcome('retry me')).toBe('unknown')
-    })
-
-    const calls = sendRequest.mock.calls.filter(([method]) => method === 'agentSession.send')
-    expect(calls).toHaveLength(3)
-    const ids = calls.map(
-      ([, params]) =>
-        (params as { envelope: { clientOperationId: string } }).envelope.clientOperationId
-    )
-    // One id for all three: each retry is a replay the host answers from the
-    // ledger. A rotated id would be a second delivery of the same message.
-    expect(new Set(ids).size).toBe(1)
-    expect(calls.every(([, params]) => !('retryUnknown' in (params as object)))).toBe(true)
   })
 
   it('keeps structured option changes dispatched after unknown delivery', async () => {

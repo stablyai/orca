@@ -85,3 +85,58 @@ describe('what a rejection shows the user', () => {
     expect(shown).toBe('Orca could not send your message — Retry to send it again.')
   })
 })
+
+describe('ambiguous operation refusals', () => {
+  it.each([
+    { ...entry, state: 'unconfirmed' as const, lastAttemptAt: 10 },
+    { ...entry, state: 'queued' as const, lastAttemptAt: 10, retryAfterUnknownSubmittedAt: 10 }
+  ])('never rotates $state operation after its host tombstone expires', (ambiguous) => {
+    const disposition = disposeStructuredAgentSessionSendResult({
+      entries: [ambiguous],
+      entry: ambiguous,
+      blockedClientMessageId: null,
+      result: {
+        ok: false,
+        refusal: {
+          code: 'agent_session_operation_expired',
+          message: 'Operation expired.'
+        }
+      },
+      createOperationId: () => 'fresh-id'
+    })
+
+    expect(disposition.entries).toMatchObject([
+      { clientMessageId: entry.clientMessageId, state: 'queued' }
+    ])
+    expect(disposition.blockedClientMessageId).toBe(entry.clientMessageId)
+  })
+
+  it('parks a recovered missing submission without polling forever', () => {
+    const result = rejectedWith(null)
+    if (!result.ok) {
+      throw new Error('expected a send result')
+    }
+    result.value.submission = {
+      ...result.value.submission,
+      dispatchState: 'unknown',
+      reason: 'durable_send_submission_missing',
+      recovered: true
+    }
+
+    const disposition = disposeStructuredAgentSessionSendResult({
+      entries: [entry],
+      entry,
+      blockedClientMessageId: null,
+      result,
+      createOperationId: () => 'unused'
+    })
+
+    expect(disposition.entries).toMatchObject([
+      {
+        clientMessageId: entry.clientMessageId,
+        state: 'unconfirmed',
+        retryAfterUnknownSubmittedAt: -1
+      }
+    ])
+  })
+})

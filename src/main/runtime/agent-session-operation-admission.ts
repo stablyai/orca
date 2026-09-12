@@ -31,3 +31,28 @@ export function admitAgentSessionOperationRow(
   }
   return { rows: pruned, decision }
 }
+
+/** Send ids name one provider delivery even when the authenticated caller changes. */
+export function admitAgentSessionGlobalOperationRow(
+  rows: OperationRows,
+  args: AgentSessionOperationAdmission
+): { rows: OperationRows; decision: AgentSessionOperationDecision } {
+  let existing: AgentSessionOperationRow | undefined
+  for (const row of rows.values()) {
+    if (row.expiresAt > args.now && row.operationId === args.operationId) {
+      existing = row
+      break
+    }
+  }
+  if (!existing) {
+    return admitAgentSessionOperationRow(rows, args)
+  }
+  const pruned = pruneAgentSessionOperationRows(rows, args.now)
+  const syntheticRows = new Map([
+    [agentSessionOperationKey(args.callerKey, args.operationId), existing]
+  ])
+  return {
+    rows: pruned,
+    decision: evaluateAgentSessionOperation({ rows: syntheticRows, ...args })
+  }
+}

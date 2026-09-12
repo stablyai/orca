@@ -71,15 +71,23 @@ export function updateStructuredAgentSessionOutboxEntry(
 export function requeueStructuredAgentSessionSendRefusal(
   entry: StructuredAgentSessionOutboxEntry,
   code: AgentSessionWireRefusalCode,
-  createOperationId: () => string
+  createOperationId: () => string,
+  retainOperationId = false
 ): StructuredAgentSessionOutboxEntry {
-  if (agentSessionRefusalOperationState('agentSession.send', code) !== 'settled-rejected') {
+  const refusalState = agentSessionRefusalOperationState('agentSession.send', code)
+  if (
+    refusalState === 'unknown' ||
+    retainOperationId ||
+    entry.state === 'unconfirmed' ||
+    entry.retryAfterUnknownSubmittedAt !== null
+  ) {
     return { ...entry, state: 'queued' }
   }
   return {
     ...entry,
     clientMessageId: createOperationId(),
     state: 'queued',
+    lastAttemptAt: null,
     retryAfterUnknownSubmittedAt: null
   }
 }
@@ -162,7 +170,6 @@ export function structuredAgentSessionSendRequest(
         fields
       })
     },
-    ...(entry.retryAfterUnknownSubmittedAt !== null ? { retryUnknown: true } : {}),
     ...fields
   }
 }

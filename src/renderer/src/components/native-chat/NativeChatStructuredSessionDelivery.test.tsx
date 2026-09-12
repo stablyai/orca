@@ -339,7 +339,7 @@ describe('NativeChatStructuredSession delivery', () => {
     await waitFor(() => expect(screen.queryByText('Message delivery is unconfirmed.')).toBeNull())
   }, 20000)
 
-  it('probes without retryUnknown so the host cannot redispatch', async () => {
+  it('probes the same operation without marking an explicit user retry', async () => {
     mocks.mode = 'outbox'
     mocks.submissions = []
     mocks.call.mockRejectedValueOnce(new Error('socket closed')).mockResolvedValue({
@@ -398,7 +398,7 @@ describe('NativeChatStructuredSession delivery', () => {
     await waitFor(() => expect(mocks.call).toHaveBeenCalledOnce())
 
     const sent = mocks.call.mock.calls[0]?.[2] as { envelope: { clientOperationId: string } }
-    // The host now reports it as an unresolved unknown: redispatch is the user's call.
+    // The host now reports an unresolved unknown: another replay is the user's call.
     mocks.submissions = [
       {
         clientMessageId: sent.envelope.clientOperationId,
@@ -537,14 +537,14 @@ describe('NativeChatStructuredSession delivery', () => {
     await waitFor(() => expect(mocks.call).toHaveBeenCalledOnce())
     await waitFor(() => expect(screen.getByText('Message delivery is unconfirmed.')).toBeTruthy())
 
-    // User force-retries: this request legitimately carries retryUnknown.
+    // User retries with the same envelope and no legacy redelivery signal.
     fireEvent.click(screen.getByRole('button', { name: /Retry/ }))
     await waitFor(() => expect(mocks.call).toHaveBeenCalledTimes(2))
     const forcedRequest = mocks.call.mock.calls[1]?.[2] as Record<string, unknown> | undefined
-    expect(forcedRequest?.retryUnknown).toBe(true)
+    expect(forcedRequest?.retryUnknown).toBeUndefined()
 
-    // That retry also failed at the transport. The probe must NOT pick it up, or it
-    // would re-send retryUnknown automatically and redispatch to the agent.
+    // That retry also failed at the transport. The probe must not repeat an
+    // explicit retry automatically.
     await act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 3000))
     })

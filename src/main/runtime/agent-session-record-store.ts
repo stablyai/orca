@@ -10,6 +10,7 @@ import {
   type AgentSessionOperationRow
 } from '../../shared/agent-session-operation-ledger'
 import {
+  admitAgentSessionGlobalOperationRow,
   admitAgentSessionOperationRow,
   type AgentSessionOperationAdmission
 } from './agent-session-operation-admission'
@@ -275,6 +276,17 @@ export class AgentSessionRecordStore {
   ): Promise<AgentSessionOperationDecision> {
     return this.transact(() => {
       const admitted = admitAgentSessionOperationRow(this.state.operations, args)
+      this.state.operations = admitted.rows
+      return admitted.decision
+    })
+  }
+
+  /** Send ids stay global after a caller reconnects under a different identity. */
+  async admitGlobalOperation(
+    args: AgentSessionOperationAdmission
+  ): Promise<AgentSessionOperationDecision> {
+    return this.transact(() => {
+      const admitted = admitAgentSessionGlobalOperationRow(this.state.operations, args)
       this.state.operations = admitted.rows
       return admitted.decision
     })

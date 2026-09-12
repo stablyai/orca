@@ -1,16 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { dispatchMobileStructuredCommand } from './mobile-structured-composer-command'
-import type {
-  AgentSessionCancelResult,
-  AgentSessionSendResult
-} from '../../../src/shared/agent-session-wire'
+import type { AgentSessionCancelResult } from '../../../src/shared/agent-session-wire'
 import {
   structuredAgentSessionSendBody,
   type StructuredAgentSessionAttachment
 } from '../../../src/shared/structured-agent-session-outbox'
 import { encodeNativeChatTranscriptIdentity } from '../../../src/shared/native-chat-transcript-retention'
 import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
-import { mobileStructuredSendDelivery } from './mobile-structured-send-delivery'
 import { projectStructuredAgentSessionMessages } from '../../../src/shared/structured-agent-session-message-projection'
 import { hasUnansweredStructuredAgentSessionDispatch } from '../../../src/shared/structured-agent-session-projection'
 import {
@@ -39,8 +35,13 @@ import { useMobileStructuredAgentState } from './use-mobile-structured-agent-sta
 import { useMobileStructuredPromptResponses } from './use-mobile-structured-prompt-responses'
 import { useMobileStructuredAgentOptions } from './use-mobile-structured-agent-options'
 import { useMobileStructuredAgentTurnTiming } from './use-mobile-structured-agent-turn-timing'
+import { sendMobileStructuredAgentSessionMessage } from './mobile-structured-agent-session-send'
+import { useMobileStructuredSendOperationReconciliation } from './use-mobile-structured-send-operation-reconciliation'
 
-type StructuredMobileAttachment = StructuredAgentSessionAttachment & { id?: string }
+type StructuredMobileAttachment = StructuredAgentSessionAttachment & {
+  id?: string
+  contentFingerprint?: string
+}
 
 type StructuredMobileSession = ReturnType<typeof useMobileStructuredAgentOptions> &
   ReturnType<typeof useMobileStructuredAgentTurnTiming> & {
@@ -67,13 +68,24 @@ export function useMobileStructuredAgentSession(args: {
   sessionId: string | null
   /** Host/workspace scope used to keep same provider ids isolated. */
   sourceIdentity?: string
+  /** Authenticated identity the host keys mutation admission under. */
+  callerIdentity?: string
   enabled: boolean
   /** Live transport only; gates the connection-scoped hold, nothing else. */
   connected: boolean
   agent: string | null
   onSendError: (message: string) => void
 }): StructuredMobileSession {
-  const { agent, client, connected, sessionId, sourceIdentity = '', enabled, onSendError } = args
+  const {
+    agent,
+    callerIdentity = '',
+    client,
+    connected,
+    sessionId,
+    sourceIdentity = '',
+    enabled,
+    onSendError
+  } = args
   const sessionKey = encodeNativeChatTranscriptIdentity([sourceIdentity, agent, sessionId])
   const operationIdsRef = useRef(new Map<string, string>())
   const commandPendingRef = useRef(false)
@@ -82,6 +94,7 @@ export function useMobileStructuredAgentSession(args: {
     retainStructuredOpId(operationIdsRef.current, key, operationId)
   const stateArgs = { client, sessionId, sessionKey, enabled, connected }
   const { state, stateRef, loadingOlder, loadEarlier } = useMobileStructuredAgentState(stateArgs)
+  useMobileStructuredSendOperationReconciliation(state.submissions)
 
   const mutate = useCallback(
     async <TValue>(
@@ -114,7 +127,7 @@ export function useMobileStructuredAgentSession(args: {
         }
       }
       if (result.status === 'unknown') {
-        // Prompt/option/cancel plans cannot redispatch an unknown ledger row;
+        // Prompt/option plans cannot repeat a harmful effect under a fresh id;
         // issue a fresh id so a retry can be admitted after the user checks the
         // stream. Sends keep theirs — see `mobile-structured-send-delivery.ts`.
         operationIdsRef.current.delete(key)
@@ -187,35 +200,25 @@ export function useMobileStructuredAgentSession(args: {
       if (commandOutcome !== null) {
         return commandOutcome
       }
-      const fields = { body: structuredAgentSessionSendBody(text, sendAttachments) }
-      if (fields.body.blocks.length === 0) {
+      const body = structuredAgentSessionSendBody(text, sendAttachments)
+      if (body.blocks.length === 0) {
         return 'rejected'
       }
-      const key = `${sessionKey}:agentSession.send:${JSON.stringify(fields)}`
-      // No `retryUnknown`: the host never re-delivers a recorded send whatever the
-      // flag says, so asking would only skip the cached answer and re-read the same
-      // row. Reusing the retained id is what keeps the retry a replay.
-      const result = await requestStructuredAgentSessionMutation<AgentSessionSendResult>({
+      return sendMobileStructuredAgentSessionMessage({
         client,
-        method: 'agentSession.send',
-        fingerprintMethod: 'agentSession.send',
         sessionId,
+        sessionKey,
+        callerIdentity,
         expectedRuntimeFence: currentFence,
-        fields,
-        clientOperationId: retainOperationId(key, operationIdsRef.current.get(key)),
-        timeoutMs
+        text,
+        attachments: sendAttachments,
+        deadline,
+        onError: onSendError
       })
-      const delivery = mobileStructuredSendDelivery(result)
-      if (delivery.operationIdSpent) {
-        operationIdsRef.current.delete(key)
-      }
-      if (delivery.error !== null) {
-        onSendError(delivery.error)
-      }
-      return delivery.outcome
     },
     [
       agent,
+      callerIdentity,
       client,
       conversationCommands,
       enabled,

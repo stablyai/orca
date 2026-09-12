@@ -17,6 +17,8 @@ export function agentSessionRefusalOperationState(
     return 'settled-rejected'
   }
   switch (code) {
+    case 'agent_session_checkpoint_stale':
+    case 'agent_session_conflict':
     case 'agent_session_operation_conflict':
     case 'agent_session_operation_expired':
     case 'agent_session_operation_invalid':
@@ -26,14 +28,12 @@ export function agentSessionRefusalOperationState(
     case 'agent_session_operation_unknown':
       return 'unknown'
     case 'structured_agent_session_unsupported':
-    case 'agent_session_checkpoint_stale':
-    case 'agent_session_conflict':
     case 'agent_session_ownership_unknown':
     case 'agent_session_operation_capacity':
     case 'agent_session_identity_required':
     case 'agent_session_journal_unreadable':
-    case 'execution_owner_reconciling':
-      // These refusals do not prove the operation reached durable settlement.
       return 'pending-admission'
+    case 'execution_owner_reconciling':
+      return 'settled-rejected'
   }
 }

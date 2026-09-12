@@ -82,8 +82,8 @@ async function appendStatus(
  * outcome and NEVER goes back on the wire, whatever state it is in and whatever
  * `retryUnknown` the client sent: `unknown` cannot prove non-delivery — that is
  * the whole content of the word — and one message reached the model five times
- * when this was a judgement call instead of an invariant. A user who wants the
- * message sent anyway retries under a fresh id, which is a first delivery.
+ * when this was a judgement call instead of an invariant. A distinct send after
+ * a terminal rejection uses a fresh id, which is a first delivery.
  */
 export async function performSend(
   ctx: AgentSessionTurnContext,
@@ -105,7 +105,11 @@ export async function performSend(
       value: { clientMessageId: input.clientMessageId, submission: existing }
     }
   }
-  await ctx.journal.appendSubmission({ ...input, fence: ctx.fence })
+  try {
+    await ctx.journal.appendSubmission({ ...input, fence: ctx.fence })
+  } catch {
+    return invalid('The message could not be recorded and was not sent.')
+  }
   ctx.publish()
 
   const outcome = await dispatchSafely(ctx, input.clientMessageId, input.body)

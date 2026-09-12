@@ -57,8 +57,11 @@ async function dispatchStructuredLaunchPrompt(
     )
     if (!result.ok) {
       mutateEntry(entry, (current) =>
-        requeueStructuredAgentSessionSendRefusal(current, result.refusal.code, () =>
-          createStructuredAgentSessionOperationId(() => crypto.randomUUID())
+        requeueStructuredAgentSessionSendRefusal(
+          current,
+          result.refusal.code,
+          () => createStructuredAgentSessionOperationId(() => crypto.randomUUID()),
+          entry.lastAttemptAt !== null
         )
       )
       return false

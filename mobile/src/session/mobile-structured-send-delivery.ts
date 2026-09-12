@@ -22,43 +22,59 @@
 //     model five times.
 
 import type { AgentSessionSendResult } from '../../../src/shared/agent-session-wire'
+import { agentSessionRefusalOperationState } from '../../../src/shared/agent-session-refusal-retry'
 import { structuredAgentSessionRejectionNotice } from '../../../src/shared/structured-agent-session-send-disposition'
 import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
 import type { StructuredAgentSessionMutationCallResult } from './mobile-structured-agent-session-rpc'
 
 export type MobileStructuredSendDelivery = {
   outcome: MobileNativeChatSendOutcome
-  /** True when a further send under the same operation id could only replay this answer. */
+  /** True when a retry is safe under a fresh operation id. */
   operationIdSpent: boolean
   /** Copy for the user, or null when the outcome needs none. */
   error: string | null
 }
 
 export function mobileStructuredSendDelivery(
-  result: StructuredAgentSessionMutationCallResult<AgentSessionSendResult>
+  result: StructuredAgentSessionMutationCallResult<AgentSessionSendResult>,
+  retained = false
 ): MobileStructuredSendDelivery {
   if (result.status === 'unknown') {
     return { outcome: 'unknown', operationIdSpent: false, error: null }
   }
+  if (result.status === 'refused') {
+    const refusalState = agentSessionRefusalOperationState('agentSession.send', result.code)
+    if (refusalState === 'unknown') {
+      return { outcome: 'unknown', operationIdSpent: false, error: null }
+    }
+    return {
+      outcome: 'rejected',
+      operationIdSpent: !retained,
+      error: result.message
+    }
+  }
   if (result.status !== 'accepted') {
     return {
       outcome: 'rejected',
-      operationIdSpent: true,
+      operationIdSpent: !retained,
       error: result.message === 'Request not sent' ? 'Message not sent' : result.message
     }
   }
-  // A host that answered without a submission row claims nothing about dispatch;
-  // treat it as the acknowledgement it has always been rather than inventing doubt.
   const submission = result.value.submission as AgentSessionSendResult['submission'] | undefined
-  if (submission?.dispatchState === 'unknown') {
+  if (!submission || submission.dispatchState === 'unknown') {
     return { outcome: 'unknown', operationIdSpent: false, error: null }
   }
-  if (submission?.dispatchState === 'rejected') {
+  if (submission.dispatchState === 'rejected') {
     return {
       outcome: 'rejected',
       operationIdSpent: true,
       error: structuredAgentSessionRejectionNotice(submission.reason)
     }
+  }
+  if (retained) {
+    // A payload match cannot distinguish retrying the ambiguous action from a
+    // later identical intent. Wait for the stream to settle and release it.
+    return { outcome: 'unknown', operationIdSpent: false, error: null }
   }
   return { outcome: 'accepted', operationIdSpent: true, error: null }
 }

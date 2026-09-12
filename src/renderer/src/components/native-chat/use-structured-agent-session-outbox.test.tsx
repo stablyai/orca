@@ -433,8 +433,9 @@ describe('useStructuredAgentSessionOutbox', () => {
     )
   })
 
-  it('retains a send operation after a pending-admission refusal', async () => {
+  it('rotates a send operation after a pending-admission refusal', async () => {
     mocks.call
+      .mockResolvedValueOnce(refusedResult('agent_session_checkpoint_stale'))
       .mockResolvedValueOnce(refusedResult('agent_session_checkpoint_stale'))
       .mockResolvedValueOnce(acceptedResult(1))
     const { result } = renderHook(() =>
@@ -450,14 +451,25 @@ describe('useStructuredAgentSessionOutbox', () => {
     await waitFor(() => expect(result.current.outbox[0]?.state).toBe('queued'))
     const firstId = (mocks.call.mock.calls[0]![2] as { envelope: { clientOperationId: string } })
       .envelope.clientOperationId
-    expect(result.current.outbox[0]?.clientMessageId).toBe(firstId)
+    const retryId = result.current.outbox[0]!.clientMessageId
+    expect(retryId).not.toBe(firstId)
 
-    act(() => result.current.retry(firstId))
+    act(() => result.current.retry(retryId))
     await waitFor(() => expect(mocks.call).toHaveBeenCalledTimes(2))
+    await waitFor(() => expect(result.current.outbox[0]?.state).toBe('queued'))
+    const secondRetryId = result.current.outbox[0]!.clientMessageId
+    expect(secondRetryId).not.toBe(retryId)
     expect(
       (mocks.call.mock.calls[1]![2] as { envelope: { clientOperationId: string } }).envelope
         .clientOperationId
-    ).toBe(firstId)
+    ).toBe(retryId)
+
+    act(() => result.current.retry(secondRetryId))
+    await waitFor(() => expect(mocks.call).toHaveBeenCalledTimes(3))
+    expect(
+      (mocks.call.mock.calls[2]![2] as { envelope: { clientOperationId: string } }).envelope
+        .clientOperationId
+    ).toBe(secondRetryId)
   })
 
   it('persists and dispatches an attachment-only structured send', async () => {
@@ -546,7 +558,7 @@ describe('useStructuredAgentSessionOutbox', () => {
     await waitFor(() => expect(mocks.call).toHaveBeenCalledTimes(3))
     await waitFor(() => expect(result.current.outbox).toHaveLength(0))
     const retryParams = mocks.call.mock.calls[1]?.[2] as { retryUnknown?: true } | undefined
-    expect(retryParams?.retryUnknown).toBe(true)
+    expect(retryParams?.retryUnknown).toBeUndefined()
   })
 
   it('rotates a history-rejected unknown head so the queued tail can advance', async () => {

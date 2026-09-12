@@ -206,6 +206,19 @@ describe('stable logical RPC client', () => {
     )
   })
 
+  it('preserves a committed response when logical close wins the callback race', async () => {
+    const session = new FakeSession('connected')
+    const inFlight = deferred<RpcResponse>()
+    session.sendRequest.mockReturnValue(inFlight.promise)
+    const client = createStableLogicalRpcClient(session, 'lan')
+    const request = client.sendRequest('terminal.send', { terminal: 'term', text: 'hi' })
+
+    inFlight.resolve(success('accepted'))
+    client.close()
+
+    await expect(request).resolves.toEqual(success('accepted'))
+  })
+
   it('publishes the replacement dial phases while the client is suspended', async () => {
     const oldSession = new FakeSession('connected')
     const replacement = new FakeSession('connecting')

@@ -20,6 +20,9 @@ export const DISPATCH_DOUBT_PROVIDER_EXITED = 'provider_exited_before_acknowledg
 /** The adapter took the message and only the journal write failed after it. */
 export const DISPATCH_DOUBT_PERSISTENCE_FAILED = 'dispatch_result_persistence_failed'
 
+/** The operation tombstone survived recovery but its journal submission did not. */
+export const DISPATCH_DOUBT_SUBMISSION_MISSING = 'durable_send_submission_missing'
+
 /** Codex owns a turn it started but did not name, because its turn-start still
  *  settles on a deadline. The turn IS running, so this must never be treated as
  *  proof of non-delivery. Delete it once Codex settles on the app-server's

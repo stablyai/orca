@@ -17,7 +17,6 @@ import {
   type AgentSessionRefusalOperationState
 } from '../../../shared/agent-session-refusal-retry'
 import { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
-import { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
 import {
@@ -236,11 +235,13 @@ const UNREACHABLE = new Set<Pair>([
   'agentSession.send:agent_session_identity_required',
   // No structured-agent-session host branch emits agent_session_journal_unreadable.
   'agentSession.setOption:agent_session_journal_unreadable',
-  'agentSession.send:agent_session_journal_unreadable'
+  'agentSession.send:agent_session_journal_unreadable',
+  // Send reconstructs doubt from its global tombstone instead of refusing it.
+  'agentSession.send:agent_session_operation_unknown'
 ])
 
 describe('agentSessionRefusalOperationState host oracle', () => {
-  // 26 real host round trips, each committing the store — and every commit now also rotates a
+  // 25 real host round trips, each committing the store — and every commit now also rotates a
   // durable backup, so this does substantially more fsync work than the budget was set for.
   it('agrees with every refusal the real host path can produce', { timeout: 90_000 }, async () => {
     const produced = new Set<Pair>()
@@ -339,14 +340,6 @@ describe('agentSessionRefusalOperationState host oracle', () => {
     const optionUnknown = { method: 'agentSession.setOption' as const, operationId: operationId() }
     await expect(invoke(unknown, optionUnknown)).rejects.toThrow('reply lost')
     record(await assertHostAgreement(unknown, optionUnknown, 'agent_session_operation_unknown'))
-
-    const appendFailure = vi
-      .spyOn(AgentSessionJournal.prototype, 'appendSubmission')
-      .mockRejectedValueOnce(new Error('journal write failed'))
-    const sendUnknown = { method: 'agentSession.send' as const, operationId: operationId() }
-    await expect(invoke(unknown, sendUnknown)).rejects.toThrow('journal write failed')
-    appendFailure.mockRestore()
-    record(await assertHostAgreement(unknown, sendUnknown, 'agent_session_operation_unknown'))
 
     const reconciling = await createHarness()
     await setLease(reconciling, (current) => ({

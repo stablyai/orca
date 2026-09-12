@@ -65,18 +65,34 @@ export async function admitAndRunAgentSessionMutation<TValue>(
   if (conflict) {
     return refuseAgentSessionMutation(conflict)
   }
+  const ledger = await request.store[
+    plan.operationIdScope === 'global' ? 'admitGlobalOperation' : 'admitOperation'
+  ]({
+    callerKey: request.callerKey,
+    operationId: envelope.clientOperationId,
+    fingerprint: hostFingerprint,
+    now: request.now()
+  })
   const admission = admitAgentSessionMutation({
     envelope,
     hostFingerprint,
-    ledger: await request.store.admitOperation({
-      callerKey: request.callerKey,
-      operationId: envelope.clientOperationId,
-      fingerprint: hostFingerprint,
-      now: request.now()
-    }),
+    ledger,
     lease: record.lease
   })
   if (admission.decision === 'refused') {
+    // A fresh row plus a pre-effect refusal proves the mutation did not run.
+    // Settle it so a same-id retry replays that fact instead of inventing doubt.
+    if (ledger.decision === 'admit') {
+      await request.store.recordOperationOutcome({
+        callerKey: ledger.row.callerKey,
+        operationId: envelope.clientOperationId,
+        outcome: {
+          status: 'failed',
+          code: admission.refusal.code,
+          message: admission.refusal.message
+        }
+      })
+    }
     return refuseAgentSessionMutation(admission.refusal)
   }
 
@@ -111,10 +127,11 @@ export async function admitAndRunAgentSessionMutation<TValue>(
     }
   }
 
-  plan.beforeRun?.()
   const outcome = await runSettledAgentSessionMutation({
     store: request.store,
-    callerKey: request.callerKey,
+    // A global send replay can cross caller identities. Settlement still owns
+    // the durable row admitted by the original caller.
+    operationCallerKey: admission.row.callerKey,
     envelope,
     plan,
     context

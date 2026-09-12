@@ -206,14 +206,14 @@ export function useStructuredAgentSessionOutbox(args: {
   // moves it out of `unconfirmed`, so one wedges the whole FIFO queue. Re-issuing
   // the same envelope without `retryUnknown` is idempotent: the operation ledger
   // replays a recorded outcome, or the host performs a genuine first delivery.
-  // A host-confirmed unknown stays parked — forcing past that redispatches, which
-  // is the user's call via Retry.
+  // A host-confirmed unknown stays parked until the user explicitly asks Retry
+  // to replay the same operation.
   const head = outbox[0]
   // Depend on primitives: `submissions` is rebuilt on every streaming batch, so an
   // array-identity dep would reset the backoff forever while the agent is working.
-  // A non-null `retryAfterUnknownSubmittedAt` means the user already force-retried,
-  // so the request would carry `retryUnknown` and redispatch host-side. Only entries
-  // that have never been force-retried are safe to re-issue automatically.
+  // A non-null `retryAfterUnknownSubmittedAt` means the user already retried, so
+  // another request would repeat that explicit action. Only entries that have
+  // never been retried are safe to probe automatically.
   const probeId =
     head &&
     head.sessionId === sessionId &&
@@ -290,6 +290,7 @@ export function useStructuredAgentSessionOutbox(args: {
               ...entry,
               clientMessageId: structuredSessionOperationId(),
               state: 'queued' as const,
+              lastAttemptAt: null,
               retryAfterUnknownSubmittedAt: null
             }
           : entry
