@@ -14,6 +14,37 @@ afterEach(() => {
 })
 
 describe('Pi session wake', () => {
+  it('does not launch a new tab for Pi session_start identity metadata', () => {
+    const providerSession = {
+      key: 'session_id' as const,
+      id: 'pi-session-1',
+      transcriptPath: PI_TRANSCRIPT_PATH
+    }
+    const record: SleepingAgentSessionRecord = {
+      paneKey: 'tab-1:leaf-1',
+      tabId: 'tab-1',
+      worktreeId: 'wt-1',
+      agent: 'pi',
+      providerSession,
+      prompt: '',
+      state: 'working',
+      capturedAt: 1,
+      updatedAt: 1,
+      origin: 'live',
+      resumeScope: 'pane'
+    }
+    useAppStore.setState({
+      tabsByWorktree: { 'wt-1': [] },
+      sleepingAgentSessionsByPaneKey: { [record.paneKey]: record }
+    })
+
+    const launched = resumeSleepingAgentSessionsForWorktree('wt-1')
+
+    expect(launched).toBe(0)
+    expect(useAppStore.getState().tabsByWorktree['wt-1']).toHaveLength(0)
+    expect(useAppStore.getState().sleepingAgentSessionsByPaneKey[record.paneKey]).toBe(record)
+  })
+
   it('wakes a manually slept Pi session with its transcript identity', () => {
     const providerSession = {
       key: 'session_id' as const,
