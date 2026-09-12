@@ -17,8 +17,7 @@ import { getStructuredAgentLaunchStatus } from '@/lib/structured-agent-session-l
 import { AGENT_SESSION_PROVIDER_HANDLE_PROVIDERS } from '../../../shared/agent-session-provider-handle'
 import type { TerminalColdActivationController } from './terminal-cold-activation'
 
-// Why shared: only a mounted workspace can park a tab, and the watcher sync only reads
-// this set, so every other surface would otherwise allocate its own empty one per fire.
+// Why shared: surfaces without watchable live tabs need no per-pass allocation.
 const NO_PARKED_TAB_IDS: ReadonlySet<string> = new Set()
 
 export function useTerminalWatcherEffects(controller: TerminalColdActivationController): void {
@@ -44,6 +43,7 @@ export function useTerminalWatcherEffects(controller: TerminalColdActivationCont
     renderedActiveWorktreeId,
     tabsByWorktree,
     terminalParkingEnabled,
+    terminalProviderSnapshotCapabilityRevision,
     terminalStartupRestorationReady,
     terminalTitleSnapshotAuthorityEnabled,
     workspaceSessionReady,
@@ -100,6 +100,23 @@ export function useTerminalWatcherEffects(controller: TerminalColdActivationCont
           }
         }
       }
+      if (tabs.length > 0 && !mountedWorktreeIdsRef.current.has(workspaceId)) {
+        const backgroundTabIds = tabs
+          .filter(
+            (tab) =>
+              canWatcherCoverParkedTerminalTab(workspaceId, tab) &&
+              !findActivityTerminalPortal(activityTerminalPortals, {
+                worktreeId: workspaceId,
+                tabId: tab.id
+              })
+          )
+          .map((tab) => tab.id)
+        if (backgroundTabIds.length > 0) {
+          // CLI-created live terminals have never mounted a pane to consume host title facts.
+          parkedTabIds = new Set(backgroundTabIds)
+          deferredTabIds = parkedTabIds
+        }
+      }
       syncEntriesByWorktreeId.set(workspaceId, {
         tabs,
         parkedTabIds,
@@ -123,6 +140,7 @@ export function useTerminalWatcherEffects(controller: TerminalColdActivationCont
     renderedActiveWorktreeId,
     tabsByWorktree,
     terminalParkingEnabled,
+    terminalProviderSnapshotCapabilityRevision,
     terminalTitleSnapshotAuthorityEnabled,
     workspaceSessionReady,
     workspaceSurfaceIds
