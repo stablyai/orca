@@ -6086,6 +6086,8 @@
           "7173352632": "idle"
         },
         "GeneralWorkspaceSettingsSection": {
+          "askBeforeRemovingProjects": "프로젝트 제거 전 확인",
+          "askBeforeRemovingProjectsDescription": "Orca에서 프로젝트를 제거하기 전에 확인합니다. VM 프로젝트는 파일이 삭제될 수 있어 항상 확인합니다.",
           "3d538a98f7": "워크스페이스의 열기 메뉴에서 사용 가능한 앱을 선택하세요.",
           "008f92085f": "앱에서 열기",
           "824b98a0d9": "자동화 및 실행 기록을 삭제하기 전에 확인 메시지를 표시하세요.",
@@ -14300,6 +14302,7 @@
       },
       "confirmation": {
         "dialog": {
+          "92bac3217e": "다시 보지 않기",
           "8490e5d36a": "확인",
           "56f5c60e0c": "취소"
         }

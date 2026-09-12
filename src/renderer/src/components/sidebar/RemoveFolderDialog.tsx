@@ -1,4 +1,6 @@
-import React, { useCallback } from 'react'
+import React, { useCallback, useState } from 'react'
+import { Checkbox } from '@/components/ui/checkbox'
+import { persistConfirmationSkipPreference } from '@/components/confirmation-skip-preference'
 import {
   Dialog,
   DialogContent,
@@ -25,6 +27,10 @@ const RemoveFolderDialog = React.memo(function RemoveFolderDialog() {
   const modalData = useAppStore((s) => s.modalData)
   const closeModal = useAppStore((s) => s.closeModal)
   const removeProject = useAppStore((s) => s.removeProject)
+  const updateSettings = useAppStore((s) => s.updateSettingsOrThrow)
+  const openSettingsPage = useAppStore((s) => s.openSettingsPage)
+  const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
+  const [dontAskAgain, setDontAskAgain] = useState(false)
 
   const isOpen = activeModal === 'confirm-remove-folder'
   const repoId = typeof modalData.repoId === 'string' ? modalData.repoId : ''
@@ -55,7 +61,8 @@ const RemoveFolderDialog = React.memo(function RemoveFolderDialog() {
   // Why: fragment concatenation around the styled name cannot be reordered by
   // SOV locales (#9294). Translate one full sentence with the name as a
   // sentinel token, then split on it to re-apply the inline emphasis.
-  const description = isRuntimeOwnedSshTargetId(sshConnectionId)
+  const isVmProject = isRuntimeOwnedSshTargetId(sshConnectionId)
+  const description = isVmProject
     ? translate(
         'auto.components.sidebar.RemoveFolderDialog.removeDescriptionVmRecipe',
         'This removes {{name}} from Orca. Its VM recipe determines whether the environment and its files are permanently deleted.',
@@ -76,13 +83,32 @@ const RemoveFolderDialog = React.memo(function RemoveFolderDialog() {
 
   const handleConfirm = useCallback(() => {
     if (repoId) {
+      if (dontAskAgain && !isVmProject) {
+        persistConfirmationSkipPreference({
+          updates: { skipRemoveProjectConfirm: true },
+          settingsSectionId: 'general-skip-remove-project-confirm',
+          updateSettings,
+          openSettingsPage,
+          openSettingsTarget
+        })
+      }
       void removeProject(repoId, {
         ...(hostId ? { hostId } : {}),
         errorFeedback: 'toast'
       })
     }
     closeModal()
-  }, [closeModal, hostId, removeProject, repoId])
+  }, [
+    closeModal,
+    hostId,
+    removeProject,
+    repoId,
+    dontAskAgain,
+    isVmProject,
+    updateSettings,
+    openSettingsPage,
+    openSettingsTarget
+  ])
 
   const handleOpenChange = useCallback(
     (open: boolean) => {
@@ -106,6 +132,15 @@ const RemoveFolderDialog = React.memo(function RemoveFolderDialog() {
             {descriptionAfterName}
           </DialogDescription>
         </DialogHeader>
+        {!isVmProject && (
+          <label className="flex items-center gap-2 text-xs text-muted-foreground">
+            <Checkbox
+              checked={dontAskAgain}
+              onCheckedChange={(checked) => setDontAskAgain(checked === true)}
+            />
+            {translate('auto.components.confirmation.dialog.92bac3217e', "Don't ask again")}
+          </label>
+        )}
         <DialogFooter>
           <Button variant="outline" onClick={() => handleOpenChange(false)}>
             {translate('auto.components.sidebar.RemoveFolderDialog.d36883e046', 'Cancel')}
