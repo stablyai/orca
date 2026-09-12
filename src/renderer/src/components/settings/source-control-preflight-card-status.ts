@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import type { PreflightStatus } from '../../../../preload/api-types'
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { getLocalPreflightContext, localPreflightContextKey } from '@/lib/local-preflight-context'
 import { useAppStore } from '@/store'
@@ -47,6 +48,7 @@ export function deriveCliProviderCardState(input: {
 export type PreflightCardStatuses = {
   statuses: PreflightIntegrationStatuses
   unavailable: boolean
+  hostForge: PreflightStatus['hostForge']
   refresh: () => void
 }
 
@@ -90,6 +92,7 @@ export function usePreflightCardStatuses(
   return {
     statuses: getPreflightIntegrationStatuses(statusInput, refreshingProviders),
     unavailable,
+    hostForge: statusInput?.hostForge,
     refresh
   }
 }

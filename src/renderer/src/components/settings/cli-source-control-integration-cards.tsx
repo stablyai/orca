@@ -6,6 +6,7 @@ import {
   useIntegrationCommandRowClass,
   useIntegrationSubordinateRowClass
 } from './integration-card-presentation'
+import { deriveHostForgeHint, type ForgeCliName } from './integrations-pane-status'
 import { getProviderAccountScope } from './provider-account-scope'
 import { ProviderHostScopeControl } from './ProviderHostScopeControl'
 import { usePreflightCardStatuses } from './source-control-preflight-card-status'
@@ -40,6 +41,27 @@ function integrationStatusLabel(
   }
 }
 
+function HostForgeHint({
+  cli,
+  hint
+}: {
+  cli: ForgeCliName
+  hint: { hostLabel: string } | null
+}): React.JSX.Element | null {
+  if (!hint) {
+    return null
+  }
+  return (
+    <p className="text-xs text-muted-foreground">
+      {translate(
+        'auto.components.settings.cli.source.control.integration.cards.hostForgeHint',
+        '{{value0}} is installed and authenticated on {{value1}} — these features currently run locally.',
+        { value0: cli, value1: hint.hostLabel }
+      )}
+    </p>
+  )
+}
+
 function ProviderAccountScopeDetails({
   children
 }: {
@@ -65,10 +87,11 @@ function ProviderAccountScopeDetails({
 }
 
 export function GitHubIntegrationCard(): React.JSX.Element {
-  const { statuses, unavailable, refresh } = usePreflightCardStatuses('gh')
+  const { statuses, unavailable, hostForge, refresh } = usePreflightCardStatuses('gh')
   const status = unavailable ? 'unavailable' : statuses.ghStatus
   const connected = status === 'connected'
   const commandRowClass = useIntegrationCommandRowClass()
+  const hostHint = deriveHostForgeHint('gh', status, hostForge)
 
   return (
     <IntegrationCardShell
@@ -180,16 +203,18 @@ export function GitHubIntegrationCard(): React.JSX.Element {
             </>
           )
         ) : null}
+        <HostForgeHint cli="gh" hint={hostHint} />
       </ProviderAccountScopeDetails>
     </IntegrationCardShell>
   )
 }
 
 export function GitLabIntegrationCard(): React.JSX.Element {
-  const { statuses, unavailable, refresh } = usePreflightCardStatuses('glab')
+  const { statuses, unavailable, hostForge, refresh } = usePreflightCardStatuses('glab')
   const status = unavailable ? 'unavailable' : statuses.glabStatus
   const connected = status === 'connected'
   const commandRowClass = useIntegrationCommandRowClass()
+  const hostHint = deriveHostForgeHint('glab', status, hostForge)
 
   return (
     <IntegrationCardShell
@@ -305,6 +330,7 @@ export function GitLabIntegrationCard(): React.JSX.Element {
             </>
           )
         ) : null}
+        <HostForgeHint cli="glab" hint={hostHint} />
       </ProviderAccountScopeDetails>
     </IntegrationCardShell>
   )
