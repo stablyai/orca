@@ -572,7 +572,7 @@ describe('buildDashboardSnapshot', () => {
     expect(snapshot.cards[0].dotState).toBe('idle')
   })
 
-  it('omits retained done agents whose local pane is gone', () => {
+  it('keeps retained done agents after their local pane is gone', () => {
     const donePaneKey = makePaneKey(TAB_ID, GONE_LEAF_ID)
     const snapshot = buildDashboardSnapshot(
       baseState({
@@ -589,7 +589,13 @@ describe('buildDashboardSnapshot', () => {
       NOW
     )
 
-    expect(snapshot.cards).toEqual([])
+    expect(snapshot.cards).toHaveLength(1)
+    expect(snapshot.cards[0]).toMatchObject({
+      paneKey: donePaneKey,
+      ptyId: null,
+      bucket: 'done',
+      dotState: 'done'
+    })
   })
 
   it('includes collapsed subagents and workspace status metadata on the parent card', () => {

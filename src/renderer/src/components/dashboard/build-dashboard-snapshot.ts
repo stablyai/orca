@@ -182,9 +182,14 @@ export function buildDashboardSnapshot(
         layoutPtyId && (state.ptyIdsByTabId?.[tabId] ?? []).includes(layoutPtyId)
           ? layoutPtyId
           : null
-      // A local row without a live PTY cannot be opened or focused. Do not
-      // publish dead cards; remote absence is only unverifiable and stays visible.
-      if (includeCardDetails && !ptyId && workspace.remoteHostKind === null) {
+      // A live local row without a PTY cannot be opened or focused. Retained rows
+      // intentionally outlive their completed terminal; remote absence is unverifiable.
+      if (
+        includeCardDetails &&
+        !ptyId &&
+        row.rowSource !== 'retained' &&
+        workspace.remoteHostKind === null
+      ) {
         continue
       }
       // Why: only a live pty can open a preview terminal, and only a
