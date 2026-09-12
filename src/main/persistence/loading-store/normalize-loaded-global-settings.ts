@@ -24,6 +24,7 @@ export function normalizeLoadedGlobalSettings(
     migratedTerminalScrollback,
     migratedTerminalTuiScrollSensitivity,
     migratedSourceControlAi,
+    piConfiguredDefaultModelState,
     migratedOptionAsAlt,
     migratedFloatingTerminalEnabled,
     migratedOsc52Clipboard,
@@ -128,6 +129,7 @@ export function normalizeLoadedGlobalSettings(
     }),
     notifications: normalizedNotifications,
     sourceControlAi: migratedSourceControlAi,
+    piConfiguredDefaultModelState,
     sourceControlGroupOrder: normalizedSourceControlGroupOrder,
     // Why: rollback builds still read commitMessageAi, so refresh the legacy projection from sourceControlAi for compat.
     commitMessageAi: projectSourceControlAiToLegacyCommitMessageAi(

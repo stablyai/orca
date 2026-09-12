@@ -1,3 +1,6 @@
+import { translateSearchKeyword } from './settings-search-keywords'
+import { PiConfiguredModelReset } from './PiConfiguredModelReset'
+import { getConnectionIdFromState } from '@/lib/connection-context'
 import { useRef } from 'react'
 import type React from 'react'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
@@ -103,6 +106,11 @@ export function CommitMessageAiPane({
   const storeSearchQuery = useAppStore((s) => s.settingsSearchQuery)
   const searchQuery = settingsSearchQuery ?? storeSearchQuery
   const config = readSettings(settings)
+  const piHostKey = useAppStore((s) =>
+    getCommitMessageModelDiscoveryHostKeyForScope(
+      getRuntimeGitScope(settings, getConnectionIdFromState(s, s.activeWorktreeId))
+    )
+  )
   const ownership = getSettingOwnershipSummary('sourceControlAiDefaults')
   const settingsWriteQueueRef = useRef<Promise<void>>(undefined!)
   settingsWriteQueueRef.current ??= Promise.resolve()
@@ -211,6 +219,29 @@ export function CommitMessageAiPane({
           onCheckedChange={onToggleEnabled}
         />
       </SearchableSetting>
+    )
+  }
+
+  if (
+    config.enabled &&
+    matchesSettingsSearch(searchQuery, {
+      title: translate('settings.piConfiguredModelReset.title', 'Saved Pi model choices'),
+      description: translate('settings.piConfiguredModelReset.action', 'Use Pi’s configured model'),
+      keywords: [
+        ...translateSearchKeyword('settings.piConfiguredModelReset.keywords.pi', 'pi'),
+        ...translateSearchKeyword('settings.piConfiguredModelReset.keywords.model', 'model'),
+        ...translateSearchKeyword('settings.piConfiguredModelReset.keywords.copilot', 'copilot'),
+        ...translateSearchKeyword('settings.piConfiguredModelReset.keywords.reset', 'reset')
+      ]
+    })
+  ) {
+    sections.push(
+      <PiConfiguredModelReset
+        key="pi-model-reset"
+        config={config}
+        hostKey={piHostKey}
+        writeConfig={writeConfig}
+      />
     )
   }
 

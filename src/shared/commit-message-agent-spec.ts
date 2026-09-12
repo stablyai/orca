@@ -87,6 +87,17 @@ export type CommitMessageAgentCapability = {
   defaultModelId: string
 }
 
+export {
+  PI_DEFAULT_MODEL_ID,
+  PI_RETIRED_COPILOT_DEFAULT_MODEL_ID
+} from './pi-configured-default-model'
+import { PI_RETIRED_COPILOT_DEFAULT_MODEL_ID } from './pi-configured-default-model'
+export const PI_COMPATIBILITY_MODEL: CommitMessageModel = {
+  id: PI_RETIRED_COPILOT_DEFAULT_MODEL_ID,
+  label: 'Github Copilot GPT 5.4 Mini',
+  ...withOpenAiThinking('gpt-5.4-mini')
+}
+
 export const COMMIT_MESSAGE_AGENT_SPECS: Partial<Record<TuiAgent, CommitMessageAgentSpec>> = {
   ...buildPrimaryCommitMessageAgentSpecs({
     CLAUDE_THINKING_LEVELS,
@@ -178,7 +189,8 @@ function toCommitMessageAgentCapability(
       ...(model.description ? { description: model.description } : {}),
       ...(model.thinkingLevels ? { thinkingLevels: [...model.thinkingLevels] } : {}),
       ...(model.defaultThinkingLevel ? { defaultThinkingLevel: model.defaultThinkingLevel } : {}),
-      ...(model.supportsFastMode ? { supportsFastMode: true } : {})
+      ...(model.supportsFastMode ? { supportsFastMode: true } : {}),
+      ...(model.isDefault ? { isDefault: true } : {})
     }))
   }
 }

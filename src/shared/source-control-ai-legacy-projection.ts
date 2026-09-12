@@ -1,3 +1,8 @@
+import { normalizePiConfiguredDefaultForLegacy } from './pi-configured-default-model-state'
+import {
+  prunePiConfiguredDefaultFromDiscovery,
+  prunePiConfiguredDefaultFromHostDiscovery
+} from './pi-configured-default-discovery'
 import type { CommitMessageAiSettings } from './commit-message-ai-types'
 import { readSourceControlActionDefault } from './source-control-ai-actions'
 import {
@@ -13,7 +18,7 @@ export function projectSourceControlAiToLegacyCommitMessageAi(
 ): CommitMessageAiSettings {
   const commitMessageChoice = sourceControlAi.modelOverridesByOperation?.commitMessage
   const commitRecipe = readSourceControlActionDefault(sourceControlAi.actions, 'commitMessage')
-  return {
+  const legacy: CommitMessageAiSettings = {
     enabled: sourceControlAi.enabled,
     agentId: hasActionAgentRecipe(commitRecipe) ? commitRecipe.agentId : sourceControlAi.agentId,
     selectedModelByAgent: {
@@ -25,13 +30,10 @@ export function projectSourceControlAiToLegacyCommitMessageAi(
       commitMessageChoice?.selectedModelByAgentByHost
     ),
     discoveredModelsByAgent:
-      sourceControlAi.discoveredModelsByAgent === undefined
-        ? {}
-        : structuredClone(sourceControlAi.discoveredModelsByAgent),
+      prunePiConfiguredDefaultFromDiscovery(sourceControlAi.discoveredModelsByAgent) ?? {},
     discoveredModelsByAgentByHost:
-      sourceControlAi.discoveredModelsByAgentByHost === undefined
-        ? {}
-        : structuredClone(sourceControlAi.discoveredModelsByAgentByHost),
+      prunePiConfiguredDefaultFromHostDiscovery(sourceControlAi.discoveredModelsByAgentByHost) ??
+      {},
     selectedThinkingByModel: {
       ...sourceControlAi.selectedThinkingByModel,
       ...commitMessageChoice?.selectedThinkingByModel
@@ -42,4 +44,6 @@ export function projectSourceControlAiToLegacyCommitMessageAi(
     ),
     customAgentCommand: sourceControlAi.customAgentCommand
   }
+  normalizePiConfiguredDefaultForLegacy(legacy)
+  return legacy
 }
