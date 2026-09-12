@@ -340,3 +340,59 @@ describe('startup managed hook reconciliation (STA-5679)', () => {
     expect(mocks.removeCodex).toHaveBeenCalledTimes(1)
   })
 })
+
+describe('installManagedAgentHooks caller-independent off switch', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mocks.installClaude.mockReturnValue(status('claude', 'installed'))
+    mocks.installCodex.mockReturnValue(status('codex', 'installed'))
+    mocks.refreshClaude.mockResolvedValue(undefined)
+    mocks.refreshCodex.mockResolvedValue(undefined)
+    mocks.detect.mockResolvedValue({
+      claude: { state: 'found' },
+      codex: { state: 'found' }
+    })
+  })
+
+  it('writes nothing for any agent when hooks are turned off', async () => {
+    const results = await installManagedAgentHooks({ agentStatusHooksEnabled: false })
+
+    expect(mocks.installClaude).not.toHaveBeenCalled()
+    expect(mocks.installCodex).not.toHaveBeenCalled()
+    // Not even the Orca-owned launcher scripts, and no PATH probing.
+    expect(mocks.refreshClaude).not.toHaveBeenCalled()
+    expect(mocks.detect).not.toHaveBeenCalled()
+    expect(results).toEqual([
+      expect.objectContaining({ agent: 'claude', state: 'skipped', skipReason: 'hooks_disabled' }),
+      expect.objectContaining({ agent: 'codex', state: 'skipped', skipReason: 'hooks_disabled' })
+    ])
+  })
+
+  it('never removes anything on the declined path', async () => {
+    // Removal would delete user-global entries another Orca profile owns (STA-5679).
+    await installManagedAgentHooks({ agentStatusHooksEnabled: false })
+
+    expect(mocks.removeClaude).not.toHaveBeenCalled()
+    expect(mocks.removeCodex).not.toHaveBeenCalled()
+    expect(mocks.removeClaudeAsync).not.toHaveBeenCalled()
+  })
+
+  it('reports only the requested agents when the caller scoped the install', async () => {
+    const results = await installManagedAgentHooks(
+      { agentStatusHooksEnabled: false },
+      { agents: ['codex'] }
+    )
+
+    expect(results.map((entry) => entry.agent)).toEqual(['codex'])
+  })
+
+  it('still installs on the turn-it-back-on path, which passes post-write settings', async () => {
+    await applyAgentStatusHooksEnabled(true, {
+      agentStatusHooksEnabled: true,
+      disabledTuiAgents: []
+    })
+
+    expect(mocks.installClaude).toHaveBeenCalledTimes(1)
+    expect(mocks.installCodex).toHaveBeenCalledTimes(1)
+  })
+})

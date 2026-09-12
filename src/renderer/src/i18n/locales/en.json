@@ -13567,6 +13567,25 @@
               }
             }
           }
+        },
+        "AgentStatusHooksControl": {
+          "label": "Enable agent status hooks",
+          "why": "Enables Orca to track your CLI agents' statuses, so it can inform you when each is working, needs you, or is done. Also powers your notifications.",
+          "disclosureSummary": "What Orca changes, and when",
+          "whenLabel": "When",
+          "whenBody": "For the agent CLIs found on your machine, kept current each time Orca starts. Agents you don't have are skipped, and nothing is written for them.",
+          "affectedLabel": "Affected",
+          "affectedDetecting": "Still checking which agent CLIs are on your PATH…",
+          "affectedNone": "No agent CLIs found on your PATH, so nothing would be written right now.",
+          "affectedScriptNote": "Plus a small script in ~/.orca/agent-hooks/. Status goes to Orca on this machine and to the devices you've paired with it.",
+          "affectedApproximate": "This list is approximate — Orca checks your PATH again when it installs.",
+          "yourHooksLabel": "Your hooks",
+          "yourHooksBody": "Orca only adds or removes entries that point at its own script, hooks you wrote are left alone. These live in your agent's own config, so they run in every session, not just ones started from Orca. When Orca isn't running the hook exits immediately and can never block or deny a tool call.",
+          "turningOffLabel": "Turning off",
+          "turningOffBody": "Removes the entries Orca added and stops it reinstalling them on the next launch.",
+          "offRamp": "Turn this off any time in Settings → Agents.",
+          "uncheckedConsequenceLead": "Orca will fall back to reading terminal output.",
+          "uncheckedConsequence": "Resumed sessions show no status until you type, finished turns can stay stuck on \"working\", and Cursor reports nothing at all."
         }
       },
       "new": {

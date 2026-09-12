@@ -16,11 +16,11 @@ import { isGpuFallbackCrashCandidate } from '../crash-reporting/gpu-crash-fallba
 import { ensureRealHomeCodexHookState } from '../codex/codex-real-home-hook-install'
 import {
   installManagedAgentHooks,
-  resolveStartupManagedHookAction,
   shouldContinueManagedHookStartup,
   shouldInstallStartupManagedAgentHook
 } from '../agent-hooks/managed-agent-hook-controls'
 import { shouldInstallManagedHooks } from './configure-process'
+import { resolveStartupManagedHookPlan } from './startup-managed-hook-plan'
 import { recordManagedHookInstallFailure } from '../agent-hooks/install-telemetry'
 import { mainProcessState as state } from './main-process-state'
 import { initializeMainProcessObservers } from './main-process-observers'
@@ -94,9 +94,16 @@ export async function initializeReadyRuntimeServices(): Promise<void> {
   // and complete the legacy real-home sweep first — but awaiting it inline
   // stalled app init behind that session, so chain instead of blocking.
   const startupManagedHookSettings = store.getSettings()
-  const shouldReconcileStartupManagedHooks =
-    shouldInstallManagedHooks(is.dev) &&
-    resolveStartupManagedHookAction(startupManagedHookSettings) === 'install'
+  const startupManagedHookPlan = resolveStartupManagedHookPlan({
+    managedHooksInstallable: shouldInstallManagedHooks(is.dev),
+    isServeMode: state.isServeMode,
+    onboarding: store.getOnboarding(),
+    settings: startupManagedHookSettings
+  })
+  if (startupManagedHookPlan.shouldRetireFirstRunLatch) {
+    store.updateSettings({ managedAgentHookFirstRunGate: 'done' })
+  }
+  const shouldReconcileStartupManagedHooks = startupManagedHookPlan.shouldReconcile
   const realHomeCodexHookState =
     shouldReconcileStartupManagedHooks &&
     shouldInstallStartupManagedAgentHook(startupManagedHookSettings, 'codex') &&

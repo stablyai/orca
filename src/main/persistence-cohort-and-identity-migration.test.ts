@@ -199,6 +199,90 @@ describe('Store.migrateTabSwitchKeybindings', () => {
   })
 })
 
+describe('Store.migrateManagedAgentHookFirstRunGate', () => {
+  // Freezes the managed-hook first-run latch on first load so a wizard re-open can never re-arm it.
+
+  beforeEach(() => {
+    testState.dir = mkdtempSync(join(tmpdir(), 'orca-test-'))
+  })
+
+  afterEach(() => {
+    rmSync(testState.dir, { recursive: true, force: true })
+  })
+
+  it('arms the latch on a truly fresh install so startup defers the hook install', async () => {
+    const store = await createStore()
+    expect(store.getSettings().managedAgentHookFirstRunGate).toBe('pending')
+  })
+
+  it('retires the latch for a pre-existing install so behaviour is unchanged', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [makeRepo()],
+      worktreeMeta: {},
+      settings: { theme: 'dark' },
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+    const store = await createStore()
+    expect(store.getSettings().managedAgentHookFirstRunGate).toBe('done')
+    expect(store.getSettings().theme).toBe('dark')
+  })
+
+  it('treats a corrupt data file as a pre-existing install', async () => {
+    mkdirSync(testState.dir, { recursive: true })
+    writeFileSync(dataFile(), '{{{corrupt json', 'utf-8')
+    const store = await createStore()
+    expect(store.getSettings().managedAgentHookFirstRunGate).toBe('done')
+  })
+
+  it('treats surviving backups as a pre-existing install when the primary file is gone', async () => {
+    // The loader's own recovery path counts a backup as evidence the profile exists; classifying
+    // this user fresh would silently stop maintaining hooks they already have. The backup is
+    // deliberately unusable, so recovery cannot re-create the primary file and hide the question.
+    mkdirSync(testState.dir, { recursive: true })
+    writeFileSync(`${dataFile()}.bak.0`, '{{{corrupt json', 'utf-8')
+    const store = await createStore()
+    expect(store.getSettings().managedAgentHookFirstRunGate).toBe('done')
+  })
+
+  it('recovers a usable backup and still classifies the profile as pre-existing', async () => {
+    mkdirSync(testState.dir, { recursive: true })
+    writeFileSync(
+      `${dataFile()}.bak.0`,
+      JSON.stringify({
+        schemaVersion: 1,
+        repos: [makeRepo()],
+        worktreeMeta: {},
+        settings: { theme: 'dark' },
+        ui: {},
+        githubCache: { pr: {}, issue: {} },
+        workspaceSession: {}
+      }),
+      'utf-8'
+    )
+    const store = await createStore()
+    expect(store.getSettings().managedAgentHookFirstRunGate).toBe('done')
+    expect(store.getSettings().theme).toBe('dark')
+  })
+
+  it('preserves an already-frozen latch on subsequent launches', async () => {
+    writeDataFile({
+      schemaVersion: 1,
+      repos: [],
+      worktreeMeta: {},
+      settings: { managedAgentHookFirstRunGate: 'pending' },
+      ui: {},
+      githubCache: { pr: {}, issue: {} },
+      workspaceSession: {}
+    })
+    const store = await createStore()
+    // Existing file, latch already armed — must not flip to 'done' just because the file exists.
+    expect(store.getSettings().managedAgentHookFirstRunGate).toBe('pending')
+  })
+})
+
 describe('Store.migrateWorktreeIdentity', () => {
   const OLD = 'repo1::/ws/cunner'
   const NEW = 'repo1::/ws/worktree-creation-spinner'
