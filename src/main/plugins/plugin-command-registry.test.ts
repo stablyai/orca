@@ -37,6 +37,47 @@ function commandPlugin(
 }
 
 describe('PluginCommandRegistry', () => {
+  it('reads binding command IDs once while preserving declaration and binding order', () => {
+    const commands = Array.from({ length: 256 }, (_, index) => ({
+      id: `command-${index}`,
+      title: `Command ${index}`,
+      action: 'view.tasks'
+    }))
+    const keys = Array.from(
+      { length: 104 },
+      (_, index) =>
+        `Mod+${Math.floor(index / 26) & 1 ? 'Alt+' : ''}${Math.floor(index / 26) & 2 ? 'Shift+' : ''}${String.fromCharCode(65 + (index % 26))}`
+    )
+    // Distinct physical chords, with two bindings belonging to the same command.
+    const uniqueKeys = [...new Set(keys)]
+    const plugin = commandPlugin('many-commands', {
+      commands,
+      keybindings: uniqueKeys.map((key, index) => ({ command: `command-${index % 32}`, key }))
+    })
+    let reads = 0
+    for (const binding of plugin.manifest.contributes.keybindings) {
+      const command = binding.command
+      Object.defineProperty(binding, 'command', {
+        get: () => {
+          reads++
+          return command
+        }
+      })
+    }
+    const registry = new PluginCommandRegistry()
+    registry.reconcile([plugin], () => false)
+    const preview = registry.preview(plugin.pluginKey)
+    expect(preview.map((command) => command.id)).toEqual(commands.map((command) => command.id))
+    expect(preview[0].keybindings.map((binding) => binding.key)).toEqual(
+      plugin.manifest.contributes.keybindings
+        .filter((_, index) => index % 32 === 0)
+        .map((binding) => binding.key)
+    )
+    expect(preview[255].keybindings).toEqual([])
+    expect(registry.list()).toEqual([])
+    expect(reads).toBe(uniqueKeys.length)
+  })
+
   it('retains pending previews and exposes only approved commands', () => {
     const plugin = commandPlugin('aliases', {
       commands: [{ id: 'tasks', title: 'Open Tasks', action: 'view.tasks' }],

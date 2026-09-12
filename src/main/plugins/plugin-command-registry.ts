@@ -134,6 +134,16 @@ function registrationsForManifest(
   pluginKey: string,
   manifest: PluginManifest
 ): PluginCommandRegistration[] {
+  const bindingsByCommand = new Map<string, PluginKeybindingContribution[]>()
+  for (const binding of manifest.contributes.keybindings) {
+    const commandId = binding.command
+    const bindings = bindingsByCommand.get(commandId)
+    if (bindings) {
+      bindings.push(binding)
+    } else {
+      bindingsByCommand.set(commandId, [binding])
+    }
+  }
   return manifest.contributes.commands.map((command) => ({
     pluginKey,
     id: command.id,
@@ -143,7 +153,7 @@ function registrationsForManifest(
       command.action === undefined
         ? { type: 'worker' as const }
         : { type: 'built-in' as const, action: command.action as PluginCommandAliasActionId },
-    keybindings: keybindingsForCommand(command, manifest.contributes.keybindings)
+    keybindings: keybindingsForCommand(command, bindingsByCommand.get(command.id) ?? [])
   }))
 }
 
@@ -151,12 +161,10 @@ function keybindingsForCommand(
   command: PluginCommandContribution,
   keybindings: readonly PluginKeybindingContribution[]
 ): PluginCommandKeybinding[] {
-  return keybindings
-    .filter((keybinding) => keybinding.command === command.id)
-    .map((keybinding) => ({
-      key: keybinding.key,
-      when: keybinding.when ?? command.context ?? 'global'
-    }))
+  return keybindings.map((keybinding) => ({
+    key: keybinding.key,
+    when: keybinding.when ?? command.context ?? 'global'
+  }))
 }
 
 function contextsOverlap(
