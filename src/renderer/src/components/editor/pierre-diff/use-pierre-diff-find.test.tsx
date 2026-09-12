@@ -76,6 +76,27 @@ it('searches original content and restores its native selection on close', () =>
   expect(editor.setDeletedTextSelectionActive).toHaveBeenCalledWith(true)
 })
 
+it('keeps replace targeting additions after Cmd+H then Cmd+F', () => {
+  results.mockReturnValue(null)
+  const { result, find } = setup(true)
+  const deleted = document.createElement('div')
+  deleted.setAttribute('data-code', '')
+  deleted.setAttribute('data-deletions', '')
+  act(() =>
+    result.current.onPointerDown({
+      nativeEvent: { composedPath: () => [deleted] }
+    } as unknown as React.PointerEvent<HTMLElement>)
+  )
+  find('h')
+  expect(result.current.searchBar?.side).toBe('additions')
+  expect(result.current.searchBar?.canReplace).toBe(true)
+  expect(result.current.searchBar?.replaceOpen).toBe(true)
+  find('f')
+  expect(result.current.searchBar?.side).toBe('additions')
+  expect(result.current.searchBar?.canReplace).toBe(true)
+  expect(results.mock.lastCall?.[0].text).toBe('modified')
+})
+
 it('fences replacement against edits made after async search started', () => {
   results.mockReturnValue({
     matches: [

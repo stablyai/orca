@@ -26,6 +26,7 @@ vi.mock('@pierre/diffs/edit', () => ({
     edit() {
       return () => this.options.onComplete?.({})
     }
+    cleanUp(_reason?: 'discard' | 'recycle' | 'complete') {}
   }
 }))
 
@@ -107,6 +108,39 @@ it('keeps simultaneous copies of a scope independent', () => {
   const reopened = create('parallel')
   expect(reopened.key).toBe('parallel')
   reopened.finish()
+})
+
+it('releases the scope when cleanup finishes without emitting complete', () => {
+  const editor = createPierreEditor(
+    'file-diff',
+    withPierreDiffEditState({}, 'orphaned', {
+      type: 'change',
+      deletionLines: ['old\n'],
+      additionLines: ['new\n']
+    } as FileDiffMetadata)
+  )
+  editor.edit({} as never)
+  editor.cleanUp('discard')
+  const reopened = create('orphaned')
+  expect(reopened.key).toBe('orphaned')
+  reopened.finish()
+})
+
+it('keeps the scope reserved across a recycle so a remount cannot share the key', () => {
+  const editor = createPierreEditor(
+    'file-diff',
+    withPierreDiffEditState({}, 'recycled', {
+      type: 'change',
+      deletionLines: ['old\n'],
+      additionLines: ['new\n']
+    } as FileDiffMetadata)
+  )
+  editor.edit({} as never)
+  editor.cleanUp('recycle')
+  const concurrent = create('recycled')
+  expect(concurrent.key).not.toBe('recycled')
+  concurrent.finish()
+  editor.cleanUp('discard')
 })
 
 it('evicts dormant document history when retained text exceeds the budget', () => {

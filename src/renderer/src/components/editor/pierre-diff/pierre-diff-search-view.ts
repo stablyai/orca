@@ -146,17 +146,21 @@ export function pierreSearchRevealLine(
   if (side === 'additions') {
     return lineNumber
   }
-  let modifiedLine = lineNumber
+  // revealLine is new-file only; never pass a pure-deletion old-file number.
+  let modifiedLine = 0
+  let found = false
   iterateOverDiff({
     diff,
     diffStyle: 'unified',
     expandedHunks: true,
-    callback: ({ deletionLine, additionLine }) => {
-      if (deletionLine?.lineNumber !== lineNumber) {
-        return
+    callback: ({ deletionLine, additionLine }): boolean => {
+      if (additionLine) {
+        modifiedLine = additionLine.lineNumber
       }
-      modifiedLine = additionLine?.lineNumber ?? lineNumber
-      return true
+      if (deletionLine?.lineNumber === lineNumber) {
+        found = true
+      }
+      return found && additionLine != null
     }
   })
   return modifiedLine

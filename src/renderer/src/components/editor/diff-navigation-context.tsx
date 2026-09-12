@@ -3,6 +3,8 @@ import { installDiffChangeNavigationShortcut } from './editor-shortcuts'
 
 /** A mounted diff that can report its changes and scroll to one. */
 export type DiffNavigator = {
+  /** File identity. Re-parses keep this so F7's cursor is not reset. */
+  id: string
   /** Modified-side start line of every hunk, in document order. */
   changeLines: readonly number[]
   scrollToChange: (args: { lineNumber: number; hunkIndex: number; hunkCount: number }) => void
@@ -46,6 +48,9 @@ export function DiffNavigationProvider({
   // Why: the cursor is provider-owned because the renderer no longer tracks a
   // "current change" of its own the way Monaco's goToDiff did.
   const cursorRef = useRef(-1)
+  // Why: React effect re-registers by unregistering first, so identity must
+  // outlive navigatorRef or a same-file re-parse would look like a new file.
+  const fileIdRef = useRef<string | null>(null)
   // Why: changeCount must be state, not a ref — the header is a sibling consumer
   // and only re-renders (enabling the buttons) when the value identity changes.
   const [changeCount, setChangeCount] = useState(0)
@@ -78,8 +83,16 @@ export function DiffNavigationProvider({
 
   const registerDiffNavigator = useCallback(
     (navigator: DiffNavigator) => {
+      if (fileIdRef.current !== navigator.id) {
+        cursorRef.current = -1
+      } else {
+        const total = navigator.changeLines.length
+        if (cursorRef.current >= total) {
+          cursorRef.current = total === 0 ? -1 : total - 1
+        }
+      }
+      fileIdRef.current = navigator.id
       navigatorRef.current = navigator
-      cursorRef.current = -1
       // Hold at most one keyboard listener; replace any prior navigator's.
       shortcutCleanupRef.current?.()
       shortcutCleanupRef.current = installDiffChangeNavigationShortcut(
@@ -100,7 +113,6 @@ export function DiffNavigationProvider({
     shortcutCleanupRef.current?.()
     shortcutCleanupRef.current = null
     navigatorRef.current = null
-    cursorRef.current = -1
     setChangeCount(0)
   }, [])
 

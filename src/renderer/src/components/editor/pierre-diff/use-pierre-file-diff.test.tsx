@@ -130,6 +130,19 @@ it('surfaces a detached highlight failure so the retry affordance still appears'
   expect(result.current.fileDiff).toBe(diff)
 })
 
+it('surfaces a highlight failure that settles before the parse snapshot commits', async () => {
+  // Why: !pool.isWorkingPool() rejects synchronously, so highlight.catch runs before
+  // requestPierreFileDiff's caller commits { error: null }.
+  vi.mocked(requestPierreFileDiff).mockImplementation(async (_input, _signal, _block, onError) => {
+    onError?.(new Error('worker died'))
+    return diff
+  })
+  const { result } = renderHook(() => usePierreFileDiff(input))
+  await act(async () => vi.runOnlyPendingTimers())
+  expect(result.current.error).toBe('worker died')
+  expect(result.current.fileDiff).toBe(diff)
+})
+
 it('does not re-parse when only editability flips, but primes the highlight', async () => {
   vi.mocked(requestPierreFileDiff).mockResolvedValue(diff)
   let finishPrime: (value: void) => void = () => {}

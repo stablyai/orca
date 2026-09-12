@@ -144,6 +144,7 @@ export function usePierreDiffFind({
         return
       }
       const nextSide = replace && isEditable ? 'additions' : sideRef.current
+      sideRef.current = nextSide
       setSide(nextSide)
       if (replace && isEditable && nextSide === 'additions') {
         setReplaceOpen(true)

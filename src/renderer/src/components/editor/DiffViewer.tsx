@@ -118,6 +118,7 @@ export default function DiffViewer({
       return
     }
     const navigator: DiffNavigator = {
+      id: modelKey,
       changeLines,
       container,
       scrollToChange: ({ lineNumber, hunkIndex, hunkCount }) => {
@@ -140,6 +141,7 @@ export default function DiffViewer({
   }, [
     changeLines,
     changeTargets,
+    modelKey,
     registerDiffNavigator,
     renderLimit.limited,
     unregisterDiffNavigator
@@ -275,6 +277,7 @@ export default function DiffViewer({
               isEditable={Boolean(editable) && editReady}
               editStateKey={modelKey}
               collapseUnchanged={false}
+              autoFocusHost
               worktreeId={worktreeId ?? ''}
               filePath={relativePath}
               language={language}

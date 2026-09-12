@@ -15,8 +15,9 @@ type FakeNavigator = DiffNavigator & {
   scrollToChange: DiffNavigator['scrollToChange'] & { mock: unknown }
 }
 
-function createFakeNavigator(changeLines: number[]): FakeNavigator {
+function createFakeNavigator(changeLines: number[], id = 'file'): FakeNavigator {
   return {
+    id,
     changeLines,
     container: document.createElement('div'),
     scrollToChange: vi.fn<DiffNavigator['scrollToChange']>()
@@ -145,6 +146,45 @@ describe('DiffNavigationProvider', () => {
     act(() => registration?.registerDiffNavigator(createFakeNavigator([1, 2])))
     expect(captured?.changeCount).toBe(2)
     expect(registrationRenderCount).toBe(1)
+  })
+
+  it('keeps the F7 cursor across a same-file unregister/re-register (re-parse)', () => {
+    mount()
+    const first = createFakeNavigator([4, 20, 61, 80], 'a.ts')
+    act(() => registration?.registerDiffNavigator(first))
+    act(() => captured?.goToNextDiff())
+    act(() => captured?.goToNextDiff())
+    act(() => captured?.goToNextDiff())
+
+    const parsed = createFakeNavigator([4, 20, 61, 80], 'a.ts')
+    act(() => registration?.unregisterDiffNavigator(first))
+    act(() => registration?.registerDiffNavigator(parsed))
+    act(() => captured?.goToNextDiff())
+
+    expect(parsed.scrollToChange).toHaveBeenLastCalledWith({
+      lineNumber: 80,
+      hunkIndex: 3,
+      hunkCount: 4
+    })
+  })
+
+  it('resets the F7 cursor when a different file registers', () => {
+    mount()
+    const first = createFakeNavigator([4, 20, 61, 80], 'a.ts')
+    act(() => registration?.registerDiffNavigator(first))
+    act(() => captured?.goToNextDiff())
+    act(() => captured?.goToNextDiff())
+    act(() => captured?.goToNextDiff())
+
+    const nextFile = createFakeNavigator([1, 2, 3, 4], 'b.ts')
+    act(() => registration?.registerDiffNavigator(nextFile))
+    act(() => captured?.goToNextDiff())
+
+    expect(nextFile.scrollToChange).toHaveBeenCalledWith({
+      lineNumber: 1,
+      hunkIndex: 0,
+      hunkCount: 4
+    })
   })
 
   it('installs a capture-phase key listener on register and removes it on unregister', () => {

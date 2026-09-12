@@ -96,6 +96,17 @@ export const createPierreEditor: EditorFactory<PierreDiffAnnotationData, undefin
     EditStateManager.clear('file-diff', key)
   }
   active.add(key)
+  const release = (): void => {
+    if (!active.has(key)) {
+      return
+    }
+    active.delete(key)
+    if (duplicate) {
+      EditStateManager.clear('file-diff', key)
+    } else {
+      retainDormant(key)
+    }
+  }
   try {
     const editor = new Editor(
       editorType,
@@ -103,24 +114,31 @@ export const createPierreEditor: EditorFactory<PierreDiffAnnotationData, undefin
         ...options,
         initialState: options.initialState ?? (restored as typeof options.initialState),
         onComplete: (event) => {
-          active.delete(key)
-          if (duplicate) {
-            EditStateManager.clear('file-diff', key)
-          } else {
-            retainDormant(key)
-          }
+          release()
           options.onComplete?.(event)
         }
       },
       key
     )
     const edit = editor.edit.bind(editor)
+    const cleanUp = editor.cleanUp.bind(editor)
     editor.edit = (instance) => {
       try {
         return edit(instance)
       } catch (error) {
         active.delete(key)
         throw error
+      }
+    }
+    // Why: settleEditSession can return or throw before onComplete, which used to pin
+    // the scope in `active` and mint throwaway concurrent keys on the next remount.
+    editor.cleanUp = (reason) => {
+      try {
+        cleanUp(reason)
+      } finally {
+        if (reason !== 'recycle') {
+          release()
+        }
       }
     }
     return editor

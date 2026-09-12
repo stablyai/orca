@@ -37,21 +37,26 @@ export function usePierreFileDiff(input: PierreDiffInput | null, editable = fals
     // Edits already paint through Pierre; coalesce parent echoes before recomputing.
     const timer = setTimeout(
       () => {
+        // Why: an already-rejected highlight enqueues onHighlightError before this then
+        // commits the snapshot, so the error must be captured for both orderings.
+        let highlightError: string | null = null
         void requestPierreFileDiff(
           input,
           controller.signal,
           editableRef.current,
-          (error: unknown) =>
+          (error: unknown) => {
+            highlightError = error instanceof Error ? error.message : String(error)
             setSnapshot((previous) =>
               previous && previous.input === input
-                ? { ...previous, error: error instanceof Error ? error.message : String(error) }
+                ? { ...previous, error: highlightError }
                 : previous
             )
+          }
         ).then(
           (diff) => {
             if (!controller.signal.aborted) {
               renderedScopeRef.current = JSON.stringify([input.cacheKey, input.path])
-              setSnapshot({ input, diff, error: null })
+              setSnapshot({ input, diff, error: highlightError })
             }
           },
           (error: unknown) => {

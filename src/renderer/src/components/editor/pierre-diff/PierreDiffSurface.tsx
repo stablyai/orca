@@ -47,6 +47,8 @@ export type PierreDiffSurfaceProps = {
   editStateKey?: string
   /** Collapse unchanged context. Combined diffs do; the single-file tab does not. */
   collapseUnchanged: boolean
+  /** Single-file tab only. Combined rows must not steal focus on mount. */
+  autoFocusHost?: boolean
   worktreeId: string
   filePath: string
   comments: readonly DecoratedDiffComment[]
@@ -82,6 +84,7 @@ export function PierreDiffSurface({
   isEditable,
   editStateKey,
   collapseUnchanged,
+  autoFocusHost = false,
   worktreeId,
   filePath,
   comments,
@@ -107,6 +110,14 @@ export function PierreDiffSurface({
   )
   const containerRef = useRef<HTMLDivElement | null>(null)
   const editorRef = useRef<Editor<'file-diff', PierreDiffAnnotationData, undefined> | null>(null)
+  // Why: Monaco focused the single-file DiffEditor on mount so Cmd+F/F7 worked
+  // without a click. Combined DiffSectionItem did not — do not steal there.
+  useLayoutEffect(() => {
+    if (!autoFocusHost) {
+      return
+    }
+    containerRef.current?.focus({ preventScroll: true })
+  }, [autoFocusHost])
   const onEditChangeRef = useRef(onEditChange)
   const {
     searchBar,
@@ -131,6 +142,31 @@ export function PierreDiffSurface({
     editorRef
   )
   const navigateToNote = usePierreDiffNoteNavigation({ worktreeId, filePath, comments })
+  const postRenderRef = useRef({
+    onPostRender,
+    navigateToNote,
+    searchPostRender,
+    shiftWheelPostRender,
+    nativeViewPostRender
+  })
+  postRenderRef.current = {
+    onPostRender,
+    navigateToNote,
+    searchPostRender,
+    shiftWheelPostRender,
+    nativeViewPostRender
+  }
+  const handlePostRender = useCallback(
+    (node: HTMLElement, instance: PierreDiffInstance, phase: PostRenderPhase) => {
+      const chain = postRenderRef.current
+      chain.onPostRender?.(node, phase, instance)
+      chain.navigateToNote(node, phase, instance)
+      chain.searchPostRender(node, phase, instance)
+      chain.shiftWheelPostRender(node, phase, instance)
+      chain.nativeViewPostRender(node, phase, instance)
+    },
+    []
+  )
   const commentableLines = useMemo(
     () => (commentableLineNumbers ? new Set(commentableLineNumbers) : null),
     [commentableLineNumbers]
@@ -173,24 +209,14 @@ export function PierreDiffSurface({
             })
           }
         : undefined,
-      onPostRender: (node: HTMLElement, instance: PierreDiffInstance, phase: PostRenderPhase) => {
-        onPostRender?.(node, phase, instance)
-        navigateToNote(node, phase, instance)
-        searchPostRender(node, phase, instance)
-        shiftWheelPostRender(node, phase, instance)
-        nativeViewPostRender(node, phase, instance)
-      }
+      onPostRender: handlePostRender
     }),
     [
       settings,
       sideBySide,
       collapseUnchanged,
-      onPostRender,
       onAddComment,
-      navigateToNote,
-      searchPostRender,
-      shiftWheelPostRender,
-      nativeViewPostRender,
+      handlePostRender,
       commentableLines,
       addCommentLabel
     ]
@@ -302,9 +328,11 @@ export function PierreDiffSurface({
         boundaryId="editor.pierre-diff-surface"
         surface="page"
         compact
-        // Why: include the remount identity, not just the name — a caught render throw
-        // otherwise stays latched until the row unmounts, even after content changes.
-        resetKey={`${editStateKey ?? fileDiff.name}:${fileDiff.name}`}
+        // Why cacheKey and not just the name: editStateKey is tab/section identity and name is the
+        // path, so neither moves when only the contents change. A caught render throw would stay
+        // latched through a save, an agent rewrite or a refetch, because the same surface stays
+        // mounted while `sameFile` holds. cacheKey is derived from the content.
+        resetKey={`${editStateKey ?? fileDiff.name}:${fileDiff.cacheKey ?? fileDiff.name}`}
         title={translate('editor.diff.renderFailed', 'This diff could not be rendered')}
         description={translate(
           'editor.diff.renderRetry',
