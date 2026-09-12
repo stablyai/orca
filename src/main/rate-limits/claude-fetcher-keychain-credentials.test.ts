@@ -452,6 +452,56 @@ describe('fetchClaudeRateLimits', () => {
     )
   })
 
+  it('reports signed-out instead of unavailable when the Keychain entry holds no tokens', async () => {
+    const configDir = '/Users/test/.claude'
+    const authPreparation: ClaudeRuntimeAuthPreparation = {
+      configDir,
+      runtime: 'host',
+      envPatch: {},
+      stripAuthEnv: false,
+      provenance: 'system'
+    }
+    vi.mocked(readActiveClaudeKeychainCredentialsStrict)
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(
+        JSON.stringify({
+          claudeAiOauth: { accessToken: '', refreshToken: '', expiresAt: 0 }
+        })
+      )
+
+    // Why: no allowPtyFallback override — signed-out must return before the
+    // generic CLI plan step even when the caller allows PTY fallback.
+    await expect(fetchClaudeRateLimits({ authPreparation })).resolves.toMatchObject({
+      provider: 'claude',
+      status: 'error',
+      error: 'Claude sign-in expired',
+      usageMetadata: {
+        failureKind: 'signed-out',
+        credentialSource: 'legacy-keychain',
+        authProvenance: 'system'
+      }
+    })
+
+    expect(netFetchMock).not.toHaveBeenCalled()
+    expect(fetchViaPty).not.toHaveBeenCalled()
+  })
+
+  it('reports signed-out when only the credentials file holds an emptied entry', async () => {
+    readFileMock.mockResolvedValue(
+      JSON.stringify({ claudeAiOauth: { accessToken: '', refreshToken: '' } })
+    )
+
+    await expect(fetchClaudeRateLimits({ allowPtyFallback: false })).resolves.toMatchObject({
+      provider: 'claude',
+      status: 'error',
+      error: 'Claude sign-in expired',
+      usageMetadata: { failureKind: 'signed-out', credentialSource: 'credentials-file' }
+    })
+
+    expect(netFetchMock).not.toHaveBeenCalled()
+    expect(fetchViaPty).not.toHaveBeenCalled()
+  })
+
   it('tries OAuth usage even when local credential metadata is expired', async () => {
     const configDir = '/Users/test/.claude'
     const authPreparation: ClaudeRuntimeAuthPreparation = {

@@ -18,7 +18,10 @@ const CONFIRMED_SIGN_OUT_PATTERNS = [
 ]
 
 function isConfirmedSignedOut(provider: ProviderRateLimits): boolean {
-  if (provider.usageMetadata?.failureKind === 'missing-credentials') {
+  if (
+    provider.usageMetadata?.failureKind === 'missing-credentials' ||
+    provider.usageMetadata?.failureKind === 'signed-out'
+  ) {
     return true
   }
   // Why: credential refresh and network failures can mention auth while live
