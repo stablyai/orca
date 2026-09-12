@@ -70,6 +70,20 @@ describe('classifyClaudeCredentialAbsence', () => {
     })
   })
 
+  it('classifies a stored-but-empty entry as signed-out, not missing', () => {
+    expect(
+      classifyClaudeCredentialAbsence({
+        hasRefreshableCredentials: false,
+        hasEmptyStoredEntry: true
+      })
+    ).toMatchObject({
+      failureKind: 'signed-out',
+      shouldAttemptCliFallback: false,
+      shouldAttemptDelegatedRefresh: false,
+      terminal: true
+    })
+  })
+
   it('classifies live Claude ownership as a deferred state', () => {
     expect(
       classifyClaudeCredentialAbsence({
