@@ -5,7 +5,10 @@ import { selectFloatingWorkspaceHasUnread } from '../../store/selectors'
 import type { ProviderRateLimits } from '../../../../shared/rate-limit-types'
 import { normalizeUsagePercentageDisplay } from '../../../../shared/usage-percentage-display'
 import { normalizeStatusBarUsageMode } from '../../../../shared/status-bar-usage-mode'
-import { isStatusBarItemAvailable } from './status-bar-agent-gating'
+import {
+  isAntigravityStatusBarAvailable,
+  isStatusBarItemAvailable
+} from './status-bar-agent-gating'
 import { getVisibleUsageProvider, isUsageEmptyState } from './status-bar-provider-visibility'
 import { getUsageProviderAccountsSectionId } from './usage-provider-settings-target'
 import { CLOSE_ALL_CONTEXT_MENUS_EVENT, useStatusBarMenuFocusHandoff } from './ProviderDetailsMenu'
@@ -102,11 +105,11 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
   const { claude, codex, gemini, opencodeGo, kimi, antigravity, minimax, grok } = rateLimits
 
   // Why: a bar is earned by a live snapshot or durable Settings setup; detection-gating hides per-CLI bars when the agent isn't on PATH.
-  // Why: Antigravity has no persisted credential, so a checked status item + detected CLI is the durable "show its slot" signal.
-  // Why: Antigravity visibility also requires geminiCliOAuthEnabled because its usage snapshot mirrors the Gemini fetch.
+  // Why: Antigravity has no persisted credential, so a checked status item plus either a detected
+  // CLI or a snapshot that carries quota is the durable "show its slot" signal.
+  const antigravitySlotAvailable = isAntigravityStatusBarAvailable(detectedAgentIds, antigravity)
   const antigravityUsageConfigured =
-    statusBarItems.includes('antigravity') &&
-    isStatusBarItemAvailable('antigravity', detectedAgentIds)
+    statusBarItems.includes('antigravity') && antigravitySlotAvailable
   // Why: thread non-GlobalSettings durability flags so bars stay visible across reloads and snapshot refreshes.
   const usageSettings = {
     ...settings,
@@ -141,7 +144,7 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
   const showAntigravity =
     visibleAntigravity !== null &&
     statusBarItems.includes('antigravity') &&
-    isStatusBarItemAvailable('antigravity', detectedAgentIds)
+    antigravitySlotAvailable
   // Why: MiniMax is cookie-auth, not a CLI on PATH, so detection-gating doesn't apply.
   const showMiniMax = visibleMiniMax !== null && statusBarItems.includes('minimax')
   const showGrok =
@@ -236,6 +239,7 @@ export function useStatusBarController(floatingTerminalOpen: boolean) {
     anyVisible,
     compact,
     containerRefCallback,
+    antigravitySlotAvailable,
     detectedAgentIds,
     floatingTerminalActionLabel,
     floatingTerminalShortcut,

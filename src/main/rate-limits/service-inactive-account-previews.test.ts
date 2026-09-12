@@ -27,6 +27,10 @@ vi.mock('./codex-fetcher', () => ({
   fetchCodexRateLimits: vi.fn()
 }))
 
+vi.mock('./antigravity-quota-fetch', () => ({
+  fetchAntigravityRateLimits: vi.fn()
+}))
+
 vi.mock('./gemini-usage-fetcher', () => ({
   fetchGeminiRateLimits: vi.fn()
 }))

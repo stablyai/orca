@@ -123,11 +123,9 @@ describe('hasUsageProviderSettings', () => {
     expect(
       hasUsageProviderSettings(usageSettings({ opencodeSessionCookie: ' session=abc ' }))
     ).toBe(true)
-    // Why: antigravity durability requires the Gemini OAuth opt-in; the
-    // checked item alone must not suppress the usage setup CTA.
-    expect(hasUsageProviderSettings(usageSettings({ antigravityUsageConfigured: true }))).toBe(
-      false
-    )
+    // Why: the checked item is durable on its own now that the read no longer borrows the
+    // Gemini fetch — this must agree with hasUsageProviderSettingsForProvider('antigravity').
+    expect(hasUsageProviderSettings(usageSettings({ antigravityUsageConfigured: true }))).toBe(true)
     expect(hasUsageProviderSettings(usageSettings({ minimaxCookieConfigured: true }))).toBe(true)
     expect(hasUsageProviderSettings(usageSettings({ minimaxApiKeyConfigured: true }))).toBe(true)
     expect(hasUsageProviderSettings(usageSettings({ grokAuthConfigured: true }))).toBe(true)
@@ -163,21 +161,20 @@ describe('hasUsageProviderSettingsForProvider', () => {
     expect(hasUsageProviderSettingsForProvider('grok', usageSettings())).toBe(false)
   })
 
-  it('requires both a checked Antigravity item and Gemini OAuth as the durable Antigravity signal', () => {
+  it('takes a checked Antigravity item as the durable Antigravity signal on its own', () => {
     expect(
       hasUsageProviderSettingsForProvider(
         'antigravity',
         usageSettings({ antigravityUsageConfigured: true, geminiCliOAuthEnabled: true })
       )
     ).toBe(true)
-    // Why: the snapshot mirrors the Gemini fetch — without the OAuth opt-in it
-    // is permanently unavailable, so the checked item alone is not durable.
+    // Why: Antigravity is read from its own credential, so the Gemini opt-in is not a precondition.
     expect(
       hasUsageProviderSettingsForProvider(
         'antigravity',
         usageSettings({ antigravityUsageConfigured: true })
       )
-    ).toBe(false)
+    ).toBe(true)
     expect(
       hasUsageProviderSettingsForProvider(
         'antigravity',
@@ -359,26 +356,18 @@ describe('getVisibleUsageProvider', () => {
     })
   })
 
-  it('hides Antigravity while Gemini OAuth is off even when its status item is checked', () => {
-    // Why: without the OAuth opt-in the mirrored snapshot is permanently
-    // 'unavailable'; the default-on item must not pin a dead bar.
+  it('shows Antigravity with the Gemini opt-in off once its status item is checked', () => {
+    // Why: a direct Antigravity read does not go through the Gemini fetch, so gating the slot on
+    // that opt-in would hide a bar that can fill from the host holding the sign-in.
     expect(
       getVisibleUsageProvider(
         'antigravity',
         null,
         usageSettings({ antigravityUsageConfigured: true })
       )
-    ).toBe(null)
-    expect(
-      getVisibleUsageProvider(
-        'antigravity',
-        provider('unavailable', {
-          provider: 'antigravity',
-          error: 'Gemini CLI OAuth is disabled in settings'
-        }),
-        usageSettings({ antigravityUsageConfigured: true })
-      )
-    ).toBe(null)
+    ).not.toBe(null)
+    // Why: the slot itself is still earned by the checked item, not by the default alone.
+    expect(getVisibleUsageProvider('antigravity', null, usageSettings({}))).toBe(null)
   })
 })
 
@@ -492,9 +481,9 @@ describe('isUsageEmptyState', () => {
     ).toBe(false)
   })
 
-  it('still shows the setup CTA when Antigravity is checked but Gemini OAuth is off', () => {
-    // Why: the default-on Antigravity item is not configured usage on its own;
-    // it must not hide the teaching CTA from users who set nothing up.
+  it('drops the setup CTA once Antigravity is checked, with or without the Gemini opt-in', () => {
+    // Why: the checked item is only set after the slot is available — `agy` on PATH, or a
+    // snapshot already carrying quota from a remote host — so it is real setup, not a default.
     expect(
       isUsageEmptyState(
         {
@@ -509,6 +498,6 @@ describe('isUsageEmptyState', () => {
         },
         usageSettings({ antigravityUsageConfigured: true })
       )
-    ).toBe(true)
+    ).toBe(false)
   })
 })
