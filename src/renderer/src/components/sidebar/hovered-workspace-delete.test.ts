@@ -3,8 +3,9 @@ import type { AppState } from '@/store/types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import {
   deleteHoveredWorkspaceImmediately,
+  getActiveWorkspaceIdentity,
   getHoveredWorkspaceIdentity,
-  resolveHoveredWorkspaceDeleteTarget
+  resolveWorkspaceDeleteTarget
 } from './hovered-workspace-delete'
 
 function worktree(overrides: Partial<Worktree> = {}): Worktree {
@@ -67,7 +68,7 @@ describe('hovered workspace delete', () => {
     const hovered = worktree({ hostId: 'ssh:build', instanceId: 'instance-2' })
 
     expect(
-      resolveHoveredWorkspaceDeleteTarget(
+      resolveWorkspaceDeleteTarget(
         state([active, hovered]),
         hoveredDocument({ workspaceId: hovered.id, hostIdentity: 'ssh:build|repo::/feature' })
       )
@@ -76,7 +77,7 @@ describe('hovered workspace delete', () => {
 
   it('retains the hovered host when resolving a folder workspace', () => {
     expect(
-      resolveHoveredWorkspaceDeleteTarget(
+      resolveWorkspaceDeleteTarget(
         state(),
         hoveredDocument({
           workspaceId: 'folder:folder-1',
@@ -91,23 +92,87 @@ describe('hovered workspace delete', () => {
     })
   })
 
+  it('falls back to the active workspace when the pointer is nowhere near a card', () => {
+    // The shortcut is usable from the terminal, where hover is never true.
+    const active = worktree({ id: 'repo::/active', path: '/active', hostId: 'local' })
+
+    expect(getActiveWorkspaceIdentity(state([active]))).toEqual({
+      workspaceId: 'repo::/active',
+      hostIdentity: 'local|repo::/active'
+    })
+    expect(resolveWorkspaceDeleteTarget(state([active]), hoveredDocument())).toEqual({
+      kind: 'worktree',
+      worktree: active
+    })
+  })
+
+  // Why: activation resolves the host (undefined -> 'local'), but a
+  // pre-host-qualification row still carries no hostId, so the composed
+  // 'local|<id>' identity never matched its '|<id>' one and delete no-opped.
+  it('falls back to a legacy workspace whose row predates host qualification', () => {
+    const legacy = worktree({ id: 'repo::/legacy', path: '/legacy' })
+    const legacyState = state([legacy])
+    legacyState.activeWorkspaceExecutionHostId = 'local'
+
+    expect(getActiveWorkspaceIdentity(legacyState)).toEqual({
+      workspaceId: 'repo::/legacy',
+      hostIdentity: 'local|repo::/legacy'
+    })
+    expect(resolveWorkspaceDeleteTarget(legacyState, hoveredDocument())).toEqual({
+      kind: 'worktree',
+      worktree: legacy
+    })
+  })
+
+  it("never lets the legacy fallback reach another host's row", () => {
+    const remote = worktree({ id: 'repo::/shared', path: '/shared', hostId: 'ssh:build' })
+    const remoteState = state([remote])
+    remoteState.activeWorktreeId = 'repo::/shared'
+    remoteState.activeWorkspaceExecutionHostId = 'local'
+
+    expect(resolveWorkspaceDeleteTarget(remoteState, hoveredDocument())).toBeNull()
+  })
+
+  it('applies the same guards to the active workspace as to a hovered one', () => {
+    const primary = worktree({ hostId: 'local', isMainWorktree: true })
+    expect(resolveWorkspaceDeleteTarget(state([primary]), hoveredDocument())).toBeNull()
+
+    const deleting = worktree({ hostId: 'local' })
+    const current = state([deleting])
+    current.deleteStateByWorktreeId = {
+      'local|repo::/feature': {
+        isDeleting: true,
+        error: null,
+        canForceDelete: false,
+        forceDeleteReason: null
+      }
+    }
+    expect(resolveWorkspaceDeleteTarget(current, hoveredDocument())).toBeNull()
+  })
+
+  it('has no active fallback when no workspace is active', () => {
+    const current = state()
+    expect(getActiveWorkspaceIdentity(current)).toBeNull()
+    expect(resolveWorkspaceDeleteTarget(current, hoveredDocument())).toBeNull()
+  })
+
   it('rejects primary worktrees, stale rows, and missing hover', () => {
     const primary = worktree({ hostId: 'local', isMainWorktree: true })
     const current = state([primary])
 
     expect(
-      resolveHoveredWorkspaceDeleteTarget(
+      resolveWorkspaceDeleteTarget(
         current,
         hoveredDocument({ workspaceId: primary.id, hostIdentity: 'local|repo::/feature' })
       )
     ).toBeNull()
     expect(
-      resolveHoveredWorkspaceDeleteTarget(
+      resolveWorkspaceDeleteTarget(
         current,
         hoveredDocument({ workspaceId: 'stale', hostIdentity: 'local|stale' })
       )
     ).toBeNull()
-    expect(resolveHoveredWorkspaceDeleteTarget(current, hoveredDocument())).toBeNull()
+    expect(resolveWorkspaceDeleteTarget(current, hoveredDocument())).toBeNull()
   })
 
   it('rejects worktrees that are already deleting', () => {
@@ -123,7 +188,7 @@ describe('hovered workspace delete', () => {
     }
 
     expect(
-      resolveHoveredWorkspaceDeleteTarget(
+      resolveWorkspaceDeleteTarget(
         current,
         hoveredDocument({ workspaceId: target.id, hostIdentity: 'ssh:build|repo::/feature' })
       )
@@ -145,7 +210,7 @@ describe('hovered workspace delete', () => {
     Object.defineProperty(doc, 'activeElement', { value: new EditableElement() })
 
     try {
-      expect(resolveHoveredWorkspaceDeleteTarget(state([target]), doc)).toBeNull()
+      expect(resolveWorkspaceDeleteTarget(state([target]), doc)).toBeNull()
     } finally {
       vi.unstubAllGlobals()
     }
