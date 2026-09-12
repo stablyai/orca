@@ -9,7 +9,16 @@
   "pluginApi": 1,
   "main": "main.mjs",
   "contributes": {
-    "panels": [{ "id": "hello", "title": "Hello Orca", "icon": "plug", "entry": "panel.html" }],
+    "panels": [
+      { "id": "hello", "title": "Hello Orca", "icon": "plug", "entry": "panel.html" },
+      {
+        "id": "hello-workspace",
+        "title": "Hello Orca Workspace",
+        "icon": "layout-dashboard",
+        "location": "workspace",
+        "entry": "workspace.html"
+      }
+    ],
     "commands": [{ "id": "hello-ping", "title": "Hello: Ping" }],
     "events": [{ "on": "worktree.created" }, { "on": "agent.status.changed" }]
   },

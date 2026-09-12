@@ -47,6 +47,7 @@
     <select id="terms" hidden></select>
     <button id="send" hidden>Type "echo hi from plugin" into selected terminal</button>
     <button id="notify">Show a notification</button>
+    <button id="open-workspace">Open the workspace view</button>
     <p class="status" id="status"></p>
     <script>
       'use strict'
@@ -110,6 +111,16 @@
           statusEl.textContent = result.ok
             ? 'typed (accepted=' + result.value.accepted + ')'
             : 'send failed: ' + (result.error || result.errorCode)
+        })
+      })
+
+      document.getElementById('open-workspace').addEventListener('click', function () {
+        // Renderer-local action: the host opens a workspace panel this same
+        // plugin declares. It never reaches the main process.
+        call('workspace.openView', { viewId: 'hello-workspace' }).then(function (result) {
+          statusEl.textContent = result.ok
+            ? 'workspace view opened'
+            : 'open failed: ' + (result.error || result.errorCode)
         })
       })
 

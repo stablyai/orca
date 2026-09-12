@@ -8,7 +8,7 @@ import { getVisibleRightSidebarActivityItems } from './right-sidebar-activity-vi
 import { getPluginPanelActivityItems } from './plugin-panel-activity-items'
 import {
   collectInstalledPluginTabKeys,
-  usePluginPanels,
+  usePluginPanelsAt,
   usePluginPanelsStore,
   type PluginPanelsFetchStatus
 } from '@/store/plugin-panels'
@@ -46,7 +46,7 @@ export function useRightSidebarActivityItems({
   const isFolder = isFolderWorkspace || (activeRepo ? isFolderRepo(activeRepo) : false)
   const isSshRepo = Boolean(activeRepo?.connectionId)
   const pluginSystemEnabled = useAppStore((s) => s.settings?.pluginSystemEnabled === true)
-  const pluginPanels = usePluginPanels()
+  const pluginPanels = usePluginPanelsAt('right-sidebar')
   const visiblePluginPanels = useMemo(
     () => (pluginSystemEnabled ? pluginPanels : []),
     [pluginPanels, pluginSystemEnabled]

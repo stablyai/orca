@@ -46,7 +46,7 @@ export function RightSidebarPanelContent({
             a reused frame could keep posting messages while the bridge is
             rebound under the next plugin's identity. */}
         {isPluginPanelTabKey(effectiveTab) && (
-          <PluginPanel key={effectiveTab} tabKey={effectiveTab} />
+          <PluginPanel key={effectiveTab} tabKey={effectiveTab} expectedLocation="right-sidebar" />
         )}
       </Suspense>
     </div>
