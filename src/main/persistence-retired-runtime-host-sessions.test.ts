@@ -38,7 +38,9 @@ beforeEach(() => {
 })
 
 afterEach(async () => {
-  for (const instance of stores.splice(0)) await instance.flushAsync()
+  for (const instance of stores.splice(0)) {
+    await instance.flushAsync()
+  }
   rmSync(testState.dir, { recursive: true, force: true })
 })
 
@@ -70,11 +72,18 @@ describe('retired runtime host sessions', () => {
       const stale = session('stale')
       instance.setWorkspaceSession(stale, GONE)
       instance.deleteHostWorkspaceSession(GONE)
-      if (kind === 'full') instance.setWorkspaceSession(stale, GONE)
-      if (kind === 'patch-topology')
+      if (kind === 'full') {
+        instance.setWorkspaceSession(stale, GONE)
+      }
+      if (kind === 'patch-topology') {
         instance.patchWorkspaceSession({ tabsByWorktree: stale.tabsByWorktree }, GONE)
-      if (kind === 'patch-scalar') instance.patchWorkspaceSession({ activeTabId: 'stale' }, GONE)
-      if (kind === 'before-unload') instance.stageWorkspaceSessionBeforeUnload(stale, GONE)
+      }
+      if (kind === 'patch-scalar') {
+        instance.patchWorkspaceSession({ activeTabId: 'stale' }, GONE)
+      }
+      if (kind === 'before-unload') {
+        instance.stageWorkspaceSessionBeforeUnload(stale, GONE)
+      }
       instance.flushOrThrow()
       expect(instance.getWorkspaceSessionHostIds()).not.toContain(GONE)
       expect(store().getWorkspaceSession(GONE).tabsByWorktree).toEqual({})
