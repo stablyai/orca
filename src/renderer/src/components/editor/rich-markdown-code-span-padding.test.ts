@@ -20,6 +20,10 @@ function roundTrip(source: string): string {
   }
 }
 
+const TAB = '\t'
+const NBSP = String.fromCharCode(0x00a0)
+const SENTINEL = String.fromCharCode(0xe002)
+
 describe('maskCodeSpanPadding', () => {
   it('leaves a node without a code mark alone', () => {
     const nodes = [{ type: 'text', text: ' padded ', marks: [] }]
@@ -35,8 +39,27 @@ describe('maskCodeSpanPadding', () => {
     const [masked] = maskCodeSpanPadding([
       { type: 'text', text: ' code ', marks: [{ type: 'code' }] }
     ])
-    expect(masked.text).not.toContain(' ')
+    expect(masked.text?.startsWith(' ')).toBe(false)
+    expect(masked.text?.endsWith(' ')).toBe(false)
     expect(restoreCodeSpanPadding(masked.text ?? '')).toBe(' code ')
+  })
+
+  it.each([[`${TAB}code${TAB}`], [`${NBSP}code${NBSP}`], [`${TAB}code${NBSP}`]])(
+    'restores %j as its original characters',
+    (text) => {
+      const [masked] = maskCodeSpanPadding([{ type: 'text', text, marks: [{ type: 'code' }] }])
+      expect(restoreCodeSpanPadding(masked.text ?? '')).toBe(text)
+    }
+  )
+
+  it.each([['  '], ['   '], [' ']])('partitions the all-whitespace span %j once', (text) => {
+    const [masked] = maskCodeSpanPadding([{ type: 'text', text, marks: [{ type: 'code' }] }])
+    expect(restoreCodeSpanPadding(masked.text ?? '')).toBe(text)
+  })
+
+  it('leaves a code span already carrying the sentinel alone', () => {
+    const nodes = [{ type: 'text', text: ` ${SENTINEL} `, marks: [{ type: 'code' }] }]
+    expect(maskCodeSpanPadding(nodes)).toEqual(nodes)
   })
 })
 
@@ -47,10 +70,28 @@ describe('code span padding round trip', () => {
     ['Plain `code` here.'],
     ['**bold** and `code` and *it*'],
     ['`a` and `b`'],
-    ['[`label`](https://example.com)']
+    ['[`label`](https://example.com)'],
+    ['`  `'],
+    ['`   `'],
+    ['a `  ` b'],
+    [`\`${TAB}x${TAB}\``],
+    [`\`${NBSP}x${NBSP}\``],
+    [`a literal ${String.fromCharCode(0xe000)} in prose`],
+    [`a literal ${SENTINEL} in prose`]
   ])('preserves %j', (source) => {
     expect(roundTrip(source)).toBe(source)
   })
+
+  it.each([['`  `'], ['`   `'], ['a `  ` b'], [`\`${TAB}x${TAB}\``]])(
+    'keeps %j stable across three cycles',
+    (source) => {
+      let current = source
+      for (let cycle = 0; cycle < 3; cycle += 1) {
+        current = roundTrip(current)
+      }
+      expect(current).toBe(source)
+    }
+  )
 
   it('is stable across three cycles', () => {
     const source = 'Read `Anexo v2.docx ` and write up.'
