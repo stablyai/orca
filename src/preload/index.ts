@@ -16,6 +16,7 @@ import { reposApi } from './api/repos-bridge'
 import { projectsApi } from './api/projects-bridge'
 import { projectGroupsApi } from './api/project-groups-bridge'
 import { folderWorkspacesApi } from './api/folder-workspaces-bridge'
+import { workspaceTrustApi } from './api/workspace-trust-bridge'
 import { sparsePresetsApi } from './api/sparse-presets-bridge'
 import { worktreesApi } from './api/worktrees-bridge'
 import { workspaceCleanupApi } from './api/workspace-cleanup-bridge'
@@ -62,6 +63,7 @@ import { sessionApi } from './api/session-bridge'
 import { remoteWorkspaceApi } from './api/remote-workspace-bridge'
 import { updaterApi } from './api/updater-bridge'
 import { docPreviewApi } from './api/doc-preview-bridge'
+import { npmPackageInfoApi } from './api/npm-package-info-bridge'
 import { notebookApi } from './api/notebook-bridge'
 import { fsApi } from './api/fs-bridge'
 import { gitApi } from './api/git-bridge'
@@ -110,6 +112,7 @@ const api = {
   projects: projectsApi,
   projectGroups: projectGroupsApi,
   folderWorkspaces: folderWorkspacesApi,
+  workspaceTrust: workspaceTrustApi,
   sparsePresets: sparsePresetsApi,
   worktrees: worktreesApi,
   workspaceCleanup: workspaceCleanupApi,
@@ -160,6 +163,7 @@ const api = {
   remoteWorkspace: remoteWorkspaceApi,
   updater: updaterApi,
   docPreview: docPreviewApi,
+  npmPackageInfo: npmPackageInfoApi,
   notebook: notebookApi,
   fs: fsApi,
   git: gitApi,

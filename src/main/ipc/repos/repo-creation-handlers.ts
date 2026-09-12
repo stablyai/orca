@@ -14,6 +14,7 @@ import { gitExecFileAsync } from '../../git/runner'
 import { detectRepoIconAndUpstream } from '../../repo-icon-autodetect'
 import { prepareLocalWorktreeRootForRepo } from '../../worktree-root-preparation'
 import { invalidateAuthorizedRootsCache } from '../registered-worktree-roots-cache'
+import { recordWorkspaceTrustDecision } from '../../workspace-trust/workspace-trust-service'
 import { emitRepoAdded } from './repo-added-telemetry'
 import { notifyReposChanged } from './repos-changed-notification'
 import { addLocalRepoFromPath } from './local-repo-registration'
@@ -286,6 +287,15 @@ export function registerRepoCreationHandlers(mainWindow: BrowserWindow, store: S
       }
 
       store.addRepo(repo)
+      // Why: repos:create only ever targets a new or pre-existing-empty directory, known
+      // in-process by this handler — the 'created' default is written here, never read back
+      // from a persisted field (see Provenance-Based Trust Defaults).
+      await recordWorkspaceTrustDecision(store, {
+        path: repo.path,
+        scope: 'workspace',
+        decision: 'trust',
+        origin: 'intake'
+      })
       await prepareLocalWorktreeRootForRepo(store, repo)
       invalidateAuthorizedRootsCache()
       notifyReposChanged(mainWindow)
