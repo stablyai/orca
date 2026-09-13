@@ -51,7 +51,10 @@ export function buildWslSkillDiscoveryCommand(
       '  return 0',
       '}',
       'matches_requested_name() {',
+      '  local LC_ALL=C',
       '  local normalized_name=${1,,}',
+      '  while [[ "$normalized_name" == \' \'* ]]; do normalized_name=${normalized_name#?}; done',
+      '  while [[ "$normalized_name" == *\' \' ]]; do normalized_name=${normalized_name%?}; done',
       ...matchBody,
       '}',
       'read_frontmatter_name() {',
@@ -287,10 +290,11 @@ export async function discoverSkillsInWsl(args: {
   // Why: plugin-metadata enrichment is optional. A failed/timed-out read must
   // degrade to zero plugin roots (matching the native readMetadataFile path),
   // not abort the mandatory native/home/repo/bundled scan.
+  const cwd = args.cwd ?? args.homeDir
   let pluginRoots: SkillScanRoot[] = []
-  if (args.cwd && (!args.sourceKinds?.length || args.sourceKinds.includes('plugin'))) {
+  if (!args.sourceKinds?.length || args.sourceKinds.includes('plugin')) {
     try {
-      pluginRoots = await discoverClaudePluginSkillSourcesInWsl({ ...args, cwd: args.cwd })
+      pluginRoots = await discoverClaudePluginSkillSourcesInWsl({ ...args, cwd })
     } catch {
       pluginRoots = []
     }
@@ -298,9 +302,9 @@ export async function discoverSkillsInWsl(args: {
   const roots = [
     ...buildSkillDiscoverySources({
       homeDir: args.homeDir,
-      cwd: args.cwd,
+      cwd,
       repos: [],
-      includeCwd: Boolean(args.cwd),
+      includeCwd: true,
       pathApi: pathPosix,
       providerRootOverrides: args.providerRootOverrides
     }),

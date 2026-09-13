@@ -20,7 +20,7 @@ vi.mock('../../shared/skill-metadata', async (importOriginal) => {
 import { discoverSkills } from './discovery'
 
 describe('native skill source filtering', () => {
-  it('rejects bundled candidates before reading their Markdown', async () => {
+  it('serves home and bundled filters from one raw root observation', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-skill-source-filter-'))
     const homeSkill = join(root, '.codex', 'skills', 'home-skill')
     const bundledSkill = join(root, '.codex', 'skills', '.system', 'bundled-skill')
@@ -33,8 +33,11 @@ describe('native skill source filtering', () => {
       const result = await discoverSkills({ homeDir: root, repos: [], sourceKinds: ['home'] })
 
       expect(result.skills.map((skill) => skill.name)).toEqual(['Home Skill'])
-      expect(summarizeSkillMarkdown).toHaveBeenCalledTimes(1)
+      expect(summarizeSkillMarkdown).toHaveBeenCalledTimes(2)
       expect(summarizeSkillMarkdown).toHaveBeenCalledWith('# Home Skill\n')
+      const bundled = await discoverSkills({ homeDir: root, repos: [], sourceKinds: ['bundled'] })
+      expect(bundled.skills.map((skill) => skill.name)).toEqual(['Bundled Skill'])
+      expect(summarizeSkillMarkdown).toHaveBeenCalledTimes(2)
     } finally {
       await rm(root, { recursive: true, force: true })
     }

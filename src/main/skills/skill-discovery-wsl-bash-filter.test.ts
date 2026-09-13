@@ -25,6 +25,9 @@ describe('generated WSL skill name filter', () => {
         sourceKind: 'home',
         providers: ['agent-skills']
       }
+      for (const directory of [' orchestration', 'orchestration ', ' orchestration ']) {
+        await writeSkill(root, directory, '---\nname: unrelated\n---\n')
+      }
       await writeSkill(root, 'scalar-match', '---\nname: orchestration\n---\n')
       await writeSkill(root, 'scalar-mismatch', '---\nname: unrelated\n---\n')
       await writeSkill(root, 'empty-quoted', '---\nname: ""\n---\n# orchestration\n')
@@ -65,12 +68,15 @@ describe('generated WSL skill name filter', () => {
             .skills.map((skill) => skill.directoryPath.split('/').at(-1))
             .sort()
         ).toEqual([
+          ' orchestration',
+          ' orchestration ',
           'block-name',
           'bom-crlf',
           'duplicate-match',
           'empty-quoted',
           'missing-close',
           'one-quote',
+          'orchestration ',
           'scalar-match',
           'unicode-space'
         ])
