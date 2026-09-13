@@ -16,6 +16,7 @@ type ListenerRecord = {
 function createWebview(overrides: Partial<Electron.WebviewTag> = {}): Electron.WebviewTag {
   return Object.assign(new EventTarget(), {
     style: {},
+    ownerDocument: { defaultView: null },
     blur: vi.fn(),
     remove: vi.fn(),
     contains: vi.fn(() => false),

@@ -18,6 +18,7 @@ export type TabGroupLayoutNode =
 
 // ─── Unified Tab ────────────────────────────────────────────────────
 export type TabContentType =
+  | 'canvas'
   | 'terminal'
   | 'editor'
   | 'diff'
@@ -28,6 +29,7 @@ export type TabContentType =
   | 'simulator'
 
 export type WorkspaceVisibleTabType =
+  | 'canvas'
   | 'terminal'
   | 'editor'
   | 'agent-session'
@@ -39,6 +41,7 @@ export type CtrlTabOrderMode = 'mru' | 'sequential'
 // resolve the concrete tab and project forward instead.
 export function toVisibleTabType(contentType: TabContentType): WorkspaceVisibleTabType {
   if (
+    contentType === 'canvas' ||
     contentType === 'agent-session' ||
     contentType === 'browser' ||
     contentType === 'terminal' ||

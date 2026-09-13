@@ -97,7 +97,7 @@ export const PROVEN_ABSENT_LEAF_PTY_TTL_MS = 15_000
 
 export const TERMINAL_INTERACTIVE_WAIT_PROBE_TIMEOUT_MS = 2_000
 
-export type RuntimeTerminalProjection = { lines: string[]; draft?: string }
+export type RuntimeTerminalProjection = { lines: string[]; draft?: string; composerReady?: boolean }
 
 export function assertAgentPromptRequestActive(signal?: AbortSignal): void {
   if (signal?.aborted) {

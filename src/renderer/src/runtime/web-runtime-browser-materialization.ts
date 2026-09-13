@@ -15,7 +15,25 @@ export function hasMaterializedWebRuntimeBrowserPage(
   remotePageId: string,
   expectedGroupId?: string
 ): boolean {
-  return (state.browserTabsByWorktree[worktreeId] ?? []).some((workspace) => {
+  return Boolean(
+    findMaterializedWebRuntimeBrowserWorkspace(
+      state,
+      environmentId,
+      worktreeId,
+      remotePageId,
+      expectedGroupId
+    )
+  )
+}
+
+export function findMaterializedWebRuntimeBrowserWorkspace(
+  state: BrowserMaterializationState,
+  environmentId: string,
+  worktreeId: string,
+  remotePageId: string,
+  expectedGroupId?: string
+) {
+  return (state.browserTabsByWorktree[worktreeId] ?? []).find((workspace) => {
     const hasRemotePage = (state.browserPagesByWorkspace[workspace.id] ?? []).some((page) => {
       const handle = state.remoteBrowserPageHandlesByPageId[page.id]
       // Why: a staged handle is this client's own optimistic guess, not proof the host published

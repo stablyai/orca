@@ -9,7 +9,12 @@ import {
   writeManagedScript,
   type HooksConfig
 } from '../agent-hooks/installer-utils'
-import { buildPosixAgentHookPostCommand } from '../agent-hooks/hook-post-command'
+import {
+  posixContextHookPost,
+  posixHookResponseFallback,
+  windowsContextHookScript,
+  WINDOWS_CONTEXT_POST_FAILURE
+} from '../agent-hooks/hook-context-response-script'
 import {
   readHooksJsonRemote,
   writeHooksJsonRemote,
@@ -64,39 +69,40 @@ function getManagedScript(
   options: { skipWhenDevinImportsClaude?: boolean } = {}
 ): string {
   if (target === 'local' && process.platform === 'win32') {
-    return [
-      '@echo off',
-      'setlocal',
-      // Why: Claude-compatible permission hooks fail closed on empty stdout (#14818).
-      'echo {}',
-      // Why: refresh endpoint coordinates for PTYs surviving an Orca restart.
-      'if defined ORCA_AGENT_HOOK_ENDPOINT if exist "%ORCA_AGENT_HOOK_ENDPOINT%" call "%ORCA_AGENT_HOOK_ENDPOINT%" 2>nul',
-      // Why (#11549): the env guards must outrank the Devin skip — the Devin skip parks in more.com,
-      // and outside an Orca pane the caller can abandon stdin, so more.com never returns.
-      ...buildWindowsHookEnvironmentGuardLines(),
-      // Why: a backgrounded session runs in a daemon worker that inherited the dispatching
-      // pane's env, so ORCA_PANE_KEY names a pane this session does not run in (#9236).
-      // Why exit, not the drain label: the drain parks in more.com and a worker is outside
-      // an Orca pane — the abandoned-stdin hang #11549 guards against.
-      'if not "%CLAUDE_JOB_DIR%"=="" exit /b 0',
-      ...(options.skipWhenDevinImportsClaude
-        ? [
-            // Why: Devin imports .claude hooks by default; skip Orca's managed hook there so status posts stay attributed to Devin.
-            `if not "%DEVIN_PROJECT_DIR%"=="" goto :${WINDOWS_HOOK_STDIN_DRAIN_LABEL}`
-          ]
-        : []),
-      // Why: use curl.exe to avoid an extra PowerShell startup per hook.
-      buildWindowsAgentHookCurlPostCommand('claude'),
-      'exit /b 0',
-      ...buildWindowsHookStdinDrainEpilogue(),
-      ''
-    ].join('\r\n')
+    return windowsContextHookScript(
+      [
+        // Why: Claude-compatible permission hooks fail closed on empty stdout (#14818).
+        // Why: refresh endpoint coordinates for PTYs surviving an Orca restart.
+        'if defined ORCA_AGENT_HOOK_ENDPOINT if exist "%ORCA_AGENT_HOOK_ENDPOINT%" call "%ORCA_AGENT_HOOK_ENDPOINT%" 2>nul',
+        // Why (#11549): the env guards must outrank the Devin skip — the Devin skip parks in more.com,
+        // and outside an Orca pane the caller can abandon stdin, so more.com never returns.
+        ...buildWindowsHookEnvironmentGuardLines(),
+        // Why: a backgrounded session runs in a daemon worker that inherited the dispatching
+        // pane's env, so ORCA_PANE_KEY names a pane this session does not run in (#9236).
+        // Why exit, not the drain label: the drain parks in more.com and a worker is outside
+        // an Orca pane — the abandoned-stdin hang #11549 guards against.
+        'if not "%CLAUDE_JOB_DIR%"=="" exit /b 0',
+        ...(options.skipWhenDevinImportsClaude
+          ? [
+              // Why: Devin imports .claude hooks by default; skip Orca's managed hook there so status posts stay attributed to Devin.
+              `if not "%DEVIN_PROJECT_DIR%"=="" goto :${WINDOWS_HOOK_STDIN_DRAIN_LABEL}`
+            ]
+          : []),
+        // Why: use curl.exe to avoid an extra PowerShell startup per hook.
+        buildWindowsAgentHookCurlPostCommand('claude', true),
+        WINDOWS_CONTEXT_POST_FAILURE,
+        'exit /b 0',
+        ...buildWindowsHookStdinDrainEpilogue(),
+        ''
+      ],
+      'echo {}'
+    )
   }
 
   return [
     '#!/bin/sh',
     // Why: Claude-compatible permission hooks fail closed on empty stdout (#14818).
-    'printf "{}\\n"',
+    ...posixHookResponseFallback(),
     ...buildPosixHookPayloadCapture(),
     ...buildPosixHookSpoolLines('claude'),
     ...(options.skipWhenDevinImportsClaude
@@ -123,9 +129,7 @@ function getManagedScript(
     '  exit 0',
     'fi',
     // Why: keep full hook JSON off the command line and avoid IDS-friendly URL-encoded paths.
-    ...buildPosixAgentHookPostCommand('claude').map((line, index, lines) =>
-      index === lines.length - 1 ? `${line} >/dev/null 2>&1 || spool_hook_event` : line
-    ),
+    ...posixContextHookPost('claude'),
     'exit 0',
     ''
   ].join('\n')

@@ -109,6 +109,7 @@ export type RuntimeHeadlessTerminal = {
 }
 
 export type RuntimeVisibleTerminalState = {
+  composerReady?: boolean
   lines: string[]
   draft?: string
   isAlternateScreen: boolean

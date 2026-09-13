@@ -5,7 +5,10 @@ import { translate } from '../i18n/i18n'
 import { useAppStore } from '../store'
 import { hasRuntimeRpcErrorCode, unwrapRuntimeRpcResult } from './runtime-rpc-client'
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
-import { hasMaterializedWebRuntimeBrowserPage } from './web-runtime-browser-materialization'
+import {
+  hasMaterializedWebRuntimeBrowserPage,
+  findMaterializedWebRuntimeBrowserWorkspace
+} from './web-runtime-browser-materialization'
 import { waitForWebRuntimeBrowserPageMaterialization } from './web-runtime-browser-materialization-wait'
 import {
   isStagedWebRuntimeBrowserTabLive,
@@ -42,6 +45,8 @@ export async function createWebRuntimeSessionBrowserTab(
     return false
   }
   const context = createWebRuntimeBrowserCreationContext(args, environmentId)
+  let completed = false
+  let createdWorkspaceId: string | undefined
   try {
     stageWebRuntimeBrowserCreation(context)
     const placementPreference = args.placementPreference ?? 'auto'
@@ -201,7 +206,18 @@ export async function createWebRuntimeSessionBrowserTab(
     }
     // Why: materialization means the snapshot has taken ownership of these rows, so nothing
     // downstream may still unwind them as an optimistic stage.
-    return completeWebRuntimeBrowserCreation(context)
+    completed = completeWebRuntimeBrowserCreation(context)
+    const workspace =
+      args.onCreated &&
+      findMaterializedWebRuntimeBrowserWorkspace(
+        useAppStore.getState(),
+        environmentId,
+        args.worktreeId,
+        created.browserPageId
+      )
+    if (completed && workspace) {
+      createdWorkspaceId = workspace.id
+    }
   } catch (error) {
     const failure = prepareWebRuntimeBrowserCreationFailure(context, error)
     if (failure.cleanupPageId) {
@@ -252,4 +268,8 @@ export async function createWebRuntimeSessionBrowserTab(
     }
     return finishWebRuntimeBrowserCreationFailure(context, failure, error)
   }
+  if (createdWorkspaceId) {
+    args.onCreated?.(createdWorkspaceId)
+  }
+  return completed
 }

@@ -31,6 +31,7 @@ import {
 import { selectWebRuntimeSessionBrowserWorktree } from './web-runtime-session-workspace-selection'
 
 export type CreateWebRuntimeSessionBrowserTabArgs = {
+  onCreated?: (workspaceId: string) => void
   worktreeId: string
   environmentId?: string | null
   url?: string

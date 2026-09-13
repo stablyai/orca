@@ -7,6 +7,10 @@ import {
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '../../store'
 import { acquireBrowserAutomationBootstrapLease } from './browser-automation-bootstrap-lease'
+import {
+  addCreatedBrowserToCanvas,
+  resolveBrowserCanvasTarget
+} from '@/components/agent-canvas/canvas-browser-creation'
 
 export function registerBrowserRequestIpcBridge(
   unsubs: (() => void)[],
@@ -35,6 +39,7 @@ export function registerBrowserRequestIpcBridge(
           })
           return
         }
+        const canvas = resolveBrowserCanvasTarget(store, worktreeId, data.originPaneKey)
         // Why: CLI-created tabs should land in the active browser tab's group, not the terminal's UI-active group.
         const activeBrowserTabId = store.activeBrowserTabIdByWorktree[worktreeId]
         const activeBrowserUnifiedTab = activeBrowserTabId
@@ -50,15 +55,25 @@ export function registerBrowserRequestIpcBridge(
         const workspace = store.createBrowserTab(worktreeId, data.url, {
           title: data.url,
           browserPageId: data.browserPageId,
-          targetGroupId: data.activate ? undefined : activeBrowserUnifiedTab?.groupId,
+          targetGroupId:
+            canvas?.groupId ?? (data.activate ? undefined : activeBrowserUnifiedTab?.groupId),
           sessionProfileId: data.sessionProfileId,
           sessionPartition: data.sessionPartition,
-          activate: data.activate === true
+          activate: !canvas && data.activate === true
         })
         // Why: registerGuest fires with the page ID, not the workspace ID; return it so waitForTabRegistration can correlate.
         const pages = useAppStore.getState().browserPagesByWorkspace[workspace.id] ?? []
         const browserPageId = pages[0]?.id ?? workspace.id
         acquireBrowserAutomationBootstrapLease(worktreeId, browserPageId)
+        if (canvas) {
+          try {
+            addCreatedBrowserToCanvas(canvas, workspace.id, data.url)
+          } catch (error) {
+            throw new Error(
+              `Browser ${browserPageId} was created, but its canvas card could not be saved. Do not create a duplicate. ${error instanceof Error ? error.message : String(error)}`
+            )
+          }
+        }
         window.api.ui.replyTabCreate({ requestId: data.requestId, browserPageId })
       } catch (err) {
         window.api.ui.replyTabCreate({

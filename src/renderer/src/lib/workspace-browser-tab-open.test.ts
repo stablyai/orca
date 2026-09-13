@@ -106,7 +106,8 @@ describe('openWorkspaceBrowserTab', () => {
   })
 
   it('creates a client tab without activating it when requested', async () => {
-    const createBrowserTab = vi.fn()
+    const createBrowserTab = vi.fn().mockReturnValue({ id: 'created-browser' })
+    const onCreated = vi.fn()
     const sshHost = toSshExecutionHostId('ssh-target')
     mocks.state = {
       ...ownerState(sshHost),
@@ -120,7 +121,8 @@ describe('openWorkspaceBrowserTab', () => {
       url: 'https://github.com/acme/orca/pull/456',
       intent: { kind: 'url' },
       focusOnCreate: false,
-      selectWorktree: false
+      selectWorktree: false,
+      onCreated
     })
 
     expect(createBrowserTab).toHaveBeenCalledWith(
@@ -128,6 +130,7 @@ describe('openWorkspaceBrowserTab', () => {
       'https://github.com/acme/orca/pull/456',
       expect.objectContaining({ activate: false })
     )
+    expect(onCreated).toHaveBeenCalledExactlyOnceWith('created-browser')
   })
 
   it('fails closed when the asserted SSH browser route is opted out or belongs to another host', async () => {

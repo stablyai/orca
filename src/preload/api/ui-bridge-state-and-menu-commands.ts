@@ -151,6 +151,7 @@ export const uiStateAndMenuCommandsApi = {
       url: string
       worktreeId?: string
       browserPageId?: string
+      originPaneKey?: string
       sessionProfileId?: string | null
       sessionPartition?: string
       activate?: boolean
@@ -163,6 +164,7 @@ export const uiStateAndMenuCommandsApi = {
         url: string
         worktreeId?: string
         browserPageId?: string
+        originPaneKey?: string
         sessionProfileId?: string | null
         sessionPartition?: string
         activate?: boolean

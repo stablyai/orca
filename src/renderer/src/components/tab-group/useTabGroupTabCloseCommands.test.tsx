@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   closeTerminalTab: vi.fn(),
   destroyWorkspaceWebviews: vi.fn(),
   requestEditorFileClose: vi.fn(),
+  clearCanvasContext: vi.fn(async () => {}),
   getRuntimeEnvironmentIdForWorktree: vi.fn(() => null as string | null)
 }))
 
@@ -25,6 +26,9 @@ vi.mock('../editor/editor-autosave', () => ({
 }))
 vi.mock('@/lib/worktree-runtime-owner', () => ({
   getRuntimeEnvironmentIdForWorktree: mocks.getRuntimeEnvironmentIdForWorktree
+}))
+vi.mock('../agent-canvas/canvas-context-sync', () => ({
+  clearClosedCanvasContext: mocks.clearCanvasContext
 }))
 
 import { useAppStore } from '../../store'
@@ -74,6 +78,37 @@ function commands(): ReturnType<typeof useTabGroupTabCloseCommands> {
     useTabGroupTabCloseCommands({ worktreeId: 'worktree-a', groupTabs: [BROWSER_TAB] })
   ).result.current
 }
+
+it.each(['single', 'bulk'])('waits for context cleanup before a %s canvas close', async (mode) => {
+  const canvas: Tab = {
+    ...BROWSER_TAB,
+    id: 'canvas',
+    contentType: 'canvas',
+    worktreeId: 'worktree-a',
+    executionHostId: 'local',
+    createdAt: 1
+  }
+  useAppStore.setState({ unifiedTabsByWorktree: { 'worktree-a': [canvas] } })
+  let acknowledge!: () => void
+  mocks.clearCanvasContext.mockImplementationOnce(
+    () =>
+      new Promise<void>((resolve) => {
+        acknowledge = resolve
+      })
+  )
+  const actions = renderHook(() =>
+    useTabGroupTabCloseCommands({ worktreeId: 'worktree-a', groupTabs: [canvas] })
+  ).result.current
+  if (mode === 'single') {
+    actions.closeItem(canvas.id)
+  } else {
+    actions.closeMany([canvas.id])
+  }
+  expect(mocks.clearCanvasContext).toHaveBeenCalledWith(canvas)
+  expect(closeUnifiedTab).not.toHaveBeenCalled()
+  acknowledge()
+  await vi.waitFor(() => expect(closeUnifiedTab).toHaveBeenCalledWith(canvas.id))
+})
 
 /** One page, held under a client-minted handle the host has not published yet. */
 function stageWorkspace(workspaceId: string): void {

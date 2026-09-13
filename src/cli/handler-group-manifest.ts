@@ -13,6 +13,11 @@ export type HandlerGroup = {
 // real exports by handler-group-manifest.test.ts, so drift fails CI, not dispatch.
 export const HANDLER_GROUPS: readonly HandlerGroup[] = [
   {
+    name: 'canvas',
+    keys: ['canvas peers', 'canvas send', 'canvas inbox'],
+    load: async () => (await import('./handlers/canvas.js')).CANVAS_HANDLERS
+  },
+  {
     name: 'core',
     keys: ['claude-teams', 'open', 'serve', 'status'],
     load: async () => (await import('./handlers/core.js')).CORE_HANDLERS

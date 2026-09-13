@@ -25,6 +25,7 @@ import { useClientHostedBrowserRows } from '@/lib/pane-manager/client-hosted-bro
 import { resolveClientHostedBrowserRowStripGroupId } from '../tab-bar/client-hosted-browser-row-strip-placement'
 
 const EditorPanel = lazy(() => import('../editor/EditorPanel'))
+const AgentCanvasWorkspace = lazy(() => import('../agent-canvas/AgentCanvasWorkspace'))
 const EMPTY_GROUPS: readonly TabGroup[] = []
 const EMPTY_CLIENT_HOSTED_ROWS: readonly ClientHostedBrowserRow[] = []
 
@@ -146,6 +147,7 @@ export default function TabGroupPanel({
       onNewTerminalTab={commands.newTerminalTab}
       onNewTerminalWithShell={commands.newTerminalWithShell}
       onNewBrowserTab={commands.newBrowserTab}
+      onNewCanvasTab={commands.newCanvasTab}
       onNewSimulatorTab={commands.newSimulatorTab}
       onOpenEntry={commands.openEntry}
       onNewFileTab={commands.newFileTab}
@@ -167,16 +169,19 @@ export default function TabGroupPanel({
       }
       activeBrowserTabId={activeTab?.contentType === 'browser' ? activeTab.entityId : null}
       activeSimulatorTabId={activeTab?.contentType === 'simulator' ? activeTab.id : null}
+      activeCanvasTabId={activeTab?.contentType === 'canvas' ? activeTab.id : null}
       activeTabType={
-        activeTab?.contentType === 'terminal'
-          ? 'terminal'
-          : activeTab?.contentType === 'agent-session'
-            ? 'agent-session'
-            : activeTab?.contentType === 'browser'
-              ? 'browser'
-              : activeTab?.contentType === 'simulator'
-                ? 'simulator'
-                : 'editor'
+        activeTab?.contentType === 'canvas'
+          ? 'canvas'
+          : activeTab?.contentType === 'terminal'
+            ? 'terminal'
+            : activeTab?.contentType === 'agent-session'
+              ? 'agent-session'
+              : activeTab?.contentType === 'browser'
+                ? 'browser'
+                : activeTab?.contentType === 'simulator'
+                  ? 'simulator'
+                  : 'editor'
       }
       onActivateFile={commands.activateEditor}
       onCloseFile={commands.closeItem}
@@ -347,7 +352,15 @@ export default function TabGroupPanel({
             data-contextual-tour-target="workspace-agent-terminal-tip"
           />
         ) : null}
+        {activeTab?.contentType === 'canvas' && (
+          <div className="absolute inset-0 flex min-h-0 min-w-0">
+            <Suspense fallback={null}>
+              <AgentCanvasWorkspace key={activeTab.id} tab={activeTab} />
+            </Suspense>
+          </div>
+        )}
         {activeTab &&
+          activeTab.contentType !== 'canvas' &&
           activeTab.contentType !== 'terminal' &&
           activeTab.contentType !== 'agent-session' &&
           activeTab.contentType !== 'browser' &&

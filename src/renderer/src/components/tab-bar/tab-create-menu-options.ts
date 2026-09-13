@@ -6,6 +6,7 @@ import { isClipboardTextByteLengthOverLimit } from '../../../../shared/clipboard
 export type TabCreateMenuOptionKind =
   | 'go-to-simulator'
   | 'new-browser'
+  | 'new-canvas'
   | 'new-markdown'
   | 'new-simulator'
   | 'new-terminal'
@@ -22,6 +23,7 @@ export type TabCreateMenuOption = {
 
 export type TabCreateMenuOptionsContext = {
   hasNewBrowser: boolean
+  hasNewCanvas?: boolean
   hasNewMarkdown: boolean
   hasOpenMarkdown: boolean
   hasSimulator: boolean
@@ -111,6 +113,15 @@ export function buildTabCreateMenuOptions(
         translate('auto.components.tab.bar.tab.create.menu.options.c87ad57785', 'browser tab'),
         translate('auto.components.tab.bar.tab.create.menu.options.cce7ef1d2c', 'web')
       ]
+    })
+  }
+
+  if (context.hasNewCanvas) {
+    options.push({
+      id: 'new-canvas',
+      kind: 'new-canvas',
+      label: translate('agentCanvas.newTab', 'New Canvas'),
+      keywords: ['canvas', 'agents', 'notes']
     })
   }
 

@@ -1,4 +1,7 @@
-import type { TerminalCursorContext } from './terminal-composer-draft'
+import {
+  isStockTerminalComposerPlaceholder,
+  type TerminalCursorContext
+} from './terminal-composer-draft'
 
 type TerminalCursorCell = {
   getChars(): string
@@ -63,16 +66,68 @@ function firstVisibleCellHasCustomForeground(line: TerminalCursorLine): boolean 
   return false
 }
 
+function withoutPlaceholderParticles(line: TerminalCursorLine): TerminalCursorLine {
+  const getCell = (column: number): TerminalCursorCell | undefined => {
+    const cell = line.getCell(column)
+    if (!cell || cell.isFgDefault() || !/^[\u2801-\u28ff]$/.test(cell.getChars())) {
+      return cell
+    }
+    return {
+      getChars: () => ' ',
+      getWidth: () => cell.getWidth(),
+      isBold: () => cell.isBold(),
+      isDim: () => cell.isDim(),
+      isFgDefault: () => cell.isFgDefault()
+    }
+  }
+  return {
+    isWrapped: line.isWrapped,
+    length: line.length,
+    getCell,
+    translateToString: (trimRight = false, start = 0, end = line.length) => {
+      let text = ''
+      for (let column = start; column < end; column += 1) {
+        const cell = getCell(column)
+        if (cell && cell.getWidth() !== 0) {
+          text += cell.getChars() || ' '
+        }
+      }
+      return trimRight ? text.trimEnd() : text
+    }
+  }
+}
+
+function hasAnimatedCodexPlaceholder(line: TerminalCursorLine, cursorX: number): boolean {
+  if (!/^\s*[›»]\s*$/.test(line.translateToString(true, 0, cursorX))) {
+    return false
+  }
+  const clean = withoutPlaceholderParticles(line)
+  return (
+    firstVisibleCellIsBold(clean) &&
+    !undimmedText(clean, cursorX).trim() &&
+    isStockTerminalComposerPlaceholder(clean.translateToString(true, cursorX).trim())
+  )
+}
+
 export function readTerminalCursorLineContext(
   terminal: TerminalCursorContextSource,
   rowsAroundCursor: number
 ): TerminalCursorContext | null {
   const buffer = terminal.buffer.active
   const cursorRow = buffer.baseY + buffer.cursorY
-  const cursorLine = buffer.getLine(cursorRow)
-  if (!cursorLine) {
+  const rawCursorLine = buffer.getLine(cursorRow)
+  if (!rawCursorLine) {
     return null
   }
+  // Only a proven dim placeholder licenses ignoring Codex's colored particle overlay.
+  const animatedPlaceholder = hasAnimatedCodexPlaceholder(rawCursorLine, buffer.cursorX)
+  const getLine = (row: number) => {
+    const line = buffer.getLine(row)
+    return line && animatedPlaceholder && Math.abs(row - cursorRow) <= 1
+      ? withoutPlaceholderParticles(line)
+      : line
+  }
+  const cursorLine = getLine(cursorRow)!
   const rows: string[] = []
   const typedRows: string[] = []
   const promptGlyphBoldRows: boolean[] = []
@@ -80,7 +135,7 @@ export function readTerminalCursorLineContext(
   const rowRadius = Math.max(0, Math.floor(rowsAroundCursor))
   const start = Math.max(buffer.viewportY, cursorRow - rowRadius)
   for (let row = start; row <= cursorRow; row += 1) {
-    const line = buffer.getLine(row)
+    const line = getLine(row)
     const nextLineIsWrapped = buffer.getLine(row + 1)?.isWrapped ?? false
     rows.push(line?.translateToString(!nextLineIsWrapped) ?? '')
     typedRows.push(line ? undimmedText(line, 0, !nextLineIsWrapped) : '')
@@ -93,7 +148,7 @@ export function readTerminalCursorLineContext(
   const rowsBelowCustomForeground: boolean[] = []
   const end = Math.min(buffer.viewportY + terminal.rows - 1, cursorRow + rowRadius)
   for (let row = cursorRow + 1; row <= end; row += 1) {
-    const line = buffer.getLine(row)
+    const line = getLine(row)
     const nextLineIsWrapped = buffer.getLine(row + 1)?.isWrapped ?? false
     rowsBelow.push(line?.translateToString(!nextLineIsWrapped) ?? '')
     typedRowsBelow.push(line ? undimmedText(line, 0, !nextLineIsWrapped) : '')

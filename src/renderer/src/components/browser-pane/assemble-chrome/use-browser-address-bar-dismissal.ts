@@ -1,4 +1,4 @@
-import { useEffect } from 'react'
+import { useEffect, type RefObject } from 'react'
 
 /**
  * Why: Electron <webview> guests run in a separate process, so clicking the page never dispatches
@@ -6,7 +6,11 @@ import { useEffect } from 'react'
  * focus moves into the guest (the host <webview> tag) close the dropdown the same way
  * BrowserImportHintButton does for its popover; Escape closes it at window capture.
  */
-export function useBrowserAddressBarDismissal(open: boolean, dismissSuggestions: () => void): void {
+export function useBrowserAddressBarDismissal(
+  open: boolean,
+  dismissSuggestions: () => void,
+  inputRef: RefObject<HTMLInputElement | null>
+): void {
   useEffect(() => {
     if (!open) {
       return
@@ -28,6 +32,14 @@ export function useBrowserAddressBarDismissal(open: boolean, dismissSuggestions:
       if (event.key !== 'Escape') {
         return
       }
+      // A modal over the browser owns Escape, even while address suggestions are still open.
+      if (
+        Array.from(
+          document.querySelectorAll('[data-slot="dialog-content"][data-state="open"]')
+        ).some((dialog) => !dialog.contains(inputRef.current))
+      ) {
+        return
+      }
       dismissSuggestions()
       event.preventDefault()
       event.stopImmediatePropagation()
@@ -41,5 +53,5 @@ export function useBrowserAddressBarDismissal(open: boolean, dismissSuggestions:
       document.removeEventListener('focusin', handleFocusIn, true)
       window.removeEventListener('keydown', handleEscape, true)
     }
-  }, [dismissSuggestions, open])
+  }, [dismissSuggestions, open, inputRef])
 }

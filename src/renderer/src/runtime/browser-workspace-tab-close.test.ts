@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AppState } from '@/store/types'
+import type { Tab } from '../../../shared/tab-types'
 import {
   consumeBrowserAddressBarEditSession,
   saveBrowserAddressBarEditSession
@@ -42,6 +43,36 @@ function browserPage(
 }
 
 const recordClientHostedBrowserCloseIntents = vi.fn()
+const removeCanvasCards = vi.hoisted(() => vi.fn())
+vi.mock('@/components/agent-canvas/canvas-closed-resource-cleanup', () => ({
+  removeClosedTabFromCanvases: removeCanvasCards
+}))
+
+it.each(['applied', 'unknown-tab', 'failed'])(
+  'prunes remote browser cards only after a host confirms %s',
+  async (outcome) => {
+    closeWebRuntimeSessionTab.mockResolvedValue(outcome)
+    const tab: Tab = {
+      id: 'tab-a',
+      entityId: WORKSPACE_ID,
+      contentType: 'browser',
+      executionHostId: 'runtime:environment-a',
+      worktreeId: 'worktree-a',
+      groupId: 'group',
+      label: 'Browser',
+      customLabel: null,
+      color: null,
+      sortOrder: 0,
+      createdAt: 1
+    }
+    closeWorkspace(false, { unifiedTabsByWorktree: { 'worktree-a': [tab] } })
+    await vi.waitFor(() => expect(recordClientHostedBrowserCloseIntents).toHaveBeenCalled())
+    expect(removeCanvasCards).toHaveBeenCalledTimes(outcome === 'failed' ? 0 : 1)
+    if (outcome !== 'failed') {
+      expect(removeCanvasCards).toHaveBeenCalledWith(tab, [tab])
+    }
+  }
+)
 
 function closeState(
   staged: boolean,

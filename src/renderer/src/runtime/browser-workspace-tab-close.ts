@@ -3,6 +3,8 @@ import { clearBrowserAddressBarEditSession } from '@/components/browser-pane/ass
 import { clearBrowserPageDeferredNavigation } from '@/components/browser-pane/navigate/browser-page-deferred-navigation'
 import { destroyWorkspaceWebviews } from '@/store/slices/browser-webview-cleanup'
 import { useAppStore } from '@/store'
+import { removeClosedTabFromCanvases } from '@/components/agent-canvas/canvas-closed-resource-cleanup'
+import type { Tab } from '../../../shared/tab-types'
 import {
   collectPendingClientHostedBrowserCloses,
   type PendingClientHostedBrowserClose
@@ -31,7 +33,8 @@ export function closeBrowserWorkspaceTabOnHosts({
     | 'browserPagesByWorkspace'
     | 'remoteBrowserPageHandlesByPageId'
     | 'recordClientHostedBrowserCloseIntents'
-  >
+  > &
+    Partial<Pick<AppState, 'unifiedTabsByWorktree'>>
   worktreeId: string
   workspaceId: string
   /** The tab id the host knows this mirror by. */
@@ -76,6 +79,7 @@ export function closeBrowserWorkspaceTabOnHosts({
     workspaceId,
     visibleTabId,
     pending,
+    canvasTabs: state.unifiedTabsByWorktree?.[worktreeId] ?? [],
     // Captured rather than re-read: store actions are stable, and the settle resolves long after
     // this snapshot stops describing the tab.
     recordCloseIntents: state.recordClientHostedBrowserCloseIntents
@@ -89,6 +93,7 @@ async function settleBrowserWorkspaceTabCloseOnHosts(args: {
   workspaceId: string
   visibleTabId: string
   pending: readonly PendingClientHostedBrowserClose[]
+  canvasTabs: Tab[]
   recordCloseIntents: (closes: readonly PendingClientHostedBrowserClose[]) => void
 }): Promise<void> {
   const outcomes = await Promise.all(
@@ -106,6 +111,14 @@ async function settleBrowserWorkspaceTabCloseOnHosts(args: {
     outcomes.filter((entry) => entry.outcome === 'failed').map((entry) => entry.environmentId)
   )
   args.recordCloseIntents(args.pending.filter((close) => unheard.has(close.environmentId)))
+  if (outcomes.length > 0 && unheard.size === 0) {
+    const closed = args.canvasTabs.find(
+      (tab) => tab.contentType === 'browser' && tab.entityId === args.workspaceId
+    )
+    if (closed) {
+      removeClosedTabFromCanvases(closed, args.canvasTabs)
+    }
+  }
   // Why every owner and not any: a host that still knows the page removes this mirror through tab
   // sync, and tearing down here too would race that retraction. Only when all of them answer that
   // the tab does not exist is there nobody left to do it — the case the connected-owner branch

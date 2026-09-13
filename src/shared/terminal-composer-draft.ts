@@ -93,6 +93,10 @@ function isStockPlaceholder(
     .join(' ')
     .replace(/\s+/g, ' ')
     .trim()
+  return isStockTerminalComposerPlaceholder(text)
+}
+
+export function isStockTerminalComposerPlaceholder(text: string): boolean {
   return (
     /^Try\s+["“]/.test(text) ||
     text === 'Ask Codex to do anything' ||
@@ -157,11 +161,6 @@ function detectTerminalComposer(
         })
         .join('')
         .trim()
-      if (!text) {
-        if (!placeholder) {
-          return null
-        }
-      }
       return {
         text,
         promptRow: context.cursorViewportRow - (cursorIndex - index),
@@ -182,7 +181,7 @@ export function detectTerminalComposerDraft(
   context: TerminalCursorContext | null | undefined
 ): TerminalComposerDraft | null {
   const match = detectTerminalComposer(context)
-  if (!match || match.placeholder) {
+  if (!match || !match.text || match.placeholder) {
     return null
   }
   return {
@@ -198,4 +197,10 @@ export function hasTerminalComposerPlaceholder(
   context: TerminalCursorContext | null | undefined
 ): boolean {
   return detectTerminalComposer(context)?.placeholder === true
+}
+
+export function hasEmptyTerminalComposer(
+  context: TerminalCursorContext | null | undefined
+): boolean {
+  return detectTerminalComposer(context)?.text === ''
 }

@@ -17,6 +17,7 @@ function TabBarInner(props: TabBarProps): React.JSX.Element {
     onNewTerminalTab,
     onNewTerminalWithShell,
     onNewBrowserTab,
+    onNewCanvasTab,
     onNewSimulatorTab,
     onNewFileTab,
     onOpenFileTab,
@@ -40,6 +41,7 @@ function TabBarInner(props: TabBarProps): React.JSX.Element {
     onNewTerminalTab,
     onNewTerminalWithShell,
     onNewBrowserTab,
+    onNewCanvasTab,
     onNewSimulatorTab,
     onNewFileTab,
     onOpenFileTab

@@ -21,6 +21,7 @@ export type TabBarProps = {
   /** On Windows, opens a new terminal with a specific shell instead of the default. */
   onNewTerminalWithShell?: (shell: string) => void
   onNewBrowserTab: () => void
+  onNewCanvasTab?: () => void
   onNewSimulatorTab?: () => void
   onOpenEntry?: (args: TabCreateEntryArgs) => Promise<void>
   terminalOnly?: boolean
@@ -41,6 +42,7 @@ export type TabBarProps = {
   activeFileId?: string | null
   activeBrowserTabId?: string | null
   activeSimulatorTabId?: string | null
+  activeCanvasTabId?: string | null
   activeTabType?: WorkspaceVisibleTabType
   onActivateFile?: (fileId: string) => void
   onCloseFile?: (fileId: string) => void
