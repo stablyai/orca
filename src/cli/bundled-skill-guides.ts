@@ -528,6 +528,7 @@ const ORCA_CLI_MARKDOWN = [
   "ORCA worktree set --worktree id:<repoId>::<worktreePath> --parent-worktree id:<parentRepoId>::<parentPath> --json",
   "ORCA worktree set --worktree id:<repoId>::<worktreePath> --no-parent --json",
   "ORCA worktree set --worktree active --pin --json",
+  "ORCA worktree set --worktree active --unpin --json",
   "ORCA worktree set --worktree active --gitlab-issue '#42' --gitlab-mr '!77' --json",
   "ORCA worktree set --worktree active --pr null --gitlab-mr null --json",
   "ORCA worktree rm --worktree id:<repoId>::<worktreePath> --force --json",
