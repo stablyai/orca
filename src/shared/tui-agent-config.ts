@@ -248,7 +248,9 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
   'qwen-code': {
     // Why: package is qwen-code but its installed CLI binary on PATH is `qwen`.
     detectCmd: 'qwen',
-    promptInjectionMode: 'stdin-after-start'
+    promptInjectionMode: 'stdin-after-start',
+    // Why: local provider initialization varies with the host; wait for the real composer instead of guessing a delay.
+    draftPasteReadyTimeoutMs: 30_000
   },
   rovo: {
     detectCmd: 'rovo',

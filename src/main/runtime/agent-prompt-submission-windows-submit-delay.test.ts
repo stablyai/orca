@@ -301,12 +301,20 @@ describe('agent prompt render gate on a ConPTY host', () => {
   async function createSettlementRuntime(
     // `noiseUntilMs` keeps the pane emitting inside every quiet window, so the gate can only
     // end on its hard cap -- which is what the cap's arithmetic has to be measured against.
-    agentOutput: { markerDelayMs?: number; noiseUntilMs?: number } = {}
+    agentOutput: {
+      launchAgent?: 'claude' | 'qwen-code'
+      markerDelayMs?: number
+      noiseUntilMs?: number
+      qwenComposerReady?: boolean
+      qwenAfterSubmitLines?: string[]
+      qwenAfterSubmitDraft?: string
+    } = {}
   ): Promise<{
     runtime: OrcaRuntimeService
     handle: string
     writes: string[]
     submitTimes: number[]
+    setQwenComposerReady: () => void
   }> {
     const markerDelayMs = agentOutput.markerDelayMs ?? 100
     const runtime = new OrcaRuntimeService(makeStore() as never)
@@ -332,10 +340,70 @@ describe('agent prompt render gate on a ConPTY host', () => {
       getForegroundProcess: async () => null
     })
     const terminal = await runtime.createTerminal(`path:${WORKTREE_PATH}`, {
-      launchAgent: 'claude'
+      launchAgent: agentOutput.launchAgent ?? 'claude'
     })
-    return { runtime, handle: terminal.handle, writes, submitTimes }
+    if (agentOutput.launchAgent === 'qwen-code') {
+      let composerReady = agentOutput.qwenComposerReady ?? true
+      Object.defineProperty(runtime, 'readVisibleTerminalState', {
+        value: async () => ({
+          lines:
+            countSubmits(writes) > 0 && agentOutput.qwenAfterSubmitLines
+              ? agentOutput.qwenAfterSubmitLines
+              : composerReady
+                ? ['*   Type your message or @path/to/file']
+                : [],
+          ...(countSubmits(writes) > 0 && agentOutput.qwenAfterSubmitDraft
+            ? { draft: agentOutput.qwenAfterSubmitDraft }
+            : {})
+        })
+      })
+      return {
+        runtime,
+        handle: terminal.handle,
+        writes,
+        submitTimes,
+        setQwenComposerReady: () => {
+          composerReady = true
+        }
+      }
+    }
+    return { runtime, handle: terminal.handle, writes, submitTimes, setQwenComposerReady: () => {} }
   }
+
+  it("waits for Qwen Code's composer before writing the prompt", async () => {
+    useHostPlatform('win32')
+    vi.useFakeTimers()
+    const { runtime, handle, writes, setQwenComposerReady } = await createSettlementRuntime({
+      launchAgent: 'qwen-code',
+      qwenComposerReady: false
+    })
+    const submission = runtime.sendTerminalAgentPrompt(handle, 'review this')
+    const stalled = expect(submission).rejects.toThrow('agent_prompt_stalled')
+
+    await vi.advanceTimersByTimeAsync(5_000)
+    expect(writes).toHaveLength(0)
+    setQwenComposerReady()
+    await vi.runAllTimersAsync()
+
+    expect(writes.some((data) => data.includes('review this'))).toBe(true)
+    await stalled
+  })
+
+  it('fails without writing when Qwen Code never mounts its composer', async () => {
+    useHostPlatform('win32')
+    vi.useFakeTimers()
+    const { runtime, handle, writes } = await createSettlementRuntime({
+      launchAgent: 'qwen-code',
+      qwenComposerReady: false
+    })
+    const submission = runtime.sendTerminalAgentPrompt(handle, 'review this')
+    const timedOut = expect(submission).rejects.toThrow('agent_prompt_ready_timeout')
+
+    await vi.runAllTimersAsync()
+
+    await timedOut
+    expect(writes).toHaveLength(0)
+  })
 
   it('does not let a mid-ingest marker plus quiet settle a large paste early', async () => {
     useHostPlatform('win32')
@@ -396,6 +464,75 @@ describe('agent prompt render gate on a ConPTY host', () => {
     expect(submitTimes[0]).toBeGreaterThanOrEqual(1_600)
     expect(submitTimes[0]).toBeLessThan(1_700)
     await stalled
+  })
+
+  it('gates Qwen Code until its pasted prompt has rendered', async () => {
+    useHostPlatform('win32')
+    vi.useFakeTimers()
+    const { runtime, handle, submitTimes } = await createSettlementRuntime({
+      launchAgent: 'qwen-code'
+    })
+    const submission = runtime.sendTerminalAgentPrompt(handle, 'review this')
+    const stalled = expect(submission).rejects.toThrow('agent_prompt_stalled')
+
+    await vi.advanceTimersByTimeAsync(1_599)
+    expect(submitTimes).toHaveLength(0)
+    await vi.runAllTimersAsync()
+    expect(submitTimes).toHaveLength(1)
+    expect(submitTimes[0]).toBeGreaterThanOrEqual(1_600)
+    await stalled
+  })
+
+  it('retries exactly once when Qwen still shows the pasted-content composer', async () => {
+    useHostPlatform('win32')
+    vi.useFakeTimers()
+    const { runtime, handle, writes } = await createSettlementRuntime({
+      launchAgent: 'qwen-code',
+      qwenAfterSubmitLines: ['* [Pasted Content 2790 chars]']
+    })
+    const submission = runtime.sendTerminalAgentPrompt(handle, 'review this')
+    const stalled = expect(submission).rejects.toThrow('agent_prompt_stalled')
+
+    await vi.runAllTimersAsync()
+    expect(countSubmits(writes)).toBe(2)
+    await stalled
+  })
+
+  it('retries exactly once when Qwen still exposes a non-empty composer draft', async () => {
+    useHostPlatform('win32')
+    vi.useFakeTimers()
+    const { runtime, handle, writes } = await createSettlementRuntime({
+      launchAgent: 'qwen-code',
+      qwenAfterSubmitDraft: 'read the target file'
+    })
+    const submission = runtime.sendTerminalAgentPrompt(handle, 'review this')
+    const stalled = expect(submission).rejects.toThrow('agent_prompt_stalled')
+
+    await vi.runAllTimersAsync()
+    expect(countSubmits(writes)).toBe(2)
+    await stalled
+  })
+
+  it('does not retry Qwen after the request is cancelled', async () => {
+    useHostPlatform('win32')
+    vi.useFakeTimers()
+    const controller = new AbortController()
+    const { runtime, handle, writes } = await createSettlementRuntime({
+      launchAgent: 'qwen-code',
+      qwenAfterSubmitLines: ['* [Pasted Content 2790 chars]']
+    })
+    const submission = runtime.sendTerminalAgentPrompt(handle, 'review this', {
+      signal: controller.signal
+    })
+    const rejected = expect(submission).rejects.toThrow('request_aborted')
+
+    await vi.advanceTimersByTimeAsync(1_600)
+    expect(countSubmits(writes)).toBe(1)
+    controller.abort()
+    await vi.runAllTimersAsync()
+
+    await rejected
+    expect(countSubmits(writes)).toBe(1)
   })
 })
 
