@@ -17,6 +17,7 @@ import {
 } from '../../shared/ephemeral-vm-recipes'
 import { getDefaultUserDataPath } from './metadata'
 import { getMacAppBundlePath } from './mac-app-update-bundle'
+import { appendProfileUserDataArg, buildProfileLaunchEnv } from './profile-app-launch'
 import {
   readServeUpdateHandoffSync,
   resumeInterruptedServeUpdate,
@@ -38,9 +39,11 @@ export function launchOrcaApp(userDataPath = getDefaultUserDataPath()): void {
 
   const overrideExecutable = process.env.ORCA_APP_EXECUTABLE
   if (typeof overrideExecutable === 'string' && overrideExecutable.trim().length > 0) {
-    spawnDetached(overrideExecutable, getLaunchAppArgs(overrideExecutable, userDataPath), {
-      env: getLaunchEnv(userDataPath)
-    })
+    spawnDetached(
+      overrideExecutable,
+      appendProfileUserDataArg(getExecutableAppArgs(overrideExecutable), userDataPath),
+      { env: buildProfileLaunchEnv(stripElectronRunAsNode(process.env), userDataPath) }
+    )
     return
   }
 
@@ -53,18 +56,18 @@ export function launchOrcaApp(userDataPath = getDefaultUserDataPath()): void {
         // packaged CLI should re-open the .app the same way Finder does.
         spawnDetached(
           'open',
-          ['-n', '-a', appBundlePath, '--args', ...getUserDataDirArg(userDataPath)],
-          {
-            env: getLaunchEnv(userDataPath)
-          }
+          ['-n', '-a', appBundlePath, '--args', ...appendProfileUserDataArg([], userDataPath)],
+          { env: buildProfileLaunchEnv(stripElectronRunAsNode(process.env), userDataPath) }
         )
         return
       }
     }
 
-    spawnDetached(process.execPath, getLaunchAppArgs(process.execPath, userDataPath), {
-      env: getLaunchEnv(userDataPath)
-    })
+    spawnDetached(
+      process.execPath,
+      appendProfileUserDataArg(getExecutableAppArgs(process.execPath), userDataPath),
+      { env: buildProfileLaunchEnv(stripElectronRunAsNode(process.env), userDataPath) }
+    )
     return
   }
 
@@ -293,22 +296,6 @@ function shouldDisableExtractedAppImageSandbox(executable: string): boolean {
     )
   } catch {
     return true
-  }
-}
-
-function getLaunchAppArgs(executable: string, userDataPath: string): string[] {
-  return [...getExecutableAppArgs(executable), ...getUserDataDirArg(userDataPath)]
-}
-
-function getUserDataDirArg(userDataPath: string): string[] {
-  return [`--user-data-dir=${userDataPath}`]
-}
-
-function getLaunchEnv(userDataPath: string): NodeJS.ProcessEnv {
-  return {
-    ...stripElectronRunAsNode(process.env),
-    ORCA_USER_DATA_PATH: userDataPath,
-    ORCA_DEV_USER_DATA_PATH: userDataPath
   }
 }
 
