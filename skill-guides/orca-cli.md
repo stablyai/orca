@@ -89,6 +89,7 @@ ORCA worktree set --worktree id:<repoId>::<worktreePath> --display-name "My Task
 ORCA worktree set --worktree active --comment "reproduced bug; testing fix" --json
 ORCA worktree set --worktree active --workspace-status in-review --json
 ORCA worktree set --worktree active --pin --json
+ORCA worktree set --worktree active --unpin --json
 ORCA worktree rm --worktree id:<repoId>::<worktreePath> --force --json
 ```
 
