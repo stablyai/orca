@@ -163,6 +163,33 @@ describe('repos:create', () => {
     await expect(callDefaultCreateProjectParent()).resolves.toBe(defaultProjectParent)
   })
 
+  // ── create-project default parent (orca#20475) ────────────────────
+
+  it('prefers a configured Projects Directory over everything else', async () => {
+    mockStore.getSettings.mockReturnValue({
+      projectsDir: '/Users/alice/dev',
+      workspaceDir: 'J:\\PROJECTS',
+      hostSettingOverrides: { local: { defaultWorktreeLocation: 'D:\\code' } }
+    })
+    await expect(callDefaultCreateProjectParent()).resolves.toBe('/Users/alice/dev')
+  })
+
+  it('trims surrounding whitespace from the Projects Directory', async () => {
+    mockStore.getSettings.mockReturnValue({
+      projectsDir: '  /Users/alice/dev  ',
+      workspaceDir: defaultWorkspaceDir
+    })
+    await expect(callDefaultCreateProjectParent()).resolves.toBe('/Users/alice/dev')
+  })
+
+  it.each([undefined, '', '   '])(
+    'treats a blank Projects Directory as unset and falls through: %p',
+    async (projectsDir) => {
+      mockStore.getSettings.mockReturnValue({ projectsDir, workspaceDir: 'J:\\PROJECTS' })
+      await expect(callDefaultCreateProjectParent()).resolves.toBe('J:\\PROJECTS')
+    }
+  )
+
   // ── create-project default parent (orca#14767) ────────────────────
 
   it('defaults new projects to a configured Workspace Directory', async () => {

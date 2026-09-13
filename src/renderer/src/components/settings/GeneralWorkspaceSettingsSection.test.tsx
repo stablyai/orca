@@ -8,6 +8,7 @@ import { GeneralWorkspaceSettingsSection } from './GeneralWorkspaceSettingsSecti
 import type { ReactNode } from 'react'
 
 vi.mock('./WorkspaceDirectorySetting', () => ({ WorkspaceDirectorySetting: () => null }))
+vi.mock('./ProjectsDirectorySetting', () => ({ ProjectsDirectorySetting: () => null }))
 vi.mock('./OpenInMenuSetting', () => ({ OpenInMenuSetting: () => null }))
 vi.mock('@/components/ui/tooltip', () => ({
   Tooltip: ({ children }: { children: ReactNode }) => <>{children}</>,

@@ -56,6 +56,11 @@ export type WorktreeVisibilityDefaults = {
 
 export type GlobalSettings = {
   workspaceDir: string
+  /** Default parent folder for "Create new project" on the local host. Blank or
+   *  unset means: fall back to the configured Workspace Directory, then to
+   *  `~/orca/projects`. Kept separate from `workspaceDir` so projects and their
+   *  worktrees can live in different trees. */
+  projectsDir?: string
   /** Host-owned defaults used when a repository has no explicit visibility override. */
   worktreeVisibilityDefaults?: WorktreeVisibilityDefaults
   /** Per-host overrides keyed by ExecutionHostId. Effective value for a

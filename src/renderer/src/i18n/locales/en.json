@@ -11841,6 +11841,10 @@
           "targetDescription": "Higher values increase contrast where possible. Background colors stay unchanged.",
           "subtle": "Subtle",
           "strong": "Strong"
+        },
+        "ProjectsDirectorySetting": {
+          "36a4a03baf": "Projects Directory",
+          "bd7ac2af54": "Default parent folder for Create new project. Leave empty to use the Workspace Directory, or ~/orca/projects when that is still the default."
         }
       },
       "right": {

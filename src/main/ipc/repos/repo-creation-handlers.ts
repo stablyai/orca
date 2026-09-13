@@ -35,7 +35,8 @@ async function isGitAvailable(): Promise<boolean> {
 }
 
 /**
- * Where the "Create new project" Location field starts. Settings -> Workspace
+ * Where the "Create new project" Location field starts. Settings -> Projects
+ * Directory wins whenever the user filled it in. Otherwise Settings -> Workspace
  * Directory owns this once the user has actually set it, including a per-host
  * override for the local host, which is the only scope this handler answers for.
  *
@@ -47,6 +48,10 @@ async function isGitAvailable(): Promise<boolean> {
 function getDefaultCreateProjectParent(store: Store): string {
   const home = homedir()
   const settings = store.getSettings()
+  const projectsDir = settings.projectsDir?.trim()
+  if (projectsDir) {
+    return projectsDir
+  }
   const configured = getEffectiveHostSetting(
     settings,
     LOCAL_EXECUTION_HOST_ID,
