@@ -27,6 +27,7 @@ export type StructuredAgentSessionLaunchIntent = {
   agent: AgentSessionHandleProvider
   params: StructuredAgentSessionCreateParams
 }
+import { createBrowserUuid } from '@/lib/browser-uuid'
 
 class StructuredAgentSessionCreateError extends Error {
   constructor(
@@ -92,7 +93,7 @@ export function createStructuredAgentSessionLaunchIntent(
   agent: AgentSessionHandleProvider,
   resumeFrom?: StructuredAgentSessionResumeSource
 ): StructuredAgentSessionLaunchIntent {
-  const sessionId = createStructuredAgentSessionId(agent, () => crypto.randomUUID())
+  const sessionId = createStructuredAgentSessionId(agent, () => createBrowserUuid())
   const state = useAppStore.getState()
   recordWebSessionFocusIntent(
     { environmentId: LOCAL_STRUCTURED_SESSION_OWNER },
@@ -110,7 +111,7 @@ export function createStructuredAgentSessionLaunchIntent(
       worktree: toRuntimeWorktreeSelector(worktreeId),
       agent,
       ...(resumeFrom ? { resumeFrom } : {}),
-      randomUuid: () => crypto.randomUUID()
+      randomUuid: () => createBrowserUuid()
     })
   }
 }

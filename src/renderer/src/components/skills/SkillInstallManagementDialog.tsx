@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { createBrowserUuid } from '@/lib/browser-uuid'
 import { Dialog } from '@/components/ui/dialog'
 import { useAppStore } from '@/store'
 import type {
@@ -158,7 +159,7 @@ export function SkillInstallManagementDialog({
     setBusy(true)
     setError(null)
     setNotice(null)
-    const operationId = crypto.randomUUID()
+    const operationId = createBrowserUuid()
     installProgress.begin(operationId)
     try {
       const version = details?.versions.find((candidate) => candidate.versionId === versionId)

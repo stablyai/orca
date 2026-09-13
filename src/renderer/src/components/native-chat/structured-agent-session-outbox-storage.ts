@@ -10,6 +10,7 @@ const OUTBOX_PREFIX = 'orca:desktopStructuredAgentSessionOutbox:v1:'
 function storageKey(sessionId: string): string {
   return `${OUTBOX_PREFIX}${encodeURIComponent(sessionId)}`
 }
+import { createBrowserUuid } from '@/lib/browser-uuid'
 
 export function readOutbox(sessionId: string): StructuredAgentSessionOutboxEntry[] {
   try {
@@ -49,7 +50,7 @@ export function enqueueStructuredAgentSessionLaunchPrompt(
   text: string
 ): StructuredAgentSessionOutboxEntry | null {
   const entry = createStructuredAgentSessionOutboxEntry({
-    clientMessageId: createStructuredAgentSessionOperationId(() => crypto.randomUUID()),
+    clientMessageId: createStructuredAgentSessionOperationId(() => createBrowserUuid()),
     sessionId,
     text,
     attachments: [],

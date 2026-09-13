@@ -24,6 +24,7 @@ type Props = {
   sourceDefaultsSupported: boolean
   updateSettings: (updates: Partial<GlobalSettings>) => void | Promise<void>
 }
+import { createBrowserUuid } from '@/lib/browser-uuid'
 
 const DEFAULT_WORKTREE_VISIBILITY_DEFAULTS: WorktreeVisibilityDefaults = { external: 'hide' }
 
@@ -105,7 +106,7 @@ export function GlobalWorktreeVisibilitySourcesSetting({
       if (customSources.length >= MAX_CUSTOM_WORKTREE_VISIBILITY_SOURCES) {
         return 'limit'
       }
-      const id = crypto.randomUUID().replaceAll('-', '')
+      const id = createBrowserUuid().replaceAll('-', '')
       const candidate = normalizeCustomWorktreeVisibilitySources([{ id, rootPath }])?.[0]
       if (!candidate) {
         return 'invalid-path'

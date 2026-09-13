@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { createBrowserUuid } from '@/lib/browser-uuid'
 import { useAppStore } from '@/store'
 import {
   Dialog,
@@ -277,7 +278,7 @@ export default function WorktreeVisibilityDialog(): React.JSX.Element | null {
       if ((existing?.length ?? 0) >= MAX_CUSTOM_WORKTREE_VISIBILITY_SOURCES) {
         return 'limit'
       }
-      const id = crypto.randomUUID().replaceAll('-', '')
+      const id = createBrowserUuid().replaceAll('-', '')
       const candidate = normalizeCustomWorktreeVisibilitySources([{ id, rootPath }])?.[0]
       if (!candidate) {
         return 'invalid-path'

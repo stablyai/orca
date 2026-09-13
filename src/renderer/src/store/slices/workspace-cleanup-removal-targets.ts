@@ -49,6 +49,7 @@ export type WorkspaceCleanupRemovalTarget = {
   displayName: string
   approvedCandidate?: WorkspaceCleanupCandidate
 }
+import { createBrowserUuid } from '@/lib/browser-uuid'
 
 export type WorkspaceCleanupUnresolvedTarget = {
   kind: 'unresolved'
@@ -190,7 +191,7 @@ export async function preflightWorkspaceCleanupCandidates(
     const chunk = worktreeIds.slice(start, start + WORKSPACE_CLEANUP_TARGET_BATCH_LIMIT)
     const scan = await window.api.workspaceCleanup.scan({
       worktreeIds: [...chunk],
-      scanId: crypto.randomUUID(),
+      scanId: createBrowserUuid(),
       refreshActivity: true
     })
     const enriched = await enrich(scan.candidates, getState())

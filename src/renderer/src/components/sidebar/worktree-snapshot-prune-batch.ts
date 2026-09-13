@@ -1,3 +1,4 @@
+import { createBrowserUuid } from '@/lib/browser-uuid'
 export type WorktreeSnapshotPruneBatch = {
   batchId: string
   finish: () => Promise<void>
@@ -14,7 +15,7 @@ export function beginWorktreeSnapshotPruneBatch(): Promise<WorktreeSnapshotPrune
   if (typeof begin !== 'function' || typeof record !== 'function' || typeof finish !== 'function') {
     return null
   }
-  const batchId = crypto.randomUUID()
+  const batchId = createBrowserUuid()
   return begin({ batchId })
     .then(() => ({ batchId, finish: () => finish({ batchId }) }))
     .catch((error: unknown) => {

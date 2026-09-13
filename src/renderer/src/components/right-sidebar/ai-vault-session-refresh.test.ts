@@ -801,3 +801,34 @@ describe('useAiVaultSessionRefresh in-app agent session behavior', () => {
     expect(listSessionsMock.mock.calls.length).toBe(callsWhileHealthy)
   })
 })
+
+// LAN web clients run in non-secure browser contexts where crypto.randomUUID is
+// hidden. Regression for the right-sidebar Vault crash ("The right sidebar hit
+// an error"): the request token used to be minted with a raw crypto.randomUUID()
+// call, which threw during render in that context. The fallback must still
+// produce a well-formed v4 UUID request token.
+describe('useAiVaultSessionRefresh non-secure context', () => {
+  it('mints a request token when crypto.randomUUID is unavailable', async () => {
+    const randomUUIDDescriptor = Object.getOwnPropertyDescriptor(globalThis.crypto, 'randomUUID')
+    Object.defineProperty(globalThis.crypto, 'randomUUID', {
+      configurable: true,
+      writable: true,
+      value: undefined
+    })
+    try {
+      await renderHook()
+      await flushMicrotasks()
+
+      expect(listSessionsMock).toHaveBeenCalledTimes(1)
+      expect(lastCallArgs()).toMatchObject({
+        requestToken: expect.stringMatching(
+          /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
+        )
+      })
+    } finally {
+      if (randomUUIDDescriptor) {
+        Object.defineProperty(globalThis.crypto, 'randomUUID', randomUUIDDescriptor)
+      }
+    }
+  })
+})
