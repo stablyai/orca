@@ -1,0 +1,202 @@
+diff --git a/dist/components/FileDiff.d.ts b/dist/components/FileDiff.d.ts
+index 1f94220f696e8c8ff8fc86248a888ca57c1fcd18..93217c7dca64086862b8a44e13978dfc0f49560d 100644
+--- a/dist/components/FileDiff.d.ts
++++ b/dist/components/FileDiff.d.ts
+@@ -45,6 +45,8 @@ interface FileDiffOptions<LAnnotation, Caret> extends Omit<BaseDiffOptions, 'hun
+   * removed in a future version.
+   */
+   | ((hunk: HunkData, instance: FileDiff<LAnnotation, Caret>) => HTMLElement | DocumentFragment | null | undefined);
++  /** False skips canonical hunk recomputation on discarded instances; completion still reports the live document and session hunks. */
++  recomputeDiffOnCleanup?: boolean;
+   disableFileHeader?: boolean;
+   renderHeaderPrefix?: RenderHeaderPrefixCallback;
+   renderHeaderFilenameSuffix?: RenderHeaderFilenameSuffixCallback;
+diff --git a/dist/components/FileDiff.js b/dist/components/FileDiff.js
+index 9bdaaa3ef199f3e443f77106a9ac7eddcc4b05b6..461364d3af60a954a766ef285ddef14744f16f30 100644
+--- a/dist/components/FileDiff.js
++++ b/dist/components/FileDiff.js
+@@ -335,7 +335,12 @@ var FileDiff = class {
+ 		const { editor } = this;
+ 		dequeueRender(this.handleEditSessionRender);
+ 		this.emitPostRender(true);
+-		editor?.cleanUp(recycle ? "recycle" : "discard");
++		this.skipCleanupRecompute = !recycle && this.options.recomputeDiffOnCleanup === false;
++		try {
++			editor?.cleanUp(recycle ? "recycle" : "discard");
++		} finally {
++			this.skipCleanupRecompute = false;
++		}
+ 		if (!recycle) this.editor = void 0;
+ 		this.resizeManager.cleanUp();
+ 		this.interactionManager.cleanUp();
+@@ -966,6 +971,7 @@ var FileDiff = class {
+ 	* ran.
+ 	*/
+ 	finalizeEditSessionHunks() {
++		if (this.skipCleanupRecompute) return false;
+ 		const fileDiff = this.getLatestDiff();
+ 		if (fileDiff == null || fileDiff.editSessionDirty !== true) return false;
+ 		const { collapsedContextThreshold = 1 } = this.options;
+diff --git a/dist/index.d.ts b/dist/index.d.ts
+index 10626ccf2c08151951c7a42a7a014ba4b147869b..175f05ac3a4638d5f3df8f3f09b432da3d61e61c 100644
+--- a/dist/index.d.ts
++++ b/dist/index.d.ts
+@@ -1,3 +1,4 @@
++export { iterateOverDiff } from "./utils/iterateOverDiff.js";
+ import { AnnotationLineMap, AnnotationSide, AnnotationSpan, AppliedThemeStyleCache, BaseCodeOptions, BaseDiffOptions, BaseDiffOptionsWithDefaults, BundledLanguage, ChangeContent, ChangeTypes, CodeColumnType, CodeToHastOptions, CodeViewDiffItem, CodeViewFileItem, CodeViewItem, CodeViewItemScrollTarget, CodeViewLayout, CodeViewLineScrollTarget, CodeViewPositionScrollTarget, CodeViewRangeScrollTarget, CodeViewScrollBehavior, CodeViewScrollTarget, ConflictResolverTypes, ContextContent, CreatePatchOptionsNonabortable, CustomPreProperties, DecorationItem, DiffAcceptRejectHunkConfig, DiffAcceptRejectHunkType, DiffFileInput, DiffIndicators, DiffLineAnnotation, DiffLineEventBaseProps, DiffTokenEventBaseProps, DiffsHighlighter, DiffsThemeNames, ExpansionDirections, ExtensionFormatMap, FileContents, FileDiffContentsLoader, FileDiffLoadedChangedFiles, FileDiffLoadedFiles, FileDiffLoadedPureRenamedFile, FileDiffMetadata, FileHeaderRenderMode, ForceDiffPlainTextOptions, ForceFilePlainTextOptions, GapSpan, HighlightedToken, HighlighterTypes, Hunk, HunkData, HunkExpansionRegion, HunkLineType, HunkSeparators, LanguageRegistration, LineAnnotation, LineDiffTypes, LineEventBaseProps, LineInfo, LineSpans, LineTypes, MaybeDiffFileInput, MergeConflictActionPayload, MergeConflictMarkerRow, MergeConflictMarkerRowType, MergeConflictRegion, MergeConflictResolution, NumericScrollLineAnchor, ObservedAnnotationNodes, ObservedGridNodes, ParsedPatch, PendingCodeViewLayoutReset, PostRenderPhase, PrePropertiesConfig, ProcessFileConflictData, RenderDiffFilesResult, RenderDiffOptions, RenderDiffResult, RenderFileMetadata, RenderFileOptions, RenderFileResult, RenderHeaderFilenameSuffixCallback, RenderHeaderMetadataCallback, RenderHeaderPrefixCallback, RenderRange, RenderWindow, RenderedDiffASTCache, RenderedFileASTCache, SelectedLineRange, SelectionPoint, SelectionSide, SharedRenderState, ShikiTransformer, SmoothScrollSettings, StickySpecs, SupportedLanguages, ThemeRegistration, ThemeRegistrationResolved, ThemeTypes, ThemedDiffResult, ThemedFileResult, ThemedToken, ThemesType, TokenEventBase, VirtualFileMetrics, VirtualWindowSpecs } from "./types.js";
+ import { FileDiffEditCompleteEvent, FileEditCompleteEvent } from "./editor/types.js";
+ import { GetHoveredLineResult, GetLineIndexUtility, InteractionManager, InteractionManagerBaseOptions, InteractionManagerMode, InteractionManagerOptions, LogTypes, MergeConflictActionTarget, OnDiffLineClickProps, OnDiffLineEnterLeaveProps, OnLineClickProps, OnLineEnterLeaveProps, OnTokenEventProps, SelectionWriteOptions, pluckInteractionOptions } from "./managers/InteractionManager.js";
+diff --git a/dist/index.js b/dist/index.js
+index 5fa10ffa775e8f5e933b6fa415935ef6ab11c4dd..d64b134796b5dcf9bfb167c5ec700d9ea6a90c08 100644
+--- a/dist/index.js
++++ b/dist/index.js
+@@ -1,3 +1,4 @@
++export { iterateOverDiff } from "./utils/iterateOverDiff.js";
+ import { ALTERNATE_FILE_NAMES_GIT, CODE_VIEW_FOOTER_ATTRIBUTE, CODE_VIEW_HEADER_ATTRIBUTE, COMMIT_METADATA_SPLIT, CORE_CSS_ATTRIBUTE, CUSTOM_HEADER_SLOT_ID, DEFAULT_CODE_VIEW_FILE_METRICS, DEFAULT_CODE_VIEW_LAYOUT, DEFAULT_COLLAPSED_CONTEXT_THRESHOLD, DEFAULT_EXPANDED_REGION, DEFAULT_RENDER_RANGE, DEFAULT_SMOOTH_SCROLL_SETTINGS, DEFAULT_THEMES, DEFAULT_TOKENIZE_MAX_LENGTH, DEFAULT_VIRTUAL_FILE_METRICS, DIFFS_DEVELOPMENT_BUILD, DIFFS_SCROLLBAR_GUTTER_MEASURED_PROPERTY, DIFFS_SCROLLBAR_MEASURE_ATTRIBUTE, DIFFS_TAG_NAME, EMPTY_RENDER_RANGE, FILENAME_HEADER_REGEX, FILENAME_HEADER_REGEX_GIT, FILE_CONTEXT_BLOB, GIT_DIFF_FILE_BREAK_REGEX, HEADER_FILENAME_SUFFIX_SLOT_ID, HEADER_METADATA_SLOT_ID, HEADER_PREFIX_SLOT_ID, HUNK_HEADER, INDEX_LINE_METADATA, MERGE_CONFLICT_BASE_MARKER_REGEX, MERGE_CONFLICT_END_MARKER_REGEX, MERGE_CONFLICT_SEPARATOR_MARKER_REGEX, MERGE_CONFLICT_START_MARKER_REGEX, SPLIT_WITH_NEWLINES, THEME_CSS_ATTRIBUTE, UNIFIED_DIFF_FILE_BREAK_REGEX, UNSAFE_CSS_ATTRIBUTE } from "./constants.js";
+ import { AttachedLanguages, RegisteredCustomLanguages, ResolvedLanguages, ResolvingLanguages } from "./highlighter/languages/constants.js";
+ import { areLanguagesAttached } from "./highlighter/languages/areLanguagesAttached.js";
+diff --git a/dist/managers/InteractionManager.d.ts b/dist/managers/InteractionManager.d.ts
+index 9f243f97a6eb28c22176b6b3abba022756571fdc..806bb52ac15de68044ea5a5cfbb5016eae38ccae 100644
+--- a/dist/managers/InteractionManager.d.ts
++++ b/dist/managers/InteractionManager.d.ts
+@@ -43,6 +43,8 @@ interface InteractionManagerBaseOptions<TMode extends InteractionManagerMode> {
+   lineHoverHighlight?: 'disabled' | 'both' | 'number' | 'line';
+   enableTokenInteractionsOnWhitespace?: boolean;
+   enableGutterUtility?: boolean;
++  canUseGutterUtility?(range: SelectedLineRange): boolean;
++  gutterUtilityLabel?: string;
+   onGutterUtilityClick?(range: SelectedLineRange): unknown;
+   onLineClick?(props: EventClickProps<TMode>): unknown;
+   onLineNumberClick?(props: EventClickProps<TMode>): unknown;
+diff --git a/dist/managers/InteractionManager.js b/dist/managers/InteractionManager.js
+index 8339405526a0a74638708738da09a6c2190cd069..7647ec597f11cbf52a5b6ba0e5e76d9b9ccfdaf6 100644
+--- a/dist/managers/InteractionManager.js
++++ b/dist/managers/InteractionManager.js
+@@ -445,7 +445,7 @@ var InteractionManager = class {
+ 					this.updateSelection(point.lineNumber, point.side);
+ 				}
+ 				const completedRange = this.buildSelectedLineRange(session.anchor, session.current);
+-				onGutterUtilityClick?.({ ...completedRange });
++				if (this.options.canUseGutterUtility?.(completedRange) !== false) onGutterUtilityClick?.({ ...completedRange });
+ 				this.selectionAnchor = void 0;
+ 				this.notifySelectionEnd(completedRange);
+ 				this.notifySelectionCommitted(completedRange);
+@@ -567,6 +567,25 @@ var InteractionManager = class {
+ 	}
+ 	showUtilityOnLine(line) {
+ 		if (this.gutterUtilityContainer == null) return;
++		const range = this.getCurrentSelectionRange() ?? {
++			start: line.lineNumber,
++			end: line.lineNumber,
++			side: line.type === "diff-line" ? line.annotationSide : undefined
++		};
++		if (this.options.canUseGutterUtility?.(range) === false) {
++			this.hideUtility();
++			return;
++		}
++		if (this.gutterUtilityButton != null) {
++			const label = this.options.gutterUtilityLabel;
++			if (label != null) {
++				this.gutterUtilityButton.setAttribute("aria-label", label);
++				this.gutterUtilityButton.title = label;
++			} else {
++				this.gutterUtilityButton.removeAttribute("aria-label");
++				this.gutterUtilityButton.removeAttribute("title");
++			}
++		}
+ 		this.gutterUtilityLine = line;
+ 		line.numberElement.appendChild(this.gutterUtilityContainer);
+ 	}
+@@ -1066,7 +1085,7 @@ var InteractionManager = class {
+ 		if (!split) return lineIndexes[0];
+ 	}
+ };
+-function pluckInteractionOptions({ enableTokenInteractionsOnWhitespace, enableGutterUtility, lineHoverHighlight, onGutterUtilityClick, onLineClick, onLineEnter, onLineLeave, onLineNumberClick, onTokenClick, onTokenEnter, onTokenLeave, renderGutterUtility, __debugPointerEvents, enableLineSelection, controlledSelection, onLineSelected, onLineSelectionStart, onLineSelectionChange, onLineSelectionEnd }, onHunkExpand, getLineIndex, onMergeConflictActionClick) {
++function pluckInteractionOptions({ enableTokenInteractionsOnWhitespace, enableGutterUtility, canUseGutterUtility, gutterUtilityLabel, lineHoverHighlight, onGutterUtilityClick, onLineClick, onLineEnter, onLineLeave, onLineNumberClick, onTokenClick, onTokenEnter, onTokenLeave, renderGutterUtility, __debugPointerEvents, enableLineSelection, controlledSelection, onLineSelected, onLineSelectionStart, onLineSelectionChange, onLineSelectionEnd }, onHunkExpand, getLineIndex, onMergeConflictActionClick) {
+ 	return {
+ 		enableTokenInteractionsOnWhitespace,
+ 		enableGutterUtility: resolveEnableGutterUtilityOption({
+@@ -1077,6 +1096,8 @@ function pluckInteractionOptions({ enableTokenInteractionsOnWhitespace, enableGu
+ 		usesCustomGutterUtility: renderGutterUtility != null,
+ 		lineHoverHighlight,
+ 		onGutterUtilityClick,
++		canUseGutterUtility,
++		gutterUtilityLabel,
+ 		onHunkExpand,
+ 		onMergeConflictActionClick,
+ 		onLineClick,
+diff --git a/dist/renderers/DiffHunksRenderer.js b/dist/renderers/DiffHunksRenderer.js
+index 4e6aeb4cd0a5dc1f9dd094b874f338cafceff29b..fc3bcf89f79ea56dba0a8a84b507fc97a370ff49 100644
+--- a/dist/renderers/DiffHunksRenderer.js
++++ b/dist/renderers/DiffHunksRenderer.js
+@@ -79,7 +79,8 @@ var DiffHunksRenderer = class {
+ 	* empty additions document gets one row for the editor's caret.
+ 	*/
+ 	beginEditSession(diff, externalDiff) {
+-		const { editSessionActive: wasAlreadyActive, renderCache } = this;
++		const { editSessionActive: wasAlreadyActive } = this;
++		let { renderCache } = this;
+ 		this.editSessionActive = true;
+ 		if (!wasAlreadyActive) this.pendingHighlightResult = void 0;
+ 		this.diff = diff;
+@@ -89,9 +90,16 @@ var DiffHunksRenderer = class {
+ 			this.clearRenderCache();
+ 			return;
+ 		}
+-		if (renderCache == null) return;
+-		if (wasAlreadyActive && renderCache.diff === diff) return;
++		if (wasAlreadyActive && renderCache?.diff === diff) return;
+ 		const { options } = this.getRenderOptions(diff);
++		const workerCache = externalDiff != null ? this.workerManager?.getDiffResultCache(externalDiff) : void 0;
++		if (workerCache != null && areDiffRenderOptionsEqual(workerCache.options, options)) renderCache = {
++			...workerCache,
++			diff: externalDiff,
++			highlighted: true,
++			renderRange: void 0
++		};
++		if (renderCache == null) return;
+ 		const cacheBelongsToSession = renderCache.diff === diff;
+ 		const cacheBelongsToExternal = externalDiff != null && areDiffTargetsEqual(renderCache.diff, externalDiff);
+ 		const { result } = renderCache;
+@@ -529,9 +537,12 @@ var DiffHunksRenderer = class {
+ 					renderRange: void 0
+ 				};
+ 			}
+-			if (!hasThemes || !forcePlainText && !hasLangs) this.asyncHighlight(diff).then(({ result, options }) => {
+-				this.applyHighlightResult(diff, result, options, !forcePlainText);
+-			});
++			if (!hasThemes || !forcePlainText && !hasLangs) {
++				if (this.renderCache.highlighted && this.renderCache.result != null) this.initializeHighlighter().then(() => this.onRenderUpdate?.());
++				else this.asyncHighlight(diff).then(({ result, options }) => {
++					this.applyHighlightResult(diff, result, options, !forcePlainText);
++				});
++			}
+ 		}
+ 		return this.renderCache.result != null ? this.processDiffResult(this.renderCache.diff, renderRange, this.renderCache.result) : void 0;
+ 	}
+diff --git a/dist/editor/editor.js b/dist/editor/editor.js
+--- a/dist/editor/editor.js
++++ b/dist/editor/editor.js
+@@ -408,6 +408,10 @@
+ 		} else if (this.#ownsVerticalViewport) this.#scrollToPrimaryCaret();
+ 		this.#checkpointEditSessionState();
+ 	}
++	setDeletedTextSelectionActive(active) {
++		this.#setDeletedTextSelectionActive(active);
++		if (active && this.#selections !== void 0) this.#updateSelections([]);
++	}
+ 	setSelections(selections) {
+ 		const textDocument = this.#editSession?.document;
+ 		if (textDocument === void 0) throw new Error("Editor.setSelections: Text document is not initialized");
+diff --git a/dist/editor/editor.d.ts b/dist/editor/editor.d.ts
+--- a/dist/editor/editor.d.ts
++++ b/dist/editor/editor.d.ts
+@@ -184,6 +184,8 @@
+     selections,
+     view
+   }: EditorViewState): void;
++  /** Select original-side native text without simulating a pointer gesture. */
++  setDeletedTextSelectionActive(active: boolean): void;
+   setSelections(selections: (Range & {
+     direction: 'none' | 'backward' | 'forward';
+   })[]): void;

@@ -133,7 +133,7 @@ function codePointAt(text: string, index: number): string | undefined {
   return codePoint === undefined ? undefined : String.fromCodePoint(codePoint)
 }
 
-function isWholeWordMatch(text: string, start: number, end: number): boolean {
+export function isWholeWordMatch(text: string, start: number, end: number): boolean {
   const before = codePointBefore(text, start)
   const after = codePointAt(text, end)
   return !isWordCharacter(before) && !isWordCharacter(after)

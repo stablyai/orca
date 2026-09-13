@@ -19,7 +19,9 @@ function runGit(repoPath: string, args: string[]): void {
   execFileSync('git', args, { cwd: repoPath, stdio: 'pipe' })
 }
 
-export function createIsolatedLargeDiffRepo(): IsolatedLargeDiffRepo {
+export function createIsolatedLargeDiffRepo(
+  originalContent = 'export const seed = 1\n'
+): IsolatedLargeDiffRepo {
   const repoPath = realpathSync(mkdtempSync(path.join(os.tmpdir(), 'orca-large-diff-repro-')))
   runGit(repoPath, ['init'])
   runGit(repoPath, ['config', 'user.email', 'e2e@test.local'])
@@ -28,7 +30,7 @@ export function createIsolatedLargeDiffRepo(): IsolatedLargeDiffRepo {
   mkdirSync(path.join(repoPath, 'src'), { recursive: true })
   const relativePath = path.join('src', `large-diff-${randomUUID()}.ts`)
   const absolutePath = path.join(repoPath, relativePath)
-  writeFileSync(absolutePath, 'export const seed = 1\n')
+  writeFileSync(absolutePath, originalContent)
   runGit(repoPath, ['add', '-A'])
   runGit(repoPath, ['commit', '-m', 'Initial large diff repro fixture'])
 

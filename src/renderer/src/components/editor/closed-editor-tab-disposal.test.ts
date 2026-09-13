@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import {
-  diffViewStateCache,
+  diffScrollTopCache,
   editorSelectionCache,
   pdfViewPositionCache,
   scrollTopCache
@@ -141,7 +141,7 @@ function buildScenario(): {
 beforeEach(() => {
   scrollTopCache.clear()
   editorSelectionCache.clear()
-  diffViewStateCache.clear()
+  diffScrollTopCache.clear()
   pdfViewPositionCache.clear()
 })
 
@@ -214,15 +214,15 @@ describe('disposeClosedEditorTabs', () => {
   })
 
   it('drops diff view state and preview scroll entries for closed diff tabs', () => {
-    diffViewStateCache.set('tab-1', {} as never)
-    diffViewStateCache.set('tab-1::pane-1', {} as never)
-    diffViewStateCache.set('tab-10', {} as never)
+    diffScrollTopCache.set('tab-1', {} as never)
+    diffScrollTopCache.set('tab-1::pane-1', {} as never)
+    diffScrollTopCache.set('tab-10', {} as never)
     scrollTopCache.set('tab-1:preview', 5)
     scrollTopCache.set('tab-1::pane-1', 6)
 
     disposeClosedEditorTabs(createRegistry([]), [diffTab('tab-1')])
 
-    expect([...diffViewStateCache.keys()]).toEqual(['tab-10'])
+    expect([...diffScrollTopCache.keys()]).toEqual(['tab-10'])
     expect(scrollTopCache.size).toBe(0)
   })
 

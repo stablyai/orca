@@ -1,4 +1,4 @@
-import { useCallback } from 'react'
+import { useCallback, useLayoutEffect } from 'react'
 import type React from 'react'
 import type { DiffSection } from '../../diff-section-types'
 import { removeDiffSectionMeasuredHeight } from '../../diff-section-height-cache'
@@ -11,17 +11,20 @@ import {
 export type CombinedDiffSectionRetryActions = {
   ensureSectionLoaded: (index: number) => void
   requestSectionReload: (index: number) => void
+  retryDeferredSectionReload: (index: number) => void
   retrySection: (index: number) => void
 }
 
 export function useCombinedDiffSectionRetry({
   invalidateViewStateCache,
   registry,
+  sections,
   setSectionHeights,
   setSections
 }: {
   invalidateViewStateCache: () => void
   registry: CombinedDiffSectionLoadRegistry
+  sections: DiffSection[]
   setSectionHeights: React.Dispatch<React.SetStateAction<Record<number, number>>>
   setSections: React.Dispatch<React.SetStateAction<DiffSection[]>>
 }): CombinedDiffSectionRetryActions {
@@ -32,6 +35,9 @@ export function useCombinedDiffSectionRetry({
     reloadTimersRef,
     renderedIndicesRef,
     requestSectionReloadRef,
+    retryDeferredSectionReloadRef,
+    deferredReloadKeysRef,
+    registryLiveRef,
     retrySectionRef,
     sectionLoadTokensRef,
     sectionsRef
@@ -93,9 +99,16 @@ export function useCombinedDiffSectionRetry({
   const requestSectionReload = useCallback(
     (index: number): void => {
       const section = sectionsRef.current[index]
-      if (!section || section.dirty) {
+      if (!section || !registryLiveRef.current) {
         return
       }
+      if (section.dirty) {
+        // Why: the git-status signature does not change for an edit inside an already-modified
+        // line, so without this record nothing would ever re-drive the refused reload.
+        deferredReloadKeysRef.current.add(section.key)
+        return
+      }
+      deferredReloadKeysRef.current.delete(section.key)
       loadedIndicesRef.current.delete(index)
       invalidateViewStateCache()
       sectionLoadTokensRef.current.set(index, (sectionLoadTokensRef.current.get(index) ?? 0) + 1)
@@ -131,10 +144,43 @@ export function useCombinedDiffSectionRetry({
       reloadTimersRef,
       renderedIndicesRef,
       sectionLoadTokensRef,
-      sectionsRef
+      sectionsRef,
+      deferredReloadKeysRef,
+      registryLiveRef
     ]
   )
   requestSectionReloadRef.current = requestSectionReload
+
+  // Why: a row can go clean via save or undo. Reloading on every clean costs a whole
+  // `git diff`; only the rows that actually refused a reload need one.
+  const retryDeferredSectionReload = useCallback(
+    (index: number): void => {
+      const section = sectionsRef.current[index]
+      if (
+        section === undefined ||
+        section.dirty ||
+        !deferredReloadKeysRef.current.has(section.key)
+      ) {
+        return
+      }
+      requestSectionReload(index)
+    },
+    [deferredReloadKeysRef, requestSectionReload, sectionsRef]
+  )
+  retryDeferredSectionReloadRef.current = retryDeferredSectionReload
+
+  useLayoutEffect(() => {
+    const deferred = deferredReloadKeysRef.current
+    if (deferred.size === 0) {
+      return
+    }
+    for (let index = 0; index < sections.length; index += 1) {
+      const section = sections[index]
+      if (section && !section.dirty && deferred.has(section.key)) {
+        retryDeferredSectionReload(index)
+      }
+    }
+  }, [deferredReloadKeysRef, retryDeferredSectionReload, sections])
 
   const ensureSectionLoaded = useCallback(
     (index: number): void => {
@@ -148,5 +194,5 @@ export function useCombinedDiffSectionRetry({
     [loadSchedulerRef, loadedIndicesRef, loadingIndicesRef, sectionsRef]
   )
 
-  return { ensureSectionLoaded, requestSectionReload, retrySection }
+  return { ensureSectionLoaded, requestSectionReload, retryDeferredSectionReload, retrySection }
 }

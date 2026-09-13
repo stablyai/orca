@@ -2,6 +2,7 @@ import * as monaco from 'monaco-editor'
 import type { editor as monacoEditor, IDisposable } from 'monaco-editor'
 import type { RefObject } from 'react'
 import { getDiffCommentPopoverTop } from './diff-comment-popover-position'
+import { canCommentOnRange } from './diff-comment-range'
 
 // Monaco glyph decorations don't expose usable click events, so we own an absolutely-positioned "+" button that follows the hovered line.
 
@@ -87,20 +88,6 @@ export function installDiffCommentAddButtonOverlay({
     return commentableLineSet === null || commentableLineSet.has(lineNumber)
   }
 
-  const canCommentOnRange = (startLine: number, endLine: number): boolean => {
-    if (commentableLineSet === null) {
-      return true
-    }
-    const from = Math.min(startLine, endLine)
-    const to = Math.max(startLine, endLine)
-    for (let line = from; line <= to; line++) {
-      if (!commentableLineSet.has(line)) {
-        return false
-      }
-    }
-    return true
-  }
-
   const positionAtLine = (lineNumber: number): void => {
     const lineTop = editor.getTopForLineNumber(lineNumber) - editor.getScrollTop()
     const top = Math.round(lineTop + (getLineHeight() - BUTTON_SIZE) / 2)
@@ -122,7 +109,7 @@ export function installDiffCommentAddButtonOverlay({
     if (!currentDrag) {
       return
     }
-    if (!canCommentOnRange(currentDrag.startLine, currentDrag.endLine)) {
+    if (!canCommentOnRange(currentDrag.startLine, currentDrag.endLine, commentableLineSet)) {
       return
     }
     const startLine = Math.min(currentDrag.startLine, currentDrag.endLine)
@@ -147,7 +134,7 @@ export function installDiffCommentAddButtonOverlay({
       line == null ||
       line === dragState.endLine ||
       !canCommentOnLine(line) ||
-      !canCommentOnRange(dragState.startLine, line)
+      !canCommentOnRange(dragState.startLine, line, commentableLineSet)
     ) {
       return
     }

@@ -16,6 +16,7 @@ import { translate } from '@/i18n/i18n'
 // the old names so we don't have to migrate the persisted WorktreeMeta shape.
 
 type Props = {
+  commentId?: string
   lineNumber: number
   startLine?: number
   label?: string | null
@@ -43,6 +44,7 @@ function resizeDiffCommentTextarea(textarea: HTMLTextAreaElement): boolean {
 }
 
 export function DiffCommentCard({
+  commentId,
   lineNumber,
   startLine,
   label,
@@ -180,7 +182,7 @@ export function DiffCommentCard({
   }
 
   return (
-    <div ref={cardRef} className="orca-diff-comment-card">
+    <div ref={cardRef} data-diff-comment-id={commentId} className="orca-diff-comment-card">
       <div className="orca-diff-comment-content-col">
         {/* Header Row */}
         <div className="orca-diff-comment-header">

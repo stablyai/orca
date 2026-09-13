@@ -20,11 +20,9 @@ export function CombinedDiffSectionList({
   isAllMode,
   isBranchMode,
   isCommitMode,
-  isDark,
   loadSection,
   loadDeferredSection,
   markDirectScrollInput,
-  modifiedEditorsRef,
   onScrollbarPointerDown,
   openSection,
   openSectionPreview,
@@ -32,6 +30,7 @@ export function CombinedDiffSectionList({
   scrollThumb,
   sectionHeights,
   sections,
+  viewStateKey,
   setScrollContainerRef,
   setSectionHeights,
   setSections,
@@ -49,11 +48,9 @@ export function CombinedDiffSectionList({
   isAllMode: boolean
   isBranchMode: boolean
   isCommitMode: boolean
-  isDark: boolean
   loadSection: (index: number) => void
   loadDeferredSection: (index: number) => void
   markDirectScrollInput: () => void
-  modifiedEditorsRef: DiffSectionItemProps['modifiedEditorsRef']
   onScrollbarPointerDown: (event: React.PointerEvent<HTMLDivElement>) => void
   openSection: (index: number) => void
   openSectionPreview: (section: DiffSection) => void
@@ -61,6 +58,7 @@ export function CombinedDiffSectionList({
   scrollThumb: CombinedDiffScrollThumb
   sectionHeights: Record<number, number>
   sections: DiffSection[]
+  viewStateKey: string
   setScrollContainerRef: (node: HTMLDivElement | null) => void
   setSectionHeights: React.Dispatch<React.SetStateAction<Record<number, number>>>
   setSections: React.Dispatch<React.SetStateAction<DiffSection[]>>
@@ -108,9 +106,13 @@ export function CombinedDiffSectionList({
                 <DiffSectionItem
                   section={section}
                   index={virtualItem.index}
+                  // Scope excludes contentGeneration: a revalidation that lands after a save
+                  // would otherwise orphan the stored selection and undo history. Staleness is
+                  // already handled by the content check in createPierreEditor.
+                  editStateKey={`${viewStateKey}:${section.key}`}
+                  renderKey={`${viewStateKey}:${section.key}:${section.contentGeneration ?? 0}`}
                   isBranchMode={isBranchMode}
                   sideBySide={sideBySide}
-                  isDark={isDark}
                   settings={settings}
                   sectionHeight={sectionHeights[virtualItem.index]}
                   worktreeId={file.worktreeId}
@@ -136,7 +138,6 @@ export function CombinedDiffSectionList({
                   }
                   setSectionHeights={setSectionHeights}
                   setSections={setSections}
-                  modifiedEditorsRef={modifiedEditorsRef}
                   handleSectionSaveRef={handleSectionSaveRef}
                   renderHeaderTrailingContent={(section) => {
                     const fileNoteCount = commentCountByFilePath.get(section.path) ?? 0

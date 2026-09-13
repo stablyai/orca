@@ -20,7 +20,7 @@ vi.mock('@/store', () => ({
 import {
   installEditorAddReviewNoteShortcut,
   installEditorFindShortcut,
-  installMonacoDiffChangeNavigationShortcut,
+  installDiffChangeNavigationShortcut,
   installMonacoEditorFindShortcut,
   installOpenDraftAddReviewNoteGuard
 } from './editor-shortcuts'
@@ -315,7 +315,7 @@ describe('installOpenDraftAddReviewNoteGuard', () => {
   })
 })
 
-describe('installMonacoDiffChangeNavigationShortcut', () => {
+describe('installDiffChangeNavigationShortcut', () => {
   function createDiffNavigationFixture(): {
     container: HTMLDivElement
     dispose: () => void
@@ -333,10 +333,7 @@ describe('installMonacoDiffChangeNavigationShortcut', () => {
 
     return {
       container,
-      dispose: installMonacoDiffChangeNavigationShortcut({
-        getContainerDomNode: () => container,
-        goToDiff
-      }),
+      dispose: installDiffChangeNavigationShortcut(container, goToDiff),
       input,
       goToDiff,
       onDownstreamKeyDown

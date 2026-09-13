@@ -1,7 +1,7 @@
 import type { OpenFile } from '@/store/slices/editor'
 import {
   editorSelectionCache,
-  diffViewStateCache,
+  diffScrollTopCache,
   pdfViewPositionCache,
   scrollTopCache
 } from '@/lib/scroll-cache'
@@ -33,7 +33,7 @@ export function disposeClosedEditorTabs(
   const diffModelPathPrefixes: string[] = []
   const scrollTopOwners: string[] = []
   const editorSelectionOwners: string[] = []
-  const diffViewStateOwners: string[] = []
+  const diffScrollTopOwners: string[] = []
   const closedPdfFilePaths: string[] = []
 
   for (const closedFile of closedFiles) {
@@ -65,8 +65,8 @@ export function disposeClosedEditorTabs(
         const { originalModelPathPrefix, modifiedModelPathPrefix } =
           getDiffViewerMonacoModelPathPrefixes(closedFile.id)
         diffModelPathPrefixes.push(originalModelPathPrefix, modifiedModelPathPrefix)
-        diffViewStateCache.delete(closedFile.id)
-        diffViewStateOwners.push(closedFile.id)
+        diffScrollTopCache.delete(closedFile.id)
+        diffScrollTopOwners.push(closedFile.id)
         scrollTopCache.delete(`${closedFile.id}:preview`)
         scrollTopOwners.push(closedFile.id)
         break
@@ -81,6 +81,6 @@ export function disposeClosedEditorTabs(
   disposeUnattachedMonacoModelsByPathPrefixes(monacoRegistry, diffModelPathPrefixes)
   deletePaneScopedCacheEntries(scrollTopCache, scrollTopOwners)
   deletePaneScopedCacheEntries(editorSelectionCache, editorSelectionOwners)
-  deletePaneScopedCacheEntries(diffViewStateCache, diffViewStateOwners)
+  deletePaneScopedCacheEntries(diffScrollTopCache, diffScrollTopOwners)
   sweepClosedPdfViewPositions(pdfViewPositionCache, closedPdfFilePaths)
 }

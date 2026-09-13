@@ -356,32 +356,37 @@ function getLargestBackwardScrollJump(samples: readonly ScrollProbeSample[]): nu
 }
 
 async function clickVisibleDiffLine(page: Page): Promise<void> {
-  // Why: after a tab switch Monaco re-lays-out its virtualized diff lines
-  // asynchronously, so the visible .view-line set is briefly empty on a loaded
-  // CI runner. Poll until a line is painted in the viewport instead of reading
-  // it once and throwing on the first miss.
-  let linePoint: { x: number; y: number } | null = null
+  // Diff rows render asynchronously after switching tabs.
+  const linePoint: { current: { x: number; y: number } | null } = { current: null }
   await expect
     .poll(
       async () => {
-        linePoint = await page.evaluate(() => {
+        linePoint.current = await page.evaluate(() => {
           const container = document.querySelector<HTMLElement>('.combined-diff-scroll-container')
           if (!container) {
             return null
           }
           const containerRect = container.getBoundingClientRect()
-          const visibleLine = Array.from(
-            container.querySelectorAll<HTMLElement>('.monaco-diff-editor .view-line')
-          ).find((line) => {
-            const rect = line.getBoundingClientRect()
-            return (
-              rect.height > 0 &&
-              rect.bottom > containerRect.top &&
-              rect.top < containerRect.bottom &&
-              rect.right > containerRect.left &&
-              rect.left < containerRect.right
-            )
-          })
+          const visibleLine = [...container.querySelectorAll('diffs-container')]
+            .flatMap((host) => [
+              ...(host.shadowRoot?.querySelectorAll<HTMLElement>('[data-content] [data-line]') ??
+                [])
+            ])
+            .find((line) => {
+              const rect = line.getBoundingClientRect()
+              const x = rect.left + Math.min(12, Math.max(1, rect.width / 2))
+              const y = rect.top + rect.height / 2
+              const root = line.getRootNode() as ShadowRoot
+              return (
+                document.elementFromPoint(x, y) === root.host &&
+                line.contains(root.elementFromPoint(x, y)) &&
+                rect.height > 0 &&
+                rect.bottom > containerRect.top &&
+                rect.top < containerRect.bottom &&
+                rect.right > containerRect.left &&
+                rect.left < containerRect.right
+              )
+            })
           if (!visibleLine) {
             return null
           }
@@ -391,16 +396,16 @@ async function clickVisibleDiffLine(page: Page): Promise<void> {
             y: rect.top + rect.height / 2
           }
         })
-        return linePoint !== null
+        return linePoint.current !== null
       },
       { timeout: 10_000, message: 'visible combined diff line not found' }
     )
     .toBe(true)
 
-  if (!linePoint) {
+  if (!linePoint.current) {
     throw new Error('visible combined diff line not found')
   }
-  await page.mouse.click(linePoint.x, linePoint.y)
+  await page.mouse.click(linePoint.current.x, linePoint.current.y)
 }
 
 test.describe('Combined diff scroll restore', () => {
