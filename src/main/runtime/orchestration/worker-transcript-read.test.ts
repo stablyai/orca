@@ -563,6 +563,47 @@ describe('worker transcript reads (opencode SQLite)', () => {
     expect(reread.sourceFingerprint).not.toBe(before)
   })
 
+  it('reports source_changed when the DB file is replaced between the stat and the page read', async () => {
+    const { db, path } = createDb()
+    insertMessage(db, 'user-1', 1_000)
+    insertTextPart(db, 'prt-1', 'user-1', 'first')
+
+    // Swap the file inside the page read: the pre-read stat attests the old
+    // file, so the post-read attestation must see the replacement.
+    const deps = opencodeDeps(path)
+    deps.opencode!.readPage = (args) => {
+      db.close()
+      openDbs.splice(openDbs.indexOf(db), 1)
+      rmSync(path, { force: true })
+      const replacement = new Database(path)
+      openDbs.push(replacement)
+      replacement.exec(`
+        CREATE TABLE session (id TEXT PRIMARY KEY);
+        CREATE TABLE message (
+          id TEXT PRIMARY KEY,
+          session_id TEXT NOT NULL,
+          time_created INTEGER NOT NULL,
+          time_updated INTEGER NOT NULL,
+          data TEXT NOT NULL
+        );
+        CREATE TABLE part (
+          id TEXT PRIMARY KEY,
+          message_id TEXT NOT NULL,
+          session_id TEXT NOT NULL,
+          time_updated INTEGER NOT NULL,
+          data TEXT NOT NULL
+        );
+        INSERT INTO session (id) VALUES ('ses-1');
+      `)
+      insertMessage(replacement, 'user-a', 1_000)
+      insertTextPart(replacement, 'prt-a', 'user-a', 'other db')
+      return Promise.resolve(readOpenCodeTranscriptPage(args))
+    }
+
+    const result = await readWorkerTranscript({ agent: 'opencode', sessionId: 'ses-1' }, deps)
+    expect(result).toEqual({ ok: false, reason: 'source_changed', warnings: [] })
+  })
+
   it('reports transcript_unreadable when DB discovery throws', async () => {
     // A throwing filesystem scan must come back as a retryable value result,
     // not a leaked rejection the worker pipeline cannot handle.
