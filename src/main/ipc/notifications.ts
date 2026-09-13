@@ -20,6 +20,16 @@ import { removeReadMacosNotifications } from './macos-notification-center'
 import { createNotificationDeliveryService } from '../notifications/notification-delivery-service'
 import { createAnnouncedNotificationRegistry } from '../notifications/announced-notification-registry'
 import { registerNotificationSoundHandlers } from './notification-sound-ipc'
+import { openNotificationSystemSettings } from './notification-system-settings-link'
+import { isStructuredAttentionRead } from '../../shared/agent-session-attention'
+import { isAgentSessionExecutionLocation } from '../../shared/agent-session-record'
+import {
+  getLastObservedDeliveryOutcome,
+  hasTriggeredPermissionDialogThisSession,
+  probeNotificationDelivery,
+  recordNotificationDeliveryOutcome,
+  resetNotificationPermissionEvidence
+} from './notification-permission-probe'
 
 // Why: the mic-status helper can take up to its own 4s timeout to resolve
 // (or hang) — bound how long we'll block banner delivery on it and fall
@@ -44,16 +54,6 @@ function readMicActiveStatusBeforeDeadline(): Promise<boolean | null> {
     })
   })
 }
-import { openNotificationSystemSettings } from './notification-system-settings-link'
-import { isStructuredAttentionRead } from '../../shared/agent-session-attention'
-import { isAgentSessionExecutionLocation } from '../../shared/agent-session-record'
-import {
-  getLastObservedDeliveryOutcome,
-  hasTriggeredPermissionDialogThisSession,
-  probeNotificationDelivery,
-  recordNotificationDeliveryOutcome,
-  resetNotificationPermissionEvidence
-} from './notification-permission-probe'
 
 export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntimeService): void {
   ipcMain.removeHandler('notifications:getDesktopAwayState')
