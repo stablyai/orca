@@ -83,6 +83,7 @@ describe('OpenCode 2 plugin compatibility', () => {
     rmSync(tempDir, { recursive: true, force: true })
   })
 
+  /** Loads the generated plugin from a unique temp path so the ESM cache cannot mask cases. */
   async function loadModule(): Promise<PluginModule> {
     // Why: a unique basename per load defeats the ESM module cache between cases.
     const pluginPath = join(
@@ -93,6 +94,7 @@ describe('OpenCode 2 plugin compatibility', () => {
     return (await import(pathToFileURL(pluginPath).href)) as PluginModule
   }
 
+  /** Builds the fake OpenCode 2 context plus a promise that resolves once its stream ends. */
   function createContext(
     events: V2Event[],
     sessions: Record<string, SessionFixture> = { root: { id: 'root' } }
@@ -120,6 +122,7 @@ describe('OpenCode 2 plugin compatibility', () => {
     }
   }
 
+  /** Lists the hook event names posted so far, in order. */
   function hookEventNames(): string[] {
     return posts.map((post) => post.body.payload.hook_event_name)
   }
