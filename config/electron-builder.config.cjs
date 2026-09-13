@@ -390,6 +390,11 @@ module.exports = {
         'orca-keyboard-layout',
         context.packager
       )
+      await signMacStandaloneHelper(
+        join(resourcesDir, '..', 'MacOS', 'orca-mic-active-status'),
+        'orca-mic-active-status',
+        context.packager
+      )
     }
   },
   win: {
@@ -528,6 +533,10 @@ module.exports = {
       {
         from: 'native/keyboard-layout-macos/.build/release/orca-keyboard-layout',
         to: 'MacOS/orca-keyboard-layout'
+      },
+      {
+        from: 'native/mic-active-status-macos/.build/release/orca-mic-active-status',
+        to: 'MacOS/orca-mic-active-status'
       }
     ],
     target: [

@@ -11,6 +11,7 @@ import type {
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { buildNotificationOptions } from './notification-options'
 import { readNotificationAuthorizationStatus } from './notification-authorization-status'
+import { readMicActiveStatus } from './mic-active-status'
 import { setTrayAttention } from '../tray/system-tray'
 import { isMainWindowVisible } from '../window/main-window-visibility'
 import { activeNotificationsById } from './native-notification-lifecycle'
@@ -109,10 +110,7 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
   ipcMain.removeHandler('notifications:dispatch')
   ipcMain.handle(
     'notifications:dispatch',
-    (
-      _event,
-      args: NotificationDispatchRequest
-    ): NotificationDispatchResult | Promise<NotificationDispatchResult> => {
+    async (_event, args: NotificationDispatchRequest): Promise<NotificationDispatchResult> => {
       // Why: light the tray attention dot before the cooldown/focus/enabled gates so they can't hold it back (clears on window show/restore; see index.ts).
       if (args.source === 'agent-task-complete' || args.source === 'terminal-bell') {
         const activeWindow = BrowserWindow.getAllWindows().find((win) => !win.isDestroyed()) ?? null
@@ -168,6 +166,15 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
         browserWindow.isFocused()
       ) {
         return { delivered: false, reason: 'suppressed-focus' }
+      }
+
+      // Why: unreadable/unsupported mic state resolves to null, which we treat as "not active"
+      // rather than suppressing incorrectly.
+      if (settings.suppressWhileMicActive && process.platform === 'darwin') {
+        const micActive = await readMicActiveStatus()
+        if (micActive === true) {
+          return { delivered: false, reason: 'suppressed-mic-active' }
+        }
       }
 
       // Why: the Settings test button is an explicit, often-repeated user action, so it bypasses burst dedupe.

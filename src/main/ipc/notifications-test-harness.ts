@@ -32,6 +32,7 @@ export const readAuthorizationStatusMock = vi.fn(
   (): Promise<'authorized' | 'denied' | 'not-determined' | 'unknown' | null> =>
     Promise.resolve(null)
 )
+export const readMicActiveStatusMock = vi.fn((): Promise<boolean | null> => Promise.resolve(null))
 
 export function createElectronModuleMock(): Record<string, unknown> {
   return {
@@ -58,6 +59,10 @@ export function createNotificationAuthorizationModuleMock(): Record<string, unkn
   return { readNotificationAuthorizationStatus: readAuthorizationStatusMock }
 }
 
+export function createMicActiveStatusModuleMock(): Record<string, unknown> {
+  return { readMicActiveStatus: readMicActiveStatusMock }
+}
+
 export function createTrustedUIRendererModuleMock(): Record<string, unknown> {
   return { getTrustedUIRendererWindow: getTrustedUIRendererWindowMock }
 }
@@ -82,6 +87,8 @@ export function resetNotificationDispatchMocks(): void {
   notificationIsSupportedMock.mockReturnValue(true)
   readAuthorizationStatusMock.mockReset()
   readAuthorizationStatusMock.mockResolvedValue(null)
+  readMicActiveStatusMock.mockReset()
+  readMicActiveStatusMock.mockResolvedValue(null)
   getAllWindowsMock.mockReset()
   getAllWindowsMock.mockReturnValue([])
   getTrustedUIRendererWindowMock.mockReset()

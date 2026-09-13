@@ -122,6 +122,7 @@ describe('onboarding flow persistence', () => {
       agentTaskComplete: false,
       terminalBell: false,
       suppressWhenFocused: false,
+      suppressWhileMicActive: false,
       customSoundId: 'two-tone',
       customSoundPath: null,
       customSoundVolume: 60
@@ -132,6 +133,7 @@ describe('onboarding flow persistence', () => {
       agentTaskComplete: true,
       terminalBell: true,
       suppressWhenFocused: false,
+      suppressWhileMicActive: false,
       customSoundId: 'two-tone',
       customSoundPath: null,
       customSoundVolume: 60

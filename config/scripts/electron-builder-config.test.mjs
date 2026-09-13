@@ -207,6 +207,20 @@ describe('electron-builder config', () => {
     )
   })
 
+  it('ships the mac mic-active-status helper in Contents/MacOS, not Resources', () => {
+    expect(electronBuilderConfig.mac.extraFiles).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          from: 'native/mic-active-status-macos/.build/release/orca-mic-active-status',
+          to: 'MacOS/orca-mic-active-status'
+        })
+      ])
+    )
+    expect(electronBuilderConfig.mac.extraResources).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ to: 'orca-mic-active-status' })])
+    )
+  })
+
   it('unpacks the compiled CommonJS boundary with CLI runtime files', () => {
     expect(electronBuilderConfig.asarUnpack).toEqual(
       expect.arrayContaining([

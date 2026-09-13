@@ -7579,7 +7579,10 @@
           "274af61bc0": "system",
           "6e6df3a09a": "Choose Custom File",
           "76e02467b8": "Change Custom File",
-          "d3756cf5bc": "disabled"
+          "d3756cf5bc": "disabled",
+          "6c0728f5e2": "Suppress While Mic Active",
+          "c8617b37ac": "Skip the notification sound while your mic is in use (e.g. on a call). macOS only.",
+          "568f113223": "Skip the notification sound while your mic is in use (e.g. on a call)."
         },
         "OpenAiTranscriptionKeyDialog": {
           "fa83512e48": "Save Key",
@@ -9954,7 +9957,13 @@
             "72539aede4": "system",
             "51ae2183e1": "desktop",
             "0534c76311": "Master switch for Orca desktop notifications.",
-            "4a210b2f72": "Enable Notifications"
+            "4a210b2f72": "Enable Notifications",
+            "c3adf3b941": "Suppress While Mic Active",
+            "8b553db79c": "Avoid playing the notification sound while the microphone is actively in use.",
+            "e03a2b355b": "mic",
+            "a98affbb35": "microphone",
+            "ad5f205b24": "call",
+            "0495f1fc54": "zoom"
           }
         },
         "orchestration": {
