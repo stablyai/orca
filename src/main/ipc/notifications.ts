@@ -20,6 +20,30 @@ import { removeReadMacosNotifications } from './macos-notification-center'
 import { createNotificationDeliveryService } from '../notifications/notification-delivery-service'
 import { createAnnouncedNotificationRegistry } from '../notifications/announced-notification-registry'
 import { registerNotificationSoundHandlers } from './notification-sound-ipc'
+
+// Why: the mic-status helper can take up to its own 4s timeout to resolve
+// (or hang) — bound how long we'll block banner delivery on it and fall
+// back to "not active" rather than delaying the notification.
+const MIC_STATUS_GATING_DEADLINE_MS = 500
+
+function readMicActiveStatusBeforeDeadline(): Promise<boolean | null> {
+  return new Promise((resolve) => {
+    let settled = false
+    const timer = setTimeout(() => {
+      if (!settled) {
+        settled = true
+        resolve(null)
+      }
+    }, MIC_STATUS_GATING_DEADLINE_MS)
+    readMicActiveStatus().then((micActive) => {
+      if (!settled) {
+        settled = true
+        clearTimeout(timer)
+        resolve(micActive)
+      }
+    })
+  })
+}
 import { openNotificationSystemSettings } from './notification-system-settings-link'
 import { isStructuredAttentionRead } from '../../shared/agent-session-attention'
 import { isAgentSessionExecutionLocation } from '../../shared/agent-session-record'
@@ -158,7 +182,7 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
       ? (payload) => runtime.dispatchMobileNotification(payload)
       : null,
     readAuthorizationStatus: readNotificationAuthorizationStatus,
-    readMicActiveStatus,
+    readMicActiveStatus: readMicActiveStatusBeforeDeadline,
     recordDeliveryOutcome: recordNotificationDeliveryOutcome,
     deliverNative: deliverNativeNotification,
     platform: process.platform,

@@ -237,6 +237,26 @@ describe('registerNotificationHandlers', () => {
       expect(await handler({}, { source: 'agent-task-complete' })).toEqual({ delivered: true })
     })
 
+    it('delivers with sound rather than waiting out a stalled mic-status helper', async () => {
+      readMicActiveStatusMock.mockReturnValue(new Promise(() => {})) // never resolves
+      registerNotificationHandlers({
+        getSettings: () => ({
+          notifications: {
+            enabled: true,
+            agentTaskComplete: true,
+            terminalBell: true,
+            suppressWhenFocused: false,
+            suppressWhileMicActive: true
+          }
+        })
+      } as never)
+
+      const handler = getDispatchHandler()
+      const dispatchPromise = handler({}, { source: 'agent-task-complete' })
+      await vi.advanceTimersByTimeAsync(500)
+      expect(await dispatchPromise).toEqual({ delivered: true })
+    })
+
     it('does not check mic status when the toggle is off', async () => {
       registerNotificationHandlers({
         getSettings: () => ({
