@@ -1,5 +1,11 @@
 import type { CommandHandler } from '../dispatch'
-import { formatEnvironment, formatEnvironmentList, formatHostList, printResult } from '../format'
+import {
+  formatEnvironment,
+  formatEnvironmentList,
+  formatHostList,
+  printResult,
+  type HostListEntry
+} from '../format'
 import { listSshTargets } from '../host-selector-alternatives'
 import { getDefaultUserDataPath, RuntimeClientError } from '../runtime-client'
 import type { RuntimeRpcSuccess } from '../runtime-client'
@@ -40,22 +46,37 @@ export const ENVIRONMENT_HANDLERS: Record<string, CommandHandler> = {
       '`orca host list`. It answers from this machine\u2019s own pairing store, so a routed answer would name servers paired with a different machine.',
       'Run `orca host list` on that machine to see the SSH targets registered there.'
     )
-    const environments = listEnvironments(getDefaultUserDataPath()).map((environment) => ({
-      kind: 'environment' as const,
-      name: environment.name,
-      id: environment.id,
-      selector: `--environment ${environment.name}`
-    }))
-    const sshTargets = (await listSshTargets(client)).map((target) => ({
-      kind: 'ssh' as const,
-      name: target.label,
-      id: target.id,
-      selector: `--host ssh:${target.id}`,
-      ...(target.connected === undefined ? {} : { connected: target.connected }),
-      ...(target.connectionStatus ? { connectionStatus: target.connectionStatus } : {}),
-      ...(target.remotePlatform ? { platform: target.remotePlatform } : {})
-    }))
-    const hosts = [
+    const environments: HostListEntry[] = listEnvironments(getDefaultUserDataPath()).map(
+      (environment) => ({
+        kind: 'environment' as const,
+        name: environment.name,
+        id: environment.id,
+        selector: `--environment ${environment.name}`
+      })
+    )
+    const environmentById = new Map(environments.map((entry) => [entry.id, entry]))
+    const sshTargets: HostListEntry[] = (await listSshTargets(client)).map((target) => {
+      const entry: HostListEntry = {
+        kind: 'ssh' as const,
+        name: target.label,
+        id: target.id,
+        selector: `--host ssh:${target.id}`,
+        ...(target.connected === undefined ? {} : { connected: target.connected }),
+        ...(target.connectionStatus ? { connectionStatus: target.connectionStatus } : {}),
+        ...(target.remotePlatform ? { platform: target.remotePlatform } : {})
+      }
+      const twin = target.coLocatedEnvironmentId
+        ? environmentById.get(target.coLocatedEnvironmentId)
+        : undefined
+      if (twin) {
+        entry.sameMachineAs = { kind: 'environment', name: twin.name, selector: twin.selector }
+        twin.sameMachineAs = { kind: 'ssh', name: entry.name, selector: entry.selector }
+        // Why: the SSH relay has already detected the OS; the paired server never reports one.
+        twin.platform ??= entry.platform
+      }
+      return entry
+    })
+    const hosts: HostListEntry[] = [
       {
         kind: 'local' as const,
         name: 'this machine',

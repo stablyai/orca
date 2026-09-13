@@ -89,6 +89,55 @@ describe('runtime-selector flags on locally pinned CLI commands', () => {
     expect(runtimeClientConstructorMock).toHaveBeenCalledWith(null, null)
   })
 
+  it('marks an SSH target and a paired server that are the same machine, on both rows', async () => {
+    pairRuntimeEnvironment(listEnvironmentsMock, 'env-m4air', 'm4air')
+    queueFixtures(
+      callMock,
+      okFixture('req_ssh_targets', {
+        targets: [{ ...SSH_TARGET, coLocatedEnvironmentId: 'env-m4air' }]
+      })
+    )
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(['host', 'list', '--json'], '/tmp/repo')
+
+    const printed = JSON.parse(String(logSpy.mock.calls[0]?.[0]))
+    const hosts = printed.result.hosts as {
+      id: string
+      platform?: string
+      sameMachineAs?: { kind: string; name: string; selector: string }
+    }[]
+    expect(hosts.find((host) => host.id === SSH_TARGET.id)?.sameMachineAs).toEqual({
+      kind: 'environment',
+      name: 'm4air',
+      selector: '--environment m4air'
+    })
+    const server = hosts.find((host) => host.id === 'env-m4air')
+    expect(server?.sameMachineAs).toEqual({
+      kind: 'ssh',
+      name: 'openclaw',
+      selector: `--host ssh:${SSH_TARGET.id}`
+    })
+    // The relay already knows the OS; the paired-server row should not say "platform unknown".
+    expect(server?.platform).toBe('win32')
+  })
+
+  it('leaves rows untouched when the co-located server is not paired here', async () => {
+    pairRuntimeEnvironment(listEnvironmentsMock, 'env-m4air', 'm4air')
+    queueFixtures(
+      callMock,
+      okFixture('req_ssh_targets', {
+        targets: [{ ...SSH_TARGET, coLocatedEnvironmentId: 'env-elsewhere' }]
+      })
+    )
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(['host', 'list', '--json'], '/tmp/repo')
+
+    const printed = JSON.parse(String(logSpy.mock.calls[0]?.[0]))
+    expect(JSON.stringify(printed.result.hosts)).not.toContain('sameMachineAs')
+  })
+
   it('rejects `host list --environment` instead of answering with a half-routed listing', async () => {
     // Why: pre-fix this routed the SSH lookup to m4air while reading paired servers from this
     // machine, dropped the openclaw row, and still stamped `_meta.runtimeId: "local"` — one
