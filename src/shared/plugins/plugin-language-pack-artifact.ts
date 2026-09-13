@@ -5,6 +5,8 @@ import {
 
 export const PLUGIN_LANGUAGE_CATALOG_MAX_ENTRIES = 20_000
 export const PLUGIN_LANGUAGE_CATALOG_MAX_DEPTH = 16
+export const PLUGIN_LANGUAGE_CATALOG_MAX_VALUE_LENGTH = 8192
+export const PLUGIN_LANGUAGE_CATALOG_MAX_KEY_LENGTH = 128
 
 const DANGEROUS_CATALOG_KEYS = new Set(['__proto__', 'prototype', 'constructor'])
 // Why: every plugin-facing security surface lives under this namespace, so
@@ -154,7 +156,7 @@ function walkPluginLanguagePackCatalog(
       }
       if (
         key.length === 0 ||
-        key.length > 128 ||
+        key.length > PLUGIN_LANGUAGE_CATALOG_MAX_KEY_LENGTH ||
         DANGEROUS_CATALOG_KEYS.has(key) ||
         hasUnsafeCatalogKeyCharacter(key)
       ) {
@@ -170,7 +172,7 @@ function walkPluginLanguagePackCatalog(
         return { ok: false, error: `catalog cannot replace protected security copy at ${path}` }
       }
       if (typeof value === 'string') {
-        if (value.length > 8192) {
+        if (value.length > PLUGIN_LANGUAGE_CATALOG_MAX_VALUE_LENGTH) {
           return { ok: false, error: `translation at ${path} exceeds 8192 characters` }
         }
         if (frame.target) {

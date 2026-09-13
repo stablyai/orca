@@ -17,8 +17,22 @@ export { LOCALE_PHRASE_FIXES } from './locale-phrase-fixes.mjs'
 export { SEARCH_KEYWORD_OVERRIDES } from './locale-search-keyword-overrides.mjs'
 export { LOCALE_VALUE_OVERRIDES } from './locale-value-overrides.mjs'
 
+export const INTERPOLATION_PLACEHOLDER_RE = /\{\{[^}]+\}\}/g
+
+export function collectInterpolationVariables(value) {
+  if (typeof value === 'string') {
+    const matches = value.match(INTERPOLATION_PLACEHOLDER_RE) ?? []
+    return [...matches].sort()
+  }
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    return []
+  }
+  return Object.values(value).flatMap((child) => collectInterpolationVariables(child))
+}
+
 const AGENT_CATALOG_PREFIX = 'auto.lib.agent.catalog.'
 const OPEN_IN_APP_CATALOG_PREFIX = 'auto.lib.open.in.app.catalog.'
+const DANGEROUS_CATALOG_KEYS = new Set(['__proto__', 'prototype', 'constructor'])
 
 // Why: product names and agent labels stay Latin — MT reads them as common words (Codex→copy, Gemini→zodiac).
 export const ENGLISH_ONLY_KEY_PREFIXES = [AGENT_CATALOG_PREFIX, OPEN_IN_APP_CATALOG_PREFIX]
@@ -474,9 +488,16 @@ export function collectStringLeaves(value, prefix = '', leaves = []) {
 
 export function setLeaf(catalog, key, translatedValue) {
   const parts = key.split('.')
+  if (parts.some((part) => DANGEROUS_CATALOG_KEYS.has(part))) {
+    throw new Error(`unsafe catalog path: ${key}`)
+  }
   let cursor = catalog
-  for (let index = 0; index < parts.length - 1; index += 1) {
-    cursor = cursor[parts[index]]
+  for (const part of parts.slice(0, -1)) {
+    const child = cursor[part]
+    if (typeof child !== 'object' || child === null || Array.isArray(child)) {
+      cursor[part] = {}
+    }
+    cursor = cursor[part]
   }
   cursor[parts.at(-1)] = translatedValue
 }

@@ -1,0 +1,85 @@
+---
+title: Language packs
+description: Translate the Orca interface with a plugin language pack and keep it in sync with new releases.
+keywords: [Orca language pack, Orca translation, i18n plugin]
+---
+
+An Orca language pack is a plugin whose `orca-plugin.json` contributes a locale and a nested JSON
+catalog:
+
+```json
+{
+  "contributes": {
+    "languagePacks": [{ "locale": "tr", "path": "locales/tr.json" }]
+  }
+}
+```
+
+The catalog uses the same nested key shape as Orca's `en.json`. Missing translations fall back to
+English. Orca is not accepting new built-in locales, so community translations should be shipped as
+plugins. See the [built-in locale decision](https://github.com/stablyai/orca/issues/9207).
+
+## Catalog rules
+
+The host accepts nested keys only. A language pack cannot replace protected
+`auto.components.settings.plugin*` copy, except for the explicitly allowed plugin chrome strings.
+A catalog may contain at most 20,000 nodes, reach depth 16, use values up to 8,192 characters, and
+occupy up to 5 MiB. Each key segment must be safe and no longer than 128 characters.
+
+The manifest `engines.orca` value must use the `>=x.y.z` form. Its `version` must be strict semver.
+
+## Create and test a pack
+
+Clone the Orca repository at the release tag you target. This gives the scaffold the matching
+`en.json`. You can instead download that tag's `en.json` and pass it to later commands with
+`--source <path>`.
+
+```bash
+git clone --branch <release-tag> https://github.com/stablyai/orca.git
+cd orca
+pnpm scaffold:language-pack init --locale tr --publisher example --id turkish --out ../orca-turkish
+```
+
+Use your own publisher slug. Ids beginning with `orca-` and the publisher `stablyai` are reserved for
+official plugins.
+
+```bash
+pnpm scaffold:language-pack status --pack ../orca-turkish
+pnpm scaffold:language-pack export-missing --pack ../orca-turkish --out ../orca-turkish/missing.json
+```
+
+Translate `missing.json` with your own process, then merge and validate it:
+
+```bash
+pnpm scaffold:language-pack merge --pack ../orca-turkish --from ../orca-turkish/missing.json
+pnpm scaffold:language-pack status --pack ../orca-turkish --check
+```
+
+Test locally through **Settings → Plugins → Development → Add path**. To publish, create a git tag.
+Users can install the exact version through **Settings → Plugins → Install plugin → Git URL** with
+an explicit `#ref`, for example `https://github.com/example/orca-turkish.git#v1.0.0`.
+
+Optionally submit the pack to a marketplace. Follow the entry shape in
+`resources/plugins/launch/orca-marketplace.json`, including a git URL and explicit tag in `ref`.
+
+## Re-sync after an Orca update
+
+Fetch `en.json` from the new Orca release, or check out that release tag. Point `--source` to it when
+it is outside the checkout:
+
+```bash
+pnpm scaffold:language-pack status --pack ../orca-turkish --source ./new-en.json
+pnpm scaffold:language-pack status --pack ../orca-turkish --source ./new-en.json --fix
+pnpm scaffold:language-pack export-missing --pack ../orca-turkish --source ./new-en.json --out ./delta.json
+```
+
+`status` shows missing and retired strings. `--fix` removes retired, protected, and oversize entries
+and rewrites the catalog deterministically. It never edits translated values. Placeholder mismatches
+and structural problems are left for the author to fix by hand. `export-missing` creates the
+translation delta.
+
+## Known limitations
+
+- The language picker shows the locale tag and plugin key, not a native language name, see [issue #13031](https://github.com/stablyai/orca/issues/13031). Keep the manifest `name` as the language's own name so the plugin list stays readable.
+- Strings outside the catalog cannot be translated, see [issue #17913](https://github.com/stablyai/orca/issues/17913).
+- Plural forms beyond `_one` and `_other` are not supported, see [issue #12106](https://github.com/stablyai/orca/issues/12106).
