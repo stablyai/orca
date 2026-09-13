@@ -49,6 +49,7 @@ function state(
     activeWorkspaceExecutionHostId: null,
     activeWorkspaceKey: null,
     activeWorktreeId: worktrees[0]?.id ?? null,
+    worktreesByRepo: { repo: worktrees },
     // Mirrors the store index: a row without an explicit hostId is owned by 'local'.
     getKnownWorktreeById: (worktreeId: string, executionHostId?: string) =>
       worktrees.find(
@@ -105,6 +106,30 @@ describe('workspace pin shortcut target', () => {
     const active = worktree({ id: 'repo::/active', path: '/active' })
 
     expect(resolveWorkspacePinShortcutTarget(state([active]), hoveredDocument())).toBe(active)
+  })
+
+  it('resolves the active workspace on its own host when the store names one', () => {
+    const local = worktree({ hostId: 'local' })
+    const remote = worktree({ hostId: 'ssh:build' })
+
+    expect(
+      resolveWorkspacePinShortcutTarget(
+        state([local, remote], { activeWorkspaceExecutionHostId: 'ssh:build' }),
+        hoveredDocument()
+      )
+    ).toBe(remote)
+  })
+
+  it('declines an unqualified active workspace that has a host twin', () => {
+    const local = worktree({ hostId: 'local' })
+    const remote = worktree({ hostId: 'ssh:build' })
+
+    expect(
+      resolveWorkspacePinShortcutTarget(
+        state([local, remote], { activeWorkspaceExecutionHostId: null }),
+        hoveredDocument()
+      )
+    ).toBeNull()
   })
 
   it('resolves the active folder workspace through its workspace key', () => {

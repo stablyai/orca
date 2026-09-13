@@ -93,7 +93,14 @@ export function createSetWorktreesPinnedAndReveal(
           executionHostId: current.hostId ?? 'local'
         })
       }
-      if (revealWorktreeId === null && worktreeId === activeSidebarWorktreeId) {
+      // The active id carries no host, so a changed remote twin would otherwise scroll the
+      // viewport to its local namesake; only follow a row the active host actually owns.
+      const activeExecutionHostId = get().activeWorkspaceExecutionHostId
+      if (
+        revealWorktreeId === null &&
+        worktreeId === activeSidebarWorktreeId &&
+        (activeExecutionHostId === null || (current.hostId ?? 'local') === activeExecutionHostId)
+      ) {
         revealWorktreeId = worktreeId
       }
     }
