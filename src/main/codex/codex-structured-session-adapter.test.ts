@@ -455,15 +455,17 @@ describe('CodexStructuredSessionAdapter.dispatch', () => {
       state: 'accepted',
       providerIdentity: { provider: 'codex', threadId: THREAD_ID, turnId: 'turn-1', ordinal: 0 }
     })
-    expect(codex.connections[0].calls[1].params).toEqual({
-      threadId: THREAD_ID,
-      clientUserMessageId: 'client-1',
-      input: [
-        { type: 'text', text: 'ship it' },
-        { type: 'localImage', path: '/tmp/shot.png' },
-        { type: 'image', url: 'https://example.test/a.png' }
-      ]
-    })
+    expect(codex.connections[0].calls.find((call) => call.method === 'turn/start')?.params).toEqual(
+      {
+        threadId: THREAD_ID,
+        clientUserMessageId: 'client-1',
+        input: [
+          { type: 'text', text: 'ship it' },
+          { type: 'localImage', path: '/tmp/shot.png' },
+          { type: 'image', url: 'https://example.test/a.png' }
+        ]
+      }
+    )
   })
 
   it('accepts a turn named only by the notification that raced the ack', async () => {
