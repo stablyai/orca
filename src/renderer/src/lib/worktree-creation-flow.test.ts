@@ -137,9 +137,12 @@ function makePendingCreation(request: WorktreeCreationRequest): PendingWorktreeC
   }
 }
 
+// Why a macrotask, not a counted pair of microtasks: the await count in
+// executeWorktreeCreation grows over time (VM preflight, post-create settlement), and a fixed
+// count silently starves the assertions that follow this helper. A timer boundary drains
+// whatever depth the flow has.
 async function flushAsyncWorktreeCreation(): Promise<void> {
-  await Promise.resolve()
-  await Promise.resolve()
+  await new Promise((resolve) => setTimeout(resolve, 0))
 }
 
 describe('runBackgroundWorktreeCreation', () => {

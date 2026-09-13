@@ -5,12 +5,15 @@ import type {
 } from '@/lib/pending-worktree-creation'
 import { shouldShowWorktreeCreationSurface } from '@/lib/worktree-creation-surface'
 
-// Guards executeWorktreeCreation's post-create tail: callers fire and forget,
-// so a throw after createWorktree succeeds must be contained per-step and the
-// creation must still reach completeWorktreeCreation, which tears the creation
-// surface down. Also covers the caller-side .catch() backstop: a rejection that
-// still escapes (e.g. pre-create preparation) becomes a visible error state
-// plus toast instead of a panel silently stuck at "creating".
+// Guards the settlement contract of executeWorktreeCreation's post-create tail. Callers fire
+// and forget, and completeWorktreeCreation is the only thing that removes the pending entry,
+// so a throw once createWorktree has resolved must still complete — otherwise the creation
+// surface stays mounted over a finished workspace and the user sees no tabs. The tail settles
+// on a returned outcome, so the two non-completing outcomes (a cancelled create, an
+// unconfirmed structured launch) must survive unchanged: both deliberately keep or drop the
+// entry themselves, and a blanket `finally { completeWorktreeCreation() }` would destroy the
+// retry affordance the unconfirmed case depends on. Also covers the caller-side .catch()
+// backstop for failures BEFORE createWorktree resolves, which really are create failures.
 
 type TestActiveView = 'terminal' | 'tasks'
 
@@ -78,6 +81,10 @@ vi.mock('@/lib/web-runtime-worktree-terminal-after-wake', () => ({
   ensureWebRuntimeWorktreeTerminalAfterWake: vi.fn()
 }))
 
+vi.mock('@/lib/worktree-creation-structured-session', () => ({
+  launchStructuredWorktreeSession: vi.fn()
+}))
+
 vi.mock('@/lib/workspace-activation-terminal-focus', () => ({
   queueWorkspaceActivationTerminalFocus: vi.fn()
 }))
@@ -102,15 +109,13 @@ vi.mock('@/lib/ephemeral-vm-worktree-creation', () => ({
   cleanupEphemeralVmRuntimeForFailedCreate: vi.fn(async () => undefined)
 }))
 
-vi.mock('@/lib/worktree-creation-structured-recovery', () => ({
-  markStructuredWorktreeLaunchUnconfirmed: vi.fn(),
-  retryStructuredWorktreeLaunch: vi.fn()
-}))
-
 import { toast } from 'sonner'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { ensureWorktreeHasInitialTerminal } from '@/lib/worktree-initial-terminal-seeding'
 import { ensureWebRuntimeWorktreeTerminalAfterWake } from '@/lib/web-runtime-worktree-terminal-after-wake'
+import { launchStructuredWorktreeSession } from '@/lib/worktree-creation-structured-session'
+import { queueWorkspaceActivationTerminalFocus } from '@/lib/workspace-activation-terminal-focus'
+import { seedAgentTabStateAfterWorktreeCreate } from '@/lib/worktree-creation-agent-seeds'
 import { ensureAgentStartupInTerminal } from '@/lib/new-workspace'
 import { prepareRequestForCreate } from '@/lib/ephemeral-vm-worktree-creation'
 import { executeWorktreeCreation } from './worktree-creation-flow-execute'
@@ -131,6 +136,10 @@ function makeRequest(overrides: Partial<WorktreeCreationRequest> = {}): Worktree
   } as WorktreeCreationRequest
 }
 
+function makeStructuredRequest(): WorktreeCreationRequest {
+  return makeRequest({ agent: 'codex', agentLaunchRoute: 'structured-native-chat' })
+}
+
 function seedPendingCreation(request: WorktreeCreationRequest): void {
   store.pendingWorktreeCreations = {
     'creation-1': {
@@ -146,18 +155,25 @@ function seedPendingCreation(request: WorktreeCreationRequest): void {
   store.activePendingCreationId = 'creation-1'
 }
 
-function surfaceInput(activeView: TestActiveView): {
-  activeView: TestActiveView
-  activePendingCreationId: string | null
-  hasActivePendingCreation: boolean
-} {
-  return {
-    activeView,
+function isCreationSurfaceShown(): boolean {
+  return shouldShowWorktreeCreationSurface({
+    activeView: 'terminal',
     activePendingCreationId: store.activePendingCreationId,
     hasActivePendingCreation:
       store.activePendingCreationId !== null &&
       store.pendingWorktreeCreations[store.activePendingCreationId] !== undefined
-  }
+  })
+}
+
+function expectSettledAndRevealed(): void {
+  expect(store.removePendingWorktreeCreation).toHaveBeenCalledWith('creation-1', {
+    cleanupVm: false
+  })
+  expect(store.pendingWorktreeCreations['creation-1']).toBeUndefined()
+  expect(store.activePendingCreationId).toBeNull()
+  // The workbench is mounted behind the creation panel; dropping the entry is what
+  // lets its tab chrome render.
+  expect(isCreationSurfaceShown()).toBe(false)
 }
 
 beforeEach(() => {
@@ -172,56 +188,83 @@ beforeEach(() => {
   store.createWorktree.mockResolvedValue({
     worktree: { id: 'wt-1', repoId: 'repo-1' }
   })
+  vi.mocked(launchStructuredWorktreeSession).mockResolvedValue({
+    accepted: true,
+    cancelled: false,
+    visibilityUnknown: false,
+    activation: false,
+    primaryTabId: null
+  })
 })
 
-describe('a throw after createWorktree succeeds no longer strands the creation surface', () => {
-  it('activating branch: a throw in activateAndRevealWorktree recovers a terminal and completes', async () => {
+describe('a throw in the post-create tail still completes the creation', () => {
+  it('activating branch: a throw in activateAndRevealWorktree completes and reveals the workspace', async () => {
     const request = makeRequest()
     seedPendingCreation(request)
-    vi.mocked(ensureWorktreeHasInitialTerminal).mockReturnValue('recovered-tab')
     vi.mocked(activateAndRevealWorktree).mockImplementation(() => {
       throw new Error('activation exploded')
     })
 
     await executeWorktreeCreation('creation-1', request)
 
-    expect(console.error).toHaveBeenCalledWith(
-      'worktree create: activate-and-reveal failed',
-      'wt-1',
-      expect.any(Error)
-    )
-    expect(ensureWorktreeHasInitialTerminal).toHaveBeenCalledWith(
-      store,
-      'wt-1',
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      {}
-    )
-    // Contained: completion still tears the surface down.
-    expect(store.removePendingWorktreeCreation).toHaveBeenCalledWith('creation-1', {
-      cleanupVm: false
-    })
-    expect(store.pendingWorktreeCreations['creation-1']).toBeUndefined()
-    expect(store.activePendingCreationId).toBeNull()
-    expect(shouldShowWorktreeCreationSurface(surfaceInput('terminal'))).toBe(false)
+    expectSettledAndRevealed()
   })
 
-  it('activating branch: leaves existing default tabs untouched after a partial failure', async () => {
-    const request = makeRequest({ issueCommand: { command: 'echo setup' } })
+  it('background branch: a throw in the initial terminal seed completes and reveals the workspace', async () => {
+    store.activeView = 'tasks'
+    const request = makeRequest()
     seedPendingCreation(request)
-    store.tabsByWorktree = { 'wt-1': [{ id: 'existing-tab' }] }
-    vi.mocked(activateAndRevealWorktree).mockImplementation(() => {
-      throw new Error('reveal exploded after tab creation')
+    vi.mocked(ensureWorktreeHasInitialTerminal).mockImplementation(() => {
+      throw new Error('seeding exploded')
     })
 
     await executeWorktreeCreation('creation-1', request)
 
-    expect(ensureWorktreeHasInitialTerminal).not.toHaveBeenCalled()
-    expect(store.removePendingWorktreeCreation).toHaveBeenCalledWith('creation-1', {
-      cleanupVm: false
+    expectSettledAndRevealed()
+  })
+
+  it('background branch: a throw in after-wake seeding completes and reveals the workspace', async () => {
+    // User left the terminal view mid-create, so the non-activating branch runs.
+    store.activeView = 'tasks'
+    const request = makeRequest()
+    seedPendingCreation(request)
+    vi.mocked(ensureWorktreeHasInitialTerminal).mockReturnValue('tab-1')
+    vi.mocked(ensureWebRuntimeWorktreeTerminalAfterWake).mockImplementation(() => {
+      throw new Error('after-wake exploded')
     })
+
+    await executeWorktreeCreation('creation-1', request)
+
+    expect(ensureWorktreeHasInitialTerminal).toHaveBeenCalled()
+    expectSettledAndRevealed()
+  })
+
+  it('structured branch: a throw in the structured launch completes and reveals the workspace', async () => {
+    const request = makeStructuredRequest()
+    seedPendingCreation(request)
+    vi.mocked(launchStructuredWorktreeSession).mockRejectedValue(new Error('launch exploded'))
+
+    await executeWorktreeCreation('creation-1', request)
+
+    expectSettledAndRevealed()
+  })
+
+  // Why: settlement reports what already landed, so a later failure does not discard the tab
+  // the earlier step seeded — agent startup would otherwise be delivered to no pane.
+  it('keeps the tab a completed step already seeded when a later step throws', async () => {
+    store.activeView = 'tasks'
+    const request = makeRequest()
+    seedPendingCreation(request)
+    vi.mocked(ensureWorktreeHasInitialTerminal).mockReturnValue('tab-1')
+    vi.mocked(ensureWebRuntimeWorktreeTerminalAfterWake).mockImplementation(() => {
+      throw new Error('after-wake exploded')
+    })
+
+    await executeWorktreeCreation('creation-1', request)
+
+    expect(seedAgentTabStateAfterWorktreeCreate).toHaveBeenCalledWith(
+      expect.objectContaining({ primaryTabId: 'tab-1' })
+    )
   })
 
   it('activating branch: routes draft and follow-up delivery to the stamped agent tab', async () => {
@@ -252,19 +295,18 @@ describe('a throw after createWorktree succeeds no longer strands the creation s
     )
   })
 
-  it('background branch: a throw in after-wake seeding is contained after tabs are seeded', async () => {
-    // User left the terminal view mid-create, so the non-activating branch runs.
-    store.activeView = 'tasks'
+  it('activating branch: a throw in activateAndRevealWorktree seeds a terminal for the workspace', async () => {
     const request = makeRequest()
     seedPendingCreation(request)
-    vi.mocked(ensureWorktreeHasInitialTerminal).mockReturnValue('tab-1')
-    vi.mocked(ensureWebRuntimeWorktreeTerminalAfterWake).mockImplementation(() => {
-      throw new Error('after-wake exploded')
+    vi.mocked(ensureWorktreeHasInitialTerminal).mockReturnValue('recovered-tab')
+    vi.mocked(activateAndRevealWorktree).mockImplementation(() => {
+      throw new Error('activation exploded')
     })
 
     await executeWorktreeCreation('creation-1', request)
 
-    // Tabs were seeded for the new worktree...
+    // Activation owns both the reveal and the primary tab, so recovery seeds the surface it
+    // never got to create; note the absence of activateCreatedTabs: false.
     expect(ensureWorktreeHasInitialTerminal).toHaveBeenCalledWith(
       store,
       'wt-1',
@@ -272,26 +314,28 @@ describe('a throw after createWorktree succeeds no longer strands the creation s
       undefined,
       undefined,
       undefined,
-      expect.objectContaining({ activateCreatedTabs: false })
+      {}
     )
-    expect(console.error).toHaveBeenCalledWith(
-      'worktree create: after-wake terminal seeding failed',
-      'wt-1',
-      expect.any(Error)
-    )
-    // ...and the creation still completed instead of stranding the entry.
-    expect(store.removePendingWorktreeCreation).toHaveBeenCalledWith('creation-1', {
-      cleanupVm: false
+    expectSettledAndRevealed()
+  })
+
+  it('activating branch: leaves existing default tabs untouched after a partial failure', async () => {
+    const request = makeRequest({ issueCommand: { command: 'echo setup' } })
+    seedPendingCreation(request)
+    store.tabsByWorktree = { 'wt-1': [{ id: 'existing-tab' }] }
+    vi.mocked(activateAndRevealWorktree).mockImplementation(() => {
+      throw new Error('reveal exploded after tab creation')
     })
-    expect(store.pendingWorktreeCreations['creation-1']).toBeUndefined()
-    expect(store.activePendingCreationId).toBeNull()
-    expect(shouldShowWorktreeCreationSurface(surfaceInput('terminal'))).toBe(false)
+
+    await executeWorktreeCreation('creation-1', request)
+
+    expect(ensureWorktreeHasInitialTerminal).not.toHaveBeenCalled()
+    expectSettledAndRevealed()
   })
 
   it('concurrent create: a throw completing a backgrounded creation still tears its entry down', async () => {
-    // A second submitted create repointed activePendingCreationId, so this
-    // creation's completion takes the non-activating branch on the terminal view.
-    store.activeView = 'terminal'
+    // A second submitted create repointed activePendingCreationId, so this creation's
+    // completion takes the non-activating branch on the terminal view.
     const request = makeRequest()
     seedPendingCreation(request)
     store.activePendingCreationId = 'creation-2'
@@ -306,8 +350,8 @@ describe('a throw after createWorktree succeeds no longer strands the creation s
 
     await executeWorktreeCreation('creation-1', request)
 
-    // Blank terminal + Setup tab are seeded by this one synchronous call.
     expect(activateAndRevealWorktree).not.toHaveBeenCalled()
+    // Blank terminal + Setup tab are seeded by this one synchronous call.
     expect(ensureWorktreeHasInitialTerminal).toHaveBeenCalledWith(
       store,
       'wt-1',
@@ -320,10 +364,58 @@ describe('a throw after createWorktree succeeds no longer strands the creation s
     // The entry is gone; the pointer stays on the other in-flight creation.
     expect(store.pendingWorktreeCreations['creation-1']).toBeUndefined()
     expect(store.activePendingCreationId).toBe('creation-2')
-    expect(shouldShowWorktreeCreationSurface(surfaceInput('terminal'))).toBe(false)
   })
 
-  it('control: with no throw the same flow completes and tears the surface down', async () => {
+  // Why: the merged per-step version passed callerProvidesSurface in its activation catch, so
+  // an agent create with no startup plan hit the zero-tab pre-seed branch and recovered nothing.
+  // Activation is what would have provided that surface, and it threw.
+  it('activating branch: an agent create with no startup plan still recovers a real terminal', async () => {
+    const request = makeRequest({ agent: 'claude' })
+    seedPendingCreation(request)
+    vi.mocked(ensureWorktreeHasInitialTerminal).mockReturnValue('recovered-tab')
+    vi.mocked(activateAndRevealWorktree).mockImplementation(() => {
+      throw new Error('activation exploded')
+    })
+
+    await executeWorktreeCreation('creation-1', request)
+
+    expect(ensureWorktreeHasInitialTerminal).toHaveBeenCalledWith(
+      store,
+      'wt-1',
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      {}
+    )
+    expect(seedAgentTabStateAfterWorktreeCreate).toHaveBeenCalledWith(
+      expect.objectContaining({ primaryTabId: 'recovered-tab' })
+    )
+    expectSettledAndRevealed()
+  })
+
+  // The single catch still names which step failed, so the field breadcrumb survives the
+  // collapse from one catch per step to one catch for the tail.
+  it('names the failing step in the log breadcrumb', async () => {
+    store.activeView = 'tasks'
+    const request = makeRequest()
+    seedPendingCreation(request)
+    vi.mocked(ensureWorktreeHasInitialTerminal).mockReturnValue('tab-1')
+    vi.mocked(ensureWebRuntimeWorktreeTerminalAfterWake).mockImplementation(() => {
+      throw new Error('after-wake exploded')
+    })
+
+    await executeWorktreeCreation('creation-1', request)
+
+    expect(console.error).toHaveBeenCalledWith(
+      'worktree create: post-create step failed',
+      'seed-after-wake-terminal',
+      'wt-1',
+      expect.any(Error)
+    )
+  })
+
+  it('control: with no throw the same flow completes and reveals the workspace', async () => {
     store.activeView = 'tasks'
     const request = makeRequest()
     seedPendingCreation(request)
@@ -331,15 +423,61 @@ describe('a throw after createWorktree succeeds no longer strands the creation s
 
     await executeWorktreeCreation('creation-1', request)
 
-    expect(store.removePendingWorktreeCreation).toHaveBeenCalledWith('creation-1', {
-      cleanupVm: false
+    expectSettledAndRevealed()
+  })
+})
+
+describe('the two non-completing outcomes survive the throw guard', () => {
+  // A blanket `finally { completeWorktreeCreation() }` would re-seed tabs and steal focus for
+  // a workspace the user is already tearing down.
+  it('cancelled: settles nothing, because the cancel path already removed the entry', async () => {
+    const request = makeStructuredRequest()
+    seedPendingCreation(request)
+    vi.mocked(launchStructuredWorktreeSession).mockImplementation(async () => {
+      store.removePendingWorktreeCreation('creation-1')
+      return {
+        accepted: true,
+        cancelled: true,
+        visibilityUnknown: false,
+        activation: false as const,
+        primaryTabId: null
+      }
     })
-    expect(store.pendingWorktreeCreations['creation-1']).toBeUndefined()
-    expect(store.activePendingCreationId).toBeNull()
-    expect(shouldShowWorktreeCreationSurface(surfaceInput('terminal'))).toBe(false)
+
+    await executeWorktreeCreation('creation-1', request)
+
+    expect(seedAgentTabStateAfterWorktreeCreate).not.toHaveBeenCalled()
+    expect(queueWorkspaceActivationTerminalFocus).not.toHaveBeenCalled()
   })
 
-  it('backstop: a rejection that escapes the execute promise becomes a visible inline error', async () => {
+  // A blanket finally would drop the entry and with it structuredLaunchRecoveryWorktreeId,
+  // which is the only handle the panel's retry has on the unconfirmed session.
+  it('awaiting-visibility: keeps the entry on an error surface so retry stays reachable', async () => {
+    const request = makeStructuredRequest()
+    seedPendingCreation(request)
+    vi.mocked(launchStructuredWorktreeSession).mockResolvedValue({
+      accepted: true,
+      cancelled: false,
+      visibilityUnknown: true,
+      activation: false,
+      primaryTabId: null
+    })
+
+    await executeWorktreeCreation('creation-1', request)
+
+    expect(store.updatePendingWorktreeCreation).toHaveBeenCalledWith('creation-1', {
+      status: 'error',
+      error: 'Could not confirm whether Codex chat opened. Retry to check again.',
+      structuredLaunchRecoveryWorktreeId: 'wt-1'
+    })
+    expect(store.removePendingWorktreeCreation).not.toHaveBeenCalled()
+    // The surface legitimately persists here: it is the retry affordance, not a strand.
+    expect(isCreationSurfaceShown()).toBe(true)
+  })
+})
+
+describe('a failure before createWorktree resolves is still reported as a create failure', () => {
+  it('becomes a visible inline error while the panel is showing it', async () => {
     // Pre-create preparation runs before the in-function try/catch.
     vi.mocked(prepareRequestForCreate).mockRejectedValue(new Error('prepare exploded'))
 
@@ -360,13 +498,13 @@ describe('a throw after createWorktree succeeds no longer strands the creation s
     )
   })
 
-  it('backstop: a rejection after leaving the panel is announced with a toast', async () => {
+  it('is announced with a toast once the user has left the panel', async () => {
     store.activeView = 'tasks'
     vi.mocked(prepareRequestForCreate).mockRejectedValue(new Error('prepare exploded'))
 
     const creationId = runBackgroundWorktreeCreation(makeRequest())
-    // The pending surface is revealed synchronously; move away before the
-    // rejected preparation reaches the fire-and-forget backstop.
+    // The pending surface is revealed synchronously; move away before the rejected
+    // preparation reaches the fire-and-forget backstop.
     store.activeView = 'tasks'
 
     await vi.waitFor(() => {
