@@ -2,11 +2,11 @@ import type { ReactNode } from 'react'
 import {
   ArrowDownToLine,
   ArrowUpToLine,
-  Braces,
   FileCode2,
   Loader2,
   MoveDown,
   MoveUp,
+  Pencil,
   Play,
   Trash2
 } from 'lucide-react'
@@ -59,11 +59,11 @@ export function IpynbToolbarButton({
 
 export function IpynbCellToolbar({
   cell,
-  index,
   running,
   canMoveUp,
   canMoveDown,
   onRun,
+  onEdit,
   onKindChange,
   onInsertAbove,
   onInsertBelow,
@@ -72,11 +72,11 @@ export function IpynbCellToolbar({
   onDelete
 }: {
   cell: IpynbCell
-  index: number
   running: boolean
   canMoveUp: boolean
   canMoveDown: boolean
   onRun: () => void
+  onEdit: () => void
   onKindChange: (kind: IpynbCellKind) => void
   onInsertAbove: (kind: IpynbCellKind) => void
   onInsertBelow: (kind: IpynbCellKind) => void
@@ -84,12 +84,8 @@ export function IpynbCellToolbar({
   onMoveDown: () => void
   onDelete: () => void
 }): React.JSX.Element {
-  const Icon = cell.kind === 'code' ? Play : cell.kind === 'markdown' ? FileCode2 : Braces
-  const executionLabel = cell.kind === 'code' ? `In [${cell.executionCount ?? ' '}]:` : cell.kind
   return (
     <div className="flex items-center gap-2 border-b border-border/50 bg-muted/20 px-3 py-1.5 text-xs text-muted-foreground">
-      <Icon className="size-3.5" />
-      <span className="font-mono">{executionLabel}</span>
       <select
         value={cell.kind}
         onChange={(event) => onKindChange(event.target.value as IpynbCellKind)}
@@ -112,6 +108,13 @@ export function IpynbCellToolbar({
           onClick={onRun}
         >
           {running ? <Loader2 className="size-3.5 animate-spin" /> : <Play className="size-3.5" />}
+        </IpynbToolbarButton>
+      ) : cell.kind === 'markdown' ? (
+        <IpynbToolbarButton
+          label={translate('auto.components.editor.EditorViewToggle.ac3bb87913', 'Edit')}
+          onClick={onEdit}
+        >
+          <Pencil className="size-3.5" />
         </IpynbToolbarButton>
       ) : null}
       <IpynbToolbarButton
@@ -170,7 +173,6 @@ export function IpynbCellToolbar({
       >
         <Trash2 className="size-3.5" />
       </IpynbToolbarButton>
-      <span className="ml-auto font-mono">#{index + 1}</span>
     </div>
   )
 }
