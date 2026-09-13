@@ -2,7 +2,7 @@ import { getTuiAgentDetectCommands, TUI_AGENT_CONFIG } from './tui-agent-config'
 import { EXACT_NODE_ENTRYPOINT_IDENTITIES } from './agent-node-entrypoint-identities'
 import type { AgentType } from './agent-status-types'
 import type { TuiAgent } from './tui-agent'
-import { filterHeadlessOneShotAgentCommand } from './agent-headless-command'
+import { filterNonInteractiveAgentCommand } from './agent-headless-command'
 import { getFirstCommandToken } from './command-token-scanner'
 
 export type RecognizedAgentProcess = { agent: TuiAgent; processName: string }
@@ -294,7 +294,7 @@ export function recognizeAgentProcessFromCommandLine(
   if (direct?.agent === 'claude-agent-teams' && tokens[1]?.toLowerCase() !== 'claude-teams') {
     direct = null
   }
-  const directRecognition = keep ? direct : filterHeadlessOneShotAgentCommand(direct, tokens)
+  const directRecognition = keep ? direct : filterNonInteractiveAgentCommand(direct, tokens)
   if (directRecognition) {
     return directRecognition
   }
@@ -311,7 +311,7 @@ export function recognizeAgentProcessFromCommandLine(
   ) {
     return null
   }
-  return keep ? viaEntrypoint : filterHeadlessOneShotAgentCommand(viaEntrypoint, tokens)
+  return keep ? viaEntrypoint : filterNonInteractiveAgentCommand(viaEntrypoint, tokens)
 }
 export function isAgentForegroundWrapperProcess(processName: string | null | undefined): boolean {
   const normalized = normalizeProcessName(processName)

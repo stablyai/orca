@@ -1,0 +1,9 @@
+{
+  "capturedAt": "2026-09-11T22:14:40.230Z",
+  "platform": "darwin",
+  "command": ["fx"],
+  "cols": 120,
+  "rows": 40,
+  "note": "fx 0.0.8; macOS arm64; FX_PERMISSION_MODE=ask; unresolved shell command permission prompt; account type not recorded",
+  "exitCode": 0
+}

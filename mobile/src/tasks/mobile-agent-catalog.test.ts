@@ -11,6 +11,7 @@ describe('mobile agent catalog', () => {
     expect(new Set(MOBILE_AGENT_CATALOG.map((agent) => agent.id))).toEqual(
       new Set(Object.keys(TUI_AGENT_CONFIG))
     )
+    expect(MOBILE_AGENT_CATALOG.at(-1)?.id).toBe('fx')
   })
 
   it('labels every agent with the desktop display name', () => {
@@ -23,5 +24,11 @@ describe('mobile agent catalog', () => {
     expect(MOBILE_AGENT_CATALOG.find((agent) => agent.id === 'claude-agent-teams')).toEqual(
       expect.not.objectContaining({ faviconDomain: expect.any(String) })
     )
+  })
+
+  it('lists Vercel fx once and leaves it on the offline generic icon path', () => {
+    const entries = MOBILE_AGENT_CATALOG.filter((agent) => agent.id === 'fx')
+
+    expect(entries).toEqual([{ id: 'fx', label: 'Vercel fx' }])
   })
 })

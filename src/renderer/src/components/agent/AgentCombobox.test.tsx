@@ -205,4 +205,13 @@ describe('AgentCombobox', () => {
       expect(markup).not.toContain('https://www.google.com/s2/favicons')
     }
   })
+
+  it('renders fx with the offline generic letter icon', () => {
+    const markup = renderToStaticMarkup(<AgentIcon agent="fx" />)
+
+    expect(markup).toContain('<text')
+    expect(markup).toContain('>V</text>')
+    expect(markup).not.toContain('<img')
+    expect(markup).not.toContain('https://www.google.com/s2/favicons')
+  })
 })

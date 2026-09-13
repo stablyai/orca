@@ -17846,5 +17846,12 @@
       "stopped": "stopped",
       "finished": "finished"
     }
+  },
+  "agent": {
+    "catalog": {
+      "fx": {
+        "label": "Vercel fx"
+      }
+    }
   }
 }

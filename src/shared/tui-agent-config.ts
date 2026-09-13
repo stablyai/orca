@@ -1,4 +1,5 @@
 import type { TuiAgent } from './tui-agent'
+import type { TuiAgentIdentityProbe } from './tui-agent-identity-probe'
 import { getOrcaCliCommandNameForPlatform } from './orca-cli-command-name'
 
 export type AgentPromptInjectionMode =
@@ -19,6 +20,8 @@ export type TuiAgentDetectionRuntime = NodeJS.Platform | 'wsl'
 
 export type TuiAgentConfig = {
   detectCmd: string
+  /** Executable identity that must be verified before automatic detection. */
+  detectIdentityProbe?: TuiAgentIdentityProbe
   /** Additional executable names that identify the same agent on PATH. */
   detectCmdAliases?: readonly string[]
   /** Other commands that must also be present before this agent counts as installed. */
@@ -102,6 +105,12 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     draftPasteReadySignal: 'codex-composer-prompt',
     draftPasteReadyTimeoutMs: 20_000,
     submitRetryDelayMs: 1200
+  },
+  fx: {
+    detectCmd: 'fx',
+    detectIdentityProbe: 'vercel-fx',
+    detectUnsupportedRuntimes: ['win32'],
+    promptInjectionMode: 'stdin-after-start'
   },
   autohand: {
     detectCmd: 'autohand',

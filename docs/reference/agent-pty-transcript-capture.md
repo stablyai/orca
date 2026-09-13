@@ -105,6 +105,11 @@ text is tested on something no pane ever sees.
 `src/main/runtime/terminal-interactive-wait-visibility.test.ts` (cursor-agent) and
 `src/main/runtime/antigravity-readiness-transcripts.test.ts` (Antigravity) are the two consumers.
 
+### fx keypad limitation
+
+Orca forwards kitty keypad CSI-u bytes unchanged. fx 0.0.8 discards keypad code points 57399–57427,
+so there is no Orca-side input workaround for those keys in this integration.
+
 ## Worked example: the Antigravity captures
 
 The six committed `antigravity-*.txt` fixtures were recorded this way on macOS against

@@ -306,6 +306,12 @@ export const getAgentCatalog = createLocalizedCatalog((): AgentCatalogEntry[] =>
     cmd: 'openclaw',
     faviconDomain: 'openclaw.ai',
     homepageUrl: 'https://github.com/openclaw/openclaw'
+  },
+  {
+    id: 'fx',
+    label: translate('agent.catalog.fx.label', 'Vercel fx'),
+    cmd: 'fx',
+    homepageUrl: 'https://fx.sh'
   }
 ])
 

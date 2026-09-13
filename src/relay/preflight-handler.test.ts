@@ -36,6 +36,7 @@ import {
   buildCommandLookupSpecs,
   hasAbsoluteCommandPath,
   isCommandOnPathForRelay,
+  matchesCommandIdentityForRelay,
   PreflightHandler
 } from './preflight-handler'
 
@@ -236,6 +237,50 @@ describe('hasAbsoluteCommandPath', () => {
   })
 })
 
+describe('matchesCommandIdentityForRelay', () => {
+  it('accepts Vercel fx output from the resolved relay executable', async () => {
+    execFileAsyncMock.mockResolvedValueOnce({
+      stdout: '𝒇x v0.0.8\nFast, native coding agent for the terminal.\n',
+      stderr: ''
+    })
+
+    await expect(
+      matchesCommandIdentityForRelay('fx', 'vercel-fx', {
+        platform: 'linux',
+        env: { PATH: '/usr/bin' },
+        accountLoginShell: null
+      })
+    ).resolves.toBe(true)
+    expect(String(execFileAsyncMock.mock.calls[0]?.[1]?.[1])).toContain('"$resolved" \'--help\'')
+  })
+
+  it.each([
+    {
+      name: 'the JSON viewer answers',
+      result: { stdout: 'fx 35.0.0\nTerminal JSON viewer and processor\n', stderr: '' }
+    },
+    { name: 'the probe fails', error: new Error('failed') },
+    {
+      name: 'the probe times out',
+      error: Object.assign(new Error('timed out'), { code: 'ETIMEDOUT' })
+    }
+  ])('withholds fx when $name', async ({ result, error }) => {
+    if (error) {
+      execFileAsyncMock.mockRejectedValue(error)
+    } else {
+      execFileAsyncMock.mockResolvedValue(result)
+    }
+
+    await expect(
+      matchesCommandIdentityForRelay('fx', 'vercel-fx', {
+        platform: 'linux',
+        env: { PATH: '/usr/bin' },
+        accountLoginShell: null
+      })
+    ).resolves.toBe(false)
+  })
+})
+
 describe('PreflightHandler', () => {
   it('honors required commands when reporting detected agents', async () => {
     execFileAsyncMock.mockImplementation(async (_file, args) => {
@@ -265,7 +310,72 @@ describe('PreflightHandler', () => {
           { id: 'claude', cmd: 'claude' }
         ]
       })
-    ).resolves.toEqual({ agents: [] })
+    ).resolves.toEqual({ agents: [], identityProbes: 1 })
+  })
+
+  it('withholds an unknown identity probe without dropping other detected agents', async () => {
+    execFileAsyncMock.mockImplementation(async (_file, args) => {
+      const script = String(args[1])
+      if (script.includes("'future-agent'")) {
+        return { stdout: '__ORCA_AGENT_PATH__/relay/path/future-agent\n' }
+      }
+      if (script.includes("'claude'")) {
+        return { stdout: '__ORCA_AGENT_PATH__/relay/path/claude\n' }
+      }
+      throw new Error('not found')
+    })
+    const requestHandlers = new Map<string, (params: Record<string, unknown>) => Promise<unknown>>()
+    const dispatcher = {
+      onRequest: vi.fn(
+        (method: string, handler: (params: Record<string, unknown>) => Promise<unknown>) => {
+          requestHandlers.set(method, handler)
+        }
+      )
+    }
+
+    new PreflightHandler(dispatcher as never)
+    const handler = requestHandlers.get('preflight.detectAgents')
+    expect(handler).toBeDefined()
+    await expect(
+      handler!({
+        commands: [
+          { id: 'future-agent', cmd: 'future-agent', identityProbe: 'future-probe' },
+          { id: 'claude', cmd: 'claude' }
+        ]
+      })
+    ).resolves.toEqual({ agents: ['claude'], identityProbes: 1 })
+  })
+
+  it('verifies fx for a new client and withholds it from an old-client request', async () => {
+    execFileAsyncMock.mockImplementation(async (_file, args) => {
+      const script = String(args[1])
+      if (script.includes('"$resolved" \'--help\'')) {
+        return {
+          stdout: '𝒇x v0.0.8\nFast, native coding agent for the terminal.\n',
+          stderr: ''
+        }
+      }
+      return { stdout: '__ORCA_AGENT_PATH__/relay/path/fx\n' }
+    })
+    const requestHandlers = new Map<string, (params: Record<string, unknown>) => Promise<unknown>>()
+    const dispatcher = {
+      onRequest: vi.fn(
+        (method: string, handler: (params: Record<string, unknown>) => Promise<unknown>) => {
+          requestHandlers.set(method, handler)
+        }
+      )
+    }
+
+    new PreflightHandler(dispatcher as never)
+    const handler = requestHandlers.get('preflight.detectAgents')
+    expect(handler).toBeDefined()
+    await expect(
+      handler!({ commands: [{ id: 'fx', cmd: 'fx', identityProbe: 'vercel-fx' }] })
+    ).resolves.toEqual({ agents: ['fx'], identityProbes: 1 })
+    await expect(handler!({ commands: [{ id: 'fx', cmd: 'fx' }] })).resolves.toEqual({
+      agents: [],
+      identityProbes: 1
+    })
   })
 
   it('does not report platform-unsupported agents on native Windows SSH hosts', async () => {
@@ -308,7 +418,7 @@ describe('PreflightHandler', () => {
             { id: 'claude', cmd: 'claude' }
           ]
         })
-      ).resolves.toEqual({ agents: ['claude'] })
+      ).resolves.toEqual({ agents: ['claude'], identityProbes: 1 })
     } finally {
       Object.defineProperty(process, 'platform', {
         configurable: true,

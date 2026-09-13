@@ -5,6 +5,8 @@
  * dragging `ipcMain` into its module graph. The Electron handler registration
  * stays in `ipc/preflight.ts` and imports from here.
  */
+import { resolveCliCommands } from '../../shared/node-cli-command-resolution'
+import { buildPosixCommandPathLookupScript } from '../../shared/posix-command-path-lookup'
 import type {
   PathSource,
   ShellHydrationFailureReason
@@ -41,8 +43,12 @@ import {
 } from '../ipc/preflight-remote-windows-terminal-capabilities'
 import {
   getTuiAgentDetectionProbeCommands,
+  getTuiAgentIdentityProbeArgs,
+  IDENTITY_PROBED_TUI_AGENT_IDS,
   KNOWN_TUI_AGENT_DETECTION_COMMANDS,
-  resolveDetectedTuiAgentIds
+  matchesTuiAgentIdentityProbe,
+  resolveDetectedTuiAgentIds,
+  type TuiAgentDetectionCommand
 } from '../ipc/tui-agent-detection-commands'
 import { invalidateWslGuestEnvironment } from '../wsl/wsl-guest-environment'
 
@@ -140,6 +146,54 @@ async function detectCommandRuntime(
   return { installed: false }
 }
 
+type IdentityProbeOutcome = 'match' | 'mismatch' | 'unavailable'
+
+async function runIdentityProbe(
+  command: TuiAgentDetectionCommand,
+  runProbe: (command: TuiAgentDetectionCommand) => Promise<string>
+): Promise<IdentityProbeOutcome> {
+  try {
+    const output = await runProbe(command)
+    return command.identityProbe && matchesTuiAgentIdentityProbe(command.identityProbe, output)
+      ? 'match'
+      : 'mismatch'
+  } catch {
+    return 'unavailable'
+  }
+}
+
+async function verifyDetectedCommandIdentities(
+  foundCommands: ReadonlySet<string>,
+  runProbe: (command: TuiAgentDetectionCommand) => Promise<string>
+): Promise<Set<string>> {
+  const outcomes = await Promise.all(
+    KNOWN_TUI_AGENT_DETECTION_COMMANDS.filter(
+      (command) => command.identityProbe && foundCommands.has(command.cmd)
+    ).map(async (command) => ({
+      command,
+      outcome: await runIdentityProbe(command, runProbe)
+    }))
+  )
+  // Probe execution failures stay fail-closed for this call but are not retained,
+  // so a later detection call can retry instead of treating them as a mismatch.
+  return new Set(
+    outcomes.filter(({ outcome }) => outcome === 'match').map(({ command }) => command.cmd)
+  )
+}
+
+function buildWslIdentityProbeCommand(command: TuiAgentDetectionCommand): string {
+  const args = command.identityProbe ? getTuiAgentIdentityProbeArgs(command.identityProbe) : []
+  return [
+    buildPosixCommandPathLookupScript(
+      { kind: 'literal', value: command.cmd },
+      { skipWindowsMountDirs: true }
+    ),
+    'if [ -n "$resolved" ]; then',
+    `"$resolved" ${args.map(shellQuote).join(' ')}`,
+    'fi'
+  ].join('\n')
+}
+
 export async function detectInstalledAgents(context?: PreflightRuntimeContext): Promise<string[]> {
   const wslTarget = getPreflightWslTarget(context)
   if (wslTarget) {
@@ -147,7 +201,22 @@ export async function detectInstalledAgents(context?: PreflightRuntimeContext): 
       wslTarget,
       getTuiAgentDetectionProbeCommands(KNOWN_TUI_AGENT_DETECTION_COMMANDS, 'wsl')
     )
-    return resolveDetectedTuiAgentIds(KNOWN_TUI_AGENT_DETECTION_COMMANDS, foundCommands, 'wsl')
+    const verifiedCommands = await verifyDetectedCommandIdentities(
+      foundCommands,
+      async (command) => {
+        const result = await execCommandInWslOrThrow(
+          wslTarget,
+          buildWslIdentityProbeCommand(command)
+        )
+        return `${result.stdout}\n${result.stderr}`
+      }
+    )
+    return resolveDetectedTuiAgentIds(
+      KNOWN_TUI_AGENT_DETECTION_COMMANDS,
+      foundCommands,
+      'wsl',
+      verifiedCommands
+    )
   }
 
   const probeCommands = getTuiAgentDetectionProbeCommands(
@@ -169,10 +238,17 @@ export async function detectInstalledAgents(context?: PreflightRuntimeContext): 
       .filter(({ cmd, installedOnPath }) => installedOnPath || installDirCommands.has(cmd))
       .map(({ cmd }) => cmd)
   )
+  const verifiedCommands = await verifyDetectedCommandIdentities(foundCommands, async (command) => {
+    const resolved = resolveCliCommands([command.cmd]).get(command.cmd) ?? command.cmd
+    const args = command.identityProbe ? getTuiAgentIdentityProbeArgs(command.identityProbe) : []
+    const result = await execLocalPreflightCommandOrThrow(resolved, args)
+    return `${result.stdout}\n${result.stderr}`
+  })
   return resolveDetectedTuiAgentIds(
     KNOWN_TUI_AGENT_DETECTION_COMMANDS,
     foundCommands,
-    process.platform
+    process.platform,
+    verifiedCommands
   )
 }
 
@@ -247,8 +323,14 @@ export async function detectRemoteAgents(args: { connectionId: string }): Promis
   }
   const result = (await mux.request('preflight.detectAgents', {
     commands: KNOWN_TUI_AGENT_DETECTION_COMMANDS
-  })) as { agents: string[] }
-  return uniqueAgentIds(result.agents)
+  })) as { agents?: unknown; identityProbes?: unknown }
+  const agents = Array.isArray(result.agents)
+    ? uniqueAgentIds(result.agents.filter((agent): agent is string => typeof agent === 'string'))
+    : []
+  if (typeof result.identityProbes !== 'number' || result.identityProbes < 1) {
+    return agents.filter((agent) => !IDENTITY_PROBED_TUI_AGENT_IDS.has(agent))
+  }
+  return agents
 }
 
 async function isGhAuthenticated(wslTarget?: WslPreflightTarget): Promise<boolean> {

@@ -129,6 +129,12 @@ describe('preflight', () => {
 
   it('only reports agents when which/where resolves to a real executable path', async () => {
     execFileAsyncMock.mockImplementation(async (command, args) => {
+      if (command === 'fx' && String(args[0]) === '--help') {
+        return {
+          stdout: '𝒇x v0.0.8\nFast, native coding agent for the terminal.\n',
+          stderr: ''
+        }
+      }
       if (command !== 'which') {
         throw new Error(`unexpected command ${String(command)}`)
       }
@@ -152,6 +158,15 @@ describe('preflight', () => {
           timedOut: false
         }
       }
+      if (target === 'fx') {
+        return {
+          environmentResolved: true,
+          code: 0,
+          stdout: '/Users/test/.local/bin/fx\n',
+          stderr: '',
+          timedOut: false
+        }
+      }
       if (target === 'cursor-agent') {
         return {
           environmentResolved: true,
@@ -164,7 +179,65 @@ describe('preflight', () => {
       throw new Error('not found')
     })
 
-    await expect(detectInstalledAgents()).resolves.toEqual(['claude', 'cursor'])
+    await expect(detectInstalledAgents()).resolves.toEqual(['claude', 'fx', 'cursor'])
+  })
+
+  it.each([
+    {
+      name: 'the JSON viewer answers',
+      probe: () =>
+        Promise.resolve({
+          stdout: 'fx 35.0.0\nTerminal JSON viewer and processor\nhttps://fx.wtf\n',
+          stderr: ''
+        })
+    },
+    { name: 'the identity probe fails', probe: () => Promise.reject(new Error('probe failed')) },
+    {
+      name: 'the identity probe times out',
+      probe: () => Promise.reject(Object.assign(new Error('timed out'), { code: 'ETIMEDOUT' }))
+    }
+  ])('withholds fx when $name', async ({ probe }) => {
+    execFileAsyncMock.mockImplementation(async (command, args) => {
+      if (command === 'fx') {
+        return probe()
+      }
+      if (command === 'which' && String(args[0]) === 'fx') {
+        return {
+          environmentResolved: true,
+          code: 0,
+          stdout: '/Users/test/.local/bin/fx\n',
+          stderr: '',
+          timedOut: false
+        }
+      }
+      throw new Error('not found')
+    })
+
+    await expect(detectInstalledAgents()).resolves.toEqual([])
+  })
+
+  it('retries a transient fx identity-probe failure on the next detection call', async () => {
+    let probeAttempts = 0
+    execFileAsyncMock.mockImplementation(async (command, args) => {
+      if (command === 'fx') {
+        probeAttempts += 1
+        if (probeAttempts === 1) {
+          throw Object.assign(new Error('timed out'), { code: 'ETIMEDOUT' })
+        }
+        return {
+          stdout: '𝒇x v0.0.8\nFast, native coding agent for the terminal.\n',
+          stderr: ''
+        }
+      }
+      if (command === 'which' && String(args[0]) === 'fx') {
+        return { stdout: '/Users/test/.local/bin/fx\n', stderr: '' }
+      }
+      throw new Error('not found')
+    })
+
+    await expect(detectInstalledAgents()).resolves.toEqual([])
+    await expect(detectInstalledAgents()).resolves.toEqual(['fx'])
+    expect(probeAttempts).toBe(2)
   })
 
   it('does not report Claude Agent Teams when only the Orca shim is present', async () => {
@@ -230,6 +303,15 @@ describe('preflight', () => {
           environmentResolved: true,
           code: 0,
           stdout: '/mock/windows/npm/claude.cmd\n',
+          stderr: '',
+          timedOut: false
+        }
+      }
+      if (String(args[0]) === 'fx') {
+        return {
+          environmentResolved: true,
+          code: 0,
+          stdout: '/mock/windows/programs/fx.exe\n',
           stderr: '',
           timedOut: false
         }
@@ -475,17 +557,26 @@ describe('preflight', () => {
     await expect(detectInstalledAgents()).resolves.toEqual(['mistral-vibe'])
   })
 
-  it('detects agents from the selected WSL distro for a WSL workspace', async () => {
+  it('detects fx from the selected WSL distro for a WSL workspace', async () => {
     Object.defineProperty(process, 'platform', {
       configurable: true,
       value: 'win32'
     })
     runWslProcessMock.mockImplementation(async ({ script }: { script: string }) => {
-      if (script.includes("'claude'")) {
+      if (script.includes('"$resolved" \'--help\'')) {
         return {
           environmentResolved: true,
           code: 0,
-          stdout: '__ORCA_AGENT_PATH__claude\t/home/test/.local/bin/claude\n',
+          stdout: '𝒇x v0.0.8\nFast, native coding agent for the terminal.\n',
+          stderr: '',
+          timedOut: false
+        }
+      }
+      if (script.includes("'fx'")) {
+        return {
+          environmentResolved: true,
+          code: 0,
+          stdout: '__ORCA_AGENT_PATH__fx\t/home/test/.local/bin/fx\n',
           stderr: '',
           timedOut: false
         }
@@ -493,8 +584,8 @@ describe('preflight', () => {
       throw new Error('not found')
     })
 
-    await expect(detectInstalledAgents({ wslDistro: 'Ubuntu' })).resolves.toEqual(['claude'])
-    expect(runWslProcessMock).toHaveBeenCalledTimes(1)
+    await expect(detectInstalledAgents({ wslDistro: 'Ubuntu' })).resolves.toEqual(['fx'])
+    expect(runWslProcessMock).toHaveBeenCalledTimes(2)
     // Why: the local fallback must not report host binaries as WSL binaries.
     expect(resolveCliCommandsMock).not.toHaveBeenCalled()
     // Why assert the lane, not the argv: argv is the runner's contract and is
@@ -503,6 +594,24 @@ describe('preflight', () => {
     expect(runWslProcessMock).toHaveBeenCalledWith(
       expect.objectContaining({ distro: 'Ubuntu', loginPath: 'preferred' })
     )
+  })
+
+  it('withholds the JSON viewer from WSL detection', async () => {
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: 'win32'
+    })
+    runWslProcessMock.mockImplementation(async ({ script }: { script: string }) => ({
+      environmentResolved: true,
+      code: 0,
+      stdout: script.includes('"$resolved" \'--help\'')
+        ? 'fx 35.0.0\nTerminal JSON viewer and processor\nhttps://fx.wtf\n'
+        : '__ORCA_AGENT_PATH__fx\t/home/test/.local/bin/fx\n',
+      stderr: '',
+      timedOut: false
+    }))
+
+    await expect(detectInstalledAgents({ wslDistro: 'Ubuntu' })).resolves.toEqual([])
   })
 
   it('detects agents from the default WSL distro when requested', async () => {

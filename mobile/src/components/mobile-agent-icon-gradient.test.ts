@@ -58,4 +58,19 @@ describe('MobileAgentIcon OMP gradient', () => {
       '1'
     ])
   })
+
+  it('renders fx with the offline generic letter icon', async () => {
+    const consoleError = vi.spyOn(console, 'error').mockImplementation((...args) => {
+      if (typeof args[0] !== 'string' || !args[0].includes('react-test-renderer is deprecated')) {
+        throw new Error(String(args[0]))
+      }
+    })
+    await act(async () => {
+      renderer = create(createElement(MobileAgentIcon, { agentId: 'fx' }))
+    })
+    consoleError.mockRestore()
+
+    expect(renderer.root.findByType('Text').children).toEqual(['V'])
+    expect(renderer.root.findAllByType('Image')).toEqual([])
+  })
 })

@@ -31,6 +31,29 @@ describe('buildOnboardingFolderAgentStartup', () => {
     })
   })
 
+  it('queues fx directly for a folder workspace without Git metadata', () => {
+    const startup = buildOnboardingFolderAgentStartup({
+      ...getDefaultSettings('/tmp/orca-workspaces'),
+      defaultTuiAgent: 'fx'
+    })
+
+    expect(startup).toMatchObject({
+      command: 'fx',
+      env: { FX_PERMISSION_MODE: 'full-access' },
+      launchAgent: 'fx',
+      launchConfig: {
+        agentCommand: 'fx',
+        agentArgs: '',
+        agentEnv: { FX_PERMISSION_MODE: 'full-access' }
+      },
+      telemetry: {
+        agent_kind: 'fx',
+        launch_source: 'onboarding',
+        request_kind: 'new'
+      }
+    })
+  })
+
   it('respects the blank terminal preference', () => {
     const startup = buildOnboardingFolderAgentStartup({
       ...getDefaultSettings('/tmp/orca-workspaces'),
