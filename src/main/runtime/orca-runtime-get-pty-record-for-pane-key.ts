@@ -1,5 +1,5 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
-import { OrcaRuntimeWithPruneMobileSessionTabGroupLayout } from './orca-runtime-prune-mobile-session-tab-group-layout'
+import { OrcaRuntimeWithGetTerminalRunningTuiAgent } from './orca-runtime-get-terminal-running-tui-agent'
 import type { RuntimeLeafRecord, RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
 import { isTerminalLeafId, makePaneKey, parsePaneKey } from '../../shared/stable-pane-id'
 import { detectAgentStatusFromTitle, isClaudeManagementTitle } from '../../shared/agent-detection'
@@ -13,8 +13,7 @@ import {
   resolveTerminalIdentityFromProbes,
   type RuntimeTerminalIdentity
 } from './terminal-identity-probe'
-
-export class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeWithPruneMobileSessionTabGroupLayout {
+export class OrcaRuntimeWithGetPtyRecordForPaneKey extends OrcaRuntimeWithGetTerminalRunningTuiAgent {
   protected getPtyRecordForPaneKey(paneKey: string): RuntimePtyWorktreeRecord | null {
     const parsed = parsePaneKey(paneKey)
     let leafPty: RuntimePtyWorktreeRecord | null = null

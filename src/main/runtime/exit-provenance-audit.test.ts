@@ -17,8 +17,12 @@ const HANDLE = 'term_exit_provenance'
 const WORKTREE_ID = 'repo-audit::/tmp/audit'
 
 const directories: string[] = []
+const databases: OrchestrationDb[] = []
 
 afterEach(() => {
+  for (const db of databases.splice(0)) {
+    db.close()
+  }
   for (const directory of directories.splice(0)) {
     rmSync(directory, { recursive: true, force: true })
   }
@@ -27,7 +31,9 @@ afterEach(() => {
 function createDb(): OrchestrationDb {
   const directory = mkdtempSync(join(tmpdir(), 'exit-provenance-'))
   directories.push(directory)
-  return new OrchestrationDb(join(directory, 'orchestration.db'))
+  const db = new OrchestrationDb(join(directory, 'orchestration.db'))
+  databases.push(db)
+  return db
 }
 
 function createRuntime(db: OrchestrationDb): OrcaRuntimeService {

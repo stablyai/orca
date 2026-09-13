@@ -332,6 +332,10 @@ export class OrcaRuntimeWithRuntimeId {
     getFirstPartyAgentStatus: (ptyId) =>
       (ptyId ? this.ptysById.get(ptyId)?.lastExplicitAgentStatus : null) ?? null,
     getLiveLeaf: (leaf) => this.leaves.get(this.getLeafKey(leaf.tabId, leaf.leafId)) ?? leaf,
+    canResolveTuiIdleEvidence: (ptyId, waitText, lastOutputAt) =>
+      this.canResolveTuiIdleEvidence(ptyId, waitText, lastOutputAt),
+    canResolveTuiIdlePromptPreview: (ptyId, waitText, lastOutputAt) =>
+      this.canResolveTuiIdlePromptPreview(ptyId, waitText, lastOutputAt),
     resolve: (waiter, result) => this.terminalWaiters.resolve(waiter, result)
   })
 
@@ -346,6 +350,10 @@ export class OrcaRuntimeWithRuntimeId {
       getPaneAgent: (ptyId) => this.getPaneAgentForTuiIdle(ptyId),
       getFirstPartyAgentStatus: (ptyId) =>
         (ptyId ? this.ptysById.get(ptyId)?.lastExplicitAgentStatus : null) ?? null,
+      canResolveTuiIdleEvidence: (ptyId, waitText, lastOutputAt) =>
+        this.canResolveTuiIdleEvidence(ptyId, waitText, lastOutputAt),
+      canResolveTuiIdlePromptPreview: (ptyId, waitText, lastOutputAt) =>
+        this.canResolveTuiIdlePromptPreview(ptyId, waitText, lastOutputAt),
       startVisibleReadProbe: (waiter, waiterTimeoutMs) =>
         this.startTuiIdleVisibleReadProbe(waiter, waiterTimeoutMs)
     },

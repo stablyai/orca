@@ -6,6 +6,16 @@ import {
 } from './agent-status-extension-test-harness'
 
 describe('getPiAgentStatusExtensionSource', () => {
+  it('registers OMP readiness only in the pane-owning process', () => {
+    const owner = createHarness({ kind: 'omp' })
+    const child = createHarness({
+      kind: 'omp',
+      env: { ORCA_PI_STATUS_OWNED: String(SELF_PID - 1) }
+    })
+    expect(owner.handlers.session_start).toBeTypeOf('function')
+    expect(child.handlers).toEqual({})
+  })
+
   it('registers Prime hooks only in the event-emitting daemon worker', () => {
     const frontend = createHarness({
       kind: 'prime-agent',

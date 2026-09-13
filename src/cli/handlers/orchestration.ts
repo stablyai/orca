@@ -1,4 +1,5 @@
 import type { CommandHandler } from '../dispatch'
+import { ORCHESTRATION_COLLABORATION_HANDLERS } from './orchestration/collaboration-handlers'
 import { ORCHESTRATION_CHECK_HANDLER } from './orchestration/message-check-handler'
 import {
   ORCHESTRATION_DISPATCH_HANDLER,
@@ -30,5 +31,6 @@ export const ORCHESTRATION_HANDLERS: Record<string, CommandHandler> = {
   ...ORCHESTRATION_DISPATCH_INSPECTION_HANDLERS,
   ...ORCHESTRATION_REQUEST_SHOW_HANDLER,
   ...ORCHESTRATION_GATE_HANDLERS,
-  ...ORCHESTRATION_RESET_HANDLER
+  ...ORCHESTRATION_RESET_HANDLER,
+  ...ORCHESTRATION_COLLABORATION_HANDLERS
 }

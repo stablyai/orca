@@ -1,9 +1,6 @@
 import { isShellProcess, type AgentStatus } from '../../shared/agent-detection'
 import type { RuntimeTerminalWait } from '../../shared/runtime-types'
-import {
-  detectTerminalWaitBlockedReason,
-  isKnownReadyPromptPreview
-} from './terminal-wait-detection'
+import { detectTerminalWaitBlockedReason } from './terminal-wait-detection'
 import {
   buildPtyTerminalWaitBlockedResult,
   buildPtyTerminalWaitResult,
@@ -12,6 +9,7 @@ import {
 } from './terminal-wait-results'
 import { buildTerminalWaitText } from './terminal-wait-tail-state'
 import {
+  hasExplicitIdleTitle,
   isTuiIdleSatisfied,
   quietForegroundProcessProvesTuiIdle,
   type FirstPartyAgentStatus
@@ -30,6 +28,16 @@ type RuntimeTerminalIdlePollDependencies = {
   getFirstPartyAgentStatus(ptyId: string | null | undefined): FirstPartyAgentStatus
   /** Re-read the record the waiter registered against; see `liveLeaf` below. */
   getLiveLeaf(leaf: RuntimeLeafRecord): RuntimeLeafRecord
+  canResolveTuiIdleEvidence(
+    ptyId: string | null,
+    waitText: string,
+    lastOutputAt: number | null
+  ): boolean
+  canResolveTuiIdlePromptPreview(
+    ptyId: string | null,
+    waitText: string,
+    lastOutputAt: number | null
+  ): boolean
   resolve(waiter: TerminalWaiter, result: RuntimeTerminalWait): void
 }
 
@@ -110,15 +118,20 @@ export class RuntimeTerminalIdlePolls {
         )
         return
       }
+      const rendererTitle = leaf.paneTitle ?? this.deps.getTabTitle(leaf.tabId)
+      const rankedIdle = isTuiIdleSatisfied({
+        record: leaf,
+        rendererTitle,
+        readPositiveBodyEvidence: () =>
+          this.deps.canResolveTuiIdlePromptPreview(leaf.ptyId, waitText, leaf.lastOutputAt),
+        agent,
+        firstPartyStatus: this.deps.getFirstPartyAgentStatus(leaf.ptyId),
+        quiescenceMs: this.deps.quiescenceMs
+      })
       if (
-        isTuiIdleSatisfied({
-          record: leaf,
-          rendererTitle: leaf.paneTitle ?? this.deps.getTabTitle(leaf.tabId),
-          readPositiveBodyEvidence: () => isKnownReadyPromptPreview(waitText),
-          agent,
-          firstPartyStatus: this.deps.getFirstPartyAgentStatus(leaf.ptyId),
-          quiescenceMs: this.deps.quiescenceMs
-        })
+        rankedIdle &&
+        (hasExplicitIdleTitle(leaf, rendererTitle) ||
+          this.deps.canResolveTuiIdleEvidence(leaf.ptyId, waitText, leaf.lastOutputAt))
       ) {
         this.stop(entry)
         this.deps.resolve(waiter, buildTerminalWaitResult(waiter.handle, 'tui-idle', leaf))
@@ -138,10 +151,16 @@ export class RuntimeTerminalIdlePolls {
         startedForegroundPoll = true
         const foreground = await foregroundRead
         const live = this.deps.getLiveLeaf(entry.leaf)
+        const liveWaitText = buildTerminalWaitText(
+          live.tailBuffer,
+          live.tailPartialLine,
+          live.preview
+        )
         if (
           foreground &&
           !isShellProcess(foreground) &&
-          (live.lastOutputAt ? Date.now() - live.lastOutputAt : 0) >= this.deps.quiescenceMs
+          (live.lastOutputAt ? Date.now() - live.lastOutputAt : 0) >= this.deps.quiescenceMs &&
+          this.deps.canResolveTuiIdleEvidence(live.ptyId, liveWaitText, live.lastOutputAt)
         ) {
           this.stop(entry)
           this.deps.resolve(waiter, buildTerminalWaitResult(waiter.handle, 'tui-idle', live))
@@ -176,16 +195,21 @@ export class RuntimeTerminalIdlePolls {
         )
         return
       }
+      const adoptedIdle = this.deps.getAdoptedPtyIdleStatus(pty) === 'idle'
+      const rankedIdle = isTuiIdleSatisfied({
+        record: pty,
+        readPositiveBodyEvidence: () =>
+          adoptedIdle ||
+          this.deps.canResolveTuiIdlePromptPreview(pty.ptyId, waitText, pty.lastOutputAt),
+        agent,
+        firstPartyStatus: this.deps.getFirstPartyAgentStatus(pty.ptyId),
+        quiescenceMs: this.deps.quiescenceMs
+      })
       if (
-        isTuiIdleSatisfied({
-          record: pty,
-          readPositiveBodyEvidence: () =>
-            this.deps.getAdoptedPtyIdleStatus(pty) === 'idle' ||
-            isKnownReadyPromptPreview(waitText),
-          agent,
-          firstPartyStatus: this.deps.getFirstPartyAgentStatus(pty.ptyId),
-          quiescenceMs: this.deps.quiescenceMs
-        })
+        rankedIdle &&
+        (hasExplicitIdleTitle(pty) ||
+          adoptedIdle ||
+          this.deps.canResolveTuiIdleEvidence(pty.ptyId, waitText, pty.lastOutputAt))
       ) {
         this.stop(entry)
         this.deps.resolve(waiter, buildPtyTerminalWaitResult(waiter.handle, 'tui-idle', pty))
@@ -206,7 +230,8 @@ export class RuntimeTerminalIdlePolls {
         if (
           foreground &&
           !isShellProcess(foreground) &&
-          (pty.lastOutputAt ? Date.now() - pty.lastOutputAt : 0) >= this.deps.quiescenceMs
+          (pty.lastOutputAt ? Date.now() - pty.lastOutputAt : 0) >= this.deps.quiescenceMs &&
+          this.deps.canResolveTuiIdleEvidence(pty.ptyId, waitText, pty.lastOutputAt)
         ) {
           this.stop(entry)
           this.deps.resolve(waiter, buildPtyTerminalWaitResult(waiter.handle, 'tui-idle', pty))
