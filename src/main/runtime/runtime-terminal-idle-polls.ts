@@ -9,6 +9,7 @@ import {
 } from './terminal-wait-results'
 import { buildTerminalWaitText } from './terminal-wait-tail-state'
 import {
+  hasExplicitIdleTitle,
   isTuiIdleSatisfied,
   quietForegroundProcessProvesTuiIdle,
   type FirstPartyAgentStatus
@@ -117,16 +118,20 @@ export class RuntimeTerminalIdlePolls {
         )
         return
       }
+      const rendererTitle = leaf.paneTitle ?? this.deps.getTabTitle(leaf.tabId)
+      const rankedIdle = isTuiIdleSatisfied({
+        record: leaf,
+        rendererTitle,
+        readPositiveBodyEvidence: () =>
+          this.deps.canResolveTuiIdlePromptPreview(leaf.ptyId, waitText, leaf.lastOutputAt),
+        agent,
+        firstPartyStatus: this.deps.getFirstPartyAgentStatus(leaf.ptyId),
+        quiescenceMs: this.deps.quiescenceMs
+      })
       if (
-        isTuiIdleSatisfied({
-          record: leaf,
-          rendererTitle: leaf.paneTitle ?? this.deps.getTabTitle(leaf.tabId),
-          readPositiveBodyEvidence: () =>
-            this.deps.canResolveTuiIdlePromptPreview(leaf.ptyId, waitText, leaf.lastOutputAt),
-          agent,
-          firstPartyStatus: this.deps.getFirstPartyAgentStatus(leaf.ptyId),
-          quiescenceMs: this.deps.quiescenceMs
-        }) && this.deps.canResolveTuiIdleEvidence(leaf.ptyId, waitText, leaf.lastOutputAt)
+        rankedIdle &&
+        (hasExplicitIdleTitle(leaf, rendererTitle) ||
+          this.deps.canResolveTuiIdleEvidence(leaf.ptyId, waitText, leaf.lastOutputAt))
       ) {
         this.stop(entry)
         this.deps.resolve(waiter, buildTerminalWaitResult(waiter.handle, 'tui-idle', leaf))
@@ -190,16 +195,21 @@ export class RuntimeTerminalIdlePolls {
         )
         return
       }
+      const adoptedIdle = this.deps.getAdoptedPtyIdleStatus(pty) === 'idle'
+      const rankedIdle = isTuiIdleSatisfied({
+        record: pty,
+        readPositiveBodyEvidence: () =>
+          adoptedIdle ||
+          this.deps.canResolveTuiIdlePromptPreview(pty.ptyId, waitText, pty.lastOutputAt),
+        agent,
+        firstPartyStatus: this.deps.getFirstPartyAgentStatus(pty.ptyId),
+        quiescenceMs: this.deps.quiescenceMs
+      })
       if (
-        isTuiIdleSatisfied({
-          record: pty,
-          readPositiveBodyEvidence: () =>
-            this.deps.getAdoptedPtyIdleStatus(pty) === 'idle' ||
-            this.deps.canResolveTuiIdlePromptPreview(pty.ptyId, waitText, pty.lastOutputAt),
-          agent,
-          firstPartyStatus: this.deps.getFirstPartyAgentStatus(pty.ptyId),
-          quiescenceMs: this.deps.quiescenceMs
-        }) && this.deps.canResolveTuiIdleEvidence(pty.ptyId, waitText, pty.lastOutputAt)
+        rankedIdle &&
+        (hasExplicitIdleTitle(pty) ||
+          adoptedIdle ||
+          this.deps.canResolveTuiIdleEvidence(pty.ptyId, waitText, pty.lastOutputAt))
       ) {
         this.stop(entry)
         this.deps.resolve(waiter, buildPtyTerminalWaitResult(waiter.handle, 'tui-idle', pty))

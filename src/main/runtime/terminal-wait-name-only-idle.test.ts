@@ -42,6 +42,8 @@ function createWait(options: {
     getAdoptedPtyIdleStatus: () => options.adoptedIdleStatus ?? null,
     getPaneAgent: () => options.agent ?? null,
     getFirstPartyAgentStatus: () => options.firstPartyStatus ?? null,
+    canResolveTuiIdleEvidence: () => true,
+    canResolveTuiIdlePromptPreview: () => false,
     quiescenceMs: QUIESCENCE_MS
   }
   const polls = new RuntimeTerminalIdlePolls({

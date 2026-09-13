@@ -11,7 +11,11 @@ import {
   getTerminalState
 } from './terminal-wait-results'
 import { buildTerminalWaitText } from './terminal-wait-tail-state'
-import { isTuiIdleSatisfied, type FirstPartyAgentStatus } from './tui-idle-evidence'
+import {
+  hasExplicitIdleTitle,
+  isTuiIdleSatisfied,
+  type FirstPartyAgentStatus
+} from './tui-idle-evidence'
 import type { TuiAgent } from '../../shared/tui-agent'
 import type { TerminalWaiter } from './runtime-terminal-contracts'
 import type { RuntimeLeafRecord, RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
@@ -51,11 +55,14 @@ export class RuntimeTerminalWait {
   /** Why one helper per record kind: every satisfaction site must rank the same way,
    *  or the immediate check and the poll disagree about the same pane. */
   private ptySatisfied(pty: RuntimePtyWorktreeRecord, waitText: string): boolean {
+    const adoptedIdle = this.deps.getAdoptedPtyIdleStatus(pty) === 'idle'
+    if (hasExplicitIdleTitle(pty) || adoptedIdle) {
+      return true
+    }
     return (
       isTuiIdleSatisfied({
         record: pty,
         readPositiveBodyEvidence: () =>
-          this.deps.getAdoptedPtyIdleStatus(pty) === 'idle' ||
           this.deps.canResolveTuiIdlePromptPreview(pty.ptyId, waitText, pty.lastOutputAt),
         agent: this.deps.getPaneAgent(pty.ptyId),
         firstPartyStatus: this.deps.getFirstPartyAgentStatus(pty.ptyId),
@@ -65,10 +72,14 @@ export class RuntimeTerminalWait {
   }
 
   private leafSatisfied(leaf: RuntimeLeafRecord, waitText: string): boolean {
+    const rendererTitle = leaf.paneTitle ?? this.deps.getTabTitle(leaf.tabId)
+    if (hasExplicitIdleTitle(leaf, rendererTitle)) {
+      return true
+    }
     return (
       isTuiIdleSatisfied({
         record: leaf,
-        rendererTitle: leaf.paneTitle ?? this.deps.getTabTitle(leaf.tabId),
+        rendererTitle,
         readPositiveBodyEvidence: () =>
           this.deps.canResolveTuiIdlePromptPreview(leaf.ptyId, waitText, leaf.lastOutputAt),
         agent: this.deps.getPaneAgent(leaf.ptyId),

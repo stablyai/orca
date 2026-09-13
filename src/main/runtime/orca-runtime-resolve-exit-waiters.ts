@@ -6,7 +6,7 @@ import { buildPtyTerminalWaitResult, buildTerminalWaitResult } from './terminal-
 import type { AgentStatus } from '../../shared/agent-detection'
 import { detectExplicitIdleStatusFromTitle } from './terminal-wait-detection'
 import { buildTerminalWaitText } from './terminal-wait-tail-state'
-import { isTuiIdleSatisfied } from './tui-idle-evidence'
+import { hasExplicitIdleTitle, isTuiIdleSatisfied } from './tui-idle-evidence'
 import { TUI_IDLE_QUIESCENCE_MS } from './orca-runtime-postlude'
 
 export class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithBindPtyIncarnationHandle {
@@ -53,11 +53,7 @@ export class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithBindPtyInc
       return
     }
     for (const waiter of [...waiters]) {
-      const waitText = buildTerminalWaitText(leaf.tailBuffer, leaf.tailPartialLine, leaf.preview)
-      if (
-        waiter.condition === 'tui-idle' &&
-        this.canResolveTuiIdleEvidence(leaf.ptyId, waitText, leaf.lastOutputAt)
-      ) {
+      if (waiter.condition === 'tui-idle') {
         this.resolveWaiter(waiter, buildTerminalWaitResult(handle, 'tui-idle', leaf))
       }
     }
@@ -96,11 +92,7 @@ export class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithBindPtyInc
       return
     }
     for (const waiter of [...waiters]) {
-      const waitText = buildTerminalWaitText(pty.tailBuffer, pty.tailPartialLine, pty.preview)
-      if (
-        waiter.condition === 'tui-idle' &&
-        this.canResolveTuiIdleEvidence(pty.ptyId, waitText, pty.lastOutputAt)
-      ) {
+      if (waiter.condition === 'tui-idle') {
         this.resolveWaiter(waiter, buildPtyTerminalWaitResult(handle, 'tui-idle', pty))
       }
     }
@@ -109,10 +101,14 @@ export class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithBindPtyInc
   // Why: the primary OSC-title signal can't fire for daemon-hosted terminals (no PTY data through the runtime), so this fallback polls the renderer-synced tab title + foreground-process quiescence; self-cancels when the OSC path fires.
   protected isTuiIdleSatisfiedForLeaf(leaf: RuntimeLeafRecord): boolean {
     const waitText = buildTerminalWaitText(leaf.tailBuffer, leaf.tailPartialLine, leaf.preview)
+    const rendererTitle = leaf.paneTitle ?? this.tabs.get(leaf.tabId)?.title ?? null
+    if (hasExplicitIdleTitle(leaf, rendererTitle)) {
+      return true
+    }
     return (
       isTuiIdleSatisfied({
         record: leaf,
-        rendererTitle: leaf.paneTitle ?? this.tabs.get(leaf.tabId)?.title ?? null,
+        rendererTitle,
         readPositiveBodyEvidence: () =>
           this.canResolveTuiIdlePromptPreview(leaf.ptyId, waitText, leaf.lastOutputAt),
         agent: this.getPaneAgentForTuiIdle(leaf.ptyId),
@@ -125,11 +121,14 @@ export class OrcaRuntimeWithResolveExitWaiters extends OrcaRuntimeWithBindPtyInc
 
   protected isTuiIdleSatisfiedForPty(pty: RuntimePtyWorktreeRecord): boolean {
     const waitText = buildTerminalWaitText(pty.tailBuffer, pty.tailPartialLine, pty.preview)
+    const adoptedIdle = this.getAdoptedPtyExplicitIdleStatus(pty) === 'idle'
+    if (hasExplicitIdleTitle(pty) || adoptedIdle) {
+      return true
+    }
     return (
       isTuiIdleSatisfied({
         record: pty,
         readPositiveBodyEvidence: () =>
-          this.getAdoptedPtyExplicitIdleStatus(pty) === 'idle' ||
           this.canResolveTuiIdlePromptPreview(pty.ptyId, waitText, pty.lastOutputAt),
         agent: this.getPaneAgentForTuiIdle(pty.ptyId),
         firstPartyStatus: pty.lastExplicitAgentStatus ?? null,
