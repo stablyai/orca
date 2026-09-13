@@ -1,3 +1,4 @@
+import { preferRemoteTrackingCompareBase } from '../../../src/shared/worktree/base-ref'
 import type { RpcClient } from '../transport/rpc-client'
 import { isMobileGitUnavailable } from './mobile-git-status'
 
@@ -66,27 +67,30 @@ export async function resolveMobileBranchCompareBaseRef(
     client.sendRequest('worktree.show', { worktree: `id:${worktreeId}` }).catch(() => null),
     client.sendRequest('repo.list').catch(() => null)
   ])
-  if (worktreeResponse?.ok) {
-    const worktreeBaseRef = readWorktreeSummary(worktreeResponse.result)?.baseRef?.trim() || null
-    if (worktreeBaseRef) {
-      return worktreeBaseRef
+  const worktreeBaseRef = worktreeResponse?.ok
+    ? readWorktreeSummary(worktreeResponse.result)?.baseRef?.trim() || null
+    : null
+  const repo = repoResponse?.ok
+    ? readRepoSummaries(repoResponse.result).find((candidate) => candidate.id === repoId)
+    : undefined
+  const repoBaseRef = repo?.worktreeBaseRef?.trim() || null
+  let defaultBaseRef: string | null = null
+  if (!repoBaseRef) {
+    const defaultResponse = await client.sendRequest('repo.baseRefDefault', {
+      repo: `id:${repoId}`
+    })
+    if (!defaultResponse.ok) {
+      if (
+        !isMobileGitUnavailable(defaultResponse.error?.code, defaultResponse.error?.message) &&
+        !worktreeBaseRef
+      ) {
+        throw new Error(defaultResponse.error?.message || 'Unable to resolve branch base')
+      }
+    } else {
+      defaultBaseRef = readDefaultBaseRef(defaultResponse.result)
     }
   }
 
-  if (repoResponse?.ok) {
-    const repo = readRepoSummaries(repoResponse.result).find((candidate) => candidate.id === repoId)
-    const repoBaseRef = repo?.worktreeBaseRef?.trim() || null
-    if (repoBaseRef) {
-      return repoBaseRef
-    }
-  }
-
-  const defaultResponse = await client.sendRequest('repo.baseRefDefault', { repo: `id:${repoId}` })
-  if (!defaultResponse.ok) {
-    if (isMobileGitUnavailable(defaultResponse.error?.code, defaultResponse.error?.message)) {
-      return null
-    }
-    throw new Error(defaultResponse.error?.message || 'Unable to resolve branch base')
-  }
-  return readDefaultBaseRef(defaultResponse.result)
+  const repoOrDefault = repoBaseRef || defaultBaseRef
+  return preferRemoteTrackingCompareBase(worktreeBaseRef, repoOrDefault)
 }
