@@ -136,6 +136,7 @@ export function unbindOtherRunsForPane(
         .prepare(
           `UPDATE runs
            SET coordinator_handle = NULL, coordinator_pane_key = NULL,
+               coordinator_principal = NULL,
                consumer_generation = consumer_generation + 1,
                updated_at = datetime('now')
            WHERE id = ?`

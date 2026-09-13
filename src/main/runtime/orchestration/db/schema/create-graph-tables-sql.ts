@@ -145,6 +145,7 @@ CREATE TABLE IF NOT EXISTS dispatch_contexts (
   launch_token_hash   TEXT,
   assignee_handle     TEXT,
   assignee_pane_key   TEXT,
+  assignee_principal  TEXT,
   capability_hash     TEXT,
   process_incarnation TEXT,
   capability_revoked_at TEXT,
@@ -155,6 +156,7 @@ CREATE TABLE IF NOT EXISTS dispatch_contexts (
   -- so it must not count as a nesting parent. Null on rows written before v37 and for Orca's loop.
   creator_handle      TEXT,
   creator_pane_key    TEXT,
+  creator_principal   TEXT,
   host_scope          TEXT,
   status              TEXT NOT NULL DEFAULT 'pending'
     CHECK(status IN ('pending', 'dispatched', 'completed', 'failed', 'circuit_broken')),

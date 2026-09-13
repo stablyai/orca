@@ -4,6 +4,7 @@ import {
   ROOT_DISPATCH_DEPTH,
   nestedWorkerDepthExceededMessage
 } from '../../../../shared/nested-worker-depth'
+import { principalFromPaneKey } from '../../../../shared/orchestration-principal'
 import { OrchestrationError } from '../orchestration-error'
 import { isEquivalentPaneKey } from './pane-key-match'
 import type { OrchestrationDb } from './orchestration-db'
@@ -32,11 +33,17 @@ export type DispatchCreator =
 export function recordedCreatorIdentity(creator: DispatchCreator): {
   creatorHandle: string | null
   creatorPaneKey: string | null
+  creatorPrincipal: string | null
 } {
   if (creator.kind === 'system') {
-    return { creatorHandle: null, creatorPaneKey: null }
+    // Orca's in-process loop is not an actor row; a handle-only creator also stays NULL.
+    return { creatorHandle: null, creatorPaneKey: null, creatorPrincipal: null }
   }
-  return { creatorHandle: creator.handle, creatorPaneKey: creator.paneKey ?? null }
+  return {
+    creatorHandle: creator.handle,
+    creatorPaneKey: creator.paneKey ?? null,
+    creatorPrincipal: principalFromPaneKey(creator.paneKey)
+  }
 }
 
 /**

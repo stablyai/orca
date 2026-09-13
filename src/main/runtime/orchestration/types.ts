@@ -46,6 +46,8 @@ export type RunRow = {
   home_database: string
   coordinator_handle: string | null
   coordinator_pane_key: string | null
+  /** Serialized OrchestrationPrincipal; write-only until the resolver PRs. */
+  coordinator_principal: string | null
   consumer_generation: number
   legacy: number
   created_at: string
@@ -278,6 +280,8 @@ export type DispatchContextRow = {
   launch_token_hash: string | null
   assignee_handle: string | null
   assignee_pane_key: string | null
+  /** Serialized OrchestrationPrincipal; write-only until the resolver PRs. */
+  assignee_principal: string | null
   capability_hash: string | null
   process_incarnation: string | null
   capability_revoked_at: string | null
@@ -287,6 +291,8 @@ export type DispatchContextRow = {
   /** Creator identity; equal to the assignee means a self-dispatch, which adds no nesting depth. */
   creator_handle: string | null
   creator_pane_key: string | null
+  /** Serialized OrchestrationPrincipal; write-only until the resolver PRs. */
+  creator_principal: string | null
   host_scope: string | null
   status: DispatchStatus
   failure_count: number

@@ -9,6 +9,7 @@ import {
 } from './runs/run-coordinator-mail-routing'
 import { createTables } from './schema/create-tables'
 import { migrate } from './schema/migrate'
+import { backfillPrincipalColumns } from './schema/principal-column-backfill'
 
 class OrchestrationDbCore {
   db: Database.Database
@@ -30,6 +31,7 @@ class OrchestrationDbCore {
     createTables.call(this as unknown as OrchestrationDb)
     migrate.call(this as unknown as OrchestrationDb)
     backfillFederatedStubHomeRuns(this.db)
+    backfillPrincipalColumns(this.db)
     createCoordinatorMailRoutingTrigger.call(this as unknown as OrchestrationDb)
     rememberCurrentRunCoordinatorHandles.call(this as unknown as OrchestrationDb)
     hardenOrchestrationDatabaseFiles(dbPath)
