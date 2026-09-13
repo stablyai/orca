@@ -286,6 +286,20 @@ describe('electron-builder config', () => {
 
   // Missing unpacked entry silently restores in-process watcher and #7547 main crashes.
 
+  it('ships the mac mic-active-status helper in Contents/MacOS, not Resources', () => {
+    expect(electronBuilderConfig.mac.extraFiles).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          from: 'native/mic-active-status-macos/.build/release/orca-mic-active-status',
+          to: 'MacOS/orca-mic-active-status'
+        })
+      ])
+    )
+    expect(electronBuilderConfig.mac.extraResources).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ to: 'orca-mic-active-status' })])
+    )
+  })
+
   // CLI Node mode cannot read asar; packed entry sends orca serve to Electron (#27307).
   it('unpacks the orcad serve-selection entry the CLI runs', async () => {
     const sharedSource = await readFile(

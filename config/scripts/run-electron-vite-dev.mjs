@@ -343,6 +343,25 @@ function prepareMacDevElectronApp() {
     )
   }
 
+  try {
+    execFileSync(
+      process.execPath,
+      [
+        path.join(repoRoot, 'config', 'scripts', 'build-mic-active-status-macos.mjs'),
+        '--bundle-id',
+        bundleId,
+        '--single-arch',
+        '--output',
+        path.join(appPath, 'Contents', 'MacOS', 'orca-mic-active-status')
+      ],
+      { stdio: 'inherit' }
+    )
+  } catch (error) {
+    console.warn(
+      `[orca-dev] mic-active-status helper build failed (suppress-while-mic-active will never suppress): ${error?.message ?? error}`
+    )
+  }
+
   buildDevSwiftCliHelpers(path.join(appPath, 'Contents', 'MacOS'))
 
   // Re-sign after copy/plist edits or macOS rejects notification registration (UNErrorDomain 1); signing failure stays nonfatal for dev.

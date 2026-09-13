@@ -11,6 +11,7 @@ import type {
 } from '../../shared/notification-settings-types'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { readNotificationAuthorizationStatus } from './notification-authorization-status'
+import { readMicActiveStatus } from './mic-active-status'
 import { setTrayAttention } from '../tray/system-tray'
 import { isMainWindowVisible } from '../window/main-window-visibility'
 import { activeNotificationsById } from './native-notification-lifecycle'
@@ -157,6 +158,7 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
       ? (payload) => runtime.dispatchMobileNotification(payload)
       : null,
     readAuthorizationStatus: readNotificationAuthorizationStatus,
+    readMicActiveStatus,
     recordDeliveryOutcome: recordNotificationDeliveryOutcome,
     deliverNative: deliverNativeNotification,
     platform: process.platform,
@@ -174,7 +176,11 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
     'notifications:settleStructuredPrompts',
     (_event, scope: unknown, sessionId: unknown): void => {
       if (isAgentSessionExecutionLocation(scope) && typeof sessionId === 'string' && sessionId) {
-        runtime?.reconcileStructuredPromptAttention({ scope, sessionId, pendingPromptIds: [] })
+        runtime?.reconcileStructuredPromptAttention({
+          scope,
+          sessionId,
+          pendingPromptIds: []
+        })
       }
     }
   )

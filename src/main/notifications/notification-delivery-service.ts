@@ -21,6 +21,8 @@ export type NotificationDeliveryDependencies = {
   readAuthorizationStatus: () => Promise<
     'authorized' | 'denied' | 'not-determined' | 'unknown' | null
   >
+  /** Null/undefined when the host can't report mic state; the mic gate is then skipped. */
+  readMicActiveStatus?: (() => Promise<boolean | null>) | null
   recordDeliveryOutcome: (outcome: 'delivered' | 'failed') => void
   deliverNative: (
     request: NotificationDispatchRequest,
@@ -141,35 +143,56 @@ export function createNotificationDeliveryService(
         return { delivered: false, reason: 'suppressed-focus' }
       }
 
-      // Explicit Settings tests bypass burst deduplication.
-      if (request.source !== 'test') {
-        // Collapse unkeyed worktree events across sources; attention keys isolate their own repeats.
-        if (
-          !reserveNotificationCooldown(
-            recentDesktopNotifications,
-            dedupeKeyFor(request),
-            deps.now()
-          )
-        ) {
-          return { delivered: false, reason: 'cooldown' }
+      const deliverToDesktop = ():
+        | NotificationDispatchResult
+        | Promise<NotificationDispatchResult> => {
+        // Explicit Settings tests bypass burst deduplication.
+        if (request.source !== 'test') {
+          // Collapse unkeyed worktree events across sources; attention keys isolate their own repeats.
+          if (
+            !reserveNotificationCooldown(
+              recentDesktopNotifications,
+              dedupeKeyFor(request),
+              deps.now()
+            )
+          ) {
+            return { delivered: false, reason: 'cooldown' }
+          }
         }
+
+        if (!deps.isNotificationSupported()) {
+          return { delivered: false, reason: 'not-supported' }
+        }
+
+        if (deps.platform !== 'darwin') {
+          return deliverNativeAndRecord(request, notificationOptions, settings)
+        }
+        // macOS swallows denied/undecided notifications; allow the renderer fallback instead.
+        return deps.readAuthorizationStatus().then((authorization) => {
+          if (authorization === 'denied' || authorization === 'not-determined') {
+            deps.recordDeliveryOutcome('failed')
+            return { delivered: false, reason: 'blocked-by-system' }
+          }
+          return deliverNativeAndRecord(request, notificationOptions, settings)
+        })
       }
 
-      if (!deps.isNotificationSupported()) {
-        return { delivered: false, reason: 'not-supported' }
+      // Why: unreadable/unsupported mic state resolves to null, which we treat as "not active"
+      // rather than suppressing incorrectly.
+      if (
+        settings.suppressWhileMicActive &&
+        deps.platform === 'darwin' &&
+        deps.readMicActiveStatus
+      ) {
+        return deps.readMicActiveStatus().then((micActive) => {
+          if (micActive === true) {
+            return { delivered: false, reason: 'suppressed-mic-active' }
+          }
+          return deliverToDesktop()
+        })
       }
 
-      if (deps.platform !== 'darwin') {
-        return deliverNativeAndRecord(request, notificationOptions, settings)
-      }
-      // macOS swallows denied/undecided notifications; allow the renderer fallback instead.
-      return deps.readAuthorizationStatus().then((authorization) => {
-        if (authorization === 'denied' || authorization === 'not-determined') {
-          deps.recordDeliveryOutcome('failed')
-          return { delivered: false, reason: 'blocked-by-system' }
-        }
-        return deliverNativeAndRecord(request, notificationOptions, settings)
-      })
+      return deliverToDesktop()
     }
   }
 }

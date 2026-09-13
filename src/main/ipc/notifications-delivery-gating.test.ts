@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
   getAllWindowsMock,
@@ -9,6 +9,7 @@ import {
   notificationIsSupportedMock,
   notificationShowMock,
   readAuthorizationStatusMock,
+  readMicActiveStatusMock,
   removeHandlerMock,
   resetNotificationDispatchMocks,
   setTrayAttentionMock,
@@ -21,6 +22,10 @@ vi.mock('electron', async () =>
 
 vi.mock('./notification-authorization-status', async () =>
   (await import('./notifications-test-harness')).createNotificationAuthorizationModuleMock()
+)
+
+vi.mock('./mic-active-status', async () =>
+  (await import('./notifications-test-harness')).createMicActiveStatusModuleMock()
 )
 
 vi.mock('./ui', async () =>
@@ -158,6 +163,114 @@ describe('registerNotificationHandlers', () => {
       reason: 'suppressed-focus'
     })
     expect(notificationCtorMock).not.toHaveBeenCalled()
+  })
+
+  describe('suppressWhileMicActive (macOS only)', () => {
+    let originalPlatform: NodeJS.Platform
+
+    beforeEach(() => {
+      originalPlatform = process.platform
+      Object.defineProperty(process, 'platform', { value: 'darwin', configurable: true })
+    })
+
+    afterEach(() => {
+      Object.defineProperty(process, 'platform', { value: originalPlatform, configurable: true })
+    })
+
+    it('suppresses notifications while the mic is actively in use', async () => {
+      readMicActiveStatusMock.mockResolvedValue(true)
+      registerNotificationHandlers({
+        getSettings: () => ({
+          notifications: {
+            enabled: true,
+            agentTaskComplete: true,
+            terminalBell: true,
+            suppressWhenFocused: false,
+            suppressWhileMicActive: true
+          }
+        })
+      } as never)
+
+      const handler = getDispatchHandler()
+      expect(await handler({}, { source: 'agent-task-complete' })).toEqual({
+        delivered: false,
+        reason: 'suppressed-mic-active'
+      })
+      expect(notificationCtorMock).not.toHaveBeenCalled()
+    })
+
+    it('delivers normally when the mic is inactive even with the toggle on', async () => {
+      readMicActiveStatusMock.mockResolvedValue(false)
+      registerNotificationHandlers({
+        getSettings: () => ({
+          notifications: {
+            enabled: true,
+            agentTaskComplete: true,
+            terminalBell: true,
+            suppressWhenFocused: false,
+            suppressWhileMicActive: true
+          }
+        })
+      } as never)
+
+      const handler = getDispatchHandler()
+      expect(await handler({}, { source: 'agent-task-complete' })).toEqual({ delivered: true })
+    })
+
+    it('does not suppress on an unreadable mic status (helper missing/unsupported)', async () => {
+      readMicActiveStatusMock.mockResolvedValue(null)
+      registerNotificationHandlers({
+        getSettings: () => ({
+          notifications: {
+            enabled: true,
+            agentTaskComplete: true,
+            terminalBell: true,
+            suppressWhenFocused: false,
+            suppressWhileMicActive: true
+          }
+        })
+      } as never)
+
+      const handler = getDispatchHandler()
+      expect(await handler({}, { source: 'agent-task-complete' })).toEqual({ delivered: true })
+    })
+
+    it('does not check mic status when the toggle is off', async () => {
+      registerNotificationHandlers({
+        getSettings: () => ({
+          notifications: {
+            enabled: true,
+            agentTaskComplete: true,
+            terminalBell: true,
+            suppressWhenFocused: false,
+            suppressWhileMicActive: false
+          }
+        })
+      } as never)
+
+      const handler = getDispatchHandler()
+      expect(await handler({}, { source: 'agent-task-complete' })).toEqual({ delivered: true })
+      expect(readMicActiveStatusMock).not.toHaveBeenCalled()
+    })
+
+    it('does not check mic status on non-macOS even when the toggle is on', async () => {
+      Object.defineProperty(process, 'platform', { value: 'win32', configurable: true })
+      registerNotificationHandlers({
+        getSettings: () => ({
+          notifications: {
+            enabled: true,
+            agentTaskComplete: true,
+            terminalBell: true,
+            suppressWhenFocused: false,
+            suppressWhileMicActive: true
+          }
+        })
+      } as never)
+
+      const handler = getDispatchHandler()
+      expect(await handler({}, { source: 'agent-task-complete' })).toEqual({ delivered: true })
+      expect(readMicActiveStatusMock).not.toHaveBeenCalled()
+    })
   })
 
   describe('minimized tray attention dot', () => {

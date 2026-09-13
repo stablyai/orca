@@ -7748,7 +7748,10 @@
           "98d70fb261": "Custom notification sound could not be played",
           "c83b05a055": "Notifications are not supported on this system",
           "6e6df3a09a": "Choose Custom File",
-          "76e02467b8": "Change Custom File"
+          "76e02467b8": "Change Custom File",
+          "6c0728f5e2": "Suppress While Mic Active",
+          "c8617b37ac": "Skip the notification sound while your mic is in use (e.g. on a call). macOS only.",
+          "568f113223": "Skip the notification sound while your mic is in use (e.g. on a call)."
         },
         "OpenAiTranscriptionKeyDialog": {
           "fa83512e48": "Save Key",
@@ -10039,7 +10042,13 @@
             "host": "host",
             "remote": "remote",
             "ssh": "ssh",
-            "mute": "mute"
+            "mute": "mute",
+            "c3adf3b941": "Suppress While Mic Active",
+            "8b553db79c": "Avoid playing the notification sound while the microphone is actively in use.",
+            "e03a2b355b": "mic",
+            "a98affbb35": "microphone",
+            "ad5f205b24": "call",
+            "0495f1fc54": "zoom"
           }
         },
         "orchestration": {
