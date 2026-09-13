@@ -1,4 +1,5 @@
 import type { AppState } from '@/store/types'
+import { getAllWorktreesFromState } from '@/store/selectors'
 import { isEditableTarget } from '@/lib/editable-target'
 import {
   getExecutionHostIdFromWorktreeHostIdentity,
@@ -21,6 +22,7 @@ export type WorkspacePinShortcutState = Pick<
   | 'activeWorktreeId'
   | 'getKnownWorktreeById'
   | 'setWorktreesPinnedAndReveal'
+  | 'worktreesByRepo'
 >
 
 /** Hovered sidebar row wins, so the chord pins what the pointer points at; otherwise the focused workspace. */
@@ -57,11 +59,26 @@ export function resolveFocusedWorkspacePinTarget(
   if (!activeWorkspaceId) {
     return null
   }
-  return (
-    (state.activeWorkspaceExecutionHostId
-      ? state.getKnownWorktreeById(activeWorkspaceId, state.activeWorkspaceExecutionHostId)
-      : state.getKnownWorktreeById(activeWorkspaceId)) ?? null
-  )
+  if (state.activeWorkspaceExecutionHostId) {
+    return (
+      state.getKnownWorktreeById(activeWorkspaceId, state.activeWorkspaceExecutionHostId) ?? null
+    )
+  }
+  // The active workspace names no host, so an id-only lookup is only safe while the id is unique;
+  // with a twin on another host it would resolve to whichever repo happens to be scanned first.
+  return hasWorkspaceHostTwin(state, activeWorkspaceId)
+    ? null
+    : (state.getKnownWorktreeById(activeWorkspaceId) ?? null)
+}
+
+function hasWorkspaceHostTwin(state: WorkspacePinShortcutState, worktreeId: string): boolean {
+  let seen = 0
+  for (const worktree of getAllWorktreesFromState(state)) {
+    if (worktree.id === worktreeId && ++seen > 1) {
+      return true
+    }
+  }
+  return false
 }
 
 export function applyWorkspacePinIntent(
