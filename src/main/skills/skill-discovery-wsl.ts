@@ -1,22 +1,14 @@
+import {
+  readWslSkillDiscoveryObservation,
+  projectWslSkillDiscovery,
+  type WslSkillDiscoveryObservation
+} from './skill-discovery-wsl-observation'
+export { parseWslSkillDiscoveryOutput } from './skill-discovery-wsl-observation'
 import { posix as pathPosix } from 'node:path'
-import { summarizeSkillMarkdown } from '../../shared/skill-metadata'
-import type {
-  DiscoveredSkill,
-  SkillDiscoveryResult,
-  SkillDiscoverySource,
-  SkillSourceKind
-} from '../../shared/skills'
+import type { SkillDiscoveryResult, SkillSourceKind } from '../../shared/skills'
 import { quoteBashString } from '../wsl-bash-command'
 import { runWslProcess } from '../wsl/wsl-runner'
-import {
-  buildSkillDiscoverySources,
-  sortDiscoveredSkills,
-  sortSkillDiscoverySources,
-  sourceKindForSkill,
-  sourceLabelForSkill,
-  stablePathId,
-  type SkillScanRoot
-} from './skill-discovery-sources'
+import { buildSkillDiscoverySources, type SkillScanRoot } from './skill-discovery-sources'
 import { rootMayContainSourceKind } from './skill-discovery-source-filter'
 import { discoverClaudePluginSkillSourcesInWsl } from './claude-plugin-skill-sources-wsl'
 import type { SkillProviderRootOverrides } from './skill-provider-destinations'
@@ -24,7 +16,7 @@ import { SKILL_STAGING_GLOB } from './skill-delete/staging-names'
 import { skillFileMaxDepth } from '../../shared/skill-discovery-depth'
 
 const MAX_MARKDOWN_BYTES = 256 * 1024
-const WSL_SCAN_TIMEOUT_MS = 30_000
+const WSL_SCAN_TIMEOUT_MS = 10_000
 const WSL_SCAN_MAX_OUTPUT_BYTES = 128 * 1024 * 1024
 
 export function buildWslSkillDiscoveryCommand(
@@ -166,121 +158,28 @@ async function executeWslSkillDiscovery(distro: string, script: string): Promise
   return result.stdout
 }
 
-function readProtocolField(fields: string[], index: number): string {
-  const value = fields[index]
-  if (value === undefined) {
-    throw new Error('WSL skill discovery returned an incomplete response.')
-  }
-  return value
-}
-
-export function parseWslSkillDiscoveryOutput(
-  output: string,
-  roots: readonly SkillScanRoot[],
-  scannedAt = Date.now(),
-  sourceKinds?: readonly SkillSourceKind[],
-  names?: readonly string[]
-): SkillDiscoveryResult {
-  const fields = output.split('\0')
-  const rootExists = new Map<number, boolean>()
-  const skillsByCanonicalPath = new Map<string, DiscoveredSkill>()
-  const normalizedNames = names?.map((name) => name.trim().toLowerCase()).filter(Boolean)
-  const expectedNames = normalizedNames?.length ? new Set(normalizedNames) : undefined
-  let index = 0
-  while (index < fields.length && fields[index]) {
-    const recordKind = fields[index++]
-    const rootIndex = Number.parseInt(readProtocolField(fields, index++), 10)
-    const root = roots[rootIndex]
-    if (!root) {
-      throw new Error('WSL skill discovery returned an unknown source.')
-    }
-    if (recordKind === 'R') {
-      rootExists.set(rootIndex, readProtocolField(fields, index++) === '1')
-      continue
-    }
-    if (recordKind !== 'S') {
-      throw new Error('WSL skill discovery returned an invalid response.')
-    }
-
-    const skillFilePath = readProtocolField(fields, index++)
-    const canonicalSkillFilePath = readProtocolField(fields, index++)
-    const updatedAtSeconds = Number.parseInt(readProtocolField(fields, index++), 10)
-    const markdown = Buffer.from(readProtocolField(fields, index++), 'base64').toString('utf8')
-    const existing = skillsByCanonicalPath.get(canonicalSkillFilePath)
-    if (existing) {
-      // Why: dedup keeps one row, but every contributing root must survive so
-      // per-agent visibility does not depend on root scan order. providers is
-      // per-agent visibility too, so union it rather than keeping only the first.
-      if (existing.rootPaths && !existing.rootPaths.includes(root.path)) {
-        existing.rootPaths.push(root.path)
-      }
-      // Reassign a fresh array — `providers` aliases the scan root's array, so
-      // pushing in place would mutate the root and sibling skills/sources.
-      const mergedProviders = [...existing.providers]
-      for (const provider of root.providers) {
-        if (!mergedProviders.includes(provider)) {
-          mergedProviders.push(provider)
-        }
-      }
-      existing.providers = mergedProviders
-      continue
-    }
-    const directoryPath = pathPosix.dirname(skillFilePath)
-    const summary = summarizeSkillMarkdown(markdown)
-    const sourceKind = sourceKindForSkill(root, skillFilePath, pathPosix)
-    if (sourceKinds?.length && !sourceKinds.includes(sourceKind)) {
-      continue
-    }
-    const directoryName = pathPosix.basename(directoryPath)
-    if (
-      expectedNames &&
-      !expectedNames.has((summary.name ?? '').trim().toLowerCase()) &&
-      !expectedNames.has(directoryName.trim().toLowerCase())
-    ) {
-      continue
-    }
-    skillsByCanonicalPath.set(canonicalSkillFilePath, {
-      id: stablePathId(canonicalSkillFilePath),
-      name: summary.name ?? directoryName,
-      description: summary.description,
-      // Copy: `root.providers` is shared across every skill/source from this
-      // root, so a later in-place merge must not mutate the aliased array.
-      providers: [...root.providers],
-      sourceKind,
-      sourceLabel: sourceLabelForSkill(root, sourceKind),
-      rootPath: root.path,
-      rootPaths: [root.path],
-      directoryPath,
-      skillFilePath,
-      installed: true,
-      updatedAt: Number.isFinite(updatedAtSeconds) ? updatedAtSeconds * 1000 : null
-    })
-  }
-
-  const sources: SkillDiscoverySource[] = roots.map((root, rootIndex) => {
-    const exists = rootExists.get(rootIndex) ?? false
-    return {
-      ...root,
-      providers: [...root.providers],
-      exists,
-      skippedReason: exists ? undefined : 'missing'
-    }
-  })
-  return {
-    skills: sortDiscoveredSkills([...skillsByCanonicalPath.values()]),
-    sources: sortSkillDiscoverySources(sources),
-    scannedAt
-  }
-}
-
-export async function discoverSkillsInWsl(args: {
+type WslSkillDiscoveryArgs = {
   distro: string
   homeDir: string
   cwd?: string
   names?: string[]
   sourceKinds?: SkillSourceKind[]
   providerRootOverrides?: SkillProviderRootOverrides
-}): Promise<SkillDiscoveryResult> {
+}
+
+export async function discoverSkillsInWsl(
+  args: WslSkillDiscoveryArgs
+): Promise<SkillDiscoveryResult> {
+  return projectWslSkillDiscovery(
+    await discoverSkillObservationInWsl(args),
+    args.sourceKinds,
+    args.names
+  )
+}
+
+export async function discoverSkillObservationInWsl(
+  args: WslSkillDiscoveryArgs
+): Promise<WslSkillDiscoveryObservation> {
   // Plugin roots are resolved (in JS) from metadata this first wsl.exe call
   // reads, then fed to the scan's own wsl.exe call below — two sequential
   // process boots. That is a deliberate one-time-per-pane cost (the renderer
@@ -316,5 +215,5 @@ export async function discoverSkillsInWsl(args: {
     args.distro,
     buildWslSkillDiscoveryCommand(roots, args.names)
   )
-  return parseWslSkillDiscoveryOutput(output, roots, Date.now(), args.sourceKinds, args.names)
+  return readWslSkillDiscoveryObservation(output, roots)
 }

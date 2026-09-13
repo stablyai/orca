@@ -18,9 +18,9 @@ vi.mock('./discovery', () => ({
 }))
 
 vi.mock('./skill-discovery-wsl', () => ({
-  discoverSkillsInWsl: vi.fn(async (args: unknown) => {
+  discoverSkillObservationInWsl: vi.fn(async (args: unknown) => {
     wslScans.push(args)
-    return emptyResult()
+    return { rows: [], sources: [], scannedAt: 1 }
   })
 }))
 
