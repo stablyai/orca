@@ -62,6 +62,17 @@ describe('language-server-registry', () => {
     })
   })
 
+  it('discovers the Kotlin CLI in stdio mode and rejects a broken launcher', async () => {
+    const commandPath = createFakeCommand(dir, 'kotlin-lsp')
+    await expect(resolveLanguageServerCommand('kotlin')).resolves.toEqual({
+      ok: true,
+      command: { command: commandPath, args: ['--stdio'] }
+    })
+    resetLanguageServerDiscoveryCache()
+    createFakeCommand(dir, 'kotlin-lsp', 1)
+    await expect(resolveLanguageServerCommand('kotlin')).resolves.toMatchObject({ ok: false })
+  })
+
   it('dedupes concurrent discovery probes for the same language', async () => {
     const counterPath = join(dir, 'probe-count.txt')
     const commandPath = createFakeCommand(dir, 'rust-analyzer', 0, { counterPath })

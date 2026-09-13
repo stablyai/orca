@@ -165,6 +165,7 @@ import type {
   LspDocumentIdentity,
   LspHover,
   LspLocation,
+  LspReferenceRequestContext,
   LspRequestContext,
   LspServerStatus
 } from '../shared/lsp-types'
@@ -2052,6 +2053,8 @@ const api = {
       ipcRenderer.invoke('lsp:hover', args),
     definition: (args: LspRequestContext): Promise<LspLocation[]> =>
       ipcRenderer.invoke('lsp:definition', args),
+    references: (args: LspReferenceRequestContext): Promise<LspLocation[]> =>
+      ipcRenderer.invoke('lsp:references', args),
     getStats: (): Promise<{ activeSessions: number; sessions: Record<string, unknown>[] }> =>
       ipcRenderer.invoke('lsp:getStats'),
     onDiagnostics: (callback: (event: LspDiagnosticsEvent) => void): (() => void) => {

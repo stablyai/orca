@@ -24,6 +24,7 @@ const mocks = vi.hoisted(() => {
     readonly dispose = vi.fn(async () => undefined)
     readonly completion = vi.fn(async () => null)
     readonly hover = vi.fn(async () => null)
+    readonly references = vi.fn(async () => [])
     readonly definition = vi.fn(async () => [])
     readonly getOpenDocumentCount = vi.fn(() => this.documents.size)
     readonly getStats = vi.fn(() => ({
@@ -148,6 +149,43 @@ describe('LspService', () => {
 
   afterEach(() => {
     vi.useRealTimers()
+  })
+
+  it('routes references to the owning SSH host and never falls back locally', async () => {
+    const service = new LspService()
+    const mux = createMuxMock()
+    vi.mocked(getActiveMultiplexer).mockReturnValue(mux as never)
+    const args = {
+      ...requestArgs({ connectionId: 'ssh-1', languageId: 'kotlin' }),
+      includeDeclaration: false
+    }
+    await service.references(args)
+    expect(mux.request).toHaveBeenCalledWith('lsp.references', args)
+    expect(mocks.instances).toHaveLength(0)
+    vi.mocked(getActiveMultiplexer).mockReturnValue(null as never)
+    await expect(service.references(args)).rejects.toThrow('No active SSH connection')
+    expect(mocks.instances).toHaveLength(0)
+    await service.disposeAll()
+  })
+
+  it('replays tracked Kotlin text before retrying references after a server failure', async () => {
+    const service = new LspService()
+    await service.openDocument(documentArgs({ languageId: 'kotlin', content: 'fun expire() {}' }))
+    mocks.instances[0].references.mockRejectedValueOnce(new Error('server exited'))
+    const args = { ...requestArgs({ languageId: 'kotlin' }), includeDeclaration: true }
+    await expect(service.references(args)).resolves.toEqual([])
+    expect(mocks.instances[1].openDocument).toHaveBeenCalledWith(
+      '/repo/main.c',
+      'kotlin',
+      'fun expire() {}'
+    )
+    expect(mocks.instances[1].references).toHaveBeenCalledWith(
+      '/repo/main.c',
+      args.position,
+      true,
+      undefined
+    )
+    await service.disposeAll()
   })
 
   it('does not start a language-server process when only checking status', async () => {

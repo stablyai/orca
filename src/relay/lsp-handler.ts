@@ -7,6 +7,7 @@ import type {
   LspDocumentContext,
   LspHover,
   LspLocation,
+  LspReferenceRequestContext,
   LspRequestContext,
   LspServerStatus
 } from '../shared/lsp-types'
@@ -73,6 +74,9 @@ export class LspHandler {
     )
     dispatcher.onRequest('lsp.definition', (params) =>
       this.definition(params as unknown as LspRequestContext)
+    )
+    dispatcher.onRequest('lsp.references', (params) =>
+      this.references(params as unknown as LspReferenceRequestContext)
     )
     dispatcher.onRequest('lsp.getStats', async () => this.getStats())
   }
@@ -200,6 +204,29 @@ export class LspHandler {
       await this.disposeBrokenSession(entry)
       return await this.retryRequest(args, (retried) =>
         retried.session.definition(args.filePath, args.position, args.content)
+      )
+    }
+  }
+
+  async references(args: LspReferenceRequestContext): Promise<LspLocation[]> {
+    assertRuntimeSupported(args)
+    const entry = await this.getOrCreateSession({ ...args, content: args.content ?? '' })
+    try {
+      return await entry.session.references(
+        args.filePath,
+        args.position,
+        args.includeDeclaration,
+        args.content
+      )
+    } catch {
+      await this.disposeBrokenSession(entry)
+      return await this.retryRequest(args, (retried) =>
+        retried.session.references(
+          args.filePath,
+          args.position,
+          args.includeDeclaration,
+          args.content
+        )
       )
     }
   }

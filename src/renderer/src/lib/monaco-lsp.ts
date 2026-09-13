@@ -8,11 +8,17 @@ import type {
   LspDiagnosticsEvent,
   LspDocumentContext,
   LspHover,
-  LspLocation,
   LspPosition,
   LspRange,
   LspServerStatus
 } from '../../../shared/lsp-types'
+
+import { registerLspEditorOpener } from './monaco-lsp-navigation'
+import {
+  clearLspNavigationModels,
+  getLspNavigationModelContext,
+  prepareLspNavigationModels
+} from './monaco-lsp-navigation-models'
 
 type Monaco = typeof monacoTypes
 
@@ -38,7 +44,7 @@ const CHANGE_DEBOUNCE_MS = 250
 const OPEN_RETRY_DELAY_MS = 2_000
 // Why: Monaco already wires its TypeScript worker for JS/TS. Registering a
 // second external provider there duplicates completions and definitions.
-const SUPPORTED_LSP_LANGUAGES = ['rust', 'c', 'cpp', 'go', 'python']
+const SUPPORTED_LSP_LANGUAGES = ['rust', 'c', 'cpp', 'go', 'python', 'kotlin']
 
 const entriesByModelUri = new Map<string, LspModelEntry>()
 let providersRegistered = false
@@ -181,6 +187,24 @@ function completionItems(result: LspCompletionResult | null): LspCompletionItem[
 
 function findContext(model: monacoTypes.editor.ITextModel): LspModelContext | undefined {
   return entriesByModelUri.get(model.uri.toString())?.context
+}
+
+function openNavigationModel(
+  monaco: Monaco,
+  context: LspModelContext,
+  filePath: string
+): monacoTypes.editor.ITextModel | undefined {
+  for (const entry of entriesByModelUri.values()) {
+    if (
+      entry.context.filePath === filePath &&
+      entry.context.worktreeId === context.worktreeId &&
+      entry.context.connectionId === context.connectionId &&
+      entry.context.runtimeEnvironmentId === context.runtimeEnvironmentId
+    ) {
+      return monaco.editor.getModel(monaco.Uri.parse(entry.context.modelUri)) ?? undefined
+    }
+  }
+  return undefined
 }
 
 function contexts(): Iterable<LspModelContext> {
@@ -379,13 +403,6 @@ function additionalTextEdits(
   }))
 }
 
-function monacoLocation(monaco: Monaco, location: LspLocation): monacoTypes.languages.Location {
-  return {
-    uri: monaco.Uri.parse(location.uri),
-    range: monacoRange(monaco, location.range)
-  }
-}
-
 function queueDocumentChange(context: LspModelContext, content: string): Promise<void> {
   const previous = context.changePromise?.catch(() => undefined) ?? Promise.resolve()
   const run = previous.then(async () => {
@@ -425,6 +442,7 @@ function releaseEntry(monaco: Monaco, modelUri: string, entry: LspModelEntry): v
   const isCurrentEntry = entriesByModelUri.get(modelUri) === entry
   if (isCurrentEntry) {
     entriesByModelUri.delete(modelUri)
+    clearLspNavigationModels(modelUri)
   }
   if (entry.context.changeTimer) {
     clearTimeout(entry.context.changeTimer)
@@ -457,6 +475,10 @@ export function ensureMonacoLspProviders(monaco: Monaco): void {
     return
   }
   providersRegistered = true
+  registerLspEditorOpener(
+    monaco,
+    (model) => findContext(model) ?? getLspNavigationModelContext(model)
+  )
 
   for (const language of SUPPORTED_LSP_LANGUAGES) {
     monaco.languages.registerCompletionItemProvider(language, {
@@ -531,6 +553,29 @@ export function ensureMonacoLspProviders(monaco: Monaco): void {
       }
     })
 
+    monaco.languages.registerReferenceProvider(language, {
+      provideReferences: async (model, position, referenceContext, token) => {
+        const context = findContext(model)
+        if (!context || token.isCancellationRequested || !(await ensureLatestContent(context))) {
+          return []
+        }
+        const locations = await window.api.lsp.references({
+          ...documentIdentityPayload(context),
+          position: lspPosition(position),
+          includeDeclaration: referenceContext.includeDeclaration
+        })
+        return token.isCancellationRequested
+          ? []
+          : prepareLspNavigationModels(
+              monaco,
+              context,
+              locations,
+              () => !token.isCancellationRequested && findContext(model) === context,
+              (filePath) => openNavigationModel(monaco, context, filePath)
+            )
+      }
+    })
+
     monaco.languages.registerDefinitionProvider(language, {
       provideDefinition: async (model, position) => {
         const context = findContext(model)
@@ -542,7 +587,13 @@ export function ensureMonacoLspProviders(monaco: Monaco): void {
             ...documentIdentityPayload(context),
             position: lspPosition(position)
           })
-          return definitions.map((location) => monacoLocation(monaco, location))
+          return await prepareLspNavigationModels(
+            monaco,
+            context,
+            definitions,
+            () => findContext(model) === context,
+            (filePath) => openNavigationModel(monaco, context, filePath)
+          )
         } catch {
           if (context) {
             markContextUnavailable(context)

@@ -93,6 +93,16 @@ function handle(message) {
     })
     return
   }
+  if (message.method === 'textDocument/references') {
+    const { textDocument, position, context } = message.params
+    const locations = [{ uri: textDocument.uri,
+      range: { start: position, end: { line: position.line, character: position.character + 6 } } }]
+    if (context.includeDeclaration) locations.push({ uri: textDocument.uri,
+      range: { start: { line: 0, character: 4 }, end: { line: 0, character: 10 } } })
+    send({ jsonrpc: '2.0', id: message.id,
+      result: documents.get(textDocument.uri)?.includes('expire') ? locations : null })
+    return
+  }
   if (message.method === 'textDocument/definition') {
     const uri = message.params.textDocument.uri
     send({
@@ -437,6 +447,25 @@ describe('LspProcessSession', () => {
 
     await session.closeDocument(filePath)
     expect(session.getOpenDocumentCount()).toBe(0)
+  })
+
+  it('finds Kotlin references with UTF-16 positions and the requested declaration policy', async () => {
+    const serverPath = join(dir, 'references.cjs')
+    const filePath = join(dir, 'Seat.kt')
+    writeFileSync(serverPath, FAKE_LSP_SERVER)
+    session = new LspProcessSession({
+      rootPath: dir,
+      languageId: 'kotlin',
+      server: { command: process.execPath, args: [serverPath] },
+      onDiagnostics: () => {}
+    })
+    await session.openDocument(filePath, 'kotlin', 'fun expire() {}')
+    const position = { line: 2, character: 7 }
+    const usages = await session.references(filePath, position, false)
+    expect(usages).toHaveLength(1)
+    expect(usages[0].range.start).toEqual(position)
+    expect(await session.references(filePath, position, true)).toHaveLength(2)
+    expect(await session.references(filePath, position, false, 'fun renamed() {}')).toEqual([])
   })
 
   it('rejects later requests without writing to a crashed server pipe', async () => {

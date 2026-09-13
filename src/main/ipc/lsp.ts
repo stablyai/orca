@@ -6,6 +6,7 @@ import type {
   LspDocumentIdentity,
   LspHover,
   LspLocation,
+  LspReferenceRequestContext,
   LspRequestContext,
   LspServerStatus
 } from '../../shared/lsp-types'
@@ -48,6 +49,13 @@ export function registerLspHandlers(): void {
   ipcMain.handle('lsp:definition', (_event, args: LspRequestContext): Promise<LspLocation[]> => {
     return lspService.definition(args)
   })
+
+  ipcMain.handle(
+    'lsp:references',
+    (_event, args: LspReferenceRequestContext): Promise<LspLocation[]> => {
+      return lspService.references(args)
+    }
+  )
 
   ipcMain.handle('lsp:getStats', (): LspServiceStats => {
     return lspService.getStats()

@@ -320,6 +320,7 @@ import type {
   LspDocumentIdentity,
   LspHover,
   LspLocation,
+  LspReferenceRequestContext,
   LspRequestContext,
   LspServerStatus
 } from '../shared/lsp-types'
@@ -1651,6 +1652,7 @@ export type PreloadApi = {
     completion: (args: LspRequestContext) => Promise<LspCompletionResult | null>
     hover: (args: LspRequestContext) => Promise<LspHover | null>
     definition: (args: LspRequestContext) => Promise<LspLocation[]>
+    references: (args: LspReferenceRequestContext) => Promise<LspLocation[]>
     getStats: () => Promise<{
       activeSessions: number
       sessions: Record<string, unknown>[]

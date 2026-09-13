@@ -9,6 +9,7 @@ import type {
   LspDocumentContext,
   LspHover,
   LspLocation,
+  LspReferenceRequestContext,
   LspRequestContext,
   LspServerStatus
 } from '../../shared/lsp-types'
@@ -301,6 +302,37 @@ export class LspService {
       await this.disposeBrokenSession(session)
       return await this.retryLocalRequest(args, (entry) =>
         entry.session.definition(args.filePath, args.position, args.content)
+      )
+    }
+  }
+
+  async references(args: LspReferenceRequestContext): Promise<LspLocation[]> {
+    assertRuntimeSupported(args)
+    if (args.connectionId) {
+      await this.ensureRemoteDocumentsOpen(args)
+      return this.remoteRequest(args.connectionId, 'lsp.references', args)
+    }
+    const session = await this.getOrCreateLocalSession({
+      ...args,
+      worktreeId: args.worktreeId,
+      content: args.content ?? ''
+    })
+    try {
+      return await session.session.references(
+        args.filePath,
+        args.position,
+        args.includeDeclaration,
+        args.content
+      )
+    } catch {
+      await this.disposeBrokenSession(session)
+      return await this.retryLocalRequest(args, (entry) =>
+        entry.session.references(
+          args.filePath,
+          args.position,
+          args.includeDeclaration,
+          args.content
+        )
       )
     }
   }
