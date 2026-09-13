@@ -56,4 +56,12 @@ describe('non-secure context (plain HTTP LAN web client)', () => {
       /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[0-9a-f]{4}-[0-9a-f]{12}$/
     )
   })
+
+  it('createAgentStatusAuthorityId does not throw when randomUUID is missing', async () => {
+    const { createAgentStatusAuthorityId } =
+      await import('../../../shared/agent-status-observation')
+    expect(createAgentStatusAuthorityId('renderer')).toMatch(
+      /^renderer:[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[0-9a-f]{4}-[0-9a-f]{12}$/
+    )
+  })
 })

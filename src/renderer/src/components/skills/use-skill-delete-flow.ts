@@ -35,10 +35,11 @@ export type SkillDeleteFlow = {
   reprobe: () => void
   requestDelete: (skills: readonly DiscoveredSkill[]) => Promise<boolean>
 }
+import { createBrowserUuid } from '@/lib/browser-uuid'
 
 function toRequest(skills: readonly DiscoveredSkill[]): SkillDeleteRequest {
   return {
-    operationId: crypto.randomUUID(),
+    operationId: createBrowserUuid(),
     skills: skills.map((skill) => ({
       id: skill.id,
       directoryPath: skill.directoryPath,

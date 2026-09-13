@@ -14,6 +14,7 @@ export type WorkspaceCleanupGitEvidenceState = {
   checkedCount: number
   totalCount: number
 }
+import { createBrowserUuid } from '@/lib/browser-uuid'
 
 const EMPTY_EVIDENCE: WorkspaceCleanupGitEvidenceState = {
   evidenceByIdentity: new Map(),
@@ -79,7 +80,7 @@ export function useWorkspaceCleanupGitEvidence({
     // would silently drop the overflow ids while marking them attempted.
     const worktreeIds = queueRef.current.slice(0, WORKSPACE_CLEANUP_GIT_EVIDENCE_MAX_TARGETS)
     queueRef.current = queueRef.current.slice(worktreeIds.length)
-    const scanId = crypto.randomUUID()
+    const scanId = createBrowserUuid()
     activeScanIdRef.current = scanId
     for (const worktreeId of worktreeIds) {
       queuedRef.current.delete(worktreeId)

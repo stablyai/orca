@@ -28,6 +28,7 @@ import { retryableSkillIds } from './skill-bundle-retry-selection'
 type BundleVersion = SkillCloudVersion & {
   manifest: Extract<SkillCloudVersion['manifest'], { skills: unknown }>
 }
+import { createBrowserUuid } from '@/lib/browser-uuid'
 
 const CONFLICT_STATES = new Set(['modified', 'unowned', 'external-link', 'name-collision'])
 
@@ -169,7 +170,7 @@ export function SkillBundleInstallFlow(props: {
           return
         }
       }
-      const operationId = crypto.randomUUID()
+      const operationId = createBrowserUuid()
       installProgress.begin(operationId)
       const operation = await window.api.skills.installBundleShare({
         shareId: props.shareId,

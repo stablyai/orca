@@ -21,8 +21,9 @@ import { callStructuredAgentSession } from '@/runtime/structured-agent-session-c
 import { readOutbox, writeOutbox } from './structured-agent-session-outbox-storage'
 
 export function structuredSessionOperationId(): string {
-  return createStructuredAgentSessionOperationId(() => crypto.randomUUID())
+  return createStructuredAgentSessionOperationId(() => createBrowserUuid())
 }
+import { createBrowserUuid } from '@/lib/browser-uuid'
 
 const UNCONFIRMED_PROBE_BASE_DELAY_MS = 1_000
 /** No attempt ceiling: a transport outage outlives any fixed budget, and giving up

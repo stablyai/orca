@@ -1,4 +1,5 @@
 import type { AppState } from '../types'
+import { createBrowserUuid } from '@/lib/browser-uuid'
 import type {
   WorkspaceCleanupScanArgs,
   WorkspaceCleanupScanResult
@@ -54,7 +55,7 @@ export async function scanWorkspaceCleanup(
     ],
     // Broad scan identity belongs to this store request; caller-provided IDs
     // are reserved for focused scans and can collide across refresh variants.
-    scanId: crypto.randomUUID()
+    scanId: createBrowserUuid()
   }
   const scanKey = getWorkspaceCleanupScanKey(scanArgs)
 

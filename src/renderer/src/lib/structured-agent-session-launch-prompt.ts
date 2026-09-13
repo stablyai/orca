@@ -18,6 +18,7 @@ export type StructuredPromptDeliveryResult = {
   delivered: boolean
   failureNotified: boolean
 }
+import { createBrowserUuid } from '@/lib/browser-uuid'
 
 export type StructuredLaunchPromptOptions = {
   prompt?: string
@@ -58,7 +59,7 @@ async function dispatchStructuredLaunchPrompt(
     if (!result.ok) {
       mutateEntry(entry, (current) =>
         requeueStructuredAgentSessionSendRefusal(current, result.refusal.code, () =>
-          createStructuredAgentSessionOperationId(() => crypto.randomUUID())
+          createStructuredAgentSessionOperationId(() => createBrowserUuid())
         )
       )
       return false
