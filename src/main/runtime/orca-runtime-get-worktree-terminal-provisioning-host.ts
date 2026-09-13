@@ -48,16 +48,30 @@ export class OrcaRuntimeWithGetWorktreeTerminalProvisioningHost extends OrcaRunt
    * Waits for `agent`'s own composer-mount marker (the same PTY-output scanner that gates the
    * editable "start workspace from issue" draft paste) instead of the generic tui-idle signal,
    * which fires on OSC-title idle and can resolve while the TUI is still on its splash screen.
-   * Resolves `false` on the agent's own hard timeout — callers should treat that as "proceed
-   * anyway" (best effort), the same way the draft-paste path does, not as a hard failure.
+   * `timeoutMs`, when given, caps the agent's own hard timeout (never extends it) so a caller
+   * with a short overall budget isn't blocked past it by this wait alone.
+   *
+   * Always resolves — including on a `getWorktreeStartupReadinessHost` failure (e.g. the PTY
+   * tore down between placement and this call) — the same "proceed anyway" contract
+   * `pasteWorktreeStartupDraftWhenReady` already relies on `.catch` for. Resolves `false` on
+   * any of those non-ready outcomes; callers should treat that as best effort, not a failure.
    */
-  async waitForAgentComposerReady(handle: string, agent: TuiAgent): Promise<boolean> {
-    const ptyId = await waitForWorktreeStartupDraft(
-      this.getWorktreeStartupReadinessHost(),
-      handle,
-      agent
-    )
-    return ptyId !== null
+  async waitForAgentComposerReady(
+    handle: string,
+    agent: TuiAgent,
+    timeoutMs?: number
+  ): Promise<boolean> {
+    try {
+      const ptyId = await waitForWorktreeStartupDraft(
+        this.getWorktreeStartupReadinessHost(),
+        handle,
+        agent,
+        timeoutMs
+      )
+      return ptyId !== null
+    } catch {
+      return false
+    }
   }
 
   async prefetchManagedWorktreeCreateBase(args: {

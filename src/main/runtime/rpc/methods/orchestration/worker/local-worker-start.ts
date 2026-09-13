@@ -1,6 +1,7 @@
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { describeTerminalWaitBlockedReason } from '../../../../../../shared/terminal-wait-blocked-reason-legacy-alias'
 import { TUI_AGENT_CONFIG } from '../../../../../../shared/tui-agent-config'
+import { resolveDraftPasteReadyTimeoutMs } from '../../../../../../shared/draft-paste-ready-timeout'
 import type { OrchestrationDb } from '../../../../orchestration/db'
 import type { RunRow, TaskRow } from '../../../../orchestration/types'
 import { resolveDispatchCreator } from '../runs/dispatch-creator'
@@ -206,7 +207,15 @@ export async function startLocalWorker(args: {
       agent &&
       TUI_AGENT_CONFIG[agent].draftPasteReadySignal === 'render-cursor-after-bracketed-paste'
     ) {
-      await runtime.waitForAgentComposerReady(terminalHandle, agent)
+      // Cap by (never extend past) the caller's own budget, so an explicit short
+      // --timeout-ms still bounds total dispatch latency the way it does for every other
+      // wait above. waitForAgentComposerReady never throws — a failure here is "proceed
+      // anyway", the same best-effort contract the pre-existing draft-paste caller relies on.
+      await runtime.waitForAgentComposerReady(
+        terminalHandle,
+        agent,
+        Math.min(params.timeoutMs ?? 60_000, resolveDraftPasteReadyTimeoutMs(agent))
+      )
     }
     const terminalAuthority = requireWorkerAuthority(runtime, terminalHandle)
     const capability = db.prepareStartingWorkerAuthority({

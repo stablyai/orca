@@ -1,5 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createOrchestrationWorkerReleaseHarness } from './worker-release.test-support'
+import { resolveDraftPasteReadyTimeoutMs } from '../../../../../../shared/draft-paste-ready-timeout'
+
+const OPENCODE_DEFAULT_COMPOSER_TIMEOUT_MS = resolveDraftPasteReadyTimeoutMs('opencode')
 
 // tui-idle fires on the generic OSC-title idle edge. opencode (and mimo-code, which shares its
 // config) enable bracketed paste before their composer actually mounts, so tui-idle can resolve
@@ -38,8 +41,31 @@ describe('worker-start composer readiness for opencode', () => {
     })) as { state: string }
 
     expect(result.state).toBe('ready')
-    expect(composerWait).toHaveBeenCalledWith('term_worker', 'opencode')
+    expect(composerWait).toHaveBeenCalledWith(
+      'term_worker',
+      'opencode',
+      OPENCODE_DEFAULT_COMPOSER_TIMEOUT_MS
+    )
     expect(sends).toEqual(['waitForAgentComposerReady', 'sendTerminalAgentPrompt'])
+  })
+
+  it('caps the composer wait at an explicit --timeout-ms shorter than the default', async () => {
+    const composerWait = vi
+      .spyOn(harness.runtime, 'waitForAgentComposerReady')
+      .mockResolvedValue(true)
+
+    const task = harness.db.createTask({
+      spec: 'opencode short timeout fixture',
+      runId: harness.activeRunId
+    })
+    await harness.call('orchestration.workerStart', {
+      task: task.id,
+      from: 'term_coord',
+      agent: 'opencode',
+      timeoutMs: 2_000
+    })
+
+    expect(composerWait).toHaveBeenCalledWith('term_worker', 'opencode', 2_000)
   })
 
   it('proceeds anyway when the opencode composer marker times out', async () => {
