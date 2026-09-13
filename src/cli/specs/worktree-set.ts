@@ -35,6 +35,7 @@ export const WORKTREE_SET_COMMAND_SPEC: CommandSpec = {
     'orca worktree set --worktree active --linear-issue STA-335 --json',
     'orca worktree set --worktree active --linear-issue null --json',
     'orca worktree set --worktree active --workspace-status in-review --unread --json',
-    'orca worktree set --worktree active --pin --json'
+    'orca worktree set --worktree active --pin --json',
+    'orca worktree set --worktree active --unpin --json'
   ]
 }
