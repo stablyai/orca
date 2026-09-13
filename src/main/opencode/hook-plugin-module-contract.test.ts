@@ -32,7 +32,7 @@ describe('OpenCode status plugin module contract', () => {
     default?: {
       id?: unknown
       server?: (ctx: unknown) => Promise<PluginHooks>
-      setup?: (ctx: unknown) => Promise<unknown>
+      setup?: (ctx: unknown) => Promise<(() => Promise<void> | void) | undefined>
     }
     OrcaOpenCodeStatusPlugin?: (ctx: unknown) => Promise<PluginHooks>
   }

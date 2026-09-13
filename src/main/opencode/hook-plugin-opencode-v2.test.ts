@@ -283,8 +283,7 @@ describe('OpenCode 2 plugin compatibility', () => {
                 key: 'extras',
                 type: 'multiselect',
                 title: 'Extras',
-                options: [{ value: 'logs', label: 'Logs' }],
-                custom: true
+                options: [{ value: 'logs', label: 'Logs' }]
               }
             ]
           }
@@ -311,8 +310,7 @@ describe('OpenCode 2 plugin compatibility', () => {
           question: 'Extras',
           header: 'Extras',
           options: [{ label: 'Logs', description: '' }],
-          multiple: true,
-          custom: true
+          multiSelect: true
         }
       ]
     })
@@ -342,6 +340,69 @@ describe('OpenCode 2 plugin compatibility', () => {
     // Why: child-session text must not replace the root pane preview; the V2
     // context's session.get has to answer the engine's lineage walk for that.
     expect(hookEventNames()).not.toContain('MessagePart')
+    await cleanup?.()
+  })
+
+  it('does not post SessionStart for a child session.created', async () => {
+    const module = await loadModule()
+    const { ctx, finished } = createContext(
+      [{ type: 'session.created', data: { sessionID: 'child', parentID: 'root' } }],
+      { root: { id: 'root' }, child: { id: 'child', parentID: 'root' } }
+    )
+
+    const cleanup = await module.default?.setup?.(ctx)
+    await finished
+
+    // Why: the V2 session.created payload carries parentID flat; a child session
+    // must not seed rootSessionById, or child suppression stops working.
+    expect(hookEventNames()).toEqual([])
+    await cleanup?.()
+  })
+
+  it('clears a pending question on form.replied', async () => {
+    const form = {
+      id: 'form_1',
+      sessionID: 'root',
+      title: 'Deploy',
+      fields: [{ key: 'target', type: 'string', title: 'Target' }]
+    }
+
+    const module = await loadModule()
+    const { ctx, finished } = createContext([
+      { type: 'form.created', data: { form } },
+      {
+        type: 'form.replied',
+        data: { id: 'form_1', sessionID: 'root', answer: { target: 'prod' } }
+      }
+    ])
+    const cleanup = await module.default?.setup?.(ctx)
+    await finished
+    await vi.waitFor(() => expect(hookEventNames()).toContain('SessionIdle'))
+
+    expect(hookEventNames()).toEqual(['AskUserQuestion', 'SessionIdle'])
+    await cleanup?.()
+  })
+
+  it('clears a pending question when the resolution id arrives as requestID', async () => {
+    const form = {
+      id: 'form_1',
+      sessionID: 'root',
+      title: 'Deploy',
+      fields: [{ key: 'target', type: 'string', title: 'Target' }]
+    }
+
+    const module = await loadModule()
+    const { ctx, finished } = createContext([
+      { type: 'form.created', data: { form } },
+      // Why: pins the hedge — a resolution whose id arrives as requestID must
+      // still retire the blocker instead of leaving the row waiting.
+      { type: 'form.cancelled', data: { requestID: 'form_1', sessionID: 'root' } }
+    ])
+    const cleanup = await module.default?.setup?.(ctx)
+    await finished
+    await vi.waitFor(() => expect(hookEventNames()).toContain('SessionIdle'))
+
+    expect(hookEventNames()).toEqual(['AskUserQuestion', 'SessionIdle'])
     await cleanup?.()
   })
 })
