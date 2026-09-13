@@ -8578,6 +8578,10 @@
         },
         "agents": {
           "search": {
+            "ssh": "ssh",
+            "passwordManager": "gestionnaire de mots de passe",
+            "screenLock": "verrouillage d’écran",
+            "onePassword": "1password",
             "2814401339": "installé",
             "719f53350c": "chemin",
             "839e82c81f": "détection",
@@ -10155,6 +10159,8 @@
           "6f7a8b9cad": "Utilisez un chemin relatif (ex. .orca/worktrees) pour un emplacement par projet, ou un chemin absolu pour un dossier partagé unique."
         },
         "agent-awake-copy": {
+          "keepDisplayAwakeTitle": "Garder l’écran actif",
+          "keepDisplayAwakeDescription": "Bloque aussi la veille de l’écran tant que l’ordinateur reste actif. Quand l’écran s’éteint, macOS et Windows verrouillent la session, ce qui verrouille 1Password et les agents SSH similaires : les git push des agents en cours échouent alors.",
           "e5995ce268": "Empêcher la mise en veille de l'ordinateur pendant que les agents travaillent",
           "95d3031db2": "Maintient cet ordinateur et cet écran éveillés pendant que les agents travaillent. Le comportement à la fermeture du capot suit les paramètres d'alimentation de cet appareil.",
           "a42f6fbdd8": "Maintient cet ordinateur et cet écran éveillés pendant que les agents travaillent. Orca demande également à cet appareil de rester éveillé lorsque le capot est fermé, sous réserve de sa politique d'alimentation.",

@@ -119,7 +119,7 @@ describe('AgentAwakeService', () => {
     service.setStatuses([workingStatus()])
 
     expect(blocker.start).toHaveBeenCalledTimes(1)
-    expect(blocker.start).toHaveBeenCalledWith('prevent-display-sleep')
+    expect(blocker.start).toHaveBeenCalledWith('prevent-app-suspension')
     expect(macosAssertion.start).toHaveBeenCalledTimes(1)
     expect(linuxAssertion.start).toHaveBeenCalledTimes(1)
   })
@@ -130,7 +130,7 @@ describe('AgentAwakeService', () => {
 
     service.setMode('on')
 
-    expect(blocker.start).toHaveBeenCalledWith('prevent-display-sleep')
+    expect(blocker.start).toHaveBeenCalledWith('prevent-app-suspension')
     expect(service.getStatus()).toEqual({ mode: 'on', active: true })
   })
 

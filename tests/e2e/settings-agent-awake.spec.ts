@@ -25,6 +25,13 @@ async function setKeepAwake(page: Page, enabled: boolean): Promise<void> {
   }, enabled)
 }
 
+async function setKeepDisplayAwake(page: Page, enabled: boolean): Promise<void> {
+  await page.evaluate(async (enabled) => {
+    const nextSettings = await window.api.settings.set({ keepDisplayAwake: enabled })
+    window.__store?.setState({ settings: nextSettings as GlobalSettings })
+  }, enabled)
+}
+
 async function openSettings(page: Page): Promise<void> {
   await page.evaluate(() => {
     window.__store!.getState().openSettingsPage()
@@ -105,10 +112,13 @@ async function readPowerSaveBlockerProbe(
   })
 }
 
-async function readMacosSleepAssertionPids(electronApp: ElectronApplication): Promise<number[]> {
+async function readMacosSleepAssertionPids(
+  electronApp: ElectronApplication,
+  args = '-i -s'
+): Promise<number[]> {
   const result = await runProcess({
     program: '/usr/bin/pgrep',
-    args: ['-P', String(electronApp.process().pid), '-f', '^/usr/bin/caffeinate -i -s$'],
+    args: ['-P', String(electronApp.process().pid), '-f', `^/usr/bin/caffeinate ${args}$`],
     maxOutputBytes: 4_096
   })
   if (result.code === 1) {
@@ -186,6 +196,91 @@ test.describe('Agent awake setting', () => {
       .toBe('off')
   })
 
+  test('can enable the display-awake toggle from Agents settings and it persists through IPC', async ({
+    orcaPage
+  }) => {
+    await openSettings(orcaPage)
+    await dismissTransientAnnouncement(orcaPage)
+    // Search 'display' also matches per-project panes; pin the pane explicitly.
+    await orcaPage.getByRole('button', { name: 'Agents', exact: true }).click()
+    await orcaPage.getByPlaceholder('Search settings').fill('display')
+
+    const displaySwitch = orcaPage.getByRole('switch', { name: 'Keep the display awake' })
+    await expect(displaySwitch.first()).toBeVisible()
+    // The toggle is inert while the whole keep-awake feature is off.
+    await expect(displaySwitch).toBeDisabled()
+
+    const agentMode = orcaPage
+      .getByRole('radiogroup', { name: 'Keep computer awake' })
+      .getByRole('radio', { name: 'Agent' })
+    await agentMode.click()
+    await expect(displaySwitch).toBeEnabled()
+
+    await displaySwitch.click()
+    await expect
+      .poll(async () => (await getSettings(orcaPage)).keepDisplayAwake, {
+        timeout: 5_000,
+        message: 'keepDisplayAwake did not persist after enabling the toggle'
+      })
+      .toBe(true)
+  })
+
+  test('blocks display sleep on the active platform assertion when the toggle is on', async ({
+    electronApp,
+    orcaPage
+  }) => {
+    if (process.platform !== 'darwin') {
+      await installPowerSaveBlockerProbe(electronApp)
+    }
+    await setKeepAwake(orcaPage, true)
+    await setKeepDisplayAwake(orcaPage, true)
+
+    const tabId = 'e2e-display-awake-tab'
+    const paneKey = `${tabId}:${randomUUID()}`
+    await postCodexHookEvent(electronApp, {
+      paneKey,
+      tabId,
+      eventName: 'UserPromptSubmit'
+    })
+
+    if (process.platform === 'darwin') {
+      await expect
+        .poll(() => readMacosSleepAssertionPids(electronApp, '-d -i -s'), { timeout: 5_000 })
+        .not.toEqual([])
+
+      // Flipping the preference mid-awake restarts the assertion without an app restart.
+      await setKeepDisplayAwake(orcaPage, false)
+      await expect
+        .poll(() => readMacosSleepAssertionPids(electronApp, '-d -i -s'), { timeout: 5_000 })
+        .toEqual([])
+      await expect
+        .poll(() => readMacosSleepAssertionPids(electronApp, '-i -s'), { timeout: 5_000 })
+        .not.toEqual([])
+      return
+    }
+
+    await expect
+      .poll(async () => await readPowerSaveBlockerProbe(electronApp), { timeout: 5_000 })
+      .toEqual(
+        expect.objectContaining({
+          starts: expect.arrayContaining([
+            expect.objectContaining({ type: 'prevent-display-sleep' })
+          ])
+        })
+      )
+
+    await setKeepDisplayAwake(orcaPage, false)
+    await expect
+      .poll(async () => await readPowerSaveBlockerProbe(electronApp), { timeout: 5_000 })
+      .toEqual(
+        expect.objectContaining({
+          starts: expect.arrayContaining([
+            expect.objectContaining({ type: 'prevent-app-suspension' })
+          ])
+        })
+      )
+  })
+
   test('keeps the OS awake only while a hook-reported agent is working', async ({
     electronApp,
     orcaPage
@@ -221,8 +316,9 @@ test.describe('Agent awake setting', () => {
         .toEqual(
           expect.objectContaining({
             activeIds: expect.arrayContaining([expect.any(Number)]),
+            // Display sleep is allowed by default: it locks screen-gated SSH agents.
             starts: expect.arrayContaining([
-              expect.objectContaining({ type: 'prevent-display-sleep' })
+              expect.objectContaining({ type: 'prevent-app-suspension' })
             ])
           })
         )

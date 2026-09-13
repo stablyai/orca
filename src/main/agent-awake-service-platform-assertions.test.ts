@@ -57,7 +57,8 @@ function createPlatformAssertion() {
   return {
     start: vi.fn(),
     stop: vi.fn(),
-    dispose: vi.fn()
+    dispose: vi.fn(),
+    setKeepDisplayAwake: vi.fn()
   }
 }
 
@@ -107,7 +108,7 @@ describe('AgentAwakeService platform assertions', () => {
     service.setStatuses([workingStatus()])
     service.setEnabled(false)
 
-    expect(blocker.start).toHaveBeenCalledWith('prevent-display-sleep')
+    expect(blocker.start).toHaveBeenCalledWith('prevent-app-suspension')
     expect(blocker.stop).toHaveBeenCalledWith(1)
     expect(macosAssertion.stop).toHaveBeenCalled()
     expect(linuxAssertion.start).toHaveBeenCalledTimes(1)
@@ -122,7 +123,7 @@ describe('AgentAwakeService platform assertions', () => {
 
     service.setEnabled(true)
     service.setStatuses([workingStatus()])
-    expect(blocker.start).toHaveBeenCalledWith('prevent-display-sleep')
+    expect(blocker.start).toHaveBeenCalledWith('prevent-app-suspension')
 
     service.setStatuses([{ ...workingStatus(), receivedAt: 1_001 }])
     expect(blocker.stop).toHaveBeenCalledWith(1)
@@ -141,11 +142,72 @@ describe('AgentAwakeService platform assertions', () => {
     service.setStatuses([workingStatus()])
     service.setEnabled(false)
 
-    expect(blocker.start).toHaveBeenCalledWith('prevent-display-sleep')
+    expect(blocker.start).toHaveBeenCalledWith('prevent-app-suspension')
     expect(blocker.stop).toHaveBeenCalledWith(1)
     expect(macosAssertion.start).toHaveBeenCalledTimes(1)
     expect(macosAssertion.stop).toHaveBeenCalled()
     expect(linuxAssertion.stop).toHaveBeenCalled()
+  })
+
+  it('blocks display sleep on every platform when keep-display-awake is enabled', () => {
+    const blocker = createBlocker()
+    const service = createService(blocker)
+
+    service.setKeepDisplayAwake(true)
+    service.setEnabled(true)
+    service.setStatuses([workingStatus()])
+
+    expect(blocker.start).toHaveBeenCalledWith('prevent-display-sleep')
+  })
+
+  it('restarts the active Electron blocker when the display preference flips', () => {
+    const blocker = createBlocker()
+    const service = createService(blocker)
+
+    service.setEnabled(true)
+    service.setStatuses([workingStatus()])
+    expect(blocker.start).toHaveBeenLastCalledWith('prevent-app-suspension')
+
+    service.setKeepDisplayAwake(true)
+    expect(blocker.stop).toHaveBeenCalledWith(1)
+    expect(blocker.start).toHaveBeenLastCalledWith('prevent-display-sleep')
+
+    service.setKeepDisplayAwake(false)
+    expect(blocker.stop).toHaveBeenCalledWith(2)
+    expect(blocker.start).toHaveBeenLastCalledWith('prevent-app-suspension')
+  })
+
+  it('restarts the live macOS caffeinate assertion and forwards the flag on toggle', () => {
+    const blocker = createBlocker()
+    const macosAssertion = createPlatformAssertion()
+    const service = createService(blocker, macosAssertion, createPlatformAssertion(), 'darwin')
+
+    service.setEnabled(true)
+    service.setStatuses([workingStatus()])
+    expect(macosAssertion.start).toHaveBeenCalledTimes(1)
+
+    service.setKeepDisplayAwake(true)
+
+    expect(macosAssertion.setKeepDisplayAwake).toHaveBeenCalledWith(true)
+    expect(macosAssertion.stop).toHaveBeenCalledWith('display-preference-change')
+    expect(macosAssertion.start).toHaveBeenCalledTimes(2)
+    expect(blocker.start).not.toHaveBeenCalled()
+  })
+
+  it('only stores the display preference while sleep prevention is inactive', () => {
+    const blocker = createBlocker()
+    const macosAssertion = createPlatformAssertion()
+    const service = createService(blocker, macosAssertion, createPlatformAssertion(), 'darwin')
+
+    service.setKeepDisplayAwake(true)
+
+    expect(macosAssertion.setKeepDisplayAwake).toHaveBeenCalledWith(true)
+    expect(macosAssertion.start).not.toHaveBeenCalled()
+    expect(macosAssertion.stop).not.toHaveBeenCalled()
+    expect(blocker.start).not.toHaveBeenCalled()
+
+    service.setKeepDisplayAwake(true)
+    expect(macosAssertion.setKeepDisplayAwake).toHaveBeenCalledTimes(1)
   })
 
   it('starts platform assertions when Electron blocker start fails', () => {

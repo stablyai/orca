@@ -4,10 +4,13 @@ import {
   getAgentAwakeDescription,
   getAgentAwakeModeLabel,
   getAgentAwakeSearchKeywords,
-  getAgentAwakeTitle
+  getAgentAwakeTitle,
+  getKeepDisplayAwakeDescription,
+  getKeepDisplayAwakeSearchKeywords,
+  getKeepDisplayAwakeTitle
 } from './agent-awake-copy'
 import { SearchableSetting } from './SearchableSetting'
-import { SettingsSegmentedControl } from './SettingsFormControls'
+import { SettingsSegmentedControl, SettingsSwitchRow } from './SettingsFormControls'
 import {
   computerAwakeSettingsForMode,
   normalizeComputerAwakeMode,
@@ -66,6 +69,21 @@ export function AgentAwakeSetting({
             ]}
           />
         </div>
+      </SearchableSetting>
+      <SearchableSetting
+        title={getKeepDisplayAwakeTitle()}
+        description={getKeepDisplayAwakeDescription()}
+        keywords={getKeepDisplayAwakeSearchKeywords()}
+      >
+        <SettingsSwitchRow
+          label={getKeepDisplayAwakeTitle()}
+          description={getKeepDisplayAwakeDescription()}
+          checked={settings.keepDisplayAwake === true}
+          disabled={mode === 'off'}
+          onChange={() =>
+            updateSettings({ keepDisplayAwake: !(settings.keepDisplayAwake === true) })
+          }
+        />
       </SearchableSetting>
     </section>
   )

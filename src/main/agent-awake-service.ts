@@ -23,6 +23,7 @@ type PlatformAwakeAssertion = {
   start: (reason: string) => boolean | void
   stop: (reason: string) => void
   dispose: () => void
+  setKeepDisplayAwake?: (keepDisplayAwake: boolean) => void
 }
 
 type PowerMonitorEventSource = {
@@ -34,6 +35,7 @@ type Logger = Pick<Console, 'debug' | 'warn'>
 
 type AgentAwakeServiceOptions = {
   blocker?: PowerSaveBlocker
+  keepDisplayAwake?: boolean
   linuxAssertion?: PlatformAwakeAssertion
   logger?: Logger
   macosAssertion?: PlatformAwakeAssertion
@@ -44,6 +46,7 @@ type AgentAwakeServiceOptions = {
 
 export class AgentAwakeService {
   private mode: ComputerAwakeMode = 'off'
+  private keepDisplayAwake: boolean
   private blockerId: number | null = null
   private readonly statusListeners = new Set<(status: ComputerAwakeStatus) => void>()
   private lastPublishedStatus: ComputerAwakeStatus | null = null
@@ -58,6 +61,7 @@ export class AgentAwakeService {
 
   constructor(options: AgentAwakeServiceOptions = {}) {
     this.blocker = options.blocker ?? powerSaveBlocker
+    this.keepDisplayAwake = options.keepDisplayAwake ?? false
     this.logger = options.logger ?? console
     this.now = options.now ?? Date.now
     this.statusLease = new AgentAwakeStatusLease(this.now, () => this.refresh('stale-expiry'))
@@ -73,6 +77,7 @@ export class AgentAwakeService {
     this.macosAssertion =
       options.macosAssertion ??
       new MacosSystemSleepAssertion({
+        keepDisplayAwake: this.keepDisplayAwake,
         logger: this.logger,
         now: this.now,
         onUnexpectedFailure: (reason) => this.refresh(reason)
@@ -99,6 +104,21 @@ export class AgentAwakeService {
     }
     this.mode = normalized
     this.refresh('settings-change')
+  }
+
+  setKeepDisplayAwake(keepDisplayAwake: boolean): void {
+    if (this.keepDisplayAwake === keepDisplayAwake) {
+      return
+    }
+    this.keepDisplayAwake = keepDisplayAwake
+    this.macosAssertion.setKeepDisplayAwake?.(keepDisplayAwake)
+    // Assertion argv and blocker type are fixed at start; restart so an active
+    // awake period picks up the display preference without an app restart.
+    if (this.getStatus().active) {
+      this.stopMacosAssertion('display-preference-change')
+      this.stopBlocker('display-preference-change')
+      this.refresh('display-preference-change')
+    }
   }
 
   setStatuses(statuses: AgentAwakeStatus[]): void {
@@ -190,7 +210,9 @@ export class AgentAwakeService {
       }
     }
     try {
-      const id = this.blocker.start('prevent-display-sleep')
+      const id = this.blocker.start(
+        this.keepDisplayAwake ? 'prevent-display-sleep' : 'prevent-app-suspension'
+      )
       this.blockerId = id
       this.reconcileBlocker('post-start')
     } catch (err) {

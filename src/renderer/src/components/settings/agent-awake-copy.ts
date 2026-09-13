@@ -7,6 +7,10 @@ const AGENT_AWAKE_DESCRIPTION_WINDOWS_KEY =
   'auto.components.settings.agent-awake-copy.modeDescriptionWindows'
 const AGENT_AWAKE_DESCRIPTION_DEFAULT_KEY =
   'auto.components.settings.agent-awake-copy.modeDescriptionDefault'
+const KEEP_DISPLAY_AWAKE_TITLE_KEY =
+  'auto.components.settings.agent-awake-copy.keepDisplayAwakeTitle'
+const KEEP_DISPLAY_AWAKE_DESCRIPTION_KEY =
+  'auto.components.settings.agent-awake-copy.keepDisplayAwakeDescription'
 
 export function getAgentAwakeTitle(): string {
   return translate(AGENT_AWAKE_TITLE_KEY, 'Keep computer awake')
@@ -36,6 +40,35 @@ export function getAgentAwakeDescription(
     AGENT_AWAKE_DESCRIPTION_DEFAULT_KEY,
     'Choose On, Agent, or Off. Agent mode stays awake while agents are working. Orca also asks this device to stay awake when the lid is closed, subject to its power policy.'
   )
+}
+
+export function getKeepDisplayAwakeTitle(): string {
+  return translate(KEEP_DISPLAY_AWAKE_TITLE_KEY, 'Keep the display awake')
+}
+
+export function getKeepDisplayAwakeDescription(): string {
+  return translate(
+    KEEP_DISPLAY_AWAKE_DESCRIPTION_KEY,
+    'Also blocks display sleep while keeping the computer awake. When the display turns off, macOS and Windows lock the screen, which locks 1Password and similar SSH agents — git pushes from running agents then fail.'
+  )
+}
+
+export function getKeepDisplayAwakeSearchKeywords(): string[] {
+  return searchKeywords([
+    { key: 'auto.components.settings.agents.search.ff8de8a2ad', fallback: 'display' },
+    { key: 'auto.components.settings.agents.search.dbc8aca6b0', fallback: 'sleep' },
+    { key: 'auto.components.settings.agents.search.ssh', fallback: 'ssh', englishOnly: true },
+    {
+      key: 'auto.components.settings.agents.search.passwordManager',
+      fallback: 'password manager'
+    },
+    { key: 'auto.components.settings.agents.search.screenLock', fallback: 'screen lock' },
+    {
+      key: 'auto.components.settings.agents.search.onePassword',
+      fallback: '1password',
+      englishOnly: true
+    }
+  ])
 }
 
 export function getAgentAwakeSearchKeywords(
