@@ -122,6 +122,12 @@ export async function readOpenCodeWorkerTranscript(
         page.items.map((item) => item.message),
         dbPath
       )
+      // Why: a same-path replacement between the pre-read stat and this page
+      // would serve the new DB's rows under the old fingerprint — re-attest
+      // after the read and report source_changed on mismatch.
+      if (!(await attestOpenCodeSource(dbPath, args.sessionId, sourceFingerprint))) {
+        return { ok: false, reason: 'source_changed', warnings: [] }
+      }
       // Newest RAW rowid (covers non-renderable rows), maxed with the page's
       // newest — a row can interleave between readSignal and readPage.
       const nextOffset = Math.max(signal.maxMessageRowId, page.items.at(-1)?.rowid ?? 0)
@@ -170,6 +176,10 @@ export async function readOpenCodeWorkerTranscript(
       forward.items.map((item) => item.message),
       dbPath
     )
+    // Why: same TOCTOU as the initial branch — re-attest after the read.
+    if (!(await attestOpenCodeSource(dbPath, args.sessionId, sourceFingerprint))) {
+      return { ok: false, reason: 'source_changed', warnings: [] }
+    }
     if (!Number.isFinite(forward.nextMessageRowId)) {
       return { ok: false, reason: 'transcript_unreadable', warnings: [] }
     }
@@ -189,6 +199,14 @@ export async function readOpenCodeWorkerTranscript(
     // verdict on the transcript itself.
     return { ok: false, reason: 'transcript_unreadable', warnings: [] }
   }
+}
+
+async function attestOpenCodeSource(
+  dbPath: string,
+  sessionId: string,
+  fingerprint: string
+): Promise<boolean> {
+  return (await openCodeSourceFingerprint(dbPath, sessionId)) === fingerprint
 }
 
 // Last stat identity per DB. A transient stat failure reuses it rather than
