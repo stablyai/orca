@@ -48,9 +48,16 @@ export function evictInstalledAgentSkillDiscoveryForRuntimeEnvironments(
 ): void {
   for (const environmentId of environmentIds) {
     const key = getRuntimeScopedSkillDiscoveryKey({ kind: 'environment', environmentId }, undefined)
-    deleteInstalledAgentSkillDiscoveryCache(key)
-    pendingDiscoveryByTarget.delete(key)
-    pendingDiscoverySatisfiesForcedRefreshByTarget.delete(key)
+    const filteredPrefix = `[${JSON.stringify(key)},`
+    const belongsToRuntime = (candidate: string): boolean =>
+      candidate === key || candidate.startsWith(filteredPrefix)
+    deleteInstalledAgentSkillDiscoveryCache(belongsToRuntime)
+    for (const pendingKey of pendingDiscoveryByTarget.keys()) {
+      if (belongsToRuntime(pendingKey)) {
+        pendingDiscoveryByTarget.delete(pendingKey)
+        pendingDiscoverySatisfiesForcedRefreshByTarget.delete(pendingKey)
+      }
+    }
   }
 }
 
