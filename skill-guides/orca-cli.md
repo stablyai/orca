@@ -93,6 +93,7 @@ ORCA worktree set --worktree active --comment "reproduced bug; testing fix" --js
 ORCA worktree set --worktree active --workspace-status in-review --json
 ORCA worktree set --worktree active --unread --json
 ORCA worktree set --worktree active --pin --json
+ORCA worktree set --worktree active --unpin --json
 ORCA worktree create --repo id:<repoId> --name review-task --pr 123 --json
 ORCA worktree set --worktree active --gitlab-issue '#42' --gitlab-mr '!77' --json
 ORCA worktree set --worktree active --pr null --gitlab-mr null --json
