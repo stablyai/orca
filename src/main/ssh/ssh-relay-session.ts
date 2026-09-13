@@ -436,6 +436,11 @@ export class SshRelaySession {
     return this.remoteCliBridgeEnv?.hostPlatform ?? this.hostPlatform
   }
 
+  /** The host's own `$HOME`, read on the host during relay deploy — never this client's. */
+  getRemoteHomeDirectory(): string | null {
+    return this.remoteCliBridgeEnv?.remoteHome ?? null
+  }
+
   getAiVaultHostInfo(): SshRelayAiVaultHostInfo | null {
     const env = this.remoteCliBridgeEnv
     if (!env) {
