@@ -215,8 +215,8 @@ export function createRepoHandlerHarness(): RepoHandlerHarness {
 export function resetProjectGroupMocks(
   mocks: ReposIpcMocks,
   gitRepo: {
-    isGitRepo: (path: string) => boolean
-    getGitRepoRoot: (path: string) => string | null
+    isGitRepo: (path: string) => Promise<boolean>
+    getGitRepoRoot: (path: string) => Promise<string>
   }
 ): void {
   mocks.mockStore.createProjectGroup.mockReset()
@@ -242,9 +242,9 @@ export function resetProjectGroupMocks(
   mocks.listWorktreeGraphMock.mockReset()
   mocks.listWorktreeGraphMock.mockResolvedValue([])
   vi.mocked(gitRepo.isGitRepo).mockReset()
-  vi.mocked(gitRepo.isGitRepo).mockReturnValue(true)
+  vi.mocked(gitRepo.isGitRepo).mockResolvedValue(true)
   vi.mocked(gitRepo.getGitRepoRoot).mockReset()
-  vi.mocked(gitRepo.getGitRepoRoot).mockImplementation((path: string) => path)
+  vi.mocked(gitRepo.getGitRepoRoot).mockImplementation(async (path: string) => path)
   mocks.mockMultiplexer.notify.mockReset()
   mocks.mockMultiplexer.request.mockReset()
   mocks.invalidateAuthorizedRootsCacheMock.mockReset()

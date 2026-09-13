@@ -85,6 +85,7 @@ describe('CodexAccountService config sync', () => {
       rateLimits as never,
       createRuntimeHome() as never
     )
+    await service.ready
     const selecting = service.selectAccount('account-2')
     await vi.waitFor(() => expect(rateLimits.refreshForCodexAccountChange).toHaveBeenCalledOnce())
     const resetting = service.consumeRateLimitResetCredit(
@@ -152,6 +153,7 @@ describe('CodexAccountService config sync', () => {
       rateLimits as never,
       createRuntimeHome() as never
     )
+    await service.ready
     const idempotencyKey = '22222222-2222-4222-8222-222222222222'
 
     const first = service.consumeRateLimitResetCredit(idempotencyKey, expectedScope)
@@ -237,6 +239,7 @@ describe('CodexAccountService config sync', () => {
       rateLimits as never,
       createRuntimeHome() as never
     )
+    await service.ready
     const firstKey = '33333333-3333-4333-8333-333333333333'
 
     await expect(service.consumeRateLimitResetCredit(firstKey, expectedScope)).rejects.toThrow(
@@ -291,6 +294,7 @@ describe('CodexAccountService config sync', () => {
       } as never,
       createRuntimeHome() as never
     )
+    await firstService.ready
     const key = '88888888-8888-4888-8888-888888888888'
 
     await expect(firstService.consumeRateLimitResetCredit(key, expectedScope)).rejects.toThrow(
@@ -311,6 +315,7 @@ describe('CodexAccountService config sync', () => {
       } as never,
       createRuntimeHome() as never
     )
+    await restarted.ready
 
     await expect(
       restarted.consumeRateLimitResetCredit('99999999-9999-4999-8999-999999999999', expectedScope)
@@ -363,6 +368,7 @@ describe('CodexAccountService config sync', () => {
       } as never,
       createRuntimeHome() as never
     )
+    await firstService.ready
     const key = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
     await firstService.consumeRateLimitResetCredit(key, expectedScope)
 
@@ -376,6 +382,7 @@ describe('CodexAccountService config sync', () => {
       } as never,
       createRuntimeHome() as never
     )
+    await restarted.ready
 
     await expect(restarted.consumeRateLimitResetCredit(key, expectedScope)).resolves.toMatchObject({
       outcome: 'reset',
@@ -425,6 +432,7 @@ describe('CodexAccountService config sync', () => {
       } as never,
       createRuntimeHome() as never
     )
+    await service.ready
 
     await expect(
       service.consumeRateLimitResetCredit('bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb', expectedScope)
@@ -475,6 +483,7 @@ describe('CodexAccountService config sync', () => {
       } as never,
       createRuntimeHome() as never
     )
+    await firstService.ready
     const key = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc'
 
     await expect(firstService.consumeRateLimitResetCredit(key, expectedScope)).rejects.toThrow(
@@ -495,6 +504,7 @@ describe('CodexAccountService config sync', () => {
       } as never,
       createRuntimeHome() as never
     )
+    await restarted.ready
     await expect(restarted.consumeRateLimitResetCredit(key, expectedScope)).resolves.toMatchObject({
       outcome: 'alreadyRedeemed'
     })
@@ -517,6 +527,7 @@ describe('CodexAccountService config sync', () => {
       } as never,
       createRuntimeHome() as never
     )
+    await service.ready
 
     expect(service.listAccounts()).toMatchObject({ accounts: [] })
     await expect(
@@ -568,6 +579,7 @@ describe('CodexAccountService config sync', () => {
       rateLimits as never,
       createRuntimeHome() as never
     )
+    await service.ready
     const idempotencyKey = '55555555-5555-4555-8555-555555555555'
 
     await expect(

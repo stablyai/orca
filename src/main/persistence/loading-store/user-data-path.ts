@@ -96,6 +96,7 @@ export function migrateMobilePairingDataToCanonicalUserDataPath(sourceUserDataDi
       copyFileSync(sourcePath, targetPath)
       copied.push(targetPath)
       // Why: copyFileSync drops Windows ACLs, so re-assert current-user-only on these credential copies (device tokens, E2EE key).
+      // Sync is deliberate: this whole block is a one-time first-run migration, not an IPC path.
       hardenExistingSecureFile(targetPath)
     }
   } catch (error) {

@@ -1,4 +1,5 @@
-import { execFileSync } from 'node:child_process'
+import { runProcess, runProcessSync } from '../../shared/child-process/run-process'
+import type { ProcessResult } from '../../shared/child-process/run-process'
 
 const PROCESS_TABLE_LOOKUP_TIMEOUT_MS = 250
 const PROCESS_TABLE_QUERY_TIMEOUT_MS = PROCESS_TABLE_LOOKUP_TIMEOUT_MS / 2
@@ -25,12 +26,26 @@ function hasUsableTty(tty: string): boolean {
   return tty !== '?' && tty !== '??' && tty !== '-'
 }
 
-function runPs(pid: number): string {
-  return execFileSync('ps', ['-p', String(pid), '-o', 'pid=,tpgid=,tty='], {
-    encoding: 'utf8',
-    timeout: PROCESS_TABLE_QUERY_TIMEOUT_MS,
-    maxBuffer: PROCESS_TABLE_MAX_BYTES
-  })
+function psSpec(pid: number): {
+  program: string
+  args: string[]
+  timeoutMs: number
+  maxOutputBytes: number
+} {
+  return {
+    program: 'ps',
+    args: ['-p', String(pid), '-o', 'pid=,tpgid=,tty='],
+    timeoutMs: PROCESS_TABLE_QUERY_TIMEOUT_MS,
+    maxOutputBytes: PROCESS_TABLE_MAX_BYTES
+  }
+}
+
+/** Why throw: callers read a failed `ps` as "no foreground group", which `runProcess` reports as a non-zero code rather than a rejection. */
+function requirePsStdout(result: ProcessResult): string {
+  if (result.timedOut || result.code !== 0) {
+    throw new Error(`ps exited with code ${result.code ?? 'unknown'}`)
+  }
+  return result.stdout
 }
 
 let ownRowCache: { pid: number; row: string } | null = null
@@ -45,7 +60,15 @@ let ownRowCache: { pid: number; row: string } | null = null
 function readOwnProcessRow(currentPid: number): string {
   if (ownRowCache?.pid !== currentPid) {
     // A throw is not cached: the caller already treats a failed read as "no group".
-    ownRowCache = { pid: currentPid, row: runPs(currentPid) }
+    ownRowCache = { pid: currentPid, row: requirePsStdout(runProcessSync(psSpec(currentPid))) }
+  }
+  return ownRowCache.row
+}
+
+async function readOwnProcessRowAsync(currentPid: number): Promise<string> {
+  if (ownRowCache?.pid !== currentPid) {
+    const row = requirePsStdout(await runProcess(psSpec(currentPid)))
+    ownRowCache = { pid: currentPid, row }
   }
   return ownRowCache.row
 }
@@ -63,7 +86,15 @@ export function resetPosixPtyForegroundGroupOwnRowCache(): void {
  * root-pid delivery this module exists to replace.
  */
 function readForegroundGroupTable(rootPid: number, currentPid: number): string {
-  return `${runPs(rootPid)}\n${readOwnProcessRow(currentPid)}`
+  return `${requirePsStdout(runProcessSync(psSpec(rootPid)))}\n${readOwnProcessRow(currentPid)}`
+}
+
+async function readForegroundGroupTableAsync(
+  rootPid: number,
+  currentPid: number
+): Promise<string> {
+  const root = requirePsStdout(await runProcess(psSpec(rootPid)))
+  return `${root}\n${await readOwnProcessRowAsync(currentPid)}`
 }
 
 function parseProcessRows(output: string): ProcessRow[] {
@@ -115,12 +146,40 @@ export function getPosixPtyForegroundGroup(
   return root.tpgid > 1 ? root.tpgid : null
 }
 
+function deliverForegroundSignal(
+  table: string | null,
+  rootPid: number,
+  ptsName: string,
+  signal: NodeJS.Signals | (string & {}),
+  fallback: () => void,
+  currentPid: number
+): void {
+  const pgid = table === null ? null : getPosixPtyForegroundGroup(table, rootPid, ptsName, currentPid)
+  if (pgid === null) {
+    fallback()
+    return
+  }
+  try {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: callers pass a real signal name; the widened string is only for node-pty's looser type.
+    process.kill(-pgid, signal as NodeJS.Signals)
+  } catch (error) {
+    // Why: the group can exit between `ps` and `kill`. The fallback would be just
+    // as stale, so a vanished foreground group is success, not a reason to retry.
+    if ((error as NodeJS.ErrnoException | undefined)?.code !== 'ESRCH') {
+      fallback()
+    }
+  }
+}
+
 /**
  * Sends `signal` to the PTY's foreground process group, falling back to the
  * supplied root-pid delivery when the group cannot be established safely.
  *
  * Scoped to SIGWINCH by callers on purpose: a destructive signal must keep the
  * narrower root-pid target plus the descendant-sweep identity machinery.
+ *
+ * Narrow sync path: only for the daemon's synchronous `SubprocessHandle.signal`.
+ * Anything reachable from an `ipcMain` reply must use the async twin below.
  */
 export function signalPosixPtyForegroundGroup(
   rootPid: number,
@@ -134,28 +193,34 @@ export function signalPosixPtyForegroundGroup(
     return
   }
   const currentPid = deps.currentPid ?? process.pid
-  let pgid: number | null
+  let table: string | null
   try {
-    pgid = getPosixPtyForegroundGroup(
-      (deps.readProcessTable ?? (() => readForegroundGroupTable(rootPid, currentPid)))(),
-      rootPid,
-      ptsName,
-      currentPid
-    )
+    table = (deps.readProcessTable ?? (() => readForegroundGroupTable(rootPid, currentPid)))()
   } catch {
-    pgid = null
+    table = null
   }
-  if (pgid === null) {
+  deliverForegroundSignal(table, rootPid, ptsName, signal, fallback, currentPid)
+}
+
+/** Async twin, for the SIGWINCH path the renderer reaches over IPC twice per revealed pane. */
+export async function signalPosixPtyForegroundGroupAsync(
+  rootPid: number,
+  ptsName: string | undefined,
+  signal: NodeJS.Signals | (string & {}),
+  fallback: () => void,
+  deps: PosixPtyForegroundGroupDeps = {}
+): Promise<void> {
+  if ((deps.platform ?? process.platform) === 'win32' || !ptsName) {
     fallback()
     return
   }
+  const currentPid = deps.currentPid ?? process.pid
+  let table: string | null
   try {
-    process.kill(-pgid, signal as NodeJS.Signals)
-  } catch (error) {
-    // Why: the group can exit between `ps` and `kill`. The fallback would be just
-    // as stale, so a vanished foreground group is success, not a reason to retry.
-    if ((error as NodeJS.ErrnoException | undefined)?.code !== 'ESRCH') {
-      fallback()
-    }
+    table = await (deps.readProcessTable ??
+      (() => readForegroundGroupTableAsync(rootPid, currentPid)))()
+  } catch {
+    table = null
   }
+  deliverForegroundSignal(table, rootPid, ptsName, signal, fallback, currentPid)
 }

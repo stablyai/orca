@@ -33,22 +33,22 @@ describe('isGitRepo', () => {
     rmSync(tmpDir, { recursive: true, force: true })
   })
 
-  it('rejects directories with an invalid .git file', () => {
+  it('rejects directories with an invalid .git file', async () => {
     const fakeRepo = path.join(tmpDir, 'fake')
     mkdirSync(fakeRepo)
     writeFileSync(path.join(fakeRepo, '.git'), 'not a gitdir file')
 
-    expect(isGitRepo(fakeRepo)).toBe(false)
+    expect(await isGitRepo(fakeRepo)).toBe(false)
   })
 
-  it('accepts bare git repositories', () => {
+  it('accepts bare git repositories', async () => {
     const bareRepo = path.join(tmpDir, 'bare.git')
     git(tmpDir, ['init', '--bare', '--quiet', bareRepo])
 
-    expect(isGitRepo(bareRepo)).toBe(true)
+    expect(await isGitRepo(bareRepo)).toBe(true)
   })
 
-  it('accepts a real repository when git itself cannot be run', () => {
+  it('accepts a real repository when git itself cannot be run', async () => {
     // Why: regression guard for the spurious "Open as Folder" prompt. When the
     // `git rev-parse` probe fails for an environmental reason (here simulated by
     // making `git` unresolvable), a directory carrying valid Git metadata must
@@ -57,34 +57,34 @@ describe('isGitRepo', () => {
     mkdirSync(realRepo)
     git(realRepo, ['init', '--quiet'])
 
-    withGitUnavailable(() => {
-      expect(isGitRepo(realRepo)).toBe(true)
+    await withGitUnavailable(async () => {
+      expect(await isGitRepo(realRepo)).toBe(true)
     })
   })
 
-  it('accepts a nested directory in a repository when git itself cannot be run', () => {
+  it('accepts a nested directory in a repository when git itself cannot be run', async () => {
     const realRepo = path.join(tmpDir, 'nested-real')
     const nestedDir = path.join(realRepo, 'packages', 'web')
     mkdirSync(nestedDir, { recursive: true })
     git(realRepo, ['init', '--quiet'])
 
-    withGitUnavailable(() => {
-      expect(isGitRepo(nestedDir)).toBe(true)
+    await withGitUnavailable(async () => {
+      expect(await isGitRepo(nestedDir)).toBe(true)
     })
   })
 
-  it('resolves a nested directory to the repo root when git itself cannot be run', () => {
+  it('resolves a nested directory to the repo root when git itself cannot be run', async () => {
     const realRepo = path.join(tmpDir, 'nested-root-real')
     const nestedDir = path.join(realRepo, 'packages', 'web')
     mkdirSync(nestedDir, { recursive: true })
     git(realRepo, ['init', '--quiet'])
 
-    withGitUnavailable(() => {
-      expect(getGitRepoRoot(nestedDir)).toBe(realRepo)
+    await withGitUnavailable(async () => {
+      expect(await getGitRepoRoot(nestedDir)).toBe(realRepo)
     })
   })
 
-  it('accepts a symlinked nested directory in a repository when git itself cannot be run', () => {
+  it('accepts a symlinked nested directory in a repository when git itself cannot be run', async () => {
     const realRepo = path.join(tmpDir, 'symlink-real')
     const nestedDir = path.join(realRepo, 'packages', 'web')
     const symlinkedNestedDir = path.join(tmpDir, 'linked-nested')
@@ -92,15 +92,15 @@ describe('isGitRepo', () => {
     git(realRepo, ['init', '--quiet'])
     symlinkSync(nestedDir, symlinkedNestedDir, process.platform === 'win32' ? 'junction' : 'dir')
 
-    withGitUnavailable(() => {
-      expect(isGitRepo(symlinkedNestedDir)).toBe(true)
-      expect(getGitRepoRoot(symlinkedNestedDir)).toBe(
+    await withGitUnavailable(async () => {
+      expect(await isGitRepo(symlinkedNestedDir)).toBe(true)
+      expect(await getGitRepoRoot(symlinkedNestedDir)).toBe(
         realpathSync.native(realRepo).replace(/\\/g, '/')
       )
     })
   })
 
-  it('rejects a symlink inside a repository that points outside when git cannot be run', () => {
+  it('rejects a symlink inside a repository that points outside when git cannot be run', async () => {
     const realRepo = path.join(tmpDir, 'symlink-parent-real')
     const outsideDir = path.join(tmpDir, 'outside-target')
     const symlinkedOutsideDir = path.join(realRepo, 'links', 'outside')
@@ -109,12 +109,12 @@ describe('isGitRepo', () => {
     git(realRepo, ['init', '--quiet'])
     symlinkSync(outsideDir, symlinkedOutsideDir, process.platform === 'win32' ? 'junction' : 'dir')
 
-    withGitUnavailable(() => {
-      expect(isGitRepo(symlinkedOutsideDir)).toBe(false)
+    await withGitUnavailable(async () => {
+      expect(await isGitRepo(symlinkedOutsideDir)).toBe(false)
     })
   })
 
-  it('resolves a symlink from one repository into another to the real target repo', () => {
+  it('resolves a symlink from one repository into another to the real target repo', async () => {
     const sourceRepo = path.join(tmpDir, 'symlink-source-real')
     const targetRepo = path.join(tmpDir, 'symlink-target-real')
     const targetNestedDir = path.join(targetRepo, 'packages', 'web')
@@ -133,13 +133,13 @@ describe('isGitRepo', () => {
       .trim()
       .replace(/\\/g, '/')
 
-    withGitUnavailable(() => {
-      expect(isGitRepo(symlinkedTargetDir)).toBe(true)
-      expect(getGitRepoRoot(symlinkedTargetDir)).toBe(expectedRoot)
+    await withGitUnavailable(async () => {
+      expect(await isGitRepo(symlinkedTargetDir)).toBe(true)
+      expect(await getGitRepoRoot(symlinkedTargetDir)).toBe(expectedRoot)
     })
   })
 
-  it('accepts a linked worktree when git itself cannot be run', () => {
+  it('accepts a linked worktree when git itself cannot be run', async () => {
     const realRepo = path.join(tmpDir, 'linked-main')
     const linkedWorktree = path.join(tmpDir, 'linked-worktree')
     mkdirSync(realRepo)
@@ -156,82 +156,82 @@ describe('isGitRepo', () => {
     ])
     git(realRepo, ['worktree', 'add', '--quiet', '-b', 'offline-linked', linkedWorktree])
 
-    withGitUnavailable(() => {
-      expect(isGitRepo(linkedWorktree)).toBe(true)
+    await withGitUnavailable(async () => {
+      expect(await isGitRepo(linkedWorktree)).toBe(true)
     })
   })
 
-  it('rejects a plain folder when git cannot be run', () => {
+  it('rejects a plain folder when git cannot be run', async () => {
     const plain = path.join(tmpDir, 'plain')
     mkdirSync(plain)
 
-    withGitUnavailable(() => {
-      expect(isGitRepo(plain)).toBe(false)
+    await withGitUnavailable(async () => {
+      expect(await isGitRepo(plain)).toBe(false)
     })
   })
 
-  it('rejects a garbage .git file even when git cannot be run', () => {
+  it('rejects a garbage .git file even when git cannot be run', async () => {
     const fakeRepo = path.join(tmpDir, 'fake-offline')
     mkdirSync(fakeRepo)
     writeFileSync(path.join(fakeRepo, '.git'), 'not a gitdir file')
 
-    withGitUnavailable(() => {
-      expect(isGitRepo(fakeRepo)).toBe(false)
+    await withGitUnavailable(async () => {
+      expect(await isGitRepo(fakeRepo)).toBe(false)
     })
   })
 
-  it('rejects a nested folder with an invalid .git marker even inside a valid repo', () => {
+  it('rejects a nested folder with an invalid .git marker even inside a valid repo', async () => {
     const realRepo = path.join(tmpDir, 'outer-real')
     const nestedDir = path.join(realRepo, 'packages', 'web')
     mkdirSync(nestedDir, { recursive: true })
     git(realRepo, ['init', '--quiet'])
     writeFileSync(path.join(nestedDir, '.git'), 'not a gitdir file')
 
-    withGitUnavailable(() => {
-      expect(isGitRepo(nestedDir)).toBe(false)
+    await withGitUnavailable(async () => {
+      expect(await isGitRepo(nestedDir)).toBe(false)
     })
   })
 
-  it('rejects a .git file that points at a missing gitdir when git cannot be run', () => {
+  it('rejects a .git file that points at a missing gitdir when git cannot be run', async () => {
     const fakeRepo = path.join(tmpDir, 'missing-gitdir')
     mkdirSync(fakeRepo)
     writeFileSync(path.join(fakeRepo, '.git'), 'gitdir: /missing/orca/gitdir')
 
-    withGitUnavailable(() => {
-      expect(isGitRepo(fakeRepo)).toBe(false)
+    await withGitUnavailable(async () => {
+      expect(await isGitRepo(fakeRepo)).toBe(false)
     })
   })
 
-  it('rejects an empty .git directory', () => {
+  it('rejects an empty .git directory', async () => {
     const emptyGitDir = path.join(tmpDir, 'empty-gitdir')
     mkdirSync(path.join(emptyGitDir, '.git'), { recursive: true })
 
-    withGitUnavailable(() => {
-      expect(isGitRepo(emptyGitDir)).toBe(false)
+    await withGitUnavailable(async () => {
+      expect(await isGitRepo(emptyGitDir)).toBe(false)
     })
   })
 
-  it('rejects an incomplete .git directory with only HEAD', () => {
+  it('rejects an incomplete .git directory with only HEAD', async () => {
     const incompleteGitDir = path.join(tmpDir, 'incomplete-gitdir')
     mkdirSync(path.join(incompleteGitDir, '.git'), { recursive: true })
     writeFileSync(path.join(incompleteGitDir, '.git', 'HEAD'), 'ref: refs/heads/main\n')
 
-    withGitUnavailable(() => {
-      expect(isGitRepo(incompleteGitDir)).toBe(false)
+    await withGitUnavailable(async () => {
+      expect(await isGitRepo(incompleteGitDir)).toBe(false)
     })
   })
 
-  it('rejects a regular repository admin directory when git itself cannot be run', () => {
+  it('rejects a regular repository admin directory when git itself cannot be run', async () => {
     const realRepo = path.join(tmpDir, 'admin-dir')
     mkdirSync(realRepo)
     git(realRepo, ['init', '--quiet'])
 
-    withGitUnavailable(() => {
-      expect(isGitRepo(path.join(realRepo, '.git'))).toBe(false)
+    await withGitUnavailable(async () => {
+      expect(await isGitRepo(path.join(realRepo, '.git'))).toBe(false)
     })
   })
 
-  it('rejects a case-insensitive .git admin directory alias when git itself cannot be run', () => {
+  it('rejects a case-insensitive .git admin directory alias when git itself cannot be run', async () => {
     const realRepo = path.join(tmpDir, 'admin-dir-uppercase')
     mkdirSync(realRepo)
     git(realRepo, ['init', '--quiet'])
@@ -242,35 +242,35 @@ describe('isGitRepo', () => {
       return
     }
 
-    withGitUnavailable(() => {
-      expect(isGitRepo(uppercaseAdminDir)).toBe(false)
+    await withGitUnavailable(async () => {
+      expect(await isGitRepo(uppercaseAdminDir)).toBe(false)
     })
   })
 
-  it('rejects a regular repository admin directory when core.bare uses alternate false spelling', () => {
+  it('rejects a regular repository admin directory when core.bare uses alternate false spelling', async () => {
     const realRepo = path.join(tmpDir, 'admin-dir-no')
     mkdirSync(realRepo)
     git(realRepo, ['init', '--quiet'])
     git(realRepo, ['config', 'core.bare', 'no'])
 
-    withGitUnavailable(() => {
-      expect(isGitRepo(path.join(realRepo, '.git'))).toBe(false)
+    await withGitUnavailable(async () => {
+      expect(await isGitRepo(path.join(realRepo, '.git'))).toBe(false)
     })
   })
 
-  it('rejects a regular repository admin directory when core.bare is empty false', () => {
+  it('rejects a regular repository admin directory when core.bare is empty false', async () => {
     const realRepo = path.join(tmpDir, 'admin-dir-empty-false')
     mkdirSync(realRepo)
     git(realRepo, ['init', '--quiet'])
     const configPath = path.join(realRepo, '.git', 'config')
     writeFileSync(configPath, readFileSync(configPath, 'utf8').replace(/bare = false/, 'bare ='))
 
-    withGitUnavailable(() => {
-      expect(isGitRepo(path.join(realRepo, '.git'))).toBe(false)
+    await withGitUnavailable(async () => {
+      expect(await isGitRepo(path.join(realRepo, '.git'))).toBe(false)
     })
   })
 
-  it('rejects a regular repository admin directory when core.bare false has inline comments', () => {
+  it('rejects a regular repository admin directory when core.bare false has inline comments', async () => {
     const realRepo = path.join(tmpDir, 'admin-dir-commented-false')
     mkdirSync(realRepo)
     git(realRepo, ['init', '--quiet'])
@@ -278,18 +278,18 @@ describe('isGitRepo', () => {
     const config = readFileSync(configPath, 'utf8')
     writeFileSync(configPath, config.replace(/bare = false/, 'bare = false # regular worktree'))
 
-    withGitUnavailable(() => {
-      expect(isGitRepo(path.join(realRepo, '.git'))).toBe(false)
+    await withGitUnavailable(async () => {
+      expect(await isGitRepo(path.join(realRepo, '.git'))).toBe(false)
     })
 
     writeFileSync(configPath, config.replace(/bare = false/, 'bare = false ; regular worktree'))
 
-    withGitUnavailable(() => {
-      expect(isGitRepo(path.join(realRepo, '.git'))).toBe(false)
+    await withGitUnavailable(async () => {
+      expect(await isGitRepo(path.join(realRepo, '.git'))).toBe(false)
     })
   })
 
-  it('rejects a regular repository admin directory when core.bare is quoted false', () => {
+  it('rejects a regular repository admin directory when core.bare is quoted false', async () => {
     const realRepo = path.join(tmpDir, 'admin-dir-quoted-false')
     mkdirSync(realRepo)
     git(realRepo, ['init', '--quiet'])
@@ -299,12 +299,12 @@ describe('isGitRepo', () => {
       readFileSync(configPath, 'utf8').replace(/bare = false/, String.raw`bare = \"false\"`)
     )
 
-    withGitUnavailable(() => {
-      expect(isGitRepo(path.join(realRepo, '.git'))).toBe(false)
+    await withGitUnavailable(async () => {
+      expect(await isGitRepo(path.join(realRepo, '.git'))).toBe(false)
     })
   })
 
-  it('resolves a contained path to the worktree root', () => {
+  it('resolves a contained path to the worktree root', async () => {
     const repoRoot = path.join(tmpDir, 'repo')
     const nestedDir = path.join(repoRoot, 'packages', 'web')
     mkdirSync(nestedDir, { recursive: true })
@@ -314,10 +314,10 @@ describe('isGitRepo', () => {
     // assertion matches getGitRepoRoot's canonicalization (e.g. macOS resolves
     // the /var tmpdir symlink to /private/var) across all platforms.
     const expectedRoot = git(repoRoot, ['rev-parse', '--show-toplevel']).trim().replace(/\\/g, '/')
-    expect(getGitRepoRoot(nestedDir)).toBe(expectedRoot)
+    expect(await getGitRepoRoot(nestedDir)).toBe(expectedRoot)
   })
 
-  it('keeps WSL UNC identity when git reports a Linux worktree root', () => {
+  it('keeps WSL UNC identity when git reports a Linux worktree root', async () => {
     expect(
       normalizeGitRepoRootForInputPath(
         String.raw`\\wsl.localhost\Ubuntu\home\alice\repo\packages\web`,
@@ -326,11 +326,11 @@ describe('isGitRepo', () => {
     ).toBe(String.raw`\\wsl.localhost\Ubuntu\home\alice\repo`)
   })
 
-  it('preserves bare repository paths when no worktree root exists', () => {
+  it('preserves bare repository paths when no worktree root exists', async () => {
     const bareRepo = path.join(tmpDir, 'bare.git')
     git(tmpDir, ['init', '--bare', '--quiet', bareRepo])
 
-    expect(getGitRepoRoot(bareRepo)).toBe(bareRepo)
+    expect(await getGitRepoRoot(bareRepo)).toBe(bareRepo)
   })
 })
 
@@ -355,7 +355,7 @@ describe('getLinkedWorktreeMainRepoRoot', () => {
     git(repoRoot, ['commit', '--quiet', '-m', 'seed'])
   }
 
-  it('resolves a linked worktree back to its main checkout', () => {
+  it('resolves a linked worktree back to its main checkout', async () => {
     const repoRoot = path.join(tmpDir, 'repo')
     initRepoWithCommit(repoRoot)
     const linked = path.join(tmpDir, 'linked')
@@ -364,51 +364,51 @@ describe('getLinkedWorktreeMainRepoRoot', () => {
     const expectedMainRoot = git(repoRoot, ['rev-parse', '--show-toplevel'])
       .trim()
       .replace(/\\/g, '/')
-    expect(getLinkedWorktreeMainRepoRoot(linked)).toBe(expectedMainRoot)
+    expect(await getLinkedWorktreeMainRepoRoot(linked)).toBe(expectedMainRoot)
   })
 
-  it('returns null for the main checkout itself', () => {
+  it('returns null for the main checkout itself', async () => {
     const repoRoot = path.join(tmpDir, 'repo')
     initRepoWithCommit(repoRoot)
 
-    expect(getLinkedWorktreeMainRepoRoot(repoRoot)).toBeNull()
+    expect(await getLinkedWorktreeMainRepoRoot(repoRoot)).toBeNull()
   })
 
-  it('returns null for a nested directory inside the main checkout', () => {
+  it('returns null for a nested directory inside the main checkout', async () => {
     const repoRoot = path.join(tmpDir, 'repo')
     initRepoWithCommit(repoRoot)
     const nested = path.join(repoRoot, 'packages', 'web')
     mkdirSync(nested, { recursive: true })
 
-    expect(getLinkedWorktreeMainRepoRoot(nested)).toBeNull()
+    expect(await getLinkedWorktreeMainRepoRoot(nested)).toBeNull()
   })
 
-  it('returns null for a bare repository', () => {
+  it('returns null for a bare repository', async () => {
     const bareRepo = path.join(tmpDir, 'bare.git')
     git(tmpDir, ['init', '--bare', '--quiet', bareRepo])
 
-    expect(getLinkedWorktreeMainRepoRoot(bareRepo)).toBeNull()
+    expect(await getLinkedWorktreeMainRepoRoot(bareRepo)).toBeNull()
   })
 
-  it('returns null for a non-repository directory', () => {
+  it('returns null for a non-repository directory', async () => {
     const plain = path.join(tmpDir, 'plain')
     mkdirSync(plain)
 
-    expect(getLinkedWorktreeMainRepoRoot(plain)).toBeNull()
+    expect(await getLinkedWorktreeMainRepoRoot(plain)).toBeNull()
   })
 
-  it('returns null for a missing path', () => {
-    expect(getLinkedWorktreeMainRepoRoot(path.join(tmpDir, 'does-not-exist'))).toBeNull()
+  it('returns null for a missing path', async () => {
+    expect(await getLinkedWorktreeMainRepoRoot(path.join(tmpDir, 'does-not-exist'))).toBeNull()
   })
 
-  it('returns null when git cannot be run rather than guessing a main checkout', () => {
+  it('returns null when git cannot be run rather than guessing a main checkout', async () => {
     const repoRoot = path.join(tmpDir, 'repo')
     initRepoWithCommit(repoRoot)
     const linked = path.join(tmpDir, 'linked')
     git(repoRoot, ['worktree', 'add', '--quiet', '-b', 'feature', linked])
 
-    withGitUnavailable(() => {
-      expect(getLinkedWorktreeMainRepoRoot(linked)).toBeNull()
+    await withGitUnavailable(async () => {
+      expect(await getLinkedWorktreeMainRepoRoot(linked)).toBeNull()
     })
   })
 })
@@ -418,13 +418,13 @@ describe('getLinkedWorktreeMainRepoRoot', () => {
  * same way a transient spawn failure would, exercising the `.git`-marker
  * fallback path. PATH is restored afterward.
  */
-function withGitUnavailable(fn: () => void): void {
+async function withGitUnavailable(fn: () => Promise<void>): Promise<void> {
   const originalPath = process.env.PATH
   // An empty PATH leaves no directory to resolve the bare `git` binary, so the
   // probe throws ENOENT — the indeterminate failure the fallback exists for.
   process.env.PATH = ''
   try {
-    fn()
+    await fn()
   } finally {
     // Why: restoring an originally-unset PATH via assignment would write the
     // string "undefined", corrupting PATH for later tests in this process.

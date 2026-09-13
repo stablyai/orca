@@ -12,7 +12,9 @@ import { assertOwnedHostCodexManagedHomePath } from './host-codex-managed-home-o
 const WSL_MANAGED_HOME_TIMEOUT_MS = 5_000
 
 export class CodexManagedHomePath {
-  constructor(private readonly validateWslPath: (distro: string, script: string) => string) {}
+  constructor(
+    private readonly validateWslPath: (distro: string, script: string) => Promise<string>
+  ) {}
 
   getRoot(): string {
     const root = join(app.getPath('userData'), 'codex-accounts')
@@ -37,7 +39,7 @@ export class CodexManagedHomePath {
     }
 
     try {
-      return this.assert(account.managedHomePath, account.id)
+      return await this.assert(account.managedHomePath, account.id)
     } catch (error) {
       if (!this.isMissingHomeError(error)) {
         throw error
@@ -46,7 +48,7 @@ export class CodexManagedHomePath {
     }
   }
 
-  assert(candidatePath: string, expectedAccountId?: string): string {
+  async assert(candidatePath: string, expectedAccountId?: string): Promise<string> {
     const wslInfo = parseWslUncPath(candidatePath)
     if (!wslInfo) {
       return assertOwnedHostCodexManagedHomePath({
@@ -74,7 +76,10 @@ export class CodexManagedHomePath {
     return this.assertMountedWslPath(candidatePath, wslInfo.linuxPath, expectedAccountId)
   }
 
-  private recreateExpectedHostHome(account: CodexManagedAccount, originalError: unknown): string {
+  private async recreateExpectedHostHome(
+    account: CodexManagedAccount,
+    originalError: unknown
+  ): Promise<string> {
     const expectedPath = join(this.getRoot(), account.id, 'home')
     if (!this.pathsEqual(account.managedHomePath, expectedPath)) {
       throw originalError
@@ -122,31 +127,33 @@ export class CodexManagedHomePath {
     }
   }
 
-  private assertWindowsWslPath(
+  private async assertWindowsWslPath(
     wslInfo: { distro: string; linuxPath: string },
     expectedAccountId?: string
-  ): string {
+  ): Promise<string> {
     try {
-      const canonicalLinuxPath = this.validateWslPath(
-        wslInfo.distro,
-        [
-          'set -euo pipefail',
-          `candidate=${quotePosixShell(wslInfo.linuxPath)}`,
-          'managed_root="${HOME%/}/.local/share/orca/codex-accounts"',
-          'candidate_real=$(readlink -f -- "$candidate")',
-          'managed_root_real=$(readlink -f -- "$managed_root")',
-          'test -f "$candidate_real/.orca-managed-home"',
-          ...(expectedAccountId === undefined
-            ? [
-                'case "$candidate_real" in "$managed_root_real"/*/home) printf "%s\\n" "$candidate_real" ;; *) exit 35 ;; esac'
-              ]
-            : [
-                `expected_marker=${quotePosixShell(expectedAccountId)}`,
-                'test "$candidate_real" = "$managed_root_real/$expected_marker/home"',
-                'test "$(cat "$candidate_real/.orca-managed-home")" = "$expected_marker"',
-                'printf "%s\\n" "$candidate_real"'
-              ])
-        ].join('\n')
+      const canonicalLinuxPath = (
+        await this.validateWslPath(
+          wslInfo.distro,
+          [
+            'set -euo pipefail',
+            `candidate=${quotePosixShell(wslInfo.linuxPath)}`,
+            'managed_root="${HOME%/}/.local/share/orca/codex-accounts"',
+            'candidate_real=$(readlink -f -- "$candidate")',
+            'managed_root_real=$(readlink -f -- "$managed_root")',
+            'test -f "$candidate_real/.orca-managed-home"',
+            ...(expectedAccountId === undefined
+              ? [
+                  'case "$candidate_real" in "$managed_root_real"/*/home) printf "%s\\n" "$candidate_real" ;; *) exit 35 ;; esac'
+                ]
+              : [
+                  `expected_marker=${quotePosixShell(expectedAccountId)}`,
+                  'test "$candidate_real" = "$managed_root_real/$expected_marker/home"',
+                  'test "$(cat "$candidate_real/.orca-managed-home")" = "$expected_marker"',
+                  'printf "%s\\n" "$candidate_real"'
+                ])
+          ].join('\n')
+        )
       ).trim()
       if (!canonicalLinuxPath) {
         throw new Error('Managed Codex home directory does not exist on disk.')

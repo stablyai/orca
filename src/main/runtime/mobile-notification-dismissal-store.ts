@@ -1,10 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import {
-  writeSecureJsonFile,
-  hardenExistingSecureFile,
-  isUnreadableError
-} from '../../shared/secure-file'
+import { hardenExistingSecureFile, isUnreadableError } from '../../shared/secure-file'
+import { writeSecureJsonFileAsync } from '../../shared/secure-file-async-write'
 import type { MobileNotificationEvent } from './runtime-mobile-notification-controller'
 
 export type DeliveredNotificationIdentity = {
@@ -20,6 +17,7 @@ export class MobileNotificationDismissalStore {
   private readonly path: string
   private entries: RecordEntry[] = []
   private unreadable = false
+  // Sync by necessity: a constructor has no await. Runs once per process at startup, not per IPC call.
   constructor(userDataPath: string) {
     this.path = join(userDataPath, 'mobile-notification-dismissals.json')
     try {
@@ -34,9 +32,9 @@ export class MobileNotificationDismissalStore {
     }
   }
 
-  record(
+  async record(
     event: MobileNotificationEvent & { notificationEpoch: string; notificationSeq: number }
-  ): void {
+  ): Promise<void> {
     if (!event.notificationId) {
       return
     }
@@ -74,10 +72,12 @@ export class MobileNotificationDismissalStore {
       })
     }
     next = next.slice(-LIMIT)
-    if (!this.unreadable) {
-      writeSecureJsonFile(this.path, next)
-    }
+    // Commit in memory before awaiting: two records that interleave across the persist would
+    // otherwise both derive `next` from the same stale entries and lose one of them.
     this.entries = next
+    if (!this.unreadable) {
+      await writeSecureJsonFileAsync(this.path, next)
+    }
   }
 
   reconcile(delivered: readonly DeliveredNotificationIdentity[]): DeliveredNotificationIdentity[] {

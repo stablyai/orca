@@ -114,15 +114,17 @@ export class RuntimeMobileNotificationController {
       }
     }
     const seq = this.replay.record(event)
-    try {
-      this.dismissalStore?.record({
+    // `dispatch` is synchronous; the store commits the entry in memory before it awaits the write,
+    // so `reconcile` is already correct by the time this returns.
+    void this.dismissalStore
+      ?.record({
         ...event,
         notificationSeq: seq,
         notificationEpoch: this.replay.epoch
       })
-    } catch {
-      console.warn('[notifications] Could not persist dismissal recovery state')
-    }
+      .catch(() => {
+        console.warn('[notifications] Could not persist dismissal recovery state')
+      })
     notifyRuntimeListeners(
       this.listeners,
       (listener) =>

@@ -293,6 +293,17 @@ describe('resolveWindowsCommand', () => {
     }
   })
 
+  it('reuses a resolved shim instead of re-probing PATH', () => {
+    const tempDir = mkdtempSync(join(tmpdir(), 'orca-win-command-cache-'))
+    const pnpmShim = join(tempDir, 'pnpm.cmd')
+    writeFileSync(pnpmShim, '@echo off\r\n')
+    withPlatform('win32', () => {
+      expect(resolveWindowsCommand('pnpm', { PATH: tempDir })).toBe(pnpmShim)
+      rmSync(tempDir, { recursive: true, force: true })
+      expect(resolveWindowsCommand('pnpm', { PATH: tempDir })).toBe(pnpmShim)
+    })
+  })
+
   it('leaves explicit command paths unchanged', () => {
     withPlatform('win32', () => {
       expect(resolveWindowsCommand('C:\\tools\\npm.cmd', { PATH: 'C:\\other' })).toBe(

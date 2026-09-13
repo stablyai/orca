@@ -1,4 +1,4 @@
-import { execFileSync, spawn } from 'node:child_process'
+import { runProcess, spawnProcess } from '../../shared/child-process/run-process'
 import type { WindowsHostInteractiveLoginSpawn } from '../../shared/windows-interactive-login-spawn'
 import type {
   CodexManagedAccount,
@@ -41,10 +41,10 @@ export type {
 
 const WINDOWS_LOGIN_TREE_KILL_TIMEOUT_MS = 5_000
 
-function killLoginProcessTree(
+async function killLoginProcessTree(
   child: CodexLoginChild,
   interactiveLogin?: WindowsHostInteractiveLoginSpawn | null
-): void {
+): Promise<void> {
   const terminationPid = interactiveLogin?.getTerminationPid?.() ?? child.pid
   if (
     process.platform === 'win32' &&
@@ -63,15 +63,18 @@ function killLoginProcessTree(
       // Why: child.kill() only reaches the direct child (cmd.exe for npm .cmd
       // shims); taskkill /t also ends codex descendants whose open handles on
       // the managed home make post-login file operations fail with ENOTEMPTY.
-      execFileSync('taskkill', ['/pid', String(terminationPid), '/t', '/f'], {
-        windowsHide: true,
-        timeout: WINDOWS_LOGIN_TREE_KILL_TIMEOUT_MS,
-        stdio: 'ignore'
+      const kill = await runProcess({
+        program: 'taskkill',
+        args: ['/pid', String(terminationPid), '/t', '/f'],
+        timeoutMs: WINDOWS_LOGIN_TREE_KILL_TIMEOUT_MS
       })
-      return
-    } catch {
+      if (kill.code === 0) {
+        return
+      }
       // Why: taskkill can race an already-exited tree; fall back to the plain
       // signal so the direct child never outlives its deadline.
+    } catch {
+      // Same fallback when taskkill itself could not be started.
     }
   }
   child.kill()
@@ -87,6 +90,8 @@ export class CodexAccountService {
   private readonly resetCredits: CodexResetCreditCoordinator
   private readonly selection: CodexAccountSelection
   private readonly registration: CodexAccountRegistration
+  /** Startup config mirroring; await it when the mirrored state must be settled. */
+  readonly ready: Promise<void>
 
   constructor(
     store: Store,
@@ -94,13 +99,19 @@ export class CodexAccountService {
     private readonly runtimeHome: CodexRuntimeHomeService,
     lifecycle: CodexAccountServiceLifecycle = {}
   ) {
-    this.managedHomePaths = new CodexManagedHomePath((distro, script) =>
-      execFileSync(
-        'wsl.exe',
-        ['-d', distro, '--exec', 'bash', '-lc', buildEncodedWslBashCommand(script)],
-        { windowsHide: true, encoding: 'utf-8', timeout: 5000 }
-      )
-    )
+    this.managedHomePaths = new CodexManagedHomePath(async (distro, script) => {
+      const probe = await runProcess({
+        program: 'wsl.exe',
+        args: ['-d', distro, '--exec', 'bash', '-lc', buildEncodedWslBashCommand(script)],
+        timeoutMs: 5000
+      })
+      // Why throw: the caller reads a non-zero exit as "not an Orca-owned home",
+      // which is what the previous execFileSync raised.
+      if (probe.code !== 0) {
+        throw new Error(`WSL managed-home validation failed with exit ${probe.code}.`)
+      }
+      return probe.stdout
+    })
     this.managedHomes = new CodexManagedHomeLifecycle(this.managedHomePaths)
     this.identity = new CodexAccountIdentity((path, accountId) =>
       this.managedHomePaths.assert(path, accountId)
@@ -138,7 +149,10 @@ export class CodexAccountService {
       managedHomes: this.managedHomes,
       login: (managedHomePath) => this.runCodexLogin(managedHomePath)
     })
-    this.configMirror.safeSyncToManagedHomes()
+    // Why not awaited here: mirroring spawns `wsl.exe` for WSL homes, and a
+    // constructor cannot await — blocking it would stall the IPC reply that
+    // built the service. Callers that need it settled await `ready`.
+    this.ready = this.configMirror.safeSyncToManagedHomes()
   }
 
   /**
@@ -221,7 +235,7 @@ export class CodexAccountService {
   private readIdentityFromHome(
     managedHomePath: string,
     expectedAccountId: string
-  ): ResolvedCodexIdentity {
+  ): Promise<ResolvedCodexIdentity> {
     return this.identity.readFromHome(managedHomePath, expectedAccountId)
   }
 
@@ -229,20 +243,15 @@ export class CodexAccountService {
     return toCodexManagedAccountSummary(account)
   }
 
-  private safeRemoveManagedHome(candidatePath: string, expectedAccountId: string): void {
-    this.managedHomes.safeRemove(candidatePath, expectedAccountId)
+  private safeRemoveManagedHome(candidatePath: string, expectedAccountId: string): Promise<void> {
+    return this.managedHomes.safeRemove(candidatePath, expectedAccountId)
   }
 
   private async runCodexLogin(managedHomePath: string): Promise<void> {
     await runCodexLoginSession(managedHomePath, {
       wslCommand: 'wsl.exe',
       spawn: ({ command, args, env, stdio }) =>
-        spawn(command, args, {
-          stdio,
-          // Why: hide the outer wrapper only. A dedicated login console stays visible.
-          windowsHide: true,
-          env
-        }),
+        spawnProcess({ program: command, args, stdio, env }),
       killProcessTree: killLoginProcessTree
     })
   }

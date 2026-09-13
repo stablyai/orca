@@ -101,11 +101,13 @@ function resolveRealPath(pathValue: string): string {
  *   the path the user picked; when a symlinked parent makes those differ, the root reads
  *   as an *external* worktree, and hiding those would hide the project's only workspace.
  */
-function resolveUpgrade(repoPath: string): { externalWorktreeVisibility?: 'hide' } | null {
-  if (!isGitRepo(repoPath)) {
+async function resolveUpgrade(
+  repoPath: string
+): Promise<{ externalWorktreeVisibility?: 'hide' } | null> {
+  if (!(await isGitRepo(repoPath))) {
     return null
   }
-  const gitRoot = getGitRepoRoot(repoPath)
+  const gitRoot = await getGitRepoRoot(repoPath)
   if (resolveRealPath(gitRoot) !== resolveRealPath(repoPath)) {
     return null
   }
@@ -125,7 +127,7 @@ async function upgradeFolderRepo(watch: UpgradeWatch, repoId: string): Promise<U
   if (hasExtraFolderWorkspaces(watch.store, current)) {
     return 'blocked'
   }
-  const updates = resolveUpgrade(current.path)
+  const updates = await resolveUpgrade(current.path)
   if (!updates) {
     return 'rejected'
   }

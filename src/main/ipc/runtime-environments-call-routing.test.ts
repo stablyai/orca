@@ -403,7 +403,7 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       { ok: true; result: unknown }
     >('runtimeEnvironments:call')
     await call(null, { selector: 'desk', method: 'repo.list' })
-    environmentStore.markEnvironmentUsed(userDataPath, added.environment.id, {
+    await environmentStore.markEnvironmentUsed(userDataPath, added.environment.id, {
       runtimeId: 'runtime-downgraded'
     })
     await call(null, { selector: 'desk', method: 'repo.list' })

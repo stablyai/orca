@@ -155,7 +155,7 @@ export class RuntimeClient {
         throw recover(new RuntimeRpcFailureError(response), null)
       }
       if (this.environmentSelector) {
-        markEnvironmentUsed(this.userDataPath, this.environmentSelector, {
+        await markEnvironmentUsed(this.userDataPath, this.environmentSelector, {
           runtimeId: response._meta.runtimeId
         })
       }

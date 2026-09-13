@@ -1,4 +1,4 @@
-import { execFileSync } from 'node:child_process'
+import { runProcessSync } from '../../shared/child-process/run-process'
 import { recordSelfInitiatedTreeKill } from '../crash-reporting/self-initiated-tree-kill-log'
 
 const PROCESS_TABLE_TIMEOUT_MS = 1_000
@@ -17,12 +17,24 @@ export type PosixPtyProcessGroupTerminationDeps = {
   signalProcessGroup?: (pgid: number) => void
 }
 
+/**
+ * Narrow sync path, deliberately kept: the only callers are the daemon's
+ * synchronous `SubprocessHandle.forceKill` and `killLocalPtyProcess`, whose
+ * throw ordering IS the termination-mode rollback and force-kill retry
+ * contract. Cost is two tty-scoped `ps` reads once per terminal teardown.
+ */
 function runPs(args: string[]): string {
-  return execFileSync('ps', args, {
-    encoding: 'utf8',
-    timeout: PROCESS_TABLE_TIMEOUT_MS,
-    maxBuffer: PROCESS_TABLE_MAX_BYTES
+  const result = runProcessSync({
+    program: 'ps',
+    args,
+    timeoutMs: PROCESS_TABLE_TIMEOUT_MS,
+    maxOutputBytes: PROCESS_TABLE_MAX_BYTES
   })
+  // Why throw: callers read a failed `ps` as "no groups", which runProcessSync reports as a code.
+  if (result.timedOut || result.code !== 0) {
+    throw new Error(`ps exited with code ${result.code ?? 'unknown'}`)
+  }
+  return result.stdout
 }
 
 function readPtyProcessTable(rootPid: number): string {

@@ -3,12 +3,13 @@ import type * as NodeFs from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
+import type * as RunProcess from '../shared/child-process/run-process'
 import type { Repo } from '../shared/repo-types'
 
 import { describe, expect, it, vi } from 'vitest'
 
-const { execFileSyncMock } = vi.hoisted(() => ({
-  execFileSyncMock: vi.fn()
+const { runProcessSyncMock } = vi.hoisted(() => ({
+  runProcessSyncMock: vi.fn()
 }))
 
 vi.mock('fs', () => ({
@@ -19,14 +20,17 @@ vi.mock('fs', () => ({
   chmodSync: vi.fn()
 }))
 
-vi.mock('child_process', () => ({
-  exec: vi.fn(),
-  execFileSync: execFileSyncMock,
-  // runner.ts imports these from child_process; stubs prevent
-  // "missing export" errors when the mock is resolved transitively.
-  execFile: vi.fn(),
-  spawn: vi.fn()
+// Why the process layer and not node:child_process: the sync runner-script builders
+// reach git through `runProcessSync`, so the mock has to sit on the sanctioned runner.
+vi.mock('../shared/child-process/run-process', async (importOriginal) => ({
+  ...(await importOriginal<typeof RunProcess>()),
+  runProcessSync: runProcessSyncMock
 }))
+
+/** Stub the one `git rev-parse --git-path` the runner-script builders make. */
+const mockGitStdout = (stdout: string): void => {
+  runProcessSyncMock.mockReturnValue({ code: 0, signal: null, stdout, stderr: '', timedOut: false })
+}
 
 describe('createSetupRunnerScript', () => {
   const makeRepo = () =>
@@ -42,7 +46,7 @@ describe('createSetupRunnerScript', () => {
     const fs = await import('node:fs')
     const originalPlatform = process.platform
 
-    execFileSyncMock.mockReturnValue('C:\\repo\\.git\\worktrees\\feature\\orca\\setup-runner.cmd')
+    mockGitStdout('C:\\repo\\.git\\worktrees\\feature\\orca\\setup-runner.cmd')
     Object.defineProperty(process, 'platform', {
       configurable: true,
       value: 'win32'
@@ -91,7 +95,7 @@ describe('createSetupRunnerScript', () => {
     const fs = await import('node:fs')
     const originalPlatform = process.platform
 
-    execFileSyncMock.mockReturnValue('C:\\repo\\.git\\worktrees\\feature\\orca\\setup-runner.sh')
+    mockGitStdout('C:\\repo\\.git\\worktrees\\feature\\orca\\setup-runner.sh')
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
 
     try {
@@ -134,7 +138,7 @@ describe('createSetupRunnerScript', () => {
   it('leaves non-path setup env values alone under a Git Bash runner', async () => {
     const originalPlatform = process.platform
 
-    execFileSyncMock.mockReturnValue('C:\\repo\\.git\\worktrees\\feature\\orca\\setup-runner.sh')
+    mockGitStdout('C:\\repo\\.git\\worktrees\\feature\\orca\\setup-runner.sh')
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
 
     try {
@@ -158,7 +162,7 @@ describe('createSetupRunnerScript', () => {
   it('keeps native Windows env vars in Windows form for the default cmd runner', async () => {
     const originalPlatform = process.platform
 
-    execFileSyncMock.mockReturnValue('C:\\repo\\.git\\worktrees\\feature\\orca\\setup-runner.cmd')
+    mockGitStdout('C:\\repo\\.git\\worktrees\\feature\\orca\\setup-runner.cmd')
     Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
 
     try {
@@ -243,7 +247,7 @@ describe('createSetupRunnerScript', () => {
   it('derives ORCA_WORKSPACE_NAME from a POSIX worktree path', async () => {
     const originalPlatform = process.platform
 
-    execFileSyncMock.mockReturnValue('/test/repo/.git/worktrees/feature/orca/setup-runner.sh')
+    mockGitStdout('/test/repo/.git/worktrees/feature/orca/setup-runner.sh')
     Object.defineProperty(process, 'platform', {
       configurable: true,
       value: 'linux'
@@ -271,7 +275,7 @@ describe('createSetupRunnerScript', () => {
     const fs = await import('node:fs')
     const originalPlatform = process.platform
 
-    execFileSyncMock.mockReturnValue('/home/jin/.git/worktrees/feature/orca/setup-runner.sh')
+    mockGitStdout('/home/jin/.git/worktrees/feature/orca/setup-runner.sh')
     Object.defineProperty(process, 'platform', {
       configurable: true,
       value: 'win32'
@@ -320,7 +324,7 @@ describe('createSetupRunnerScript', () => {
     const fs = await import('node:fs')
     const originalPlatform = process.platform
 
-    execFileSyncMock.mockReturnValue('/home/jin/repo/.git/worktrees/feature/orca/setup-runner.sh')
+    mockGitStdout('/home/jin/repo/.git/worktrees/feature/orca/setup-runner.sh')
     Object.defineProperty(process, 'platform', {
       configurable: true,
       value: 'win32'
@@ -377,9 +381,7 @@ describe('createIssueCommandRunnerScript', () => {
     const fs = await import('node:fs')
     const originalPlatform = process.platform
 
-    execFileSyncMock.mockReturnValue(
-      '/test/repo/.git/worktrees/feature/orca/issue-command-runner.sh'
-    )
+    mockGitStdout('/test/repo/.git/worktrees/feature/orca/issue-command-runner.sh')
     Object.defineProperty(process, 'platform', {
       configurable: true,
       value: 'linux'
@@ -420,7 +422,7 @@ describe('createIssueCommandRunnerScript', () => {
   it('carries the WSL launch shell for a Windows-drive worktree routed through WSL', async () => {
     const originalPlatform = process.platform
 
-    execFileSyncMock.mockReturnValue('/mnt/c/repo/.git/orca/issue-command-runner.sh')
+    mockGitStdout('/mnt/c/repo/.git/orca/issue-command-runner.sh')
     Object.defineProperty(process, 'platform', {
       configurable: true,
       value: 'win32'
@@ -449,7 +451,7 @@ describe('createIssueCommandRunnerScript', () => {
   it('keeps native Windows issue runners on the cmd launch shell', async () => {
     const originalPlatform = process.platform
 
-    execFileSyncMock.mockReturnValue('C:\\repo\\.git\\orca\\issue-command-runner.cmd')
+    mockGitStdout('C:\\repo\\.git\\orca\\issue-command-runner.cmd')
     Object.defineProperty(process, 'platform', {
       configurable: true,
       value: 'win32'

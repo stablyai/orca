@@ -1,4 +1,4 @@
-import { gitExecFileAsync, gitExecFileSync } from './runner'
+import { gitExecFileAsync } from './runner'
 
 export type LocalGitExecOptions = {
   wslDistro?: string
@@ -36,43 +36,12 @@ async function resolveDefaultBaseRefFromProbes(
   return null
 }
 
-function hasGitRef(path: string, ref: string): boolean {
-  try {
-    gitExecFileSync(['rev-parse', '--verify', ref], { cwd: path })
-    return true
-  } catch {
-    return false
-  }
-}
-
 function gitRefToDefaultBaseRef(ref: string): string {
   return ref.replace(/^refs\/remotes\//, '')
 }
 
-function getVerifiedOriginHeadBaseRef(path: string): string | null {
-  try {
-    const ref = gitExecFileSync(['symbolic-ref', '--quiet', 'refs/remotes/origin/HEAD'], {
-      cwd: path
-    }).trim()
-    return ref && hasGitRef(path, ref) ? gitRefToDefaultBaseRef(ref) : null
-  } catch {
-    return null
-  }
-}
-
 /** Resolve the default base ref without inventing a fallback branch. */
-export function getDefaultBaseRef(path: string): string | null {
-  const originHeadBaseRef = getVerifiedOriginHeadBaseRef(path)
-  if (originHeadBaseRef) {
-    return originHeadBaseRef
-  }
-  for (const { ref, returnAs } of DEFAULT_BASE_REF_PROBES) {
-    if (hasGitRef(path, ref)) {
-      return returnAs
-    }
-  }
-  return null
-}
+export { getDefaultBaseRefAsync as getDefaultBaseRef }
 
 export async function getBaseRefDefault(
   path: string,

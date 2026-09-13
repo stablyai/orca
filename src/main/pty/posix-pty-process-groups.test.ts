@@ -1,10 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { recordSelfInitiatedTreeKillMock } = vi.hoisted(() => ({
-  recordSelfInitiatedTreeKillMock: vi.fn()
+const { recordSelfInitiatedTreeKillMock, runProcessSyncMock } = vi.hoisted(() => ({
+  recordSelfInitiatedTreeKillMock: vi.fn(),
+  runProcessSyncMock: vi.fn()
 }))
 vi.mock('../crash-reporting/self-initiated-tree-kill-log', () => ({
   recordSelfInitiatedTreeKill: recordSelfInitiatedTreeKillMock
+}))
+vi.mock('../../shared/child-process/run-process', () => ({
+  runProcessSync: runProcessSyncMock
 }))
 
 import {
@@ -14,6 +18,7 @@ import {
 
 beforeEach(() => {
   recordSelfInitiatedTreeKillMock.mockReset()
+  runProcessSyncMock.mockReset()
 })
 
 const TABLE = `
@@ -130,5 +135,42 @@ describe('POSIX PTY group-sweep breadcrumbs', () => {
     })
 
     expect(recordSelfInitiatedTreeKillMock.mock.calls.map(([kill]) => kill.pid)).toEqual([101, 100])
+  })
+})
+
+describe('POSIX PTY process table read', () => {
+  it('reads the table through the sanctioned runner, tty-scoped', () => {
+    runProcessSyncMock.mockImplementation((spec: { args: string[] }) =>
+      spec.args.includes('-t')
+        ? { code: 0, signal: null, stdout: TABLE, stderr: '', timedOut: false }
+        : { code: 0, signal: null, stdout: '  100  100 ttys001', stderr: '', timedOut: false }
+    )
+
+    forceKillPosixPtyProcessGroups(100, vi.fn(), {
+      platform: 'darwin',
+      currentPid: 999,
+      signalProcessGroup: vi.fn()
+    })
+
+    const specs = runProcessSyncMock.mock.calls.map(([spec]) => spec)
+    expect(specs.every((spec) => spec.program === 'ps')).toBe(true)
+    // Why pinned: a whole-host `ps -ax` retains the cost this module exists to bound.
+    expect(specs.some((spec) => spec.args.includes('-ax'))).toBe(false)
+    expect(specs.at(-1).args).toContain('-t')
+  })
+
+  it('falls back when the runner reports a non-zero ps', () => {
+    runProcessSyncMock.mockReturnValue({
+      code: 1,
+      signal: null,
+      stdout: '',
+      stderr: '',
+      timedOut: false
+    })
+    const fallback = vi.fn()
+
+    forceKillPosixPtyProcessGroups(100, fallback, { platform: 'darwin', currentPid: 999 })
+
+    expect(fallback).toHaveBeenCalledTimes(1)
   })
 })

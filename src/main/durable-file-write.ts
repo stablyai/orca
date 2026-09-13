@@ -6,6 +6,7 @@
 import { closeSync, fsyncSync, openSync, rmSync, writeFileSync } from 'node:fs'
 import { copyFile, open, readdir, rename, rm, stat } from 'node:fs/promises'
 import { basename, dirname, join } from 'node:path'
+import { serializePathWrite } from '../shared/path-write-serializer'
 import { renameFileWithWindowsRetry } from './codex-accounts/fs-utils'
 
 /**
@@ -25,6 +26,7 @@ async function syncDirectory(directory: string): Promise<void> {
   }
 }
 
+/** Only `writeFileDurableSync` reaches this: a crash/quit handler has no event loop left to await on. */
 function syncDirectorySync(directory: string): void {
   let fd: number | null = null
   try {
@@ -48,8 +50,10 @@ function syncDirectorySync(directory: string): void {
  * themselves and need the rename made durable.
  */
 export async function renameDurable(tmpPath: string, finalPath: string): Promise<void> {
-  await rename(tmpPath, finalPath)
-  await syncDirectory(dirname(finalPath))
+  await serializePathWrite(finalPath, async () => {
+    await rename(tmpPath, finalPath)
+    await syncDirectory(dirname(finalPath))
+  })
 }
 
 /**
@@ -77,34 +81,36 @@ export async function writeTempFileDurable(
  * the backup someone will fall back to. Returns false when the source does not exist.
  */
 export async function copyFileDurable(sourcePath: string, finalPath: string): Promise<boolean> {
-  const tmpPath = durableWriteTempPath(finalPath)
-  let renamed = false
-  try {
+  return await serializePathWrite(finalPath, async () => {
+    const tmpPath = durableWriteTempPath(finalPath)
+    let renamed = false
     try {
-      // copyFile stays in the kernel — and clones the extents outright on APFS and btrfs — so
-      // this does not pull the whole file through the process on every commit.
-      await copyFile(sourcePath, tmpPath)
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-        return false
+      try {
+        // copyFile stays in the kernel — and clones the extents outright on APFS and btrfs — so
+        // this does not pull the whole file through the process on every commit.
+        await copyFile(sourcePath, tmpPath)
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+          return false
+        }
+        throw error
       }
-      throw error
-    }
-    const handle = await open(tmpPath, 'r+')
-    try {
-      await handle.sync()
+      const handle = await open(tmpPath, 'r+')
+      try {
+        await handle.sync()
+      } finally {
+        await handle.close()
+      }
+      await rename(tmpPath, finalPath)
+      renamed = true
+      await syncDirectory(dirname(finalPath))
+      return true
     } finally {
-      await handle.close()
+      if (!renamed) {
+        await rm(tmpPath, { force: true }).catch(() => {})
+      }
     }
-    await rename(tmpPath, finalPath)
-    renamed = true
-    await syncDirectory(dirname(finalPath))
-    return true
-  } finally {
-    if (!renamed) {
-      await rm(tmpPath, { force: true }).catch(() => {})
-    }
-  }
+  })
 }
 
 /** Write `payload` to `tmpPath`, fsync it, then rename onto `finalPath` and fsync the directory. */
@@ -128,22 +134,24 @@ export async function writeFileDurableIfCurrent(
   payload: string,
   isCurrent: () => boolean
 ): Promise<boolean> {
-  let renamed = false
-  try {
-    // Why: fsync BEFORE rename. A rename that lands first can expose a zero-length file.
-    await writeTempFileDurable(tmpPath, payload)
-    if (!isCurrent()) {
-      return false
+  return await serializePathWrite(finalPath, async () => {
+    let renamed = false
+    try {
+      // Why: fsync BEFORE rename. A rename that lands first can expose a zero-length file.
+      await writeTempFileDurable(tmpPath, payload)
+      if (!isCurrent()) {
+        return false
+      }
+      await rename(tmpPath, finalPath)
+      renamed = true
+      await syncDirectory(dirname(finalPath))
+      return true
+    } finally {
+      if (!renamed) {
+        await rm(tmpPath, { force: true }).catch(() => {})
+      }
     }
-    await rename(tmpPath, finalPath)
-    renamed = true
-    await syncDirectory(dirname(finalPath))
-    return true
-  } finally {
-    if (!renamed) {
-      await rm(tmpPath, { force: true }).catch(() => {})
-    }
-  }
+  })
 }
 
 /** Temp path for a durable write. Shared shape so `removeStaleDurableWriteTempFiles` can reclaim orphans. */
@@ -186,7 +194,14 @@ export async function removeStaleDurableWriteTempFiles(
   }
 }
 
-/** Synchronous counterpart for quit and crash paths that cannot await. */
+/**
+ * The synchronous lane, for callers that have no await to give: quit/crash handlers
+ * (`primary-state-writes`' shutdown flush) and the two sync-by-construction browser stores
+ * (`browser-host-client-identity`, `browser-route-partition-binding-store`). Anything that can
+ * await must use `writeFileDurable` — this call blocks the IPC event loop for the whole fsync.
+ * It also bypasses the per-path lane above, since nothing can be awaited at crash time; a crash
+ * writer publishing last is the intended outcome.
+ */
 export function writeFileDurableSync(
   tmpPath: string,
   finalPath: string,

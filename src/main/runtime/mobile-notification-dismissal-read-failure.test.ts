@@ -8,11 +8,11 @@ vi.mock('node:fs', async (original) => {
   const f = await original<typeof fs>()
   return { ...f, readFileSync: vi.fn(f.readFileSync) }
 })
-it('preserves dismissal history after EIO', () => {
+it('preserves dismissal history after EIO', async () => {
   const dir = mkdtempSync(join(tmpdir(), 'push-comment-'))
   try {
     const store = new MobileNotificationDismissalStore(dir)
-    store.record({
+    await store.record({
       type: 'dismiss',
       notificationId: 'old',
       notificationEpoch: 'epoch',
@@ -24,7 +24,7 @@ it('preserves dismissal history after EIO', () => {
       throw Object.assign(new Error('read failed'), { code: 'EIO' })
     })
     const restarted = new MobileNotificationDismissalStore(dir)
-    restarted.record({
+    await restarted.record({
       type: 'dismiss',
       notificationId: 'new',
       notificationEpoch: 'epoch',

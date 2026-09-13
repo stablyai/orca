@@ -66,6 +66,7 @@ describe('CodexAccountService config sync', () => {
       rateLimits as never,
       createRuntimeHome() as never
     )
+    await service.ready
 
     await expect(
       service.consumeRateLimitResetCredit('66666666-6666-4666-8666-666666666666', expectedScope)
@@ -132,6 +133,7 @@ describe('CodexAccountService config sync', () => {
       } as never,
       createRuntimeHome() as never
     )
+    await firstService.ready
     await expect(
       firstService.consumeRateLimitResetCredit('eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee', ubuntuScope)
     ).rejects.toThrow('Ubuntu response lost')
@@ -147,6 +149,7 @@ describe('CodexAccountService config sync', () => {
       } as never,
       createRuntimeHome() as never
     )
+    await restarted.ready
 
     await expect(
       restarted.consumeRateLimitResetCredit('ffffffff-ffff-4fff-8fff-ffffffffffff', debianScope)
@@ -175,6 +178,7 @@ describe('CodexAccountService config sync', () => {
       rateLimits as never,
       runtimeHome as never
     )
+    await service.ready
 
     await expect(service.consumeCurrentRateLimitResetCredit()).resolves.toMatchObject({
       outcome: 'noCredit'
@@ -220,6 +224,7 @@ describe('CodexAccountService config sync', () => {
       } as never,
       createRuntimeHome() as never
     )
+    await service.ready
 
     await expect(service.consumeCurrentRateLimitResetCredit()).resolves.toEqual({
       outcome: 'reset',
@@ -265,6 +270,7 @@ describe('CodexAccountService config sync', () => {
       } as never,
       createRuntimeHome() as never
     )
+    await firstService.ready
 
     await expect(firstService.consumeCurrentRateLimitResetCredit()).rejects.toThrow(
       'provider response lost'
@@ -290,6 +296,7 @@ describe('CodexAccountService config sync', () => {
       } as never,
       createRuntimeHome() as never
     )
+    await restarted.ready
 
     await expect(restarted.consumeCurrentRateLimitResetCredit()).resolves.toEqual({
       outcome: 'alreadyRedeemed',
@@ -350,6 +357,7 @@ describe('CodexAccountService config sync', () => {
       } as never,
       createRuntimeHome() as never
     )
+    await service.ready
 
     await expect(service.consumeCurrentRateLimitResetCredit()).rejects.toThrow('unknown outcome')
     expect(consume).not.toHaveBeenCalled()
@@ -400,6 +408,7 @@ describe('CodexAccountService config sync', () => {
       } as never,
       createRuntimeHome() as never
     )
+    await service.ready
 
     // The orphan pending attempt wedges the target-scoped default reset until removal.
     await expect(service.consumeCurrentRateLimitResetCredit()).rejects.toThrow('unknown outcome')
@@ -459,6 +468,7 @@ describe('CodexAccountService config sync', () => {
       } as never,
       createRuntimeHome() as never
     )
+    await service.ready
     vi.spyOn(store, 'replaceCodexResetCreditAttemptLedgerAndFlush').mockImplementationOnce(() => {
       throw new Error('disk full')
     })
@@ -491,6 +501,7 @@ describe('CodexAccountService config sync', () => {
       rateLimits as never,
       runtimeHome as never
     )
+    await service.ready
 
     const queueBlocker = service.selectAccount(null)
     await vi.waitFor(() => expect(rateLimits.refreshForCodexAccountChange).toHaveBeenCalledOnce())

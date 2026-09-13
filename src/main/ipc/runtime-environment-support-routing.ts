@@ -6,7 +6,10 @@ import type {
 } from '../../shared/runtime-rpc-envelope'
 import type { KnownRuntimeEnvironment } from '../../shared/runtime-environments'
 import { getPreferredPairingOffer } from '../../shared/runtime-environments'
-import { markEnvironmentUsed, resolveEnvironment } from '../../shared/runtime-environment-store'
+import {
+  markEnvironmentUsedDetached,
+  resolveEnvironment
+} from '../../shared/runtime-environment-store'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../shared/protocol-version'
 import {
   subscribeRemoteRuntimeRequest,
@@ -102,7 +105,7 @@ export function executeSupportRoutedCall(args: {
       ),
     markUsed: (environmentId, response) => {
       if (response.ok) {
-        markEnvironmentUsed(args.userDataPath, environmentId, {
+        markEnvironmentUsedDetached(args.userDataPath, environmentId, {
           runtimeId: response._meta.runtimeId
         })
       }
@@ -262,7 +265,7 @@ function subscriptionCallbacks(
   return {
     onResponse: (response: RuntimeRpcResponse<unknown>) => {
       if (response.ok && shouldMarkUsed()) {
-        markEnvironmentUsed(args.userDataPath, args.environment.id, {
+        markEnvironmentUsedDetached(args.userDataPath, args.environment.id, {
           runtimeId: response._meta.runtimeId
         })
       }

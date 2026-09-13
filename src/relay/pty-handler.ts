@@ -89,7 +89,7 @@ import {
   ClaimedAgentPtyOwnerRegistry
 } from '../shared/claimed-agent-pty-owner'
 import type { RelayPtySourceOutput } from './relay-pty-source-output'
-import { signalPosixPtyForegroundGroup } from '../main/pty/posix-pty-foreground-group'
+import { signalPosixPtyForegroundGroupAsync } from '../main/pty/posix-pty-foreground-group'
 import { readPtsName } from '../main/pty/node-pty-pts-name'
 import type { RelayPtySourcePublication } from './relay-pty-source-publication'
 import type {
@@ -2484,9 +2484,14 @@ export class PtyHandler {
     // Host-local behavior only — no wire change, so an older client simply gets a
     // SIGWINCH that now lands. Destructive signals keep node-pty's own path.
     if (signal === 'SIGWINCH') {
-      signalPosixPtyForegroundGroup(managed.pty.pid, readPtsName(managed.pty), signal, () => {
-        managed.pty.kill(signal)
-      })
+      await signalPosixPtyForegroundGroupAsync(
+        managed.pty.pid,
+        readPtsName(managed.pty),
+        signal,
+        () => {
+          managed.pty.kill(signal)
+        }
+      )
       return
     }
     managed.pty.kill(signal)

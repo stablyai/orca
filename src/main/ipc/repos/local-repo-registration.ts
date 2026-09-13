@@ -25,11 +25,11 @@ export async function addLocalRepoFromPath(
   if (repoKind === 'git') {
     await awaitWindowsHostGitEnvironmentReady({ cwd: path })
   }
-  if (repoKind === 'git' && !isGitRepo(path)) {
+  if (repoKind === 'git' && !(await isGitRepo(path))) {
     return { error: `Not a valid git repository: ${path}` }
   }
 
-  const resolvedPath = repoKind === 'git' ? getGitRepoRoot(path) : path
+  const resolvedPath = repoKind === 'git' ? await getGitRepoRoot(path) : path
   const pathKey = normalizeRuntimePathForComparison(path)
   const existing = store
     .getRepos()
@@ -55,7 +55,7 @@ export async function addLocalRepoFromPath(
   // it belongs to an already-tracked repo. Adding it anyway yields a second "ready" host setup on the
   // same project and host — a duplicate run-target row that resolves to a transient worktree path.
   if (repoKind === 'git') {
-    const mainRepoRoot = getLinkedWorktreeMainRepoRoot(resolvedPath)
+    const mainRepoRoot = await getLinkedWorktreeMainRepoRoot(resolvedPath)
     if (mainRepoRoot) {
       const mainRepoKey = normalizeRuntimePathForComparison(mainRepoRoot)
       // Why !isFolderRepo: only a git-kind main checkout projects onto the same project as its

@@ -77,7 +77,7 @@ export class RuntimeNestedRepoImport {
     for (const [projectGroupOrder, repoPath] of selection.selectedPaths.entries()) {
       try {
         await awaitWindowsHostGitEnvironmentReady({ cwd: repoPath })
-        if (!isGitRepo(repoPath)) {
+        if (!(await isGitRepo(repoPath))) {
           results.push({ path: repoPath, status: 'failed', error: 'Not a valid git repository' })
           continue
         }

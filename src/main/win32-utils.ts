@@ -1,6 +1,6 @@
-import { execFile, execFileSync, type ExecFileOptionsWithStringEncoding } from 'node:child_process'
 import { delimiter, join, win32 } from 'node:path'
 import { existsSync } from 'node:fs'
+import { runProcess, runProcessSync, type ProcessResult } from '../shared/child-process/run-process'
 
 export {
   getCmdExePath,
@@ -13,20 +13,12 @@ export {
   type GetSpawnArgsForWindowsOptions
 } from '../shared/windows-batch-spawn'
 
-function execFileWithoutBlocking(
-  command: string,
-  args: string[],
-  options: ExecFileOptionsWithStringEncoding
-): Promise<string> {
-  return new Promise((resolve, reject) => {
-    execFile(command, args, options, (error, stdout) => {
-      if (error) {
-        reject(error)
-        return
-      }
-      resolve(stdout)
-    })
-  })
+/** execFile(Sync) turned a non-zero exit into a throw; runProcess returns it as data. */
+function assertExitZero(program: string, result: ProcessResult): void {
+  if (result.code !== 0) {
+    const status = result.code ?? result.signal ?? 'no status'
+    throw new Error(`${program} exited ${status}: ${result.stderr.trim()}`)
+  }
 }
 
 /**
@@ -49,6 +41,15 @@ export function getRegExePath(env: NodeJS.ProcessEnv = process.env): string {
   return win32.join(root, 'System32', 'reg.exe')
 }
 
+/**
+ * Why cached: resolution stats every candidate name in every PATH directory, each one through
+ * the Windows filter-driver stack, and IPC handlers re-resolve the same few binaries. A hit
+ * cannot go stale in a way the spawn's own ENOENT misses; a miss expires so a binary installed
+ * mid-session is still found.
+ */
+const RESOLVE_MISS_TTL_MS = 10_000
+const resolvedWindowsCommands = new Map<string, { resolved: string; expiresAt: number }>()
+
 export function resolveWindowsCommand(
   command: string,
   env: NodeJS.ProcessEnv = process.env
@@ -65,14 +66,25 @@ export function resolveWindowsCommand(
     return command
   }
 
+  const cacheKey = `${pathEnv}\u0000${command}`
+  const cached = resolvedWindowsCommands.get(cacheKey)
+  if (cached && cached.expiresAt > performance.now()) {
+    return cached.resolved
+  }
+
   for (const directory of pathEnv.split(delimiter).filter(Boolean)) {
     for (const name of [`${command}.cmd`, `${command}.exe`, `${command}.bat`, command]) {
       const candidate = join(directory, name)
       if (existsSync(candidate)) {
+        resolvedWindowsCommands.set(cacheKey, { resolved: candidate, expiresAt: Infinity })
         return candidate
       }
     }
   }
+  resolvedWindowsCommands.set(cacheKey, {
+    resolved: command,
+    expiresAt: performance.now() + RESOLVE_MISS_TTL_MS
+  })
   return command
 }
 
@@ -104,6 +116,9 @@ function cachedOrEnvironmentIdentity(): string | undefined {
   return undefined
 }
 
+const WHOAMI_SID_ARGS = ['/user', '/fo', 'csv', '/nh'] as const
+const WHOAMI_TIMEOUT_MS = 5000
+
 function identityFromWhoamiOutput(output: string): string | null {
   // CSV columns: "DOMAIN\\user","S-1-5-21-..."
   const sidMatch = /"(S-[\d-]+)"\s*$/.exec(output.trim())
@@ -120,13 +135,15 @@ function resolveCurrentIdentity(): string | null {
     return knownIdentity
   }
   try {
-    const output = execFileSync(getWhoamiExePath(), ['/user', '/fo', 'csv', '/nh'], {
-      encoding: 'utf-8',
-      stdio: ['ignore', 'pipe', 'ignore'],
-      windowsHide: true,
-      timeout: 5000
+    // Why sync: the only callers are grantDirAcl's EACCES/EPERM recovery inside synchronous
+    // atomic writes; every async caller goes through resolveCurrentIdentityAsync, and whichever
+    // runs first populates the cache for the other.
+    const result = runProcessSync({
+      program: getWhoamiExePath(),
+      args: WHOAMI_SID_ARGS,
+      timeoutMs: WHOAMI_TIMEOUT_MS
     })
-    const resolvedIdentity = identityFromWhoamiOutput(output)
+    const resolvedIdentity = result.code === 0 ? identityFromWhoamiOutput(result.stdout) : null
     if (resolvedIdentity) {
       cachedIdentity = resolvedIdentity
     }
@@ -141,21 +158,18 @@ async function resolveCurrentIdentityAsync(): Promise<string | null> {
   if (knownIdentity !== undefined) {
     return knownIdentity
   }
+  // Single-flight: concurrent IPC handlers share one whoami spawn instead of queueing one each.
   if (!pendingIdentityResolution) {
     pendingIdentityResolution = (async () => {
       try {
-        const stdout = await execFileWithoutBlocking(
-          getWhoamiExePath(),
-          ['/user', '/fo', 'csv', '/nh'],
-          {
-            encoding: 'utf-8',
-            windowsHide: true,
-            timeout: 5000
-          }
-        )
+        const result = await runProcess({
+          program: getWhoamiExePath(),
+          args: WHOAMI_SID_ARGS,
+          timeoutMs: WHOAMI_TIMEOUT_MS
+        })
         // Why: a synchronous caller may resolve identity while async whoami
         // is in flight; its authoritative cached result must win the race.
-        const resolvedIdentity = identityFromWhoamiOutput(stdout)
+        const resolvedIdentity = result.code === 0 ? identityFromWhoamiOutput(result.stdout) : null
         if (cachedIdentity === undefined && resolvedIdentity) {
           cachedIdentity = resolvedIdentity
         }
@@ -195,11 +209,13 @@ export function grantDirAcl(dirPath: string, options?: { recursive?: boolean }):
   // dirs (tens of thousands of cached chromium files), making the startup
   // grant silently fail. Give recursive calls a generous budget.
   const timeout = options?.recursive ? 60_000 : 10_000
-  execFileSync(getIcaclsExePath(), args, {
-    stdio: 'ignore',
-    windowsHide: true,
-    timeout
-  })
+  // Why sync: every caller is an EACCES/EPERM recovery inside a synchronous atomic write
+  // (codex-accounts/fs-utils, browser-route-partition-binding-store, agent-hooks/installer-utils),
+  // which must not publish the file before the grant lands. Async callers use grantDirAclAsync.
+  assertExitZero(
+    getIcaclsExePath(),
+    runProcessSync({ program: getIcaclsExePath(), args, timeoutMs: timeout })
+  )
 }
 
 export async function grantDirAclAsync(dirPath: string): Promise<void> {
@@ -209,13 +225,12 @@ export async function grantDirAclAsync(dirPath: string): Promise<void> {
   }
   // Why: crash recovery runs on Electron's main thread; an asynchronous
   // icacls child keeps its worst-case timeout from freezing every window.
-  await execFileWithoutBlocking(
+  assertExitZero(
     getIcaclsExePath(),
-    [dirPath, '/grant:r', `${identity}:(OI)(CI)(F)`],
-    {
-      encoding: 'utf-8',
-      windowsHide: true,
-      timeout: 10_000
-    }
+    await runProcess({
+      program: getIcaclsExePath(),
+      args: [dirPath, '/grant:r', `${identity}:(OI)(CI)(F)`],
+      timeoutMs: 10_000
+    })
   )
 }
