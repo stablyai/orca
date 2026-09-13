@@ -177,7 +177,7 @@ describe('registerNotificationHandlers', () => {
       Object.defineProperty(process, 'platform', { value: originalPlatform, configurable: true })
     })
 
-    it('suppresses notifications while the mic is actively in use', async () => {
+    it('delivers the notification but suppresses only its sound while the mic is active', async () => {
       readMicActiveStatusMock.mockResolvedValue(true)
       registerNotificationHandlers({
         getSettings: () => ({
@@ -186,20 +186,22 @@ describe('registerNotificationHandlers', () => {
             agentTaskComplete: true,
             terminalBell: true,
             suppressWhenFocused: false,
-            suppressWhileMicActive: true
+            suppressWhileMicActive: true,
+            customSoundId: 'system'
           }
         })
       } as never)
 
       const handler = getDispatchHandler()
       expect(await handler({}, { source: 'agent-task-complete' })).toEqual({
-        delivered: false,
-        reason: 'suppressed-mic-active'
+        delivered: true,
+        soundSuppressed: true
       })
-      expect(notificationCtorMock).not.toHaveBeenCalled()
+      // Why: the banner and click action must still show — only the sound is withheld.
+      expect(notificationCtorMock).toHaveBeenCalledWith(expect.objectContaining({ silent: true }))
     })
 
-    it('delivers normally when the mic is inactive even with the toggle on', async () => {
+    it('delivers normally with sound when the mic is inactive even with the toggle on', async () => {
       readMicActiveStatusMock.mockResolvedValue(false)
       registerNotificationHandlers({
         getSettings: () => ({

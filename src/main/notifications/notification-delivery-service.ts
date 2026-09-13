@@ -27,7 +27,8 @@ export type NotificationDeliveryDependencies = {
   deliverNative: (
     request: NotificationDispatchRequest,
     options: ReturnType<typeof buildNotificationOptions>,
-    settings: NotificationSettings
+    settings: NotificationSettings,
+    deliveryOptions?: { suppressSound?: boolean }
   ) => NotificationDispatchResult | Promise<NotificationDispatchResult>
   platform: NodeJS.Platform
   now: () => number
@@ -54,7 +55,8 @@ export function createNotificationDeliveryService(
   const deliverNativeAndRecord = (
     request: NotificationDispatchRequest,
     options: ReturnType<typeof buildNotificationOptions>,
-    settings: NotificationSettings
+    settings: NotificationSettings,
+    deliveryOptions?: { suppressSound?: boolean }
   ): NotificationDispatchResult | Promise<NotificationDispatchResult> => {
     const recordIfDelivered = (result: NotificationDispatchResult): NotificationDispatchResult => {
       if (result.delivered) {
@@ -62,7 +64,7 @@ export function createNotificationDeliveryService(
       }
       return result
     }
-    const result = deps.deliverNative(request, options, settings)
+    const result = deps.deliverNative(request, options, settings, deliveryOptions)
     return result instanceof Promise ? result.then(recordIfDelivered) : recordIfDelivered(result)
   }
 
@@ -143,9 +145,9 @@ export function createNotificationDeliveryService(
         return { delivered: false, reason: 'suppressed-focus' }
       }
 
-      const deliverToDesktop = ():
-        | NotificationDispatchResult
-        | Promise<NotificationDispatchResult> => {
+      const deliverToDesktop = (
+        suppressSound: boolean
+      ): NotificationDispatchResult | Promise<NotificationDispatchResult> => {
         // Explicit Settings tests bypass burst deduplication.
         if (request.source !== 'test') {
           // Collapse unkeyed worktree events across sources; attention keys isolate their own repeats.
@@ -165,7 +167,7 @@ export function createNotificationDeliveryService(
         }
 
         if (deps.platform !== 'darwin') {
-          return deliverNativeAndRecord(request, notificationOptions, settings)
+          return deliverNativeAndRecord(request, notificationOptions, settings, { suppressSound })
         }
         // macOS swallows denied/undecided notifications; allow the renderer fallback instead.
         return deps.readAuthorizationStatus().then((authorization) => {
@@ -173,26 +175,23 @@ export function createNotificationDeliveryService(
             deps.recordDeliveryOutcome('failed')
             return { delivered: false, reason: 'blocked-by-system' }
           }
-          return deliverNativeAndRecord(request, notificationOptions, settings)
+          return deliverNativeAndRecord(request, notificationOptions, settings, { suppressSound })
         })
       }
 
-      // Why: unreadable/unsupported mic state resolves to null, which we treat as "not active"
-      // rather than suppressing incorrectly.
+      // Why suppress the sound rather than skip delivery: the setting promises to skip the
+      // notification *sound*, not hide the notification itself — the banner and click action
+      // still deliver normally. Unreadable/unsupported mic state resolves to null, which we
+      // treat as "not active" rather than suppressing incorrectly.
       if (
         settings.suppressWhileMicActive &&
         deps.platform === 'darwin' &&
         deps.readMicActiveStatus
       ) {
-        return deps.readMicActiveStatus().then((micActive) => {
-          if (micActive === true) {
-            return { delivered: false, reason: 'suppressed-mic-active' }
-          }
-          return deliverToDesktop()
-        })
+        return deps.readMicActiveStatus().then((micActive) => deliverToDesktop(micActive === true))
       }
 
-      return deliverToDesktop()
+      return deliverToDesktop(false)
     }
   }
 }

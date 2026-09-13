@@ -247,17 +247,17 @@ export function NotificationsPane({
 
       <NotificationSettingToggle
         label={translate(
-          'auto.components.settings.NotificationsPane.6c0728f5e2',
+          'auto.components.settings.NotificationsPane.suppressMicActiveLabel',
           'Suppress While Mic Active'
         )}
         description={
           platform !== null && platform !== 'darwin'
             ? translate(
-                'auto.components.settings.NotificationsPane.c8617b37ac',
+                'auto.components.settings.NotificationsPane.suppressMicActiveUnsupportedDescription',
                 'Skip the notification sound while your mic is in use (e.g. on a call). macOS only.'
               )
             : translate(
-                'auto.components.settings.NotificationsPane.568f113223',
+                'auto.components.settings.NotificationsPane.suppressMicActiveDescription',
                 'Skip the notification sound while your mic is in use (e.g. on a call).'
               )
         }

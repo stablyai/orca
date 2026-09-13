@@ -126,11 +126,11 @@ export const getNotificationsPaneSearchEntries = createLocalizedCatalog(() => [
   },
   {
     title: translate(
-      'auto.components.settings.notifications.search.c3adf3b941',
+      'auto.components.settings.notifications.search.suppressMicActiveTitle',
       'Suppress While Mic Active'
     ),
     description: translate(
-      'auto.components.settings.notifications.search.8b553db79c',
+      'auto.components.settings.notifications.search.suppressMicActiveDescription',
       'Avoid playing the notification sound while the microphone is actively in use.'
     ),
     keywords: [
@@ -142,13 +142,13 @@ export const getNotificationsPaneSearchEntries = createLocalizedCatalog(() => [
         'auto.components.settings.notifications.search.fa60d8e4ab',
         'suppress'
       ),
-      ...translateSearchKeyword('auto.components.settings.notifications.search.e03a2b355b', 'mic'),
+      ...translateSearchKeyword('auto.components.settings.notifications.search.mic', 'mic'),
       ...translateSearchKeyword(
-        'auto.components.settings.notifications.search.a98affbb35',
+        'auto.components.settings.notifications.search.microphone',
         'microphone'
       ),
-      ...translateSearchKeyword('auto.components.settings.notifications.search.ad5f205b24', 'call'),
-      ...translateSearchKeyword('auto.components.settings.notifications.search.0495f1fc54', 'zoom')
+      ...translateSearchKeyword('auto.components.settings.notifications.search.call', 'call'),
+      ...translateSearchKeyword('auto.components.settings.notifications.search.zoom', 'zoom')
     ]
   },
   {

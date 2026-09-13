@@ -21,7 +21,9 @@ export function deliverAgentAttentionNotification(
     .then((result) => {
       onResult?.(result)
       if (result.delivered) {
-        void playDesktopNotificationSound(sound.customSoundId, sound.customSoundVolume)
+        if (!result.soundSuppressed) {
+          void playDesktopNotificationSound(sound.customSoundId, sound.customSoundVolume)
+        }
         return
       }
       // Surface blocked macOS permission in-app rather than silently losing the notification.

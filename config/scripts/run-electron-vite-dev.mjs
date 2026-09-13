@@ -257,7 +257,9 @@ function prepareMacDevElectronApp() {
   const requiredResourcePaths = [
     chromiumResourcePath,
     path.join(appPath, 'Contents', 'MacOS', 'orca-keyboard-layout'),
-    path.join(appPath, 'Contents', 'MacOS', 'orca-process-footprint')
+    path.join(appPath, 'Contents', 'MacOS', 'orca-process-footprint'),
+    // Required so a bundle cached before this helper existed (or that failed to build it) retries next launch instead of silently disabling mic suppression.
+    path.join(appPath, 'Contents', 'MacOS', 'orca-mic-active-status')
   ]
 
   function copiedAppIsUsable() {
