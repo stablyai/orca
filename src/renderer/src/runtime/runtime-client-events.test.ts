@@ -110,6 +110,29 @@ describe('subscribeRuntimeClientEvents', () => {
     expect(onError).not.toHaveBeenCalled()
   })
 
+  it('forwards cloneProgress event frames', async () => {
+    let capturedOnResponse: ((response: unknown) => void) | undefined
+    const subscribe = vi.fn(async (_args, nextCallbacks) => {
+      capturedOnResponse = (nextCallbacks as { onResponse: (response: unknown) => void }).onResponse
+      return { unsubscribe: vi.fn(), sendBinary: vi.fn() }
+    })
+    const onEvent = vi.fn()
+    vi.stubGlobal('window', { api: { runtimeEnvironments: { subscribe } } })
+
+    await subscribeRuntimeClientEvents('env-1', onEvent)
+    if (!capturedOnResponse) {
+      throw new Error('Expected subscription callbacks')
+    }
+    const cloneProgress = {
+      type: 'cloneProgress',
+      destination: '/home/user/projects',
+      phase: 'Receiving objects',
+      percent: 42
+    }
+    capturedOnResponse({ ok: true, result: cloneProgress })
+    expect(onEvent).toHaveBeenCalledWith(cloneProgress)
+  })
+
   it('signals a replay-tagged response so event-derived state can resync after a reconnect', async () => {
     let capturedOnResponse: ((response: unknown) => void) | undefined
     const subscribe = vi.fn(async (_args, nextCallbacks) => {

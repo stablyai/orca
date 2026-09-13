@@ -105,6 +105,15 @@ export function registerRuntimeClientIpcBridge(
       })
       return
     }
+    if (event.type === 'cloneProgress') {
+      useAppStore
+        .getState()
+        .updateCloneTaskProgress(
+          { backend: 'environment', destination: event.destination, environmentId },
+          { phase: event.phase, percent: event.percent }
+        )
+      return
+    }
     if (event.type === 'sshStateChanged') {
       applyRuntimeEnvironmentSshStateChanged(environmentId, event.targetId, event.state, generation)
       return

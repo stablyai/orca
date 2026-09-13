@@ -15,6 +15,7 @@ import { clearGitStatusLineStatsCache } from '../shared/git-status-line-stats-ca
 import { invalidateGitBranchLineTotalInFlight } from '../shared/git-branch-line-total'
 import { buildRelayGitEnv, buildRelayUnattendedGitEnv } from './relay-command-env'
 import { getGitCloneFailureMessage } from '../shared/git-clone-failure-message'
+import { parseGitCloneProgress } from '../shared/git-clone-progress'
 import type {
   GitHandlerCommandOptions,
   GitHandlerCommandResult,
@@ -225,15 +226,8 @@ export class GitHandler {
       child.stderr?.on('data', (chunk: Buffer) => {
         const text = chunk.toString('utf-8')
         stderr = (stderr + text).slice(-4096)
-        for (const line of text.split(/[\r\n]+/)) {
-          const match = line.match(/^([\w\s]+):\s+(\d+)%/)
-          if (match) {
-            this.dispatcher.notify('git.cloneProgress', {
-              progressId,
-              phase: match[1].trim(),
-              percent: Number.parseInt(match[2], 10)
-            })
-          }
+        for (const progress of parseGitCloneProgress(text)) {
+          this.dispatcher.notify('git.cloneProgress', { progressId, ...progress })
         }
       })
       child.on('error', (error) => {

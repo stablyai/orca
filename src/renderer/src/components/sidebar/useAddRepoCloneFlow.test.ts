@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as ReactModule from 'react'
 import type { Repo } from '../../../../shared/repo-types'
+import type { CloneTask } from '@/store/slices/clone-tasks'
 
 const mocks = vi.hoisted(() => ({
   stateValues: [] as unknown[],
@@ -10,16 +11,12 @@ const mocks = vi.hoisted(() => ({
   refIndex: 0,
   storeState: {
     settings: { activeRuntimeEnvironmentId: null as string | null },
-    repos: [] as Repo[],
-    projects: [],
-    projectHostSetups: []
+    cloneTasksById: {} as Record<string, CloneTask>,
+    startCloneTask: vi.fn(),
+    backgroundCloneTask: vi.fn(),
+    dismissCloneTask: vi.fn()
   },
-  cloneRemote: vi.fn(),
-  cloneLocal: vi.fn(),
   pickDirectory: vi.fn(),
-  onCloneProgress: vi.fn(() => vi.fn()),
-  callRuntimeRpc: vi.fn(),
-  fetchWorktrees: vi.fn(),
   onGitRepoReady: vi.fn()
 }))
 
@@ -66,8 +63,7 @@ vi.mock('@/store', () => {
 })
 
 vi.mock('@/runtime/runtime-rpc-client', () => ({
-  getActiveRuntimeTarget: () => ({ kind: 'local' }),
-  callRuntimeRpc: mocks.callRuntimeRpc
+  getActiveRuntimeTarget: () => ({ kind: 'local' })
 }))
 
 vi.mock('sonner', () => ({
@@ -96,27 +92,17 @@ describe('useAddRepoCloneFlow', () => {
     mocks.stateSetters = []
     mocks.refIndex = 0
     mocks.refValues = []
-    mocks.stateValues = ['https://github.com/stablyai/orca.git', '/srv', false, null, null]
-    mocks.storeState.repos = []
-    mocks.storeState.projects = []
-    mocks.storeState.projectHostSetups = []
+    // [cloneUrl, cloneDestination, cloneError, activeTaskId]
+    mocks.stateValues = ['https://github.com/stablyai/orca.git', '/srv', null, null]
+    mocks.storeState.cloneTasksById = {}
+    mocks.storeState.settings.activeRuntimeEnvironmentId = null
+    mocks.storeState.startCloneTask.mockReturnValue('task-1')
     vi.stubGlobal('window', {
-      api: {
-        repos: {
-          cloneRemote: mocks.cloneRemote,
-          clone: mocks.cloneLocal,
-          pickDirectory: mocks.pickDirectory,
-          onCloneProgress: mocks.onCloneProgress
-        }
-      }
+      api: { repos: { pickDirectory: mocks.pickDirectory } }
     })
   })
 
-  it('clones through the selected SSH target', async () => {
-    const repo = makeRepo({ connectionId: 'ssh-1' })
-    mocks.cloneRemote.mockResolvedValue(repo)
-    mocks.callRuntimeRpc.mockReset()
-    mocks.fetchWorktrees.mockResolvedValue(true)
+  it('starts an SSH-backed clone task through the store', async () => {
     const { useAddRepoCloneFlow } = await import('./useAddRepoCloneFlow')
 
     const result = useAddRepoCloneFlow({
@@ -124,82 +110,20 @@ describe('useAddRepoCloneFlow', () => {
       activeRuntimeEnvironmentId: null,
       sshTargetId: 'ssh-1',
       workspaceDir: '/local/workspace',
-      fetchWorktrees: mocks.fetchWorktrees,
       onGitRepoReady: mocks.onGitRepoReady
     })
     await result.handleClone()
 
-    expect(mocks.cloneRemote).toHaveBeenCalledWith({
-      connectionId: 'ssh-1',
+    expect(mocks.storeState.startCloneTask).toHaveBeenCalledWith({
       url: 'https://github.com/stablyai/orca.git',
-      destination: '/srv'
+      destination: '/srv',
+      backend: 'ssh',
+      connectionId: 'ssh-1',
+      environmentId: undefined
     })
-    expect(mocks.cloneLocal).not.toHaveBeenCalled()
-    expect(mocks.fetchWorktrees).toHaveBeenCalledWith(repo.id, {
-      requireAuthoritative: true,
-      executionHostId: 'ssh:ssh-1'
-    })
-    expect(mocks.storeState.repos).toContainEqual({
-      ...repo,
-      executionHostId: 'ssh:ssh-1'
-    })
-    expect(mocks.storeState.projects).toEqual(
-      expect.arrayContaining([expect.objectContaining({ sourceRepoIds: [repo.id] })])
-    )
-    expect(mocks.storeState.projectHostSetups).toEqual(
-      expect.arrayContaining([expect.objectContaining({ repoId: repo.id, path: repo.path })])
-    )
-    expect(mocks.onGitRepoReady).toHaveBeenCalledWith(repo.id, 'clone_url', 'ssh:ssh-1')
   })
 
-  it('does not prefill SSH clone destinations from the local workspace directory', async () => {
-    mocks.stateValues = ['https://github.com/stablyai/orca.git', '', false, null, null]
-    const { useAddRepoCloneFlow } = await import('./useAddRepoCloneFlow')
-
-    const result = useAddRepoCloneFlow({
-      step: 'clone',
-      activeRuntimeEnvironmentId: null,
-      sshTargetId: 'ssh-1',
-      workspaceDir: '/private/tmp/orca-setup-e2e.hOWO1f',
-      fetchWorktrees: mocks.fetchWorktrees,
-      onGitRepoReady: mocks.onGitRepoReady
-    })
-
-    expect(result.cloneDestination).toBe('')
-    expect(mocks.stateSetters[1]).not.toHaveBeenCalledWith('/private/tmp/orca-setup-e2e.hOWO1f')
-  })
-
-  it('strips Electron IPC wrappers from clone errors', async () => {
-    const cloneError =
-      'Clone failed: Destination already exists and is not empty: /srv/orca. Choose a different parent folder, delete the existing folder, or add the existing repository instead.'
-    mocks.cloneRemote.mockRejectedValue(
-      new Error(`Error invoking remote method 'repos:cloneRemote': Error: ${cloneError}`)
-    )
-    const { useAddRepoCloneFlow } = await import('./useAddRepoCloneFlow')
-
-    const result = useAddRepoCloneFlow({
-      step: 'clone',
-      activeRuntimeEnvironmentId: null,
-      sshTargetId: 'ssh-1',
-      workspaceDir: '/local/workspace',
-      fetchWorktrees: mocks.fetchWorktrees,
-      onGitRepoReady: mocks.onGitRepoReady
-    })
-    await result.handleClone()
-
-    expect(mocks.stateSetters[3]).toHaveBeenCalledWith(cloneError)
-  })
-
-  it('clones through the selected runtime environment', async () => {
-    const repo = makeRepo({ id: 'runtime-repo' })
-    const localRepo = makeRepo({
-      id: repo.id,
-      path: '/local/runtime-repo',
-      executionHostId: 'local'
-    })
-    mocks.storeState.repos = [localRepo]
-    mocks.callRuntimeRpc.mockResolvedValue({ repo })
-    mocks.fetchWorktrees.mockResolvedValue(true)
+  it('starts an environment-backed clone task when a runtime environment is active', async () => {
     const { useAddRepoCloneFlow } = await import('./useAddRepoCloneFlow')
 
     const result = useAddRepoCloneFlow({
@@ -207,31 +131,102 @@ describe('useAddRepoCloneFlow', () => {
       activeRuntimeEnvironmentId: 'env-1',
       sshTargetId: null,
       workspaceDir: '/local/workspace',
-      fetchWorktrees: mocks.fetchWorktrees,
       onGitRepoReady: mocks.onGitRepoReady
     })
     await result.handleClone()
 
-    expect(mocks.callRuntimeRpc).toHaveBeenCalledWith(
-      { kind: 'environment', environmentId: 'env-1' },
-      'repo.clone',
-      {
+    expect(mocks.storeState.startCloneTask).toHaveBeenCalledWith({
+      url: 'https://github.com/stablyai/orca.git',
+      destination: '/srv',
+      backend: 'environment',
+      connectionId: undefined,
+      environmentId: 'env-1'
+    })
+  })
+
+  it('starts a local clone task with no host qualifiers', async () => {
+    const { useAddRepoCloneFlow } = await import('./useAddRepoCloneFlow')
+
+    const result = useAddRepoCloneFlow({
+      step: 'clone',
+      activeRuntimeEnvironmentId: null,
+      sshTargetId: null,
+      workspaceDir: '/local/workspace',
+      onGitRepoReady: mocks.onGitRepoReady
+    })
+    await result.handleClone()
+
+    expect(mocks.storeState.startCloneTask).toHaveBeenCalledWith({
+      url: 'https://github.com/stablyai/orca.git',
+      destination: '/srv',
+      backend: 'local',
+      connectionId: undefined,
+      environmentId: undefined
+    })
+  })
+
+  it('surfaces the task error and navigates on task success', async () => {
+    const repo = makeRepo()
+    // Active task points at a succeeded task; the success effect should navigate.
+    mocks.stateValues = ['https://github.com/stablyai/orca.git', '/srv', null, 'task-1']
+    mocks.storeState.cloneTasksById = {
+      'task-1': {
+        id: 'task-1',
         url: 'https://github.com/stablyai/orca.git',
-        destination: '/srv'
-      },
-      { timeoutMs: 10 * 60_000 }
-    )
-    expect(mocks.cloneLocal).not.toHaveBeenCalled()
-    expect(mocks.cloneRemote).not.toHaveBeenCalled()
-    expect(mocks.fetchWorktrees).toHaveBeenCalledWith(repo.id, {
-      requireAuthoritative: true,
-      executionHostId: 'runtime:env-1'
+        destination: '/srv',
+        displayName: 'orca',
+        backend: 'local',
+        status: 'success',
+        repoId: repo.id,
+        backgrounded: false,
+        startedAt: 1
+      }
+    }
+    const { useAddRepoCloneFlow } = await import('./useAddRepoCloneFlow')
+
+    useAddRepoCloneFlow({
+      step: 'clone',
+      activeRuntimeEnvironmentId: null,
+      sshTargetId: null,
+      workspaceDir: '/local/workspace',
+      onGitRepoReady: mocks.onGitRepoReady
     })
-    expect(mocks.storeState.repos).toContainEqual({
-      ...repo,
-      executionHostId: 'runtime:env-1'
+
+    // The success effect runs synchronously (mocked useEffect); its async body resolves next tick.
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(mocks.onGitRepoReady).toHaveBeenCalledWith(repo.id, 'clone_url')
+  })
+
+  it('does not prefill SSH clone destinations from the local workspace directory', async () => {
+    mocks.stateValues = ['https://github.com/stablyai/orca.git', '', null, null]
+    const { useAddRepoCloneFlow } = await import('./useAddRepoCloneFlow')
+
+    const result = useAddRepoCloneFlow({
+      step: 'clone',
+      activeRuntimeEnvironmentId: null,
+      sshTargetId: 'ssh-1',
+      workspaceDir: '/private/tmp/orca-setup-e2e.hOWO1f',
+      onGitRepoReady: mocks.onGitRepoReady
     })
-    expect(mocks.storeState.repos).toContainEqual(localRepo)
-    expect(mocks.onGitRepoReady).toHaveBeenCalledWith(repo.id, 'clone_url', 'runtime:env-1')
+
+    expect(result.cloneDestination).toBe('')
+    expect(mocks.stateSetters[1]).not.toHaveBeenCalledWith('/private/tmp/orca-setup-e2e.hOWO1f')
+  })
+
+  it('backgrounds the active task when the flow resets', async () => {
+    mocks.stateValues = ['https://github.com/stablyai/orca.git', '/srv', null, 'task-1']
+    const { useAddRepoCloneFlow } = await import('./useAddRepoCloneFlow')
+
+    const result = useAddRepoCloneFlow({
+      step: 'clone',
+      activeRuntimeEnvironmentId: null,
+      sshTargetId: null,
+      workspaceDir: '/local/workspace',
+      onGitRepoReady: mocks.onGitRepoReady
+    })
+    result.resetCloneFlow()
+
+    expect(mocks.storeState.backgroundCloneTask).toHaveBeenCalledWith('task-1')
   })
 })

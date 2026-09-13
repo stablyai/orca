@@ -164,7 +164,6 @@ export default React.memo(function AddRepoDialog({
     activeRuntimeEnvironmentId: selectedRuntimeEnvironmentId,
     sshTargetId: hostSelection.selectedSshTargetId,
     workspaceDir: settings?.workspaceDir,
-    fetchWorktrees,
     onGitRepoReady: completeGitRepoAdd
   })
 
@@ -208,9 +207,8 @@ export default React.memo(function AddRepoDialog({
   })
 
   const resetState = useCallback(() => {
-    // Why: kill the git clone process if one is running, so backing out
-    // or closing the dialog doesn't leave a clone running on disk.
-    void window.api.repos.cloneAbort()
+    // Why: closing/backing out no longer aborts an in-flight clone — resetCloneFlow
+    // hands it off to the sidebar so it keeps running in the background.
     resetLocalFolderFlow()
     setStep('add')
     setIsAdding(false)

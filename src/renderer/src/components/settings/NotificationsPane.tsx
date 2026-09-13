@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { Button } from '../ui/button'
 import { Separator } from '../ui/separator'
-import { BellRing, Bot, Siren } from 'lucide-react'
+import { BellRing, Bot, DownloadCloud, Siren } from 'lucide-react'
 import { useAppStore } from '@/store'
 import {
   MacNotificationPermissionCard,
@@ -159,6 +159,25 @@ export function NotificationsPane({
         onToggle={() =>
           void updateNotificationSettings({
             terminalBell: !notificationSettings.terminalBell
+          })
+        }
+      />
+
+      <NotificationSettingToggle
+        icon={<DownloadCloud className="size-4" />}
+        label={translate(
+          'auto.components.settings.NotificationsPane.cloneCompleteLabel',
+          'Clone Complete'
+        )}
+        description={translate(
+          'auto.components.settings.NotificationsPane.cloneCompleteDescription',
+          'A background repository clone has finished.'
+        )}
+        checked={notificationSettings.cloneComplete}
+        disabled={!notificationSettings.enabled}
+        onToggle={() =>
+          void updateNotificationSettings({
+            cloneComplete: !notificationSettings.cloneComplete
           })
         }
       />

@@ -19,18 +19,54 @@ import { getRepoName } from '../git/repo'
 import { prepareLocalWorktreeRootForRepo } from '../worktree-root-preparation'
 import type { RuntimeStore } from './runtime-store-contract'
 import { runtimeRepoMatchesExecutionHost } from './runtime-worktree-selection'
+import { parseGitCloneProgress } from '../../shared/git-clone-progress'
+import type { RuntimeClientEvent } from '../../shared/runtime-client-events'
 
 type RuntimeRepositoryCloneDependencies = {
   getStore: () => RuntimeStore | null
   invalidateResolvedWorktrees: () => void
   invalidateWorktreeScan: (repoId: string) => void
   notifyReposChanged: () => void
+  emitClientEvent: (event: RuntimeClientEvent) => void
 }
 
 export class RuntimeRepositoryCloneController {
   private readonly inFlightByPath = new Map<string, Promise<void>>()
+  // Why: abort handles for in-flight clones, keyed by clone-path comparison key,
+  // so the renderer can cancel by the parent destination it passed.
+  private readonly activeCloneProcsByPathKey = new Map<
+    string,
+    {
+      proc: Awaited<ReturnType<typeof gitSpawnAfterWindowsEnvironmentReady>>
+      destinationKey: string
+    }
+  >()
 
   constructor(private readonly deps: RuntimeRepositoryCloneDependencies) {}
+
+  /**
+   * Aborts an in-flight clone by its destination. SIGTERM surfaces as
+   * "Clone aborted" in cloneAfterPathLock, which cleans up the partial target.
+   * No-op (returns false) if no clone is running for that destination.
+   */
+  abortClone(destination: string): boolean {
+    const trimmedDestination = destination.trim()
+    if (!trimmedDestination) {
+      return false
+    }
+    const destinationKey = getClonePathComparisonKey(trimmedDestination)
+    let aborted = false
+    // Why: the renderer knows only the parent destination it passed; match every
+    // in-flight clone whose parent destination matches (usually exactly one).
+    for (const [pathKey, entry] of this.activeCloneProcsByPathKey) {
+      if (entry.destinationKey === destinationKey) {
+        entry.proc.kill()
+        this.activeCloneProcsByPathKey.delete(pathKey)
+        aborted = true
+      }
+    }
+    return aborted
+  }
 
   async clone(
     url: string,
@@ -118,14 +154,30 @@ export class RuntimeRepositoryCloneController {
     await new Promise<void>((resolve, reject) => {
       let stderrTail = ''
       let settled = false
+      this.activeCloneProcsByPathKey.set(clonePathKey, {
+        proc,
+        destinationKey: getClonePathComparisonKey(trimmedDestination)
+      })
       proc.stderr?.on('data', (chunk: Buffer) => {
-        stderrTail = (stderrTail + chunk.toString()).slice(-4096)
+        const text = chunk.toString()
+        stderrTail = (stderrTail + text).slice(-4096)
+        // Why: stream progress over the client-event bus keyed by destination.
+        for (const progress of parseGitCloneProgress(text)) {
+          this.deps.emitClientEvent({
+            type: 'cloneProgress',
+            destination: trimmedDestination,
+            ...progress
+          })
+        }
       })
       const finish = async (code: number | null, signal: NodeJS.Signals | null, error?: Error) => {
         if (settled) {
           return
         }
         settled = true
+        if (this.activeCloneProcsByPathKey.get(clonePathKey)?.proc === proc) {
+          this.activeCloneProcsByPathKey.delete(clonePathKey)
+        }
         if (error || code !== 0 || signal) {
           await cleanupClaimedCloneTarget(clonePath, claimedTarget)
         }
