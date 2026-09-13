@@ -53,6 +53,7 @@ import type { KeybindingsApi, SettingsApi } from './api/settings-api'
 import type { ShellApi } from './api/shell-api'
 import type { SpeechApi } from './api/speech-api'
 import type { SshApi } from './api/ssh-api'
+import type { SymbolIndexApi } from './api/symbol-index-api'
 import type { DiagnosticsApi, MemoryApi, StatsApi, TelemetryApi } from './api/telemetry-api'
 import type { UiCommandEventApi } from './api/ui-command-event-api'
 import type { UiWindowApi } from './api/ui-window-api'
@@ -87,6 +88,7 @@ export type PreloadApi = {
   hostedReview: HostedReviewApi
   gl: GitLabApi
   bitbucket: BitbucketApi
+  symbolIndex: SymbolIndexApi
   linear: LinearApi
   jira: JiraApi
   starNag: StarNagApi

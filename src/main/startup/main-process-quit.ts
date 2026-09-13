@@ -123,6 +123,7 @@ function installWillQuitHandler(): void {
     destroySystemTray()
     // Why: an agent still working at quit gets no terminating hook, so stats.flushAsync() closes those sessions out synchronously (only the write is deferred) — otherwise their duration is lost.
     state.starNag?.stop()
+    state.symbolIndexService?.dispose()
     state.automations?.stop()
     // Why: plugin hosts are forked children; dispose sends shutdown and
     // escalates to SIGKILL so they cannot outlive the app. The promise joins

@@ -26,6 +26,18 @@ describe('keybindings', () => {
     }
   )
 
+  it('defines editor go-to-definition shortcuts on every platform', () => {
+    const definition = getKeybindingDefinition('editor.goToDefinition')
+    expect(definition?.scope).toBe('editor')
+    expect(definition?.allowBareKeybindings).toBe(true)
+    for (const platform of ['darwin', 'linux', 'win32'] as const) {
+      expect(getEffectiveKeybindingsForAction('editor.goToDefinition', platform)).toEqual([
+        'Mod+B',
+        'F12'
+      ])
+    }
+  })
+
   it('matches macOS Option+Z through its composed key', () => {
     expect(
       keybindingMatchesAction(

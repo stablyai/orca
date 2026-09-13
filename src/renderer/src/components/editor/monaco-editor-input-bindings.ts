@@ -1,4 +1,5 @@
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react'
+import type { OnMount } from '@monaco-editor/react'
 import type { editor } from 'monaco-editor'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
@@ -17,9 +18,12 @@ import {
 import { handleMonacoLargeTextPaste } from './monaco-large-text-paste'
 import type { MarkdownCommentPopoverState } from './use-monaco-markdown-annotations'
 import type { MonacoEditorPropsRef } from './monaco-editor-mount-params'
+import { installMonacoGoToDefinitionBindings } from './monaco-go-to-definition-bindings'
 
 type MonacoEditorInputBindingsParams = {
   editorInstance: editor.IStandaloneCodeEditor
+  monaco: Parameters<OnMount>[1]
+  filePath: string
   worktreeId: string | undefined
   editorContainerRef: MutableRefObject<HTMLDivElement | null>
   propsRef: MonacoEditorPropsRef
@@ -40,6 +44,8 @@ export function installMonacoEditorInputBindings(params: MonacoEditorInputBindin
 } {
   const {
     editorInstance,
+    monaco,
+    filePath,
     worktreeId,
     editorContainerRef,
     propsRef,
@@ -58,6 +64,13 @@ export function installMonacoEditorInputBindings(params: MonacoEditorInputBindin
     propsRef.current.onSave(value)
   })
   const cleanupFindShortcut = installMonacoEditorFindShortcut(editorInstance)
+  const cleanupGoToDefinitionBindings = installMonacoGoToDefinitionBindings({
+    editorInstance,
+    monaco,
+    filePath,
+    relativePath: propsRef.current.relativePath,
+    worktreeId
+  })
   // Opens the same composer as the selection "+" button.
   const cleanupAddReviewNoteShortcut = installEditorAddReviewNoteShortcut(editorDomNode, () => {
     // Why: keep an open draft instead of remounting, to avoid same-tick chord races before the composer guard runs.
@@ -132,6 +145,7 @@ export function installMonacoEditorInputBindings(params: MonacoEditorInputBindin
     disposeInputBindings: () => {
       cleanupSaveShortcut()
       cleanupFindShortcut()
+      cleanupGoToDefinitionBindings()
       cleanupAddReviewNoteShortcut()
       editorDomNode.removeEventListener('paste', onLargeTextPaste, { capture: true })
       searchInFilesAction.dispose()
