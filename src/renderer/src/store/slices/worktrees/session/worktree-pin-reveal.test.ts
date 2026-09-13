@@ -15,10 +15,12 @@ function worktree(overrides: Partial<Worktree> = {}): Worktree {
   } as Worktree
 }
 
-function sliceState(worktrees: Worktree[]) {
+function sliceState(worktrees: Worktree[], active: Record<string, unknown> = {}) {
   const state = {
     activeWorkspaceKey: null,
     activeWorktreeId: null,
+    activeWorkspaceExecutionHostId: null,
+    ...active,
     worktreeLineageById: {},
     settings: null,
     updateWorktreeMeta: vi.fn(),
@@ -73,6 +75,42 @@ describe('setWorktreesPinnedAndReveal', () => {
     )
 
     expect(state.updateWorktreesMeta).not.toHaveBeenCalled()
+    expect(state.revealWorktreeInSidebar).not.toHaveBeenCalled()
+  })
+
+  it('reveals a changed row the active host owns', () => {
+    const { state, get } = sliceState([worktree({ hostId: 'ssh:build' })], {
+      activeWorktreeId: 'repo::/feature',
+      activeWorkspaceExecutionHostId: 'ssh:build'
+    })
+
+    createSetWorktreesPinnedAndReveal(vi.fn() as unknown as WorktreeSliceSet, get)(
+      [{ worktreeId: 'repo::/feature', executionHostId: 'ssh:build' }],
+      true
+    )
+
+    expect(state.revealWorktreeInSidebar).toHaveBeenCalledWith('repo::/feature', {
+      behavior: 'smooth',
+      highlight: true
+    })
+  })
+
+  it('does not reveal when the changed row is a twin of the active one on another host', () => {
+    const local = worktree({ hostId: 'local' })
+    const remote = worktree({ hostId: 'ssh:build' })
+    const { state, get } = sliceState([local, remote], {
+      activeWorktreeId: 'repo::/feature',
+      activeWorkspaceExecutionHostId: 'local'
+    })
+
+    createSetWorktreesPinnedAndReveal(vi.fn() as unknown as WorktreeSliceSet, get)(
+      [{ worktreeId: 'repo::/feature', executionHostId: 'ssh:build' }],
+      true
+    )
+
+    expect(state.updateWorktreesMeta).toHaveBeenCalledWith([
+      { worktreeId: 'repo::/feature', updates: { isPinned: true }, executionHostId: 'ssh:build' }
+    ])
     expect(state.revealWorktreeInSidebar).not.toHaveBeenCalled()
   })
 
