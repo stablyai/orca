@@ -131,7 +131,6 @@ export class PtyBindingPersistenceOperations {
       args.expectedBinding !== undefined &&
       args.incarnationId !== args.expectedBinding.incarnationId
     let terminalMembershipChanged = false
-    let hostAdmittedTabCreated = false
     const advanceTopologyFence = (): void => {
       const repoId = getRepoIdFromWorktreeId(bindingWorktreeId)
       const currentRevision = session.terminalTopologyRevisionByRepoId?.[repoId] ?? 0
@@ -139,7 +138,7 @@ export class PtyBindingPersistenceOperations {
       // the authority — with no fence the renderer's pre-create tab list replays
       // over it and the tab is lost even on the repo's first such change.
       const establishesMembershipAuthority =
-        args.expectedSourceBinding !== undefined || hostAdmittedTabCreated
+        args.expectedSourceBinding !== undefined || args.hostAdmittedMembership === true
       if (
         !reconciledIncarnation &&
         (!terminalMembershipChanged || (currentRevision <= 0 && !establishesMembershipAuthority))
@@ -178,10 +177,10 @@ export class PtyBindingPersistenceOperations {
     const tabs = session.tabsByWorktree?.[bindingWorktreeId]
     const tab = tabs?.find((t) => t.id === args.tabId)
     if (tab) {
+      terminalMembershipChanged = tab.ptyId !== args.ptyId
       tab.ptyId = args.ptyId
     } else {
       terminalMembershipChanged = true
-      hostAdmittedTabCreated = args.hostAdmittedMembership === true
       // Why: pty:spawn can beat the debounced writer; persist a minimal tab so hydration won't prune the binding as orphaned.
       const nextTabs = [
         ...(tabs ?? []),
@@ -215,6 +214,9 @@ export class PtyBindingPersistenceOperations {
     }
     const layout = session.terminalLayoutsByTabId?.[args.tabId]
     if (layout) {
+      if (layout.ptyIdsByLeafId?.[args.leafId] !== args.ptyId) {
+        terminalMembershipChanged = true
+      }
       if (!layout.root) {
         terminalMembershipChanged = true
         // Why: createTab can persist an empty layout before TerminalPane mounts; the sync binding still needs a durable root.
