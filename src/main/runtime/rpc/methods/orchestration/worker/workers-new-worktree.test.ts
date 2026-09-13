@@ -165,6 +165,16 @@ describe('orchestration new-worktree workers', () => {
     expect(runtime.createTerminal).not.toHaveBeenCalled()
   })
 
+  it('accepts the Qwen executable name and launches the canonical Qwen Code agent', async () => {
+    mockCreatedWorktree()
+
+    await startWorker({ agent: 'qwen' })
+
+    expect(runtime.createManagedWorktree).toHaveBeenCalledWith(
+      expect.objectContaining({ startupAgent: 'qwen-code' })
+    )
+  })
+
   it('passes launch preferences into agent-first worktree creation', async () => {
     mockCreatedWorktree()
 

@@ -1,4 +1,4 @@
-import { isTuiAgent } from '../../../../../../shared/tui-agent-config'
+import { isTuiAgent, resolveTuiAgent } from '../../../../../../shared/tui-agent-config'
 import type { TuiAgent } from '../../../../../../shared/tui-agent'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
@@ -139,10 +139,10 @@ function resolveWorkerStartAgent(args: {
   effort?: string
   missingAgentMessage: string
 }): { agent: TuiAgent | undefined; launch: WorkerStartLaunch } {
-  if (!args.terminal && (!args.agent || !isTuiAgent(args.agent))) {
+  const agent = resolveTuiAgent(args.agent)
+  if (!args.terminal && !agent) {
     throw new OrchestrationError('agent_unconfigured', args.missingAgentMessage)
   }
-  const agent = args.agent as TuiAgent | undefined
   if (agent) {
     args.runtime.validateOrchestrationAgentLauncher(agent)
     return {

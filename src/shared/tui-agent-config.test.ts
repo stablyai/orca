@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { TUI_AGENT_CONFIG } from './tui-agent-config'
+import { resolveTuiAgent, TUI_AGENT_CONFIG } from './tui-agent-config'
 import type { TuiAgent } from './tui-agent'
 
 describe('TUI_AGENT_CONFIG', () => {
@@ -28,5 +28,11 @@ describe('TUI_AGENT_CONFIG', () => {
     for (const [agent, expected] of Object.entries(overrides)) {
       expect(TUI_AGENT_CONFIG[agent as TuiAgent]).toMatchObject(expected)
     }
+  })
+
+  it('resolves configured executable names to their stable agent ids', () => {
+    expect(resolveTuiAgent('qwen')).toBe('qwen-code')
+    expect(resolveTuiAgent('qwen-code')).toBe('qwen-code')
+    expect(resolveTuiAgent('not-an-agent')).toBeUndefined()
   })
 })

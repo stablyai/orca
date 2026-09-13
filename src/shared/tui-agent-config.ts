@@ -302,6 +302,22 @@ export function isTuiAgent(value: unknown): value is TuiAgent {
   return typeof value === 'string' && Object.hasOwn(TUI_AGENT_CONFIG, value)
 }
 
+/** Resolve a stable agent id or one of its configured executable names. */
+export function resolveTuiAgent(value: unknown): TuiAgent | undefined {
+  if (isTuiAgent(value)) {
+    return value
+  }
+  if (typeof value !== 'string') {
+    return undefined
+  }
+  for (const agent of Object.keys(TUI_AGENT_CONFIG)) {
+    if (isTuiAgent(agent) && getTuiAgentDetectCommands(TUI_AGENT_CONFIG[agent]).includes(value)) {
+      return agent
+    }
+  }
+  return undefined
+}
+
 export function getTuiAgentDetectCommands(config: TuiAgentConfig): string[] {
   return [config.detectCmd, ...(config.detectCmdAliases ?? [])]
 }
