@@ -105,13 +105,10 @@ describe('terminal send keyboard dismissal wiring', () => {
     expect(slice.slice(catchAt)).toContain('restoreRejectedDraft()')
   })
 
-  it('keeps buffered Return focused until accepted-agent dismissal runs', () => {
-    const slice = sourceSlice(
-      commandDockSource,
-      'ref={commandInputRef}',
-      'onSubmitEditing={() => void handleSend()}'
-    )
+  it('keeps the compose field focused until accepted-agent dismissal runs', () => {
+    const slice = sourceSlice(commandDockSource, 'ref={commandInputRef}', 'editable={canCompose}')
     expect(slice).toContain('blurOnSubmit={false}')
+    expect(slice).toContain('multiline')
   })
 
   it('restores a rejected buffered draft by origin without generation fencing', () => {

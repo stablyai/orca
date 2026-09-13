@@ -114,7 +114,7 @@ describe('terminal live input mode preference hook', () => {
       await load.promise
     })
 
-    expect([...harness.current.liveInputTerminalHandles]).toEqual(['pty-1'])
+    expect([...harness.current.liveInputTerminalHandles]).toEqual([])
     expect(saveDisabledTerminalLiveInputHandles).not.toHaveBeenCalled()
     harness.unmount()
   })

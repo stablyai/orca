@@ -84,23 +84,34 @@ describe('terminal live input', () => {
     ).toBe(false)
   })
 
-  it('defaults first-seen terminal handles to live input once', () => {
+  it('marks first-seen terminal handles as defaulted without enabling live input', () => {
     const firstPass = defaultTerminalLiveInputHandles(new Set(), new Set(), ['pty-1'])
 
     expect(firstPass.changed).toBe(true)
-    expect([...firstPass.enabledHandles]).toEqual(['pty-1'])
+    expect([...firstPass.enabledHandles]).toEqual([])
     expect([...firstPass.defaultedHandles]).toEqual(['pty-1'])
 
-    const manuallyDisabled = new Set<string>()
-    const secondPass = defaultTerminalLiveInputHandles(
-      manuallyDisabled,
-      firstPass.defaultedHandles,
-      ['pty-1', 'pty-2']
-    )
+    const stillBuffered = new Set<string>()
+    const secondPass = defaultTerminalLiveInputHandles(stillBuffered, firstPass.defaultedHandles, [
+      'pty-1',
+      'pty-2'
+    ])
 
     expect(secondPass.changed).toBe(true)
-    expect([...secondPass.enabledHandles]).toEqual(['pty-2'])
+    expect([...secondPass.enabledHandles]).toEqual([])
     expect([...secondPass.defaultedHandles]).toEqual(['pty-1', 'pty-2'])
+  })
+
+  it('keeps an already-enabled live handle enabled when later handles are defaulted', () => {
+    const enabled = new Set(['pty-live'])
+    const result = defaultTerminalLiveInputHandles(enabled, new Set(['pty-live']), [
+      'pty-live',
+      'pty-new'
+    ])
+
+    expect(result.changed).toBe(true)
+    expect(result.enabledHandles).toBe(enabled)
+    expect([...result.defaultedHandles]).toEqual(['pty-live', 'pty-new'])
   })
 
   it('does not allocate new live input sets when no handles need defaults', () => {
@@ -113,7 +124,7 @@ describe('terminal live input', () => {
     expect(result.defaultedHandles).toBe(defaulted)
   })
 
-  it('does not default persisted buffered-mode handles back to live input on reentry', () => {
+  it('does not enable live input for newly discovered or persisted-buffered handles', () => {
     const defaultableHandles = filterTerminalLiveInputDefaultCandidates(
       ['pty-1', 'pty-2'],
       new Set(['pty-1'])
@@ -126,7 +137,7 @@ describe('terminal live input', () => {
     )
 
     expect(defaultableHandles).toEqual(['pty-2'])
-    expect([...result.enabledHandles]).toEqual(['pty-2'])
+    expect([...result.enabledHandles]).toEqual([])
     expect([...result.defaultedHandles]).toEqual(['pty-1', 'pty-2'])
   })
 

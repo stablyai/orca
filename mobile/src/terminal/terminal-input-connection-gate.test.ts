@@ -92,9 +92,9 @@ describe('session route offline-compose wiring', () => {
     const bufferedInput = sourceSlice(
       commandDockSource,
       'ref={commandInputRef}',
-      'onSubmitEditing={() => void handleSend()}'
+      'editable={canCompose}'
     )
-    expect(bufferedInput).toContain('editable={canCompose}')
+    expect(bufferedInput).toContain('multiline')
 
     const liveCapture = sourceSlice(
       commandDockSource,

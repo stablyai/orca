@@ -343,7 +343,7 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
               value={bufferedTerminalDraftState.input}
               // Why: iOS kills active dictation/IME if JS writes a value differing from native text; store raw, normalize at send.
               onChangeText={bufferedTerminalDraftState.setInput}
-              placeholder="Type a command…"
+              placeholder="Type a message…"
               placeholderTextColor={colors.textMuted}
               autoCapitalize="none"
               autoCorrect={autocompleteEnabled}
@@ -352,11 +352,13 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
               // Why: not autofill content, but keyboard must stay default so non-Latin IMEs remain selectable.
               autoComplete="off"
               keyboardType={getTerminalCommandKeyboardType(Platform.OS, autocompleteEnabled)}
-              returnKeyType="send"
+              multiline
+              textAlignVertical="top"
+              scrollEnabled
+              returnKeyType="default"
               blurOnSubmit={false}
               // Why: composing is local — an outage must not lock the field or discard typed text (#6713).
               editable={canCompose}
-              onSubmitEditing={() => void handleSend()}
             />
             <MobileTerminalInputActions
               canSend={canSend}

@@ -141,7 +141,7 @@ export const mobileSessionCommandInputStyles = StyleSheet.create({
   },
   inputBar: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-end',
     minHeight: 46,
     paddingVertical: spacing.xs + 2,
     paddingHorizontal: spacing.md,
@@ -151,14 +151,15 @@ export const mobileSessionCommandInputStyles = StyleSheet.create({
   },
   textInput: {
     flex: 1,
-    height: 34,
+    minHeight: 34,
+    maxHeight: 140,
     backgroundColor: colors.bgRaised,
     color: colors.textPrimary,
     borderRadius: radii.input,
     paddingHorizontal: spacing.md,
-    paddingVertical: 0,
-    fontSize: 14,
-    fontFamily: typography.monoFamily,
+    paddingTop: spacing.sm,
+    paddingBottom: spacing.sm,
+    fontSize: typography.bodySize,
     marginRight: spacing.sm
   },
   liveInputBar: {

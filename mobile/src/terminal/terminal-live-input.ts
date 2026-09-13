@@ -106,25 +106,22 @@ export function defaultTerminalLiveInputHandles(
   defaultedHandles: ReadonlySet<string>,
   terminalHandles: readonly string[]
 ): TerminalLiveInputDefaultResult {
-  let nextEnabledHandles: Set<string> | null = null
   let nextDefaultedHandles: Set<string> | null = null
 
   for (const handle of terminalHandles) {
     if (defaultedHandles.has(handle)) {
       continue
     }
-    nextEnabledHandles ??= new Set(enabledHandles)
     nextDefaultedHandles ??= new Set(defaultedHandles)
-    nextEnabledHandles.add(handle)
     nextDefaultedHandles.add(handle)
   }
 
-  if (!nextEnabledHandles || !nextDefaultedHandles) {
+  if (!nextDefaultedHandles) {
     return { enabledHandles, defaultedHandles, changed: false }
   }
 
   return {
-    enabledHandles: nextEnabledHandles,
+    enabledHandles,
     defaultedHandles: nextDefaultedHandles,
     changed: true
   }
