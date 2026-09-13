@@ -1,3 +1,4 @@
+import type { WorkOrigin } from '../../../../shared/work-origin'
 /**
  * Creating a structured session for a worktree: resolve the create intent, attach it under the
  * host-computed fingerprint, then publish its tab.
@@ -42,6 +43,7 @@ export type PreparedStructuredAgentSessionCreate = {
  *  `resolveUncommittedStructuredCreate` so a failure reaches the client as a refusal. */
 export async function prepareStructuredAgentSessionCreateForWorktree(args: {
   runtime: OrcaRuntimeService
+  workOrigin?: WorkOrigin
   /** Installs the host lazily; called at the same point the RPC handler always installed it. */
   ensureHost: () => Promise<StructuredAgentSessionHost>
   envelope: AgentSessionMutationEnvelope
@@ -74,6 +76,7 @@ export async function prepareStructuredAgentSessionCreateForWorktree(args: {
     host,
     attachParams: {
       ...resolvedAttach,
+      workOrigin: args.workOrigin === undefined ? { kind: 'host' } : args.workOrigin,
       // After the fingerprint, deliberately: `attachFingerprintFields` excludes options because
       // they are the session's initial state, not its identity, so a retry that re-resolves them
       // must replay rather than conflict.
@@ -92,6 +95,7 @@ export async function prepareStructuredAgentSessionCreateForWorktree(args: {
 /** The commit half. Past `attach`, a failure no longer proves the session does not exist. */
 export async function commitStructuredAgentSessionCreate(args: {
   runtime: OrcaRuntimeService
+  workOrigin?: WorkOrigin
   caller: StructuredAgentSessionCaller
   prepared: PreparedStructuredAgentSessionCreate
   activate: boolean
@@ -123,6 +127,7 @@ export async function commitStructuredAgentSessionCreate(args: {
 
 export async function createStructuredAgentSessionForWorktree(args: {
   runtime: OrcaRuntimeService
+  workOrigin?: WorkOrigin
   ensureHost: () => Promise<StructuredAgentSessionHost>
   caller: StructuredAgentSessionCaller
   envelope: AgentSessionMutationEnvelope

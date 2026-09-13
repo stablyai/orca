@@ -28,6 +28,7 @@ export function terminalTabEqual(a: TerminalTab, b: TerminalTab): boolean {
     a.generation === b.generation &&
     a.shellOverride === b.shellOverride &&
     a.launchAgent === b.launchAgent &&
+    JSON.stringify(a.workOriginsByLeafId) === JSON.stringify(b.workOriginsByLeafId) &&
     a.pendingActivationSpawn === b.pendingActivationSpawn
   )
 }

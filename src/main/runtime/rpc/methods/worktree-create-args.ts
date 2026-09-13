@@ -7,7 +7,7 @@ type WorktreeCreateParams = z.infer<typeof WorktreeCreate>
 type ManagedWorktreeCreateArgs = Parameters<OrcaRuntimeService['createManagedWorktree']>[0]
 type CreateProvenance = Pick<
   ManagedWorktreeCreateArgs,
-  'automationProvenance' | 'cliProvenance' | 'creatorProvenance'
+  'automationProvenance' | 'cliProvenance' | 'creatorProvenance' | 'workOrigin'
 >
 
 /** Wire params → runtime create args. Kept out of the method table so the mapping can grow with
@@ -47,19 +47,10 @@ export function buildManagedWorktreeCreateArgs(
     pushTarget: params.pushTarget,
     runHooks: params.runHooks === true,
     activate: params.activate === true,
-    // Why: create-activation is the caller's own view intent; without this a paired
-    // client's create dragged every other connected client and the host with it.
-    // Why 'runtime' only: a phone has no terminal-provisioning renderer, so when it
-    // creates without a startup command the host renderer is what runs the repo's
-    // setup/default tabs off this activation. Scoping mobile would drop that work.
-    // Why the CLI is excluded by payload and not by version: the CLI also pairs as a
-    // 'runtime' device but has no viewer of its own, so scoping it makes --activate
-    // reveal nothing. Current CLIs say so explicitly with `navigation`, but an older
-    // CLI against an updated host cannot; `cliProvenanceRequest` is the marker every
-    // CLI has always sent, and no renderer or phone sends it.
+    // CLI activation inherits its viewer; paired UI navigation stays local.
     navigation: resolveRuntimeNavigationTarget({
       ...(params.navigation ? { navigation: params.navigation } : {}),
-      ...(origin.clientKind === 'runtime' && params.cliProvenanceRequest === undefined
+      ...(origin.clientKind && params.cliProvenanceRequest === undefined
         ? { clientKind: origin.clientKind }
         : {})
     }),

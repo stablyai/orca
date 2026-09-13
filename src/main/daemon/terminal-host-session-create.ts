@@ -139,6 +139,7 @@ async function spawnAndPublishSession(
     rows: size.rows,
     terminalHandle: opts.env?.ORCA_TERMINAL_HANDLE,
     launchAgent: opts.launchAgent,
+    workOrigin: opts.workOrigin,
     subprocess,
     ownerBackend: resolvePtyOwnerBackend({
       platform: process.platform,

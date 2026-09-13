@@ -1,3 +1,4 @@
+import { printHookWarning, printPreservedBranchWarning } from './worktree-result-warnings'
 import type {
   RuntimeWorktreeListResult,
   RuntimeWorktreePsResult,
@@ -37,30 +38,6 @@ import {
   resolveCreateParentSelector
 } from './worktree-create-parent-selector'
 import { getOptionalLinearIssueLinkFlag } from './worktree-linear-issue-link'
-
-type HookWarningResult = {
-  warning?: string
-}
-
-type PreservedBranchResult = {
-  preservedBranch?: {
-    branchName: string
-  }
-}
-
-function printHookWarning(result: HookWarningResult, json: boolean): void {
-  if (!json && result.warning) {
-    console.error(`warning: ${result.warning}`)
-  }
-}
-
-function printPreservedBranchWarning(result: PreservedBranchResult, json: boolean): void {
-  if (!json && result.preservedBranch) {
-    console.error(
-      `warning: local branch "${result.preservedBranch.branchName}" was kept because Git could not safely delete it`
-    )
-  }
-}
 
 function assertParentWorktreeFlagsCompatible(flags: Map<string, string | boolean>): void {
   if (flags.has('parent-worktree') && flags.get('no-parent') === true) {
@@ -239,7 +216,7 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
       }
     }
     const linearIssueLink = getOptionalLinearIssueLinkFlag(flags, 'linear-issue')
-    const activate = flags.get('activate') === true || flags.get('run-hooks') === true
+    const activate = flags.get('activate') === true
     const name = getRequiredStringFlag(flags, 'name')
     const result = await client.call<RuntimeWorktreeCreateResult>('worktree.create', {
       repo: await getCreateRepoSelector(flags, cwdParentWorktree, client),
@@ -264,6 +241,14 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
       callerTerminalHandle,
       // Why: marks the workspace as CLI-created so the sidebar can badge and
       // filter it. Sent on every `worktree create` — hand-typed or agent-run.
+      ...(process.env.ORCA_WORK_ORIGIN_SESSION_ID && process.env.ORCA_AGENT_SESSION_SPAWN_TOKEN
+        ? {
+            callerOriginSession: {
+              sessionId: process.env.ORCA_WORK_ORIGIN_SESSION_ID,
+              spawnToken: process.env.ORCA_AGENT_SESSION_SPAWN_TOKEN
+            }
+          }
+        : {}),
       cliProvenanceRequest: callerTerminalHandle ? { callerTerminalHandle } : {},
       ...(startupAgent
         ? {

@@ -1,3 +1,4 @@
+import type { WorkOrigin } from '../../shared/work-origin'
 import type { AgentStatusEntry, AgentStatusIpcPayload } from '../../shared/agent-status-types'
 import type {
   BrowserTabInfo,
@@ -12,6 +13,11 @@ import type { RuntimeAgentRowSnapshot } from './runtime-worktree-agent-rows'
 import type { RuntimeLeafRecord, RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
 
 export type RuntimeMobileSessionProjectionHost = {
+  getWorkOrigin?(
+    worktreeId: string,
+    paneKey: string,
+    pty?: RuntimePtyWorktreeRecord | null
+  ): WorkOrigin | undefined
   tabs: ReadonlyMap<string, RuntimeSyncedTab>
   leaves: ReadonlyMap<string, RuntimeLeafRecord>
   ptysById: ReadonlyMap<string, RuntimePtyWorktreeRecord>

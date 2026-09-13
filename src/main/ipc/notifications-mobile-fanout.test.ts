@@ -36,6 +36,35 @@ describe('registerNotificationHandlers', () => {
     resetNotificationDispatchMocks()
   })
 
+  it('forwards each device origin without showing a host notification or sharing cooldowns', async () => {
+    const dispatchMobileNotification = vi.fn()
+    registerNotificationHandlers(
+      {
+        getSettings: () => ({
+          notifications: { enabled: true, agentTaskComplete: true, terminalBell: true }
+        })
+      } as never,
+      { dispatchMobileNotification } as never
+    )
+    const handler = getDispatchHandler()
+    for (const deviceId of ['a', 'b']) {
+      expect(
+        await handler(
+          {},
+          {
+            source: 'agent-task-complete',
+            worktreeId: 'shared-workspace',
+            workOrigin: { kind: 'paired-device', deviceId }
+          }
+        )
+      ).toEqual({ delivered: false, reason: 'not-recipient' })
+    }
+    expect(
+      dispatchMobileNotification.mock.calls.map(([event]) => event.workOrigin.deviceId)
+    ).toEqual(['a', 'b'])
+    expect(notificationCtorMock).not.toHaveBeenCalled()
+  })
+
   it('uses rich formatter output for mobile notifications before the native support guard', async () => {
     notificationIsSupportedMock.mockReturnValue(false)
     const dispatchMobileNotification = vi.fn()

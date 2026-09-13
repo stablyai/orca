@@ -1,3 +1,6 @@
+import { isAgentSessionLaunchArgs } from './agent-session-launch-args'
+export { isAgentSessionLaunchArgs } from './agent-session-launch-args'
+import { normalizeWorkOrigin, type WorkOrigin } from './work-origin'
 import { isAgentSessionRewindRecord, type AgentSessionRewindRecord } from './agent-session-rewind'
 import { isAgentSessionConversationName } from './agent-session-conversation-name'
 /**
@@ -123,6 +126,7 @@ export type AgentSessionLease = {
 }
 
 export type AgentSessionRecord = {
+  workOrigin?: WorkOrigin
   schemaVersion: typeof AGENT_SESSION_RECORD_SCHEMA_VERSION
   sessionId: string
   location: AgentSessionExecutionLocation
@@ -152,8 +156,6 @@ const MAX_ID_LENGTH = 512
 const MAX_PATH_LENGTH = 4096
 const MAX_LAUNCH_ENV_ENTRIES = 256
 const MAX_LAUNCH_ENV_VALUE_LENGTH = 65_536
-const MAX_LAUNCH_ARGS = 256
-const MAX_LAUNCH_ARGS_BYTES = 16 * 1024
 const SESSION_ID_PATTERN = /^[A-Za-z0-9_-]{8,128}$/
 
 function isBoundedString(value: unknown, max: number): value is string {
@@ -338,6 +340,9 @@ export function isAgentSessionRecord(value: unknown): value is AgentSessionRecor
   }
   const record = value as Partial<AgentSessionRecord>
   const shapeValid =
+    (record.workOrigin === undefined ||
+      record.workOrigin === null ||
+      normalizeWorkOrigin(record.workOrigin) !== null) &&
     record.schemaVersion === AGENT_SESSION_RECORD_SCHEMA_VERSION &&
     isAgentSessionId(record.sessionId) &&
     isAgentSessionExecutionLocation(record.location) &&
@@ -367,14 +372,5 @@ export function isAgentSessionRecord(value: unknown): value is AgentSessionRecor
       (validated.lease.ownerProcess !== null &&
         head?.linkId === validated.lease.provenHandleLinkId &&
         head.mintedAtFence === validated.lease.runtimeFence))
-  )
-}
-
-export function isAgentSessionLaunchArgs(value: unknown): value is AgentSessionLaunchArgs {
-  return (
-    Array.isArray(value) &&
-    value.length <= MAX_LAUNCH_ARGS &&
-    value.every((arg) => typeof arg === 'string' && !arg.includes('\0')) &&
-    Buffer.byteLength(JSON.stringify(value), 'utf8') <= MAX_LAUNCH_ARGS_BYTES
   )
 }

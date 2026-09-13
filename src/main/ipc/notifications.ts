@@ -1,3 +1,4 @@
+import { workOriginAllowsHost } from '../../shared/work-origin'
 import { BrowserWindow, Notification, ipcMain, powerMonitor } from 'electron'
 import { readDesktopAwayState } from '../notifications/desktop-away-state'
 import type { Store } from '../persistence'
@@ -113,8 +114,18 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
       _event,
       args: NotificationDispatchRequest
     ): NotificationDispatchResult | Promise<NotificationDispatchResult> => {
+      const workOrigin =
+        args.workOrigin !== undefined
+          ? args.workOrigin
+          : args.worktreeId && args.paneKey
+            ? runtime?.getPaneWorkOrigin?.(args.worktreeId, args.paneKey)
+            : undefined
+      const localRecipient = workOriginAllowsHost(workOrigin)
       // Why: light the tray attention dot before the cooldown/focus/enabled gates so they can't hold it back (clears on window show/restore; see index.ts).
-      if (args.source === 'agent-task-complete' || args.source === 'terminal-bell') {
+      if (
+        localRecipient &&
+        (args.source === 'agent-task-complete' || args.source === 'terminal-bell')
+      ) {
         const activeWindow = BrowserWindow.getAllWindows().find((win) => !win.isDestroyed()) ?? null
         if (!isMainWindowVisible(activeWindow)) {
           setTrayAttention(true)
@@ -135,12 +146,13 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
         if (
           reserveNotificationCooldown(
             recentMobileNotifications,
-            JSON.stringify([desktopAllowed, args.source, args.agentState, dedupeKey]),
+            JSON.stringify([workOrigin, desktopAllowed, args.source, args.agentState, dedupeKey]),
             Date.now()
           )
         ) {
           runtime.dispatchMobileNotification({
             type: 'notification',
+            ...(workOrigin !== undefined ? { workOrigin } : {}),
             emittedAt: Date.now(),
             source: args.source,
             ...(!desktopAllowed ? { desktopAllowed: false } : {}),
@@ -153,6 +165,10 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
             ...(args.agentState ? { agentState: args.agentState } : {})
           })
         }
+      }
+
+      if (!localRecipient) {
+        return { delivered: false, reason: 'not-recipient' }
       }
 
       if (!desktopAllowed) {

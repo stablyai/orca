@@ -28,7 +28,7 @@ type Ports = {
   sendFollowup: (handle: string, followup: WorktreeStartupFollowup) => void
   provision: (
     options: WorktreeTerminalProvisioningArgs
-  ) => Promise<{ setupSpawned: boolean; setupTerminalHandle: string | null }>
+  ) => Promise<{ setupSpawned: boolean; setupTerminalHandle: string | null; warning?: string }>
   activate: (
     repoId: string,
     worktreeId: string,
@@ -64,7 +64,9 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
   ports: Ports
 }): Promise<RuntimeLocalWorktreeTerminalStartupResult> {
   const { request, repo, worktree, setup, defaultTabs, startup, ports } = args
-  const shouldActivate = request.activate === true || request.runHooks === true
+  const wantsReveal = request.activate === true
+  const addressed = request.workOrigin !== undefined && request.workOrigin?.kind !== 'host'
+  const shouldActivate = wantsReveal && !addressed
   let warning = args.warning
   let didSpawnStartup = false
   let didSpawnSetup = false
@@ -130,6 +132,9 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
       const provisioned = await ports.provision(
         provisionArgs(args, startupTerminalHandle, didSpawnStartup, wrappedSetupCommand)
       )
+      if (provisioned.warning) {
+        warning = [warning, provisioned.warning].filter(Boolean).join(' ')
+      }
       didSpawnSetup = provisioned.setupSpawned
       setupTerminalHandle = provisioned.setupTerminalHandle
     }
@@ -153,8 +158,11 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
       ...provisionArgs(args, startupTerminalHandle, didSpawnStartup, wrappedSetupCommand),
       surfaceOwner: false
     })
-    if (request.awaitTerminalProvisioning) {
+    if (request.awaitTerminalProvisioning || addressed) {
       const provisioned = await provisioning
+      if (provisioned.warning) {
+        warning = [warning, provisioned.warning].filter(Boolean).join(' ')
+      }
       didSpawnSetup = provisioned.setupSpawned
       setupTerminalHandle = provisioned.setupTerminalHandle
     } else {
@@ -170,14 +178,18 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
       warning = appendFailure(warning, worktree.path, 'initial', error)
     }
   }
-  const returnedSetup = didSpawnSetup
-    ? undefined
-    : setup
-      ? {
-          ...setup,
-          ...(didSpawnStartup && wrappedSetupCommand ? { command: wrappedSetupCommand } : {})
-        }
-      : undefined
+  if (wantsReveal && addressed) {
+    ports.activate(repo.id, worktree.id, undefined, undefined, undefined)
+  }
+  const returnedSetup =
+    addressed || didSpawnSetup
+      ? undefined
+      : setup
+        ? {
+            ...setup,
+            ...(didSpawnStartup && wrappedSetupCommand ? { command: wrappedSetupCommand } : {})
+          }
+        : undefined
   return {
     ...(warning ? { warning } : {}),
     ...(returnedSetup ? { returnedSetup } : {}),

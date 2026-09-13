@@ -1,5 +1,6 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
 import { OrcaRuntimeWithResolveMobileSessionTerminalCommand } from './orca-runtime-resolve-mobile-session-terminal-command'
+import type { WorkOrigin } from '../../shared/work-origin'
 import type { WorktreeStartupLaunch } from '../../shared/worktree/launch-types'
 import type { TuiAgent } from '../../shared/tui-agent'
 import type { SleepingAgentLaunchConfig } from '../../shared/agent-session-resume'
@@ -23,6 +24,7 @@ export class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal extends Orca
     afterTabId?: string,
     opts: {
       command?: string
+      workOrigin?: WorkOrigin
       cwd?: string
       env?: Record<string, string>
       envToDelete?: string[]
@@ -43,6 +45,7 @@ export class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal extends Orca
     const isNewSession = stableSessionId !== undefined && opts.identity?.sessionId === undefined
     const terminal = await this.createTerminal(`id:${worktreeId}`, {
       focus: false,
+      workOrigin: opts.workOrigin,
       command: opts.command,
       cwd,
       env: opts.env,
@@ -95,6 +98,7 @@ export class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal extends Orca
       parentTabId,
       leafId,
       ptyId: livePty.pty.ptyId,
+      workOrigin: this.getPaneWorkOrigin(worktreeId, livePty.pty.paneKey, livePty.pty),
       incarnationId: livePty.pty.incarnationId,
       title: terminal.title ?? livePty.pty.title ?? 'Terminal',
       ...(cwd ? { startupCwd: cwd } : {}),

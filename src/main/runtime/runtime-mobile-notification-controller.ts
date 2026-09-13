@@ -1,3 +1,4 @@
+import type { WorkOrigin } from '../../shared/work-origin'
 import { reserveNotificationCooldown } from '../../shared/notification-burst-cooldown'
 import type { AgentStatusState } from '../../shared/agent-status-types'
 import type {
@@ -15,6 +16,7 @@ import {
 
 export type MobileNotificationDispatchEvent = {
   type: 'notification'
+  workOrigin?: WorkOrigin
   legacySocketAllowed?: boolean
   desktopAllowed?: boolean
   desktopAway?: boolean
@@ -104,7 +106,7 @@ export class RuntimeMobileNotificationController {
         (event.emittedAt === undefined ||
           reserveNotificationCooldown(
             this.legacyCooldown,
-            event.worktreeId ?? 'global',
+            JSON.stringify([event.workOrigin, event.worktreeId ?? 'global']),
             event.emittedAt
           ))
       event = {

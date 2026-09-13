@@ -54,6 +54,23 @@ import { StructuredAgentSessionClientDelivery } from './structured-agent-session
 export type { StructuredAgentSessionHostDeps } from './structured-agent-session-host-types'
 
 export class StructuredAgentSessionHost {
+  getWorkOrigin(sessionId: string) {
+    return this.deps.store.getRecord(sessionId)?.workOrigin
+  }
+
+  resolveChildWorkOrigin(sessionId: string, spawnToken: string) {
+    const record = this.deps.store.getRecord(sessionId)
+    if (
+      !record ||
+      !spawnToken ||
+      record.lease.claimStatus !== 'live' ||
+      record.lease.ownerProcess?.spawnToken !== spawnToken
+    ) {
+      return null
+    }
+    return record.workOrigin ?? null
+  }
+
   private readonly conversationCommands = new StructuredConversationCommandController(
     () => this.mutationContext(),
     this

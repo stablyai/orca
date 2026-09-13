@@ -344,6 +344,7 @@ describe('registerPtyHandlers', () => {
           })
         )
         const store = {
+          getWorkspaceSession: vi.fn(() => ({})),
           upsertSshRemotePtyLease: vi.fn(),
           supersedeSshRemotePtyLeasesForBoundPane: vi.fn(),
           persistPtyBinding: vi.fn()
@@ -433,6 +434,7 @@ describe('registerPtyHandlers', () => {
         expect(store.persistPtyBinding).toHaveBeenCalledWith(
           {
             worktreeId: 'wt-1',
+            workOrigin: { kind: 'host' },
             tabId: 'tab-1',
             leafId,
             ptyId: 'ssh-pty'
@@ -466,6 +468,7 @@ describe('registerPtyHandlers', () => {
           throw new SshPtyAbsentFromRelayError('SSH_SESSION_EXPIRED: remote-pty')
         })
         const store = {
+          getWorkspaceSession: vi.fn(() => ({})),
           markSshRemotePtyLease: vi.fn(),
           clearSshRemotePtyKillIntent: vi.fn()
         }
@@ -523,6 +526,7 @@ describe('registerPtyHandlers', () => {
           throw new Error('SSH_SESSION_EXPIRED: remote-pty')
         })
         const store = {
+          getWorkspaceSession: vi.fn(() => ({})),
           markSshRemotePtyLease: vi.fn(),
           clearSshRemotePtyKillIntent: vi.fn()
         }
@@ -579,6 +583,7 @@ describe('registerPtyHandlers', () => {
           throw new SshPtyAbsentFromRelayError('SSH_SESSION_EXPIRED: remote-pty')
         })
         const store = {
+          getWorkspaceSession: vi.fn(() => ({})),
           markSshRemotePtyLease: vi.fn(),
           clearSshRemotePtyKillIntent: vi.fn()
         }

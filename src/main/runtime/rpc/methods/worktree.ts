@@ -1,3 +1,4 @@
+import { resolveRpcWorkOrigin } from '../work-origin-context'
 import {
   finishAutomationWorkspaceProvenanceRequest,
   releaseAutomationWorkspaceProvenanceRequest,
@@ -95,6 +96,7 @@ export const WORKTREE_METHODS = [
             buildManagedWorktreeCreateArgs(
               params,
               {
+                workOrigin: resolveRpcWorkOrigin(context, params),
                 automationProvenance,
                 cliProvenance: buildCliWorkspaceProvenance(params.cliProvenanceRequest, {
                   startupAgent: params.startupAgent ?? params.createdWithAgent,

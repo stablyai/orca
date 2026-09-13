@@ -1,3 +1,4 @@
+import { useAppStore } from '@/store'
 import type { IpcPtyTransportOptions, PtyConnectResult, PtyTransport } from './pty-transport-types'
 
 type PtyConnectOptions = Parameters<PtyTransport['connect']>[0]
@@ -39,6 +40,11 @@ export async function spawnIpcPty(
   const shouldSendLocalCwdFallback =
     cwdFallback === 'worktree' && !connectionId && !admittedSessionId
   return window.api.pty.spawn({
+    workOrigin:
+      worktreeId && tabId
+        ? useAppStore.getState().tabsByWorktree[worktreeId]?.find((tab) => tab.id === tabId)
+            ?.workOrigin
+        : undefined,
     cols: connectOptions.cols ?? 80,
     rows: connectOptions.rows ?? 24,
     cwd,

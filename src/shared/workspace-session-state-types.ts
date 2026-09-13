@@ -1,3 +1,4 @@
+import type { WorkOrigin } from './work-origin'
 import type { ExecutionHostId } from './execution-host'
 import type { SleepingAgentSessionRecord } from './agent-session-resume'
 import type { WorkspaceKey } from './folder-workspace-types'
@@ -113,6 +114,7 @@ export type WorkspaceSessionState = {
   /** Provider-session resume records captured when workspaces sleep. */
   sleepingAgentSessionsByPaneKey?: Record<string, SleepingAgentSessionRecord>
   /** Host-issued process incarnation for each durable terminal surface. */
+  terminalWorkOriginsByPaneKey?: Record<string, WorkOrigin>
   terminalPtyIncarnationsByPaneKey?: Record<string, string>
   /** Monotonic host authority watermark for terminal membership in each repo. */
   terminalTopologyRevisionByRepoId?: Record<string, number>

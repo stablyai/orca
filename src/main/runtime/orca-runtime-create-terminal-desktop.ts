@@ -51,6 +51,7 @@ export async function createDesktopTerminal(
     dependencies.getRuntimeDesktopSurface().onIpc('terminal:tabCreateReply', handler)
     win.webContents.send('terminal:requestTabCreate', {
       requestId,
+      workOrigin: launchOpts.workOrigin,
       worktreeId,
       command: launchOpts.command,
       cwd,

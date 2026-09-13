@@ -114,6 +114,10 @@ export async function persistPtyIpcSpawnCommit(ctx: PtyIpcSpawnState): Promise<{
         tabId: args.tabId,
         leafId: ctx.validatedLeafId,
         ptyId: ctx.result.id,
+        workOrigin:
+          ctx.result.isReattach || ctx.stablePaneOwner
+            ? ctx.result.workOrigin
+            : ctx.spawnOptions.workOrigin,
         ...(ctx.result.incarnationId ? { incarnationId: ctx.result.incarnationId } : {}),
         ...(ctx.cwd ? { startupCwd: ctx.cwd } : {})
       }

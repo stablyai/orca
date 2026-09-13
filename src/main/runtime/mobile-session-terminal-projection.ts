@@ -34,6 +34,9 @@ export function buildHeadlessMobileSessionTerminalTabs(
             type: 'terminal' as const,
             id: `${tab.id}::${leafId}`,
             parentTabId: tab.id,
+            ...(session.terminalWorkOriginsByPaneKey?.[`${tab.id}:${leafId}`] !== undefined
+              ? { workOrigin: session.terminalWorkOriginsByPaneKey[`${tab.id}:${leafId}`] }
+              : {}),
             leafId,
             title,
             ...(ptyId ? { ptyId } : {}),

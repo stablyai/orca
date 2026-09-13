@@ -1,4 +1,7 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
+import { createPaneClaimRelease } from '../ipc/pty/pane/spawn-reservation'
+import { revealCreatedTerminal } from './terminal-create-reveal'
+import * as workOriginPolicy from './terminal-create-work-origin'
 import { OrcaRuntimeWithTerminalCreateDeduplication } from './orca-runtime-terminal-create-deduplication'
 import * as dependencies from './orca-runtime-create-terminal-dependencies'
 import { createDesktopTerminal } from './orca-runtime-create-terminal-desktop'
@@ -42,20 +45,20 @@ export class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTerminalCreate
       let tabId = canAdoptPaneIdentity ? (hintedTabId as string) : dependencies.randomUUID()
       let leafId = canAdoptPaneIdentity ? (launchOpts.leafId as string) : dependencies.randomUUID()
       let paneKey = dependencies.makePaneKey(tabId, leafId)
+      const workOrigin = workOriginPolicy.resolveTerminalCreateWorkOrigin(
+        this,
+        workspace.id,
+        paneKey,
+        canAdoptPaneIdentity,
+        launchOpts.workOrigin
+      )
       const claimedStablePaneCreate = this.ptyController.claimStablePaneCreate?.({
         worktreeId: workspace.id,
         connectionId: workspace.connectionId,
         tabId,
         leafId
       })
-      let stablePaneCreateReleased = false
-      const releaseStablePaneCreate = (): void => {
-        if (stablePaneCreateReleased) {
-          return
-        }
-        stablePaneCreateReleased = true
-        claimedStablePaneCreate?.()
-      }
+      const releaseStablePaneCreate = createPaneClaimRelease(claimedStablePaneCreate)
       try {
         if (launchOpts.signal?.aborted) {
           throw new Error('client_disconnected')
@@ -132,6 +135,7 @@ export class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTerminalCreate
               ? launchOpts.command
               : (agentTeamsPlan?.command ?? launchOpts.command),
             launchAgent: launchOpts.launchAgent,
+            workOrigin,
             commandDelivery: 'provider',
             startupCommandDelivery: launchOpts.startupCommandDelivery,
             env,
@@ -234,6 +238,7 @@ export class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTerminalCreate
             pty.launchToken = launchToken ?? null
             pty.launchIncarnationId = launchToken ? pty.incarnationId : null
             pty.launchAgent = launchOpts.launchAgent ?? null
+            workOriginPolicy.applyCreatedTerminalWorkOrigin(pty, result, workOrigin)
           }
           pty.tabId = tabId
           pty.paneKey = paneKey
@@ -250,32 +255,26 @@ export class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTerminalCreate
             ...(cwd !== workspace.path ? { startupCwd: cwd } : {})
           })
         }
-        let surface: dependencies.RuntimeTerminalCreate['surface'] = 'background'
-        let warning: string | undefined
-        if (presentation !== 'background' && this.notifier?.revealTerminalSession) {
-          try {
-            await this.notifier.revealTerminalSession(workspace.id, {
-              ptyId: result.id,
-              title: launchOpts.title ?? null,
-              ...(cwd !== workspace.path ? { cwd } : {}),
-              ...(effectiveLaunchConfig ? { launchConfig: effectiveLaunchConfig } : {}),
-              ...(launchToken ? { launchToken } : {}),
-              ...(launchOpts.launchAgent ? { launchAgent: launchOpts.launchAgent } : {}),
-              ...(launchOpts.viewMode ? { viewMode: launchOpts.viewMode } : {}),
-              activate: presentation === 'focused',
-              ...(presentation ? { presentation } : {}),
-              ...dependencies.ownerSurfacing(opts.surfaceOwner !== false),
-              tabId,
-              leafId
-            })
-            surface = 'visible'
-          } catch (err) {
-            console.warn(`[terminal-create] failed to create inactive tab for ${result.id}:`, err)
-            warning = dependencies.createTerminalRevealWarning(handle, err)
+        const { surface, warning } = await revealCreatedTerminal(
+          this.notifier,
+          presentation,
+          workspace.id,
+          handle,
+          {
+            ptyId: result.id,
+            title: launchOpts.title ?? null,
+            ...(cwd !== workspace.path ? { cwd } : {}),
+            ...(effectiveLaunchConfig ? { launchConfig: effectiveLaunchConfig } : {}),
+            ...(launchToken ? { launchToken } : {}),
+            ...(launchOpts.launchAgent ? { launchAgent: launchOpts.launchAgent } : {}),
+            ...(launchOpts.viewMode ? { viewMode: launchOpts.viewMode } : {}),
+            activate: presentation === 'focused',
+            ...(presentation ? { presentation } : {}),
+            ...dependencies.ownerSurfacing(opts.surfaceOwner !== false),
+            tabId,
+            leafId
           }
-        } else if (presentation !== 'background') {
-          warning = dependencies.createTerminalRevealWarning(handle)
-        }
+        )
         return {
           handle,
           tabId,

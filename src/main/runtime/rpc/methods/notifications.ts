@@ -1,3 +1,4 @@
+import { workOriginAllowsDevice } from '../../../../shared/work-origin'
 import { createNotificationStreamFilter } from './notification-stream-policy'
 import { defineStreamingMethod, defineMethod } from '../core'
 import {
@@ -17,11 +18,14 @@ export const NOTIFICATION_METHODS = [
   defineStreamingMethod({
     name: 'notifications.subscribe',
     params: NotificationsSubscribeParams,
-    handler: async (params, { runtime, connectionId }, emit) => {
+    handler: async (params, { runtime, connectionId, pairedDeviceId }, emit) => {
       const shouldEmit = createNotificationStreamFilter(params?.includeDesktopSuppressed)
       await new Promise<void>((resolve) => {
         const unsubscribe = runtime.onNotificationDispatched((event) => {
-          if (shouldEmit(event)) {
+          if (
+            shouldEmit(event) &&
+            (event.type === 'dismiss' || workOriginAllowsDevice(event.workOrigin, pairedDeviceId))
+          ) {
             emit(event)
           }
         })
@@ -60,12 +64,15 @@ export const NOTIFICATION_METHODS = [
     // Why: returns only notifications with seq > lastSeenSeq. The runtime owns
     // the monotonic seq, so this is the single source of truth for what the
     // client missed while its socket was reaped.
-    handler: async (params, { runtime }) => {
+    handler: async (params, { runtime, pairedDeviceId }) => {
       const missed = runtime.getMissedNotificationsSince(params.lastSeenSeq, params.epoch)
       return {
-        notifications: missed.filter(
-          createNotificationStreamFilter(params.includeDesktopSuppressed)
-        ),
+        notifications: missed
+          .filter(createNotificationStreamFilter(params.includeDesktopSuppressed))
+          .filter(
+            (event) =>
+              event.type === 'dismiss' || workOriginAllowsDevice(event.workOrigin, pairedDeviceId)
+          ),
         epoch: runtime.getMobileNotificationEpoch(),
         ...(params.deliveredPushes
           ? { dismissedPushes: runtime.reconcileDismissedPushes(params.deliveredPushes) }

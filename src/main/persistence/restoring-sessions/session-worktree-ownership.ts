@@ -50,6 +50,7 @@ export const WORKSPACE_SESSION_WORKTREE_REFERENCE_KIND = {
   defaultTerminalTabsAppliedByWorktreeId: 'owner-keyed',
   sleepingAgentSessionsByPaneKey: 'row-record',
   terminalPtyIncarnationsByPaneKey: 'none',
+  terminalWorkOriginsByPaneKey: 'none',
   terminalTopologyRevisionByRepoId: 'none',
   terminalSurfaceTombstonesByPaneKey: 'row-record',
   closedTerminalTabTombstonesByTabId: 'row-record'

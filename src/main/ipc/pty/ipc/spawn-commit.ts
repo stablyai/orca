@@ -112,6 +112,10 @@ export async function commitPtyIpcSpawn(ctx: PtyIpcSpawnState): Promise<PtySpawn
         ctx.metadataLeafId !== null
         ? {
             tabId: args.tabId,
+            workOrigin:
+              ctx.result.isReattach || ctx.stablePaneOwner
+                ? ctx.result.workOrigin
+                : ctx.spawnOptions.workOrigin,
             leafId: ctx.metadataLeafId,
             ...(ctx.preAllocatedHandle ? { terminalHandle: ctx.preAllocatedHandle } : {}),
             ...(ctx.result.incarnationId ? { incarnationId: ctx.result.incarnationId } : {}),

@@ -1,4 +1,5 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
+import type { WorkOrigin } from '../../shared/work-origin'
 import { OrcaRuntimeWithStopExplicitlyClosedTabPtys } from './orca-runtime-stop-explicitly-closed-tab-ptys'
 import type { TerminalPaneSplitSource } from '../../shared/feature-education-telemetry'
 import type { RuntimeTerminalSplit } from '../../shared/runtime-types'
@@ -8,6 +9,7 @@ export class OrcaRuntimeWithSplitTerminal extends OrcaRuntimeWithStopExplicitlyC
   async splitTerminal(
     handle: string,
     opts: {
+      workOrigin?: WorkOrigin
       direction?: 'horizontal' | 'vertical'
       command?: string
       env?: Record<string, string>
@@ -32,6 +34,7 @@ export class OrcaRuntimeWithSplitTerminal extends OrcaRuntimeWithStopExplicitlyC
     this.notifier?.splitTerminal(leaf.tabId, leaf.paneRuntimeId, {
       direction,
       command: opts.command,
+      workOrigin: opts.workOrigin,
       worktreeId: leaf.worktreeId,
       sourceLeafId: leaf.leafId,
       telemetrySource: opts.telemetrySource,

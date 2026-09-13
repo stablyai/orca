@@ -1,3 +1,4 @@
+import { resolveRpcWorkOrigin } from '../work-origin-context'
 // `agentSession.*` — the structured session RPC surface.
 //
 // Every method here is gated on the client advertising
@@ -162,6 +163,7 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
           }
           return prepareStructuredAgentSessionCreateForWorktree({
             runtime: ctx.runtime,
+            workOrigin: resolveRpcWorkOrigin(ctx),
             ensureHost: async () => {
               await ensureHostInstalled(ctx)
               return requireHost(ctx)
@@ -174,7 +176,11 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
           })
         }
         const { host, attachParams } = await resolveClientSuppliedAttach(params, ctx)
-        return { host, attachParams, tab: null }
+        return {
+          host,
+          attachParams: { ...attachParams, workOrigin: resolveRpcWorkOrigin(ctx) },
+          tab: null
+        }
       })
       if ('refusal' in prepared) {
         return { ok: false, refusal: prepared.refusal }

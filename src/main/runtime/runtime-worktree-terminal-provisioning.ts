@@ -1,3 +1,4 @@
+import type { WorkOrigin } from '../../shared/work-origin'
 import { randomUUID } from 'node:crypto'
 import type { CreateWorktreeResult } from '../../shared/worktree/create-types'
 import type { GlobalSettings } from '../../shared/global-settings-types'
@@ -13,6 +14,7 @@ export type WorktreeProvisionTerminalOptions = {
   direction?: 'horizontal' | 'vertical'
   activate?: boolean
   surfaceOwner?: false
+  workOrigin?: WorkOrigin
 }
 
 export type WorktreeTerminalProvisioningHost = {
@@ -44,6 +46,7 @@ export type WorktreeTerminalProvisioningArgs = {
   // Why: setup and startup must use the same wrapper when startup waits for setup.
   wrappedSetupCommand?: string
   surfaceOwner?: false
+  workOrigin?: WorkOrigin
 }
 
 export async function createWorktreeDefaultTabTerminals(
@@ -51,7 +54,8 @@ export async function createWorktreeDefaultTabTerminals(
   selector: string,
   worktreeId: string,
   defaultTabs: CreateWorktreeResult['defaultTabs'] | undefined,
-  surfacing: { surfaceOwner?: false } = {}
+  surfacing: { surfaceOwner?: false; workOrigin?: WorkOrigin } = {},
+  onFailure?: (message: string) => void
 ): Promise<string[]> {
   if (!defaultTabs || defaultTabs.tabs.length === 0 || !host.canSpawn()) {
     return []
@@ -70,7 +74,9 @@ export async function createWorktreeDefaultTabTerminals(
         await host.setTabColor(worktreeId, terminal.tabId, template.color)
       }
     } catch (error) {
-      console.warn(`[worktree-create] Failed to create default tab for ${worktreeId}:`, error)
+      const message = `Failed to create default tab for ${worktreeId}: ${error instanceof Error ? error.message : String(error)}`
+      onFailure?.(message)
+      console.warn(`[worktree-create] ${message}`)
     }
   }
   return handles
@@ -79,11 +85,15 @@ export async function createWorktreeDefaultTabTerminals(
 export async function provisionWorktreeTerminals(
   host: WorktreeTerminalProvisioningHost,
   args: WorktreeTerminalProvisioningArgs
-): Promise<{ setupSpawned: boolean; setupTerminalHandle: string | null }> {
+): Promise<{ setupSpawned: boolean; setupTerminalHandle: string | null; warning?: string }> {
   if (!host.canSpawn()) {
     return { setupSpawned: false, setupTerminalHandle: null }
   }
-  const surfacing = args.surfaceOwner === false ? { surfaceOwner: false as const } : {}
+  const surfacing = {
+    ...(args.surfaceOwner === false ? { surfaceOwner: false as const } : {}),
+    ...(args.workOrigin !== undefined ? { workOrigin: args.workOrigin } : {})
+  }
+  const warnings: string[] = []
   let setupSpawned = false
   let setupTerminalHandle: string | null = null
   try {
@@ -92,7 +102,8 @@ export async function provisionWorktreeTerminals(
       args.worktreeSelector,
       args.worktreeId,
       args.defaultTabs,
-      surfacing
+      surfacing,
+      (message) => warnings.push(message)
     )
     let primaryHandle = args.primaryTerminalHandle ?? defaultHandles[0] ?? null
     const setupLaunchMode =
@@ -147,9 +158,14 @@ export async function provisionWorktreeTerminals(
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
+    warnings.push(`Failed to create setup/default terminals for ${args.worktreePath}: ${message}`)
     console.warn(
       `[worktree-create] Failed to create setup/default terminals for ${args.worktreePath}: ${message}`
     )
   }
-  return { setupSpawned, setupTerminalHandle }
+  return {
+    setupSpawned,
+    setupTerminalHandle,
+    ...(warnings.length ? { warning: warnings.join(' ') } : {})
+  }
 }

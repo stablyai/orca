@@ -20,6 +20,12 @@ export function preserveRuntimeAuthoredWorkspaceSessionFields(
   prior: WorkspaceSessionState | null | undefined
 ): WorkspaceSessionState {
   if (
+    next.terminalWorkOriginsByPaneKey === undefined &&
+    prior?.terminalWorkOriginsByPaneKey !== undefined
+  ) {
+    next = { ...next, terminalWorkOriginsByPaneKey: prior.terminalWorkOriginsByPaneKey }
+  }
+  if (
     next.clientHostedBrowserPagesByWorktree !== undefined ||
     prior?.clientHostedBrowserPagesByWorktree === undefined
   ) {

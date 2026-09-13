@@ -1,3 +1,4 @@
+import type { WorkOrigin } from '../../shared/work-origin'
 import type { TerminalOscLinkRange } from '../../shared/terminal-osc-link-ranges'
 import type { TuiAgent } from '../../shared/tui-agent'
 import type { AgentSessionClaimedSpawnResult } from '../../shared/agent-session-host-authority'
@@ -29,6 +30,7 @@ export type PtySpawnResult = {
   pid?: number | null
   /** Minimal allowlisted launch ownership returned by daemon reattach. */
   launchAgent?: TuiAgent
+  workOrigin?: WorkOrigin
   /** Local WSL context: null is native; undefined is unavailable/legacy. */
   wslDistro?: string | null
   /** ANSI snapshot of the terminal screen, present when reattaching to an

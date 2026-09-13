@@ -1,4 +1,5 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
+import type { WorkOrigin } from '../../shared/work-origin'
 import { OrcaRuntimeWithSplitTerminal } from './orca-runtime-split-terminal'
 import type { RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
 import type { TerminalPaneSplitSource } from '../../shared/feature-education-telemetry'
@@ -11,6 +12,7 @@ export class OrcaRuntimeWithSplitPtyBackedTerminal extends OrcaRuntimeWithSplitT
   protected async splitPtyBackedTerminal(
     pty: RuntimePtyWorktreeRecord,
     opts: {
+      workOrigin?: WorkOrigin
       direction?: 'horizontal' | 'vertical'
       command?: string
       env?: Record<string, string>
@@ -54,6 +56,7 @@ export class OrcaRuntimeWithSplitPtyBackedTerminal extends OrcaRuntimeWithSplitT
       rows: 40,
       cwd: workspace.path,
       command: opts.command,
+      workOrigin: opts.workOrigin,
       commandDelivery: 'provider',
       env: this.buildTerminalWorkspaceEnv(workspace, opts.env ?? {}, paneKey, parentTabId),
       envToDelete: opts.envToDelete,
@@ -89,6 +92,7 @@ export class OrcaRuntimeWithSplitPtyBackedTerminal extends OrcaRuntimeWithSplitT
     this.registerPty(result.id, workspace.id, workspace.connectionId)
     const createdPty = this.getOrCreatePtyWorktreeRecord(result.id)
     if (createdPty) {
+      createdPty.workOrigin = opts.workOrigin === undefined ? { kind: 'host' } : opts.workOrigin
       createdPty.tabId = parentTabId
       createdPty.paneKey = paneKey
       createdPty.runtimeSessionOwned = pty.runtimeSessionOwned

@@ -1,3 +1,4 @@
+import type { WorkOrigin } from '../../shared/work-origin'
 /**
  * Reservation admission: what a reserve request means against the persisted state.
  *
@@ -44,6 +45,7 @@ import {
 import type { AgentSessionStoreState } from './agent-session-record-store-file'
 
 export type AgentSessionReserveRequest = {
+  workOrigin?: WorkOrigin
   sessionId: string
   location: AgentSessionExecutionLocation
   provider: AgentSessionHandleProvider
@@ -238,6 +240,7 @@ function createAgentSessionRecord(
 ): AgentSessionRecord {
   return {
     schemaVersion: AGENT_SESSION_RECORD_SCHEMA_VERSION,
+    workOrigin: request.workOrigin,
     sessionId: request.sessionId,
     location: request.location,
     provider: request.provider,

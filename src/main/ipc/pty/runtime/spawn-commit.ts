@@ -1,3 +1,4 @@
+import { resolveCommittedPtyWorkOrigin } from '../pane/pty-work-origin'
 import { isValidTerminalTabId } from '../../../../shared/terminal-tab-id'
 import { ptyOwnership, ptyIncarnationById, deletePtyOwnership } from '../provider/ownership-state'
 import { ptySizes } from '../delivery/visibility-state'
@@ -18,11 +19,7 @@ import {
 import { seedTerminalRestoreRecordsFromSpawnResult } from '../pane/agent-session-owners'
 import { track } from '../../../telemetry/client'
 import { getCohortAtEmit } from '../../../telemetry/cohort-classifier'
-import {
-  agentKindSchema,
-  launchSourceSchema,
-  requestKindSchema
-} from '../../../../shared/telemetry-events'
+import * as schemas from '../../../../shared/telemetry-events'
 import { persistAdmittedStablePaneBinding } from '../pane/stable-owner'
 import { claimSshPaneLease } from '../pane/ssh-pane-lease-claim'
 import {
@@ -38,6 +35,7 @@ import type { RuntimePtySpawnState } from './spawn-state'
 
 export async function commitRuntimePtySpawn(ctx: RuntimePtySpawnState) {
   const args = ctx.args
+  const workOrigin = resolveCommittedPtyWorkOrigin(ctx)
   const providerReattachLaunchIdentity = admitProviderReattachLaunchIdentity(ctx.result)
   try {
     ctx.stablePaneBindingPersisted = persistAdmittedStablePaneBinding({
@@ -75,6 +73,7 @@ export async function commitRuntimePtySpawn(ctx: RuntimePtySpawnState) {
         tabId: owner.surface.tabId,
         leafId: owner.surface.leafId,
         terminalHandle: owner.surface.terminalHandle,
+        ...(workOrigin !== undefined ? { workOrigin } : {}),
         ...(ctx.result.incarnationId ? { incarnationId: ctx.result.incarnationId } : {}),
         ...(providerReattachLaunchIdentity ? { providerReattachLaunchIdentity } : {})
       }
@@ -155,6 +154,7 @@ export async function commitRuntimePtySpawn(ctx: RuntimePtySpawnState) {
         leafId: ctx.hostSessionBinding.leafId,
         ptyId: ctx.result.id,
         hostAdmittedMembership: true,
+        ...(workOrigin !== undefined ? { workOrigin } : {}),
         ...(ctx.result.incarnationId ? { incarnationId: ctx.result.incarnationId } : {}),
         ...(ctx.cwd ? { startupCwd: ctx.cwd } : {}),
         ...(ctx.hostSessionBinding.expectedSourceBinding
@@ -206,6 +206,7 @@ export async function commitRuntimePtySpawn(ctx: RuntimePtySpawnState) {
         ? {
             tabId: args.tabId,
             leafId: ctx.metadataLeafId,
+            ...(workOrigin !== undefined ? { workOrigin } : {}),
             ...(args.preAllocatedHandle ? { terminalHandle: args.preAllocatedHandle } : {}),
             ...(ctx.result.incarnationId ? { incarnationId: ctx.result.incarnationId } : {}),
             ...(providerReattachLaunchIdentity ? { providerReattachLaunchIdentity } : {})
@@ -229,9 +230,9 @@ export async function commitRuntimePtySpawn(ctx: RuntimePtySpawnState) {
     markClaudePtySpawned(ctx.result.id)
   }
   if (args.telemetry && !ctx.stablePaneOwner) {
-    const agentKindParse = agentKindSchema.safeParse(args.telemetry.agent_kind)
-    const launchSourceParse = launchSourceSchema.safeParse(args.telemetry.launch_source)
-    const requestKindParse = requestKindSchema.safeParse(args.telemetry.request_kind)
+    const agentKindParse = schemas.agentKindSchema.safeParse(args.telemetry.agent_kind)
+    const launchSourceParse = schemas.launchSourceSchema.safeParse(args.telemetry.launch_source)
+    const requestKindParse = schemas.requestKindSchema.safeParse(args.telemetry.request_kind)
     if (agentKindParse.success && launchSourceParse.success && requestKindParse.success) {
       track('agent_started', {
         agent_kind: agentKindParse.data,

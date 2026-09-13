@@ -179,6 +179,7 @@ export class OrcaRuntimeWithPerformMobileSessionPtyRecordsRefresh extends OrcaRu
               leafId: tab.leafId,
               sessionId
             },
+            workOrigin: tab.workOrigin,
             cwd: tab.startupCwd,
             command: agentStartup.command,
             env: agentStartup.env,

@@ -1,9 +1,5 @@
-import type {
-  ConfirmForegroundProcessRequest,
-  ConfirmShellForegroundRequest,
-  GetForegroundProcessRequest,
-  InspectProcessRequest
-} from './daemon-foreground-process-protocol'
+import type { WorkOrigin } from '../../shared/work-origin'
+import type * as ForegroundProcessProtocol from './daemon-foreground-process-protocol'
 
 export type {
   ConfirmForegroundProcessRequest,
@@ -71,6 +67,7 @@ export type CreateOrAttachRequest = {
     command?: string
     startupCommandDelivery?: StartupCommandDelivery
     launchAgent?: TuiAgent
+    workOrigin?: WorkOrigin
     /** Rejects an absent session instead of interpreting mount uncertainty as create permission. */
     attachOnly?: boolean
     /** Explicit Windows shell override selected by the user (e.g. 'wsl.exe').
@@ -316,10 +313,10 @@ export type DaemonRequest =
   | ShutdownIfIdleRequest
   | DetachRequest
   | GetCwdRequest
-  | GetForegroundProcessRequest
-  | InspectProcessRequest
-  | ConfirmForegroundProcessRequest
-  | ConfirmShellForegroundRequest
+  | ForegroundProcessProtocol.GetForegroundProcessRequest
+  | ForegroundProcessProtocol.InspectProcessRequest
+  | ForegroundProcessProtocol.ConfirmForegroundProcessRequest
+  | ForegroundProcessProtocol.ConfirmShellForegroundRequest
   | ClearScrollbackRequest
   | ShutdownRequest
   | PingRequest

@@ -1,3 +1,4 @@
+import type { WorkOrigin } from '../../shared/work-origin'
 import type { AgentStatus } from '../../shared/agent-detection'
 import type { AgentStatusState } from '../../shared/agent-status-types'
 import type { SleepingAgentLaunchConfig } from '../../shared/agent-session-resume'
@@ -58,6 +59,7 @@ export type RuntimePtyWorktreeRecord = RuntimeTerminalTailState & {
   launchToken: string | null
   launchIncarnationId: PtyIncarnationId | null
   launchAgent: TuiAgent | null
+  workOrigin?: WorkOrigin
   agentSessionOwners: AgentSessionOwnerBinding[]
   foregroundAgent: TuiAgent | null
   connected: boolean

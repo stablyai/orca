@@ -1,3 +1,4 @@
+import type { WorkOrigin } from '../../../../shared/work-origin'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import type {
   AgentProviderSessionMetadata,
@@ -34,6 +35,7 @@ export type PtySpawnIpcArgs = {
   launchConfig?: SleepingAgentLaunchConfig
   resumeProviderSession?: AgentProviderSessionMetadata
   launchToken?: unknown
+  workOrigin?: WorkOrigin
   launchAgent?: TuiAgent
   startupCommandDelivery?: StartupCommandDelivery
   connectionId?: string | null
@@ -97,6 +99,7 @@ export type PtySpawnIpcDeps = {
   localStartupCwdDirectoryExists: (path: string) => boolean
   prepareCodexResumeHome: (args: {
     connectionId?: string | null
+    workOrigin?: WorkOrigin
     launchAgent?: TuiAgent
     providerSession?: AgentProviderSessionMetadata
     target: CodexAccountSelectionTarget

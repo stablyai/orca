@@ -24,9 +24,7 @@ const passthroughDedupe = <T>(_repo: string, _id: string | undefined, run: () =>
 describe('worktree.create navigation authority', () => {
   it.each([
     ['runtime', 'caller'],
-    // Why: no phone renderer provisions the host's setup/default tabs off the activation,
-    // so mobile creates keep the all-surface reveal until that work moves to the runtime.
-    ['mobile', 'all']
+    ['mobile', 'caller']
   ] as const)(
     'resolves create activation from the paired %s client kind',
     async (clientKind, expected) => {
@@ -50,10 +48,7 @@ describe('worktree.create navigation authority', () => {
     }
   )
 
-  it('keeps an older CLI reveal working against an updated host', async () => {
-    // Why: an old CLI cannot send `navigation`, but it pairs as a runtime device. Without the
-    // cliProvenanceRequest marker it would resolve to 'caller' and `--activate` would reveal
-    // nothing anywhere — strictly worse than the pre-fix behavior for that version skew.
+  it('preserves an older CLI request without guessing a missing origin', async () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       dedupeWorktreeCreate: passthroughDedupe,
@@ -74,7 +69,7 @@ describe('worktree.create navigation authority', () => {
     )
 
     expect(runtime.createManagedWorktree).toHaveBeenCalledWith(
-      expect.objectContaining({ navigation: 'all' })
+      expect.objectContaining({ navigation: 'all', workOrigin: null })
     )
   })
 
@@ -98,7 +93,7 @@ describe('worktree.create navigation authority', () => {
     )
   })
 
-  it('honors an explicit follow navigation on create', async () => {
+  it('keeps explicit follow navigation local to its caller', async () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       dedupeWorktreeCreate: passthroughDedupe,
@@ -119,11 +114,11 @@ describe('worktree.create navigation authority', () => {
     )
 
     expect(runtime.createManagedWorktree).toHaveBeenCalledWith(
-      expect.objectContaining({ navigation: 'clients' })
+      expect.objectContaining({ navigation: 'caller' })
     )
   })
 
-  it('keeps an explicit all-surface reveal from a paired caller', async () => {
+  it('keeps explicit all-surface navigation local to its caller', async () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       dedupeWorktreeCreate: passthroughDedupe,
@@ -144,7 +139,7 @@ describe('worktree.create navigation authority', () => {
     )
 
     expect(runtime.createManagedWorktree).toHaveBeenCalledWith(
-      expect.objectContaining({ navigation: 'all' })
+      expect.objectContaining({ navigation: 'caller' })
     )
   })
 })

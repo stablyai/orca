@@ -9,12 +9,15 @@ export const CLIENT_EVENT_METHODS = [
   defineStreamingMethod({
     name: 'runtime.clientEvents.subscribe',
     params: null,
-    handler: async (_params, { runtime, connectionId, clientKind }, emit) => {
+    handler: async (_params, { runtime, connectionId, clientKind, pairedDeviceId }, emit) => {
       await new Promise<void>((resolve) => {
         // Why: mobile discards terminalSideEffects; excluding it stops the
         // per-OSC batch frames from crossing the relay.
         const unsubscribe = runtime.onClientEvent(
           (event) => {
+            if (event.type === 'activateWorktree' && event.recipientDeviceId !== pairedDeviceId) {
+              return
+            }
             emit(event)
           },
           { consumesTerminalSideEffects: clientKind !== 'mobile' }

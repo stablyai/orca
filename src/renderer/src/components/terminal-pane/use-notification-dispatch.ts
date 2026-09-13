@@ -1,3 +1,7 @@
+import { getExplicitRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { workOriginAllowsHost, workOriginMatchesDevice } from '../../../../shared/work-origin'
+import { parsePaneKey } from '../../../../shared/stable-pane-id'
+import { getRemoteRuntimePtyEnvironmentId } from '@/runtime/runtime-terminal-stream'
 import { useCallback } from 'react'
 import { useAppStore } from '@/store'
 import { resolveCommittedTitleAgentType } from '@/lib/pane-agent-evidence'
@@ -65,11 +69,34 @@ export type TerminalNotificationEvent = {
  * creates a new array reference on every store update and triggers
  * excessive re-renders of TerminalPane.
  */
-export function dispatchTerminalNotification(
+export async function dispatchTerminalNotification(
   worktreeId: string,
   event: TerminalNotificationEvent
-): void {
+): Promise<void> {
   const state = useAppStore.getState()
+  const pane = event.paneKey ? parsePaneKey(event.paneKey) : null
+  const tab = pane
+    ? state.tabsByWorktree[worktreeId]?.find((tab) => tab.id === pane.tabId)
+    : undefined
+  const ptyId = pane
+    ? (state.terminalLayoutsByTabId[pane.tabId]?.ptyIdsByLeafId?.[pane.leafId] ?? tab?.ptyId)
+    : undefined
+  const environmentId =
+    (ptyId ? getRemoteRuntimePtyEnvironmentId(ptyId) : null) ??
+    getExplicitRuntimeEnvironmentIdForWorktree(state, worktreeId)
+  const leafOrigin = pane ? tab?.workOriginsByLeafId?.[pane.leafId] : undefined
+  const origin = leafOrigin === undefined ? tab?.workOrigin : leafOrigin
+  if (environmentId) {
+    const deviceId = state.runtimeEnvironments.find(
+      (environment) => environment.id === environmentId
+    )?.pairedDeviceId
+    if (!deviceId || !workOriginMatchesDevice(origin, deviceId)) {
+      return
+    }
+  }
+  const localRecipient = environmentId !== null || workOriginAllowsHost(origin)
+  let markUnread: (() => void) | undefined
+
   // Why: the completion title is the live identity. If it explicitly names an
   // agent, any snapshot from another agent is stale pane-reuse residue and must
   // not lend its prompt/agentType or timing id to this notification.
@@ -157,18 +184,33 @@ export function dispatchTerminalNotification(
     const shouldMarkUnread = event.paneKey
       ? !isVisibleForegroundPaneKey(state, worktreeId, event.paneKey)
       : state.activeWorktreeId !== worktreeId || !isOrcaWindowForegroundFocused()
-    if (shouldMarkUnread) {
-      // Why: activeWorktreeId is only in-app selection. If Orca is backgrounded,
-      // a selected chat finishing still needs unread/Dock attention.
-      state.markWorktreeUnread(worktreeId)
-      if (event.paneKey) {
-        // Why: focus-return auto-ack needs an agent-specific source marker;
-        // generic pane unread also covers BEL and must still show until interact.
-        state.markAgentCompletionPaneUnread(event.paneKey)
-      }
-      if (terminalAttentionEnabled && tabId && event.paneKey) {
-        state.markTerminalTabUnread(tabId)
-        state.markTerminalPaneUnread(event.paneKey)
+    if (localRecipient && shouldMarkUnread) {
+      markUnread = () => {
+        const current = useAppStore.getState()
+        if (event.paneKey) {
+          if (
+            (!isCurrentLivePaneKey(current, worktreeId, event.paneKey) &&
+              !isCurrentKnownPaneKey(current, worktreeId, event.paneKey)) ||
+            isVisibleForegroundPaneKey(current, worktreeId, event.paneKey)
+          ) {
+            return
+          }
+        } else if (current.activeWorktreeId === worktreeId && isOrcaWindowForegroundFocused()) {
+          return
+        }
+
+        // Why: activeWorktreeId is only in-app selection. If Orca is backgrounded,
+        // a selected chat finishing still needs unread/Dock attention.
+        current.markWorktreeUnread(worktreeId)
+        if (event.paneKey) {
+          // Why: focus-return auto-ack needs an agent-specific source marker;
+          // generic pane unread also covers BEL and must still show until interact.
+          current.markAgentCompletionPaneUnread(event.paneKey)
+        }
+        if (terminalAttentionEnabled && tabId && event.paneKey) {
+          current.markTerminalTabUnread(tabId)
+          current.markTerminalPaneUnread(event.paneKey)
+        }
       }
     }
   }
@@ -209,9 +251,10 @@ export function dispatchTerminalNotification(
         })
       : null
 
-  void window.api.notifications
+  return window.api.notifications
     .dispatch({
       source: event.source,
+      workOrigin: environmentId ? { kind: 'host' } : origin,
       ...(notificationId ? { notificationId } : {}),
       worktreeId,
       paneKey: event.paneKey,
@@ -223,6 +266,10 @@ export function dispatchTerminalNotification(
       ...agentSnapshot
     })
     .then((result) => {
+      if (result.reason === 'not-recipient') {
+        return
+      }
+      markUnread?.()
       if (result.delivered) {
         void playDesktopNotificationSound(customSoundId, customSoundVolume)
         return

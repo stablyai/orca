@@ -1,4 +1,5 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
+import type { WorkOrigin } from '../../shared/work-origin'
 import { OrcaRuntimeWithListManagedWorktrees } from './orca-runtime-list-managed-worktrees'
 import type { RuntimeNavigationTarget } from '../../shared/runtime-navigation'
 import { navigationTargetsClients, navigationTargetsHost } from '../../shared/runtime-navigation'
@@ -202,6 +203,7 @@ export class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntimeWithListM
   }
 
   protected async provisionManagedWorktreeTerminals(args: {
+    workOrigin?: WorkOrigin
     worktreeSelector: string
     worktreeId: string
     worktreePath: string
@@ -219,7 +221,7 @@ export class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntimeWithListM
     // Why: a workspace provisioned in the background must not pull the sidebar
     // to itself; the user never asked to look at these tabs.
     surfaceOwner?: false
-  }): Promise<{ setupSpawned: boolean; setupTerminalHandle: string | null }> {
+  }): Promise<{ setupSpawned: boolean; setupTerminalHandle: string | null; warning?: string }> {
     return provisionWorktreeTerminals(this.getWorktreeTerminalProvisioningHost(), args)
   }
 }

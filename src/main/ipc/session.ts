@@ -14,11 +14,13 @@ export function registerSessionHandlers(store: Store): void {
   })
 
   ipcMain.handle('session:set', (_event, args: WorkspaceSessionState, hostId?: string | null) => {
-    store.setWorkspaceSession(args, hostId)
+    const { terminalWorkOriginsByPaneKey: _origin, ...session } = args
+    store.setWorkspaceSession(session, hostId)
   })
 
   ipcMain.handle('session:patch', (_event, args: WorkspaceSessionPatch, hostId?: string | null) => {
-    store.patchWorkspaceSession(args, hostId)
+    const { terminalWorkOriginsByPaneKey: _origin, ...patch } = args
+    store.patchWorkspaceSession(patch, hostId)
   })
 
   ipcMain.handle('session:flush', () => {
@@ -32,7 +34,8 @@ export function registerSessionHandlers(store: Store): void {
   // data (including terminal scrollback buffers) is persisted to disk
   // before the window closes — regardless of before-quit ordering.
   ipcMain.on('session:set-sync', (event, args: WorkspaceSessionState, hostId?: string | null) => {
-    store.setWorkspaceSession(args, hostId)
+    const { terminalWorkOriginsByPaneKey: _origin, ...session } = args
+    store.setWorkspaceSession(session, hostId)
     store.flush()
     event.returnValue = true
   })

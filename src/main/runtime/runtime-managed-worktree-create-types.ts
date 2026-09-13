@@ -1,3 +1,4 @@
+import type { WorkOrigin } from '../../shared/work-origin'
 import type { AgentLaunchPreferences } from '../../shared/agent-session-host-authority'
 import type { CreateWorktreeArgs } from '../../shared/worktree/create-types'
 import type {
@@ -19,6 +20,7 @@ export type RuntimeManagedWorktreeCreateArgs = {
   name: string
   nameWasGenerated?: boolean
   navigation?: RuntimeNavigationTarget
+  workOrigin?: WorkOrigin
   baseBranch?: string
   compareBaseRef?: string
   branchNameOverride?: string

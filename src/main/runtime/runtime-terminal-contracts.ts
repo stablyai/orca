@@ -1,3 +1,4 @@
+import type { WorkOrigin } from '../../shared/work-origin'
 import type { ParsedAgentStatusPayload } from '../../shared/agent-status-types'
 import type {
   AgentLaunchPreferences,
@@ -22,6 +23,7 @@ import type { WorkerTerminalHostScope } from './orchestration/worker-terminal-pr
 
 export type TerminalCreateOptions = {
   command?: string
+  workOrigin?: WorkOrigin
   claudeAgentTeamsSourceCommand?: string
   cwd?: string
   env?: Record<string, string>

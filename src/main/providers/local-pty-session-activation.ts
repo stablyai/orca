@@ -190,6 +190,7 @@ export function activateLocalPtySession(args: {
   return {
     id,
     incarnationId,
+    workOrigin: spawn.workOrigin,
     pid,
     ...(spawnedWslDistro !== undefined ? { wslDistro: spawnedWslDistro } : {})
   }

@@ -1,3 +1,4 @@
+import { useAppStore } from '../store'
 import type {
   RuntimeClientEvent,
   RuntimeClientEventStreamMessage
@@ -30,7 +31,25 @@ export async function subscribeRuntimeClientEvents(
     },
     {
       onResponse: (response) => {
-        handleRuntimeClientEventResponse(response, onEvent, onError, onReplayedAfterReconnect)
+        handleRuntimeClientEventResponse(
+          response,
+          (event) => {
+            if (event.type === 'activateWorktree') {
+              const environment = useAppStore
+                .getState()
+                .runtimeEnvironments.find((entry) => entry.id === environmentId)
+              if (
+                !event.recipientDeviceId ||
+                event.recipientDeviceId !== environment?.pairedDeviceId
+              ) {
+                return
+              }
+            }
+            onEvent(event)
+          },
+          onError,
+          onReplayedAfterReconnect
+        )
       },
       onError
     }

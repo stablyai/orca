@@ -36,6 +36,9 @@ export class OrcaRuntimeWithRunCreateMobileSessionTerminal extends OrcaRuntimeWi
     } = {}
   ): Promise<RuntimeMobileSessionCreateTerminalResult> {
     const pairedCreate = Boolean(opts.clientNavigationId)
+    const workOrigin = opts.clientNavigationId
+      ? { kind: 'paired-device', deviceId: opts.clientNavigationId }
+      : { kind: 'host' }
     const graphEpoch = this.captureReadyGraphEpoch()
     const workspace = await this.resolveTerminalWorkspaceLaunchScope(worktreeSelector)
     const worktreeId = workspace.id
@@ -62,6 +65,7 @@ export class OrcaRuntimeWithRunCreateMobileSessionTerminal extends OrcaRuntimeWi
         opts.activate !== false,
         opts.afterTabId,
         {
+          workOrigin,
           command: startupCommand.command,
           cwd,
           env: startupCommand.env,
@@ -117,6 +121,8 @@ export class OrcaRuntimeWithRunCreateMobileSessionTerminal extends OrcaRuntimeWi
         getRuntimeDesktopSurface().onIpc('terminal:tabCreateReply', handler)
         win.webContents.send('terminal:requestTabCreate', {
           requestId,
+          workOrigin,
+          ...(pairedCreate ? { surfaceOwner: false } : {}),
           worktreeId,
           afterTabId: afterDesktopTabId,
           targetGroupId: opts.targetGroupId,
@@ -129,11 +135,11 @@ export class OrcaRuntimeWithRunCreateMobileSessionTerminal extends OrcaRuntimeWi
           ...(opts.viewMode ? { viewMode: opts.viewMode } : {}),
           startupCommandDelivery: startupCommand.startupCommandDelivery,
           source: 'runtime-session',
-          activate: opts.activate
+          activate: pairedCreate ? false : opts.activate
         })
       })
 
-      if (opts.activate !== false) {
+      if (!pairedCreate && opts.activate !== false) {
         this.notifier?.focusTerminal(reply.tabId, worktreeId, null)
       }
       // Why: register the wait before the renderer's PTY spawn arrives so that
@@ -186,6 +192,7 @@ export class OrcaRuntimeWithRunCreateMobileSessionTerminal extends OrcaRuntimeWi
           opts.activate !== false,
           opts.afterTabId,
           {
+            workOrigin,
             command: startupCommand.command,
             cwd,
             env: startupCommand.env,

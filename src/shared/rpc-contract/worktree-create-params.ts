@@ -83,6 +83,7 @@ export const WorktreeCreate = z
     parentWorktree: OptionalString,
     cwdParentWorktree: OptionalString,
     noParent: OptionalBoolean,
+    callerOriginSession: z.object({ sessionId: z.string(), spawnToken: z.string() }).optional(),
     callerTerminalHandle: OptionalString,
     orchestrationContext: z
       .object({

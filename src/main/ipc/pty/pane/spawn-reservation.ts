@@ -113,3 +113,14 @@ export function resolvePaneSpawnReservation<T extends PaneSpawnReservationResult
   }
   return response
 }
+
+export function createPaneClaimRelease(claimed?: () => void): () => void {
+  let released = false
+  return () => {
+    if (released) {
+      return
+    }
+    released = true
+    claimed?.()
+  }
+}

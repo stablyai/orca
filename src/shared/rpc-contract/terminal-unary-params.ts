@@ -140,6 +140,9 @@ export const TerminalWait = TerminalHandle.extend({
 })
 
 export const TerminalCreateParams = z.object({
+  callerOriginSession: z.object({ sessionId: z.string(), spawnToken: z.string() }).optional(),
+  callerTerminalHandle: z.string().optional(),
+  cliProvenanceRequest: z.object({}).optional(),
   worktree: OptionalString,
   clientMutationId: z.string().min(1).max(128).optional(),
   reconcileExisting: z.boolean().optional(),
@@ -184,6 +187,9 @@ export const TerminalCreateParams = z.object({
 })
 
 export const TerminalSplit = TerminalHandle.extend({
+  callerOriginSession: z.object({ sessionId: z.string(), spawnToken: z.string() }).optional(),
+  callerTerminalHandle: OptionalString,
+  cliProvenanceRequest: z.object({}).optional(),
   direction: z
     .unknown()
     .transform((v) => (v === 'vertical' || v === 'horizontal' ? v : undefined))

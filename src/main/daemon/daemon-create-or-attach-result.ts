@@ -1,3 +1,4 @@
+import type { WorkOrigin } from '../../shared/work-origin'
 import type { TuiAgent } from '../../shared/tui-agent'
 import type { ShellReadyState, TerminalSnapshot } from './types'
 import type { AgentSessionClaimedSpawnResult } from '../../shared/agent-session-host-authority'
@@ -10,6 +11,7 @@ export type DaemonCreateOrAttachResult = {
   shellState: ShellReadyState
   historySeeded?: boolean
   launchAgent?: TuiAgent
+  workOrigin?: WorkOrigin
   /** Undefined only when talking to a daemon predating WSL session context. */
   wslDistro?: string | null
   agentSessionEnsure?: AgentSessionClaimedSpawnResult
@@ -23,15 +25,18 @@ export type DaemonCreateOrAttachResult = {
 }
 
 export function getDaemonSessionResultMetadata(session: {
+  workOrigin?: WorkOrigin
   launchAgent: TuiAgent | null
   historySeeded: boolean | undefined
   wslDistro: string | null
 }): {
   launchAgent?: TuiAgent
+  workOrigin?: WorkOrigin
   historySeeded?: boolean
   wslDistro: string | null
 } {
   return {
+    ...(session.workOrigin !== undefined ? { workOrigin: session.workOrigin } : {}),
     ...(session.launchAgent ? { launchAgent: session.launchAgent } : {}),
     ...(session.historySeeded !== undefined ? { historySeeded: session.historySeeded } : {}),
     // Why: null authoritatively identifies a native session; omission is

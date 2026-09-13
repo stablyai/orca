@@ -1,3 +1,4 @@
+import type { WorkOrigin } from '../../../../../../shared/work-origin'
 import type { AgentLaunchPreferences } from '../../../../../../shared/agent-session-host-authority'
 import { narrowStructuredLaunchSeedOptions } from '../../../../../../shared/native-chat-session-option-defaults'
 import type { TuiAgent } from '../../../../../../shared/tui-agent'
@@ -58,6 +59,7 @@ export function requireWorkerAuthority(runtime: OrcaRuntimeService, terminalHand
 
 export async function createExistingWorktreeWorkerTerminal(args: {
   runtime: OrcaRuntimeService
+  workOrigin?: WorkOrigin
   worktreeId: string
   agent: TuiAgent
   launchPreferences?: AgentLaunchPreferences
@@ -65,6 +67,7 @@ export async function createExistingWorktreeWorkerTerminal(args: {
   effects: WorkerEffect[]
 }): Promise<{ handle: string; warning?: string }> {
   const terminal = await args.runtime.createTerminal(`id:${args.worktreeId}`, {
+    workOrigin: args.workOrigin,
     // Why: the agent id is not a shell command — `cursor` resolves to the Cursor
     // desktop app while its CLI is `cursor-agent`. Let the runtime build the
     // configured launcher instead of executing the raw id.
@@ -94,6 +97,7 @@ export async function createExistingWorktreeWorkerTerminal(args: {
  */
 export async function createStructuredWorkerSessionForWorktree(args: {
   runtime: OrcaRuntimeService
+  workOrigin?: WorkOrigin
   worktreeId: string
   agent: TuiAgent
   dispatchId: string
@@ -110,6 +114,7 @@ export async function createStructuredWorkerSessionForWorktree(args: {
   const options = narrowStructuredLaunchSeedOptions(args.launchPreferences)
   const created = await createStructuredWorkerSession({
     runtime: args.runtime,
+    workOrigin: args.workOrigin,
     worktreeId: args.worktreeId,
     agent: args.agent,
     dispatchId: args.dispatchId,
@@ -150,6 +155,7 @@ export function applyWaitForSetupOutcome(
 
 export function monitorWorkerSetup(args: {
   runtime: OrcaRuntimeService
+  workOrigin?: WorkOrigin
   db: OrchestrationDb
   runId: string
   dispatchId: string

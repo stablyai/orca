@@ -1,3 +1,4 @@
+import { normalizeWorkOrigin, type WorkOrigin } from '../../shared/work-origin'
 import type { SshChannelMultiplexer } from '../ssh/ssh-channel-multiplexer'
 import { isPtyIncarnationId, type PtyIncarnationId } from '../../shared/pty-incarnation'
 import {
@@ -24,6 +25,7 @@ import {
 import type { SshPtyReceivingActivationLease } from './ssh-pty-notification-routing'
 
 export type SshPtyAttachResult = {
+  workOrigin?: WorkOrigin
   replay?: string
   incarnationId?: PtyIncarnationId
   sourceRecovery?: PtySourceRecoveryResult
@@ -44,6 +46,7 @@ export function parseSshPtyAttachResult(value: unknown): SshPtyAttachResult {
     throw new Error('Invalid SSH PTY attach response')
   }
   const result = value as {
+    workOrigin?: unknown
     replay?: unknown
     incarnationId?: unknown
     sourceRecovery?: unknown
@@ -69,6 +72,7 @@ export function parseSshPtyAttachResult(value: unknown): SshPtyAttachResult {
     throw new Error('Invalid SSH PTY source activation identity')
   }
   return {
+    workOrigin: normalizeWorkOrigin(result.workOrigin),
     ...(typeof result.replay === 'string' ? { replay: result.replay } : {}),
     ...(isPtyIncarnationId(result.incarnationId) ? { incarnationId: result.incarnationId } : {}),
     ...(sourceRecovery ? { sourceRecovery } : {}),
@@ -219,6 +223,7 @@ export async function reattachSshPtySession(args: {
     return {
       id: toAppSshPtyId(args.connectionId, relaySessionId),
       isReattach: true,
+      workOrigin: attachResult.workOrigin,
       ...(attachResult.replay ? { replay: attachResult.replay } : {}),
       ...(attachResult.incarnationId ? { incarnationId: attachResult.incarnationId } : {}),
       ...(attachResult.sourceRecovery ? { sourceRecovery: attachResult.sourceRecovery } : {}),

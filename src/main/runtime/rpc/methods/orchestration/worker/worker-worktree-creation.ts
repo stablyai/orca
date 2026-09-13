@@ -46,6 +46,7 @@ export async function createWorkerWorktree(args: {
   const setupDecision = params.setup ?? 'run'
   db.recordWorkerStage({ dispatchId, stage: 'worktree_creating', effects })
   const created = await runtime.createManagedWorktree({
+    workOrigin: runtime.getTerminalWorkOrigin(params.from) ?? null,
     repoSelector: params.repo ?? coordinatorWorktree.repoId,
     name: params.name as string,
     baseBranch: params.baseBranch,

@@ -14,22 +14,28 @@ export function finishRuntimeRemoteWorktreeCreate(args: {
   startupTerminalPaneKey: string | null
   startupTerminalPtyId: string | null
 }): CreateWorktreeResult {
-  const returnedSetup = args.didSpawnSetup
-    ? undefined
-    : args.result.setup
-      ? {
-          ...args.result.setup,
-          ...(args.didSpawnStartup && args.wrappedSetupCommand
-            ? { command: args.wrappedSetupCommand }
-            : {})
-        }
-      : undefined
+  const addressed =
+    args.request.workOrigin !== undefined && args.request.workOrigin?.kind !== 'host'
+  const returnedSetup =
+    addressed || args.didSpawnSetup
+      ? undefined
+      : args.result.setup
+        ? {
+            ...args.result.setup,
+            ...(args.didSpawnStartup && args.wrappedSetupCommand
+              ? { command: args.wrappedSetupCommand }
+              : {})
+          }
+        : undefined
   const resultForRenderer = returnedSetup
     ? { ...args.result, setup: returnedSetup }
     : (() => {
         const { setup: _setup, ...resultWithoutSetup } = args.result
         return resultWithoutSetup
       })()
+  if (addressed) {
+    delete resultForRenderer.defaultTabs
+  }
   const resultWithStartupTerminal =
     args.didSpawnStartup && args.startupTerminalHandle
       ? {
