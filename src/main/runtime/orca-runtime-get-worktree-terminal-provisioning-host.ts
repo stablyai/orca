@@ -5,10 +5,14 @@ import type {
   WorktreeTerminalProvisioningHost
 } from './runtime-worktree-terminal-provisioning'
 import type { TerminalCreateOptions } from './runtime-terminal-contracts'
-import type { WorktreeStartupReadinessHost } from './runtime-worktree-startup-readiness'
+import {
+  waitForWorktreeStartupDraft,
+  type WorktreeStartupReadinessHost
+} from './runtime-worktree-startup-readiness'
 import { prefetchWorktreeCreateBase } from '../worktree-create-base-prefetch'
 import { prepareWorktreeCreateForRepo } from '../worktree-create-preparation'
 import { getWorktreeCreatePrefetchGitOptions } from '../project-runtime-git-options'
+import type { TuiAgent } from '../../shared/tui-agent'
 
 export class OrcaRuntimeWithGetWorktreeTerminalProvisioningHost extends OrcaRuntimeWithActivateManagedWorktree {
   protected getWorktreeTerminalProvisioningHost(): WorktreeTerminalProvisioningHost {
@@ -38,6 +42,22 @@ export class OrcaRuntimeWithGetWorktreeTerminalProvisioningHost extends OrcaRunt
       readRecentOutput: (ptyId) => this.recentPtyOutputById.get(ptyId)?.read(),
       write: (ptyId, data) => this.ptyController?.write(ptyId, data)
     }
+  }
+
+  /**
+   * Waits for `agent`'s own composer-mount marker (the same PTY-output scanner that gates the
+   * editable "start workspace from issue" draft paste) instead of the generic tui-idle signal,
+   * which fires on OSC-title idle and can resolve while the TUI is still on its splash screen.
+   * Resolves `false` on the agent's own hard timeout — callers should treat that as "proceed
+   * anyway" (best effort), the same way the draft-paste path does, not as a hard failure.
+   */
+  async waitForAgentComposerReady(handle: string, agent: TuiAgent): Promise<boolean> {
+    const ptyId = await waitForWorktreeStartupDraft(
+      this.getWorktreeStartupReadinessHost(),
+      handle,
+      agent
+    )
+    return ptyId !== null
   }
 
   async prefetchManagedWorktreeCreateBase(args: {
