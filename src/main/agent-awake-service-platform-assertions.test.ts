@@ -108,7 +108,7 @@ describe('AgentAwakeService platform assertions', () => {
     service.setStatuses([workingStatus()])
     service.setEnabled(false)
 
-    expect(blocker.start).toHaveBeenCalledWith('prevent-app-suspension')
+    expect(blocker.start).toHaveBeenCalledWith('prevent-display-sleep')
     expect(blocker.stop).toHaveBeenCalledWith(1)
     expect(macosAssertion.stop).toHaveBeenCalled()
     expect(linuxAssertion.start).toHaveBeenCalledTimes(1)
@@ -123,7 +123,7 @@ describe('AgentAwakeService platform assertions', () => {
 
     service.setEnabled(true)
     service.setStatuses([workingStatus()])
-    expect(blocker.start).toHaveBeenCalledWith('prevent-app-suspension')
+    expect(blocker.start).toHaveBeenCalledWith('prevent-display-sleep')
 
     service.setStatuses([{ ...workingStatus(), receivedAt: 1_001 }])
     expect(blocker.stop).toHaveBeenCalledWith(1)
@@ -142,39 +142,28 @@ describe('AgentAwakeService platform assertions', () => {
     service.setStatuses([workingStatus()])
     service.setEnabled(false)
 
-    expect(blocker.start).toHaveBeenCalledWith('prevent-app-suspension')
+    expect(blocker.start).toHaveBeenCalledWith('prevent-display-sleep')
     expect(blocker.stop).toHaveBeenCalledWith(1)
     expect(macosAssertion.start).toHaveBeenCalledTimes(1)
     expect(macosAssertion.stop).toHaveBeenCalled()
     expect(linuxAssertion.stop).toHaveBeenCalled()
   })
 
-  it('blocks display sleep on every platform when keep-display-awake is enabled', () => {
-    const blocker = createBlocker()
-    const service = createService(blocker)
-
-    service.setKeepDisplayAwake(true)
-    service.setEnabled(true)
-    service.setStatuses([workingStatus()])
-
-    expect(blocker.start).toHaveBeenCalledWith('prevent-display-sleep')
-  })
-
-  it('restarts the active Electron blocker when the display preference flips', () => {
+  it('leaves the Electron blocker on prevent-display-sleep whatever the display preference is', () => {
     const blocker = createBlocker()
     const service = createService(blocker)
 
     service.setEnabled(true)
     service.setStatuses([workingStatus()])
-    expect(blocker.start).toHaveBeenLastCalledWith('prevent-app-suspension')
-
-    service.setKeepDisplayAwake(true)
-    expect(blocker.stop).toHaveBeenCalledWith(1)
     expect(blocker.start).toHaveBeenLastCalledWith('prevent-display-sleep')
 
+    // Off macOS this path already keeps the display awake; the setting must not take that away.
+    service.setKeepDisplayAwake(true)
     service.setKeepDisplayAwake(false)
-    expect(blocker.stop).toHaveBeenCalledWith(2)
-    expect(blocker.start).toHaveBeenLastCalledWith('prevent-app-suspension')
+
+    expect(blocker.start).toHaveBeenCalledTimes(1)
+    expect(blocker.start).toHaveBeenLastCalledWith('prevent-display-sleep')
+    expect(blocker.stop).not.toHaveBeenCalled()
   })
 
   it('restarts the live macOS caffeinate assertion and forwards the flag on toggle', () => {

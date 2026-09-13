@@ -9353,7 +9353,7 @@
         },
         "agent-awake-copy": {
           "keepDisplayAwakeTitle": "保持显示器唤醒",
-          "keepDisplayAwakeDescription": "在保持计算机唤醒的同时也阻止显示器睡眠。显示器关闭时，macOS 和 Windows 会锁定屏幕，1Password 等 SSH 代理也会被锁定，运行中的代理将无法执行 git push。",
+          "keepDisplayAwakeDescription": "在保持这台 Mac 唤醒的同时也阻止显示器睡眠。显示器睡眠可能触发锁屏，从而锁定 1Password 等 SSH 代理，运行中的代理的 git push 可能因此失败。",
           "e5995ce268": "智能体工作时保持电脑唤醒",
           "95d3031db2": "在智能体工作时保持此电脑和显示器唤醒。合盖行为遵循此设备的电源设置。",
           "a42f6fbdd8": "在智能体工作时保持此电脑和显示器唤醒。Orca 还会根据电源策略，在合盖时请求此设备保持唤醒。",

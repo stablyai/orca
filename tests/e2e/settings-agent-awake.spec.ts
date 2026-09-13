@@ -199,6 +199,8 @@ test.describe('Agent awake setting', () => {
   test('can enable the display-awake toggle from Agents settings and it persists through IPC', async ({
     orcaPage
   }) => {
+    // The row is macOS-only: elsewhere the Electron blocker already blocks display sleep.
+    test.skip(process.platform !== 'darwin', 'display-awake toggle is macOS-only')
     await openSettings(orcaPage)
     await dismissTransientAnnouncement(orcaPage)
     // Search 'display' also matches per-project panes; pin the pane explicitly.
@@ -225,7 +227,7 @@ test.describe('Agent awake setting', () => {
       .toBe(true)
   })
 
-  test('blocks display sleep on the active platform assertion when the toggle is on', async ({
+  test('adds the caffeinate display assertion on macOS and leaves other platforms untouched', async ({
     electronApp,
     orcaPage
   }) => {
@@ -269,16 +271,11 @@ test.describe('Agent awake setting', () => {
         })
       )
 
+    // Off macOS the blocker already blocks display sleep, so the preference must change nothing.
     await setKeepDisplayAwake(orcaPage, false)
-    await expect
-      .poll(async () => await readPowerSaveBlockerProbe(electronApp), { timeout: 5_000 })
-      .toEqual(
-        expect.objectContaining({
-          starts: expect.arrayContaining([
-            expect.objectContaining({ type: 'prevent-app-suspension' })
-          ])
-        })
-      )
+    const probe = await readPowerSaveBlockerProbe(electronApp)
+    expect(probe.starts.map((start) => start.type)).toEqual(['prevent-display-sleep'])
+    expect(probe.stops).toEqual([])
   })
 
   test('keeps the OS awake only while a hook-reported agent is working', async ({
@@ -316,9 +313,8 @@ test.describe('Agent awake setting', () => {
         .toEqual(
           expect.objectContaining({
             activeIds: expect.arrayContaining([expect.any(Number)]),
-            // Display sleep is allowed by default: it locks screen-gated SSH agents.
             starts: expect.arrayContaining([
-              expect.objectContaining({ type: 'prevent-app-suspension' })
+              expect.objectContaining({ type: 'prevent-display-sleep' })
             ])
           })
         )

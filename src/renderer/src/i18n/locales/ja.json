@@ -9320,7 +9320,7 @@
         },
         "agent-awake-copy": {
           "keepDisplayAwakeTitle": "ディスプレイのスリープを防ぐ",
-          "keepDisplayAwakeDescription": "コンピュータのスリープ防止中はディスプレイのスリープも防ぎます。ディスプレイがオフになると macOS と Windows は画面をロックし、1Password などの SSH Agent もロックされるため、実行中の Agent の git push が失敗します。",
+          "keepDisplayAwakeDescription": "この Mac のスリープ防止中はディスプレイのスリープも防ぎます。ディスプレイのスリープは画面ロックを引き起こすことがあり、1Password などの SSH Agent がロックされて、実行中の Agent の git push が失敗することがあります。",
           "e5995ce268": "Agent 作業中はコンピュータを起きたままにする",
           "95d3031db2": "Agent が作業している間、このコンピュータとディスプレイを起きたままにします。蓋を閉じたときの動作は、このデバイスの電源設定に従います。",
           "a42f6fbdd8": "Agent が作業している間、このコンピュータとディスプレイを起きたままにします。Orca は電源ポリシーに従い、蓋が閉じているときもこのデバイスを起きたままにするよう要求します。",

@@ -106,17 +106,15 @@ export class AgentAwakeService {
     this.refresh('settings-change')
   }
 
+  /** macOS-only: caffeinate argv is fixed at spawn, so an active assertion must be replaced. */
   setKeepDisplayAwake(keepDisplayAwake: boolean): void {
     if (this.keepDisplayAwake === keepDisplayAwake) {
       return
     }
     this.keepDisplayAwake = keepDisplayAwake
     this.macosAssertion.setKeepDisplayAwake?.(keepDisplayAwake)
-    // Assertion argv and blocker type are fixed at start; restart so an active
-    // awake period picks up the display preference without an app restart.
-    if (this.getStatus().active) {
+    if (this.platform === 'darwin' && this.getStatus().active) {
       this.stopMacosAssertion('display-preference-change')
-      this.stopBlocker('display-preference-change')
       this.refresh('display-preference-change')
     }
   }
@@ -210,9 +208,9 @@ export class AgentAwakeService {
       }
     }
     try {
-      const id = this.blocker.start(
-        this.keepDisplayAwake ? 'prevent-display-sleep' : 'prevent-app-suspension'
-      )
+      // Unconditional: this path is the only assertion off macOS, where it already
+      // keeps the display awake. keepDisplayAwake exists for the caffeinate path.
+      const id = this.blocker.start('prevent-display-sleep')
       this.blockerId = id
       this.reconcileBlocker('post-start')
     } catch (err) {

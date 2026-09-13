@@ -49,7 +49,7 @@ export function getKeepDisplayAwakeTitle(): string {
 export function getKeepDisplayAwakeDescription(): string {
   return translate(
     KEEP_DISPLAY_AWAKE_DESCRIPTION_KEY,
-    'Also blocks display sleep while keeping the computer awake. When the display turns off, macOS and Windows lock the screen, which locks 1Password and similar SSH agents — git pushes from running agents then fail.'
+    'Also blocks display sleep while keeping this Mac awake. Display sleep can trigger the screen lock, which can lock 1Password and similar SSH agents — git pushes from running agents can then fail.'
   )
 }
 

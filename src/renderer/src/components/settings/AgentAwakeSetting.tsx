@@ -32,6 +32,9 @@ export function AgentAwakeSetting({
     settings.computerAwakeMode,
     settings.keepComputerAwakeWhileAgentsRun
   )
+  // Only macOS lets the display sleep while awake mode holds: the Electron
+  // blocker used elsewhere already blocks it, so the toggle would be inert.
+  const isMac = navigator.userAgent.includes('Mac')
   const setMode = (nextMode: ComputerAwakeMode): void => {
     updateSettings(computerAwakeSettingsForMode(nextMode))
   }
@@ -70,21 +73,23 @@ export function AgentAwakeSetting({
           />
         </div>
       </SearchableSetting>
-      <SearchableSetting
-        title={getKeepDisplayAwakeTitle()}
-        description={getKeepDisplayAwakeDescription()}
-        keywords={getKeepDisplayAwakeSearchKeywords()}
-      >
-        <SettingsSwitchRow
-          label={getKeepDisplayAwakeTitle()}
+      {isMac ? (
+        <SearchableSetting
+          title={getKeepDisplayAwakeTitle()}
           description={getKeepDisplayAwakeDescription()}
-          checked={settings.keepDisplayAwake === true}
-          disabled={mode === 'off'}
-          onChange={() =>
-            updateSettings({ keepDisplayAwake: !(settings.keepDisplayAwake === true) })
-          }
-        />
-      </SearchableSetting>
+          keywords={getKeepDisplayAwakeSearchKeywords()}
+        >
+          <SettingsSwitchRow
+            label={getKeepDisplayAwakeTitle()}
+            description={getKeepDisplayAwakeDescription()}
+            checked={settings.keepDisplayAwake === true}
+            disabled={mode === 'off'}
+            onChange={() =>
+              updateSettings({ keepDisplayAwake: !(settings.keepDisplayAwake === true) })
+            }
+          />
+        </SearchableSetting>
+      ) : null}
     </section>
   )
 }
