@@ -87,7 +87,7 @@ export class OrcaRuntimeWithVisibleSnapshotPreview extends OrcaRuntimeWithCaptur
       { scrollbackRows: 0 },
       { timeoutMs: VISIBLE_TERMINAL_SNAPSHOT_TIMEOUT_MS }
     )
-    if (!snapshot || this.getPtyLifecycleGeneration(ptyId) !== generation) {
+    if (!snapshot || this.peekPtyLifecycleGeneration(ptyId) !== generation) {
       this.providerVisibleRetryAtByPtyId.set(ptyId, Date.now() + VISIBLE_TERMINAL_SNAPSHOT_RETRY_MS)
       return null
     }
@@ -102,7 +102,7 @@ export class OrcaRuntimeWithVisibleSnapshotPreview extends OrcaRuntimeWithCaptur
     }
     const projection = await this.parseVisibleSnapshot(snapshot)
     if (
-      this.getPtyLifecycleGeneration(ptyId) !== generation ||
+      this.peekPtyLifecycleGeneration(ptyId) !== generation ||
       this.getPtyOutputSequence(ptyId) > snapshot.seq
     ) {
       return null
@@ -128,7 +128,7 @@ export class OrcaRuntimeWithVisibleSnapshotPreview extends OrcaRuntimeWithCaptur
     await state.writeChain
     if (
       this.headlessTerminals.get(ptyId) !== state ||
-      this.getPtyLifecycleGeneration(ptyId) !== generation
+      this.peekPtyLifecycleGeneration(ptyId) !== generation
     ) {
       return null
     }

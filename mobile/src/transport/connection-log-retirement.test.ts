@@ -168,6 +168,21 @@ describe('connection log retirement', () => {
     )
   })
 
+  it('does not write an empty log back when a forgotten host is hydrated again', async () => {
+    const save = vi.fn(async (_id: string, _entries: readonly ConnectionLogEntry[]) => {})
+    const remove = vi.fn(async () => {})
+    const store = createConnectionLogStore(200, { load: async () => [], save, remove })
+    store.append('a', entry(1))
+    await store.forgetHost('a')
+
+    await store.hydrate('a')
+    await Promise.resolve()
+
+    expect(remove).toHaveBeenCalledOnce()
+    expect(save).not.toHaveBeenCalled()
+    expect(store.get('a')).toEqual([])
+  })
+
   it('retries a failed removal once and leaves a forgotten log empty on failure', async () => {
     const remove = vi.fn().mockRejectedValue(new Error('storage unavailable'))
     const store = createConnectionLogStore(200, {

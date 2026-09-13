@@ -8,14 +8,17 @@ import { dependencies, FakeLogicalClient, host } from './mobile-endpoint-supervi
 import type { ConnectionLogEntry, ConnectionLogSink } from './types'
 import type { RpcClient } from './rpc-client'
 
-const mocks = vi.hoisted(() => ({ open: vi.fn(), append: vi.fn() }))
+const mocks = vi.hoisted(() => ({ open: vi.fn(), append: vi.fn(), sink: vi.fn() }))
 vi.mock('../notifications/push-registration', () => ({ attachPushRegistration: () => () => {} }))
 vi.mock('./host-logical-client', () => ({
   openHostLogicalClient: (...args: unknown[]) => mocks.open(...args)
 }))
 vi.mock('./host-store', () => ({ loadHosts: async () => [] }))
 vi.mock('./persisted-connection-log-store', () => ({
-  connectionLogStore: { append: (...args: unknown[]) => mocks.append(...args) },
+  connectionLogStore: {
+    append: (...args: unknown[]) => mocks.append(...args),
+    sink: (...args: unknown[]) => mocks.sink(...args)
+  },
   recordConnectionClientSessionStart: () => {}
 }))
 vi.mock('react-native', () => ({ Platform: { OS: 'ios' } }))
@@ -27,6 +30,7 @@ const event = (id: string): ConnectionLogEntry => ({ id, ts: 1, level: 'info', m
 function createHarness() {
   const logs = createConnectionLogStore()
   mocks.append.mockImplementation((id: string, entry: ConnectionLogEntry) => logs.append(id, entry))
+  mocks.sink.mockImplementation((id: string) => logs.sink(id))
   const pendingOpens = new HostClientOpenRegistry()
   const state = {
     store: new Map<string, HostClientStoreEntry>(),
@@ -40,6 +44,13 @@ function createHarness() {
   return {
     logs,
     state,
+    // Mirrors closeEntry for Retry/Disconnect: the ticket is cancelled, the host log is kept.
+    reconnect: () => {
+      pendingOpens.cancel(host.id)
+      state.store.get(host.id)?.client.close()
+      state.store.delete(host.id)
+      state.pendingAcquisitions.set(host.id, 1)
+    },
     retire: async () => {
       pendingOpens.cancel(host.id)
       state.store.get(host.id)?.client.close()
@@ -53,6 +64,7 @@ beforeEach(() => {
   vi.useFakeTimers()
   mocks.open.mockReset()
   mocks.append.mockReset()
+  mocks.sink.mockReset()
   vi.spyOn(console, 'log').mockImplementation(() => {})
 })
 afterEach(() => {
@@ -72,6 +84,27 @@ describe('host-client diagnostic producer retirement', () => {
     await openHostClientEntry(state, host.id)
     sink(event('current'))
     expect(logs.get(host.id).map(({ id }) => id)).toEqual(['startup', 'current'])
+  })
+
+  it('keeps the retiring client diagnostics across a reconnect of a paired host', async () => {
+    const { state, logs, reconnect } = createHarness()
+    const sinks: ConnectionLogSink[] = []
+    mocks.open.mockImplementation((_host, onLog: ConnectionLogSink) => {
+      sinks.push(onLog)
+      return new FakeLogicalClient('connected', 'lan')
+    })
+    await openHostClientEntry(state, host.id)
+    reconnect()
+    // The old client explains why it was retired only after the replacement opens.
+    sinks[0](event('old-client-close-reason'))
+    await openHostClientEntry(state, host.id)
+    sinks[0](event('old-client-late'))
+    sinks[1](event('new-client'))
+    expect(logs.get(host.id).map(({ id }) => id)).toEqual([
+      'old-client-close-reason',
+      'old-client-late',
+      'new-client'
+    ])
   })
 
   it('rejects the retired client after the same host id is re-paired', async () => {

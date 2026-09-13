@@ -1,10 +1,12 @@
-import type { ConnectionLogEntry } from './types'
+import type { ConnectionLogEntry, ConnectionLogSink } from './types'
 import { redactConnectionLogEntry } from '../diagnostics/connection-log-redaction'
 
 const MAX_ENTRIES_PER_HOST = 200
 
 export type ConnectionLogStore = {
   append: (hostId: string, entry: ConnectionLogEntry) => void
+  // Append bound to the host log's current identity; goes inert once forgetHost retires it.
+  sink: (hostId: string) => ConnectionLogSink
   get: (hostId: string) => readonly ConnectionLogEntry[]
   hydrate: (hostId: string) => Promise<void>
   subscribe: (hostId: string, listener: () => void) => () => void
@@ -129,7 +131,10 @@ export function createConnectionLogStore(
         log.hydrated = true
         log.hydrationFailed = false
         notify(hostId)
-        persist(hostId, log)
+        // Nothing to write would only recreate a key removal just deleted.
+        if (merged.length > 0) {
+          persist(hostId, log)
+        }
       })
       .catch((error: unknown) => {
         log.hydrationFailed = true
@@ -142,16 +147,27 @@ export function createConnectionLogStore(
     return pending
   }
 
+  const append = (hostId: string, entry: ConnectionLogEntry): void => {
+    const log = getLog(hostId)
+    log.entries.push(redactConnectionLogEntry(entry))
+    trim(log.entries)
+    log.snapshot = undefined
+    notify(hostId)
+    void hydrateHost(hostId, log, false)
+      .then(() => persist(hostId, log))
+      .catch(() => {})
+  }
+
   return {
-    append(hostId, entry) {
-      const log = getLog(hostId)
-      log.entries.push(redactConnectionLogEntry(entry))
-      trim(log.entries)
-      log.snapshot = undefined
-      notify(hostId)
-      void hydrateHost(hostId, log, false)
-        .then(() => persist(hostId, log))
-        .catch(() => {})
+    append,
+
+    sink(hostId) {
+      const bound = getLog(hostId)
+      return (entry) => {
+        if (logsByHost.get(hostId) === bound) {
+          append(hostId, entry)
+        }
+      }
     },
 
     get(hostId) {

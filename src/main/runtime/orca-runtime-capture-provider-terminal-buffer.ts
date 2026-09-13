@@ -31,7 +31,7 @@ export class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaRuntimeWit
       // Why: daemon PTYs survive an app relaunch before any renderer mounts.
       // Mobile still needs their retained history without navigating desktop.
       const snapshot = await this.ptyController?.serializeProviderBuffer?.(ptyId, opts)
-      if (!snapshot || this.getPtyLifecycleGeneration(ptyId) !== generation) {
+      if (!snapshot || this.peekPtyLifecycleGeneration(ptyId) !== generation) {
         return null
       }
       const snapshotModeTracker = new TerminalKittyKeyboardModeTracker()
@@ -163,7 +163,7 @@ export class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaRuntimeWit
     if (snapshotOptions.visibleScreenOnly) {
       const projection = await this.parseVisibleSnapshot(snapshot)
       // Live bytes ordered after the provider frame make that frame stale.
-      return this.getPtyLifecycleGeneration(ptyId) === generation &&
+      return this.peekPtyLifecycleGeneration(ptyId) === generation &&
         this.getPtyOutputSequence(ptyId) <= snapshot.seq
         ? projection
         : { lines: [] }
@@ -180,7 +180,7 @@ export class OrcaRuntimeWithCaptureProviderTerminalBuffer extends OrcaRuntimeWit
     try {
       await emulator.write(data)
       const projection = projectTerminalTailLines(emulator, lineLimit)
-      return this.getPtyLifecycleGeneration(ptyId) === generation &&
+      return this.peekPtyLifecycleGeneration(ptyId) === generation &&
         this.getPtyOutputSequence(ptyId) <= snapshot.seq
         ? projection
         : { lines: [] }

@@ -115,7 +115,7 @@ export class OrcaRuntimeWithResolveAuthoritativeTerminalWaitPermission extends O
   }
 
   protected assertAgentPromptGeneration(ptyId: string, expected: number): void {
-    if (this.getPtyLifecycleGeneration(ptyId) !== expected) {
+    if (this.peekPtyLifecycleGeneration(ptyId) !== expected) {
       throw new Error('terminal_handle_stale')
     }
   }

@@ -76,7 +76,7 @@ export class OrcaRuntimeWithCreatePtyHeadlessTerminalState extends OrcaRuntimeWi
         return (
           confirmed &&
           this.headlessTerminals.get(ptyId) === constructed &&
-          this.getPtyLifecycleGeneration(ptyId) === lifecycleGeneration
+          this.peekPtyLifecycleGeneration(ptyId) === lifecycleGeneration
         )
       })
     }

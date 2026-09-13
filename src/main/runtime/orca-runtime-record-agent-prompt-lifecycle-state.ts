@@ -80,6 +80,11 @@ export class OrcaRuntimeWithRecordAgentPromptLifecycleState extends OrcaRuntimeW
     return generation
   }
 
+  // Read without minting so a late compare cannot resurrect a pruned entry.
+  protected peekPtyLifecycleGeneration(ptyId: string): number | undefined {
+    return this.ptyLifecycleGenerationById.get(ptyId)
+  }
+
   protected advancePtyLifecycleGeneration(ptyId: string): void {
     this.ptyLifecycleGenerationById.set(ptyId, this.nextPtyLifecycleGeneration++)
     this.clearAgentPromptCorrelationForPty(ptyId)

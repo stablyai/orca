@@ -105,12 +105,9 @@ export async function openHostClientEntry(
     let client: RpcClient
     try {
       recordConnectionClientSessionStart(hostId)
-      client = openHostLogicalClient(host, (entry) => {
-        // A retired client's delayed diagnostics must not recreate its forgotten host log.
-        if (isCurrent()) {
-          connectionLogStore.append(hostId, entry)
-        }
-      })
+      // Bound to the host log, not the open ticket: a reconnect keeps the retiring
+      // client's late diagnostics, while a removed host's log cannot be recreated.
+      client = openHostLogicalClient(host, connectionLogStore.sink(hostId))
     } catch {
       failCurrentOpen('client-construction')
       return null

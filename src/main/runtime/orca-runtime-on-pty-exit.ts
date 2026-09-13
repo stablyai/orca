@@ -142,8 +142,8 @@ export class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDisconnecte
     this.agentPromptExplicitStatusFloorByPtyId.delete(ptyId)
     // Safe against respawn: `getPtyLifecycleGeneration` lazily mints from the
     // monotonic `nextPtyLifecycleGeneration`, so a re-read after this delete
-    // returns a strictly newer number — never a reused one. Every comparison a
-    // stale frame makes therefore still fails, exactly as the advance above intends.
+    // returns a strictly newer number — never a reused one. Late compares use
+    // `peekPtyLifecycleGeneration`, so they fail without re-inserting this entry.
     this.ptyLifecycleGenerationById.delete(ptyId)
     this.agentStatusOscProcessorsByPtyId.delete(ptyId)
     this.terminalSpawnCommandsByPtyId.delete(ptyId)

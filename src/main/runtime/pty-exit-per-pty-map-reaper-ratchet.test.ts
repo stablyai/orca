@@ -189,6 +189,25 @@ describe('per-PTY lifecycle generation retention (leak regression)', () => {
     expect(internals.getPtyLifecycleGeneration('reused')).toBe(after)
   })
 
+  it('does not resurrect a pruned generation when a late provider response compares', async () => {
+    const runtime = new OrcaRuntimeService()
+    const internals = runtime as unknown as Internals
+    let finish!: (value: PtyProviderBufferSnapshot) => void
+    const response = new Promise<PtyProviderBufferSnapshot>((resolve) => (finish = resolve))
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null,
+      serializeProviderBuffer: vi.fn(() => response)
+    })
+    const generation = internals.getPtyLifecycleGeneration('pruned')
+    const capture = internals.captureProviderTerminalBuffer('pruned', {}, generation)
+    internals.dropDisconnectedPtyRecord('pruned')
+    finish({ data: 'old screen', cols: 80, rows: 24, seq: 10, source: 'headless' })
+    await expect(capture).resolves.toBeNull()
+    expect(internals.ptyLifecycleGenerationById.has('pruned')).toBe(false)
+  })
+
   it('retains no lifecycle generation after a spawn/exit cycle', () => {
     const runtime = new OrcaRuntimeService()
     const internals = runtime as unknown as Internals

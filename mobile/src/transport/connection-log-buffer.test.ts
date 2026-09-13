@@ -205,8 +205,6 @@ describe('connection log buffer', () => {
     })
 
     await store.hydrate('host-a')
-    await vi.waitFor(() => expect(save).toHaveBeenCalled())
-    save.mockReset()
     save.mockRejectedValueOnce(new Error('storage unavailable')).mockResolvedValueOnce(undefined)
     store.append('host-a', entry(1))
 
