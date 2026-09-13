@@ -16,12 +16,12 @@ export let rendererLifecycleResetHandler: (() => void) | null = null
 export let rendererGateResetLoadHandler: (() => void) | null = null
 export let rendererGateResetGoneHandler: (() => void) | null = null
 export let rendererGateResetWebContents: WebContents | null = null
-// Why: the backgrounded-delivery dedupe map lives in the registerPtyHandlers closure but teardown funnels through module-scope clearProviderPtyState.
+// Provider teardown releases delivery bookkeeping held by the active IPC session.
 // Why null-init + wrapper fn: see delivery/debug.ts — rolldown const-folds `export let fn = noop` bridges (STA-5661).
-let clearBackgroundedDeliverySyncForPtyImpl: ((id: string) => void) | null = null
+let clearProviderPtyDeliveryStateImpl: ((id: string) => void) | null = null
 
-export function clearBackgroundedDeliverySyncForPty(id: string): void {
-  clearBackgroundedDeliverySyncForPtyImpl?.(id)
+export function clearProviderPtyDeliveryState(id: string): void {
+  clearProviderPtyDeliveryStateImpl?.(id)
 }
 
 export type RendererNavigationDetails = {
@@ -46,8 +46,8 @@ export function setRebindProviderListeners(fn: (() => void) | null): void {
   rebindProviderListeners = fn
 }
 
-export function setClearBackgroundedDeliverySyncForPty(fn: (id: string) => void): void {
-  clearBackgroundedDeliverySyncForPtyImpl = fn
+export function setClearProviderPtyDeliveryState(fn: (id: string) => void): void {
+  clearProviderPtyDeliveryStateImpl = fn
 }
 
 export function setSshOutputIntakeCleanup(fn: (() => void) | null): void {

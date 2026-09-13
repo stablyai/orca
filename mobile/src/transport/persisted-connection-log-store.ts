@@ -21,8 +21,16 @@ export const connectionLogStore = createConnectionLogStore(200, {
   },
   save(hostId, entries) {
     return AsyncStorage.setItem(storageKey(hostId), JSON.stringify(entries))
+  },
+  remove(hostId) {
+    return AsyncStorage.removeItem(storageKey(hostId))
   }
 })
+
+export function forgetConnectionLogHost(hostId: string): void {
+  sessionStartedHosts.delete(hostId)
+  void connectionLogStore.forgetHost(hostId).catch(() => {})
+}
 
 export function recordConnectionRevival(
   hostId: string,

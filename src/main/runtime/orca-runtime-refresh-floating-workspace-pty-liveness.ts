@@ -128,6 +128,8 @@ export class OrcaRuntimeWithRefreshFloatingWorkspacePtyLiveness extends OrcaRunt
       this.reconcileAgentStatusForEndedProcessFn?.(this.collectAgentStatusPaneKeysForPty(ptyId))
     }
     this.advancePtyLifecycleGeneration(ptyId)
+    // A later incarnation remints from the monotonic counter.
+    this.ptyLifecycleGenerationById.delete(ptyId)
     this.pairedRendererSessionOwnedPtyIds.delete(ptyId)
     this.ptysById.delete(ptyId)
     this.pendingPtyHandleReplacementFences.delete(ptyId)

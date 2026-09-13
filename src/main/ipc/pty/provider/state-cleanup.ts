@@ -14,7 +14,7 @@ import {
 import { agentSessionOwners } from '../pane/agent-session-owners'
 import { paneKeyPtyId, paneKeyTeardownListeners, ptyPaneKey } from '../pane/key-state'
 import { ptyIncarnationById, ptyOwnership } from './ownership-state'
-import { clearBackgroundedDeliverySyncForPty } from './listener-lifecycle'
+import { clearProviderPtyDeliveryState } from './listener-lifecycle'
 import {
   activeRendererPtys,
   deliveredHiddenRendererResizeOutputPtys,
@@ -71,7 +71,7 @@ export function clearProviderPtyState(
   if (deliveryPolicyChanged) {
     invalidatePendingPtyDrainPolicy(id, false)
   }
-  clearBackgroundedDeliverySyncForPty(id)
+  clearProviderPtyDeliveryState(id)
   providerSnapshotRequiredPtys.delete(id)
   // Why: the Phase-5 ConPTY DA1 spawn record must not leak onto a reused id.
   clearNativeWindowsConptyPty(id)

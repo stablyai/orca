@@ -9,7 +9,7 @@ import {
   setInvalidatePendingPtyDrainPolicy,
   setInvalidatePendingPtyDrainPriority
 } from './visibility-state'
-import { setClearBackgroundedDeliverySyncForPty } from '../provider/listener-lifecycle'
+import { setClearProviderPtyDeliveryState } from '../provider/listener-lifecycle'
 import {
   applyCumulativeAck,
   canSendPtyDataToRenderer,
@@ -108,8 +108,9 @@ export function wirePtyIpcSession(session: PtyIpcSession): void {
   session.writeOffLostRendererDelivery = (report) => writeOffLostRendererDelivery(session, report)
   session.getRendererInFlightCharsForPty = (id) => getRendererInFlightCharsForPty(session, id)
 
-  setClearBackgroundedDeliverySyncForPty((id: string) => {
+  setClearProviderPtyDeliveryState((id: string) => {
     session.backgroundedDeliverySyncByPty.delete(id)
+    session.pendingDataDropWarnedPtys.delete(id)
   })
   if (session.runtime) {
     session.runtime.onRemoteTerminalViewPresenceChanged = (id) =>

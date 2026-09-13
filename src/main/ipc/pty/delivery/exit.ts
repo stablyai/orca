@@ -114,6 +114,7 @@ export function finalizePtyExitForRenderer(
   session: PtyIpcSession,
   payload: { id: string; code: number; incarnationId?: string }
 ): void {
+  session.pendingDataDropWarnedPtys.delete(payload.id)
   if (session.mainWindow.isDestroyed()) {
     session.rendererCreditBeforeExitByPty.delete(payload.id)
     return

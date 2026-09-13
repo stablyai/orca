@@ -5,7 +5,8 @@ import type { ConnectionLogEntry } from './types'
 vi.mock('@react-native-async-storage/async-storage', () => ({
   default: {
     getItem: vi.fn(),
-    setItem: vi.fn()
+    setItem: vi.fn(),
+    removeItem: vi.fn()
   }
 }))
 
@@ -16,11 +17,34 @@ describe('persisted connection log store', () => {
     vi.mocked(AsyncStorage.getItem).mockReset()
     vi.mocked(AsyncStorage.setItem).mockReset()
     vi.mocked(AsyncStorage.setItem).mockResolvedValue(undefined)
+    vi.mocked(AsyncStorage.removeItem).mockReset()
+    vi.mocked(AsyncStorage.removeItem).mockResolvedValue(undefined)
   })
 
   afterEach(() => {
     vi.useRealTimers()
     vi.resetModules()
+  })
+
+  it('removes persisted history and starts a new client session after re-pairing', async () => {
+    vi.mocked(AsyncStorage.getItem).mockResolvedValue(null)
+    const { connectionLogStore, recordConnectionClientSessionStart, forgetConnectionLogHost } =
+      await import('./persisted-connection-log-store')
+    recordConnectionClientSessionStart('host/a')
+    await connectionLogStore.hydrate('host/a')
+    recordConnectionClientSessionStart('host/a')
+    expect(connectionLogStore.get('host/a')).toHaveLength(1)
+
+    forgetConnectionLogHost('host/a')
+    expect(connectionLogStore.get('host/a')).toEqual([])
+    vi.setSystemTime(2_000)
+    recordConnectionClientSessionStart('host/a')
+    await connectionLogStore.hydrate('host/a')
+
+    expect(AsyncStorage.removeItem).toHaveBeenCalledWith('orca.mobile.connection-log.v1.host%2Fa')
+    expect(connectionLogStore.get('host/a')).toMatchObject([
+      { ts: 2_000, code: 'client-session-started' }
+    ])
   })
 
   it('keeps a new client-session boundary when a restart shares the prior timestamp', async () => {

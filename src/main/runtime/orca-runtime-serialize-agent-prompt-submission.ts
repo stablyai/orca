@@ -95,7 +95,7 @@ export class OrcaRuntimeWithSerializeAgentPromptSubmission extends OrcaRuntimeWi
         current !== pty ||
         !current.connected ||
         current.incarnationId !== incarnationId ||
-        (recoverCompletedHook && this.getPtyLifecycleGeneration(ptyId) !== generation)
+        (recoverCompletedHook && this.peekPtyLifecycleGeneration(ptyId) !== generation)
       ) {
         return
       }
