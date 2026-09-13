@@ -5,6 +5,11 @@ import type { RuntimeOrchestrationEnvelope } from '../../shared/runtime-rpc-enve
 import { isKeepaliveFrame, RuntimeRpcEnvelopeSchema } from './envelope-schema'
 import { RuntimeClientError, type RuntimeRpcResponse } from './types'
 import { MAX_TIMER_DELAY_MS, isSafeTimerDelayMs } from '../../shared/timer-delay'
+import {
+  isRuntimePermissionError,
+  RuntimeAccessError,
+  systemErrorCode
+} from './runtime-access-error'
 
 export async function sendRequest<TResult>(
   metadata: RuntimeMetadata,
@@ -68,13 +73,15 @@ export async function sendRequest<TResult>(
     }
 
     socket.setEncoding('utf8')
-    socket.once('error', () => {
+    socket.once('error', (error) => {
       finish({
         ok: false,
-        error: new RuntimeClientError(
-          'runtime_unavailable',
-          'Could not connect to the running Orca app. Restart Orca and try again.'
-        )
+        error: isRuntimePermissionError(error)
+          ? new RuntimeAccessError('connect', systemErrorCode(error), metadata.pid)
+          : new RuntimeClientError(
+              'runtime_unavailable',
+              'Could not connect to the running Orca app. Restart Orca and try again.'
+            )
       })
     })
     // Why: a clean peer close (FIN, no 'error') before a terminal frame never

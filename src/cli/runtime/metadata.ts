@@ -7,6 +7,11 @@ import {
   type RuntimeMetadata
 } from '../../shared/runtime-bootstrap'
 import { RuntimeClientError } from './types'
+import {
+  isRuntimePermissionError,
+  RuntimeAccessError,
+  systemErrorCode
+} from './runtime-access-error'
 
 export function readMetadata(userDataPath: string): RuntimeMetadata {
   const metadataPath = getRuntimeMetadataPath(userDataPath)
@@ -20,6 +25,9 @@ export function readMetadata(userDataPath: string): RuntimeMetadata {
     }
     return metadata
   } catch (error) {
+    if (isRuntimePermissionError(error)) {
+      throw new RuntimeAccessError('read_metadata', systemErrorCode(error))
+    }
     if (error instanceof RuntimeClientError) {
       throw error
     }
@@ -34,7 +42,10 @@ export function tryReadMetadata(userDataPath: string): RuntimeMetadata | null {
   const metadataPath = getRuntimeMetadataPath(userDataPath)
   try {
     return JSON.parse(readFileSync(metadataPath, 'utf8')) as RuntimeMetadata | null
-  } catch {
+  } catch (error) {
+    if (isRuntimePermissionError(error)) {
+      throw new RuntimeAccessError('read_metadata', systemErrorCode(error))
+    }
     return null
   }
 }
