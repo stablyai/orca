@@ -34,6 +34,9 @@ function navigationHarness(initialState: HostStackNavigationState | undefined) {
     navigation,
     unsubscribe,
     listenerCount: () => stateListeners.size,
+    setStateWithoutNotification(nextState: HostStackNavigationState | undefined) {
+      state = nextState
+    },
     setState(nextState: HostStackNavigationState | undefined) {
       state = nextState
       for (const listener of stateListeners) {
@@ -59,6 +62,24 @@ function committedHostState(hostIdParam: string): HostStackNavigationState {
   }
 }
 
+function committedTargetState(
+  params: Readonly<Record<string, unknown>> = TARGET.params
+): HostStackNavigationState {
+  return {
+    index: 0,
+    routes: [
+      {
+        name: 'h',
+        state: {
+          key: '/h',
+          index: 0,
+          routes: [{ key: 'target', name: TARGET.name, params }]
+        }
+      }
+    ]
+  }
+}
+
 // The shape app/_layout.tsx sees: Expo Router mounts it as a screen of its own internal
 // navigator, so every route the host stack lives in sits one level below.
 function rootLayoutScopedState(inner: HostStackNavigationState): HostStackNavigationState {
@@ -66,6 +87,34 @@ function rootLayoutScopedState(inner: HostStackNavigationState): HostStackNaviga
 }
 
 describe('host stack navigation', () => {
+  it('completes an exact focused target without route work', () => {
+    const harness = navigationHarness(committedTargetState())
+    const push = vi.fn()
+
+    const controller = navigateToHostStackRoute(
+      harness.navigation,
+      { push, replace: vi.fn() },
+      'host/one',
+      TARGET
+    )
+
+    expect(push).not.toHaveBeenCalled()
+    expect(harness.listenerCount()).toBe(0)
+    expect(controller.isActive()).toBe(false)
+  })
+
+  it('transitions when the focused route has a semantic param the target clears', () => {
+    const harness = navigationHarness(
+      committedTargetState({ hostId: 'host/one', taskSource: 'linear' })
+    )
+    const push = vi.fn()
+
+    navigateToHostStackRoute(harness.navigation, { push, replace: vi.fn() }, 'host/one', TARGET)
+
+    expect(push).toHaveBeenCalledOnce()
+    expect(harness.listenerCount()).toBe(1)
+  })
+
   it('matches a host committed as the encoded segment it was pushed as', () => {
     const harness = navigationHarness({ index: 0, routes: [{ name: 'index' }] })
     const push = vi.fn()
@@ -216,6 +265,88 @@ describe('host stack navigation', () => {
     harness.setState(committedHostState('host/one'))
 
     expect(harness.navigation.dispatch).toHaveBeenCalledTimes(1)
+    expect(harness.navigation.dispatch).toHaveBeenCalledWith(
+      expect.objectContaining({ payload: OTHER_TARGET })
+    )
+  })
+
+  it('settles a pending retarget immediately when its new target is already focused', () => {
+    const harness = navigationHarness({ index: 0, routes: [{ name: 'index' }] })
+    const push = vi.fn()
+    const router = { push, replace: vi.fn() }
+    const pending = coordinateHostStackNavigation(
+      null,
+      harness.navigation,
+      router,
+      'host/one',
+      TARGET
+    )
+
+    harness.setStateWithoutNotification({
+      index: 0,
+      routes: [
+        {
+          name: 'h',
+          state: {
+            key: '/h',
+            index: 0,
+            routes: [{ key: 'session', name: OTHER_TARGET.name, params: OTHER_TARGET.params }]
+          }
+        }
+      ]
+    })
+    const retargeted = coordinateHostStackNavigation(
+      pending,
+      harness.navigation,
+      router,
+      'host/one',
+      OTHER_TARGET
+    )
+
+    expect(retargeted).toBe(pending)
+    expect(push).toHaveBeenCalledTimes(1)
+    expect(pending.controller.isActive()).toBe(false)
+    expect(harness.listenerCount()).toBe(0)
+
+    harness.setState(committedHostState('host/one'))
+    expect(harness.navigation.dispatch).not.toHaveBeenCalled()
+  })
+
+  it('waits for a real state event before advancing a non-focused retarget', () => {
+    const harness = navigationHarness({ index: 0, routes: [{ name: 'index' }] })
+    const push = vi.fn()
+    const replace = vi.fn()
+    const router = { push, replace }
+    const pending = coordinateHostStackNavigation(
+      null,
+      harness.navigation,
+      router,
+      'host/one',
+      TARGET
+    )
+
+    harness.setStateWithoutNotification({
+      index: 0,
+      routes: [
+        {
+          name: 'h',
+          params: { hostId: 'host/one' },
+          state: {
+            key: '/h',
+            index: 0,
+            routes: [{ key: 'tasks', name: TARGET.name, params: TARGET.params }]
+          }
+        }
+      ]
+    })
+    coordinateHostStackNavigation(pending, harness.navigation, router, 'host/one', OTHER_TARGET)
+
+    expect(replace).not.toHaveBeenCalled()
+    expect(harness.navigation.dispatch).not.toHaveBeenCalled()
+    expect(pending.controller.isActive()).toBe(true)
+    expect(harness.listenerCount()).toBe(1)
+
+    harness.setState(committedHostState('host/one'))
     expect(harness.navigation.dispatch).toHaveBeenCalledWith(
       expect.objectContaining({ payload: OTHER_TARGET })
     )
