@@ -25,7 +25,9 @@ function getRegistryKey(root, path) {
   if (!values) {
     return null
   }
-  const byName = {}
+  // Null-prototype: a value literally named __proto__ would otherwise reassign the prototype
+  // instead of becoming an entry, and silently break the keyed-value contract.
+  const byName = Object.create(null)
   for (const value of values) {
     byName[value.name] = value
   }

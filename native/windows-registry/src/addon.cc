@@ -66,6 +66,16 @@ Napi::Value GetKey(const Napi::CallbackInfo& info) {
     entry.Set("name", Napi::String::New(env, reinterpret_cast<char16_t*>(name.data())));
     entry.Set("type", Napi::Number::New(env, static_cast<uint32_t>(valueType)));
 
+    // RegEnumValueW reports a byte count, and the registry does not enforce that a string
+    // type holds a whole number of WCHARs. On an odd count the terminator appended below
+    // straddles a character boundary, so Napi's NAPI_AUTO_LENGTH scan runs past the value.
+    const bool isUtf16 =
+        valueType == REG_SZ || valueType == REG_EXPAND_SZ || valueType == REG_MULTI_SZ;
+    if (isUtf16 && dataLength % sizeof(WCHAR) != 0) {
+      RegCloseKey(key);
+      return env.Null();
+    }
+
     if (valueType == REG_SZ || valueType == REG_EXPAND_SZ) {
       // RegEnumValueW does not guarantee a terminator when the stored value lacks one.
       data[dataLength] = 0;

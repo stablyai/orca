@@ -20,7 +20,12 @@ function regQuery(key: string, name: string): { type: string; data: string } | n
   } catch {
     return null
   }
-  const line = stdout.split(/\r?\n/).find((candidate) => candidate.trim().startsWith(name))
+  // reg.exe echoes the name as stored, so a machine holding PATH rather than Path would
+  // otherwise miss the line and make the oracle look absent.
+  const wanted = name.toLowerCase()
+  const line = stdout
+    .split(/\r?\n/)
+    .find((candidate) => candidate.trim().toLowerCase().startsWith(wanted))
   if (!line) {
     return null
   }
