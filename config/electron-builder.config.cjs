@@ -20,6 +20,7 @@ const {
 const { verifySkillsCliRuntime } = require('./scripts/verify-skills-cli-runtime.cjs')
 const { verifyStaticAppImagePackage } = require('./scripts/static-appimage-package-contract.cjs')
 const { signWindowsUninstallerViaSignPath } = require('./scripts/windows-uninstaller-signing.cjs')
+const { assertMacPasskeySigningDisabled } = require('./scripts/mac-webauthn-signing.cjs')
 
 // Why: dev-channel builds must carry the *release* identity — same bundle id,
 // Developer ID signature, and notarization ticket — or Squirrel.Mac refuses to
@@ -64,6 +65,17 @@ const devChannelRepo = isHourlyChannel
       ? 'orca-adhoc'
       : null
 const appId = 'com.stablyai.orca'
+const MAC_BASE_ENTITLEMENTS = 'resources/build/entitlements.mac.plist'
+// Profile expiry can stop installed apps launching, so no distributed channel may opt in.
+if (isMacRelease) {
+  assertMacPasskeySigningDisabled({
+    repoRoot: resolve(__dirname, '..'),
+    entitlementsPaths: [
+      MAC_BASE_ENTITLEMENTS,
+      'resources/build/entitlements.computer-use.mac.plist'
+    ]
+  })
+}
 const featureWallResources = {
   from: 'resources/onboarding/feature-wall',
   to: 'onboarding/feature-wall'
@@ -278,6 +290,12 @@ module.exports = {
       verifyStaticAppImagePackage(file, arch)
     }
   },
+  afterSign: async (context) => {
+    if (isMacRelease && context.electronPlatformName === 'darwin') {
+      const { verifyMacSignedApp } = await import('./scripts/verify-macos-signed-app.mjs')
+      await verifyMacSignedApp(context)
+    }
+  },
   afterPack: async (context) => {
     const resourcesDir =
       context.electronPlatformName === 'darwin'
@@ -463,8 +481,8 @@ module.exports = {
       rank: 'Alternate'
     })),
     icon: 'resources/build/icon.icns',
-    entitlements: 'resources/build/entitlements.mac.plist',
-    entitlementsInherit: 'resources/build/entitlements.mac.plist',
+    entitlements: MAC_BASE_ENTITLEMENTS,
+    entitlementsInherit: MAC_BASE_ENTITLEMENTS,
     extendInfo: {
       NSAppleEventsUsageDescription:
         'Orca allows terminal-launched developer tools to automate local apps when you request it.',

@@ -5,6 +5,7 @@ const require = createRequire(import.meta.url)
 const electronBuilderConfig = require('../electron-builder.config.cjs')
 
 const MUTABLE_BUILD_ENV = [
+  'ORCA_MAC_PROVISIONING_PROFILE',
   'ORCA_MAC_HOURLY',
   'ORCA_MAC_DAILY',
   'ORCA_MAC_ADHOC',
@@ -147,6 +148,39 @@ describe('electron-builder mac channel config', () => {
           )
         })
       })
+    })
+  })
+})
+
+describe('electron-builder mac passkey signing', () => {
+  it.each(['ORCA_MAC_RELEASE', 'ORCA_MAC_HOURLY', 'ORCA_MAC_DAILY', 'ORCA_MAC_ADHOC'])(
+    'keeps %s free of profile-dependent entitlements',
+    (channel) => {
+      withEnv({ [channel]: '1' }, (config) => {
+        expect(config.mac.entitlements).toBe('resources/build/entitlements.mac.plist')
+        expect(config.mac.entitlementsInherit).toBe('resources/build/entitlements.mac.plist')
+        expect(config.mac.provisioningProfile).toBeUndefined()
+        expect(config.afterSign).toBeTypeOf('function')
+      })
+    }
+  )
+
+  it.each(['ORCA_MAC_RELEASE', 'ORCA_MAC_HOURLY', 'ORCA_MAC_DAILY', 'ORCA_MAC_ADHOC'])(
+    'rejects the retired profile opt-in on %s',
+    (channel) => {
+      expect(() =>
+        withEnv(
+          { [channel]: '1', ORCA_MAC_PROVISIONING_PROFILE: 'expired.provisionprofile' },
+          () => {}
+        )
+      ).toThrow(/unsupported/)
+    }
+  )
+
+  it('leaves local builds unchanged even with the retired opt-in', () => {
+    withEnv({ ORCA_MAC_PROVISIONING_PROFILE: 'missing.provisionprofile' }, (config) => {
+      expect(config.mac.entitlements).toBe('resources/build/entitlements.mac.plist')
+      expect(config.mac.provisioningProfile).toBeUndefined()
     })
   })
 })
