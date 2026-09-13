@@ -1,7 +1,7 @@
 import { appendFile, mkdtemp, rename, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { NativeChatMessage, NativeChatTurnLifecycle } from '../../shared/native-chat-types'
 import {
   getActiveNativeChatWatcherCount,
@@ -18,6 +18,7 @@ beforeEach(() => {
 afterEach(async () => {
   await Promise.all(tempRoots.map((root) => rm(root, { recursive: true, force: true })))
   tempRoots = []
+  vi.unstubAllEnvs()
 })
 
 async function tempFile(initial: string): Promise<string> {
@@ -772,5 +773,39 @@ describe('subscribeNativeChatTranscript (resolve-poll for a not-yet-created file
     // Give any stray timer a chance to fire; it must not install a watcher.
     await new Promise((resolve) => setTimeout(resolve, 100))
     expect(getActiveNativeChatWatcherCount()).toBe(before)
+  })
+})
+
+describe('opencode routing', () => {
+  it('routes opencode subscriptions to the signal-poll watcher, not the line decoder', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'orca-opencode-route-'))
+    tempRoots.push(root)
+    // Hermetic discovery: an empty XDG home means the DB never resolves, so
+    // the subscription stays in its keep-polling phase — but it exists.
+    vi.stubEnv('XDG_DATA_HOME', root)
+    const subscription = await subscribeNativeChatTranscript({
+      agent: 'opencode',
+      sessionId: 'ses-1',
+      onAppend: () => {}
+    })
+    try {
+      // A routing regression falls through to the null line decoder and
+      // returns the watching:false no-op instead.
+      expect(subscription.watching).toBe(true)
+    } finally {
+      subscription.unsubscribe()
+    }
+  })
+
+  it('returns the no-op for a blank opencode session id even with a filePath', async () => {
+    const subscription = await subscribeNativeChatTranscript({
+      agent: 'opencode',
+      sessionId: '  ',
+      filePath: 'C:\\some\\where\\rollout.jsonl',
+      onAppend: () => {}
+    })
+    // filePath can never resolve a DB-backed session — a blank id must bail
+    // instead of polling an unresolvable target forever.
+    expect(subscription.watching).toBe(false)
   })
 })

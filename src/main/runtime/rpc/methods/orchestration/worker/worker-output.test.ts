@@ -6,6 +6,24 @@ import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import * as sshFilesystemDispatch from '../../../../../providers/ssh-filesystem-dispatch'
 import { readExactWorkerOutput } from './worker-output'
 
+// Why: the opencode read must not depend on the built worker bundle or the
+// host's real opencode.db — stub the SQLite leg to a settled "session missing".
+vi.mock('../../../../../ai-vault/session-scanner-opencode-sqlite-worker-spawn', () => ({
+  listOpenCodeSqliteSessionsViaWorker: vi.fn(),
+  parseOpenCodeSqliteSessionViaWorker: vi.fn(),
+  readOpenCodeTranscriptPageViaWorker: vi.fn(),
+  readOpenCodeTranscriptPageAfterViaWorker: vi.fn(),
+  readOpenCodeTranscriptSignalViaWorker: vi.fn(async () => null)
+}))
+
+// Why: DB discovery otherwise walks the real filesystem (env vars, data dirs);
+// resolving to null pins the fallback verdict to transcript_missing no matter
+// what opencode state the host machine has.
+vi.mock('../../../../../native-chat/transcript-opencode', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  resolveOpenCodeTranscriptDbPath: vi.fn(async () => null)
+}))
+
 function codexMessage(id: string, text: string): string {
   return JSON.stringify({
     type: 'event_msg',
@@ -213,7 +231,10 @@ describe('exact orchestration worker output', () => {
     expect(readTerminal).not.toHaveBeenCalled()
   })
 
-  it('labels OpenCode as a terminal fallback when no transcript decoder exists', async () => {
+  it('labels OpenCode as a terminal fallback when its SQLite transcript is missing', async () => {
+    // Why: OpenCode is a transcript agent now (SQLite-backed), so the fallback
+    // reason is a missing DB/session row — never the old "no decoder" verdict.
+    // The session id below exists in no opencode.db, on any host.
     const capability = `dcap_${'A'.repeat(43)}`
     readTerminal.mockResolvedValue({
       handle: 'term_worker',
@@ -236,7 +257,7 @@ describe('exact orchestration worker output', () => {
 
     expect(result).toMatchObject({
       source: 'terminal',
-      fallbackReason: 'provider_unsupported',
+      fallbackReason: 'transcript_missing',
       terminal: { tail: ['opencode --dispatch-capability [dispatch capability redacted]'] },
       warnings: ['Dispatch capability tokens were redacted from terminal output.']
     })
