@@ -117,19 +117,54 @@ describe('canToggleNativeChat', () => {
     ).toBe(true)
   })
 
-  it.each(['gemini', 'opencode'] as const)(
-    'rejects unsupported agent %s detected live',
-    (agent) => {
-      expect(
-        canToggleNativeChat({
-          experimentalNativeChatEnabled: true,
-          contentType: 'terminal',
-          launchAgent: null,
-          detectedAgent: agent
-        })
-      ).toBe(false)
-    }
-  )
+  it.each(['gemini'] as const)('rejects unsupported agent %s detected live', (agent) => {
+    expect(
+      canToggleNativeChat({
+        experimentalNativeChatEnabled: true,
+        contentType: 'terminal',
+        launchAgent: null,
+        detectedAgent: agent
+      })
+    ).toBe(false)
+  })
+
+  it('accepts local OpenCode now that native chat reads its SQLite transcript', () => {
+    expect(
+      canToggleNativeChat({
+        experimentalNativeChatEnabled: true,
+        contentType: 'terminal',
+        launchAgent: 'opencode',
+        nativeChatTranscriptIsLocalReadable: isNativeChatTranscriptLocalReadable(null)
+      })
+    ).toBe(true)
+  })
+
+  // Why: the opencode.db reader resolves the desktop host's data dir only — a
+  // WSL guest session's DB is unreachable, so the toggle must stay hidden
+  // rather than offer a chat that can only render an endless loading state.
+  it('rejects OpenCode when the terminal project resolves to a WSL distro', () => {
+    expect(
+      canToggleNativeChat({
+        experimentalNativeChatEnabled: true,
+        contentType: 'terminal',
+        launchAgent: 'opencode',
+        nativeChatTranscriptIsLocalReadable: isNativeChatTranscriptLocalReadable(null),
+        wslDistro: 'Ubuntu'
+      })
+    ).toBe(false)
+  })
+
+  it('keeps Grok toggleable inside WSL (path translation reaches guest JSONL)', () => {
+    expect(
+      canToggleNativeChat({
+        experimentalNativeChatEnabled: true,
+        contentType: 'terminal',
+        launchAgent: 'grok',
+        nativeChatTranscriptIsLocalReadable: isNativeChatTranscriptLocalReadable(null),
+        wslDistro: 'Ubuntu'
+      })
+    ).toBe(true)
+  })
 
   it('accepts Grok when resolved from the title', () => {
     expect(

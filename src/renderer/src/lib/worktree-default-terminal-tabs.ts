@@ -4,6 +4,8 @@ import type {
 } from '../../../shared/worktree/launch-types'
 import { agentKindToTuiAgent } from '../../../shared/agent-kind'
 import { initialAgentTabViewModeProps } from './native-chat-initial-view-mode'
+import { getNativeChatToggleWslDistro } from '@/components/native-chat/native-chat-availability'
+import { useAppStore } from '@/store'
 import { getConnectionId } from '@/lib/connection-context'
 import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
 import { seedNativeChatAppliedSessionOptions } from '@/components/native-chat/native-chat-session-option-cache'
@@ -61,7 +63,10 @@ export function applyDefaultTerminalTabs(
               ),
               nativeChatTranscriptIsLocalReadable: isNativeChatTranscriptLocalReadable(
                 getConnectionId(worktreeId)
-              )
+              ),
+              // Why: `store` is the narrow activation facade — the WSL runtime
+              // resolution needs the full state slices.
+              wslDistro: getNativeChatToggleWslDistro(useAppStore.getState(), worktreeId)
             })
           }
         : {}),

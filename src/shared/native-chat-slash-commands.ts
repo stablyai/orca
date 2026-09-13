@@ -111,11 +111,26 @@ const OMP_COMMANDS: readonly SlashCommandSuggestion[] = [
   { name: 'hotkeys', description: 'Show keyboard shortcuts in Terminal' }
 ]
 
+const OPENCODE_COMMANDS: readonly SlashCommandSuggestion[] = [
+  { name: 'init', description: 'Initialize an AGENTS.md file' },
+  { name: 'new', description: 'Start a new session' },
+  { name: 'sessions', description: 'List and switch sessions' },
+  { name: 'models', description: 'List available models' },
+  { name: 'compact', description: 'Compact the conversation' },
+  { name: 'undo', description: 'Undo the last turn and revert file changes' },
+  { name: 'redo', description: 'Redo a previously undone turn' },
+  { name: 'share', description: 'Share the current session' },
+  { name: 'thinking', description: 'Toggle reasoning block visibility' },
+  { name: 'details', description: 'Toggle tool execution details' },
+  { name: 'help', description: 'Show available commands' }
+]
+
 const COMMANDS_BY_AGENT: Partial<Record<AgentType, readonly SlashCommandSuggestion[]>> = {
   claude: CLAUDE_COMMANDS,
   openclaude: CLAUDE_COMMANDS,
   codex: CODEX_COMMANDS,
-  omp: OMP_COMMANDS
+  omp: OMP_COMMANDS,
+  opencode: OPENCODE_COMMANDS
 }
 
 /** Known slash commands for an agent, falling back to a small common set so the

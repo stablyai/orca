@@ -9,6 +9,7 @@ import {
   seedNativeChatLaunchDraftForAgentTab
 } from '@/lib/agent-launch-prompt-delivery'
 import { initialAgentTabViewModeProps } from '@/lib/native-chat-initial-view-mode'
+import { getNativeChatToggleWslDistro } from '@/components/native-chat/native-chat-availability'
 import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { isWebRuntimeSessionActive } from '@/runtime/web-runtime-session'
@@ -148,7 +149,8 @@ function launchAgentInNewTabInternal(args: LaunchAgentInNewTabArgs): LaunchAgent
     promptDelivery: viewModePromptDelivery,
     launchDraftText: trimmedPrompt,
     nativeChatTranscriptIsLocalReadable:
-      isNativeChatTranscriptLocalReadable(worktreeSshConnectionId)
+      isNativeChatTranscriptLocalReadable(worktreeSshConnectionId),
+    wslDistro: getNativeChatToggleWslDistro(store, worktreeId)
   }
   const initialViewModeProps = initialAgentTabViewModeProps(store.settings, initialViewModeOptions)
   const startupPlanBase = {

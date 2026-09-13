@@ -3,7 +3,7 @@ import { useAppStore } from '../../store'
 import type { AgentType } from '../../../../shared/agent-status-types'
 import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-types'
 import { resolveNativeChatTabAgentEvidence } from '../tab-bar/native-chat-tab-agent-evidence'
-import { canToggleNativeChat } from './native-chat-availability'
+import { canToggleNativeChat, getNativeChatToggleWslDistro } from './native-chat-availability'
 import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
 import { isMacPlatform, matchesNativeChatToggleShortcut } from './native-chat-shortcut'
 import { getConnectionIdFromState } from '@/lib/connection-context'
@@ -90,6 +90,9 @@ export function useNativeChatToggleShortcut(worktreeId: string, isWorktreeActive
           nativeChatTranscriptIsLocalReadable: isNativeChatTranscriptLocalReadable(
             getConnectionIdFromState(state, worktreeId)
           ),
+          // Why: OpenCode's DB reader cannot reach a WSL guest's opencode.db —
+          // the availability gate hides the toggle for WSL-resolved projects.
+          wslDistro: getNativeChatToggleWslDistro(state, worktreeId),
           isChatViewMode: tab.viewMode === 'chat'
         })
       ) {

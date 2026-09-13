@@ -7,6 +7,7 @@ import type { SplitTerminalPaneDetail } from '@/constants/terminal'
 import { singlePaneLayoutSnapshot } from '@/store/slices/terminal-helpers'
 import { verifyTerminalRevealIdentity } from '@/lib/terminal-reveal-identity'
 import { initialAgentTabViewModeProps } from '@/lib/native-chat-initial-view-mode'
+import { getNativeChatToggleWslDistro } from '@/components/native-chat/native-chat-availability'
 import { getConnectionIdFromState } from '@/lib/connection-context'
 import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
 import { tryMakePaneKey } from './agent-status-routing'
@@ -97,7 +98,8 @@ export function registerTerminalPresentationIpcBridge(unsubs: (() => void)[]): v
                               nativeChatTranscriptIsLocalReadable:
                                 isNativeChatTranscriptLocalReadable(
                                   getConnectionIdFromState(store, worktreeId)
-                                )
+                                ),
+                              wslDistro: getNativeChatToggleWslDistro(store, worktreeId)
                             }))
                       }
                     : {}),

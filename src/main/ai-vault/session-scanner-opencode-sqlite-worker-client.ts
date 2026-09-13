@@ -2,8 +2,14 @@ import type { WorkerThreadFactory } from '../lazy-worker-thread-host'
 import { WorkerThreadRequestQueue } from '../worker-thread-request-queue'
 import type { AiVaultScanIssue, AiVaultSession } from '../../shared/ai-vault-types'
 import type {
+  OpenCodeSqliteCaptureRequest,
   OpenCodeSqliteCaptureValue,
+  OpenCodeSqliteListRequest,
   OpenCodeSqliteListValue,
+  OpenCodeSqliteNativeChatPageAfterRequest,
+  OpenCodeSqliteNativeChatPageRequest,
+  OpenCodeSqliteNativeChatSignalRequest,
+  OpenCodeSqliteParseRequest,
   OpenCodeSqliteWorkerRequest,
   OpenCodeSqliteWorkerResponse
 } from './session-scanner-opencode-sqlite-worker-protocol'
@@ -29,6 +35,16 @@ export const IDLE_TEARDOWN_MS = 30_000
 // spin a crash loop. Reset on any successful response, after draining, and when a
 // fresh scan burst starts from idle (so the cap is per-scan, not process-wide).
 export const MAX_CONSECUTIVE_DEATHS = 3
+
+// Omit<union, 'id'> collapses to the shared keys, so omit each member and let
+// the client stamp the correlation id.
+type OpenCodeSqliteRequestBody =
+  | Omit<OpenCodeSqliteListRequest, 'id'>
+  | Omit<OpenCodeSqliteParseRequest, 'id'>
+  | Omit<OpenCodeSqliteCaptureRequest, 'id'>
+  | Omit<OpenCodeSqliteNativeChatPageRequest, 'id'>
+  | Omit<OpenCodeSqliteNativeChatSignalRequest, 'id'>
+  | Omit<OpenCodeSqliteNativeChatPageAfterRequest, 'id'>
 
 // Distinguishes "no worker available at all" from a timeout or crash so callers
 // can surface a precise issue while keeping synchronous SQLite off the main thread.
@@ -98,13 +114,12 @@ export class OpenCodeSqliteWorkerClient {
     try {
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the worker's list leg returns exactly this, built by the repo's own reader on the other side of a structured clone.
       const value = (await this.dispatch(
-        (id) => ({
-          id,
+        {
           kind: 'list',
           dbPaths: args.dbPaths,
           limit: args.limit,
           ...(args.agent ? { agent: args.agent } : {})
-        }),
+        },
         LIST_TIMEOUT_MS
       )) as OpenCodeSqliteListValue
       args.issues.push(...value.issues)
@@ -151,14 +166,13 @@ export class OpenCodeSqliteWorkerClient {
   }): Promise<AiVaultSession | null> {
     try {
       const value = await this.dispatch(
-        (id) => ({
-          id,
+        {
           kind: 'parse',
           dbPath: args.dbPath,
           sessionId: args.sessionId,
           platform: args.platform,
           ...(args.agent ? { agent: args.agent } : {})
-        }),
+        },
         PARSE_TIMEOUT_MS
       )
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the worker's parse leg returns exactly this, built by the repo's own reader on the other side of a structured clone.
@@ -188,14 +202,13 @@ export class OpenCodeSqliteWorkerClient {
   }): Promise<OpenCodeSqliteCaptureValue> {
     try {
       const value = await this.dispatch(
-        (id) => ({
-          id,
+        {
           kind: 'capture',
           dbPath: args.dbPath,
           sessionId: args.sessionId,
           platform: args.platform,
           ...(args.agent ? { agent: args.agent } : {})
-        }),
+        },
         CAPTURE_TIMEOUT_MS
       )
       return parseOpenCodeSqliteCaptureValue(value)
@@ -204,11 +217,13 @@ export class OpenCodeSqliteWorkerClient {
     }
   }
 
-  private async dispatch(
-    buildRequest: (id: number) => OpenCodeSqliteWorkerRequest,
-    timeoutMs: number
-  ): Promise<unknown> {
-    const response = await this.requests.dispatch(buildRequest, timeoutMs)
+  /**
+   * Enqueue one worker request and await its response. Public on purpose: the
+   * native-chat dispatch module (session-scanner-opencode-sqlite-native-chat-dispatch)
+   * rides this same FIFO/timeout/respawn lifecycle instead of duplicating it.
+   */
+  async dispatch(request: OpenCodeSqliteRequestBody, timeoutMs: number): Promise<unknown> {
+    const response = await this.requests.dispatch((id) => ({ ...request, id }), timeoutMs)
     if (!response.ok) {
       throw new Error(response.error)
     }

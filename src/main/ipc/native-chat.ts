@@ -12,6 +12,7 @@ import {
   type NativeChatTranscriptSubscription,
   type SubscribeNativeChatTranscriptArgs
 } from '../native-chat/transcript-watch'
+import { DESKTOP_READ_WINDOW } from '../native-chat/transcript-watch-contract'
 
 // Re-export so existing test imports of `clearNativeChatTranscriptCache` from
 // this module keep working after the cache moved to transcript-read-cache.ts.
@@ -30,7 +31,6 @@ export type NativeChatReadSessionArgs = {
 
 // Why: render and parse only the recent window so long transcripts do not stall
 // either the main process or the message list. Pagination raises this limit.
-const DESKTOP_READ_WINDOW = 300
 
 async function readSession(args: NativeChatReadSessionArgs): Promise<ReadTranscriptResult> {
   const { agent, sessionId } = args

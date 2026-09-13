@@ -211,6 +211,11 @@ async function resolveSessionFileById(
       signal
     )
   }
+  if (transcriptAgent === 'opencode') {
+    // Why: no per-session file exists — the SQLite reader (transcript-opencode.ts)
+    // owns DB resolution.
+    return null
+  }
   // Why: a new transcript agent must pick its own resolver. Falling through to
   // OMP's scan would search the wrong root with a foreign session id, so fail
   // the build here instead of resolving silently wrong at runtime.

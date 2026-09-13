@@ -8,6 +8,11 @@ import {
   captureOpenCode2SqliteSession,
   parseOpenCode2SqliteSession
 } from './session-scanner-opencode2-sqlite'
+import {
+  readOpenCodeTranscriptPage,
+  readOpenCodeTranscriptPageAfter,
+  readOpenCodeTranscriptSignal
+} from '../native-chat/transcript-opencode-sqlite-query'
 import type {
   OpenCodeSqliteWorkerRequest,
   OpenCodeSqliteWorkerResponse
@@ -49,6 +54,33 @@ async function handleRequest(
           ? await captureOpenCode2SqliteSession(request)
           : await captureOpenCodeSqliteSession(request)
       return { id: request.id, ok: true, value: capture }
+    }
+    if (request.kind === 'native-chat-page') {
+      const page = readOpenCodeTranscriptPage({
+        dbPath: request.dbPath,
+        sessionId: request.sessionId,
+        limit: request.limit,
+        ...(request.beforeMessageRowId !== undefined
+          ? { beforeMessageRowId: request.beforeMessageRowId }
+          : {})
+      })
+      return { id: request.id, ok: true, value: page }
+    }
+    if (request.kind === 'native-chat-signal') {
+      const signal = readOpenCodeTranscriptSignal(request.dbPath, request.sessionId)
+      return { id: request.id, ok: true, value: signal }
+    }
+    if (request.kind === 'native-chat-page-after') {
+      const page = readOpenCodeTranscriptPageAfter({
+        dbPath: request.dbPath,
+        sessionId: request.sessionId,
+        afterMessageRowId: request.afterMessageRowId,
+        limit: request.limit,
+        ...(request.upToMessageRowId !== undefined
+          ? { upToMessageRowId: request.upToMessageRowId }
+          : {})
+      })
+      return { id: request.id, ok: true, value: page }
     }
     const session =
       request.agent === 'opencode2'
