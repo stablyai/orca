@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // Builds the orca-mic-active-status helper binary.
 //
-// The helper reads CoreAudio's default-input-device running state (see
+// The helper reads CoreAudio's per-process input-running state, falling back
+// to the default-input-device running state pre-macOS 14.2 (see
 // native/mic-active-status-macos/main.swift). The target CFBundleIdentifier
 // is embedded as a __TEXT,__info_plist section so every later `codesign
 // --force` pass (electron-builder's signing, the dev runner's ad-hoc deep

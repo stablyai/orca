@@ -28,10 +28,12 @@ function resolveHelperPath(): string | null {
 }
 
 /**
- * Reads whether the default input device is actively running, via a helper
- * binary calling CoreAudio's kAudioDevicePropertyDeviceIsRunningSomewhere.
- * Returns null when the helper is unavailable or fails, so callers can treat
- * an unreadable state as "not active" rather than suppressing incorrectly.
+ * Reads whether the microphone is actively being captured, via a helper
+ * binary querying CoreAudio's per-process kAudioProcessPropertyIsRunningInput
+ * (falling back to the device-wide kAudioDevicePropertyDeviceIsRunningSomewhere
+ * pre-macOS 14.2). Returns null when the helper is unavailable or fails, so
+ * callers can treat an unreadable state as "not active" rather than
+ * suppressing incorrectly.
  *
  * Why a helper at all: Electron/Node expose no CoreAudio bindings, so a
  * native helper is the only way to read live input-device hardware state.
