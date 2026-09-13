@@ -1,4 +1,8 @@
 import assert from 'node:assert/strict'
+import { execFileSync } from 'node:child_process'
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { dirname, join } from 'node:path'
 import { test } from 'node:test'
 import {
   canaryAuthority,
@@ -103,4 +107,102 @@ test('seals and verifies canary authority for later batches', () => {
     selectorGeneration: '11',
     rehomeGeneration: '4'
   }), /does not match/)
+})
+
+test('reuses a canary across selector advances only within the same control epoch', () => {
+  const authority = canaryAuthority({
+    cellIds: 'production-gce-c7', targetDigest, rollbackDigest,
+    confirmation: `ROLL_RELAY_SAME_CAP ${targetDigest} production-gce-c7`,
+    commitSha: 'c'.repeat(40), runId: '42', selectorGeneration: '11', rehomeGeneration: '4'
+  })
+  const expected = {
+    commitSha: 'c'.repeat(40), runId: '42', targetDigest, rollbackDigest,
+    selectorGeneration: '21', rehomeGeneration: '4'
+  }
+  for (const generation of ['13', '14', '21', '29']) {
+    assert.equal(verifyCanaryAuthority(authority, {
+      ...expected, selectorGeneration: generation
+    }), authority)
+  }
+  for (const generation of ['12', '-1', 'NaN', 'Infinity', '13.5', '9007199254740992']) {
+    assert.throws(() => verifyCanaryAuthority(authority, {
+      ...expected, selectorGeneration: generation
+    }), /does not match/)
+  }
+  for (const generation of [-1, NaN, Infinity, 13.5, '13', Number.MAX_SAFE_INTEGER + 1]) {
+    assert.throws(() => verifyCanaryAuthority({
+      ...authority, selectorGeneration: generation
+    }, expected), /does not match/)
+  }
+  for (const mismatch of [
+    { rehomeGeneration: '3' }, { rehomeGeneration: '5' },
+    { targetDigest: rollbackDigest }, { rollbackDigest: targetDigest }, { runId: '43' }
+  ]) {
+    assert.throws(() => verifyCanaryAuthority(authority, {
+      ...expected, ...mismatch
+    }), /does not match/)
+  }
+})
+
+function gitIn(root, ...args) {
+  return execFileSync('git', ['-C', root, ...args], { encoding: 'utf8' }).trim()
+}
+
+async function canaryRepository() {
+  const root = await mkdtemp(join(tmpdir(), 'relay-same-cap-canary-'))
+  gitIn(root, 'init', '--quiet')
+  gitIn(root, 'config', 'user.email', 'relay@example.test')
+  gitIn(root, 'config', 'user.name', 'Relay Wave Test')
+  gitIn(root, 'config', 'commit.gpgsign', 'false')
+  const commit = async (path, body, message) => {
+    await mkdir(dirname(join(root, path)), { recursive: true })
+    await writeFile(join(root, path), body)
+    gitIn(root, 'add', '--all')
+    gitIn(root, 'commit', '--quiet', '--no-verify', '--message', message)
+    return gitIn(root, 'rev-parse', 'HEAD')
+  }
+  const sealed = await commit(
+    'cloud/dev/scripts/relay-production-same-cap-wave.mjs',
+    'export const v = 1\n',
+    'wave'
+  )
+  const sameCode = await commit('README.md', 'an unrelated merge\n', 'unrelated')
+  const changedCode = await commit(
+    'cloud/dev/scripts/relay-production-same-cap-wave.mjs',
+    'export const v = 2\n',
+    'wave change'
+  )
+  return { root, sealed, sameCode, changedCode }
+}
+
+test('a batch trusts a canary sealed by identical code at an ancestor commit', async () => {
+  const repository = await canaryRepository()
+  try {
+    const authority = canaryAuthority({
+      cellIds: 'production-gce-c7',
+      targetDigest,
+      rollbackDigest,
+      confirmation: `ROLL_RELAY_SAME_CAP ${targetDigest} production-gce-c7`,
+      commitSha: repository.sealed,
+      runId: '42',
+      selectorGeneration: '11',
+      rehomeGeneration: '4'
+    })
+    const verifyAt = (commitSha, repositoryRoot) => verifyCanaryAuthority(authority, {
+      commitSha,
+      runId: '42',
+      targetDigest,
+      rollbackDigest,
+      selectorGeneration: '21',
+      rehomeGeneration: '4'
+    }, repositoryRoot)
+    assert.equal(verifyAt(repository.sameCode, repository.root).cellId, 'production-gce-c7')
+    assert.throws(
+      () => verifyAt(repository.changedCode, repository.root),
+      /code changed after it was sealed/
+    )
+    assert.throws(() => verifyAt('f'.repeat(40), repository.root), /unknown to this checkout/)
+  } finally {
+    await rm(repository.root, { recursive: true, force: true })
+  }
 })

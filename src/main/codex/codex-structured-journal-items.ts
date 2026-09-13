@@ -2,7 +2,7 @@ import type {
   AgentJournalItemBody,
   AgentJournalItemIdentity
 } from '../../shared/agent-session-journal-types'
-import { requiresTerminalSettlement } from '../native-chat/agent-session-journal/journal-lifecycle-capacity'
+import { requiresTerminalSettlement } from '../native-chat/agent-session-journal/journal-terminal-settlement'
 import {
   codexItemIdentity,
   codexJournalItem,
@@ -11,7 +11,8 @@ import {
   type CodexThreadItem
 } from './codex-structured-item-translation'
 import { createCodexStructuredItemStreams } from './codex-structured-item-streams'
-import { codexStructuredItemKey } from './codex-structured-item-stream-bounds'
+import { boundStreamItem, codexStructuredItemKey } from './codex-structured-item-stream-bounds'
+import { codexCommandOutlivesTurn } from './codex-command-lifecycle'
 import type {
   CodexItemTranslation,
   CodexJournalTranslationAdmission,
@@ -40,7 +41,7 @@ export class CodexJournalItems {
     private readonly deps: Pick<
       CodexJournalTranslatorDeps,
       'sink' | 'coalesceMs' | 'maxRetainedBytes' | 'schedule'
-    >,
+    > & { maxMetadataBytes?: number },
     private readonly activeTurn: (threadId: string) => string | null,
     private readonly suppress: (threadId: string, turnId: string) => void
   ) {
@@ -49,6 +50,7 @@ export class CodexJournalItems {
       coalesceMs: deps.coalesceMs,
       maxRetainedBytes: deps.maxRetainedBytes,
       schedule: deps.schedule,
+      maxMetadataBytes: deps.maxMetadataBytes,
       identityFor: (threadId, params, item) => {
         const turnId = readCodexTurnId(params) ?? this.activeTurn(threadId)
         return this.identityFor(threadId, turnId, item)
@@ -60,7 +62,10 @@ export class CodexJournalItems {
     return this.details.get(codexStructuredItemKey(threadId, itemId)) ?? null
   }
 
-  handle(event: { threadId: string; method: string; params: unknown }): CodexItemTranslation {
+  handle(
+    event: { threadId: string; method: string; params: unknown },
+    source: 'live' | 'history' = 'live'
+  ): CodexItemTranslation {
     const params =
       typeof event.params === 'object' && event.params !== null
         ? (event.params as Record<string, unknown>)
@@ -71,6 +76,19 @@ export class CodexJournalItems {
     }
     const turnId = readCodexTurnId(event.params) ?? this.activeTurn(event.threadId)
     const identity = this.identityFor(event.threadId, turnId, item)
+    // Count echoes for stable resume ordinals, but user bubbles come from submissions.
+    if (source === 'live' && item.type === 'userMessage') {
+      return { handled: true, admission: CODEX_JOURNAL_ADMITTED }
+    }
+    if (item.type === 'contextCompaction' && event.method === 'item/started') {
+      return { handled: true, admission: CODEX_JOURNAL_ADMITTED }
+    }
+    if (
+      event.method !== 'item/completed' &&
+      !this.streams.canTrack(event.threadId, item, identity)
+    ) {
+      return { handled: true, admission: { accepted: false, reason: 'failed' } }
+    }
     const translated = codexJournalItem(item)
     const command = readCodexJournalString(item, 'command')
     if (command) {
@@ -126,19 +144,13 @@ export class CodexJournalItems {
       return CODEX_JOURNAL_ADMITTED
     }
     if (method === 'item/completed') {
-      const admission = appendCodexLifecycleItem(
-        this.deps.sink,
-        identity,
-        translated.body,
-        translated.blobs
-      )
+      const admission = appendCodexLifecycleItem(this.deps.sink, identity, translated.body)
       return admission.accepted ? publishCodexLifecycle(this.deps.sink) : admission
     }
     const options = requiresTerminalSettlement(translated.body) ? { lifecycle: true } : {}
     const admission = this.deps.sink.tryAppendItem
-      ? this.deps.sink.tryAppendItem(identity, translated.body, translated.blobs, options)
-      : (this.deps.sink.appendItem(identity, translated.body, translated.blobs),
-        CODEX_JOURNAL_ADMITTED)
+      ? this.deps.sink.tryAppendItem(identity, translated.body, options)
+      : (this.deps.sink.appendItem(identity, translated.body), CODEX_JOURNAL_ADMITTED)
     if (!admission.accepted) {
       return admission
     }
@@ -153,12 +165,15 @@ export class CodexJournalItems {
     item: CodexThreadItem,
     identity: AgentJournalItemIdentity
   ): void {
-    this.streams.track(threadId, item, identity)
+    const retainedItem = codexCommandOutlivesTurn(item)
+      ? (boundStreamItem(item) as CodexThreadItem)
+      : item
+    this.streams.track(threadId, retainedItem, identity)
     this.activeItems.set(codexStructuredItemKey(threadId, item.id), {
       threadId,
       turnId,
       identity,
-      item
+      item: retainedItem
     })
   }
 
@@ -190,8 +205,10 @@ export class CodexJournalItems {
   }
 
   private trimActiveState(): CodexJournalTranslationAdmission {
-    while (this.activeItems.size > MAX_CODEX_ACTIVE_ITEMS) {
-      const oldest = this.activeItems.keys().next().value
+    while (this.activeItems.size - this.streams.persistentCount > MAX_CODEX_ACTIVE_ITEMS) {
+      const oldest = [...this.activeItems].find(
+        ([, active]) => !codexCommandOutlivesTurn(active.item)
+      )?.[0]
       if (typeof oldest !== 'string') {
         break
       }

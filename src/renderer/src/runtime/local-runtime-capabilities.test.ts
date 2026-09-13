@@ -3,6 +3,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   readLocalRuntimeCapabilities,
+  readLocalRuntimeCapabilitiesOrUnknown,
   refreshLocalRuntimeCapabilities,
   setLocalRuntimeCapabilitiesForTests
 } from './local-runtime-capabilities'
@@ -11,6 +12,22 @@ describe('local runtime capabilities', () => {
   beforeEach(() => {
     setLocalRuntimeCapabilitiesForTests([])
   })
+
+  it('starts unknown while the array reader stays compatible', async () => {
+    vi.resetModules()
+    const fresh = await import('./local-runtime-capabilities')
+    expect(fresh.readLocalRuntimeCapabilitiesOrUnknown()).toBeNull()
+    expect(fresh.readLocalRuntimeCapabilities()).toEqual([])
+  })
+
+  it.each([{}, { capabilities: [] }])(
+    'treats a successful legacy or empty response as known denial: %j',
+    async (status) => {
+      Object.assign(window, { api: { runtime: { getStatus: vi.fn(async () => status) } } })
+      await expect(refreshLocalRuntimeCapabilities()).resolves.toEqual([])
+      expect(readLocalRuntimeCapabilitiesOrUnknown()).toEqual([])
+    }
+  )
 
   it('fails closed until the live host advertises support', async () => {
     const getStatus = vi.fn(async () => ({ capabilities: ['agent-session.structured.v1'] }))
@@ -21,6 +38,7 @@ describe('local runtime capabilities', () => {
       'agent-session.structured.v1'
     ])
     expect(readLocalRuntimeCapabilities()).toEqual(['agent-session.structured.v1'])
+    expect(readLocalRuntimeCapabilitiesOrUnknown()).toEqual(['agent-session.structured.v1'])
   })
 
   it('coalesces concurrent live status reads', async () => {
@@ -38,6 +56,7 @@ describe('local runtime capabilities', () => {
       ['agent-session.structured.v1'],
       ['agent-session.structured.v1']
     ])
+    expect(first).toBe(second)
     expect(getStatus).toHaveBeenCalledOnce()
   })
 
@@ -55,5 +74,12 @@ describe('local runtime capabilities', () => {
 
     await expect(refreshLocalRuntimeCapabilities()).resolves.toEqual([])
     expect(readLocalRuntimeCapabilities()).toEqual([])
+    expect(readLocalRuntimeCapabilitiesOrUnknown()).toBeNull()
+
+    window.api.runtime.getStatus = vi
+      .fn()
+      .mockResolvedValue({ capabilities: ['agent-session.structured.v1'] })
+    await refreshLocalRuntimeCapabilities()
+    expect(readLocalRuntimeCapabilitiesOrUnknown()).toEqual(['agent-session.structured.v1'])
   })
 })

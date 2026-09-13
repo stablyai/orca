@@ -26,7 +26,8 @@ export async function closeRetainedTuiOwner(input: {
       record: current,
       expectedFence: record.lease.runtimeFence,
       probe: { outcome: 'exit-observed' },
-      now: input.deps.now()
+      now: input.deps.now(),
+      journalSettlement: 'not-required'
     })
   )
   input.releaseOwner(input.sessionId)

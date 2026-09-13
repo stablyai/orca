@@ -21,12 +21,25 @@ export type ProcessTableRow = {
   startedAt: string
 }
 
+export type PosixProcessIdentity = Pick<ProcessTableRow, 'pid' | 'startedAt'>
+
 export type DescendantSnapshot = {
+  /** Identity of the root observed in the same process-table capture. */
+  root?: PosixProcessIdentity
   rootPgid: number | null
   descendants: ProcessTableRow[]
-  /** Wall-clock boundary for deciding whether ps's second-resolution lstart
-   *  can safely distinguish this process from a later PID reuse. */
+  /** Wall-clock boundary for an unmerged snapshot (or legacy callers). */
   capturedAtMs: number
+  /** Per-PID identity boundaries for merged captures. */
+  capturedAtMsByPid?: Readonly<Record<string, number>>
+  /**
+   * PIDs this walk re-derived from a live root. A ppid walk only reaches what
+   * the root actually parents, so membership is proof of ownership that owes
+   * nothing to `lstart`'s one-second resolution: a stranger would have to have
+   * been forked into our own tree, and then it is not a stranger. Rows a merge
+   * retained from an earlier walk are absent, and still answer to start time.
+   */
+  reDerivedPids?: ReadonlySet<number>
 }
 
 export type ProcessTableCapture = {
@@ -156,9 +169,13 @@ export function collectDescendantRows(
 ): DescendantSnapshot {
   const childrenByPpid = new Map<number, ProcessTableRow[]>()
   let rootRow: ProcessTableRow | null = null
+  let duplicateRoot = false
   for (const row of table) {
     if (row.pid === rootPid) {
-      rootRow = row
+      // A non-atomic process-table read can contain both an old and a recycled
+      // root row. There is no safe identity to retain in that case.
+      duplicateRoot = rootRow !== null
+      rootRow ??= row
       continue
     }
     const siblings = childrenByPpid.get(row.ppid)
@@ -172,7 +189,7 @@ export function collectDescendantRows(
   // An absent root has already exited — its real descendants reparent to pid 1 and
   // become unreachable by ppid, so any rows still pointing at the vacated PID are a
   // PID-reuse coincidence. Sweeping them could signal an unrelated process, so bail.
-  if (!rootRow) {
+  if (!rootRow || duplicateRoot) {
     return { rootPgid: null, descendants: [], capturedAtMs }
   }
   const descendants: ProcessTableRow[] = []
@@ -191,7 +208,13 @@ export function collectDescendantRows(
       queue.push(child.pid)
     }
   }
-  return { rootPgid: rootRow.pgid, descendants, capturedAtMs }
+  return {
+    root: { pid: rootRow.pid, startedAt: rootRow.startedAt },
+    rootPgid: rootRow.pgid,
+    descendants,
+    capturedAtMs,
+    reDerivedPids: new Set(descendants.map((row) => row.pid))
+  }
 }
 
 type SnapshotDeps = {
@@ -316,7 +339,11 @@ export type TerminateDeps = {
 }
 
 export function hasUnambiguousStartIdentity(row: ProcessTableRow, capturedAtMs: number): boolean {
-  const startedAtMs = Date.parse(row.startedAt)
+  return hasUnambiguousStartTime(row.startedAt, capturedAtMs)
+}
+
+export function hasUnambiguousStartTime(startedAt: string, capturedAtMs: number): boolean {
+  const startedAtMs = Date.parse(startedAt)
   if (!Number.isFinite(startedAtMs)) {
     return false
   }
@@ -364,7 +391,10 @@ export function terminateDescendantSnapshot(
       for (const row of snapshot.descendants) {
         const live = liveTargets.get(row.pid)
         if (
-          hasUnambiguousStartIdentity(row, snapshot.capturedAtMs) &&
+          hasUnambiguousStartIdentity(
+            row,
+            snapshot.capturedAtMsByPid?.[String(row.pid)] ?? snapshot.capturedAtMs
+          ) &&
           live?.startedAt === row.startedAt &&
           live.pgid === row.pgid
         ) {

@@ -179,15 +179,27 @@ describe('openFileInBrowserTab', () => {
     }
     mocks.unifiedTabsByWorktree = {
       'wt-1': [
-        { id: 'tab-terminal', contentType: 'terminal', entityId: 'term-1', groupId: 'group-1' },
-        { id: 'tab-doc', contentType: 'browser', entityId: 'browser-9', groupId: 'group-1' }
+        {
+          id: 'tab-terminal',
+          worktreeId: 'wt-1',
+          contentType: 'terminal',
+          entityId: 'term-1',
+          groupId: 'group-1'
+        },
+        {
+          id: 'tab-doc',
+          worktreeId: 'wt-1',
+          contentType: 'browser',
+          entityId: 'browser-9',
+          groupId: 'group-1'
+        }
       ]
     }
 
     openFileInBrowserTab({ filePath: '/home/alice/report.html', worktreeId: 'wt-1' })
 
     expect(mocks.focusGroup).toHaveBeenCalledWith('wt-1', 'group-1')
-    expect(mocks.activateTab).toHaveBeenCalledWith('tab-doc')
+    expect(mocks.activateTab).toHaveBeenCalledWith('tab-doc', { worktreeId: 'wt-1' })
     expect(mocks.setActiveBrowserTab).toHaveBeenCalledWith('browser-9')
     expect(mocks.createBrowserTab).not.toHaveBeenCalled()
   })

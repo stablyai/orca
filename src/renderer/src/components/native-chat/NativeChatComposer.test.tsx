@@ -6,7 +6,6 @@ import type {
   SessionOptionDescriptor,
   SessionOptionsSurface
 } from '../../../../shared/native-chat-session-options'
-import type * as nativeChatAgentProfiles from '../../../../shared/native-chat-agent-profiles'
 import { clearNativeChatSessionOptionCacheForTests } from './native-chat-session-option-cache'
 import { clearNativeChatModelEnrichmentForTests } from './native-chat-session-option-enrichment'
 
@@ -27,6 +26,7 @@ const mocks = vi.hoisted(() => ({
     sessionOptionsSnapshot?: SessionOptionDescriptor[]
     attachDisabled?: boolean
     sendButtonDisabled?: boolean
+    autocomplete?: { mode: string; items?: { kind: string; name: string }[] }
   } | null,
   modelSwitchOutcome: 'applied' as 'applied' | 'rejected' | 'unknown',
   confirmationObserver: null as {
@@ -89,10 +89,6 @@ vi.mock('./native-chat-runtime-image-send', () => ({
 vi.mock('./claude-model-switch-confirmation', () => ({
   createClaudeModelSwitchConfirmationObserver: (...args: unknown[]) =>
     mocks.createClaudeModelSwitchConfirmationObserver(...args)
-}))
-vi.mock('../../../../shared/native-chat-agent-profiles', async (importOriginal) => ({
-  ...(await importOriginal<typeof nativeChatAgentProfiles>()),
-  getVerifiedNativeChatCommands: () => []
 }))
 vi.mock('@/lib/native-chat-telemetry', () => ({
   emitNativeChatMessageSent: vi.fn(),
@@ -292,7 +288,9 @@ describe('NativeChatComposer', () => {
           optionsSurface,
           optionSnapshot,
           onError: vi.fn(),
-          runtime: 'local'
+          runtime: 'local',
+          sessionId: 'session-test',
+          runtimeEnvironmentId: null
         }}
       />
     )
@@ -306,6 +304,46 @@ describe('NativeChatComposer', () => {
     expect(send).toHaveBeenCalledWith('hello', [])
     expect(mocks.sendNativeChatMessage).not.toHaveBeenCalled()
     expect(mocks.setDraft).toHaveBeenCalledWith('')
+  })
+
+  // The structured menu offers only what a pick can carry out: the host's own
+  // commands, plus the ones the agent itself runs from message text (Codex `/goal`).
+  // Listing the agent's whole TUI catalog here answered every pick with
+  // "not available in chat sessions".
+  it.each([
+    ['claude', 'compact', ['model', 'effort']],
+    ['codex', 'vim', ['model', 'effort', 'goal']]
+  ] as const)('offers %s only actionable structured slash commands', (agent, withheld, offered) => {
+    mocks.draft = '/'
+    render(
+      <NativeChatComposer
+        terminalTabId="tab-1"
+        paneKey={`tab-1:structured-${agent}`}
+        targetPtyId={null}
+        agent={agent}
+        structuredTransport={{
+          send: vi.fn(() => true),
+          dispatchCommand: vi.fn(async () => ({ handled: false, accepted: false, error: null })),
+          optionsSurface: {
+            getSnapshot: () => [],
+            setOption: vi.fn(),
+            invokeAction: vi.fn(),
+            subscribe: () => () => {}
+          },
+          optionSnapshot: [],
+          onError: vi.fn(),
+          runtime: 'local',
+          sessionId: 'session-test',
+          runtimeEnvironmentId: null
+        }}
+      />
+    )
+
+    const names = (mocks.fieldProps?.autocomplete?.items ?? [])
+      .filter((item) => item.kind === 'command')
+      .map((item) => item.name)
+    expect(names).toEqual([...offered])
+    expect(names).not.toContain(withheld)
   })
 
   it('sends structured image attachments through the durable transport', async () => {
@@ -334,7 +372,9 @@ describe('NativeChatComposer', () => {
           optionSnapshot: [],
           worktreeId: 'wt-1',
           onError: vi.fn(),
-          runtime: 'local'
+          runtime: 'local',
+          sessionId: 'session-test',
+          runtimeEnvironmentId: null
         }}
       />
     )

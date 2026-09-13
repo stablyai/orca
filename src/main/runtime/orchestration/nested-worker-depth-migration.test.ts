@@ -34,6 +34,7 @@ describe('nested worker depth migration (v30)', () => {
     const oldDb = new Database(dbPath)
     oldDb.exec('ALTER TABLE dispatch_contexts DROP COLUMN depth')
     oldDb.exec('ALTER TABLE remote_dispatch_attachments DROP COLUMN depth')
+    oldDb.exec('ALTER TABLE remote_dispatch_attachments DROP COLUMN home_run_id')
     oldDb.pragma('user_version = 29')
     oldDb
       .prepare(
@@ -78,7 +79,7 @@ describe('nested worker depth migration (v30)', () => {
       )
       .run()
 
-    const task = db.createTask({ spec: 'post-upgrade nesting attempt' })
+    const task = db.createTask({ runId: 'run_legacy_local', spec: 'post-upgrade nesting attempt' })
     expect(() =>
       db!.createDispatchContext({
         taskId: task.id,

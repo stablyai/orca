@@ -19,9 +19,9 @@ Type a web search instead of a path or URL to open it in the worktree browser wi
 
 ## Worktree Jump Palette (Cmd-J)
 
-Jump across every worktree and every tab in one search. The placeholder in the empty input reads _repo/worktree_ — type either half and Orca filters accordingly. Once you start typing, search includes non-archived worktrees even if they are hidden by the sidebar's current filters. Slack-style emoji shortcodes (`:rocket:`) use the same suggestion popover as workspace naming.
+Jump across worktrees and tabs in one search. The palette opens with the sidebar's current host and project scope, including individual repository selections. The placeholder in the empty input reads _repo/worktree_ — type either half and Orca filters accordingly. Typing can still find non-archived worktrees hidden by the sidebar's other visibility toggles, but it keeps that host and repository scope. Slack-style emoji shortcodes (`:rocket:`) use the same suggestion popover as workspace naming.
 
-Press **Tab** in the palette for a host and project filter menu. Selected hosts and projects narrow the result set and show as chips you can remove one at a time; closing the palette clears the filter so the next open is unscoped.
+Press **Tab** in the palette for a host and project filter menu. Project choices are repository-granular. Selected hosts and repositories narrow the result set and show as chips you can remove one at a time. Changes are temporary: closing the palette discards them, and the next open reseeds the filter from the sidebar.
 
 Results include:
 

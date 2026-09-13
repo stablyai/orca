@@ -113,8 +113,7 @@ export function SourceControlUncommittedSections(props: {
               onToggle={() => props.toggleSection(id)}
               actions={
                 <>
-                  {/* Why: bulk actions are hover-only, but forced visible on no-hover pointers (touch/SSH; see AGENTS.md "SSH Use Case"). One wrapper so focusing any action reveals all three (else keyboard tabs into an invisible stop). */}
-                  <div className="flex items-center can-hover:opacity-0 transition-opacity group-hover/section:opacity-100 focus-within:opacity-100">
+                  <div className="flex items-center">
                     {canRevertAll && (
                       <ActionButton
                         icon={area === 'untracked' ? Trash : Undo2}
@@ -169,12 +168,8 @@ export function SourceControlUncommittedSections(props: {
                     <Button
                       type="button"
                       variant="ghost"
-                      size="sm"
-                      className={
-                        items.some((entry) => entry.conflictStatus === 'unresolved')
-                          ? 'h-6 px-1.5 text-[10px] text-muted-foreground hover:text-foreground'
-                          : 'h-auto px-1.5 py-0.5 text-xs text-muted-foreground hover:text-foreground'
-                      }
+                      size="xs"
+                      className="px-1.5 text-muted-foreground hover:text-foreground"
                       onClick={(event) => {
                         event.stopPropagation()
                         props.onViewSection(sectionViewAction)

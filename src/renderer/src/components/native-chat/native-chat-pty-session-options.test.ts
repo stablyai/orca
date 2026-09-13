@@ -117,6 +117,7 @@ describe('native chat PTY session options', () => {
     expect(effortResult.snapshot.map(({ id }) => id)).toEqual(['model', 'effort', 'fastMode'])
     expect(effortResult.snapshot.find(({ id }) => id === 'effort')).toMatchObject({
       valueSource: 'dispatched',
+      transport: 'catalog',
       kind: { currentValue: 'high' }
     })
     expect(listener).toHaveBeenCalledOnce()

@@ -15,6 +15,7 @@ import type {
   ResumableSessionParseState,
   SessionAccumulator
 } from './session-scanner-types'
+import type { TranscriptMessageSink } from './session-transcript-consumers'
 import { extractString, normalizeTitleText, parseJsonObject } from './session-scanner-values'
 
 type ParserSessionOptions = {
@@ -24,12 +25,13 @@ type ParserSessionOptions = {
 
 export async function parseAntigravitySessionFile(
   file: FileWithMtime,
-  platform: NodeJS.Platform = process.platform
+  platform: NodeJS.Platform = process.platform,
+  messages?: TranscriptMessageSink
 ): Promise<AiVaultSession | null> {
   const input = openTranscriptReadStream(file.path, { encoding: 'utf-8' }, 'scan')
   const lines = createInterface({ input, crlfDelay: Infinity })
   try {
-    return await parseAntigravitySessionLines({ file, lines, platform })
+    return await parseAntigravitySessionLines({ file, lines, platform, messages })
   } finally {
     // readline.close() leaves the underlying stream open; destroy it so a
     // mid-parse throw cannot leak the gated transcript handle.
@@ -54,13 +56,14 @@ export async function parseAntigravitySessionContent(
 }
 
 export function createAntigravitySessionResumeState(
-  file: FileWithMtime
+  file: FileWithMtime,
+  messages?: TranscriptMessageSink
 ): ResumableSessionParseState {
   const sessionId = antigravityConversationIdFromTranscriptPath(file.path) ?? ''
   // Why: the transcript has no cwd/model fields. Workspace enrichment is a
   // separate, conservative history join; protobuf/SQLite blobs are unstable.
   return accumulatorFoldResumeState(
-    createAccumulator({ agent: 'antigravity', file, sessionId }),
+    createAccumulator({ agent: 'antigravity', file, sessionId, messages }),
     consumeAntigravityRecordLine
   )
 }
@@ -70,8 +73,9 @@ async function parseAntigravitySessionLines(args: {
   lines: AsyncIterable<string> | Iterable<string>
   platform: NodeJS.Platform
   options?: ParserSessionOptions
+  messages?: TranscriptMessageSink
 }): Promise<AiVaultSession | null> {
-  const state = createAntigravitySessionResumeState(args.file)
+  const state = createAntigravitySessionResumeState(args.file, args.messages)
   for await (const line of args.lines) {
     state.consumeLine(line)
   }

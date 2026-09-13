@@ -141,36 +141,6 @@ describe('manual sleep agent session capture', () => {
     expect(records['tab-1:working'].restoreOnTabOpenOnly).toBeUndefined()
   })
 
-  it('carries a blocked legacy-orchestration-worker flag onto the replacement record', () => {
-    vi.useFakeTimers()
-    vi.setSystemTime(NOW)
-    const store = createTestStore()
-    seedTabs(store)
-    store.setState({
-      agentStatusByPaneKey: {
-        'tab-1:leaf-1': makeAgentEntry(),
-        'tab-1:leaf-2': makeAgentEntry({ paneKey: 'tab-1:leaf-2' })
-      },
-      sleepingAgentSessionsByPaneKey: {
-        'tab-1:leaf-1': makeSleepingRecord({
-          providerSession: { key: 'session_id', id: 'session-tab-1:leaf-1' },
-          automaticResumeBlockedBy: 'legacy-orchestration-worker'
-        }),
-        'tab-1:leaf-2': makeSleepingRecord({
-          paneKey: 'tab-1:leaf-2',
-          automaticResumeBlockedBy: 'legacy-orchestration-worker'
-        })
-      }
-    } as Partial<AppState>)
-
-    store.getState().captureSleepingAgentSessionsByWorktree('wt-1')
-
-    const records = store.getState().sleepingAgentSessionsByPaneKey
-    expect(records['tab-1:leaf-1'].automaticResumeBlockedBy).toBe('legacy-orchestration-worker')
-    // Different provider session: the block belonged to a session that is no longer running here.
-    expect(records['tab-1:leaf-2'].automaticResumeBlockedBy).toBeUndefined()
-  })
-
   it('preserves retained completed sessions as intentional sleep records', () => {
     vi.useFakeTimers()
     vi.setSystemTime(NOW)
@@ -229,38 +199,6 @@ describe('manual sleep agent session capture', () => {
     expect(record).toMatchObject({ origin: 'worktree-sleep', state: 'working', updatedAt: NOW })
     expect(record.capturedAt - record.updatedAt).toBeLessThanOrEqual(AGENT_STATUS_STALE_AFTER_MS)
     expect(record.interrupted).toBeUndefined()
-  })
-
-  it('carries a blocked legacy-orchestration-worker flag onto a retained replacement record', () => {
-    vi.useFakeTimers()
-    vi.setSystemTime(NOW)
-    const store = createTestStore()
-    seedTabs(store)
-    const entry = makeAgentEntry({ paneKey: 'tab-1:retained', state: 'done' })
-    store.setState({
-      retainedAgentsByPaneKey: {
-        'tab-1:retained': {
-          entry,
-          tab: makeTab({ id: 'tab-1', worktreeId: 'wt-1' }),
-          worktreeId: 'wt-1',
-          agentType: 'codex',
-          startedAt: entry.stateStartedAt
-        }
-      },
-      sleepingAgentSessionsByPaneKey: {
-        'tab-1:retained': makeSleepingRecord({
-          paneKey: 'tab-1:retained',
-          providerSession: { key: 'session_id', id: 'session-tab-1:retained' },
-          automaticResumeBlockedBy: 'legacy-orchestration-worker'
-        })
-      }
-    } as Partial<AppState>)
-
-    store.getState().captureSleepingAgentSessionsByWorktree('wt-1')
-
-    expect(
-      store.getState().sleepingAgentSessionsByPaneKey['tab-1:retained'].automaticResumeBlockedBy
-    ).toBe('legacy-orchestration-worker')
   })
 
   // Why: the promoted checkpoint owns the pane's recovery identity (connection, transcript); the

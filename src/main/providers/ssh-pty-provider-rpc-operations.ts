@@ -1,6 +1,7 @@
 import type { SshChannelMultiplexer } from '../ssh/ssh-channel-multiplexer'
 import type { PtyProcessInspection } from './pty-process-inspection'
 import { writeToSshPty, writeToSshPtyWithSettlement } from './ssh-pty-write'
+import type { WriteSettlement } from '../../shared/pty-write-settlement'
 
 type SshPtyProviderRpcContext = {
   mux: SshChannelMultiplexer
@@ -14,7 +15,7 @@ export function createSshPtyProviderRpcOperations({ mux, toRelayPtyId }: SshPtyP
       await mux.request('pty.deleteWorktreeHistory', { worktreeId })
     },
     write: (id: string, data: string): boolean => writeToSshPty(mux, toRelayPtyId(id), data),
-    writeWithSettlement: (id: string, data: string): Promise<boolean> =>
+    writeWithSettlement: (id: string, data: string): Promise<WriteSettlement> =>
       writeToSshPtyWithSettlement(mux, toRelayPtyId(id), data),
     resize: (id: string, cols: number, rows: number): void => {
       mux.notify('pty.resize', { id: toRelayPtyId(id), cols, rows })
@@ -50,15 +51,21 @@ export function createSshPtyProviderRpcOperations({ mux, toRelayPtyId }: SshPtyP
       const result = await mux.request('pty.getForegroundProcess', { id: toRelayPtyId(id) })
       return result as string | null
     },
+    // Do NOT in-flight coalesce this the way the sibling git reads are: the host mints one
+    // `observationEpoch` per request and the pane foreground reader commits it per read, so a
+    // shared reply reads as a stale replay and degrades a `live` identity read to `unverifiable`.
+    // Guarded by ssh-pty-inspect-observation-identity.test.ts; #17525 removes the poll.
     inspectProcess: async (
       id: string,
-      options?: { expectedIncarnationId?: string }
+      options?: { expectedIncarnationId?: string; scanChildProcesses?: boolean }
     ): Promise<PtyProcessInspection> => {
       return (await mux.request('pty.inspectProcess', {
         id: toRelayPtyId(id),
         ...(options?.expectedIncarnationId
           ? { expectedIncarnationId: options.expectedIncarnationId }
-          : {})
+          : {}),
+        // Additive request member: an older relay ignores it and answers as it always did.
+        ...(options?.scanChildProcesses === true ? { scanChildProcesses: true } : {})
       })) as PtyProcessInspection
     },
     serialize: async (ids: string[]): Promise<string> => {

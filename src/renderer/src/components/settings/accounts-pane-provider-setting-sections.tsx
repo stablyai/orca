@@ -1,11 +1,11 @@
 import { translate } from '@/i18n/i18n'
 import { Button } from '../ui/button'
-import { Input } from '../ui/input'
 import { Label } from '../ui/label'
 import { Switch } from '../ui/switch'
 import { GeminiIcon, OpenCodeGoIcon } from '../status-bar/icons'
 import { SearchableSetting } from './SearchableSetting'
 import type { AccountsPaneSectionModel } from './accounts-pane-types'
+import { DebouncedSettingsTextInput } from './DebouncedSettingsTextInput'
 
 export function renderGeminiAccountsSection(model: AccountsPaneSectionModel): React.JSX.Element {
   const { localAccountRuntimeSentenceLabel, recordFeatureInteraction, settings, updateSettings } =
@@ -114,13 +114,11 @@ export function renderOpenCodeAccountsSection(model: AccountsPaneSectionModel): 
           )}
         </Label>
         <div className="flex gap-2">
-          <Input
+          <DebouncedSettingsTextInput
             type="password"
             value={settings.opencodeSessionCookie}
-            onChange={(e) => {
-              recordOpenCodeSettingEdit('cookie')
-              updateSettings({ opencodeSessionCookie: e.target.value })
-            }}
+            onEdit={() => recordOpenCodeSettingEdit('cookie')}
+            commit={(opencodeSessionCookie) => updateSettings({ opencodeSessionCookie })}
             placeholder={translate(
               'auto.components.settings.AccountsPane.a7e38affcd',
               'Fe26.2**… token or auth=Fe26.2**… header'
@@ -180,13 +178,11 @@ export function renderOpenCodeAccountsSection(model: AccountsPaneSectionModel): 
           {translate('auto.components.settings.AccountsPane.dbdb0b0bd8', 'Workspace ID override')}
         </Label>
         <div className="flex gap-2">
-          <Input
+          <DebouncedSettingsTextInput
             type="text"
             value={settings.opencodeWorkspaceId}
-            onChange={(e) => {
-              recordOpenCodeSettingEdit('workspaceId')
-              updateSettings({ opencodeWorkspaceId: e.target.value })
-            }}
+            onEdit={() => recordOpenCodeSettingEdit('workspaceId')}
+            commit={(opencodeWorkspaceId) => updateSettings({ opencodeWorkspaceId })}
             placeholder={translate(
               'auto.components.settings.AccountsPane.a122332371',
               'wrk_… (leave blank for automatic lookup)'

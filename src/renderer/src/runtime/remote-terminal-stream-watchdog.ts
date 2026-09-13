@@ -13,7 +13,8 @@ export type RemoteTerminalStreamWatchdog = {
   recordOutputAcknowledged: (bytes: number) => void
   completeCommandResponseProbe: () => void
   recordCommandInput: (text: string) => void
-  recordInbound: () => void
+  /** Only live output answers a pending command; control frames prove transport activity alone. */
+  recordInbound: (carriesOutput: boolean) => void
   dispose: () => void
 }
 
@@ -111,9 +112,11 @@ export function createRemoteTerminalStreamWatchdog(
         REMOTE_TERMINAL_COMMAND_RESPONSE_TIMEOUT_MS
       )
     },
-    recordInbound() {
+    recordInbound(carriesOutput) {
       lastInboundAtMs = Date.now()
-      clearResponseTimer()
+      if (carriesOutput) {
+        clearResponseTimer()
+      }
     },
     dispose() {
       disposed = true

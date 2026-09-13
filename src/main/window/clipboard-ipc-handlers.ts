@@ -55,8 +55,16 @@ async function saveClipboardImageBufferForTarget(
 ): Promise<string> {
   assertClipboardImageByteLengthWithinLimit(buffer.byteLength)
   const runtimeEnvironmentId = args?.runtimeEnvironmentId?.trim()
-  if (runtimeEnvironmentId && !args?.connectionId) {
-    return saveClipboardImageBufferInRuntime(app.getPath('userData'), runtimeEnvironmentId, buffer)
+  // Why (#17679): with a runtime owner, a connectionId names one of the RUNTIME's SSH
+  // connections (nested Remote Server -> SSH), not one this process dialed. Looking it up
+  // in the local provider registry can only miss, so the runtime must perform the save.
+  if (runtimeEnvironmentId) {
+    return saveClipboardImageBufferInRuntime(
+      app.getPath('userData'),
+      runtimeEnvironmentId,
+      buffer,
+      args?.connectionId ?? null
+    )
   }
   return saveClipboardImageBufferAsTempFile(buffer, args)
 }

@@ -19,6 +19,7 @@
     "../src/preload/usage-provider-api.ts",
     "../src/shared/**/*",
     "../src/main/gitlab/mappers.ts",
+    "../src/main/ipc/deferred-emoji-shortcode-dataset.ts",
     "../src/main/ipc/worktree-branch-name.ts",
     "../src/main/ipc/worktree-logic.ts",
     "../src/main/ipc/worktree-display-name.ts",

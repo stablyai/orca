@@ -39,7 +39,7 @@ vi.mock('@/lib/agent-catalog', () => ({
   AgentIcon: () => null
 }))
 vi.mock('@/lib/structured-agent-session-launch', () => ({
-  useStructuredCodexLaunchStatus: () => structuredLaunchMock.status
+  useStructuredAgentLaunchStatus: () => structuredLaunchMock.status
 }))
 
 import TabBarCreateEntry from './TabBarCreateEntry'

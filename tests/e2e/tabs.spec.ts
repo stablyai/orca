@@ -39,6 +39,22 @@ function tabLocator(page: Page, tabId: string) {
   return page.locator(`${SORTABLE_TAB}[data-tab-id="${tabId}"]`).first()
 }
 
+async function closeTabFromTabBar(page: Page, tabId: string): Promise<void> {
+  const tab = tabLocator(page, tabId)
+  await tab.hover()
+  await tab.getByRole('button', { name: /^Close tab /i }).click()
+  const confirmation = page.getByRole('dialog', { name: 'Stop running command?' })
+  // A shell still starting under load may require the running-command confirmation.
+  await expect
+    .poll(async () => (await confirmation.isVisible()) || (await tab.count()) === 0, {
+      timeout: 5_000
+    })
+    .toBe(true)
+  if (await confirmation.isVisible()) {
+    await confirmation.getByRole('button', { name: 'Stop and Close', exact: true }).click()
+  }
+}
+
 /** Count rendered tabs in the tab bar (user-visible, not store-level). */
 async function countRenderedTabs(page: Page): Promise<number> {
   return page.locator(SORTABLE_TAB).count()
@@ -73,6 +89,8 @@ test.describe('Tabs', () => {
     await waitForStartupWorktreeRefresh(orcaPage)
     await waitForActiveWorktree(orcaPage)
     await ensureTerminalVisible(orcaPage)
+    const initialTabId = (await getActiveTabId(orcaPage))!
+    await expect(tabLocator(orcaPage, initialTabId)).toBeVisible()
   })
 
   /**
@@ -94,7 +112,7 @@ test.describe('Tabs', () => {
     // Why: the "+" dropdown uses Radix <DropdownMenuItem>, which exposes the
     // label text as the accessible name once the menu is open.
     const newTerminalMenuItem = orcaPage.getByRole('menuitem', { name: /New Terminal/i }).first()
-    await newTerminalMenuItem.click({ force: true })
+    await newTerminalMenuItem.click()
     await expect(newTerminalMenuItem).toBeHidden({ timeout: 3_000 })
 
     // Final assertion is on the rendered tab count — the tab bar itself must
@@ -138,8 +156,7 @@ test.describe('Tabs', () => {
 
     await orcaPage.getByRole('button', { name: 'New tab' }).click({ force: true })
     const newMarkdownMenuItem = orcaPage.getByRole('menuitem', { name: /New Markdown/i }).first()
-    await newMarkdownMenuItem.click({ force: true })
-    await expect(newMarkdownMenuItem).toBeHidden({ timeout: 3_000 })
+    await newMarkdownMenuItem.click()
 
     // Why: require an id that did not exist before the click, so an already-open
     // Markdown file can't satisfy the assertions (or be deleted by cleanup), and
@@ -161,6 +178,7 @@ test.describe('Tabs', () => {
 
     const editor = orcaPage.locator('.rich-markdown-editor')
     await expect(editor).toBeVisible({ timeout: 25_000 })
+    await expect(newMarkdownMenuItem).toBeHidden({ timeout: 3_000 })
 
     await expect
       .poll(() => editor.evaluate((element) => document.activeElement === element), {
@@ -519,12 +537,7 @@ test.describe('Tabs', () => {
     const tabsBefore = await countRenderedTabs(orcaPage)
     const activeId = await getActiveTabId(orcaPage)
     expect(activeId).not.toBeNull()
-    const activeTab = tabLocator(orcaPage, activeId!)
-    // Why: hover the tab first so the close button reveals its hover style.
-    // The button is interactive regardless but hovering matches real user
-    // behaviour and keeps click coordinates stable.
-    await activeTab.hover()
-    await activeTab.getByRole('button', { name: /^Close tab /i }).click()
+    await closeTabFromTabBar(orcaPage, activeId!)
 
     await expect
       .poll(() => countRenderedTabs(orcaPage), {
@@ -562,9 +575,7 @@ test.describe('Tabs', () => {
     const activeTabBefore = await getActiveTabId(orcaPage)
     expect(activeTabBefore).not.toBeNull()
 
-    const activeTab = tabLocator(orcaPage, activeTabBefore!)
-    await activeTab.hover()
-    await activeTab.getByRole('button', { name: /^Close tab /i }).click()
+    await closeTabFromTabBar(orcaPage, activeTabBefore!)
 
     // Final DOM assertion: some *other* tab element now carries data-active.
     await expect

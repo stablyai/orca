@@ -1,6 +1,11 @@
 import { parseAgentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
+import {
+  decodeAgentSessionQuestionAnswers,
+  isValidAgentSessionQuestionAnswers
+} from '../../../shared/agent-session-question-answer'
 import type {
   AgentJournalItemBody,
+  AgentJournalQuestion,
   AgentJournalResolution
 } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionPromptResult } from '../../../shared/agent-session-wire'
@@ -14,6 +19,7 @@ function invalid(message: string): TurnOutcome<never> {
 function promptBodyOf(body: AgentJournalItemBody): {
   options: readonly { id: string }[]
   freeTextQuestionId?: string
+  questions?: AgentJournalQuestion[]
   resolution: AgentJournalResolution
 } | null {
   return body.kind === 'approval' || body.kind === 'question' ? body : null
@@ -64,7 +70,19 @@ export async function performPrompt(
     prompt.freeTextQuestionId !== undefined &&
     freeText?.questionId === prompt.freeTextQuestionId &&
     freeText.answer.trim().length > 0
-  if (!acceptsFreeText && !prompt.options.some((option) => option.id === input.optionId)) {
+  const grouped =
+    item.body.kind === 'question' && prompt.questions
+      ? decodeAgentSessionQuestionAnswers(input.optionId)
+      : null
+  const acceptsGrouped =
+    grouped !== null &&
+    prompt.questions !== undefined &&
+    isValidAgentSessionQuestionAnswers(prompt.questions, grouped)
+  if (
+    !acceptsFreeText &&
+    !acceptsGrouped &&
+    !prompt.options.some((option) => option.id === input.optionId)
+  ) {
     return invalid(`Option ${input.optionId} is not offered by item ${input.itemId}.`)
   }
   const identity = parseAgentJournalItemKey(input.itemId)

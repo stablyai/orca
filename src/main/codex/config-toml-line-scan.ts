@@ -296,3 +296,21 @@ function parseTomlUnicodeEscape(
     return null
   }
 }
+
+export function withTrailingCr(originalLine: string, rendered: string): string {
+  return originalLine.endsWith('\r') ? `${rendered}\r` : rendered
+}
+
+export function withCrLine(rendered: string, usesCrlf: boolean): string {
+  return usesCrlf ? `${rendered}\r` : rendered
+}
+
+// Why: a missing trailing newline is restored in the file's own EOL so a
+// preamble-only or table-appended rewrite matches the source's newline behavior.
+export function joinPreservingTrailingNewline(lines: string[], usesCrlf: boolean): string {
+  const result = lines.join('\n')
+  if (result.endsWith('\n') || result.length === 0) {
+    return result
+  }
+  return result.endsWith('\r') ? `${result}\n` : `${result}${usesCrlf ? '\r\n' : '\n'}`
+}

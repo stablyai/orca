@@ -32,6 +32,7 @@ type StoreState = {
   }
   updateSettings: (patch: Record<string, unknown>) => Promise<void>
   recordFeatureInteraction: (feature: string) => void
+  fetchOrcaProfileAuthStatus: () => Promise<unknown>
 }
 
 const mocks = vi.hoisted(() => {
@@ -188,7 +189,8 @@ describe('MobilePane pairing connection mode', () => {
       settingsSearchQuery: '',
       settings: { mobileAutoRestoreFitMs: null },
       updateSettings,
-      recordFeatureInteraction: vi.fn()
+      recordFeatureInteraction: vi.fn(),
+      fetchOrcaProfileAuthStatus: vi.fn().mockResolvedValue(null)
     }
     Object.defineProperty(window, 'api', {
       configurable: true,
@@ -797,7 +799,8 @@ describe('MobilePane', () => {
       settingsSearchQuery: '',
       settings: { mobileAutoRestoreFitMs: null },
       updateSettings: mocks.updateSettings,
-      recordFeatureInteraction: vi.fn()
+      recordFeatureInteraction: vi.fn(),
+      fetchOrcaProfileAuthStatus: vi.fn().mockResolvedValue(null)
     }
     Object.defineProperty(window, 'api', {
       configurable: true,

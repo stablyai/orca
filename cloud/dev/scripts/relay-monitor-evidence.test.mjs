@@ -1,9 +1,15 @@
 import assert from 'node:assert/strict'
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { execFileSync } from 'node:child_process'
+import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import test from 'node:test'
-import { relayWorkflowPath, relayWorkflowUrl } from './relay-repository.mjs'
+import { TRUSTED_EVIDENCE_CODE_PATHS } from './relay-evidence-code-provenance.mjs'
+import {
+  RELAY_REPOSITORY_ROOT,
+  relayWorkflowPath,
+  relayWorkflowUrl
+} from './relay-repository.mjs'
 import {
   createEvidenceManifest,
   verifyDryRunAuthority,
@@ -12,7 +18,7 @@ import {
 } from './relay-monitor-evidence.mjs'
 
 const now = Date.parse('2026-07-28T12:00:00.000Z')
-const provenance = [
+const provenanceFor = (commitSha) => [
   '--incident-id',
   'relay-123',
   '--run-id',
@@ -20,10 +26,11 @@ const provenance = [
   '--run-attempt',
   '1',
   '--commit-sha',
-  'a'.repeat(40),
+  commitSha,
   '--mode',
   'dry-run'
 ]
+const provenance = provenanceFor('a'.repeat(40))
 const selector = {
   generation: 2,
   membership: {
@@ -512,4 +519,158 @@ test('monitor uses a reusable job so exact job_workflow_ref is present', async (
   )
   assert.match(job, /workflow_call:/)
   assert.match(job, /environment: production/)
+})
+
+function gitIn(root, ...args) {
+  return execFileSync('git', ['-C', root, ...args], { encoding: 'utf8' }).trim()
+}
+
+// A real repository shaped like main under unrelated merge traffic: one sealed commit, a
+// descendant that only touched untrusted files, a descendant that touched the monitor, and a
+// sibling that never descended from the seal.
+async function trustedCodeRepository() {
+  const root = await mkdtemp(join(tmpdir(), 'relay-evidence-repository-'))
+  gitIn(root, 'init', '--quiet')
+  gitIn(root, 'config', 'user.email', 'relay@example.test')
+  gitIn(root, 'config', 'user.name', 'Relay Evidence Test')
+  gitIn(root, 'config', 'commit.gpgsign', 'false')
+  const commit = async (path, body, message) => {
+    await mkdir(dirname(join(root, path)), { recursive: true })
+    await writeFile(join(root, path), body)
+    gitIn(root, 'add', '--all')
+    gitIn(root, 'commit', '--quiet', '--no-verify', '--message', message)
+    return gitIn(root, 'rev-parse', 'HEAD')
+  }
+  const base = await commit(
+    'cloud/apps/relay-ops/src/incident-monitor.ts',
+    'export const v = 1\n',
+    'monitor'
+  )
+  const sealed = await commit('README.md', 'base\n', 'base')
+  const sameCode = await commit('README.md', 'an unrelated merge\n', 'unrelated')
+  const changedCode = await commit(
+    'cloud/apps/relay-ops/src/incident-monitor.ts',
+    'export const v = 2\n',
+    'monitor change'
+  )
+  // Branches before the seal, so the seal is not in its history even though its code matches.
+  gitIn(root, 'checkout', '--quiet', '--detach', base)
+  const sibling = await commit('README.md', 'a divergent line\n', 'divergent')
+  return { root, sealed, sameCode, changedCode, sibling }
+}
+
+const authorityAt = (directory, commitSha, repositoryRoot) => verifyDryRunAuthority(
+  [
+    '--directory',
+    directory,
+    ...provenanceFor(commitSha),
+    '--required-migration-policy',
+    'strict'
+  ],
+  () => now,
+  repositoryRoot
+)
+
+test('accepts dry-run evidence sealed by identical code at an ancestor commit', async () => {
+  const repository = await trustedCodeRepository()
+  const directory = await evidenceDirectory()
+  try {
+    await createEvidenceManifest([
+      '--directory',
+      directory,
+      ...provenanceFor(repository.sealed)
+    ])
+    // An exact match never consults git: a root with no checkout at all still verifies.
+    await assert.doesNotReject(authorityAt(directory, repository.sealed, directory))
+    await assert.doesNotReject(authorityAt(directory, repository.sameCode, repository.root))
+  } finally {
+    await rm(repository.root, { recursive: true, force: true })
+    await rm(directory, { recursive: true, force: true })
+  }
+})
+
+test('rejects dry-run evidence whose monitor code or lineage differs', async () => {
+  const repository = await trustedCodeRepository()
+  const directory = await evidenceDirectory()
+  try {
+    await createEvidenceManifest([
+      '--directory',
+      directory,
+      ...provenanceFor(repository.sealed)
+    ])
+    await assert.rejects(
+      authorityAt(directory, repository.changedCode, repository.root),
+      /code changed after it was sealed: cloud\/apps\/relay-ops\/src\/incident-monitor\.ts/
+    )
+    await assert.rejects(
+      authorityAt(directory, repository.sibling, repository.root),
+      /is not an ancestor of/
+    )
+    // Fails closed: a shallow clone that never fetched the sealed commit proves nothing.
+    await assert.rejects(
+      authorityAt(directory, 'f'.repeat(40), repository.root),
+      /unknown to this checkout/
+    )
+    // Fails closed: no checkout to compare against.
+    await assert.rejects(
+      authorityAt(directory, repository.sameCode, directory),
+      /cannot be compared without a git checkout/
+    )
+  } finally {
+    await rm(repository.root, { recursive: true, force: true })
+    await rm(directory, { recursive: true, force: true })
+  }
+})
+
+test('keeps restore and mutation bound to the exact sealing commit', async () => {
+  const repository = await trustedCodeRepository()
+  const directory = await evidenceDirectory()
+  try {
+    await createEvidenceManifest([
+      '--directory',
+      directory,
+      ...provenanceFor(repository.sealed)
+    ])
+    await assert.rejects(
+      verifyRestoredEvidence([
+        '--directory',
+        directory,
+        ...provenanceFor(repository.sameCode)
+      ]),
+      /provenance does not match/
+    )
+    await assert.rejects(
+      verifyMutationEvidence(
+        [
+          '--directory',
+          directory,
+          ...provenanceFor(repository.sameCode),
+          '--mutation-mode',
+          'execute',
+          '--source-cell-id',
+          'c1',
+          '--director-origin',
+          'https://relay.example'
+        ],
+        { ORCA_RELAY_ADMIN_ID_TOKEN: 'aaa.bbb.ccc' },
+        async () => Response.json({ selector }),
+        () => now
+      ),
+      /provenance does not match/
+    )
+  } finally {
+    await rm(repository.root, { recursive: true, force: true })
+    await rm(directory, { recursive: true, force: true })
+  }
+})
+
+// A trusted path that no longer exists silently stops being compared, so the same-code rule would
+// pass over code it was written to pin.
+test('every trusted provenance path exists in this checkout', async () => {
+  for (const path of TRUSTED_EVIDENCE_CODE_PATHS) {
+    await assert.doesNotReject(
+      stat(new URL(path, RELAY_REPOSITORY_ROOT)),
+      `${path} is missing`
+    )
+  }
 })

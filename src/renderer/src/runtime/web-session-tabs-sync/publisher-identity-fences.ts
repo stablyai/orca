@@ -36,6 +36,19 @@ export function noteRetiredValue(
   return history
 }
 
+/**
+ * Un-retires one value, leaving every other retired generation fenced.
+ *
+ * Only an authority that names the value current may call this; reviving on a delayed frame's own
+ * say-so is exactly the resurrection `retired` exists to prevent.
+ */
+export function reviveRetiredValue(history: RetiredValueHistory | undefined, value: string): void {
+  const index = history?.retired.indexOf(value) ?? -1
+  if (history && index >= 0) {
+    history.retired.splice(index, 1)
+  }
+}
+
 function normalizeSessionTabsRuntimeId(runtimeId: unknown): string | undefined {
   if (typeof runtimeId !== 'string') {
     return undefined

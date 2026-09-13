@@ -10,6 +10,7 @@ import type {
   ResumableSessionParseState,
   SessionAccumulator
 } from './session-scanner-types'
+import type { TranscriptMessageSink } from './session-transcript-consumers'
 import {
   accumulatorFoldResumeState,
   addPreviewContent,
@@ -38,7 +39,8 @@ type ParserSessionOptions = {
 
 export async function parseRovoSessionFile(
   file: FileWithMtime,
-  platform: NodeJS.Platform = process.platform
+  platform: NodeJS.Platform = process.platform,
+  messages?: TranscriptMessageSink
 ): Promise<AiVaultSession | null> {
   const metadata = asRecord(
     JSON.parse(await wslGatedReadFile(file.path, 'utf-8', 'scan')) as unknown
@@ -49,7 +51,8 @@ export async function parseRovoSessionFile(
   const accumulator = createAccumulator({
     agent: 'rovo',
     file,
-    sessionId: basename(dirname(file.path))
+    sessionId: basename(dirname(file.path)),
+    messages
   })
   accumulator.title = firstString(metadata, ['title', 'name', 'summary'])
   accumulator.cwd = firstString(metadata, [
@@ -174,12 +177,13 @@ export type MessageGraphAgent = 'openclaw' | 'pi' | 'omp' | 'prime-agent'
 export async function parseMessageGraphSessionFile(
   agent: MessageGraphAgent,
   file: FileWithMtime,
-  platform: NodeJS.Platform = process.platform
+  platform: NodeJS.Platform = process.platform,
+  messages?: TranscriptMessageSink
 ): Promise<AiVaultSession | null> {
   const input = openTranscriptReadStream(file.path, { encoding: 'utf-8' }, 'scan')
   const lines = createInterface({ input, crlfDelay: Infinity })
   try {
-    return await parseMessageGraphSessionLines({ agent, file, lines, platform })
+    return await parseMessageGraphSessionLines({ agent, file, lines, platform, messages })
   } finally {
     // readline.close() leaves the underlying stream open; destroy it so a
     // mid-parse throw cannot leak the gated transcript handle.
@@ -245,10 +249,11 @@ function consumeMessageGraphRecordLine(accumulator: SessionAccumulator, line: st
 
 export function createMessageGraphSessionResumeState(
   agent: MessageGraphAgent,
-  file: FileWithMtime
+  file: FileWithMtime,
+  messages?: TranscriptMessageSink
 ): ResumableSessionParseState {
   const state = accumulatorFoldResumeState(
-    createAccumulator({ agent, file, sessionId: sessionIdFromFileName(file.path) }),
+    createAccumulator({ agent, file, sessionId: sessionIdFromFileName(file.path), messages }),
     consumeMessageGraphRecordLine
   )
   // Why: only OMP materializes task-subagent transcripts beside its sessions
@@ -263,8 +268,9 @@ async function parseMessageGraphSessionLines(args: {
   lines: AsyncIterable<string> | Iterable<string>
   platform: NodeJS.Platform
   options?: ParserSessionOptions
+  messages?: TranscriptMessageSink
 }): Promise<AiVaultSession | null> {
-  const state = createMessageGraphSessionResumeState(args.agent, args.file)
+  const state = createMessageGraphSessionResumeState(args.agent, args.file, args.messages)
   for await (const line of args.lines) {
     state.consumeLine(line)
   }

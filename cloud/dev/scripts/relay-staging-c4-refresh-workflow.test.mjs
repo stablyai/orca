@@ -39,14 +39,17 @@ const launchDigest = '5aedbca5c86de24c8b4d4bf7e3b444b76c712f281ede916cb9d90f70ca
 // so a file-wide count no longer isolates Asia.
 const asiaCells = ['production-gce-c27', 'production-gce-c28', 'production-gce-c29']
 
-function productionCell(cellId) {
-  const start = productionTfvars.indexOf(`"${cellId}"`)
+function cellBlock(tfvars, cellId) {
+  const start = tfvars.indexOf(`"${cellId}"`)
   assert.notEqual(start, -1, `${cellId} is missing`)
-  return productionTfvars.slice(start, productionTfvars.indexOf('\n  }', start))
+  return tfvars.slice(start, tfvars.indexOf('\n  }', start))
 }
 
+const productionCell = (cellId) => cellBlock(productionTfvars, cellId)
+
+// Scoped to C4 by name: staging C3 serves this digest too since its 2026-09-03 re-pin.
 test('pins staging C4 and all production Asia cells to the same launch image', () => {
-  assert.equal(stagingTfvars.match(new RegExp(launchDigest, 'g'))?.length, 1)
+  assert.match(cellBlock(stagingTfvars, 'staging-gce-c4'), new RegExp(`relay@sha256:${launchDigest}"`))
   for (const cellId of asiaCells) {
     assert.match(productionCell(cellId), new RegExp(`relay@sha256:${launchDigest}"`), cellId)
   }

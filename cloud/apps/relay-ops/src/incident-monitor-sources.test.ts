@@ -93,7 +93,7 @@ describe('incident monitor sources', () => {
   })
 
   it('zero-fills an expired sparse lock-wait point', async () => {
-    let pointAt = now - INCIDENT_MONITOR_THRESHOLDS.cloudDataMaxAgeMs
+    let pointAt = now - INCIDENT_MONITOR_THRESHOLDS.cloudLockWaitCarryMs
     const fetchImpl: typeof fetch = async () => Response.json({
       timeSeries: [{
         points: [{
@@ -141,7 +141,7 @@ describe('incident monitor sources', () => {
 
   it('freshens a sparse zero without masking a recent nonzero lock wait', async () => {
     let value = 0
-    const pointAt = now - INCIDENT_MONITOR_THRESHOLDS.cloudDataMaxAgeMs
+    const pointAt = now - INCIDENT_MONITOR_THRESHOLDS.cloudLockWaitCarryMs
     const readAt = now + 11_879
     const fetchImpl: typeof fetch = async () => Response.json({
       timeSeries: [{
@@ -315,6 +315,49 @@ describe('incident monitor sources', () => {
       available: false,
       points: []
     }, endAt)).toBeNull()
+  })
+
+  // Why: the per-region cell latency bar is only correct if the tfvars region
+  // reaches the evaluator on every cell expectation.
+  it('carries the configured region onto every cell expectation', async () => {
+    const gcloud: GcloudClient = {
+      accessToken: async () => 'unused',
+      identityToken: async () => 'unused'
+    }
+    const selector = {
+      generation: 1,
+      membership: {
+        existingOnly: [],
+        migrationOnly: [],
+        general: productionCells
+      }
+    }
+    const fetchImpl: typeof fetch = async (_input, init) => {
+      const body = JSON.parse(String(init?.body)) as { cellId?: string; sourceCellId?: string }
+      if (!body.cellId && !body.sourceCellId) return Response.json({ selector })
+      if (body.cellId) {
+        return Response.json({
+          status: {
+            enabled: true,
+            connectionCapacity: { hardCap: 600 },
+            runtime: { lastHeartbeatAt: now - 1_000, heartbeatFresh: true }
+          }
+        })
+      }
+      return Response.json({
+        blocked: 0,
+        blockedExpiredUnregistered: 0,
+        registeredTargetInactive: 0
+      })
+    }
+    const result = await directorSignals('production', selector, gcloud, now, fetchImpl)
+    const regionById = new Map(result.cells.map((cell) => [cell.cellId, cell.region]))
+    expect(regionById.get('production-gce-c1')).toBe('us-central1')
+    expect(regionById.get('production-gce-c27')).toBe('asia-east2')
+    expect(result.cells).toHaveLength(productionCells.length)
+    for (const cell of RELAY_OPS_ENVIRONMENTS.production.cells) {
+      expect(regionById.get(cell.cellId)).toBe(cell.region)
+    }
   })
 
   it('aggregates admin state without returning tokens or response identities', async () => {

@@ -2,6 +2,7 @@ import { opendir } from 'node:fs/promises'
 import type { Dirent } from 'node:fs'
 import path from 'node:path'
 import type { WarpThemeImportSkippedFile } from '../../shared/terminal-custom-themes'
+import { sortDirectoryEntriesByName } from './directory-entry-order'
 
 export const MAX_THEME_FILES = 200
 const MAX_THEME_DIRECTORY_DEPTH = 3
@@ -42,17 +43,6 @@ type DirectoryScanState = {
 
 export function isYamlFile(filePath: string): boolean {
   return YAML_EXTENSIONS.has(path.extname(filePath).toLowerCase())
-}
-
-export function compareThemeFileLabels(
-  left: ThemeFileCandidate,
-  right: ThemeFileCandidate
-): number {
-  return left.label.localeCompare(right.label, undefined, { sensitivity: 'base' })
-}
-
-function compareDirentNames(left: Dirent<string>, right: Dirent<string>): number {
-  return left.name.localeCompare(right.name, undefined, { sensitivity: 'base' })
 }
 
 function isYamlFileEntry(entry: Dirent<string>): boolean {
@@ -141,10 +131,10 @@ async function collectYamlFilesFromDirectory(
     return
   }
 
-  const sortedEntries = entries.sort(compareDirentNames)
   if (previewBudgetExpiredWhileReading) {
     return
   }
+  const sortedEntries = sortDirectoryEntriesByName(entries)
   if (entryLimitHit && !budget.entryLimitReported) {
     skippedFiles.push({
       label: relativeDirectory || sourceLabel,

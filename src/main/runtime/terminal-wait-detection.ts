@@ -4,6 +4,11 @@ import {
   type AgentStatus
 } from '../../shared/agent-detection'
 import type { RuntimeTerminalWaitBlockedReason } from '../../shared/runtime-types'
+import {
+  isTerminalWaitWhitespace,
+  startOfLastLines,
+  startOfLastNonBlankLines
+} from './terminal-wait-tail-window'
 
 const EXPLICIT_IDLE_TITLE_RE = /(^|\s)(ready|idle|done)(\s|$|[.!?])/i
 const CLAUDE_IDLE_PREFIX = '\u2733'
@@ -153,11 +158,6 @@ function findAntigravityReadyPromptIndex(normalized: string): number | null {
   return modelIndex !== null && promptIndex !== null ? Math.max(modelIndex, promptIndex) : null
 }
 
-function isTerminalWaitWhitespace(value: string, index: number): boolean {
-  const code = value.charCodeAt(index)
-  return code === 32 || (code >= 9 && code <= 13)
-}
-
 export const TERMINAL_WAIT_BLOCKED_SENTINEL_RE =
   /update available|choose working directory to|codex just got an upgrade|hooks need review|do you trust|trust this|trusted workspace|press enter to (?:confirm|continue|view|insert)|press t to trust|permission required|requires permission|allow once|allow always|run this command\?/i
 
@@ -206,33 +206,36 @@ function isCursorApprovalChoiceLine(line: string): boolean {
   )
 }
 
-function startOfLastLines(value: string, count: number): number {
-  let cursor = value.length
-  for (let seen = 0; seen < count; seen += 1) {
-    const previous = value.lastIndexOf('\n', cursor - 1)
-    if (previous === -1) {
-      return 0
-    }
-    cursor = previous
-  }
-  return cursor + 1
-}
+// Why bounded: answered dialogs and quoted prompt wording (agents grep this file and its specs) stay in the
+// retained tail; only a dialog owning the screen bottom is live. Real Codex dialogs (trust, hooks review,
+// update, exec approval) are 4-8 lines; the slack covers a wrapped command or a longer hook list.
+const LIVE_PROMPT_TAIL_LINES = 12
 
 function findTerminalWaitBlockedSignal(
-  normalized: string
+  fullTail: string
 ): { reason: RuntimeTerminalWaitBlockedReason; index: number } | null {
-  // Why: one combined negative scan over the up-to-256 KiB tail avoids a dozen full-tail searches when no prompt can match.
+  const windowStart = startOfLastNonBlankLines(fullTail, LIVE_PROMPT_TAIL_LINES)
+  const normalized = windowStart === 0 ? fullTail : fullTail.slice(windowStart)
+  // Why: one combined negative scan avoids a dozen searches when no prompt can match.
   if (!TERMINAL_WAIT_BLOCKED_SENTINEL_RE.test(normalized)) {
     return null
   }
+  const signal = findBlockedSignalInLiveWindow(normalized)
+  // Why: callers compare this index against ready-header indexes found over the full tail.
+  return signal === null ? null : { reason: signal.reason, index: signal.index + windowStart }
+}
+
+function findBlockedSignalInLiveWindow(
+  normalized: string
+): { reason: RuntimeTerminalWaitBlockedReason; index: number } | null {
   const candidates: { reason: RuntimeTerminalWaitBlockedReason; index: number }[] = []
   const updateIndex = normalized.lastIndexOf('update available')
   if (updateIndex !== -1 && normalized.includes('press enter to continue', updateIndex)) {
-    candidates.push({ reason: 'codex-update-prompt', index: updateIndex })
+    candidates.push({ reason: 'agent-update-prompt', index: updateIndex })
   }
   const cwdIndex = normalized.lastIndexOf('choose working directory to')
   if (cwdIndex !== -1 && normalized.includes('press enter to continue', cwdIndex)) {
-    candidates.push({ reason: 'codex-cwd-prompt', index: cwdIndex })
+    candidates.push({ reason: 'agent-cwd-prompt', index: cwdIndex })
   }
   const modelMigrationIndex = normalized.lastIndexOf('codex just got an upgrade')
   if (
@@ -243,7 +246,8 @@ function findTerminalWaitBlockedSignal(
   }
   const hooksIndex = normalized.lastIndexOf('hooks need review')
   if (hooksIndex !== -1 && normalized.includes('press enter to confirm', hooksIndex)) {
-    candidates.push({ reason: 'codex-hooks-review-prompt', index: hooksIndex })
+    // Why neutral: this matcher never inspects the agent -- 'hooks need review' is not Codex-only wording.
+    candidates.push({ reason: 'agent-hooks-review-prompt', index: hooksIndex })
   }
   const trustIndex = Math.max(
     normalized.lastIndexOf('do you trust'),
@@ -258,7 +262,8 @@ function findTerminalWaitBlockedSignal(
       trustSegment.includes('directory') ||
       trustSegment.includes('repo'))
   ) {
-    candidates.push({ reason: 'codex-trust-workspace', index: trustIndex })
+    // Why neutral: this matcher never inspects the agent -- every TUI agent ships a workspace-trust dialog.
+    candidates.push({ reason: 'agent-trust-workspace', index: trustIndex })
   }
   const interactivePromptIndex = Math.max(
     normalized.lastIndexOf('press enter to confirm'),
@@ -271,19 +276,22 @@ function findTerminalWaitBlockedSignal(
     interactivePromptIndex === -1
       ? ''
       : normalized.slice(Math.max(0, interactivePromptIndex - 600), interactivePromptIndex + 200)
-  const hasCodexInteractiveContext =
+  // Why 'codex' only widens detection and never names the reason: the sole Codex evidence here is
+  // that word somewhere in 600 chars of scrollback, which an agent narrating about Codex satisfies
+  // on any pane -- enough to suspect a dialog, not enough to label a non-Codex user's pane.
+  const hasInteractiveDialogContext =
     interactivePromptContext.includes('codex') ||
     interactivePromptContext.includes('permission') ||
     interactivePromptContext.includes('sandbox') ||
     interactivePromptContext.includes('trust') ||
     interactivePromptContext.includes('hook')
-  if (interactivePromptIndex !== -1 && hasCodexInteractiveContext) {
+  if (interactivePromptIndex !== -1 && hasInteractiveDialogContext) {
     const contextStart = Math.max(0, interactivePromptIndex - 600)
     const hasSpecificPromptInContext = candidates.some(
       (candidate) => candidate.index >= contextStart && candidate.index <= interactivePromptIndex
     )
     if (!hasSpecificPromptInContext) {
-      candidates.push({ reason: 'codex-interactive-prompt', index: interactivePromptIndex })
+      candidates.push({ reason: 'agent-interactive-prompt', index: interactivePromptIndex })
     }
   }
   const cursorApprovalIndex = findCursorApprovalPromptIndex(normalized)
@@ -300,8 +308,13 @@ function findTerminalWaitBlockedSignal(
       permissionSegment.includes(choice)
     ).length
     if (decisionCount >= 2) {
-      // Why: preserve the existing remote receipt value for mixed-version clients.
-      candidates.push({ reason: 'codex-interactive-prompt', index: permissionPromptIndex })
+      // Why neutral: an approval dialog with named choices identifies no agent; older hosts publish
+      // 'codex-interactive-prompt' here and clients alias the two. Rule 1 additive member --
+      // remote-wire-compatibility.md names RuntimeTerminalWaitBlockedReason as Rule 1 because no
+      // consumer switches exhaustively on it.
+      // Why alias rather than drop the old spelling: preserve the existing remote receipt value for
+      // mixed-version clients -- an older host still publishes codex-* on this path.
+      candidates.push({ reason: 'agent-interactive-prompt', index: permissionPromptIndex })
     }
   }
   return candidates.length > 0

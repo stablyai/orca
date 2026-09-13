@@ -2,7 +2,9 @@ import { createAdaptorServer } from '@hono/node-server'
 import {
   hasAdmissionCapacity,
   HostDataAuthSchema,
+  parseRelayHostCapabilities,
   RELAY_ADMISSION_BUDGETS,
+  RELAY_HOST_CAPABILITIES_HEADER,
   RELAY_CLOSE_CODE,
   RELAY_DEFAULT_REGION,
   RELAY_PROTOCOL_LIMITS,
@@ -18,18 +20,26 @@ import { createRelayApp } from './app.js'
 import { RelayAssignmentStore } from './assignment-store.js'
 import type { RelayConfig } from './config.js'
 import { RelayCredentialStore } from './credential-store.js'
-import type { RelayDatabase } from './database.js'
+import { readRelayDatabasePoolPressure, type RelayDatabase } from './database.js'
 import { HostSessionRegistry } from './host-session-registry.js'
 import { observeRelayDatabase } from './observed-relay-database.js'
 import { RelayObservability } from './relay-observability.js'
-import {
-  RelayConnectionLedger,
-  type RelayConnectionUpgrade
-} from './relay-connection-ledger.js'
+import { combineRegionalRehomeSafety } from './regional-rehome-safety.js'
+import { RelayConnectionLedger, type RelayConnectionUpgrade } from './relay-connection-ledger.js'
 import { createRelayReadiness } from './relay-readiness.js'
 import { createRelayTokenVerifier, readBearer } from './relay-token-verifier.js'
 import { closeRelayWebSocket } from './relay-websocket-close.js'
 import { ProcessQueuedByteBudget } from './splice-forwarder.js'
+
+// A malformed percent-escape in the request target must be a client error, never a URIError
+// thrown out of the `upgrade` listener (which is uncaught and kills the process).
+function decodePathSegment(value: string): string | null {
+  try {
+    return decodeURIComponent(value)
+  } catch {
+    return null
+  }
+}
 
 function rejectUpgrade(socket: NodeJS.WritableStream, status: number, message: string): void {
   socket.write(`HTTP/1.1 ${status} ${message}\r\nConnection: close\r\nContent-Length: 0\r\n\r\n`)
@@ -53,7 +63,7 @@ function guardSocketErrors(socket: WebSocket, kind: string): void {
 
 function admissionSource(request: IncomingMessage): string {
   const forwarded = request.headers['x-forwarded-for']
-  const chain = (Array.isArray(forwarded) ? forwarded.join(',') : forwarded ?? '')
+  const chain = (Array.isArray(forwarded) ? forwarded.join(',') : (forwarded ?? ''))
     .split(',')
     .map((entry) => entry.trim())
     .filter(Boolean)
@@ -78,6 +88,7 @@ export function createRelayServer(
   database: RelayDatabase,
   options: {
     now?: () => number
+    random?: () => number
     connectionLedgerLimits?: { hardCap: number; controlReserve: number }
     cellIncarnation?: string
   } = {}
@@ -99,6 +110,7 @@ export function createRelayServer(
   const store = new RelayCredentialStore(observedDatabase, options.now)
   const assignments = new RelayAssignmentStore(observedDatabase, options.now, {
     requireLiveCells: config.role === 'director',
+    regionalRehomeCohortPercent: config.regionCorrectionCohortPercent ?? 0,
     recordControlRenewal: (durationMs, outcome) =>
       observability.recordControlRenewal?.(durationMs, outcome)
   })
@@ -113,17 +125,36 @@ export function createRelayServer(
     assignments,
     queuedBytes,
     observability,
-    options.now
+    options.now,
+    options.random,
+    cellIncarnation
   )
   const app = createRelayApp(config, {
     store,
     assignments,
     drain: (graceMs) => sessions.drain(graceMs),
     drainHost: (input) => sessions.drainHost(input),
+    idleRehome: (input) => {
+      const now = (options.now ?? Date.now)()
+      if (input.directorSafety.observedAt > now || now - input.directorSafety.observedAt > 60_000) {
+        return Promise.resolve({ outcome: 'deferred' })
+      }
+      return sessions.idleRehome(input,
+        () => assignments.commitIdleRegionalRehome(input, combineRegionalRehomeSafety(
+          input.directorSafety,
+          { ...observability.regionalRehomeRuntimeSafety(), ...readRelayDatabasePoolPressure(database) }
+        ), input.cohortPercent),
+        () => assignments.reconcileIdleRegionalRehome(input)
+      )
+    },
     regionalRehomeTrustProbeHostExists: (input) => sessions.get(input) !== null,
     cellIncarnation,
     isDraining: () => sessions.isDraining(),
     runtimeCounts: () => runtimeCounts(),
+    regionalRehomeSafetySnapshot: () => ({
+      ...observability.regionalRehomeRuntimeSafety(),
+      ...readRelayDatabasePoolPressure(database)
+    }),
     ready,
     recordAssignmentAdmission: (outcome) => observability.recordAssignmentAdmission?.(outcome),
     recordAssignmentRejectionReason: (lane, reason) =>
@@ -278,8 +309,8 @@ export function createRelayServer(
       return
     }
     if (url.pathname.startsWith('/v1/connect/')) {
-      const hostId = decodeURIComponent(url.pathname.slice('/v1/connect/'.length))
-      if (!/^[A-Za-z0-9_-]{16}$/.test(hostId)) {
+      const hostId = decodePathSegment(url.pathname.slice('/v1/connect/'.length))
+      if (hostId === null || !/^[A-Za-z0-9_-]{16}$/.test(hostId)) {
         rejectUpgrade(socket, 429, 'Too Many Requests')
         return
       }
@@ -325,7 +356,7 @@ export function createRelayServer(
               const identity = invite ? { userId: invite.userId, relayHostId: hostId } : null
               // Released combined-service invites gain their first durable cell assignment here.
               const assignment = identity
-                ? (await assignments.resolve(identity)) ?? (await assignments.assign(identity))
+                ? ((await assignments.resolve(identity)) ?? (await assignments.assign(identity)))
                 : null
               if (!invite || !assignment) {
                 phoneAdmission?.hostData.release()
@@ -373,7 +404,7 @@ export function createRelayServer(
         rejectUpgrade(socket, 404, 'Not Found')
         return
       }
-      const connId = decodeURIComponent(url.pathname.slice('/v1/host/data/'.length))
+      const connId = decodePathSegment(url.pathname.slice('/v1/host/data/'.length))
       if (!connId || connId.length > 128) {
         rejectUpgrade(socket, 429, 'Too Many Requests')
         return
@@ -474,7 +505,8 @@ export function createRelayServer(
           sessions.acceptControl(
             webSocket,
             identity,
-            controlUpgrade?.inclusionWatermark
+            controlUpgrade?.inclusionWatermark,
+            parseRelayHostCapabilities(request.headers[RELAY_HOST_CAPABILITIES_HEADER])
           )
         })
       } catch {

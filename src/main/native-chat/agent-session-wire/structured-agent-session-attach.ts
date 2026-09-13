@@ -5,13 +5,17 @@
 // the record store's compare-and-swap, which also owns the idempotency row, so
 // a retried attach replays instead of reserving a second owner.
 
-import type { AgentType } from '../../../shared/agent-status-types'
 import type {
   AgentSessionJournalIdentity,
   AgentSessionProviderHandle
 } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionOwnerProbe } from '../../../shared/agent-session-lease-adjudication'
-import type { AgentSessionHandleProvider } from '../../../shared/agent-session-provider-handle'
+import type {
+  AgentSessionHandleProvider,
+  AgentSessionProviderHandleLink
+} from '../../../shared/agent-session-provider-handle'
+import { claudeProviderHandleLink } from '../../claude/claude-structured-owner-identity'
+import { codexProviderHandleLink } from '../../codex/codex-structured-owner-identity'
 import type {
   AgentSessionAccountHome,
   AgentSessionExecutionLocation,
@@ -32,6 +36,7 @@ import {
 } from '../../../shared/agent-session-mutation-envelope'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import { agentSessionProviderHandleChainHead } from '../../../shared/agent-session-provider-handle'
+import { agentSessionJournalCloseRetries } from '../agent-session-journal/journal-close-retry'
 import { journalDirectoryFor } from '../agent-session-journal/journal-paths'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import {
@@ -51,11 +56,27 @@ export type AgentSessionAttachParams = {
   envelope: AgentSessionMutationEnvelope
   location: AgentSessionExecutionLocation
   provider: AgentSessionHandleProvider
-  agent: AgentType
+  agent: AgentSessionHandleProvider
   accountHome: AgentSessionAccountHome
   runtimeKind: AgentSessionOwnerRuntimeKind
+  /** Host-resolved defaults for a create-by-intent; remote attach schemas do not accept them. */
+  options?: Readonly<Record<string, string>>
+  launchArgs?: string[]
   /** Omitted only for create-by-intent; the adapter proves the durable handle. */
   providerHandle?: Exclude<AgentSessionProviderHandle, { kind: 'opaque' }>
+  /**
+   * Host-resolved only. Present when this create adopts an existing provider conversation rather
+   * than starting one: it seeds the handle chain so the adapter resumes instead of creating, and
+   * names the transcript to import so the journal shows the conversation so far.
+   *
+   * Deliberately separate from `providerHandle`, which `agentSession.ensure` already supplies
+   * without adopting — presence of a handle must never be what triggers a resume.
+   */
+  adopt?: {
+    providerHandle: Exclude<AgentSessionProviderHandle, { kind: 'opaque' }>
+    /** Omitted only when the exact committed operation replays an already-imported journal. */
+    transcriptPath?: string
+  }
 }
 
 /** Host-supplied half of the reservation. */
@@ -70,7 +91,10 @@ export type AgentSessionAttachAuthority = {
 
 /** The fields that define WHICH session this call would attach to. Deliberately
  *  excludes the spawn token and the probe: those differ between a first attempt
- *  and its retry, and a retry must replay rather than conflict. */
+ *  and its retry, and a retry must replay rather than conflict. `options` is
+ *  excluded for the same reason — it is the session's initial state, not its
+ *  identity, and the host re-resolves it from settings the user may have changed
+ *  between an unknown-outcome attempt and its retry. */
 export function attachFingerprintFields(params: AgentSessionAttachParams): Record<string, unknown> {
   return {
     location: params.location,
@@ -79,6 +103,10 @@ export function attachFingerprintFields(params: AgentSessionAttachParams): Recor
     accountHome: params.accountHome,
     runtimeKind: params.runtimeKind,
     providerHandle: params.providerHandle,
+    // Which conversation this attaches to, so an adopting create and a blank one never share an
+    // identity. The transcript path is excluded: it is where the host found that conversation this
+    // time, not part of what the caller asked for.
+    adoptedProviderHandle: params.adopt?.providerHandle,
     expectedRuntimeFence: params.envelope.expectedRuntimeFence
   }
 }
@@ -162,10 +190,51 @@ export async function attachJournal(input: {
     fence,
     historyFilePath
   })
-  return {
-    ...opened,
-    unconfirmedClientMessageIds: await opened.journal.markPendingSubmissionsUnknown(fence)
+  try {
+    // That await is a WRITE. A failure in it leaves the journal with no caller
+    // holding a reference to close it.
+    return {
+      ...opened,
+      unconfirmedClientMessageIds: await opened.journal.markPendingSubmissionsUnknown(fence)
+    }
+  } catch (error) {
+    // A rejected close leaves the handle open, so the journal is retained for a
+    // later retry rather than dropped along with the only reference to it.
+    await agentSessionJournalCloseRetries.closeOrRetain(opened.journal)
+    throw error
   }
+}
+
+/**
+ * The first link of an adopting session's chain.
+ *
+ * `adopted` is the only origin besides `created` a chain will accept at its head, and it is the
+ * honest one here: this session did not create the conversation. The adapter appends its own
+ * `resumed` link once the provider proves the same identity root — or, when it proves the identical
+ * handle at the same fence, the validator elides that as a retry and this link stays the head.
+ */
+const ADOPTED_HANDLE_FENCE = 1
+
+function adoptedProviderHandleLink(
+  handle: Exclude<AgentSessionProviderHandle, { kind: 'opaque' }>,
+  observedAt: number
+): AgentSessionProviderHandleLink {
+  return handle.kind === 'claude'
+    ? claudeProviderHandleLink({
+        sessionId: handle.sessionId,
+        leafUuid: handle.leafUuid,
+        resumed: false,
+        origin: 'adopted',
+        fence: ADOPTED_HANDLE_FENCE,
+        observedAt
+      })
+    : codexProviderHandleLink({
+        threadId: handle.threadId,
+        resumed: false,
+        origin: 'adopted',
+        fence: ADOPTED_HANDLE_FENCE,
+        observedAt
+      })
 }
 
 export function reserveRequestFor(input: {
@@ -182,9 +251,17 @@ export function reserveRequestFor(input: {
     location: params.location,
     provider: params.provider,
     accountHome: params.accountHome,
+    ...(params.options ? { options: params.options } : {}),
     ...(authority.launchArgs ? { launchArgs: authority.launchArgs } : {}),
     ...(authority.launchEnv ? { launchEnv: authority.launchEnv } : {}),
     runtimeKind: params.runtimeKind,
+    ...(params.adopt
+      ? {
+          // Fence 1 is a new record's first, and the owner probe requires the head link to carry
+          // the record's current fence.
+          adoptedHandleLink: adoptedProviderHandleLink(params.adopt.providerHandle, input.now)
+        }
+      : {}),
     expectedFence: params.envelope.expectedRuntimeFence,
     spawnToken: authority.spawnToken,
     claimKeyId: authority.claimKeyId,

@@ -23,13 +23,19 @@ import {
 import type { AutomationListRow } from './automation-list-row-identity'
 import type { AutomationPaneTab } from './automation-page-state'
 import { AutomationListFilterPills } from './AutomationListFilterMenu'
-import { isAutomationListFilterActive, type AutomationListFilter } from './automation-list-view'
+import {
+  isAutomationListFilterActive,
+  type AutomationListFilter,
+  type AutomationListSort,
+  type AutomationListSortField,
+  type AutomationListViewItem
+} from './automation-list-view'
 import { automationHostFilterStableKey } from '../../../../shared/automation-host-filter'
 import type { AutomationTemplate } from './automation-templates'
 import type { ExternalAutomationListEntry } from './external-automation-list-entries'
 import type { ExternalAutomationScope } from './external-automation-scope-client'
-import { AutomationListLocalRows } from './AutomationListLocalRows'
-import { AutomationListExternalRows } from './AutomationListExternalRows'
+import { AutomationListLocalRow } from './AutomationListLocalRow'
+import { AutomationListExternalRow } from './AutomationListExternalRow'
 import { AutomationHostFilterNotice, AutomationHostLoadSummary } from './AutomationHostFilterNotice'
 import { AutomationListEmptyView } from './AutomationListEmptyView'
 import { resolveAutomationListEmptyState } from './automation-list-empty-state'
@@ -63,8 +69,10 @@ type AutomationsListPanelProps = {
     action: AutomationHostRecoveryAction,
     entry?: AutomationHostCatalogEntry | null
   ) => void
-  filteredRows: readonly AutomationListRow[]
-  filteredExternalAutomationEntries: readonly ExternalAutomationListEntry[]
+  /** Both collections as one list in render order; the sort spans local and external rows. */
+  sortedListItems: readonly AutomationListViewItem[]
+  listSort: AutomationListSort | null
+  onListSortChange: (field: AutomationListSortField) => void
   selectedRowKey: string | null
   selectedExternalKey: string | null
   selectedExternal?: ExternalAutomationListEntry | null
@@ -124,8 +132,9 @@ export function AutomationsListPanel(props: AutomationsListPanelProps): React.JS
     externalManagersUncheckedNotice,
     onSelectHost,
     onRecoverHost,
-    filteredRows,
-    filteredExternalAutomationEntries,
+    sortedListItems,
+    listSort,
+    onListSortChange,
     selectedRowKey,
     selectedExternalKey,
     relativeNow,
@@ -161,18 +170,20 @@ export function AutomationsListPanel(props: AutomationsListPanelProps): React.JS
   // Hosts moved into the Filters menu, so its toolbar row is the focus fallback now.
   const toolbarRef = useRef<HTMLDivElement>(null)
   const pendingKeyboardScrollRef = useRef(false)
-  const rowKeys = React.useMemo(() => filteredRows.map((row) => row.key), [filteredRows])
-  const visibleItems = React.useMemo(
-    () => [
-      ...filteredRows.map((row) => ({ kind: 'local' as const, id: row.key })),
-      ...filteredExternalAutomationEntries.map((entry) => ({
-        kind: 'external' as const,
-        id: entry.key
-      }))
-    ],
-    [filteredExternalAutomationEntries, filteredRows]
+  // Why: keyboard traversal and focus recovery read render order, which the sort owns.
+  const rowKeys = React.useMemo(
+    () => sortedListItems.filter((item) => item.kind === 'local').map((item) => item.id),
+    [sortedListItems]
   )
-  useAutomationListFocusRecovery({ rowKeys, containerRef: listRef, fallbackRef: toolbarRef })
+  const visibleItems = React.useMemo(
+    () => sortedListItems.map((item) => ({ kind: item.kind, id: item.id })),
+    [sortedListItems]
+  )
+  useAutomationListFocusRecovery({
+    rowKeys,
+    containerRef: listRef,
+    fallbackRef: toolbarRef
+  })
   const handleSearchArrowNavigate = React.useCallback(
     (key: AutomationListArrowKey) => {
       const next = getAutomationListArrowNavigationTarget({
@@ -331,24 +342,30 @@ export function AutomationsListPanel(props: AutomationsListPanelProps): React.JS
       >
         {hasFilteredListItems ? (
           <div className="min-w-full w-fit">
-            <AutomationListTableHeader />
+            <AutomationListTableHeader sort={listSort} onSort={onListSortChange} />
             <div className="divide-y divide-border/50">
-              <AutomationListLocalRows {...rowProps} rows={filteredRows} />
-              <AutomationListExternalRows
-                entries={filteredExternalAutomationEntries}
-                selectedExternalKey={selectedExternalKey}
-                relativeNow={relativeNow}
-                sshConnectionStates={sshConnectionStates}
-                externalActionKey={externalActionKey}
-                onSelect={(entryKey) => {
-                  selectAutomationRow(null)
-                  selectExternalKey(entryKey)
-                  setActivePaneTab('overview')
-                  onOpenDetail()
-                }}
-                onRequestAction={requestExternalAction}
-                onEdit={openEditExternalDialog}
-              />
+              {sortedListItems.map((item) =>
+                item.kind === 'local' ? (
+                  <AutomationListLocalRow key={item.id} {...rowProps} row={item.row} />
+                ) : (
+                  <AutomationListExternalRow
+                    key={item.id}
+                    entry={item.entry}
+                    selectedExternalKey={selectedExternalKey}
+                    relativeNow={relativeNow}
+                    sshConnectionStates={sshConnectionStates}
+                    externalActionKey={externalActionKey}
+                    onSelect={(entryKey) => {
+                      selectAutomationRow(null)
+                      selectExternalKey(entryKey)
+                      setActivePaneTab('overview')
+                      onOpenDetail()
+                    }}
+                    onRequestAction={requestExternalAction}
+                    onEdit={openEditExternalDialog}
+                  />
+                )
+              )}
             </div>
           </div>
         ) : (

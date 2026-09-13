@@ -44,7 +44,8 @@ function queries(
     listResolved: async () => [],
     resolveRepo: async () => repo,
     selectRepos: () => [repo],
-    scanRepo: async () => ({ ok, worktrees: [...worktrees] })
+    scanRepo: async () => ({ ok, worktrees: [...worktrees] }),
+    listKnownHostIds: () => []
   })
 }
 

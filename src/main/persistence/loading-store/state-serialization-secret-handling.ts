@@ -8,6 +8,7 @@ import {
 } from '../../protected-secret-persistence'
 import { stripRetiredGlobalSettings } from '../applying-settings/terminal-settings-migrations'
 import { omitDefaultWorktreeMetaFieldsInMap } from '../../../shared/worktree/meta-persisted-defaults'
+import { projectWorktreeMetaByIdentityOntoLocators } from './worktree-meta-alias-projection'
 import { withoutRedundantPartitionGlobals } from '../../../shared/workspace-session-host-field-ownership'
 
 import {
@@ -68,16 +69,28 @@ export class StateSerializationSecretHandlingOperations {
       const encrypted = encryptToSentinel(slot, plaintext ?? '')
       return encrypted || null
     }
+    // Ordered before the default omission on purpose: the two maps hold the SAME row object, so
+    // the projection settles almost every row on a reference check. Omitting first rebuilds each
+    // row twice into two distinct objects and forces a deep compare per row instead. Omission is
+    // a pure function of the value, so a pair equal here is equal after it too -- and it never
+    // touches `hostId`/`instanceId`, which is what the reader re-derives the omitted key from.
+    const projectedWorktreeMetaByIdentity =
+      this.runtime.state.worktreeMetaByIdentity === undefined
+        ? undefined
+        : projectWorktreeMetaByIdentityOntoLocators(
+            this.runtime.state.worktreeMetaByIdentity,
+            this.runtime.state
+          )
     // Why: clone before encrypting secrets so in-memory this.state stays plaintext.
     const stateToSave = {
       ...this.getDurableState(),
       // Default-valued metadata slots are re-filled at load (normalizeWorktreeLinkedItemMetadata),
       // so omitting them here is lossless and drops ~12% of the file on a heavy install.
       worktreeMeta: omitDefaultWorktreeMetaFieldsInMap(this.runtime.state.worktreeMeta),
-      ...(this.runtime.state.worktreeMetaByIdentity !== undefined
+      ...(projectedWorktreeMetaByIdentity !== undefined
         ? {
             worktreeMetaByIdentity: omitDefaultWorktreeMetaFieldsInMap(
-              this.runtime.state.worktreeMetaByIdentity
+              projectedWorktreeMetaByIdentity
             )
           }
         : {}),

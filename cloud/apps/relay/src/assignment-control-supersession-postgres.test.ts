@@ -38,6 +38,10 @@ describePostgres('PostgreSQL control supersession', () => {
         [identity.userId]
       )
       await database.query(`DELETE FROM relay_assignments WHERE user_id = ?`, [identity.userId])
+      // A snapshot left by an aborted run rejects the replayed watermark with stale_connection_snapshot.
+      await database.query(`DELETE FROM relay_cell_connection_snapshots WHERE cell_id = ?`, [
+        cell.id
+      ])
       await database.query(`DELETE FROM relay_cell_connection_runtime WHERE cell_id = ?`, [cell.id])
       await database.query(`DELETE FROM relay_cell_connection_limits WHERE cell_id = ?`, [cell.id])
       await database.query(`DELETE FROM relay_cell_runtime WHERE cell_id = ?`, [cell.id])

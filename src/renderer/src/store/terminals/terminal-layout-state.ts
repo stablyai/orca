@@ -43,15 +43,20 @@ export function createTerminalLayoutActions(
         }
       })
     },
+    // Why: pane mount/unmount re-asserts the same booleans; bailing like setTabLayout keeps map subscribers asleep.
     setTabPaneExpanded: (tabId, expanded) => {
-      set((s) => ({
-        expandedPaneByTabId: { ...s.expandedPaneByTabId, [tabId]: expanded }
-      }))
+      set((s) =>
+        s.expandedPaneByTabId[tabId] === expanded
+          ? s
+          : { expandedPaneByTabId: { ...s.expandedPaneByTabId, [tabId]: expanded } }
+      )
     },
     setTabCanExpandPane: (tabId, canExpand) => {
-      set((s) => ({
-        canExpandPaneByTabId: { ...s.canExpandPaneByTabId, [tabId]: canExpand }
-      }))
+      set((s) =>
+        s.canExpandPaneByTabId[tabId] === canExpand
+          ? s
+          : { canExpandPaneByTabId: { ...s.canExpandPaneByTabId, [tabId]: canExpand } }
+      )
     },
     setTabLayout: (tabId, layout) => {
       let ownershipTransfers: ReturnType<typeof resolveTerminalLayoutPtyOwnershipTransfers> = []

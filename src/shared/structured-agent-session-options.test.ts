@@ -49,8 +49,12 @@ describe('structured agent session options', () => {
       models: CODEX_SESSION_OPTION_CATALOG.models,
       record: bridgeRecord,
       mode: 'live',
-      modelLabel: 'Model'
+      modelLabel: 'Model',
+      liveTransport: 'catalog'
     })
+    // Same catalog, same `dispatched` vocabulary — only the transport separates them.
+    expect(structured.every((descriptor) => descriptor.transport === 'agent-session')).toBe(true)
+    expect(bridge.every((descriptor) => descriptor.transport === 'catalog')).toBe(true)
     expect(bridge[0]).toMatchObject({ action: { type: 'agent-picker' } })
     expect(bridge.find((descriptor) => descriptor.id === 'effort')).toMatchObject({
       action: { type: 'agent-picker' }

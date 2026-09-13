@@ -7,12 +7,9 @@ import { withLocalGitCapabilityCacheForExecution } from './git-capability-state'
 import { withRepoRefMaintenancePaused } from './local-repo-ref-maintenance'
 import { gitExecFileAsync } from './runner'
 import { parseWorktreeList } from '../../shared/git-worktree-porcelain-parser'
+import { isBranchCheckedOutInWorktreeError } from '../../shared/git-branch-delete-refusal'
 import type { GitWorktreeExecOptions, RemoveWorktreeOptions } from './worktree-operation-options'
-import {
-  gitExecOptions,
-  isBranchCheckedOutInWorktreeError,
-  normalizeLocalBranchRef
-} from './worktree-operation-options'
+import { gitExecOptions, normalizeLocalBranchRef } from './worktree-operation-options'
 
 export async function deleteBranchAfterWorktreeRemoval(
   repoPath: string,

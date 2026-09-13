@@ -2,13 +2,17 @@
  * Deciding whether a relay socket path is ours to take, and acting on the answer.
  *
  * The only destructive action available here is a SIGTERM to a relay that has been proven —
- * by argv, by socket-holder enumeration, and by a zero child count re-checked on the host
- * immediately before the signal — to hold nothing at all. Everything else is left running.
+ * by argv, by socket-holder enumeration, and by a child census re-run on the host immediately
+ * before the signal — to hold nothing at all. Everything else is left running.
  * Per docs/reference/ssh-execution-boundary.md, a relay we merely failed to reach is
  * `unverifiable`, and `unverifiable` never authorizes a kill or a rebind.
  */
 import type { SshConnection } from './ssh-connection'
 import { shellEscape } from './ssh-connection-utils'
+import {
+  RELAY_UNRECOGNIZED_CHILD_COUNT_VAR,
+  relayDaemonChildCensusShell
+} from './relay-daemon-service-children'
 import { execCommand, isUnconfirmedSshCommandTermination } from './ssh-relay-deploy-helpers'
 import {
   describeRelayEndpointIncumbent,
@@ -16,10 +20,12 @@ import {
   mayLaunchOverRelayEndpoint,
   probeRelayEndpointIncumbent,
   RelayEndpointHeldError,
+  RelayEndpointUnresponsiveError,
   withHandshakeRefusalEvidence,
   type RelayEndpointIncumbent
 } from './ssh-relay-endpoint-incumbent'
 import { isRelayVersionMismatchError } from './ssh-relay-version-mismatch-error'
+import { isRelayCredentialMismatchError } from './ssh-relay-credential-mismatch-error'
 import type { RemoteHostPlatform } from './ssh-remote-platform'
 
 /** `reaped` is only reachable from a post-signal `kill -0` that failed. Nothing else claims it. */
@@ -39,9 +45,10 @@ export function reapEmptyRelayHuskCommand(pid: number, sockPath: string): string
     `sock=${shellEscape(sockPath)}`,
     'args=$(ps -o args= -p "$pid" 2>/dev/null | tr "\\n" " ")',
     'case "$args" in *relay.js*"$sock"*) ;; *) printf \'MISMATCH\\n\'; exit 0 ;; esac',
-    "command -v pgrep >/dev/null 2>&1 || { printf 'BUSY\\n'; exit 0; }",
-    'kids=$(pgrep -P "$pid" 2>/dev/null | grep -c .)',
-    '[ "$kids" = "0" ] || { printf \'BUSY\\n\'; exit 0; }',
+    // Why the same census as the probe: `unknown` (no pgrep) and any child this host could
+    // not account for as a relay service both land on BUSY, so nothing is signalled.
+    ...relayDaemonChildCensusShell(),
+    `[ "$${RELAY_UNRECOGNIZED_CHILD_COUNT_VAR}" = "0" ] || { printf 'BUSY\\n'; exit 0; }`,
     // SIGTERM only: the relay's own handler disposes and unlinks. SIGKILL would leave the
     // socket inode behind and skip that shutdown path for no gain on an empty daemon.
     'kill -TERM "$pid" 2>/dev/null || true',
@@ -94,8 +101,10 @@ export async function reapEmptyRelayHusk(
 
 /**
  * Called when `--connect` to an existing socket failed and the caller is about to launch a
- * replacement at the same path. Resolves to nothing when the launch may proceed; throws
- * `RelayEndpointHeldError` when a live relay owns the path and holds work.
+ * replacement at the same path. Resolves when the launch may proceed; throws
+ * `RelayEndpointHeldError` when a live relay refused us and holds work, and
+ * `RelayEndpointUnresponsiveError` when a live relay holds work but never answered — the
+ * second is retryable, because silence is not a decision.
  *
  * `unverifiable` deliberately permits the launch: the daemon, not the client, performs the
  * takeover. `RelaySocketOwnership.listen` re-probes on EADDRINUSE, refuses a path that accepts
@@ -113,20 +122,25 @@ export async function resolveRelayEndpointBeforeRelaunch(
   const probed = await probeRelayEndpointIncumbent(conn, hostPlatform, nodePath, sockPath, options)
   // A daemon that answered the handshake with its own version is live by positive host
   // evidence, even where nothing can enumerate socket holders.
-  const incumbent = isRelayVersionMismatchError(reconnectError)
-    ? withHandshakeRefusalEvidence(probed)
-    : probed
+  // A refused credential is the same positive evidence: the daemon answered.
+  const refused =
+    isRelayVersionMismatchError(reconnectError) || isRelayCredentialMismatchError(reconnectError)
+  const incumbent = refused ? withHandshakeRefusalEvidence(probed) : probed
   console.warn(`[ssh-relay] Relay endpoint incumbent: ${describeRelayEndpointIncumbent(incumbent)}`)
 
   if (mayLaunchOverRelayEndpoint(incumbent)) {
     return incumbent
   }
   if (!isReapableRelayHusk(incumbent)) {
-    throw new RelayEndpointHeldError(incumbent)
+    throw refused
+      ? new RelayEndpointHeldError(incumbent)
+      : new RelayEndpointUnresponsiveError(incumbent)
   }
   const result = await reapEmptyRelayHusk(conn, incumbent, options)
   if (result !== 'reaped') {
-    throw new RelayEndpointHeldError(incumbent)
+    throw refused
+      ? new RelayEndpointHeldError(incumbent)
+      : new RelayEndpointUnresponsiveError(incumbent)
   }
   console.log(`[ssh-relay] Reaped empty relay husk holding ${sockPath}`)
   return incumbent

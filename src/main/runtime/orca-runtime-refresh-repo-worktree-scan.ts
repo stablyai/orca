@@ -153,6 +153,11 @@ export class OrcaRuntimeWithRefreshRepoWorktreeScan extends OrcaRuntimeWithListK
     }
   }
 
+  invalidateWorktreeCatalog(repoId: string): void {
+    this.invalidateResolvedWorktreeCache()
+    this.invalidateWorktreeScanCacheForRepo(repoId)
+  }
+
   protected invalidateSshWorktreeScanCacheInternal(targetId: string): void {
     const repos = this.store?.getRepos() ?? []
     const affectedRepos = repos.filter((repo) => getRepoSshConnectionId(repo) === targetId)

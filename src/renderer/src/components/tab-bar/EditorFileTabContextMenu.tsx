@@ -32,11 +32,22 @@ const isMac = navigator.userAgent.includes('Mac')
 const isLinux = navigator.userAgent.includes('Linux')
 
 /** Platform-appropriate label: macOS → Finder, Windows → File Explorer, Linux → Files */
-const revealLabel = isMac
-  ? 'Reveal in Finder'
-  : isLinux
-    ? 'Open Containing Folder'
-    : 'Reveal in File Explorer'
+function getRevealLabel(): string {
+  return isMac
+    ? translate(
+        'auto.components.tab.bar.EditorFileTabContextMenu.revealInFinder',
+        'Reveal in Finder'
+      )
+    : isLinux
+      ? translate(
+          'auto.components.tab.bar.EditorFileTabContextMenu.openContainingFolder',
+          'Open Containing Folder'
+        )
+      : translate(
+          'auto.components.tab.bar.EditorFileTabContextMenu.revealInFileExplorer',
+          'Reveal in File Explorer'
+        )
+}
 
 type EditorFileTabContextMenuProps = {
   open: boolean
@@ -126,6 +137,10 @@ export function EditorFileTabContextMenu({
           }
           skipMenuFocusRestoreRef.current = false
           event.preventDefault()
+          // Why: opening the input in onSelect lets the still-closing menu reclaim
+          // focus, and the resulting blur commits the rename away before the user types.
+          onActivate()
+          onOpenRenameInput()
         }}
       >
         <TabWorkspaceLayoutMenuSection
@@ -137,8 +152,6 @@ export function EditorFileTabContextMenu({
           disabled={!canRename || isRenaming}
           onSelect={() => {
             skipMenuFocusRestoreRef.current = true
-            onActivate()
-            onOpenRenameInput()
           }}
         >
           <Pencil className="size-3.5" />
@@ -249,7 +262,7 @@ export function EditorFileTabContextMenu({
           }}
         >
           <ExternalLink className="size-3.5" />
-          {revealLabel}
+          {getRevealLabel()}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

@@ -18,7 +18,7 @@ type SshTargetSummaryRow = { id: string; label: string }
 async function requestResult(client: RpcClient, method: string): Promise<unknown> {
   try {
     const response = await client.sendRequest(method)
-    return response.ok ? (response as RpcSuccess).result : null
+    return response.ok ? response.result : null
   } catch {
     // Best-effort: hosts that predate a method still list repos; labels degrade to host ids.
     return null

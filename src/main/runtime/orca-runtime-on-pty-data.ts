@@ -211,7 +211,6 @@ export class OrcaRuntimeWithOnPtyData extends OrcaRuntimeWithPreparePtyExecution
     }
     titleTrackerEntry.applyingChunk = true
     titleTrackerEntry.chunkTouchedSessionTabs = false
-    let retainedAgentStatusChanged = false
     try {
       for (const payload of agentStatusChunk.payloads) {
         titleTrackerEntry.pendingFacts.push({ kind: 'agent-status', payload })
@@ -230,7 +229,7 @@ export class OrcaRuntimeWithOnPtyData extends OrcaRuntimeWithPreparePtyExecution
         // Why: per-chunk cross-channel contract order is status → titles →
         // bell — the chunk's agentStatus:set events must reach the renderer
         // before its pty:sideEffect batch.
-        retainedAgentStatusChanged = this.emitTerminalAgentStatusEvents(ptyId, agentStatusChunk)
+        this.emitTerminalAgentStatusEvents(ptyId, agentStatusChunk)
         const lastPayloadTitleOffset =
           agentStatusChunk.lastPayloadCleanOffset === null
             ? null
@@ -242,10 +241,10 @@ export class OrcaRuntimeWithOnPtyData extends OrcaRuntimeWithPreparePtyExecution
         this.flushPendingTerminalSideEffectFacts(ptyId, titleTrackerEntry)
       }
     }
-    // Why: hook (OSC 9999) transitions often arrive without a title change, so
-    // headless-serve snapshots would never republish and paired remote clients
-    // kept the stale agent state until the next title change (#7970).
-    if (titleTrackerEntry.chunkTouchedSessionTabs || retainedAgentStatusChanged) {
+    // Why only the title arm here: an OSC 9999 transition republishes off the store's own
+    // change signal (installHookStatusSessionTabsRepublish), which sees hook and OSC rows
+    // alike — a second per-chunk republish would only re-emit the same snapshot version.
+    if (titleTrackerEntry.chunkTouchedSessionTabs) {
       this.touchMobileSessionSnapshotsForPty(ptyId)
     }
 

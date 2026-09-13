@@ -1,4 +1,5 @@
 import { getAppEnvironment, hasAppEnvironment } from '../shared/app-environment'
+import { recordCoalescedDurableCrashBreadcrumb } from './crash-reporting/durable-crash-breadcrumb'
 
 /**
  * PIDs of Orca's own Chromium processes — browser, renderers, GPU, utilities.
@@ -10,6 +11,20 @@ import { getAppEnvironment, hasAppEnvironment } from '../shared/app-environment'
  *
  * Empty on a Node host and empty on failure: that is "no refusal proven", never
  * "safe to kill" — callers must keep every other guard they already have.
+ *
+ * The other direction is real too, and bounded by design: `getAppMetrics()` can
+ * still list a renderer Electron has not finished reaping, so on Windows a pid
+ * already recycled onto an unrelated child of ours reads as `own` and its tree
+ * walk is refused. That is why a refusal only blocks the pid-addressed walk and
+ * every gated site still kills its own root through the child handle.
+ *
+ * Why failure stays open rather than refusing everything: a refusal is not free.
+ * `terminateWindowsProcessTree` resolves without killing, and
+ * `killSourceControlAgentProcess` returns that straight to a caller that then
+ * releases the managed-home lock, so failing closed would trade one unreadable
+ * metrics table for every PTY, git, codex and notebook tree in main leaking at
+ * once. The `own_chromium_pids_unreadable` crumb is the price of that choice:
+ * without it a throw is byte-identical to "no Chromium on this host".
  *
  * Host coverage: only Electron main installs a Chromium-backed AppEnvironment
  * (main-process-preflight). The standalone daemon installs none and `orcad`
@@ -30,7 +45,26 @@ export function readOrcaChromiumProcessPids(): ReadonlySet<number> {
       .map((metric) => metric.pid)
       .filter((pid) => Number.isInteger(pid) && pid > 0)
     return new Set(pids)
-  } catch {
+  } catch (error) {
+    recordUnreadableOwnChromiumMetrics(error)
     return new Set()
+  }
+}
+
+// Why coalesced: the gate reads this set on every tree kill, so a persistently
+// broken metrics table would otherwise flood the 30-slot ring it shares.
+const UNREADABLE_METRICS_COALESCE_MS = 60_000
+
+function recordUnreadableOwnChromiumMetrics(error: unknown): void {
+  try {
+    recordCoalescedDurableCrashBreadcrumb({
+      name: 'own_chromium_pids_unreadable',
+      data: { cause: error instanceof Error ? error.message : String(error) },
+      coalesceKey: 'own-chromium-pids-unreadable',
+      minIntervalMs: UNREADABLE_METRICS_COALESCE_MS
+    })
+  } catch {
+    // Diagnostics must never turn an admitted kill into a thrown one: callers
+    // read this set outside their own try.
   }
 }

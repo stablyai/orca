@@ -14,9 +14,9 @@ import {
 import { AGENT_STATUS_STALE_AFTER_MS, type AgentType } from '../../../shared/agent-status-types'
 import type { EnrichedAgentHookEventPayload } from './server-types'
 import { equivalentInterruptAgentType, isValidPaneKey } from './server-status-identity'
-import { AgentHookServerListeners } from './server-listeners'
+import { AgentHookServerRowOwnership } from './server-row-ownership'
 
-export abstract class AgentHookServerStatusInference extends AgentHookServerListeners {
+export abstract class AgentHookServerStatusInference extends AgentHookServerRowOwnership {
   inferInterrupt(request: AgentInterruptInferenceRequest): boolean {
     if (!isValidPaneKey(request.paneKey)) {
       return false

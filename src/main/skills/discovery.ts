@@ -11,7 +11,8 @@ import type {
 } from '../../shared/skills'
 import {
   buildSkillDiscoverySources,
-  compareSkills,
+  sortDiscoveredSkills,
+  sortSkillDiscoverySources,
   sourceKindForSkill,
   sourceLabelForSkill,
   stablePathId,
@@ -328,7 +329,7 @@ export async function discoverSkills(args: {
       mergeScannedSkill(seen, skill)
     }
   }
-  const skills = Array.from(seen.values()).sort(compareSkills)
+  const skills = sortDiscoveredSkills(Array.from(seen.values()))
   // Why: root *ids* — a repo/plugin id is already a hash, while its label carries
   // the repo or plugin name and its path carries the user's directory names. A
   // fully cached scan did no filesystem work, so it stays silent rather than
@@ -345,9 +346,7 @@ export async function discoverSkills(args: {
   }
   return {
     skills,
-    sources: sources.sort((a, b) =>
-      a.label.localeCompare(b.label, undefined, { sensitivity: 'base' })
-    ),
+    sources: sortSkillDiscoverySources(sources),
     scannedAt: Date.now()
   }
 }

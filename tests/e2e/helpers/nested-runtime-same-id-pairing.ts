@@ -28,6 +28,10 @@ export async function replaceRuntimePairingInPlace(args: {
     if (!store) {
       throw new Error('Paired desktop store is unavailable during same-ID re-pair')
     }
+    const connection = await window.api.runtimeEnvironments.connect({ selector })
+    if (!connection.ok) {
+      throw new Error(`Same-ID re-pair reconnect failed: ${JSON.stringify(connection.error)}`)
+    }
     const environments = await window.api.runtimeEnvironments.list()
     store.getState().setRuntimeEnvironments(environments)
     if (!(await store.getState().refreshRuntimeEnvironmentStatus(selector))) {

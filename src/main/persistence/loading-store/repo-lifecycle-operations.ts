@@ -136,11 +136,9 @@ export class RepoLifecycleOperations {
   /**
    * Drop every persisted row owned by a repo id that is no longer registered.
    *
-   * Runs at load because no removal path can: `removeProject` only fires while the repo is still in
-   * `state.repos`, and a paired client's mirror of a remote host's rows is keyed by ids that client
-   * never registers, so the owning host's removal never reaches it (#17776). An orphan has no owner
-   * that could object, so this ignores the session-ownership and local-execution-host gates the
-   * missing-directory sweeper needs.
+   * Runs at load to reach leftover local rows after deregistration. Rows owned by a `runtime:*`
+   * host are exempt: this runs before pairing, so their absence from the local catalog cannot
+   * establish deletion. Only an explicit `removeProjectForHost` retires them.
    */
   sweepDeregisteredRepoResidue(): string[] {
     const state = this[repoLifecycleOperationsContext].runtime.state

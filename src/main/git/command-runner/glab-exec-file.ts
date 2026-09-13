@@ -3,6 +3,7 @@ import { extractExecError, parseRetryAfterMs } from '../exec-error'
 import { resolveCommand, resolveDefaultWslCli } from './wsl-command-resolution'
 import { isHostCommandMissing } from './github-cli-host-fallback'
 import { execFileCaptureToTermination } from './exec-file-capture'
+import { logHostedCliDeadlineKill } from './hosted-cli-deadline-log'
 import type { GitExecOptions } from './git-exec-options'
 import { argsLookIdempotent } from './gh-idempotency'
 import {
@@ -59,6 +60,7 @@ export async function glabExecFileAsync(
 ): Promise<{ stdout: string; stderr: string }> {
   ;({ args, options } = redirectPortedHostnameToEnv(args, options))
   let resolved = resolveCommand('glab', args, options.cwd, options.wslDistro)
+  const timeoutMs = options.timeout ?? DEFAULT_GLAB_EXEC_TIMEOUT_MS
   let lastError: unknown
   let attemptedDefaultWslFallback = false
   for (let attempt = 0; attempt <= GH_RETRY_DELAYS_MS.length; attempt++) {
@@ -72,9 +74,10 @@ export async function glabExecFileAsync(
           cwd: resolved.cwd,
           encoding: (options.encoding ?? 'utf-8') as BufferEncoding,
           maxBuffer: options.maxBuffer,
-          timeout: options.timeout ?? DEFAULT_GLAB_EXEC_TIMEOUT_MS,
+          timeout: timeoutMs,
           env: options.env,
-          signal: options.signal
+          signal: options.signal,
+          onDeadlineKill: () => logHostedCliDeadlineKill('glab', resolved.binary, args, timeoutMs)
         },
         resolved.termination
       )

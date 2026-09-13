@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs'
 import { pathToFileURL } from 'node:url'
+import { requireSameEvidenceCode } from './relay-evidence-code-provenance.mjs'
 
 export const SAME_CAP_CELLS = [
   'production-gce-c7', 'production-gce-c8', 'production-gce-c9', 'production-gce-c10',
@@ -85,17 +86,28 @@ export function canaryAuthority(input) {
   }
 }
 
-export function verifyCanaryAuthority(authority, expected) {
+export function verifyCanaryAuthority(authority, expected, repositoryRoot) {
+  const selectorGeneration = Number(expected.selectorGeneration)
   if (
     authority?.v !== 1 ||
-    authority.commitSha !== expected.commitSha ||
+    !/^[0-9a-f]{40}$/.test(authority.commitSha ?? '') ||
     authority.runId !== expected.runId ||
     authority.targetDigest !== expected.targetDigest ||
     authority.rollbackDigest !== expected.rollbackDigest ||
-    authority.selectorGeneration !== Number(expected.selectorGeneration) ||
+    !Number.isSafeInteger(authority.selectorGeneration) ||
+    authority.selectorGeneration < 0 ||
+    !Number.isSafeInteger(selectorGeneration) ||
+    selectorGeneration < authority.selectorGeneration ||
     authority.rehomeGeneration !== Number(expected.rehomeGeneration) ||
     !SAME_CAP_CELLS.includes(authority.cellId)
   ) throw new Error('canary authority does not match this batch')
+  // Each cell checks exact live selector state; later batches may reuse this control epoch's canary.
+  requireSameEvidenceCode({
+    sealedSha: authority.commitSha,
+    currentSha: expected.commitSha,
+    label: 'relay same-cap canary authority',
+    repositoryRoot
+  })
   return authority
 }
 

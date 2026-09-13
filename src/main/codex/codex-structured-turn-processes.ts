@@ -57,6 +57,8 @@ async function terminateWindowsAddedProcesses(
   const added = current.filter((row) => baseline.get(row.pid) !== windowsIdentity(row))
   const addedPids = new Set(added.map((row) => row.pid))
   const roots = added.filter((row) => !addedPids.has(row.ppid))
+  // Added roots come from a table walk, not a spawn, so a refused tree walk has
+  // no handle to fall back to: the row stays in `remaining` and this reports false.
   await Promise.all(
     roots.map((row) => terminateWindowsProcessTree(row.pid, { site: 'codex-turn-added-roots' }))
   )

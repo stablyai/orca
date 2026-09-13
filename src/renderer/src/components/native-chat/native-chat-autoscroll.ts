@@ -42,3 +42,38 @@ export function shouldShowJumpToLatest(
   }
   return distanceFromBottom(geometry) > threshold
 }
+
+/** Distance from the top within which the transcript pages in older history. */
+export const NATIVE_CHAT_LOAD_EARLIER_THRESHOLD_PX = 80
+
+export type LoadEarlierIntent = {
+  geometry: ScrollGeometry
+  /** Offset at the previous scroll event; a prepend or a bottom pin moves down. */
+  previousScrollTop: number
+  hasMore: boolean
+  loadingEarlier: boolean
+  itemCount: number
+  /** Item count when the last page was asked for, or null if none has been. */
+  requestedAtItemCount: number | null
+}
+
+/** Whether reaching this offset should page in older history.
+ *
+ *  Windowing makes the naive "am I near the top?" test unsafe: every row that
+ *  resolves its real height changes the content height and re-fires the
+ *  observers that ask. So the answer also requires the view to have moved
+ *  *upwards* — measurement settling and the bottom pin both move it down — and
+ *  requires new items since the last request, which caps a stuck near-top view at
+ *  one request per page rather than one per measurement. */
+export function shouldLoadEarlier(intent: LoadEarlierIntent): boolean {
+  if (!intent.hasMore || intent.loadingEarlier) {
+    return false
+  }
+  if (intent.geometry.scrollTop >= NATIVE_CHAT_LOAD_EARLIER_THRESHOLD_PX) {
+    return false
+  }
+  if (intent.geometry.scrollTop > intent.previousScrollTop) {
+    return false
+  }
+  return intent.requestedAtItemCount !== intent.itemCount
+}

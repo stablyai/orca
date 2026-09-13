@@ -152,6 +152,37 @@ describe('agentStatus:getSnapshot IPC', () => {
     expect(handler!({})).toEqual(snapshot)
   })
 
+  // The half-migration seam: until PR 2 retires the renderer's own feed bridge, main must not
+  // publish structured rows to the renderer at all — one pane key, one writer.
+  it('omits structured rows the renderer feed bridge still owns', async () => {
+    getStatusSnapshot.mockReturnValue([
+      {
+        paneKey: PANE_KEY,
+        state: 'done',
+        prompt: 'hook row',
+        agentType: 'claude',
+        connectionId: null,
+        receivedAt: 1_700_000_000_000,
+        stateStartedAt: 1_699_999_999_000
+      },
+      {
+        paneKey: CHILD_PANE_KEY,
+        state: 'working',
+        prompt: 'native chat row',
+        agentType: 'codex',
+        connectionId: null,
+        structuredHost: 'owned',
+        receivedAt: 1_700_000_001_000,
+        stateStartedAt: 1_700_000_000_500
+      }
+    ])
+    const { registerAgentHookHandlers } = await import('./agent-hooks')
+    registerAgentHookHandlers()
+
+    const rows = handleHandlers.get('agentStatus:getSnapshot')!({}) as { paneKey: string }[]
+    expect(rows.map((row) => row.paneKey)).toEqual([PANE_KEY])
+  })
+
   it('enriches the hook cache snapshot with runtime lineage metadata', async () => {
     const snapshot = [
       {
@@ -188,7 +219,8 @@ describe('agentStatus:getSnapshot IPC', () => {
               coordinatorHandle: 'term-parent'
             }
           : undefined
-      )
+      ),
+      getTerminalProcessIncarnation: vi.fn(() => 'pty-1:inc-1')
     }
     const { registerAgentHookHandlers } = await import('./agent-hooks')
     registerAgentHookHandlers(runtime)
@@ -261,6 +293,17 @@ describe('agentStatus:drop IPC', () => {
     expect(clearMigrationUnsupportedPtysForPaneKey).toHaveBeenCalledWith(PANE_KEY)
   })
 
+  it('forwards a runtime-owned legacy numeric row dismissal', async () => {
+    const { registerAgentHookHandlers } = await import('./agent-hooks')
+    registerAgentHookHandlers()
+
+    const handler = onHandlers.get('agentStatus:drop')!
+    handler!({}, 'tab-1:0')
+
+    expect(dropStatusEntry).toHaveBeenCalledWith('tab-1:0')
+    expect(clearMigrationUnsupportedPtysForPaneKey).toHaveBeenCalledWith('tab-1:0')
+  })
+
   it('rejects non-string paneKey (defensive against a malformed renderer message)', async () => {
     const { registerAgentHookHandlers } = await import('./agent-hooks')
     registerAgentHookHandlers()
@@ -273,7 +316,6 @@ describe('agentStatus:drop IPC', () => {
       null,
       {},
       [],
-      'tab-1:0', // legacy numeric pane-key suffix
       'no-colon', // missing colon — rejected by isValidPaneKey
       ':leading', // empty tabId half
       'trailing:', // empty leafId half

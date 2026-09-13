@@ -245,3 +245,45 @@ describe('closing a browser workspace owned by more than one runtime environment
     expect(mocks.destroyWorkspaceWebviews).not.toHaveBeenCalled()
   })
 })
+
+describe('shared tab close policies', () => {
+  it('queues the dirty editor close without removing its tab or file', () => {
+    const editor = {
+      ...BROWSER_TAB,
+      id: 'editor-tab',
+      entityId: 'dirty-file',
+      contentType: 'editor'
+    } as Tab
+    useAppStore.setState({
+      unifiedTabsByWorktree: { 'worktree-a': [editor] },
+      openFiles: [{ id: 'dirty-file', isDirty: true, worktreeId: 'worktree-a' }]
+    } as never)
+    renderHook(() =>
+      useTabGroupTabCloseCommands({ worktreeId: 'worktree-a', groupTabs: [editor] })
+    ).result.current.closeItem(editor.id)
+    expect(mocks.requestEditorFileClose).toHaveBeenCalledWith('dirty-file')
+    expect(closeUnifiedTab).not.toHaveBeenCalled()
+    expect(useAppStore.getState().closeFile).not.toHaveBeenCalled()
+  })
+
+  it('shares terminal teardown while skipping running-process prompts only for bulk closes', () => {
+    const terminal = {
+      ...BROWSER_TAB,
+      id: 'terminal-tab',
+      entityId: 'terminal-entity',
+      contentType: 'terminal'
+    } as Tab
+    useAppStore.setState({ unifiedTabsByWorktree: { 'worktree-a': [terminal] } })
+    const { result } = renderHook(() =>
+      useTabGroupTabCloseCommands({ worktreeId: 'worktree-a', groupTabs: [terminal] })
+    )
+    result.current.closeItem(terminal.id)
+    expect(mocks.closeTerminalTab).toHaveBeenLastCalledWith('terminal-entity', {
+      onClosed: expect.any(Function)
+    })
+    result.current.closeMany([terminal.id])
+    expect(mocks.closeTerminalTab).toHaveBeenLastCalledWith('terminal-entity', {
+      skipRunningProcessConfirm: true
+    })
+  })
+})

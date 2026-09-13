@@ -28,7 +28,7 @@ export function isValidGitRepo(repoPath: string): boolean {
   }
 }
 
-export function createSeededTestRepo(): string {
+export function createSeededTestRepo(options: { publishPath?: boolean } = {}): string {
   // Why: realpathSync so the seeded path matches the store's repo.path on
   // macOS, where os.tmpdir() (/var/...) symlinks to /private/var/... and the
   // app canonicalizes repo.path via `git rev-parse --show-toplevel` on add.
@@ -63,6 +63,8 @@ export function createSeededTestRepo(): string {
     stdio: 'pipe'
   })
 
-  writeFileSync(TEST_REPO_PATH_FILE, testRepoDir)
+  if (options.publishPath !== false) {
+    writeFileSync(TEST_REPO_PATH_FILE, testRepoDir)
+  }
   return testRepoDir
 }

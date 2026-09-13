@@ -90,6 +90,34 @@ afterEach(() => {
 })
 
 describe('session write subscriber allocation', () => {
+  it.each(['tabsByWorktree', 'unifiedTabsByWorktree'] as const)(
+    'remembers an equivalent %s source before unrelated writes',
+    (field) => {
+      const harness = createHarness()
+      try {
+        harness.write(() => ({ [field]: { 'wt-1': [] } }))
+        vi.advanceTimersByTime(500)
+        harness.persisted.length = 0
+
+        harness.write(() => ({ [field]: { 'wt-1': [] } }))
+        const calls = countFilterCalls(() => {
+          for (let write = 0; write < 200; write += 1) {
+            harness.write(() => ({ runtimePaneTitlesByTabId: {} }))
+          }
+        })
+        expect(calls).toBe(0)
+        vi.advanceTimersByTime(500)
+        expect(harness.persisted).toHaveLength(0)
+
+        harness.write(() => ({ activeTabId: 'next-tab' }))
+        vi.advanceTimersByTime(500)
+        expect(harness.persisted).toHaveLength(1)
+      } finally {
+        harness.dispose()
+      }
+    }
+  )
+
   it('allocates nothing for store writes that touch no session field', () => {
     const harness = createHarness()
     try {

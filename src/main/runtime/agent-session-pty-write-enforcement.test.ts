@@ -1,3 +1,4 @@
+import { settledWriteStub } from '../providers/settled-pty-write-stub'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
 import { agentSessionPtyWriteGate } from './agent-session-pty-write-gate'
@@ -63,6 +64,7 @@ async function makeRuntime(options: { onWrite?: (ptyId: string, data: string) =>
   runtime.setPtyController({
     spawn: vi.fn(async () => ({ id: 'never' })),
     write,
+    writeWithSettlement: settledWriteStub(write),
     kill: () => true,
     getForegroundProcess: async () => null,
     listProcesses: vi.fn(async () => []),
@@ -335,27 +337,34 @@ describe('lease transition against an in-flight write', () => {
     try {
       const { runtime, handle, write } = await makeRuntime({
         onWrite: (_ptyId, data) => {
-          if (data.includes('orca orchestration check')) {
+          if (data !== '\r') {
             publish(agentSessionLeaseFixture({ runtimeFence: 8 }))
           }
         }
       })
       let messages: { id: string; sequence: number; type: string }[] = []
-      // Why run-scoped: pointer delivery only serves `run:` mailboxes, and it stages the
-      // batch as delivered before writing — a fake missing either makes the fence
-      // assertion below vacuous because nothing is ever written.
+      const getPendingMailboxPointerMessages = vi.fn(() => [])
+      // Pointer delivery reads pending reservations before staging unread mail; omitting
+      // either side makes the fence assertion vacuous because nothing reaches the PTY.
       runtime.setOrchestrationDb({
         getUndeliveredUnreadMessages: () => messages,
+        getPendingMailboxPointerMessages,
+        areUnreadMessages: () => true,
+        stageMailboxPointerEnter: () => true,
+        markMailboxPointerWriteAttempted: () => true,
+        markMailboxPointerEnterAttempted: () => true,
+        settleMailboxPointerEnter: () => undefined,
         getCurrentRunForPane: () => ({ id: RUN_ID }),
-        getRun: () => ({ id: RUN_ID, coordinator_handle: handle }),
-        markAsDelivered: () => undefined
+        getRun: () => ({ id: RUN_ID, coordinator_handle: handle })
       } as never)
       runtime.onPtyData(PTY_ID, '\x1b]0;Codex working\x07', 1)
       runtime.onPtyData(PTY_ID, '\x1b]0;Codex done\x07', 2)
+      getPendingMailboxPointerMessages.mockClear()
       enforce(agentSessionLeaseFixture({ runtimeFence: 7 }))
       messages = [{ id: 'msg-1', sequence: 1, type: 'status' }]
 
       runtime.deliverPendingMessagesForHandle(`run:${RUN_ID}`)
+      expect(getPendingMailboxPointerMessages).toHaveBeenCalledWith(`run:${RUN_ID}`)
       expect(write).toHaveBeenCalledTimes(1)
 
       await vi.advanceTimersByTimeAsync(500)

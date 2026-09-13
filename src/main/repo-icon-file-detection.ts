@@ -3,6 +3,7 @@ import { buildImageDataUri } from '../shared/image-data-uri'
 import { MAX_REPO_ICON_UPLOAD_BYTES, type RepoIcon } from '../shared/repo-icon'
 import type { ExecutionHostFilesystemRoute } from './providers/execution-host-provider-dispatch'
 import type { IFilesystemProvider } from './providers/types'
+import { extractIconHref } from './repo-icon-source-href'
 import { iconHrefCandidates } from './repo-icon-href-candidates'
 import { joinWorktreeRelativePath } from './runtime/runtime-relative-paths'
 
@@ -49,11 +50,6 @@ const REPO_ICON_SOURCE_FILE_CANDIDATES = [
 // not read large app entrypoints just to find a small favicon href.
 const MAX_REPO_ICON_SOURCE_BYTES = 256 * 1024
 
-const LINK_ICON_HTML_RE =
-  /<link\b(?=[^>]*\brel=["'](?:icon|shortcut icon)["'])(?=[^>]*\bhref=["']([^"'?]+))[^>]*>/i
-const LINK_ICON_OBJECT_RE =
-  /(?=[^}]*\brel\s*:\s*["'](?:icon|shortcut icon)["'])(?=[^}]*\bhref\s*:\s*["']([^"'?]+))[^}]*/i
-
 type DetectedImageFormat = {
   mimeType: 'image/png' | 'image/webp'
 }
@@ -96,10 +92,6 @@ function detectImageFormat(buffer: Buffer): DetectedImageFormat | null {
     return { mimeType: 'image/webp' }
   }
   return null
-}
-
-function extractIconHref(source: string): string | null {
-  return source.match(LINK_ICON_HTML_RE)?.[1] ?? source.match(LINK_ICON_OBJECT_RE)?.[1] ?? null
 }
 
 function repoIconFromImageBuffer(buffer: Buffer, relativePath: string): RepoIcon | null {

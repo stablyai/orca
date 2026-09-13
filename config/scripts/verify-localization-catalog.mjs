@@ -11,7 +11,12 @@ import { repairTranslatedValue } from './locale-translation-policy.mjs'
 
 const SOURCE_EXTENSIONS = new Set(['.ts', '.tsx', '.js', '.jsx', '.mts', '.cts'])
 const SKIP_PATH_PARTS = new Set(['.git', 'dist', 'node_modules', 'out', '__snapshots__', 'assets'])
-const LOCALIZATION_FUNCTION_NAMES = new Set(['t', 'translate', 'translateMain'])
+const LOCALIZATION_FUNCTION_NAMES = new Set([
+  't',
+  'translate',
+  'translateMain',
+  'translateSearchKeyword'
+])
 const PLACEHOLDER_RE = /\{\{[^}]+\}\}/g
 const LOCALES_RELATIVE_DIR = path.join('src', 'renderer', 'src', 'i18n', 'locales')
 export const LOCALIZATION_SOURCE_ROOTS = [

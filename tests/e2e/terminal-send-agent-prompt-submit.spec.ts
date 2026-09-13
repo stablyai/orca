@@ -58,6 +58,7 @@ async function createFakeCodexTerminal(
   if (!worktree) {
     throw new Error(`runtime did not register ${testRepoPath}`)
   }
+  rmSync(fixtureReport, { force: true })
   const created = await client.call<{ terminal: { handle: string } }>('terminal.create', {
     worktree: `id:${worktree.id}`,
     command: [fakeCodexCommand, ...args].join(' '),
@@ -134,7 +135,7 @@ test('CLI text plus Enter waits for a slow agent composer before submitting', as
   })
 })
 
-test('CLI reports a swallowed Enter without submitting a second Enter', async ({
+test('CLI reports a swallowed Enter as accepted without submitting a second Enter', async ({
   electronApp,
   orcaPage,
   testRepoPath
@@ -162,7 +163,7 @@ test('CLI reports a swallowed Enter without submitting a second Enter', async ({
         terminal,
         '--timeout-ms',
         String(swallowedEnterFixtureTimeoutMs),
-        '--expect-stalled',
+        '--expect-unsubmitted',
         '--report',
         fixtureReport,
         '--marker',
@@ -183,7 +184,8 @@ test('CLI reports a swallowed Enter without submitting a second Enter', async ({
 
   expect(JSON.parse(stdout)).toMatchObject({
     rescueSent: false,
-    sendErrorCode: 'agent_prompt_stalled',
+    sendErrorCode: null,
+    promptStages: ['input_accepted'],
     contractOk: true,
     submitted: false,
     prematureEnters: 0,

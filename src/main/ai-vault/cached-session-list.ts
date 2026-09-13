@@ -4,7 +4,7 @@ import {
   resetAiVaultScannerBackgroundForTests,
   scanAiVaultSessionsInBackground
 } from './session-scanner-background'
-import { listRunningWslHomeDirsAsync } from '../wsl'
+import { getCachedWslDistros, hasCachedWslDistros, listRunningWslHomeDirsAsync } from '../wsl'
 import { filterPathsToRunningWslDistrosAsync } from '../wsl-running-path-filter'
 import type { AiVaultListArgs, AiVaultListResult } from '../../shared/ai-vault-types'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
@@ -47,6 +47,12 @@ let cacheGeneration = 0
 
 export function configureAiVaultSessionSources(next: AiVaultSessionSources): void {
   sources = next
+}
+
+/** The extra Codex homes session discovery scans. Anything that decides what a listed row may be
+ *  resumed from must read the same set, or a row can be listed and then refuse to resume. */
+export function configuredAdditionalCodexHomePaths(): readonly string[] {
+  return sources.getAdditionalCodexHomePaths?.() ?? []
 }
 
 export async function listAiVaultSessions(
@@ -129,6 +135,13 @@ export async function listAiVaultSessions(
 // renderer-supplied paths against the same WSL-aware Claude roots the scan uses.
 export async function getAiVaultWslHomeDirs(): Promise<string[]> {
   if (process.platform !== 'win32') {
+    return []
+  }
+  // No installed distro can be running: spares WSL-less hosts the running-distro probe.
+  // Cache read only: a rejected wsl.exe probe yields [] without caching, so it must not
+  // narrow the WSL roots delete/subagent validation trusts; and probing here would let this
+  // listing be the first to cache [] and flip a configured distro to "missing".
+  if (hasCachedWslDistros() && getCachedWslDistros()?.length === 0) {
     return []
   }
   return listRunningWslHomeDirsAsync()

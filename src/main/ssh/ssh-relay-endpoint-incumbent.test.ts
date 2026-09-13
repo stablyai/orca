@@ -32,17 +32,24 @@ describe('parseRelayEndpointIncumbentProbe', () => {
   it('reports live when the socket accepted a connection', () => {
     const incumbent = parseRelayEndpointIncumbentProbe(
       SOCK,
-      probeOutput(['PRESENT=yes', 'LISTEN=accepted', 'HOLDERS_SOURCE=lsof', 'HOLDER=4242 yes 13'])
+      probeOutput([
+        'PRESENT=yes',
+        'LISTEN=accepted',
+        'HOLDERS_SOURCE=lsof',
+        'HOLDER=4242 yes 13 11'
+      ])
     )
     expect(incumbent.verdict).toBe('live')
     expect(incumbent.evidence).toBe('accepted-connection')
-    expect(incumbent.holders).toEqual([{ pid: 4242, matchesRelayArgv: true, childCount: 13 }])
+    expect(incumbent.holders).toEqual([
+      { pid: 4242, matchesRelayArgv: true, childCount: 13, unrecognizedChildCount: 11 }
+    ])
   })
 
   it('reports live when a process still holds an inode that refuses connections', () => {
     const incumbent = parseRelayEndpointIncumbentProbe(
       SOCK,
-      probeOutput(['PRESENT=yes', 'LISTEN=refused', 'HOLDERS_SOURCE=lsof', 'HOLDER=91 yes 2'])
+      probeOutput(['PRESENT=yes', 'LISTEN=refused', 'HOLDERS_SOURCE=lsof', 'HOLDER=91 yes 2 2'])
     )
     expect(incumbent.verdict).toBe('live')
     expect(incumbent.evidence).toBe('holder-process')
@@ -85,7 +92,12 @@ describe('parseRelayEndpointIncumbentProbe', () => {
   it('drops holder lines that do not carry a usable pid', () => {
     const incumbent = parseRelayEndpointIncumbentProbe(
       SOCK,
-      probeOutput(['PRESENT=yes', 'LISTEN=refused', 'HOLDERS_SOURCE=lsof', 'HOLDER=- no unknown'])
+      probeOutput([
+        'PRESENT=yes',
+        'LISTEN=refused',
+        'HOLDERS_SOURCE=lsof',
+        'HOLDER=- no unknown unknown'
+      ])
     )
     expect(incumbent.holders).toEqual([])
     expect(incumbent.verdict).toBe('exited')
@@ -94,9 +106,24 @@ describe('parseRelayEndpointIncumbentProbe', () => {
   it('keeps an unreadable child count as null rather than zero', () => {
     const [holder] = parseRelayEndpointIncumbentProbe(
       SOCK,
-      probeOutput(['PRESENT=yes', 'LISTEN=accepted', 'HOLDERS_SOURCE=lsof', 'HOLDER=7 yes unknown'])
+      probeOutput([
+        'PRESENT=yes',
+        'LISTEN=accepted',
+        'HOLDERS_SOURCE=lsof',
+        'HOLDER=7 yes unknown unknown'
+      ])
     ).holders
     expect(holder.childCount).toBeNull()
+    expect(holder.unrecognizedChildCount).toBeNull()
+  })
+
+  it('keeps a holder line with no unrecognized-child field unreapable', () => {
+    const incumbent = parseRelayEndpointIncumbentProbe(
+      SOCK,
+      probeOutput(['PRESENT=yes', 'LISTEN=accepted', 'HOLDERS_SOURCE=lsof', 'HOLDER=7 yes 0'])
+    )
+    expect(incumbent.holders[0].unrecognizedChildCount).toBeNull()
+    expect(isReapableRelayHusk(incumbent)).toBe(false)
   })
 })
 
@@ -172,27 +199,36 @@ describe('mayLaunchOverRelayEndpoint', () => {
 describe('isReapableRelayHusk', () => {
   const husk = parseRelayEndpointIncumbentProbe(
     SOCK,
-    probeOutput(['PRESENT=yes', 'LISTEN=accepted', 'HOLDERS_SOURCE=lsof', 'HOLDER=500 yes 0'])
+    probeOutput(['PRESENT=yes', 'LISTEN=accepted', 'HOLDERS_SOURCE=lsof', 'HOLDER=500 yes 0 0'])
   )
 
-  it('accepts a single proven relay holder with zero children', () => {
+  it('accepts a single proven relay holder with no unaccounted-for children', () => {
     expect(isReapableRelayHusk(husk)).toBe(true)
   })
 
-  it('refuses a relay that still holds children', () => {
+  it('accepts a relay whose only children are its own service processes (#13614)', () => {
+    const withServices = parseRelayEndpointIncumbentProbe(
+      SOCK,
+      probeOutput(['PRESENT=yes', 'LISTEN=accepted', 'HOLDERS_SOURCE=lsof', 'HOLDER=500 yes 2 0'])
+    )
+    expect(withServices.holders[0].childCount).toBe(2)
+    expect(isReapableRelayHusk(withServices)).toBe(true)
+  })
+
+  it('refuses a relay that still holds children it could not account for', () => {
     expect(
       isReapableRelayHusk({
         ...husk,
-        holders: [{ pid: 500, matchesRelayArgv: true, childCount: 1 }]
+        holders: [{ pid: 500, matchesRelayArgv: true, childCount: 3, unrecognizedChildCount: 1 }]
       })
     ).toBe(false)
   })
 
-  it('refuses a holder whose child count could not be read', () => {
+  it('refuses a holder whose unrecognized-child count could not be read', () => {
     expect(
       isReapableRelayHusk({
         ...husk,
-        holders: [{ pid: 500, matchesRelayArgv: true, childCount: null }]
+        holders: [{ pid: 500, matchesRelayArgv: true, childCount: 0, unrecognizedChildCount: null }]
       })
     ).toBe(false)
   })
@@ -201,7 +237,7 @@ describe('isReapableRelayHusk', () => {
     expect(
       isReapableRelayHusk({
         ...husk,
-        holders: [{ pid: 500, matchesRelayArgv: false, childCount: 0 }]
+        holders: [{ pid: 500, matchesRelayArgv: false, childCount: 0, unrecognizedChildCount: 0 }]
       })
     ).toBe(false)
   })
@@ -211,8 +247,8 @@ describe('isReapableRelayHusk', () => {
       isReapableRelayHusk({
         ...husk,
         holders: [
-          { pid: 500, matchesRelayArgv: true, childCount: 0 },
-          { pid: 501, matchesRelayArgv: true, childCount: 0 }
+          { pid: 500, matchesRelayArgv: true, childCount: 0, unrecognizedChildCount: 0 },
+          { pid: 501, matchesRelayArgv: true, childCount: 0, unrecognizedChildCount: 0 }
         ]
       })
     ).toBe(false)

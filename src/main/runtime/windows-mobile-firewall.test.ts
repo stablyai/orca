@@ -1,10 +1,14 @@
 import { describe, expect, it, vi } from 'vitest'
+import { execFile } from 'node:child_process'
 import {
   getWebSocketPort,
   inspectWindowsMobileFirewall,
   repairWindowsMobileFirewall,
   type WindowsMobileFirewallEnvironment
 } from './windows-mobile-firewall'
+
+// Why: every other case injects `runPowerShell`, so only the argv case below reaches execFile.
+vi.mock('node:child_process', () => ({ execFile: vi.fn() }))
 
 function environment(
   runPowerShell: WindowsMobileFirewallEnvironment['runPowerShell'],
@@ -177,6 +181,56 @@ describe('windows mobile firewall', () => {
     expect(repairScript).toContain('-LocalPort 6769')
     expect(repairScript).toContain("-Program 'C:\\Users\\O''Brien\\Orca\\Orca.exe'")
     expect(repairScript).toContain('-EdgeTraversalPolicy Block')
+  })
+
+  it('keeps the elevated child encoded because Start-Process re-splits its ArgumentList', async () => {
+    // Why: `Start-Process -ArgumentList` joins the array into one ShellExecuteEx parameter
+    // string without quoting and PowerShell re-splits it on whitespace, which collapses runs
+    // of spaces. Measured on Windows 11: a `-Command` payload turned `C:\My  App\Orca.exe`
+    // into `C:\My App\Orca.exe`, i.e. a firewall rule for the wrong program. Base64 is the
+    // only form that survives that hop, so this site must not follow the local runner.
+    const runPowerShell = vi.fn().mockResolvedValue('{"launched":true,"exitCode":0}')
+    await repairWindowsMobileFirewall(
+      6769,
+      environment(runPowerShell, { executablePath: 'C:\\My  App\\Orca.exe' })
+    )
+
+    const outerScript = runPowerShell.mock.calls[0]![0] as string
+    expect(outerScript).toContain("'-EncodedCommand'")
+    expect(outerScript).not.toContain("'-Command'")
+    expect(outerScript).toContain('-Verb RunAs')
+
+    const encoded = outerScript.match(/'-EncodedCommand', '([^']+)'/)?.[1]
+    const repairScript = Buffer.from(encoded!, 'base64').toString('utf16le')
+    expect(repairScript).toContain("-Program 'C:\\My  App\\Orca.exe'")
+  })
+
+  it('runs the local PowerShell over argv with a plain -Command script', async () => {
+    // Why: execFile reaches CreateProcess with no shell in between, so the script needs no
+    // base64 armouring, and argv preserves runs of spaces that the elevated hop cannot.
+    // `-EncodedCommand` here was pure EDR signal.
+    const execFileMock = vi.mocked(execFile)
+    execFileMock.mockImplementation(((_file, _args, _options, callback) => {
+      callback(null, '{"privateFirewallEnabled":true,"networkCategory":"Private"}', '')
+      return {}
+    }) as unknown as typeof execFile)
+
+    await inspectWindowsMobileFirewall(6768, undefined, {
+      platform: 'win32',
+      isPackaged: true,
+      executablePath: 'C:\\My  App\\Orca.exe',
+      systemRoot: 'C:\\Windows'
+    })
+
+    const [file, args] = execFileMock.mock.calls[0]!
+    expect(file).toMatch(/WindowsPowerShell\\v1\.0\\powershell\.exe$/i)
+    expect(args!.slice(0, 3)).toEqual(['-NoProfile', '-NonInteractive', '-Command'])
+    expect(args).not.toContain('-EncodedCommand')
+    expect(args).not.toContain('-ExecutionPolicy')
+    // The script travels as ONE argv element, so its spaces and newlines survive verbatim.
+    expect(args).toHaveLength(4)
+    expect(args![3]).toContain("-Program 'C:\\My  App\\Orca.exe'")
+    expect(args![3]).toContain('\n')
   })
 
   it('distinguishes a cancelled UAC prompt from repair failure', async () => {

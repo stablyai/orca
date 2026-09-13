@@ -22,6 +22,10 @@ on:
       - main
     paths: *skill-roundtrip-paths
 
+concurrency:
+  group: skill-roundtrip-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   roundtrip:
     strategy:
@@ -41,7 +45,9 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
+          # Historical skill snapshots need tags, but only their blobs are read.
           fetch-depth: 0
+          filter: blob:none
           persist-credentials: false
       - uses: actions/setup-node@v6
         with:

@@ -166,10 +166,7 @@ export function startParkedTerminalByteWatcher(
         dispatchTerminalNotification(worktreeId, {
           source: 'agent-task-complete',
           terminalTitle: title,
-          paneKey,
-          ...(isAgentTaskCompleteOsNotificationEnabled(useAppStore.getState())
-            ? {}
-            : { suppressOsNotification: true })
+          paneKey
         })
       }, PARKED_NOTIFICATION_GRACE_MS)
     },

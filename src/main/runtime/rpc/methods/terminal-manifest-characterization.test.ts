@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { OrcaRuntimeService } from '../../orca-runtime'
 import { TERMINAL_METHODS } from './terminal'
+import { eraseRpcMethods } from '../core'
 import {
   TerminalMultiplexLegacyAckFrame,
   TerminalMultiplexSourceRangeAckFrame,
@@ -13,6 +14,7 @@ const METHOD_CASES: readonly (readonly [string, unknown, boolean])[] = [
   ['terminal.resolvePane', { paneKey: 'pane' }, false],
   ['terminal.recoverPane', { paneKey: 'pane', worktreeId: 'worktree' }, false],
   ['terminal.show', { terminal: 'term' }, false],
+  ['terminal.resolveIdentity', { terminal: 'term' }, false],
   ['terminal.read', { terminal: 'term' }, false],
   ['terminal.inspectProcess', { terminal: 'term' }, false],
   ['terminal.isRunningAgent', { terminal: 'term' }, false],
@@ -49,14 +51,14 @@ const METHOD_CASES: readonly (readonly [string, unknown, boolean])[] = [
 ]
 
 function schemaFor(name: string) {
-  const method = TERMINAL_METHODS.find((candidate) => candidate.name === name)
+  const method = eraseRpcMethods(TERMINAL_METHODS).find((candidate) => candidate.name === name)
   if (!method?.params) {
     throw new Error(`Missing terminal schema: ${name}`)
   }
   return method.params
 }
 async function invoke(name: string, params: unknown, runtime: Partial<OrcaRuntimeService>) {
-  const method = TERMINAL_METHODS.find((candidate) => candidate.name === name)
+  const method = eraseRpcMethods(TERMINAL_METHODS).find((candidate) => candidate.name === name)
   if (!method?.params || 'stream' in method) {
     throw new Error(`Missing unary terminal method: ${name}`)
   }
@@ -65,11 +67,11 @@ async function invoke(name: string, params: unknown, runtime: Partial<OrcaRuntim
 
 describe('terminal RPC manifest characterization', () => {
   it('preserves all method names, order, streaming flags, and parseable minimum inputs', () => {
-    expect(TERMINAL_METHODS).toHaveLength(34)
+    expect(TERMINAL_METHODS).toHaveLength(35)
     expect(TERMINAL_METHODS.map((method) => [method.name, 'stream' in method])).toEqual(
       METHOD_CASES.map(([name, _params, stream]) => [name, stream])
     )
-    expect(new Set(TERMINAL_METHODS.map((method) => method.name)).size).toBe(34)
+    expect(new Set(TERMINAL_METHODS.map((method) => method.name)).size).toBe(35)
     for (const [name, params] of METHOD_CASES) {
       expect(() => schemaFor(name).parse(params), name).not.toThrow()
     }

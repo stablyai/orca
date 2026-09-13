@@ -358,6 +358,7 @@ export function RemoteBrowserPagePane({
             void openWorkspaceBrowserTab({
               workspaceId: worktreeId,
               url: linkUrl,
+              focusOnCreate: false,
               intent: { kind: 'url' },
               expectedRuntimeEnvironmentId: runtimeEnvironmentId,
               placementPreference: 'server'

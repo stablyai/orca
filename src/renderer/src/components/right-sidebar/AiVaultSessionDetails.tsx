@@ -1,5 +1,12 @@
 import type React from 'react'
-import { FileJson, FolderGit2, MessageSquare, MessageSquarePlus, Play } from 'lucide-react'
+import {
+  FileJson,
+  FolderGit2,
+  MessageSquare,
+  MessageSquarePlus,
+  MessagesSquare,
+  Play
+} from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
@@ -30,6 +37,7 @@ export function SessionInlineDetails({
   onResumeInWorktree,
   onResumeInNewTab,
   onContinueInNewSession,
+  onResumeInNewChat,
   onOpenLog
 }: {
   id: string
@@ -43,6 +51,7 @@ export function SessionInlineDetails({
   onResumeInWorktree: () => void
   onResumeInNewTab: () => void
   onContinueInNewSession?: () => void
+  onResumeInNewChat?: () => void
   onOpenLog?: () => void
 }): React.JSX.Element {
   // A zero-turn transcript would resume into an empty conversation, so the plain
@@ -68,7 +77,11 @@ export function SessionInlineDetails({
         event.stopPropagation()
       }}
     >
-      {showResumeInWorktree || showResumeInNewTab || onContinueInNewSession || onOpenLog ? (
+      {showResumeInWorktree ||
+      showResumeInNewTab ||
+      onContinueInNewSession ||
+      onResumeInNewChat ||
+      onOpenLog ? (
         <div className="flex flex-wrap items-center gap-1.5 border-b border-sidebar-border/80 bg-sidebar-accent/15 px-3 py-2">
           {showResumeInWorktree ? (
             <Button
@@ -107,6 +120,25 @@ export function SessionInlineDetails({
               {translate(
                 'auto.components.right.sidebar.AiVaultSessionRow.resumeInNewTab',
                 'Resume in New Tab'
+              )}
+            </Button>
+          ) : null}
+          {onResumeInNewChat ? (
+            <Button
+              type="button"
+              variant="secondary"
+              size="xs"
+              draggable={false}
+              onClick={(event) => {
+                event.stopPropagation()
+                onResumeInNewChat()
+              }}
+              className="h-7 shrink-0 px-2.5 text-[11px]"
+            >
+              <MessagesSquare className="size-3.5" />
+              {translate(
+                'auto.components.right.sidebar.AiVaultSessionRow.resumeInNewChat',
+                'Resume in New Chat'
               )}
             </Button>
           ) : null}

@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { RelayDialStageTracker, type RelayDialStage } from './relay-dial-stage'
 import type { ConnectionState, RpcResponse } from './types'
 import type { RpcClient } from './rpc-client'
 import { isRpcDeliveryUnknown, markRpcDeliveryUnknown } from './rpc-delivery-ambiguity'
@@ -397,6 +398,34 @@ describe('stable logical RPC client', () => {
     expect(states).toEqual(['handshaking', 'disconnected'])
     expect(client.getState()).toBe('disconnected')
     expect(client.getPendingPath()).toBeNull()
+  })
+
+  // Pins the shipping wiring: migrateTo's bound honors the replacement's dial stages.
+  it('outlives the flat bound when the relay cell holds the dial', async () => {
+    vi.useFakeTimers()
+    try {
+      const oldSession = new FakeSession('connected')
+      const replacement = Object.assign(new FakeSession('connecting'), {
+        dialStage: new RelayDialStageTracker(),
+        getDialStage(): RelayDialStage {
+          return this.dialStage.getDialStage()
+        },
+        onDialStageChange(listener: (stage: RelayDialStage) => void) {
+          return this.dialStage.onDialStageChange(listener)
+        }
+      })
+      const client = createStableLogicalRpcClient(oldSession, 'lan')
+      const migrating = client.migrateTo(replacement, 'relay', 12_000)
+      await vi.advanceTimersByTimeAsync(1_000)
+      replacement.dialStage.advance('awaiting-hello')
+      await vi.advanceTimersByTimeAsync(20_000)
+      expect(replacement.close).not.toHaveBeenCalled()
+      replacement.setState('connected')
+      await migrating
+      expect(client.getActivePath()).toBe('relay')
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('closes a replacement that fails authentication and preserves the active session', async () => {

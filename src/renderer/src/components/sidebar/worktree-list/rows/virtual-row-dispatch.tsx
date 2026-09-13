@@ -124,6 +124,7 @@ function renderLineageGroupVirtualRow(
       ref={ctx.measureVirtualRowElement}
       className={cn(
         'absolute left-0 right-0 top-0',
+        parent?.worktree.id === ctx.worktreeDragState.draggingWorktreeId && 'pointer-events-none',
         ctx.worktreeDragState.draggingWorktreeId !== null &&
           'transition-transform duration-150 ease-out will-change-transform'
       )}
@@ -234,6 +235,7 @@ export function renderWorktreeVirtualRow(
       data-workspace-status={itemWorkspaceStatus ?? undefined}
       className={cn(
         'absolute left-0 right-0 top-0',
+        row.worktree.id === ctx.worktreeDragState.draggingWorktreeId && 'pointer-events-none',
         ctx.worktreeDragState.draggingWorktreeId !== null &&
           'transition-transform duration-150 ease-out will-change-transform'
       )}

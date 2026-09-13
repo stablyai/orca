@@ -33,7 +33,8 @@ import {
   endPtyHandlerTest,
   type MockDispatcher
 } from './pty-handler-test-harness'
-import { PROCESS_TABLE_SNAPSHOT_MAX_STALENESS_MS } from '../shared/process-table-snapshot-reader'
+import * as processTableSnapshotReader from '../shared/process-table-snapshot-reader'
+import { RELAY_PTY_SWEEP_MAX_EVIDENCE_AGE_MS } from '../shared/ssh-relay-pty-ownership-proof'
 
 const PANE_KEY = 'tab-agent:22222222-2222-4222-8222-222222222222'
 
@@ -139,16 +140,41 @@ describe('PtyHandler publishes host-attested PTY ownership', () => {
     expect(entry?.ownerClientInstanceId).toBe('client-A')
   })
 
-  it('dates the foreground observation instead of stamping it fresh', async () => {
-    // `capturedAgeMs` used to be a hardcoded 0 with no reader anywhere, so the one field that
-    // exists to bound staleness asserted the evidence was never stale. It now carries the
-    // actual age of the TTL-shared capture the record was derived from.
-    const { id } = await spawnFrom(7, { env: { ORCA_PANE_KEY: PANE_KEY } })
+  it('publishes the age the capture reported, rather than restamping it fresh', async () => {
+    // This assertion used to read `capturedAgeMs <= PROCESS_TABLE_SNAPSHOT_MAX_STALENESS_MS`, which
+    // could not fail: `beginPtyHandlerTest` installs fake timers, so `Date.now()` is frozen, the
+    // real reader reports exactly +0, and `0 <= 500` held identically for a hardcoded zero, for
+    // completion-stamping and for start-stamping. The one test guarding this field was blind to
+    // every change to it, while the real reader on a 2,002-process host returns thousands of ms.
+    //
+    // So drive a real age in from the reader. That the reader MEASURES the age correctly is
+    // pinned separately, against a controllable clock, by process-table-snapshot.test.ts; what
+    // belongs here is that the handler publishes what it was given instead of restamping.
+    const capturedAgeMs = 6_140
+    const snapshot = vi
+      .spyOn(processTableSnapshotReader, 'getStrictProcessTableSnapshotWithAge')
+      .mockResolvedValue({ rows: [], capturedAgeMs })
 
+    const { id } = await spawnFrom(7, { env: { ORCA_PANE_KEY: PANE_KEY } })
     const entry = (await listProcesses()).find((process) => process.id === id)
 
-    expect(entry?.foregroundProcessEvidence?.capturedAgeMs).toBeLessThanOrEqual(
-      PROCESS_TABLE_SNAPSHOT_MAX_STALENESS_MS
+    expect(snapshot).toHaveBeenCalled()
+    expect(entry?.foregroundProcessEvidence?.capturedAgeMs).toBe(capturedAgeMs)
+  })
+
+  it('publishes an age a destructive consumer will refuse, rather than one it will trust', async () => {
+    // The point of the field, stated as the consumer sees it: an observation this old cannot
+    // authorize a stop, and the whole bug was that it used to arrive claiming it could.
+    const snapshot = vi
+      .spyOn(processTableSnapshotReader, 'getStrictProcessTableSnapshotWithAge')
+      .mockResolvedValue({ rows: [], capturedAgeMs: 6_140 })
+
+    const { id } = await spawnFrom(7, { env: { ORCA_PANE_KEY: PANE_KEY } })
+    const entry = (await listProcesses()).find((process) => process.id === id)
+
+    expect(snapshot).toHaveBeenCalled()
+    expect(entry?.foregroundProcessEvidence?.capturedAgeMs).toBeGreaterThan(
+      RELAY_PTY_SWEEP_MAX_EVIDENCE_AGE_MS
     )
   })
 })

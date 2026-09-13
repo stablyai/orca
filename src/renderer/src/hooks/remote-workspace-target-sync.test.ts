@@ -680,7 +680,15 @@ describe('createRemoteWorkspaceTargetSync', () => {
       ]
     })
 
-    await harness.sync.applyUnsolicitedSnapshot('target-a', incoming)
+    vi.useFakeTimers()
+    try {
+      const pending = harness.sync.applyUnsolicitedSnapshot('target-a', incoming)
+      await vi.advanceTimersByTimeAsync(10_000)
+      await pending
+    } finally {
+      harness.sync.stop()
+      vi.useRealTimers()
+    }
 
     const merged = hydrateTabsSession.mock.calls[0][0]
     expect(merged.tabsByWorktree).toEqual({

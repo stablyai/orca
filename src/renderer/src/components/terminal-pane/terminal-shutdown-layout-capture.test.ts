@@ -91,6 +91,70 @@ function mockRootForSplit(firstPaneId = 1, secondPaneId = 2): HTMLDivElement {
 }
 
 describe('captureTerminalShutdownLayout', () => {
+  it('uses the bounded native fit check without a separate JS byte scan', async () => {
+    const byteLimits = await import('../../../../shared/utf8-byte-limits')
+    const { captureTerminalShutdownLayout } = await import('./terminal-shutdown-layout-capture')
+    const measure = vi.spyOn(byteLimits, 'measureUtf8ByteLength')
+    const contents = 'x'.repeat(32 * 1024)
+    const pane = {
+      id: 1,
+      leafId: LEAF_ID,
+      terminal: mockTerminal(5_000),
+      serializeAddon: { serialize: vi.fn(() => contents) }
+    }
+    try {
+      const layout = captureTerminalShutdownLayout({
+        manager: { getPanes: () => [pane], getActivePane: () => pane } as never,
+        container: mockRootForPane(1),
+        expandedPaneId: null,
+        paneTransports: new Map(),
+        paneTitlesByPaneId: {},
+        existingLayout: undefined
+      })
+      expect(layout.buffersByLeafId).toEqual({ [LEAF_ID]: `${contents}${CURSOR_HOME}` })
+      expect(pane.serializeAddon.serialize).toHaveBeenCalledExactlyOnceWith({ scrollback: 5_000 })
+      expect(measure.mock.calls.length).toBe(0)
+    } finally {
+      measure.mockRestore()
+    }
+  })
+
+  it.each(['x', 'é', '界', '😀', '\ud83d', '\udc00'])(
+    'preserves exact-cap decisions and probe options for %j',
+    async (unit) => {
+      const { captureTerminalShutdownLayout } = await import('./terminal-shutdown-layout-capture')
+      for (const delta of [-1, 0, 1]) {
+        const payloadBytes =
+          TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT + delta - CURSOR_HOME.length
+        const unitBytes = Buffer.byteLength(unit)
+        const contents =
+          unit.repeat(Math.floor(payloadBytes / unitBytes)) + 'x'.repeat(payloadBytes % unitBytes)
+        const serialize = vi.fn((options?: { scrollback?: number }) =>
+          options?.scrollback === 5_000 ? contents : 'short'
+        )
+        const pane = Object.freeze({
+          id: 1,
+          leafId: LEAF_ID,
+          terminal: mockTerminal(5_000),
+          serializeAddon: { serialize }
+        })
+        const layout = captureTerminalShutdownLayout({
+          manager: { getPanes: () => [pane], getActivePane: () => pane } as never,
+          container: mockRootForPane(1),
+          expandedPaneId: null,
+          paneTransports: new Map(),
+          paneTitlesByPaneId: {},
+          existingLayout: undefined
+        })
+        const expected = delta <= 0 ? contents : 'short'
+        expect(layout.buffersByLeafId).toEqual({ [LEAF_ID]: `${expected}${CURSOR_HOME}` })
+        expect(serialize.mock.calls.map(([options]) => options?.scrollback)).toEqual(
+          delta <= 0 ? [5_000] : [5_000, 2_500, 3_750, 4_375, 4_687]
+        )
+      }
+    }
+  )
+
   it('flushes queued terminal output before serializing shutdown scrollback', async () => {
     const { captureTerminalShutdownLayout } = await import('./terminal-shutdown-layout-capture')
     const order: string[] = []

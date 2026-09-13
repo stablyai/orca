@@ -16,7 +16,7 @@ import {
   retainLocalWatcherPhysicalFailure,
   trackDetachedLocalUnsubscribe
 } from './filesystem-watcher-listener-lifecycle'
-import { createDebouncedBatch } from './filesystem-watcher-batch-control'
+import { cancelLocalBatchFlush, createDebouncedBatch } from './filesystem-watcher-batch-control'
 import { mapWithConcurrency } from '../../shared/map-with-concurrency'
 
 // Why: matches the watcher subprocess budget in parcel-watcher-event-delivery.ts.
@@ -139,7 +139,10 @@ async function flushBatch(root: WatchedRoot): Promise<void> {
       DIRECTORY_STAT_CONCURRENCY,
       async (evt) => {
         // Why: a deleted path can't be stat'd; leave isDirectory undefined and let the renderer infer from dirCache.
-        const isDirectory = evt.type === 'delete' ? undefined : await tryStatIsDirectory(evt.path)
+        const isDirectory =
+          root.batch.cancelled || evt.type === 'delete'
+            ? undefined
+            : await tryStatIsDirectory(evt.path)
 
         return {
           kind: evt.type,
@@ -207,7 +210,8 @@ export function scheduleLocalBatchFlush(root: WatchedRoot): void {
 
   // Trailing-edge debounce: reset timer on each new event
   if (root.batch.timer) {
-    clearTimeout(root.batch.timer)
+    root.batch.timer.refresh()
+    return
   }
   // Why: clear the handle as it fires so `batch.timer` means "a debounce window is still open", which gates the queued drain.
   root.batch.timer = setTimeout(() => {
@@ -254,9 +258,7 @@ export async function createLocalWatcher(
           console.error(`[filesystem-watcher] error for ${rootKey}:`, err)
           emitOverflowPayload(root)
           // Why: after an error the native subscription may be invalid (deleted root); tear down the dead watcher so it doesn't dangle (§7.3).
-          if (root.batch.timer) {
-            clearTimeout(root.batch.timer)
-          }
+          cancelLocalBatchFlush(root)
           // Why: error callback can fire before subscribe() assigns root.subscription; guard against null so cleanup doesn't crash.
           if (root.subscription) {
             retainLocalWatcherPhysicalFailure(rootKey, err)

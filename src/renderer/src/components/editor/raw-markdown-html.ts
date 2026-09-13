@@ -59,20 +59,27 @@ export function encodeRawMarkdownHtmlForRichEditor(
   { htmlSuperscriptLinks = false }: { htmlSuperscriptLinks?: boolean } = {}
 ): string {
   const normalizedContent = normalizeMarkdownReferenceLinks(content)
+  const lastCommentClose = normalizedContent.lastIndexOf('-->')
   const { transport } = codec
   let index = 0
   let isLineStart = true
   let activeFence: '`' | '~' | null = null
   let activeFenceLength = 0
   let result = ''
+  const nonWhitespace = /\S/g
+  const fencePrefix = /(`{3,}|~{3,})/y
+  let fenceProbe = -1
+  let fenceMatch: RegExpExecArray | null = null
 
   while (index < normalizedContent.length) {
     if (isLineStart) {
-      // Why: only line starts inspect the rest of the line, so slicing the suffix on every
-      // character (one throwaway string per char) is pure waste — compute it here. On a large
-      // doc this drops O(n) suffix allocations from the rich-editor open path (#7056).
-      const lineRest = normalizedContent.slice(index)
-      const fenceMatch = lineRest.match(/^\s*(`{3,}|~{3,})/)
+      // Reuse the lookahead across blank lines, preserving cross-line fence semantics.
+      if (index > fenceProbe) {
+        nonWhitespace.lastIndex = index
+        fenceProbe = nonWhitespace.exec(normalizedContent)?.index ?? normalizedContent.length
+        fencePrefix.lastIndex = fenceProbe
+        fenceMatch = fencePrefix.exec(normalizedContent)
+      }
       if (fenceMatch) {
         const fenceChar = fenceMatch[1][0] as '`' | '~'
         const fenceLength = fenceMatch[1].length
@@ -175,7 +182,11 @@ export function encodeRawMarkdownHtmlForRichEditor(
           continue
         }
       }
-      const inlineHtml = matchInlineHtml(normalizedContent.slice(index))
+      // An unterminated comment cannot match; later tags must still be encoded.
+      const inlineHtml =
+        normalizedContent.startsWith('<!--', index) && index + 4 > lastCommentClose
+          ? null
+          : matchInlineHtml(normalizedContent.slice(index))
       if (inlineHtml) {
         result += transport.create('inline-html', inlineHtml)
         index += inlineHtml.length

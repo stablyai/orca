@@ -57,6 +57,13 @@ const NODE_PTY_CONSOLE_LIST_PATCH_SOURCE = join(
   'relay-assets',
   NODE_PTY_CONSOLE_LIST_PATCH_FILENAME
 )
+const NODE_PTY_WINDOWS_TEARDOWN_PATCH_FILENAME = 'node-pty-1.1.0-windows-pty-teardown-patch.cjs'
+const NODE_PTY_WINDOWS_TEARDOWN_PATCH_SOURCE = join(
+  ROOT,
+  'config',
+  'relay-assets',
+  NODE_PTY_WINDOWS_TEARDOWN_PATCH_FILENAME
+)
 const NODE_PTY_MASTER_CLOEXEC_PATCH_FILENAME = 'node-pty-1.1.0-master-cloexec-patch.cjs'
 const NODE_PTY_MASTER_CLOEXEC_PATCH_SOURCE = join(
   ROOT,
@@ -131,6 +138,10 @@ for (const platform of RELAY_BUILD_PLATFORMS) {
     copyFileSync(
       NODE_PTY_CONSOLE_LIST_PATCH_SOURCE,
       join(outDir, NODE_PTY_CONSOLE_LIST_PATCH_FILENAME)
+    )
+    copyFileSync(
+      NODE_PTY_WINDOWS_TEARDOWN_PATCH_SOURCE,
+      join(outDir, NODE_PTY_WINDOWS_TEARDOWN_PATCH_FILENAME)
     )
   }
   copyFileSync(

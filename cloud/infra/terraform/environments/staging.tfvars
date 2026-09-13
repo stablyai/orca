@@ -5,19 +5,11 @@ region      = "us-central1"
 
 artifact_repository_id = "orca-cloud"
 
-# Dual accept while the relay source moves to the public stablyai/orca repository: the same
-# workflows are trusted from both repos, and the public copies carry a `cloud-` file prefix.
-# Remove this entry once the private workflows are retired and point github_owner/github_repo,
-# github_repo_id, and github_owner_id at the surviving repository.
-github_accepted_repositories = [
-  {
-    owner                = "stablyai"
-    repo                 = "orca"
-    repo_id              = "1183888342"
-    owner_id             = "127256420"
-    workflow_file_prefix = "cloud-"
-  }
-]
+# The relay source lives in the public stablyai/orca repository, where the workflows carry a
+# `cloud-` file prefix. github_owner and github_owner_id keep their defaults.
+github_repo                 = "orca"
+github_repo_id              = "1183888342"
+github_workflow_file_prefix = "cloud-"
 
 auth_base_url = "https://auth-staging.onorca.dev"
 
@@ -67,7 +59,7 @@ relay_gce_cells = {
     boot_disk_gb                = 30
     boot_image                  = "https://www.googleapis.com/compute/v1/projects/cos-cloud/global/images/cos-stable-121-18867-528-7"
     capacity_requests           = 4000
-    image                       = "us-central1-docker.pkg.dev/onorca-cloud-staging/orca-cloud/relay@sha256:9fba2a189ab3fa29853800830e77c7551ab3aaa8f43f3cd9adbdea28b876a8b9"
+    image                       = "us-central1-docker.pkg.dev/onorca-cloud-staging/orca-cloud/relay@sha256:5aedbca5c86de24c8b4d4bf7e3b444b76c712f281ede916cb9d90f70cad1e563"
     initially_enabled           = false
     connection_hard_cap         = 1000
     connection_unobserved_bound = 60
@@ -89,3 +81,6 @@ relay_gce_cells = {
 }
 
 relay_region_rehome_source_cell_ids = ["staging-gce-c2", "staging-gce-c3"]
+
+# Push is currently provisioned only in production.
+push_gateway_enabled = false

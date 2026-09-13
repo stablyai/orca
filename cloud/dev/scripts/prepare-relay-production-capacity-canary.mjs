@@ -1,10 +1,12 @@
 import { pathToFileURL } from 'node:url'
+import { fetchAdminOnceMore } from './relay-admin-transient-retry.mjs'
 import {
   applyExactAdmissionSelector,
   inspectAdmissionSelector,
   membershipWithStates,
   selectorCellState
 } from './relay-admission-selector.mjs'
+import { SAME_CAP_CELLS } from './relay-production-same-cap-wave.mjs'
 
 const DIRECTOR_ORIGIN = 'https://relay.onorca.dev'
 export const PRODUCTION_CAPACITY_CELL_IDS = [
@@ -30,6 +32,9 @@ function cellOrigin(cellId) {
   return `https://${cellId.slice('production-gce-'.length)}.relay.onorca.dev`
 }
 
+// The same-cap roll covers the Asia cells the US-only capacity rollout never touches.
+const APPROVED_CELL_LISTS = { 'same-cap': SAME_CAP_CELLS }
+
 export function parseProductionCapacityCellArguments(argv) {
   const values = {}
   for (let index = 0; index < argv.length; index += 2) {
@@ -41,8 +46,15 @@ export function parseProductionCapacityCellArguments(argv) {
   if (!['isolate', 'drain', 'activate'].includes(values.mode)) {
     throw new Error('--mode must be isolate, drain, or activate')
   }
+  const approvedList = values['approved-cells']
+  if (approvedList !== undefined && !APPROVED_CELL_LISTS[approvedList]) {
+    throw new Error('--approved-cells is not a known allowlist')
+  }
+  const approvedCellIds = approvedList === undefined
+    ? PRODUCTION_CAPACITY_CELL_IDS
+    : APPROVED_CELL_LISTS[approvedList]
   const cellId = values['cell-id']
-  if (!PRODUCTION_CAPACITY_CELL_IDS.includes(cellId)) {
+  if (!approvedCellIds.includes(cellId)) {
     throw new Error('production capacity target is not approved')
   }
   const expectedCellOrigin = cellOrigin(cellId)
@@ -72,12 +84,16 @@ export async function prepareProductionCapacityCell(config, overrides = {}) {
   if (!token || token.length > 8_192) throw new Error('admin identity token is unavailable')
   const postAt = async (origin, path, body) =>
     await responseJson(
-      await fetchImpl(`${origin}${path}`, {
-        method: 'POST',
-        headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
-        body: JSON.stringify(body),
-        signal: AbortSignal.timeout(30_000)
-      }),
+      await fetchAdminOnceMore(
+        fetchImpl,
+        `${origin}${path}`,
+        {
+          method: 'POST',
+          headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+          body: JSON.stringify(body)
+        },
+        { wait: overrides.wait }
+      ),
       path
     )
   const post = async (path, body) => await postAt(config.directorOrigin, path, body)

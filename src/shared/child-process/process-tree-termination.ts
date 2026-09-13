@@ -1,5 +1,5 @@
 import { spawn as nodeSpawn, type ChildProcess } from 'node:child_process'
-import { notifyProcessTreeKill } from './process-tree-kill-observer'
+import { admitProcessTreeKill } from './process-tree-kill-gate'
 
 const PROBE_INTERVAL_MS = 25
 const SUBPROCESS_TIMEOUT_MS = 2_000
@@ -13,8 +13,17 @@ const MAX_PS_OUTPUT_BYTES = 8 * 1024 * 1024
  * leader would hand it to whatever group it inherited instead.
  *
  * Runs in every host — Electron main, the daemon, the relay, the CLI — so the
- * main-process own-Chromium guard cannot reach here; the exit check below is
- * what keeps the Windows branch off a pid that is no longer ours.
+ * own-Chromium guard arrives through `process-tree-kill-gate`, which main
+ * installs and every other host leaves admitting. The exit check below is what
+ * keeps the Windows branch off a pid that is no longer ours on those hosts.
+ *
+ * Both arms ask before walking the tree, so a refused pid never gets a
+ * pid-addressed kill; that also means the recorded crumb says "about to kill",
+ * not "killed". The root is still killed through its handle, which cannot reach
+ * the recycled pid the refusal was about, so a refusal is never a leak. Main's
+ * gate only ever refuses the `win-taskkill-tree` scope — a POSIX group holds
+ * only what Orca put in it — so the POSIX refusal arm is the seam's contract,
+ * not something any installed gate exercises today.
  */
 export function signalProcessTree(child: ChildProcess, signal?: NodeJS.Signals): Promise<boolean> {
   if (!child.pid) {
@@ -39,13 +48,20 @@ export function signalProcessTree(child: ChildProcess, signal?: NodeJS.Signals):
     }
     return taskkillTree(child, child.pid, signal)
   }
-  try {
-    process.kill(-child.pid, signal)
-    notifyProcessTreeKill({
+  if (
+    !admitProcessTreeKill({
       pid: child.pid,
       site: 'run-process-tree',
       scope: 'posix-process-group'
     })
+  ) {
+    // Same shape as the reaped-pid skip above: refuse the group, still kill the
+    // root by handle, and report unverified.
+    killRoot(child, signal)
+    return Promise.resolve(false)
+  }
+  try {
+    process.kill(-child.pid, signal)
     return Promise.resolve(true)
   } catch {
     return Promise.resolve(!processGroupExists(child.pid))
@@ -73,6 +89,13 @@ function taskkillTree(
   rootPid: number,
   signal?: NodeJS.Signals
 ): Promise<boolean> {
+  // Asked before the spawn, not after: a refusal has to prevent the taskkill.
+  if (
+    !admitProcessTreeKill({ pid: rootPid, site: 'run-process-tree', scope: 'win-taskkill-tree' })
+  ) {
+    killRoot(child, signal)
+    return Promise.resolve(false)
+  }
   return new Promise((resolve) => {
     let killer: ChildProcess
     try {
@@ -86,7 +109,6 @@ function taskkillTree(
       resolve(false)
       return
     }
-    notifyProcessTreeKill({ pid: rootPid, site: 'run-process-tree', scope: 'win-taskkill-tree' })
     let settled = false
     const finish = (fallback: boolean): void => {
       if (settled) {

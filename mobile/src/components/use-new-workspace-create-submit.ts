@@ -58,7 +58,7 @@ export function useNewWorkspaceCreateSubmit(args: {
   getWorktreeCreateCutoverSupport: () => Promise<WorktreeCreateIdempotencySupport | false>
   transitionDrawer: (view: Exclude<NewWorktreeDrawerView, 'transition'>) => void
   setError: Dispatch<SetStateAction<string>>
-  onCreated: (worktreeId: string, name: string) => void
+  onCreated: (worktreeId: string, name: string, warning?: string) => void
   onClose: () => void
 }): {
   creating: boolean
@@ -181,7 +181,7 @@ export function useNewWorkspaceCreateSubmit(args: {
         return
       }
       args.onClose()
-      args.onCreated(result.worktreeId, result.name)
+      args.onCreated(result.worktreeId, result.name, result.warning)
     } catch (error) {
       args.setError(error instanceof Error ? error.message : 'Failed to create workspace')
     } finally {

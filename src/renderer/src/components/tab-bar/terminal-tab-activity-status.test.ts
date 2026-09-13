@@ -1,5 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
+import {
+  AGENT_STATUS_STALE_AFTER_MS,
+  type AgentStatusEntry
+} from '../../../../shared/agent-status-types'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import {
   hasUnreadAgentCompletionForTerminalTab,
@@ -54,6 +57,24 @@ afterEach(() => {
 })
 
 describe('resolveTerminalTabActivityStatus', () => {
+  // Why: Orca injects its own "<Agent> - action required" OSC title on a blocked/waiting hook and
+  // classifies that title back as evidence. Once the pane's row aged past the freshness window it
+  // stopped registering its identity, so the self-authored title outranked the pane's own `done`
+  // row and the tab glyph claimed a question nobody was asking.
+  it('does not paint a stale self-authored action-required title as a live question', () => {
+    const done = entry(FIRST_LEAF_ID, 'done', {
+      updatedAt: NOW - AGENT_STATUS_STALE_AFTER_MS - 1,
+      stateStartedAt: NOW - AGENT_STATUS_STALE_AFTER_MS - 1
+    })
+    expect(
+      resolveTerminalTabActivityStatus({
+        tab: { id: TAB_ID, title: 'Codex - action required' },
+        agentStatusByPaneKey: { [done.paneKey]: done },
+        ptyIdsByTabId: LIVE_PTY
+      })
+    ).toBe('active')
+  })
+
   it('reports a fresh hook working state', () => {
     const working = entry(FIRST_LEAF_ID, 'working')
     expect(
@@ -64,6 +85,24 @@ describe('resolveTerminalTabActivityStatus', () => {
       })
     ).toBe('working')
   })
+
+  it.each(['tab', 'pane'] as const)(
+    'keeps native permission %s titles after hook freshness expires',
+    (surface) => {
+      const stale = entry(FIRST_LEAF_ID, 'working', {
+        agentType: 'gemini',
+        updatedAt: NOW - AGENT_STATUS_STALE_AFTER_MS - 1
+      })
+      expect(
+        resolveTerminalTabActivityStatus({
+          tab: { id: TAB_ID, title: '✋ Gemini CLI' },
+          agentStatusByPaneKey: { [stale.paneKey]: stale },
+          ptyIdsByTabId: LIVE_PTY,
+          runtimePaneTitlesByTabId: surface === 'pane' ? { [TAB_ID]: { 1: '✋ Gemini CLI' } } : {}
+        })
+      ).toBe('permission')
+    }
+  )
 
   it('reports monitoring without hiding active or actionable siblings', () => {
     const monitoring = entry(FIRST_LEAF_ID, 'working', { workingMode: 'monitoring' })

@@ -7,7 +7,7 @@ import {
   primeTerminalWebglAddon,
   resetTerminalWebglSuggestion
 } from './pane-webgl-renderer'
-import { attachLigatures, disposePane, openTerminal } from './pane-lifecycle'
+import { attachLigatures, disposePane, openTerminal, setLigaturesEnabled } from './pane-lifecycle'
 import { ensureArabicShapingJoinerForText } from './terminal-arabic-shaping-joiner'
 import {
   buildDefaultTerminalOptions,
@@ -531,6 +531,7 @@ describe('openTerminal — addon and provider wiring', () => {
       }),
       attachCustomWheelEventHandler: vi.fn(),
       onWriteParsed: vi.fn(() => ({ dispose: vi.fn() })),
+      refresh: vi.fn(),
       write: vi.fn(() => {
         events.push('write')
       }),
@@ -588,6 +589,31 @@ describe('openTerminal — addon and provider wiring', () => {
   // unicode v11 is activated (still on default v6 width tables), wide chars
   // lay out as single cells. The bug surfaces as the broken `?`-style glyphs
   // users saw on worktree switch.
+  it('builds one initial WebGL atlas with ligatures and still rebuilds on a live toggle', async () => {
+    await primeTerminalWebglAddon()
+    resetTerminalWebglSuggestion()
+    vi.mocked(WebglAddon).mockClear()
+    webglMock.dispose.mockClear()
+    vi.stubGlobal('navigator', { platform: 'MacIntel', userAgent: 'Macintosh' })
+    const { pane } = createOpenTerminalHarness()
+    pane.terminalGpuAcceleration = 'auto'
+    pane.gpuRenderingEnabled = true
+
+    openTerminal(pane, true)
+    expect(pane.ligaturesAddon).not.toBeNull()
+    expect(pane.webglAddon).not.toBeNull()
+    const addons = vi.mocked(pane.terminal.loadAddon).mock.calls.map(([addon]) => addon)
+    expect(addons.indexOf(pane.ligaturesAddon!)).toBeLessThan(addons.indexOf(pane.webglAddon!))
+    setLigaturesEnabled(pane, true)
+    expect(WebglAddon).toHaveBeenCalledTimes(1)
+    expect(webglMock.dispose).not.toHaveBeenCalled()
+
+    setLigaturesEnabled(pane, false)
+    expect(WebglAddon).toHaveBeenCalledTimes(2)
+    expect(webglMock.dispose).toHaveBeenCalledTimes(1)
+    expect(pane.ligaturesAddon).toBeNull()
+  })
+
   it('activates unicode 11 before any caller-driven write would be possible', () => {
     const { pane, events } = createOpenTerminalHarness()
 

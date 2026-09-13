@@ -26,7 +26,9 @@ function context(): StructuredAgentSessionEvictionContext & { order: string[] } 
         return true
       })
     } as unknown as StructuredAgentSessionEvictionContext['adapter'],
-    forget: vi.fn(() => order.push('forget')),
+    forget: vi.fn(async () => {
+      order.push('forget')
+    }),
     discardSink: vi.fn(() => order.push('discardSink')),
     releaseLease: vi.fn(async () => {
       order.push('releaseLease')
@@ -122,7 +124,7 @@ describe('rows the provider emits while closing', () => {
           return true
         }
       } as never,
-      forget: () => {},
+      forget: async () => {},
       discardSink: () => state.discardEventSink(sessionId),
       releaseLease: async () => {}
     })
@@ -171,7 +173,7 @@ describe('eviction against the real sink cache', () => {
       sessionId,
       eventSink: state.eventSinkFor(sessionId),
       adapter: { closeSession: async () => true } as never,
-      forget: () => {},
+      forget: async () => {},
       discardSink: () => state.discardEventSink(sessionId),
       releaseLease: async () => {}
     })

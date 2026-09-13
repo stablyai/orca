@@ -13,6 +13,7 @@ import {
   readTerminalTail
 } from './terminal-tail-read'
 import { getTerminalState } from './terminal-wait-results'
+import { readStructuredWorkerTerminal } from './structured-worker-terminal-read'
 
 export class OrcaRuntimeWithResolveTerminalPane extends OrcaRuntimeWithGetTerminalInteractiveWait {
   resolveTerminalPane(paneKey: string, expectedWorktreeId?: string): RuntimeTerminalResolvePane {
@@ -181,6 +182,18 @@ export class OrcaRuntimeWithResolveTerminalPane extends OrcaRuntimeWithGetTermin
     opts: { cursor?: number; limit?: number; screen?: boolean } = {},
     providerSnapshot: RuntimeProviderSnapshotReadOptions = {}
   ): Promise<RuntimeTerminalRead> {
+    // Before the PTY lookup, because a structured worker has no PTY and no leaf: without this the
+    // only peer read verb answers `terminal_handle_stale` for a perfectly live worker.
+    const structured = readStructuredWorkerTerminal({
+      handle,
+      db: this.getOrchestrationDbIfAvailable?.() ?? null,
+      ...(opts.cursor === undefined ? {} : { cursor: opts.cursor }),
+      ...(opts.limit === undefined ? {} : { limit: opts.limit })
+    })
+    if (structured) {
+      // `screen` asks for a rendered grid; there is none, and the journal is the whole record.
+      return { ...structured, source: opts.screen ? 'screen-unavailable' : 'stream' }
+    }
     const pty = this.getLivePtyForHandle(handle)
     if (pty) {
       const read = this.readPtyTerminal(handle, pty.pty, opts)

@@ -1,6 +1,13 @@
 import type { ChildProcess } from 'node:child_process'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import {
+  findSelfInitiatedTreeKills,
+  resetSelfInitiatedTreeKillLogForTest
+} from '../crash-reporting/self-initiated-tree-kill-log'
 import { terminateCodexAppServerProcessTree } from './codex-app-server-process-teardown'
+
+/** Above pid_max on every supported POSIX host, so the group signal is a real ESRCH. */
+const UNREACHABLE_PGID = 2_147_483_647
 
 function child() {
   return {
@@ -10,6 +17,10 @@ function child() {
 }
 
 describe('terminateCodexAppServerProcessTree', () => {
+  beforeEach(() => {
+    resetSelfInitiatedTreeKillLogForTest()
+  })
+
   it('waits for the Windows tree kill before releasing the wrapper', async () => {
     const target = child()
     const release = Promise.withResolvers<void>()
@@ -118,6 +129,55 @@ describe('terminateCodexAppServerProcessTree', () => {
     ).resolves.toBe(false)
 
     expect(target.kill).not.toHaveBeenCalled()
+  })
+
+  /**
+   * `selfInitiatedTreeKillCount` decides whether a `render-process-gone` was
+   * ours. A group that had already exited was killed by nobody, so crediting it
+   * puts a suspect in the five-second window that Orca never issued. Exercised
+   * through the real `process.kill(-pgid)` because the swallow being tested
+   * lives in the production default, not in an injectable seam.
+   */
+  it('does not claim a snapshot group that was already gone', async () => {
+    const target = { pid: UNREACHABLE_PGID, kill: vi.fn(() => true) as ChildProcess['kill'] }
+
+    await expect(
+      terminateCodexAppServerProcessTree(target, undefined, {
+        platform: 'darwin',
+        captureDescendants: async () => ({
+          rootPgid: UNREACHABLE_PGID,
+          descendants: [],
+          capturedAtMs: 1
+        }),
+        terminateDescendants: async () => true
+      })
+    ).resolves.toBe(true)
+
+    expect(target.kill).toHaveBeenLastCalledWith('SIGKILL')
+    expect(findSelfInitiatedTreeKills(Date.now())).toEqual([])
+  })
+
+  it('claims a snapshot group the signal actually reached', async () => {
+    const target = child()
+    const signalProcessGroup = vi.fn()
+
+    await expect(
+      terminateCodexAppServerProcessTree(target, undefined, {
+        platform: 'darwin',
+        captureDescendants: async () => ({ rootPgid: 1234, descendants: [], capturedAtMs: 1 }),
+        terminateDescendants: async () => true,
+        signalProcessGroup
+      })
+    ).resolves.toBe(true)
+
+    expect(signalProcessGroup).toHaveBeenCalledWith(1234, 'SIGKILL')
+    expect(findSelfInitiatedTreeKills(Date.now())).toEqual([
+      expect.objectContaining({
+        pid: 1234,
+        site: 'codex-app-server-teardown',
+        scope: 'posix-process-group'
+      })
+    ])
   })
 
   it('tears down 40 dedicated groups without process-table scans or cross-group fanout', async () => {

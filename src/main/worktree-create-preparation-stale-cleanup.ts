@@ -10,7 +10,7 @@ import { retryPendingPreparationDiscards } from './worktree-preparation-discard-
 
 const STALE_PREPARATION_CLEANUP_CONCURRENCY = 4
 
-const staleCleanupInFlight = new Map<string, Promise<void>>()
+const staleCleanupInFlight = new Map<string, { scanned: Promise<void>; settled: Promise<void> }>()
 
 function isProcessAlive(pid: number): boolean {
   try {
@@ -21,26 +21,24 @@ function isProcessAlive(pid: number): boolean {
   }
 }
 
-/** Reclaims preparations a crashed process left registered. Single-flighted per host key so a burst
- *  of arming calls shares one worktree listing. */
-export async function cleanupStalePreparations(
+/** Returns after the shared host scan; file reclamation stays tracked in the background. */
+export async function startStalePreparationCleanup(
   cleanupKey: string,
   repoPath: string,
   options: AddWorktreeOptions
 ): Promise<void> {
   const existing = staleCleanupInFlight.get(cleanupKey)
   if (existing) {
-    await existing.catch(() => {})
+    await existing.scanned.catch(() => {})
     return
   }
-  const cleanup = (async () => {
-    // Not awaited: the create path awaits this cleanup, and one stranded discard costs an unlock plus
-    // a `worktree remove --force` bounded at 30s each. Reclaiming leaked scratch must not delay create.
-    void retryPendingPreparationDiscards(cleanupKey)
-    const worktrees = await listWorktreeGraph(repoPath, {
-      ...options,
-      includeCreatePreparations: true
-    })
+  void retryPendingPreparationDiscards(cleanupKey)
+  const scan = listWorktreeGraph(repoPath, {
+    ...options,
+    includeCreatePreparations: true
+  })
+  const scanned = scan.then(() => {})
+  const cleanup = scan.then(async (worktrees) => {
     const staleWorktrees = worktrees.filter(isWorktreeCreatePreparation)
     let nextIndex = 0
     async function discardNextStalePreparation(): Promise<void> {
@@ -63,22 +61,27 @@ export async function cleanupStalePreparations(
     }
     const workerCount = Math.min(STALE_PREPARATION_CLEANUP_CONCURRENCY, staleWorktrees.length)
     await Promise.all(Array.from({ length: workerCount }, () => discardNextStalePreparation()))
-  })()
-  staleCleanupInFlight.set(cleanupKey, cleanup)
-  try {
-    await cleanup.catch(() => {})
-  } finally {
-    if (staleCleanupInFlight.get(cleanupKey) === cleanup) {
-      staleCleanupInFlight.delete(cleanupKey)
-    }
-  }
+  })
+  // Keep reclamation single-flighted, but do not make a new checkout wait for old file removal.
+  const entry = { scanned, settled: cleanup }
+  staleCleanupInFlight.set(cleanupKey, entry)
+  void cleanup
+    .catch(() => {})
+    .finally(() => {
+      if (staleCleanupInFlight.get(cleanupKey) === entry) {
+        staleCleanupInFlight.delete(cleanupKey)
+      }
+    })
+  await scanned.catch(() => {})
 }
 
-/** True while a crash-recovery scan is running, which means a create is in flight or imminent. */
+/** Keeps repo maintenance paused through crash-recovery scanning and reclamation. */
 export function hasPendingStalePreparationCleanup(): boolean {
   return staleCleanupInFlight.size > 0
 }
 
-export function resetStalePreparationCleanupForTests(): void {
+export async function resetStalePreparationCleanupForTests(): Promise<void> {
+  const cleanups = [...staleCleanupInFlight.values()].map((entry) => entry.settled)
   staleCleanupInFlight.clear()
+  await Promise.allSettled(cleanups)
 }

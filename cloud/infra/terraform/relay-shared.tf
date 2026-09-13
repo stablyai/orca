@@ -14,16 +14,16 @@ locals {
     "assertion.repository_owner_id == '${var.github_owner_id}'",
   ]
 
-  # Dual accept during the public extraction: the primary repository first, then every repository
-  # var.github_accepted_repositories adds. Each one renders its own OR arm in every provider
-  # condition, so both repos can run the same workflows through the same identities. A repository
-  # that imports these workflows may rename the files, hence the per-repository prefix.
+  # The primary repository first, then every repository var.github_accepted_repositories adds.
+  # Each one renders its own OR arm in every provider condition, so a repository move can trust
+  # both repos at once. A repository that imports these workflows may rename the files, hence the
+  # per-repository prefix; the primary's is var.github_workflow_file_prefix.
   relay_github_accepted_repositories = concat([{
     owner                = var.github_owner
     repo                 = var.github_repo
     repo_id              = var.github_repo_id
     owner_id             = var.github_owner_id
-    workflow_file_prefix = ""
+    workflow_file_prefix = var.github_workflow_file_prefix
   }], var.github_accepted_repositories)
 
   relay_github_single_repository = length(local.relay_github_accepted_repositories) == 1

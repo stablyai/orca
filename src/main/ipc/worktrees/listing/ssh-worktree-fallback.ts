@@ -9,7 +9,7 @@ import type { GitWorktreeInfo, DetectedWorktree, Worktree } from '../../../../sh
 import type { Store } from '../../../persistence/loading-store/store'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import {
-  readWorktreeMetaForHost,
+  readWorktreeMetaForRepo,
   writeWorktreeMetaForHost
 } from '../../../persistence/host-qualified-worktree-meta'
 import { getRepoOwnedWorktreeMeta } from '../../../worktree-metadata-ownership'
@@ -155,10 +155,11 @@ export function buildDetectedGitWorktrees(
   const repoOwnerCount = store.getRepos().filter((candidate) => candidate.id === repo.id).length
   const detected = liveWorktrees.map((gitWorktree) => {
     const worktreeId = `${repo.id}::${gitWorktree.path}`
-    const legacyMeta = store.getWorktreeMeta?.(worktreeId)
+    // Why: the locator-keyed row is only a stand-in for a missing host snapshot, so don't read it when we have one.
+    const legacyMeta = allMeta === undefined ? store.getWorktreeMeta?.(worktreeId) : undefined
     const metaById = allMeta ?? (legacyMeta ? { [worktreeId]: legacyMeta } : {})
-    let meta =
-      readWorktreeMetaForHost(store, worktreeId, getRepoExecutionHostId(repo)) ??
+    const meta =
+      readWorktreeMetaForRepo(store, worktreeId, repo) ??
       getRepoOwnedWorktreeMeta(repo, worktreeId, metaById, repoOwnerCount)
     const worktree = mergeWorktree(repo.id, gitWorktree, meta, repo.displayName)
     const detected = toDetectedWorktree({
@@ -174,17 +175,21 @@ export function buildDetectedGitWorktrees(
       return detected
     }
 
-    meta = resolveWorktreeMetaWithDiscoveryBackfill(
+    const backfilledMeta = resolveWorktreeMetaWithDiscoveryBackfill(
       store,
       repo,
       worktreeId,
       allMeta,
       repoOwnerCount
     )
+    // Why: backfill hands back the same object when it wrote nothing, and both builders are pure over it.
+    if (backfilledMeta === meta) {
+      return detected
+    }
     return toDetectedWorktree({
       repo,
-      worktree: mergeWorktree(repo.id, gitWorktree, meta, repo.displayName),
-      meta,
+      worktree: mergeWorktree(repo.id, gitWorktree, backfilledMeta, repo.displayName),
+      meta: backfilledMeta,
       settings,
       knownOrcaLayouts,
       isLegacyRepoForVisibility,

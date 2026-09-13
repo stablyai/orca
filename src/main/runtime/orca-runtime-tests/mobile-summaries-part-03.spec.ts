@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { makeAgentStatusStoreWiring } from '../agent-status-store-wiring.test-fixture'
 import {
   OrcaRuntimeService,
   getDefaultWorkspaceSession,
@@ -17,14 +18,18 @@ import {
 } from '../orca-runtime-test-fixtures.spec'
 
 describe('OrcaRuntimeService', () => {
-  it('keeps a retained OSC row from an SSH pane after its PTY disconnects', async () => {
+  it('keeps an OSC row from an SSH pane after its PTY disconnects', async () => {
     // Why: OSC snapshots must carry the pane transport; hardcoding local would
     // strip the SSH exemption off rows whose freshest update arrived via OSC.
     const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession({
       ...getDefaultWorkspaceSession(),
       tabsByWorktree: {}
     })
-    const runtime = new OrcaRuntimeService(runtimeStore as never)
+    const runtime = new OrcaRuntimeService(
+      runtimeStore as never,
+      undefined,
+      makeAgentStatusStoreWiring().deps
+    )
     runtime['recordPtyWorktree']('ssh-osc-pty', TEST_WORKTREE_ID, {
       connected: true,
       connectionId: 'ssh-osc-1',

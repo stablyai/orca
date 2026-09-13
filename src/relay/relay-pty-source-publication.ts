@@ -7,6 +7,7 @@ import type { PtySourceReceivingActivation } from '../shared/pty-source-receivin
 import {
   createPtySourceReceivingActivation,
   pendingPtySourceRecoveryResult,
+  boundedPtyRecoveryEnd,
   registerCanceledPtySourceRetirement,
   registerPtySourceActivationSettlement,
   samePtySourceRecoveryRequest
@@ -66,9 +67,7 @@ export class RelayPtySourcePublication {
     recovery?: PtySourceRecoveryRequest
   ): false | 'opened' | 'rotated' | 'existing' | PtySourceRecoveryResult {
     let current = this.deliveries.get(id)
-    // A superseded request can find the delivery its own replacement opened: releasing that fence
-    // resumes a send the replacement is still rotating, and cancelling it blanks the pane that owns
-    // it. So every bail-out below acts only on a record this caller still owns.
+    // Only release this caller's delivery; its replacement may still be rotating.
     const owned = current?.clientId === context?.clientId ? current : undefined
     if (!context?.onResponseSettled) {
       this.sender.releaseRotationFence(owned)
@@ -141,7 +140,7 @@ export class RelayPtySourcePublication {
         identity = rotation.identity
         displayEnd = current.displayEnd
         recoveryCheckpointSourceEndSu = recovery.acceptedSourceEndSu
-        recoveryEndSu = snapshot.receivedEndSu
+        recoveryEndSu = boundedPtyRecoveryEnd(this.session.sourceDeliverySnapshot(identity))
         recoveryWasSealed = snapshot.state === 'sealed-unsettled'
         this.counters.rotated++
       } catch (error) {

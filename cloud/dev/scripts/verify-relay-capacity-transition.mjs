@@ -1,4 +1,5 @@
 import { pathToFileURL } from 'node:url'
+import { fetchAdminOnceMore } from './relay-admin-transient-retry.mjs'
 
 const CAPACITY_PROTOCOL = 2
 
@@ -107,8 +108,8 @@ export function parseCapacityTransitionArguments(argv) {
   const regionalRehomeProtocol = values['regional-rehome-protocol'] === undefined
     ? undefined
     : integer(values['regional-rehome-protocol'], '--regional-rehome-protocol')
-  if (regionalRehomeProtocol !== undefined && ![0, 1].includes(regionalRehomeProtocol)) {
-    throw new Error('--regional-rehome-protocol must be 0 or 1')
+  if (regionalRehomeProtocol !== undefined && ![0, 1, 3].includes(regionalRehomeProtocol)) {
+    throw new Error('--regional-rehome-protocol must be 0, 1, or 3')
   }
   if (runtime === 'unavailable' && regionalRehomeProtocol !== undefined) {
     throw new Error('unavailable runtime cannot prove the regional rehome protocol')
@@ -378,9 +379,12 @@ export async function verifyCapacityTransition(config, overrides = {}) {
   const token = overrides.token ?? process.env.ORCA_RELAY_ADMIN_ID_TOKEN
   if (!token || token.length > 8_192) throw new Error('admin identity token is unavailable')
   const health = await responseJson(
-    await fetchImpl(`${config.directorOrigin}/health`, {
-      signal: AbortSignal.timeout(15_000)
-    }),
+    await fetchAdminOnceMore(
+      fetchImpl,
+      `${config.directorOrigin}/health`,
+      {},
+      { wait, timeoutMs: 15_000 }
+    ),
     'director health'
   )
   if (health.ok !== true || health.connectionCapacityProtocol !== CAPACITY_PROTOCOL) {
@@ -394,12 +398,16 @@ export async function verifyCapacityTransition(config, overrides = {}) {
     lastObservation = { runtimeAvailable: runtime !== null }
     if ((runtime === null) === (config.runtime === 'unavailable')) {
       const result = await responseJson(
-        await fetchImpl(`${config.directorOrigin}/v1/admin/cell-status`, {
-          method: 'POST',
-          headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
-          body: JSON.stringify({ v: 1, cellId: config.cellId }),
-          signal: AbortSignal.timeout(30_000)
-        }),
+        await fetchAdminOnceMore(
+          fetchImpl,
+          `${config.directorOrigin}/v1/admin/cell-status`,
+          {
+            method: 'POST',
+            headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json' },
+            body: JSON.stringify({ v: 1, cellId: config.cellId })
+          },
+          { wait }
+        ),
         'cell status'
       )
       const status = result.status

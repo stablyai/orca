@@ -1,4 +1,5 @@
 import type { MobileRelayEndpoint } from '../../../src/shared/mobile-relay-credential-contract'
+import type { RelayHostCloseReason } from '../../../src/shared/relay-host-close-reason'
 import type { MobileRelayCredentialBundle } from './mobile-relay-credential-bundle'
 import type { MobileRelayRpcSession } from './mobile-relay-rpc-session'
 import type { resolveMobileRelayEndpoint } from './mobile-relay-resume-director'
@@ -10,7 +11,8 @@ export type MobileEndpointSupervisorDependencies = {
   openRelay: (
     relay: MobileRelayEndpoint,
     credential: { token: string; version: number },
-    confirmReqId: string
+    confirmReqId: string,
+    onHostCloseReason?: (reason: RelayHostCloseReason) => void
   ) => MobileRelayRpcSession
   resolveRelay: typeof resolveMobileRelayEndpoint
   readBundle: (hostId: string) => Promise<MobileRelayCredentialBundle | null>

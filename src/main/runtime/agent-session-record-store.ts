@@ -1,7 +1,9 @@
+import { setVisibleSessionId } from './agent-session-visible-tab-index'
+import { commitConversationCommandRecord } from './agent-session-conversation-command-record'
+import { setAgentSessionRecordConversationName } from './agent-session-record-conversation-name'
 /** Durable single-writer session records and their operation ledger. */
 
 import {
-  agentSessionOperationKey,
   settleAgentSessionOperation,
   type AgentSessionOperationDecision,
   type AgentSessionOperationOutcome,
@@ -49,10 +51,7 @@ import {
   type AgentSessionReservationProcesslessProof
 } from './agent-session-processless-reservation'
 import {
-  admitPendingAgentSessionReservationReplay,
-  applyAgentSessionReservation,
-  evaluateAgentSessionReserveOperation,
-  requireAgentSessionRecordForReplay,
+  commitAgentSessionReservation,
   type AgentSessionReserveRequest,
   type AgentSessionReserveResult
 } from './agent-session-reservation-admission'
@@ -125,23 +124,30 @@ export class AgentSessionRecordStore {
 
   /** Persist the user-visible tab reference separately from the rollback-sensitive profile tabs. */
   setSessionTabVisibility(sessionId: string, visible: boolean): Promise<void> {
-    return this.transact(() => {
-      if (visible) {
-        if (!this.state.records.has(sessionId)) {
-          throw new Error('agent_session_identity_required')
-        }
-        this.state.visibleSessionIds.add(sessionId)
-      } else {
-        this.state.visibleSessionIds.delete(sessionId)
-      }
-      this.state.visibleSessionIdsIndexPresent = true
-    })
+    return this.transact(() => setVisibleSessionId(this.state, sessionId, visible))
   }
 
   listByScope(location: AgentSessionExecutionLocation): AgentSessionRecord[] {
     const scope = agentSessionScopeKey(location)
     return this.listRecords().filter((record) => agentSessionScopeKey(record.location) === scope)
   }
+
+  setConversationCommand(
+    sessionId: string,
+    fence: number,
+    command: NonNullable<AgentSessionRecord['conversationCommand']>
+  ): Promise<void> {
+    return this.transact(() =>
+      commitConversationCommandRecord(this.state, sessionId, fence, command)
+    )
+  }
+
+  /** Unfenced on purpose: the name is a durable note, so writing it never contends with the
+   *  writer lease. `null` clears it. */
+  setConversationName = (sessionId: string, name: string | null): Promise<AgentSessionRecord> =>
+    this.mutate(sessionId, (record) =>
+      setAgentSessionRecordConversationName(record, name, Date.now())
+    )
 
   /** A record this build cannot validate: readable as present, never grantable as a writer. */
   isSessionUnreadable(sessionId: string): boolean {
@@ -163,31 +169,10 @@ export class AgentSessionRecordStore {
     )
   }
 
-  /**
-   * Compare-and-swap reservation plus its client-operation row, committed together. A replayed
-   * operation returns the recorded outcome and never reaches the reservation.
-   */
   async reserveOwner(request: AgentSessionReserveRequest): Promise<AgentSessionReserveResult> {
-    return this.transact(() => {
-      const decision = evaluateAgentSessionReserveOperation(this.state, request)
-      if (decision.decision === 'refused') {
-        throw new Error(decision.code)
-      }
-      if (decision.decision === 'replay') {
-        let record = requireAgentSessionRecordForReplay(this.state, decision.row, request.sessionId)
-        if (decision.row.outcome.status === 'pending' && request.handoffOperationId !== null) {
-          record = admitPendingAgentSessionReservationReplay(record, request)
-        }
-        return { record, disposition: 'replayed' as const, operationRow: decision.row }
-      }
-      const result = applyAgentSessionReservation(this.state, request, AGENT_SESSION_LEASE_TTL_MS)
-      this.state.operations.set(
-        agentSessionOperationKey(request.operation.callerKey, request.operation.operationId),
-        decision.row
-      )
-      this.state.records.set(result.record.sessionId, result.record)
-      return { ...result, operationRow: decision.row }
-    })
+    return this.transact(() =>
+      commitAgentSessionReservation(this.state, request, AGENT_SESSION_LEASE_TTL_MS)
+    )
   }
 
   async commitProcessIdentity(
@@ -252,7 +237,9 @@ export class AgentSessionRecordStore {
     probe: AgentSessionOwnerProbe
     now: number
   }): Promise<AgentSessionRecord> {
-    return this.mutate(args.sessionId, (record) => evictAgentSessionOwner({ ...args, record }))
+    return this.mutate(args.sessionId, (record) =>
+      evictAgentSessionOwner({ ...args, record, journalSettlement: 'required' })
+    )
   }
 
   async transitionHandoff(

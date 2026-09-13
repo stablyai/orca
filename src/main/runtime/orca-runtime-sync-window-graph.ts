@@ -89,6 +89,13 @@ export class OrcaRuntimeWithSyncWindowGraph extends OrcaRuntimeWithAttachWindow 
     // keep live CLI handles usable while the UI graph rebuilds.
     const preserveLivePtysDuringReload = this.graphStatus === 'reloading'
     for (const leaf of lifecycleLeaves) {
+      if (leaf.ptyId) {
+        if (leaf.parked) {
+          this.orchestrationMailboxPointerDelivery.markPtyColdParked(leaf.ptyId)
+        } else {
+          this.orchestrationMailboxPointerDelivery.clearPtyColdParked(leaf.ptyId)
+        }
+      }
       const leafKey = this.getLeafKey(leaf.tabId, leaf.leafId)
       const existing = this.leaves.get(leafKey)
       const ptyId =
@@ -162,6 +169,11 @@ export class OrcaRuntimeWithSyncWindowGraph extends OrcaRuntimeWithAttachWindow 
     for (const oldLeafKey of this.leaves.keys()) {
       if (!nextLeaves.has(oldLeafKey)) {
         const oldLeaf = this.leaves.get(oldLeafKey)
+        if (oldLeaf?.ptyId && !nextPtyIds.has(oldLeaf.ptyId)) {
+          // A cold-parked PTY remains alive without a graph leaf; hold its
+          // staged Enter until a live idle frame authorizes submission.
+          this.orchestrationMailboxPointerDelivery.markPtyColdParked(oldLeaf.ptyId)
+        }
         const retainedIncarnation = oldLeaf?.ptyId
           ? this.handleByPtyIncarnation.get(oldLeaf.ptyId)
           : undefined

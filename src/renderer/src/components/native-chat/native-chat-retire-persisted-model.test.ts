@@ -3,7 +3,6 @@
 import { renderHook } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { CatalogModel } from '../../../../shared/agent-session-option-catalog'
-import type { PersistedNativeChatSessionOptions } from '../../../../shared/native-chat-session-options'
 import {
   clearNativeChatModelEnrichmentForTests,
   ensureNativeChatModelEnrichment,
@@ -11,15 +10,14 @@ import {
 } from './native-chat-session-option-enrichment'
 
 const mocks = vi.hoisted(() => ({
-  storeState: {
-    settings: {} as { nativeChatSessionOptions?: PersistedNativeChatSessionOptions },
-    updateSettings: vi.fn()
-  },
+  callRuntimeRpc: vi.fn(),
   createNativeChatPtySessionOptions: vi.fn(),
   discoverNativeChatCatalogModels: vi.fn()
 }))
 
-vi.mock('../../store', () => ({ useAppStore: { getState: () => mocks.storeState } }))
+vi.mock('@/runtime/runtime-rpc-client', () => ({
+  callRuntimeRpc: mocks.callRuntimeRpc
+}))
 
 vi.mock('./native-chat-pty-session-options', () => ({
   createNativeChatPtySessionOptions: mocks.createNativeChatPtySessionOptions
@@ -36,79 +34,63 @@ const { retirePersistedModelMissingFromDiscovery, useNativeChatSessionOptions } 
 const models = (...ids: string[]): CatalogModel[] =>
   ids.map((id) => ({ id, label: id, options: [] }))
 
-function persist(options: PersistedNativeChatSessionOptions): void {
-  mocks.storeState.settings = { nativeChatSessionOptions: options }
-}
+const LOCAL_TARGET = { kind: 'local' } as const
 
 /** The persisted model becomes `-m <id>` at every launch site, including ones that
  *  never render the picker, and grok exits fatally on an id it no longer lists. */
 describe('retirePersistedModelMissingFromDiscovery', () => {
   beforeEach(() => {
-    mocks.storeState.updateSettings.mockReset().mockResolvedValue(undefined)
-    mocks.storeState.settings = {}
+    mocks.callRuntimeRpc.mockReset().mockResolvedValue({ ok: true })
   })
 
   it('clears a persisted id the authoritative probe no longer lists', async () => {
-    persist({ grok: { model: 'grok-build', valuesByModel: { 'grok-build': { effort: 'low' } } } })
     await retirePersistedModelMissingFromDiscovery('grok', models('grok-4.5'))
-    expect(mocks.storeState.updateSettings).toHaveBeenCalledWith({
-      // Why keep valuesByModel: the option values are still valid if the user
-      // reselects that model on another host.
-      nativeChatSessionOptions: {
-        grok: { valuesByModel: { 'grok-build': { effort: 'low' } } }
+    expect(mocks.callRuntimeRpc).toHaveBeenCalledWith(
+      LOCAL_TARGET,
+      'settings.mutateNativeChatSessionOptions',
+      {
+        type: 'clear-model-if-missing',
+        agent: 'grok',
+        availableModelIds: ['grok-4.5']
       }
-    })
+    )
   })
 
-  it('keeps a persisted id the probe still lists', async () => {
-    persist({ grok: { model: 'grok-4.5' } })
+  it('lets the host keep a concurrently selected model from the available list', async () => {
     await retirePersistedModelMissingFromDiscovery('grok', models('grok-4.5', 'grok-build'))
-    expect(mocks.storeState.updateSettings).not.toHaveBeenCalled()
+    expect(mocks.callRuntimeRpc).toHaveBeenCalledWith(
+      LOCAL_TARGET,
+      'settings.mutateNativeChatSessionOptions',
+      {
+        type: 'clear-model-if-missing',
+        agent: 'grok',
+        availableModelIds: ['grok-4.5', 'grok-build']
+      }
+    )
   })
 
   it('treats an empty list as a failed probe, not an empty account', async () => {
-    persist({ grok: { model: 'grok-build' } })
     await retirePersistedModelMissingFromDiscovery('grok', [])
-    expect(mocks.storeState.updateSettings).not.toHaveBeenCalled()
+    expect(mocks.callRuntimeRpc).not.toHaveBeenCalled()
   })
 
   it('leaves additive agents alone, whose lists extend the seed rather than replace it', async () => {
-    // Cursor's probe not listing a model is no evidence the model is gone.
-    persist({ cursor: { model: 'gpt-5.3-codex' } })
     await retirePersistedModelMissingFromDiscovery('cursor', models('auto'))
-    expect(mocks.storeState.updateSettings).not.toHaveBeenCalled()
+    expect(mocks.callRuntimeRpc).not.toHaveBeenCalled()
   })
 
-  it('does nothing when no model was ever persisted', async () => {
-    persist({ grok: { valuesByModel: { 'grok-4.5': { effort: 'high' } } } })
-    await retirePersistedModelMissingFromDiscovery('grok', models('grok-4.5'))
-    expect(mocks.storeState.updateSettings).not.toHaveBeenCalled()
-  })
-
-  it('survives settings that were never written', async () => {
-    mocks.storeState.settings = {}
+  it('does not depend on a client-local settings snapshot', async () => {
     await expect(
       retirePersistedModelMissingFromDiscovery('grok', models('grok-4.5'))
     ).resolves.toBeUndefined()
-    expect(mocks.storeState.updateSettings).not.toHaveBeenCalled()
+    expect(mocks.callRuntimeRpc).toHaveBeenCalledOnce()
   })
 
-  it('re-reads live settings at apply so a pick landing mid-retirement survives', async () => {
-    // Regression: retirement captured the settings snapshot before its write was
-    // queued, so a pick landing in between was clobbered back to the old shape.
-    persist({ grok: { model: 'grok-build' } })
-    const pending = retirePersistedModelMissingFromDiscovery('grok', models('grok-5'))
-    persist({ grok: { model: 'grok-5' } })
-    await pending
-    expect(mocks.storeState.updateSettings).not.toHaveBeenCalled()
-  })
-
-  it('retires only the named agent, leaving other agents’ picks intact', async () => {
-    persist({ grok: { model: 'grok-build' }, claude: { model: 'opus' } })
-    await retirePersistedModelMissingFromDiscovery('grok', models('grok-4.5'))
-    expect(mocks.storeState.updateSettings).toHaveBeenCalledWith({
-      nativeChatSessionOptions: { grok: {}, claude: { model: 'opus' } }
-    })
+  it('swallows a failed best-effort retirement write', async () => {
+    mocks.callRuntimeRpc.mockRejectedValue(new Error('runtime offline'))
+    await expect(
+      retirePersistedModelMissingFromDiscovery('grok', models('grok-4.5'))
+    ).resolves.toBeUndefined()
   })
 })
 
@@ -128,8 +110,7 @@ describe('useNativeChatSessionOptions retirement on mount', () => {
 
   beforeEach(() => {
     clearNativeChatModelEnrichmentForTests()
-    mocks.storeState.updateSettings.mockReset().mockResolvedValue(undefined)
-    mocks.storeState.settings = {}
+    mocks.callRuntimeRpc.mockReset().mockResolvedValue({ ok: true })
     mocks.discoverNativeChatCatalogModels.mockReset().mockResolvedValue(null)
     // A stable snapshot reference: useSyncExternalStore re-renders forever otherwise.
     const emptySnapshot: never[] = []
@@ -143,7 +124,6 @@ describe('useNativeChatSessionOptions retirement on mount', () => {
   })
 
   it('retires a persisted id against models the probe already cached', async () => {
-    persist({ grok: { model: 'grok-build' } })
     ensureNativeChatModelEnrichment({
       agent: 'grok',
       hostKey: 'local',
@@ -154,19 +134,46 @@ describe('useNativeChatSessionOptions retirement on mount', () => {
     mountPane()
 
     await vi.waitFor(() =>
-      expect(mocks.storeState.updateSettings).toHaveBeenCalledWith({
-        nativeChatSessionOptions: { grok: {} }
-      })
+      expect(mocks.callRuntimeRpc).toHaveBeenCalledWith(
+        LOCAL_TARGET,
+        'settings.mutateNativeChatSessionOptions',
+        expect.objectContaining({ type: 'clear-model-if-missing', agent: 'grok' })
+      )
     )
   })
 
   it('leaves the persisted id alone while the probe is still in flight', async () => {
-    persist({ grok: { model: 'grok-build' } })
     mocks.discoverNativeChatCatalogModels.mockReturnValue(new Promise(() => {}))
 
     mountPane()
 
     await Promise.resolve()
-    expect(mocks.storeState.updateSettings).not.toHaveBeenCalled()
+    expect(mocks.callRuntimeRpc).not.toHaveBeenCalled()
+  })
+
+  it('keeps PTY picks in the client settings record used by paired launches', async () => {
+    mountPane()
+    const persistSelection = mocks.createNativeChatPtySessionOptions.mock.calls[0]?.[0]
+      ?.persistSelection as
+      | ((pick: {
+          modelId: string
+          optionId: string
+          value: string
+          adoptModelAsLaunchDefault: boolean
+        }) => Promise<void>)
+      | undefined
+
+    await persistSelection?.({
+      modelId: 'grok-4.5',
+      optionId: 'effort',
+      value: 'high',
+      adoptModelAsLaunchDefault: true
+    })
+
+    expect(mocks.callRuntimeRpc).toHaveBeenCalledWith(
+      LOCAL_TARGET,
+      'settings.mutateNativeChatSessionOptions',
+      expect.objectContaining({ type: 'apply-picks', agent: 'grok' })
+    )
   })
 })

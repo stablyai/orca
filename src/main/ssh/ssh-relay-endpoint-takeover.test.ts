@@ -7,13 +7,18 @@ vi.mock('./ssh-relay-deploy-helpers', () => ({
     (error as { sshChannelCloseConfirmed?: boolean } | null)?.sshChannelCloseConfirmed === false
 }))
 
-import { isRelayEndpointHeldError } from './ssh-relay-endpoint-incumbent'
+import {
+  isRelayEndpointHeldError,
+  isRelayEndpointUnresponsiveError
+} from './ssh-relay-endpoint-incumbent'
+import { RelayCredentialMismatchError } from './ssh-relay-credential-mismatch-error'
 import {
   interpretRelayHuskReapOutput,
   reapEmptyRelayHuskCommand,
   resolveRelayEndpointBeforeRelaunch
 } from './ssh-relay-endpoint-takeover'
 import { RelayVersionMismatchError } from './ssh-relay-version-mismatch-error'
+import { RELAY_DAEMON_SERVICE_ENTRY_FILENAMES } from '../../shared/relay-artifacts'
 import type { SshConnection } from './ssh-connection'
 import { getRemoteHostPlatform } from './ssh-remote-platform'
 
@@ -39,12 +44,14 @@ beforeEach(() => {
   vi.spyOn(console, 'log').mockImplementation(() => {})
 })
 
+const REFUSED = new RelayCredentialMismatchError('')
+
 describe('incumbent alive and refusing', () => {
   it('refuses to rebind a live relay holding PTYs, and signals nothing', async () => {
     execCommand.mockResolvedValueOnce(
-      probe(['PRESENT=yes', 'LISTEN=accepted', 'HOLDERS_SOURCE=lsof', 'HOLDER=3669803 yes 13'])
+      probe(['PRESENT=yes', 'LISTEN=accepted', 'HOLDERS_SOURCE=lsof', 'HOLDER=3669803 yes 13 11'])
     )
-    await expect(resolve()).rejects.toSatisfy(isRelayEndpointHeldError)
+    await expect(resolve(REFUSED)).rejects.toSatisfy(isRelayEndpointHeldError)
     // The whole point of #8585: the incumbent's socket must survive so it is not orphaned.
     expect(issuedCommands().some((command) => /\brm -f\b/.test(command))).toBe(false)
     expect(issuedCommands().some((command) => /\bkill\b/.test(command))).toBe(false)
@@ -52,10 +59,18 @@ describe('incumbent alive and refusing', () => {
 
   it('names the incumbent pid and the Reset Relay escape hatch in the error', async () => {
     execCommand.mockResolvedValue(
-      probe(['PRESENT=yes', 'LISTEN=accepted', 'HOLDERS_SOURCE=lsof', 'HOLDER=3669803 yes 13'])
+      probe(['PRESENT=yes', 'LISTEN=accepted', 'HOLDERS_SOURCE=lsof', 'HOLDER=3669803 yes 13 11'])
     )
-    await expect(resolve()).rejects.toThrow(/3669803\(children=13\)/)
-    await expect(resolve()).rejects.toThrow(/Reset Relay/)
+    await expect(resolve(REFUSED)).rejects.toThrow(/3669803\(children=13,unrecognized=11\)/)
+    await expect(resolve(REFUSED)).rejects.toThrow(/Reset Relay/)
+  })
+
+  it('treats a refused credential as live even where holders cannot be enumerated', async () => {
+    execCommand.mockResolvedValue(
+      probe(['PRESENT=yes', 'LISTEN=unknown', 'HOLDERS_SOURCE=unavailable'])
+    )
+    await expect(resolve(REFUSED)).rejects.toSatisfy(isRelayEndpointHeldError)
+    expect(issuedCommands().some((command) => /\bkill\b/.test(command))).toBe(false)
   })
 
   it('treats a version mismatch as live even where holders cannot be enumerated', async () => {
@@ -70,7 +85,7 @@ describe('incumbent alive and refusing', () => {
   it('reaps a live relay only when it provably holds nothing, and confirms it is gone', async () => {
     execCommand
       .mockResolvedValueOnce(
-        probe(['PRESENT=yes', 'LISTEN=accepted', 'HOLDERS_SOURCE=lsof', 'HOLDER=80583 yes 0'])
+        probe(['PRESENT=yes', 'LISTEN=accepted', 'HOLDERS_SOURCE=lsof', 'HOLDER=80583 yes 2 0'])
       )
       .mockResolvedValueOnce('GONE\n')
     await expect(resolve()).resolves.toMatchObject({ verdict: 'live' })
@@ -80,19 +95,42 @@ describe('incumbent alive and refusing', () => {
   it('does not launch over an empty relay whose death could not be confirmed', async () => {
     execCommand
       .mockResolvedValueOnce(
-        probe(['PRESENT=yes', 'LISTEN=accepted', 'HOLDERS_SOURCE=lsof', 'HOLDER=80583 yes 0'])
+        probe(['PRESENT=yes', 'LISTEN=accepted', 'HOLDERS_SOURCE=lsof', 'HOLDER=80583 yes 2 0'])
       )
       .mockResolvedValueOnce('LIVE\n')
-    await expect(resolve()).rejects.toSatisfy(isRelayEndpointHeldError)
+    await expect(resolve(REFUSED)).rejects.toSatisfy(isRelayEndpointHeldError)
   })
 
   it('does not launch over a relay the host refused to signal on its own re-check', async () => {
     execCommand
       .mockResolvedValueOnce(
-        probe(['PRESENT=yes', 'LISTEN=accepted', 'HOLDERS_SOURCE=lsof', 'HOLDER=80583 yes 0'])
+        probe(['PRESENT=yes', 'LISTEN=accepted', 'HOLDERS_SOURCE=lsof', 'HOLDER=80583 yes 2 0'])
       )
       .mockResolvedValueOnce('BUSY\n')
-    await expect(resolve()).rejects.toSatisfy(isRelayEndpointHeldError)
+    await expect(resolve(REFUSED)).rejects.toSatisfy(isRelayEndpointHeldError)
+  })
+})
+
+describe('incumbent alive but silent', () => {
+  // The stalled-host shape: the kernel backlog accepts the probe's connect, the daemon never
+  // answers the handshake. Nothing refused us, so this must stay retryable — never terminal,
+  // never a rebind, never a signal.
+  it('reports an unresponsive holder as retryable, not as a held endpoint', async () => {
+    execCommand.mockResolvedValueOnce(
+      probe(['PRESENT=yes', 'LISTEN=accepted', 'HOLDERS_SOURCE=unavailable'])
+    )
+    const outcome = resolve(new Error('Relay failed to start within 10s.'))
+    await expect(outcome).rejects.toSatisfy(isRelayEndpointUnresponsiveError)
+    await expect(outcome).rejects.not.toSatisfy(isRelayEndpointHeldError)
+    expect(issuedCommands().some((command) => /\brm -f\b/.test(command))).toBe(false)
+    expect(issuedCommands().some((command) => /\bkill\b/.test(command))).toBe(false)
+  })
+
+  it('stays retryable when a silent holder is enumerated with live work', async () => {
+    execCommand.mockResolvedValueOnce(
+      probe(['PRESENT=yes', 'LISTEN=unknown', 'HOLDERS_SOURCE=lsof', 'HOLDER=3669803 yes 13 11'])
+    )
+    await expect(resolve()).rejects.toSatisfy(isRelayEndpointUnresponsiveError)
   })
 })
 
@@ -138,9 +176,19 @@ describe('reapEmptyRelayHuskCommand', () => {
   })
 
   it('aborts without signalling when the host cannot count children', () => {
-    expect(reapEmptyRelayHuskCommand(4242, SOCK)).toContain(
-      "command -v pgrep >/dev/null 2>&1 || { printf 'BUSY\\n'; exit 0; }"
-    )
+    const command = reapEmptyRelayHuskCommand(4242, SOCK)
+    // The census leaves both counters at `unknown` without pgrep, and the gate demands "0".
+    expect(command).toContain('unrecognized_kids=unknown')
+    expect(command).toContain('command -v pgrep >/dev/null 2>&1')
+    expect(command).toContain('[ "$unrecognized_kids" = "0" ] ||')
+  })
+
+  it('subtracts only the daemon service children it can name from the reap gate', () => {
+    const command = reapEmptyRelayHuskCommand(4242, SOCK)
+    for (const filename of RELAY_DAEMON_SERVICE_ENTRY_FILENAMES) {
+      expect(command).toContain(`*'/${filename}'`)
+    }
+    expect(command).toContain('unrecognized_kids=$((unrecognized_kids+1))')
   })
 })
 

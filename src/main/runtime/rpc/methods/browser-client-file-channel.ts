@@ -7,7 +7,7 @@ import { BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY } from '../../../../shared/proto
 import { getBrowserClientDownloadTransferStore } from '../../browser-client-download-transfer-store'
 import { getBrowserHostLeaseRegistry } from '../../browser-host-lease-registry-instance'
 import { getRuntimeBrowserPageRegistry } from '../../runtime-browser-page-registry'
-import { defineMethod, type RpcAnyMethod, type RpcContext } from '../core'
+import { defineMethod, type RpcContext } from '../core'
 
 type FileChannelAuthorityParams = {
   browserHostClientId: string
@@ -64,7 +64,7 @@ function requireFileChannelPage(
   return page
 }
 
-export const BROWSER_CLIENT_FILE_CHANNEL_METHODS: RpcAnyMethod[] = [
+export const BROWSER_CLIENT_FILE_CHANNEL_METHODS = [
   defineMethod({
     name: 'browser.clientHost.fileChannel.read',
     params: BrowserClientFileChannelReadParams,

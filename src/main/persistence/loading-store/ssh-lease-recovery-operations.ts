@@ -24,6 +24,10 @@ import {
   upsertSshRemotePtyLease as upsertSshRemotePtyLeaseOperation
 } from '../leasing-ssh-ptys/ssh-pty-lease-operations'
 import {
+  reconcileSshRemotePtyLeasesForTarget as reconcileSshRemotePtyLeasesForTargetOperation,
+  supersedeSshRemotePtyLeasesForBoundPane as supersedeSshRemotePtyLeasesForBoundPaneOperation
+} from '../leasing-ssh-ptys/ssh-pty-pane-supersession'
+import {
   getSshPtyConsumerRecovery as getSshPtyConsumerRecoveryOperation,
   removeSshPtyConsumerRecovery as removeSshPtyConsumerRecoveryOperation,
   type SshPtyConsumerRecoveryOperations,
@@ -93,6 +97,28 @@ export class SshLeaseRecoveryOperations {
       Partial<Pick<SshRemotePtyLease, 'createdAt' | 'updatedAt'>>
   ): void {
     upsertSshRemotePtyLeaseOperation(getSshPtyLeaseOperations(this), lease)
+  }
+
+  /**
+   * Re-run pane supersession from the binding rather than from an arriving lease. Spawn commits
+   * call this after their binding write so it does not matter whether the lease or the binding
+   * landed first; see `supersedeSshRemotePtyLeasesForBoundPane`.
+   */
+  supersedeSshRemotePtyLeasesForBoundPane(targetId: string, leafId: string): void {
+    supersedeSshRemotePtyLeasesForBoundPaneOperation(
+      getSshPtyLeaseOperations(this),
+      targetId,
+      leafId
+    )
+  }
+
+  /**
+   * Re-derive one reattachable lease per pane from each pane's current binding. Called on the
+   * connect path immediately before the reattach set is read; see
+   * `reconcileSshRemotePtyLeasesForTarget`.
+   */
+  reconcileSshRemotePtyLeasesForTarget(targetId: string): void {
+    reconcileSshRemotePtyLeasesForTargetOperation(getSshPtyLeaseOperations(this), targetId)
   }
 
   markSshRemotePtyLeases(targetId: string, state: SshRemotePtyLease['state']): void {

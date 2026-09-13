@@ -1,6 +1,8 @@
 import type { CommandSpec } from '../args'
 import { GLOBAL_FLAGS } from '../args'
+import { WORKTREE_LISTING_SCOPE_NOTES } from './worktree-listing-scope-notes'
 import { SERVE_COMMAND_SPECS } from './serve'
+import { TERMINAL_SEND_COMMAND_SPEC } from './terminal-send'
 import { TERMINAL_CLOSE_COMMAND_SPEC } from './terminal-close'
 
 export const CORE_COMMAND_SPECS: CommandSpec[] = [
@@ -65,7 +67,8 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
     path: ['worktree', 'list'],
     summary: 'List Orca-managed worktrees',
     usage: 'orca worktree list [--repo <selector>] [--limit <n>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'repo', 'limit']
+    allowedFlags: [...GLOBAL_FLAGS, 'repo', 'limit'],
+    notes: [...WORKTREE_LISTING_SCOPE_NOTES]
   },
   {
     path: ['worktree', 'show'],
@@ -180,7 +183,8 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
     path: ['worktree', 'ps'],
     summary: 'Show a compact orchestration summary across worktrees',
     usage: 'orca worktree ps [--limit <n>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'limit']
+    allowedFlags: [...GLOBAL_FLAGS, 'limit'],
+    notes: [...WORKTREE_LISTING_SCOPE_NOTES]
   },
   {
     path: ['terminal', 'list'],
@@ -221,13 +225,7 @@ export const CORE_COMMAND_SPECS: CommandSpec[] = [
       'orca terminal read --terminal term_abc123 --screen --json'
     ]
   },
-  {
-    path: ['terminal', 'send'],
-    summary: 'Send input to a live terminal',
-    usage:
-      'orca terminal send [--terminal <handle>] [--text <text>] [--enter] [--interrupt] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'terminal', 'text', 'enter', 'interrupt']
-  },
+  TERMINAL_SEND_COMMAND_SPEC,
   {
     path: ['terminal', 'wait'],
     summary: 'Wait for a terminal condition',

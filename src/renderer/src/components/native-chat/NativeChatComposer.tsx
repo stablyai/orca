@@ -1,9 +1,8 @@
-import { forwardRef, useCallback, useImperativeHandle, useMemo, useState } from 'react'
+import type { NativeChatComposerInput } from './native-chat-composer-input'
+import { forwardRef, useCallback, useImperativeHandle, useState } from 'react'
 import { useAppStore } from '../../store'
 import { sendRuntimePtyInput } from '@/runtime/runtime-terminal-inspection'
 import { getSettingsForAgentTabRuntimeOwner } from '@/lib/agent-paste-draft'
-import { getVerifiedNativeChatCommands } from '../../../../shared/native-chat-agent-profiles'
-import { STRUCTURED_AGENT_SESSION_SLASH_COMMANDS } from '../../../../shared/structured-agent-session-composer'
 import {
   applyMentionSuggestion,
   EMPTY_HISTORY,
@@ -22,6 +21,7 @@ import { useNativeChatSessionOptions } from './use-native-chat-session-options'
 import { useNativeChatFileAttachmentActions } from './use-native-chat-file-attachment-actions'
 import { useNativeChatDictationActions } from './use-native-chat-dictation-actions'
 import { useNativeChatSessionOptionCommand } from './use-native-chat-session-option-command'
+import { useNativeChatComposerCatalog } from './use-native-chat-composer-catalog'
 import { useNativeChatPickerState } from './use-native-chat-picker-state'
 import { useNativeChatPickerCommandDispatch } from './use-native-chat-picker-command-dispatch'
 import { useNativeChatTypedInsertion } from './use-native-chat-typed-insertion'
@@ -109,12 +109,9 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
       dictationState === 'listening' ||
       dictationState === 'stopping'
 
-    const agentCommands = useMemo(
-      () =>
-        structuredTransport
-          ? STRUCTURED_AGENT_SESSION_SLASH_COMMANDS
-          : getVerifiedNativeChatCommands(agent),
-      [agent, structuredTransport]
+    const { agentCommands, sessionSkillNames } = useNativeChatComposerCatalog(
+      agent,
+      structuredTransport
     )
     const picker = useNativeChatPickerState({
       agent,
@@ -123,6 +120,7 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
       draft,
       caret,
       agentCommands,
+      sessionSkillNames,
       textareaRef,
       setDraft,
       setCaret,
@@ -150,7 +148,7 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
       ? [true, !canSend]
       : [targetPtyId !== null, targetPtyId === null || !canSend]
 
-    const syncCaret = useCallback((el: HTMLTextAreaElement) => {
+    const syncCaret = useCallback((el: NativeChatComposerInput) => {
       setCaret(el.selectionStart ?? el.value.length)
     }, [])
 
@@ -220,7 +218,7 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
       [focus, insertTypedText, handlePaste, pasteFromClipboard]
     )
 
-    const { pickAttachment } = useNativeChatFileAttachmentActions(attachExternalPaths)
+    const { pickAttachment } = useNativeChatFileAttachmentActions(paneKey, attachExternalPaths)
     const { toggleDictation, startHoldDictation, stopHoldDictation } =
       useNativeChatDictationActions({ textareaRef, setDictationPressed })
     const { dispatch: dispatchSessionOptionCommand, isDispatching: isDispatchingSessionOption } =
@@ -246,6 +244,7 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
 
     const sendStructured = useNativeChatStructuredComposerSend({
       agent,
+      draft,
       imageAttachments,
       structuredTransport,
       clearImageAttachments,
@@ -355,7 +354,7 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
     })
 
     const handleDraftChange = useCallback(
-      (value: string, element: HTMLTextAreaElement) => {
+      (value: string, element: NativeChatComposerInput) => {
         setDraft(value)
         setHistory((prev) => ({ entries: prev.entries, index: null }))
         syncCaret(element)
@@ -367,6 +366,7 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
 
     return (
       <NativeChatComposerField
+        composerScopeKey={paneKey}
         textareaRef={textareaRef}
         draft={draft}
         disabled={disabled}

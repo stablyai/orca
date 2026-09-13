@@ -17,7 +17,10 @@ export type WorktreeHostRouting<T extends LaunchHostRepo> =
   | { kind: 'resolved'; hostId: ExecutionHostId; repo: T | null }
   /** No row carries this repo id and the worktree names no host — nothing ever named a host. */
   | { kind: 'unowned' }
-  /** Rival rows disagree about the host; guessing one is the cross-host leak. */
+  /**
+   * No single trustworthy host: rival rows disagree, or the resolved row named one that cannot be
+   * parsed. Guessing is the cross-host leak in both cases.
+   */
   | { kind: 'ambiguous' }
 
 /**
@@ -33,7 +36,10 @@ export function resolveWorktreeHostRouting<T extends LaunchHostRepo & ExecutionH
 ): WorktreeHostRouting<T> {
   const resolution = resolveWorktreeExecutionHost(createRepoRowExecutionHostLookup(repos), worktree)
   if (resolution.kind === 'unresolved') {
-    return resolution.reason === 'ambiguous' ? { kind: 'ambiguous' } : { kind: 'unowned' }
+    // Only `unknown` — nothing anywhere carries the id — becomes `unowned`, which callers dispose of
+    // as a plain local folder. `malformed` is a row that declared a host and named an unparseable
+    // one, so it joins `ambiguous`: guessing is the cross-host leak either way.
+    return resolution.reason === 'unknown' ? { kind: 'unowned' } : { kind: 'ambiguous' }
   }
   return { kind: 'resolved', hostId: resolution.hostId, repo: resolution.owner }
 }

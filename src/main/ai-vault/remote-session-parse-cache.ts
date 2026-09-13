@@ -1,5 +1,6 @@
 import type { AiVaultSession } from '../../shared/ai-vault-types'
 import type { RemoteScannerContext, RemoteSessionCandidate } from './remote-session-scanner-types'
+import { sidecarUnchanged, type SessionSidecarObservation } from './session-sidecar-stat'
 
 // Matches the local scanner's cap. The relay sidecar is forked with
 // --max-old-space-size=384, and a retained session row is a title, a preview
@@ -11,6 +12,7 @@ type RemoteSessionParseCacheEntry = {
   mtimeMs: number
   sizeBytes: number | null
   hostKey: string
+  sidecar?: SessionSidecarObservation
   session: AiVaultSession | null
 }
 
@@ -55,13 +57,15 @@ function storeEntry(path: string, entry: RemoteSessionParseCacheEntry): void {
  * (#13753). The local scanner has had `parseAgentSessionFileCached` for exactly
  * this reason; this is its remote counterpart.
  *
- * `(mtimeMs, sizeBytes)` is a sound validity key here because discovery already
- * folds a source's `contentDependencyPath` stat into both fields
- * (remote-session-scanner-discovery.ts), so a metadata-only transcript whose
- * companion file changed still looks changed. Sources whose parse reads a file
- * discovery does not stat — Codex looks its title up in `session_index.jsonl` —
- * are not covered by that key and pass `refreshReusedSession` to re-derive the
- * uncovered part without touching the transcript.
+ * `(mtimeMs, sizeBytes)` covers the transcript, and the sidecar observation
+ * discovery records beside it (remote-session-scanner-discovery.ts) covers a
+ * source's companion file, so a metadata-only transcript whose companion
+ * changed still looks changed. Remote Cline is the only such source; remote
+ * Cursor streams transcript content with no sibling to read. Sources whose
+ * parse reads a file discovery does not stat — Codex looks its title up in
+ * `session_index.jsonl` — are not covered by either and pass
+ * `refreshReusedSession` to re-derive the uncovered part without touching the
+ * transcript.
  *
  * Only a completed parse is stored. A read that threw stays uncached so a
  * transient filesystem failure cannot pin a wrong answer for the corpus's life.
@@ -80,7 +84,10 @@ export async function parseRemoteSessionFileCached(args: {
     entry !== undefined &&
     entry.hostKey === args.hostKey &&
     entry.mtimeMs === file.mtimeMs &&
-    (entry.sizeBytes === null || file.sizeBytes === undefined || entry.sizeBytes === file.sizeBytes)
+    (entry.sizeBytes === null ||
+      file.sizeBytes === undefined ||
+      entry.sizeBytes === file.sizeBytes) &&
+    sidecarUnchanged(entry.sidecar, file.sidecar)
   if (unchanged) {
     if (args.stats) {
       args.stats.reused++
@@ -101,6 +108,7 @@ export async function parseRemoteSessionFileCached(args: {
     mtimeMs: file.mtimeMs,
     sizeBytes: file.sizeBytes ?? null,
     hostKey: args.hostKey,
+    sidecar: file.sidecar,
     session
   })
   return session

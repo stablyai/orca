@@ -1,11 +1,16 @@
 // Merges the three Cmd+J open-tab engines into one ranked list for the new-tab
 // omnibox. Pure: no store, no React.
 
+import { capPaletteSection } from '../cmd-j/palette-section-render-cap'
 import { isClipboardTextByteLengthOverLimit } from '../../../../shared/clipboard-text'
+import type { PaletteDocumentRank } from '@/lib/palette-match/palette-document'
 import {
-  comparePaletteDocumentRank,
-  type PaletteDocumentRank
-} from '@/lib/palette-match/palette-document'
+  comparePaletteEntityRanks,
+  createPaletteSearchContext,
+  encodePaletteIdentity,
+  type PaletteActivityRank,
+  type PaletteSearchContext
+} from '@/lib/palette-match/palette-ranking'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../../shared/execution-host'
 import {
   searchBrowserPages,
@@ -17,6 +22,7 @@ import {
   type SearchableSimulatorTab,
   type SimulatorPaletteSearchResult
 } from '@/lib/simulator-palette-search'
+import { getUnifiedTabPaletteExecutionHostId } from '@/lib/unified-tab-host-ownership'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import {
   searchWorkspaceTabs,
@@ -39,6 +45,7 @@ type OpenTabSearchResultBase = {
   title: string
   /** Engine secondary text when the match came from a secondary field. */
   matchedText: string | null
+  matchedTexts?: readonly string[]
   worktreeId: string
 }
 
@@ -72,14 +79,16 @@ export type OpenTabSearchInput = {
   browserPages: readonly SearchableBrowserPage[]
   simulatorTabs: readonly SearchableSimulatorTab[]
   query: string
+  context?: PaletteSearchContext
+  retainedResultId?: string | null
 }
 
 type RankedResult = {
   result: OpenTabSearchResult
-  tier: number
-  sourceRank: number
-  matchRank: PaletteDocumentRank | null
-  score: number
+  matchRank: PaletteDocumentRank
+  activity: PaletteActivityRank
+  position: readonly [number, number]
+  identity: string
 }
 
 const SOURCE_RANK: Record<OpenTabSearchSource, number> = {
@@ -87,13 +96,6 @@ const SOURCE_RANK: Record<OpenTabSearchSource, number> = {
   browser: 1,
   simulator: 2
 }
-
-const TITLE_PREFIX_TIER = 0
-const TITLE_SUBSTRING_TIER = 1
-// Why one tier for every secondary match: path and agent-snippet matches share
-// `secondaryRanges`, so splitting on offset would outrank the engine's own match
-// rank, which is compared explicitly below. See the plan's tiering decision.
-const SECONDARY_TIER = 2
 
 function isOpenTabSearchQueryTooLarge(
   query: string,
@@ -106,21 +108,6 @@ type EngineResult =
   | WorkspaceTabPaletteSearchResult
   | BrowserPaletteSearchResult
   | SimulatorPaletteSearchResult
-
-// Why the positive signal rather than "no title and no secondary range": the
-// simulator alias branch and the browser workspace-label branch are real matches
-// that carry neither range, and would be dropped by the inverse test.
-function isNameOnlyMatch(result: EngineResult): boolean {
-  return result.worktreeRanges.length > 0 || result.repoRanges.length > 0
-}
-
-function getTier(result: EngineResult): number {
-  const titleRange = result.titleRanges[0]
-  if (!titleRange) {
-    return SECONDARY_TIER
-  }
-  return titleRange.start === 0 ? TITLE_PREFIX_TIER : TITLE_SUBSTRING_TIER
-}
 
 function getMatchedText(result: EngineResult): string | null {
   return result.secondaryRanges.length > 0 ? result.secondaryText : null
@@ -138,16 +125,15 @@ function getEditorRelativePath(entry: SearchableWorkspaceTab | undefined): strin
 }
 
 function baseResult(
-  source: OpenTabSearchSource,
-  id: string,
   result: EngineResult,
   executionHostId: ExecutionHostId
 ): OpenTabSearchResultBase {
   return {
     executionHostId,
-    id: `open-tab:${source}:${id}`,
+    id: result.paletteIdentity,
     title: result.title,
     matchedText: getMatchedText(result),
+    matchedTexts: result.secondaryMatches.map((match) => match.text).filter(Boolean),
     worktreeId: result.worktreeId
   }
 }
@@ -157,84 +143,129 @@ function rank<TEngine extends EngineResult>(
   results: readonly TEngine[],
   toResult: (result: TEngine) => OpenTabSearchResult
 ): RankedResult[] {
-  return results
-    .filter((result) => !isNameOnlyMatch(result))
-    .map((result) => ({
-      tier: getTier(result),
-      sourceRank: SOURCE_RANK[source],
-      matchRank: result.rank,
-      score: result.score,
-      result: toResult(result)
-    }))
+  return results.flatMap((result) => {
+    if (!result.rank) {
+      return []
+    }
+    const converted = toResult(result)
+    return [
+      {
+        matchRank: result.rank,
+        activity: result.activity,
+        position: [SOURCE_RANK[source], result.score],
+        result: converted,
+        identity: converted.id
+      }
+    ]
+  })
 }
 
-export function searchOpenTabs({
+export function searchOpenTabCandidates({
   workspaceTabs,
   browserPages,
   simulatorTabs,
-  query
+  query,
+  context: suppliedContext
 }: OpenTabSearchInput): OpenTabSearchResult[] {
   const trimmed = query.trim()
   if (!trimmed || isOpenTabSearchQueryTooLarge(query)) {
     return []
   }
 
-  // Single-worktree builders stamp one host on every entry; resolve once.
-  const executionHostId =
-    workspaceTabs[0]?.worktree.hostId ??
-    browserPages[0]?.worktree.hostId ??
-    simulatorTabs[0]?.worktree.hostId ??
-    LOCAL_EXECUTION_HOST_ID
+  const context = suppliedContext ?? createPaletteSearchContext(Date.now())
   // Why map workspace only: editor relativePath is read from the searchable entry.
-  const workspaceEntriesByTabId = new Map(workspaceTabs.map((entry) => [entry.tab.id, entry]))
+  const workspaceEntriesByIdentity = new Map(
+    workspaceTabs.map((entry) => [
+      encodePaletteIdentity([
+        getUnifiedTabPaletteExecutionHostId(entry.tab, entry.worktree) ?? LOCAL_EXECUTION_HOST_ID,
+        entry.worktree.id,
+        entry.tab.id
+      ]),
+      entry
+    ])
+  )
 
   return [
     // Why no isCurrentTab filter: Cmd+J lists the tab you are on, and hiding it
     // made the omnibox look broken when you searched for the tab on screen.
-    ...rank('workspace', searchWorkspaceTabs([...workspaceTabs], trimmed), (result) => ({
-      ...baseResult('workspace', result.tabId, result, executionHostId),
-      source: 'workspace',
-      contentType: result.contentType,
-      tabId: result.tabId,
-      entityId: result.entityId,
-      groupId: result.groupId,
-      relativePath: getEditorRelativePath(workspaceEntriesByTabId.get(result.tabId)),
-      occupantAgent: result.occupantAgent
-    })),
-    ...rank('browser', searchBrowserPages([...browserPages], trimmed), (result) => ({
-      ...baseResult('browser', result.pageId, result, executionHostId),
-      source: 'browser',
-      contentType: 'browser',
-      pageId: result.pageId,
-      workspaceId: result.workspaceId,
-      url: result.url,
-      faviconUrl: result.faviconUrl
-    })),
-    ...rank('simulator', searchSimulatorTabs([...simulatorTabs], trimmed), (result) => ({
-      ...baseResult('simulator', result.tabId, result, executionHostId),
-      source: 'simulator',
-      contentType: 'simulator',
-      tabId: result.tabId,
-      groupId: result.groupId
-    }))
+    ...rank(
+      'workspace',
+      searchWorkspaceTabs([...workspaceTabs], trimmed, { context, fieldMode: 'omnibox' }),
+      (result) => ({
+        ...baseResult(result, result.executionHostId ?? LOCAL_EXECUTION_HOST_ID),
+        source: 'workspace',
+        contentType: result.contentType,
+        tabId: result.tabId,
+        entityId: result.entityId,
+        groupId: result.groupId,
+        relativePath: getEditorRelativePath(
+          workspaceEntriesByIdentity.get(
+            encodePaletteIdentity([
+              result.executionHostId ?? LOCAL_EXECUTION_HOST_ID,
+              result.worktreeId,
+              result.tabId
+            ])
+          )
+        ),
+        occupantAgent: result.occupantAgent
+      })
+    ),
+    ...rank(
+      'browser',
+      searchBrowserPages([...browserPages], trimmed, { context, fieldMode: 'omnibox' }),
+      (result) => ({
+        ...baseResult(result, result.executionHostId ?? LOCAL_EXECUTION_HOST_ID),
+        source: 'browser',
+        contentType: 'browser',
+        pageId: result.pageId,
+        workspaceId: result.workspaceId,
+        url: result.url,
+        faviconUrl: result.faviconUrl
+      })
+    ),
+    ...rank(
+      'simulator',
+      searchSimulatorTabs([...simulatorTabs], trimmed, { context, fieldMode: 'omnibox' }),
+      (result) => ({
+        ...baseResult(result, result.executionHostId ?? LOCAL_EXECUTION_HOST_ID),
+        source: 'simulator',
+        contentType: 'simulator',
+        tabId: result.tabId,
+        groupId: result.groupId
+      })
+    )
   ]
     .sort((a, b) => {
-      if (a.tier !== b.tier) {
-        return a.tier - b.tier
-      }
-      if (a.sourceRank !== b.sourceRank) {
-        return a.sourceRank - b.sourceRank
-      }
-      // Why before position: `score` is position-only now, so without this an
-      // agent-snippet fallback in an earlier tab would outrank a real path match.
-      if (a.matchRank && b.matchRank) {
-        const byMatch = comparePaletteDocumentRank(a.matchRank, b.matchRank)
-        if (byMatch !== 0) {
-          return byMatch
+      return comparePaletteEntityRanks(
+        {
+          rank: a.matchRank,
+          activity: a.activity,
+          position: a.position,
+          identity: a.identity
+        },
+        {
+          rank: b.matchRank,
+          activity: b.activity,
+          position: b.position,
+          identity: b.identity
         }
-      }
-      return a.score - b.score
+      )
     })
-    .slice(0, OPEN_TAB_SEARCH_RESULT_LIMIT)
     .map((ranked) => ranked.result)
+}
+
+export function searchOpenTabs(input: OpenTabSearchInput): OpenTabSearchResult[] {
+  return capOpenTabSearchCandidates(searchOpenTabCandidates(input), input.retainedResultId)
+}
+
+export function capOpenTabSearchCandidates(
+  candidates: readonly OpenTabSearchResult[],
+  retainedResultId?: string | null
+): OpenTabSearchResult[] {
+  const capped = capPaletteSection(
+    candidates,
+    OPEN_TAB_SEARCH_RESULT_LIMIT,
+    (result) => result.id === retainedResultId
+  )
+  return [...capped.visible]
 }

@@ -66,9 +66,26 @@ A verdict needs evidence from the host that owns the process. Apply these tests 
 
 **Does the termination event match the current identity?** A host-delivered exit for the live PTY incarnation and provider generation, while its siblings still report, establishes `exited`. A stale event, an event for a superseded incarnation, or one quiet terminal with no host evidence does not.
 
+**Did the answer carry its evidence, or only the same wording?** `pty.attach` refuses with `PTY "<id>" not found` both for a pid the relay probed and found gone and for an id its session map never had — which is every id minted before a relay restart, since ids carry a per-start mint epoch. Only the probed refusal carries `PTY_ATTACH_PROVEN_EXITED_MARKER` (`src/shared/pty-attach-absence-evidence.ts`) and reaches the client as `SshPtyProvenExitedOnRelayError`; the unmarked union arrives as `SshPtyAbsentFromRelayError`, which licenses retiring the client's own route to the PTY and nothing more. A missing marker is never evidence — an older relay omits it too.
+
 **Is a returned status actually a claim of success?** An operation that reports failure may have succeeded, and one that reports success may not have run — check the durable state it should have changed rather than trusting the return.
 
 Anything short of positive host evidence is `unverifiable`. Reporting it as `exited` is the error this document exists to prevent: it orphans live work and can cold-start a duplicate over the same worktree.
+
+## Deciding a remote pane is idle
+
+The orphan-PTY sweep is the one flow that turns an observation into a SIGKILL, so its idleness evidence has to be measured against the same thing the signal reaches. It is not the terminal.
+
+`forceKillPosixPtyProcessGroups` (`src/main/pty/posix-pty-process-groups.ts`) collects every process group on the pane's tty and `killpg`s each one. The blast radius is therefore _(process groups on the tty) × (members of those groups, wherever they are)_, and the second factor is not bounded by the terminal at all. Two facts make that gap reachable:
+
+- **Job control can be off.** With `set +m` a background job does not get its own process group — it keeps the shell's. `ps` then shows one process group on the tty, running a build. Nothing in a tty-shaped predicate can see it.
+- **A group member can leave the terminal.** `ioctl(TIOCNOTTY)` without `setsid` drops the controlling terminal but keeps the pgid, so the process reports `tpgid == -1`, never appears in `ps -t <tty>`, and is still killed by `killpg(shellPgid)`. A double-forked grandchild similarly keeps the pgid while reparenting to pid 1, so no walk by `ppid` from the PTY root can name it either.
+
+So `shellOwnsEveryTtyProcessGroup` (`src/main/providers/agent-foreground-process-batch.ts`) requires both measurements: every process group on the tty is the shell's own with none stopped, **and** the shell's own process group has no other member anywhere in the host's process table. The name is tty-shaped for wire-compatibility reasons only.
+
+Two residuals remain, and neither is removable here. The capture is a snapshot, so work started between the `ps` and the signal is invisible — bounded by `RELAY_PTY_SWEEP_MAX_EVIDENCE_AGE_MS` on the reading side, not eliminated. And a process the host's own `ps` cannot enumerate (another PID namespace, `hidepid=2`, a table truncated by a permission boundary) is unobservable while `killpg` still reaches it.
+
+The general rule this instantiates: **evidence must be measured in the unit the destructive action operates on.** Evidence in a different unit is `unverifiable` no matter how precise it looks.
 
 ## Reading artifacts instead of process state
 

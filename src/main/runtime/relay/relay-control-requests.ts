@@ -25,6 +25,8 @@ export type DeviceCredentialInstallAuthorization =
 export class RelayControlRequests {
   private readonly pending = new Map<string, PendingRequest>()
 
+  constructor(private readonly onPendingChanged?: () => void) {}
+
   get size(): number {
     return this.pending.size
   }
@@ -162,7 +164,7 @@ export class RelayControlRequests {
     }
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
-        this.pending.delete(reqId)
+        this.finish(reqId)
         reject(new Error('relay_control_request_timeout'))
       }, 10_000)
       this.pending.set(reqId, { kind, resolve, reject, timer })
@@ -180,6 +182,8 @@ export class RelayControlRequests {
     if (pending) {
       clearTimeout(pending.timer)
       this.pending.delete(reqId)
+      // Settle the request before its final waiter retires the owning origin.
+      queueMicrotask(() => this.onPendingChanged?.())
     }
   }
 }

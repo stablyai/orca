@@ -93,7 +93,7 @@ export type TerminalTitleTracker = {
    */
   seedInitialTitle: (rawTitle: string) => void
   /** Restore the status consumed by the latest exit candidate when process evidence disproves it. */
-  restoreLastAgentExit: () => AgentStatus | null
+  restoreLastAgentExit: (confirmedStatus?: AgentStatus) => AgentStatus | null
   /** Last title surfaced through onTitle, after normalization. */
   getLastNormalizedTitle: () => string | null
   /**
@@ -280,8 +280,8 @@ export function createTerminalTitleTracker(
         agentTracker?.seedTitle(rawTitle)
       }
     },
-    restoreLastAgentExit(): AgentStatus | null {
-      return agentTracker?.restoreLastExit() ?? null
+    restoreLastAgentExit(confirmedStatus?: AgentStatus): AgentStatus | null {
+      return agentTracker?.restoreLastExit(confirmedStatus) ?? null
     },
     getLastNormalizedTitle: () => lastEmittedTitle,
     setTransientFactScanningSuppressed(suppressed: boolean): void {

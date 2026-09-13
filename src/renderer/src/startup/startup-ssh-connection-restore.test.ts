@@ -146,6 +146,7 @@ describe('restoreSshConnectionsForStartup', () => {
   })
 
   it('does not push a connected background target back into the deferred list', async () => {
+    vi.useFakeTimers()
     installWindowApi([target('ssh-active'), target('ssh-bg')])
     // The active host never answers and times out; the background host connects first.
     harness.connect.mockImplementation((targetId: string) =>
@@ -154,7 +155,7 @@ describe('restoreSshConnectionsForStartup', () => {
         : new Promise<SshConnectionState>(() => {})
     )
 
-    await restoreSshConnectionsForStartup({
+    const restore = restoreSshConnectionsForStartup({
       connectionIds: ['ssh-active', 'ssh-bg'],
       blockingConnectionIds: ['ssh-active'],
       setDeferredSshReconnectTargets: harness.setDeferredSshReconnectTargets,
@@ -162,11 +163,14 @@ describe('restoreSshConnectionsForStartup', () => {
       publishSshConnectionState: harness.publishSshConnectionState
     })
 
+    await vi.advanceTimersByTimeAsync(15_000)
+    await restore
+
     expect(harness.removeDeferredSshReconnectTarget).toHaveBeenCalledWith('ssh-bg')
     // The timed-out rewrite must not resurrect the reachable background target: a deferred
     // connected target sends fresh panes down the cold-restore path instead of the normal one.
     expect(harness.setDeferredSshReconnectTargets).toHaveBeenLastCalledWith(['ssh-active'])
-  }, 30_000)
+  })
 
   it('keeps passphrase targets deferred and never dials them', async () => {
     installWindowApi([target('ssh-key', true), target('ssh-bg')])

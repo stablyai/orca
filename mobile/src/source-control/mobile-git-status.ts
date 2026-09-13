@@ -36,13 +36,6 @@ export const MOBILE_GIT_STATUS_LABELS: Record<MobileGitFileStatus, string> = {
   copied: 'C'
 }
 
-function compareGitStatusEntries(a: MobileGitStatusEntry, b: MobileGitStatusEntry): number {
-  return (
-    getConflictSortRank(a) - getConflictSortRank(b) ||
-    a.path.localeCompare(b.path, undefined, { numeric: true })
-  )
-}
-
 function getConflictSortRank(entry: MobileGitStatusEntry): number {
   if (entry.conflictStatus === 'unresolved') {
     return 0
@@ -56,11 +49,21 @@ function getConflictSortRank(entry: MobileGitStatusEntry): number {
 export function buildMobileSourceControlSections<TEntry extends MobileGitStatusEntry>(
   entries: readonly TEntry[]
 ): MobileSourceControlSection<TEntry>[] {
-  return AREA_ORDER.map((area) => ({
+  const sections = AREA_ORDER.map((area) => ({
     area,
     title: AREA_TITLES[area],
-    data: entries.filter((entry) => entry.area === area).sort(compareGitStatusEntries)
+    data: entries.filter((entry) => entry.area === area)
   })).filter((section) => section.data.length > 0)
+  if (sections.some((section) => section.data.length > 1)) {
+    const collator = new Intl.Collator(undefined, { numeric: true })
+    for (const section of sections) {
+      section.data.sort(
+        (a, b) =>
+          getConflictSortRank(a) - getConflictSortRank(b) || collator.compare(a.path, b.path)
+      )
+    }
+  }
+  return sections
 }
 
 export function countStagedEntries(entries: readonly MobileGitStatusEntry[]): number {

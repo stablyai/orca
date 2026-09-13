@@ -19,6 +19,7 @@ const EXPECTED_DIRECT_CALLBACK_METHODS = [
   'emulator.onPaneFocus',
   'gh.onPRRefreshEvent',
   'keybindings.onChanged',
+  'orcaProfiles.onAuthStatusChanged',
   'pty.onExit',
   'rateLimits.onUpdate',
   'remoteWorkspace.onChanged',
@@ -29,7 +30,7 @@ const EXPECTED_DIRECT_CALLBACK_METHODS = [
   'runtime.onNativeChatLaunchDraftResolved',
   'runtime.onTerminalDriverChanged',
   'runtime.onTerminalFitOverrideChanged',
-  'runtimeEnvironments.onSharedControlDiagnostics',
+  'runtimeEnvironments.onStatusChanged',
   'settings.onChanged',
   'ssh.onCredentialRequest',
   'ssh.onCredentialResolved',
@@ -105,7 +106,7 @@ const EXPECTED_DIRECT_CALLBACK_METHODS = [
 const EXPECTED_CALLBACK_REGISTRATION_SEQUENCE = [
   'ui.onMobileMarkdownRequest',
   'automations.onChanged',
-  'runtimeEnvironments.onSharedControlDiagnostics',
+  'runtimeEnvironments.onStatusChanged',
   'repos.onChanged',
   'worktrees.onChanged',
   'worktrees.onHeadIdentitiesChanged',
@@ -126,6 +127,7 @@ const EXPECTED_CALLBACK_REGISTRATION_SEQUENCE = [
   'ui.onToggleWorktreePalette',
   'ui.onToggleFloatingTerminal',
   'ui.onTerminalShortcutCaptured',
+  'orcaProfiles.onAuthStatusChanged',
   'ui.onOpenQuickOpen',
   'ui.onToggleQuickCommandsMenu',
   'ui.onOpenNewWorkspace',
@@ -380,7 +382,7 @@ describe('useIpcEvents App-lifetime lifecycle', () => {
     ).toEqual([
       'ui.onMobileMarkdownRequest',
       'automations.onChanged',
-      'runtimeEnvironments.onSharedControlDiagnostics',
+      'runtimeEnvironments.onStatusChanged',
       'runtimeEnvironments.subscribe',
       ...EXPECTED_CALLBACK_REGISTRATION_SEQUENCE.slice(3)
     ])

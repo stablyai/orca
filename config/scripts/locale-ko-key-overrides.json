@@ -492,7 +492,7 @@
     "ko": "agent CLI를 찾지 못했습니다. 하나를 설치하거나 설정에서 기본 agent를 선택하세요."
   },
   "auto.components.Terminal.7958465754": {
-    "ko": "실행 중인 프로세스가 있는 로컬 terminals이 있습니다. 그래도 창을 닫으시겠습니까?"
+    "ko": "실행 중인 프로세스가 있는 terminals이 있습니다. 그래도 창을 닫으시겠습니까?"
   },
   "auto.components.Terminal.cdc9ac4b2d": {
     "ko": "편집기"

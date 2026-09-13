@@ -140,6 +140,9 @@ export async function loadIpcEventsHarness(
     dispatchEvent: vi.fn(),
     api: new Proxy(
       {
+        runtimeEnvironments: createApiNamespaceStub({
+          getStatusSnapshots: () => Promise.resolve([])
+        }),
         ui: createApiNamespaceStub({
           getZoomLevel: () => 0,
           consumePendingOpenSettings: () => Promise.resolve(false),

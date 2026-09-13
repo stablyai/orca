@@ -6,13 +6,16 @@ import type {
 } from '../../../../shared/agent-session-wire'
 import { createStructuredAgentSessionOperationId } from '../../../../shared/structured-agent-session-mutation'
 import {
-  classifyStructuredAgentSessionSendFailure,
   createStructuredAgentSessionOutboxEntry,
   reconcileStructuredAgentSessionOutbox,
-  requeueStructuredAgentSessionSendRefusal,
   structuredAgentSessionSendRequest,
   type StructuredAgentSessionOutboxEntry
 } from '../../../../shared/structured-agent-session-outbox'
+import {
+  disposeStructuredAgentSessionSendFailure,
+  disposeStructuredAgentSessionSendResult,
+  type StructuredAgentSessionSendDisposition
+} from '../../../../shared/structured-agent-session-send-disposition'
 import type { RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
 import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
 import { readOutbox, writeOutbox } from './structured-agent-session-outbox-storage'
@@ -89,16 +92,46 @@ export function useStructuredAgentSessionOutbox(args: {
   }, [fence, sessionId, target])
 
   useEffect(() => {
-    const next = reconcileStructuredAgentSessionOutbox(outboxRef.current, submissions)
-    if (
-      next.some((entry, index) => entry !== outboxRef.current[index]) ||
-      next.length !== outboxRef.current.length
-    ) {
+    const current = outboxRef.current
+    const headSubmission = submissions.find(
+      (submission) => submission.clientMessageId === current[0]?.clientMessageId
+    )
+    const hostOwnsHead =
+      headSubmission?.dispatchState === 'pending' || headSubmission?.dispatchState === 'accepted'
+    const hostSettledHeadError =
+      current[0]?.state === 'unconfirmed' ||
+      blockedIdRef.current === headSubmission?.clientMessageId
+    const next = reconcileStructuredAgentSessionOutbox(current, submissions)
+    if (next.some((entry, index) => entry !== current[index]) || next.length !== current.length) {
       outboxRef.current = next
       setOutbox(next)
       writeOutbox(sessionId, next)
     }
+    if (hostOwnsHead) {
+      if (dispatchingRef.current) {
+        dispatchGenerationRef.current += 1
+        dispatchingRef.current = false
+      }
+      if (blockedIdRef.current === headSubmission.clientMessageId) {
+        blockedIdRef.current = null
+      }
+      if (hostSettledHeadError) {
+        setError(null)
+      }
+    }
   }, [sessionId, submissions])
+
+  // The one place that owns the refs, the React state and the storage write.
+  const applyDisposition = useCallback(
+    (disposition: StructuredAgentSessionSendDisposition): void => {
+      blockedIdRef.current = disposition.blockedClientMessageId
+      setError(disposition.error)
+      outboxRef.current = disposition.entries
+      setOutbox(disposition.entries)
+      writeOutbox(sessionId, disposition.entries)
+    },
+    [sessionId]
+  )
 
   useEffect(() => {
     const next = outbox[0]
@@ -135,79 +168,36 @@ export function useStructuredAgentSessionOutbox(args: {
         if (dispatchGenerationRef.current !== dispatchGeneration) {
           return
         }
-        if (!result.ok) {
-          setError(result.refusal.message)
-          const updated = outboxRef.current.map((entry) =>
-            entry.clientMessageId === next.clientMessageId
-              ? requeueStructuredAgentSessionSendRefusal(
-                  entry,
-                  result.refusal.code,
-                  structuredSessionOperationId
-                )
-              : entry
-          )
-          blockedIdRef.current = updated[0]?.clientMessageId ?? null
-          outboxRef.current = updated
-          setOutbox(updated)
-          writeOutbox(sessionId, updated)
-          return
-        }
-        const submission = result.value.submission
-        if (submission.dispatchState === 'rejected') {
-          blockedIdRef.current = next.clientMessageId
-          setError(submission.reason ?? 'Message was not accepted')
-        } else {
-          setError(null)
-        }
-        const updated =
-          submission.dispatchState === 'accepted'
-            ? outboxRef.current.filter((entry) => entry.clientMessageId !== next.clientMessageId)
-            : outboxRef.current.map((entry) =>
-                entry.clientMessageId === next.clientMessageId
-                  ? {
-                      ...entry,
-                      state:
-                        submission.dispatchState === 'unknown' ||
-                        submission.dispatchState === 'pending'
-                          ? ('unconfirmed' as const)
-                          : ('queued' as const)
-                    }
-                  : entry
-              )
-        outboxRef.current = updated
-        setOutbox(updated)
-        writeOutbox(sessionId, updated)
+        applyDisposition(
+          disposeStructuredAgentSessionSendResult({
+            entries: outboxRef.current,
+            entry: next,
+            blockedClientMessageId: blockedIdRef.current,
+            result,
+            createOperationId: structuredSessionOperationId
+          })
+        )
       })
       .catch((caught) => {
         if (dispatchGenerationRef.current !== dispatchGeneration) {
           return
         }
-        const failure = classifyStructuredAgentSessionSendFailure(caught, isDesktopDeliveryUnknown)
-        if (failure === 'failed') {
-          blockedIdRef.current = next.clientMessageId
-        }
-        const updated = outboxRef.current.map((entry) =>
-          entry.clientMessageId === next.clientMessageId
-            ? {
-                ...entry,
-                state:
-                  failure === 'delivery-unknown' ? ('unconfirmed' as const) : ('queued' as const)
-              }
-            : entry
+        applyDisposition(
+          disposeStructuredAgentSessionSendFailure({
+            entries: outboxRef.current,
+            entry: next,
+            blockedClientMessageId: blockedIdRef.current,
+            cause: caught,
+            isDeliveryUnknown: isDesktopDeliveryUnknown
+          })
         )
-        setError(
-          failure === 'delivery-unknown' ? 'Message delivery is unconfirmed' : String(caught)
-        )
-        outboxRef.current = updated
-        setOutbox(updated)
-        writeOutbox(sessionId, updated)
       })
       .finally(() => {
         if (dispatchGenerationRef.current === dispatchGeneration) {
           dispatchingRef.current = false
         }
       })
-  }, [fence, outbox, sessionId, target])
+  }, [applyDisposition, fence, outbox, sessionId, target])
 
   // A transport-side unknown may never have reached the host, and nothing else
   // moves it out of `unconfirmed`, so one wedges the whole FIFO queue. Re-issuing

@@ -67,7 +67,7 @@ describe('classifySupersededRelay', () => {
           'PRESENT=yes',
           'LISTEN=accepted',
           'HOLDERS_SOURCE=lsof',
-          'HOLDER=3669803 yes 13'
+          'HOLDER=3669803 yes 13 11'
         ])
       )
     ).toBe('retained-live-work')
@@ -76,7 +76,7 @@ describe('classifySupersededRelay', () => {
   it('nominates only a proven empty relay for reaping', () => {
     expect(
       classifySupersededRelay(
-        incumbent(['PRESENT=yes', 'LISTEN=accepted', 'HOLDERS_SOURCE=lsof', 'HOLDER=80583 yes 0'])
+        incumbent(['PRESENT=yes', 'LISTEN=accepted', 'HOLDERS_SOURCE=lsof', 'HOLDER=80583 yes 2 0'])
       )
     ).toBe('reap-candidate')
   })
@@ -101,7 +101,7 @@ describe('sweepSupersededRelayEndpoints', () => {
     execCommand
       .mockResolvedValueOnce(`${OLD_SOCK}\n`)
       .mockResolvedValueOnce(
-        probe(['PRESENT=yes', 'LISTEN=accepted', 'HOLDERS_SOURCE=lsof', 'HOLDER=3669803 yes 13'])
+        probe(['PRESENT=yes', 'LISTEN=accepted', 'HOLDERS_SOURCE=lsof', 'HOLDER=3669803 yes 13 11'])
       )
     const findings = await sweepSupersededRelayEndpoints(CONN, HOST, SWEEP)
     expect(findings).toHaveLength(1)
@@ -114,7 +114,7 @@ describe('sweepSupersededRelayEndpoints', () => {
     execCommand
       .mockResolvedValueOnce(`${OLD_SOCK}\n`)
       .mockResolvedValueOnce(
-        probe(['PRESENT=yes', 'LISTEN=accepted', 'HOLDERS_SOURCE=lsof', 'HOLDER=80583 yes 0'])
+        probe(['PRESENT=yes', 'LISTEN=accepted', 'HOLDERS_SOURCE=lsof', 'HOLDER=80583 yes 2 0'])
       )
       .mockResolvedValueOnce('GONE\n')
     const findings = await sweepSupersededRelayEndpoints(CONN, HOST, SWEEP)
@@ -126,7 +126,7 @@ describe('sweepSupersededRelayEndpoints', () => {
     execCommand
       .mockResolvedValueOnce(`${OLD_SOCK}\n`)
       .mockResolvedValueOnce(
-        probe(['PRESENT=yes', 'LISTEN=accepted', 'HOLDERS_SOURCE=lsof', 'HOLDER=80583 yes 0'])
+        probe(['PRESENT=yes', 'LISTEN=accepted', 'HOLDERS_SOURCE=lsof', 'HOLDER=80583 yes 2 0'])
       )
       .mockResolvedValueOnce('LIVE\n')
     const findings = await sweepSupersededRelayEndpoints(CONN, HOST, SWEEP)

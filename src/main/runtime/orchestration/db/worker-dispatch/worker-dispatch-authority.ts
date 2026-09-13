@@ -15,9 +15,9 @@ export function prepareStartingWorkerAuthority(
     effects: unknown[]
     setupState: string
     hostScope?: string | null
-    // 'created': this worker-start operation created the agent terminal (including agent-first
-    // worktree creation, whose effects receipt says 'reused_agent_terminal'). 'external': an
-    // explicit --terminal reuse; ownership transfers only from an exact owned settled resource.
+    // 'created': this worker-start operation created the agent terminal (agent-first worktree
+    // creation included; its pre-rename effects rows said 'reused_agent_terminal'). 'external':
+    // an explicit --terminal reuse; ownership transfers only from an exact owned settled resource.
     terminalOwnership?: 'created' | 'external'
   }
 ): string {
@@ -49,18 +49,22 @@ export function prepareStartingWorkerAuthority(
       )
     }
     const capability = `dcap_${randomBytes(32).toString('base64url')}`
+    const endpointId = this.getWorkerDispatch(params.dispatchId)?.runtime_epoch ?? null
     const contextUpdate = this.db
       .prepare(
         `UPDATE dispatch_contexts
          SET assignee_handle = ?, assignee_pane_key = ?, process_incarnation = ?,
+             host_scope = ?,
              capability_hash = ?, launch_token_hash = COALESCE(launch_token_hash, ?),
-             capability_revoked_at = NULL
+             capability_revoked_at = NULL,
+             consumer_generation = consumer_generation + 1
          WHERE id = ? AND status = 'pending'`
       )
       .run(
         params.handle,
         params.paneKey,
         params.processIncarnation,
+        params.hostScope ?? null,
         hashDispatchCapability(capability),
         params.launchTokenHash ?? null,
         params.dispatchId
@@ -71,6 +75,7 @@ export function prepareStartingWorkerAuthority(
         `Dispatch ${params.dispatchId} is not starting.`
       )
     }
+    this.fenceOutstandingMailboxDelivery(`dispatch:${params.dispatchId}`)
     const workerUpdate = this.db
       .prepare(
         `UPDATE worker_dispatches
@@ -109,6 +114,8 @@ export function prepareStartingWorkerAuthority(
           terminalHandle: params.handle,
           paneKey: params.paneKey,
           processIncarnation: params.processIncarnation,
+          endpointId,
+          endpointIncarnation: params.processIncarnation,
           hostScope: params.hostScope,
           ownership: 'owned'
         })
@@ -126,6 +133,8 @@ export function prepareStartingWorkerAuthority(
             terminalHandle: params.handle,
             paneKey: params.paneKey,
             processIncarnation: params.processIncarnation,
+            endpointId,
+            endpointIncarnation: params.processIncarnation,
             hostScope: params.hostScope ?? null
           })
         } else {
@@ -135,6 +144,8 @@ export function prepareStartingWorkerAuthority(
             terminalHandle: params.handle,
             paneKey: params.paneKey,
             processIncarnation: params.processIncarnation,
+            endpointId,
+            endpointIncarnation: params.processIncarnation,
             hostScope: params.hostScope,
             ownership: 'external'
           })
@@ -149,12 +160,66 @@ export function prepareStartingWorkerAuthority(
   }
 }
 
+/**
+ * Custody for an agent terminal this worker-start just created, recorded at creation instead of
+ * after the agent boot wait. Until the row exists a keystroke into the booting pane finds no
+ * ownership to flip, so the takeover is silently dropped and a later `worker-release` closes the
+ * pane under the user.
+ *
+ * Ownership of a pane only; the Dispatch capability stays behind the boot wait, because authority
+ * must not be handed to a process that has not come up.
+ */
+export function recordCreatedWorkerTerminalCustody(
+  this: OrchestrationDb,
+  params: {
+    dispatchId: string
+    handle: string
+    paneKey: string
+    processIncarnation: string
+    worktreeId: string
+    hostScope?: string | null
+  }
+): void {
+  this.db.exec('BEGIN IMMEDIATE')
+  try {
+    // Same guard as prepareStartingWorkerAuthority, read inside the transaction: a dispatch stopped
+    // while the terminal was being created must not acquire an owner.
+    const dispatch = this.getDispatchContextById(params.dispatchId)
+    const worker = this.getWorkerDispatch(params.dispatchId)
+    if (!dispatch || dispatch.status !== 'pending' || worker?.state !== 'starting') {
+      throw new OrchestrationError(
+        'dispatch_inactive',
+        `Dispatch ${params.dispatchId} is not starting.`
+      )
+    }
+    if (!this.getWorkerTerminalResourceByOwner(params.dispatchId)) {
+      this.createWorkerTerminalResourceStatement({
+        dispatchId: params.dispatchId,
+        worktreeId: params.worktreeId,
+        terminalHandle: params.handle,
+        paneKey: params.paneKey,
+        processIncarnation: params.processIncarnation,
+        endpointId: worker.runtime_epoch,
+        endpointIncarnation: params.processIncarnation,
+        hostScope: params.hostScope,
+        ownership: 'owned'
+      })
+    }
+    this.db.exec('COMMIT')
+  } catch (error) {
+    this.db.exec('ROLLBACK')
+    throw error
+  }
+}
+
 export type WorkerDispatchAuthorityMethods = {
   prepareStartingWorkerAuthority: typeof prepareStartingWorkerAuthority
+  recordCreatedWorkerTerminalCustody: typeof recordCreatedWorkerTerminalCustody
 }
 
 export function attachWorkerDispatchAuthority(ctor: { prototype: object }): void {
   Object.assign(ctor.prototype, {
-    prepareStartingWorkerAuthority
+    prepareStartingWorkerAuthority,
+    recordCreatedWorkerTerminalCustody
   })
 }

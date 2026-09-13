@@ -177,6 +177,7 @@ export async function syncRuntimeGraph(): Promise<void> {
           leafId,
           paneRuntimeId: parkedPaneId ?? index + 1,
           ptyId,
+          parked: true,
           paneTitle: (parkedPaneId === undefined ? null : parkedPaneTitles[parkedPaneId]) ?? null,
           title
         })

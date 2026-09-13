@@ -5,19 +5,11 @@ region      = "us-central1"
 
 artifact_repository_id = "orca-cloud"
 
-# Dual accept while the relay source moves to the public stablyai/orca repository: the same
-# workflows are trusted from both repos, and the public copies carry a `cloud-` file prefix.
-# Remove this entry once the private workflows are retired and point github_owner/github_repo,
-# github_repo_id, and github_owner_id at the surviving repository.
-github_accepted_repositories = [
-  {
-    owner                = "stablyai"
-    repo                 = "orca"
-    repo_id              = "1183888342"
-    owner_id             = "127256420"
-    workflow_file_prefix = "cloud-"
-  }
-]
+# The relay source lives in the public stablyai/orca repository, where the workflows carry a
+# `cloud-` file prefix. github_owner and github_owner_id keep their defaults.
+github_repo                 = "orca"
+github_repo_id              = "1183888342"
+github_workflow_file_prefix = "cloud-"
 
 # Our first-party auth service. auth.onorca.dev is PropelAuth's prod domain, so
 # our service lives at login.onorca.dev (desktop points ORCA_CLOUD_API_URL here).
@@ -410,9 +402,22 @@ relay_region_rehome_source_cell_ids = [
   "production-gce-c23",
   "production-gce-c24",
   "production-gce-c25",
-  "production-gce-c26"
+  "production-gce-c26",
+  # Asia cells carry the same trust so mis-homed hosts can be drained back off them.
+  "production-gce-c27",
+  "production-gce-c28",
+  "production-gce-c29"
 ]
 
 # Slack #orca-relay-alerts, created out of band on 2026-08-05. Declared here because an apply
 # was otherwise going to strip it from every policy, leaving the alerts firing at nobody.
 relay_alert_notification_channels = ["projects/onorca-cloud/notificationChannels/4879431412695417284"]
+
+# Mobile push gateway. Production is the only environment that runs one; the runtime account,
+# the three Apple secrets, and their accessor bindings already exist and are imported once
+# (see docs/push-gateway.md).
+push_gateway_enabled = true
+push_base_url        = "https://push.onorca.dev"
+# Dedicated push pools allow three revision resources during validation and recovery.
+push_max_instances         = 2
+manage_push_domain_mapping = true

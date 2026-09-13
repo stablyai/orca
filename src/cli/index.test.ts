@@ -228,6 +228,29 @@ describe('unknown command surfaces a suggestion', () => {
     expect(stderr).toContain('--json')
   })
 
+  it('names the offending --worktree value and the valid forms on selector_not_found', async () => {
+    const { RuntimeRpcFailureError } = await import('./runtime/types.js')
+    callMock.mockRejectedValue(
+      new RuntimeRpcFailureError({
+        id: 'req_selector',
+        ok: false,
+        error: { code: 'selector_not_found', message: 'selector_not_found' },
+        _meta: { runtimeId: 'runtime_local' }
+      })
+    )
+
+    await main(
+      ['orchestration', 'worker-start', '--task', 't1', '--worktree', 'repo-1', '--agent', 'codex'],
+      '/tmp/repo'
+    )
+
+    expect(process.exitCode).toBe(1)
+    const stderr = errorSpy.mock.calls.map((call) => String(call[0])).join('\n')
+    expect(stderr).toContain('No Orca workspace matched the worktree selector "repo-1"')
+    expect(stderr).toContain('id:repo-1::<absolute-path>')
+    expect(stderr).toContain('Valid selector forms:')
+  })
+
   it('reports a pre-command flag that belongs to another command', async () => {
     await main(['--workspace', 'worktree', 'list'], '/tmp/repo')
 
@@ -305,6 +328,23 @@ describe('orca root help', () => {
     logSpy.mockRestore()
   })
 
+  it('labels retired coordinator scheduler commands at the root', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(['--help'], '/tmp/repo')
+
+    const output = String(logSpy.mock.calls[0]?.[0])
+    expect(output).toContain(
+      'orchestration coordinator-start Retired: load the current orchestration skill'
+    )
+    expect(output).toContain(
+      'orchestration coordinator-stop Retired: load the current orchestration skill'
+    )
+    expect(output).not.toContain('Start the legacy automatic coordinator loop')
+    expect(output).not.toContain('Stop the legacy automatic coordinator loop')
+    logSpy.mockRestore()
+  })
+
   it('advertises computer-use capabilities discovery', async () => {
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
 
@@ -356,6 +396,7 @@ describe('orca root help', () => {
     expect(logSpy.mock.calls[0][0]).toContain(
       'orchestration worker-list Report worker terminal resource accounting'
     )
+    expect(logSpy.mock.calls[0][0]).not.toContain('orchestration worker-cleanup')
     expect(callMock).not.toHaveBeenCalled()
   })
 
@@ -438,6 +479,21 @@ describe('orca root help', () => {
     expect(help).toContain(
       '--cursor <cursor>      Opaque cursor returned by a previous worker-read page'
     )
+    expect(help).not.toContain('Line cursor from a previous read')
+    expect(callMock).not.toHaveBeenCalled()
+  })
+
+  it('describes worker-list cursors as opaque page cursors', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    logSpy.mockClear()
+
+    await main(['orchestration', 'worker-list', '--help'], '/tmp/repo')
+
+    const help = String(logSpy.mock.calls[0][0])
+    expect(help).toContain('[--cursor <cursor>]')
+    expect(help).toContain('--cursor <cursor>      Opaque page cursor copied from page.nextCursor')
+    expect(help).toContain('Continue with the opaque page.nextCursor value unchanged.')
+    expect(help).not.toContain('--cursor <dispatch_id>')
     expect(help).not.toContain('Line cursor from a previous read')
     expect(callMock).not.toHaveBeenCalled()
   })

@@ -1,7 +1,8 @@
 import type { DetectedWorktreeListResult, Worktree } from '../../shared/worktree/types'
 import type { Repo } from '../../shared/repo-types'
 import type { RuntimeWorktreeListResult } from '../../shared/runtime-types'
-import { getRepoExecutionHostId } from '../../shared/execution-host'
+import { getRepoExecutionHostId, type ExecutionHostId } from '../../shared/execution-host'
+import { buildWorktreeListingPage, listingKnownHostIds } from './worktree-listing-host-scope'
 import { readWorktreeMetaForHost } from '../persistence/host-qualified-worktree-meta'
 import { getRepoOwnedWorktreeMeta } from '../worktree-metadata-ownership'
 import type { WorktreeMeta } from '../../shared/worktree/meta-types'
@@ -38,6 +39,8 @@ type Dependencies = {
   resolveRepo(selector: string): Promise<Repo>
   selectRepos(selector: string): Repo[]
   scanRepo(repo: Repo): Promise<RuntimeWorktreeScanResult>
+  /** Hosts this runtime has repos or workspaces on, so a host with no rows is still named. */
+  listKnownHostIds(): Iterable<ExecutionHostId>
 }
 
 /**
@@ -77,7 +80,7 @@ export class RuntimeManagedWorktreeQueries {
       throw new Error('invalid_limit')
     }
     const resolved = await this.deps.listResolved()
-    const repoId = repoSelector ? (await this.deps.resolveRepo(repoSelector)).id : null
+    const scopedRepo = repoSelector ? await this.deps.resolveRepo(repoSelector) : null
     const pathsByRepo = new Map<string, string[]>()
     for (const worktree of resolved) {
       const paths = pathsByRepo.get(worktree.repoId) ?? []
@@ -97,14 +100,12 @@ export class RuntimeManagedWorktreeQueries {
     )
     const worktrees = resolved.filter(
       (worktree) =>
-        (!repoId || worktree.repoId === repoId) &&
+        (!scopedRepo || worktree.repoId === scopedRepo.id) &&
         this.isVisible(worktree, matchers.get(worktree.repoId), sourceDefaultsSupported)
     )
-    return {
-      worktrees: worktrees.slice(0, limit),
-      totalCount: worktrees.length,
-      truncated: worktrees.length > limit
-    }
+    // See `listingKnownHostIds`: a scoped listing must still name the host it was asked about.
+    const knownHostIds = listingKnownHostIds(scopedRepo, () => this.deps.listKnownHostIds())
+    return buildWorktreeListingPage(worktrees, limit, knownHostIds)
   }
 
   resolveRepoForConnection(selector: string, connectionId?: string | null): Promise<Repo> {

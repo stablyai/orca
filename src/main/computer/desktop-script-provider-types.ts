@@ -101,6 +101,8 @@ export type BridgeWindow = {
 
 export type BridgeResponse = {
   ok: boolean
+  /** Echo of BridgeRequest.requestId; set only on the persistent serve path. */
+  requestId?: number
   error?: string
   capabilities?: ComputerProviderCapabilities
   apps?: {
@@ -122,6 +124,8 @@ export type BridgeResponse = {
 
 export type BridgeRequest = {
   tool: string
+  /** Correlates a serve-mode reply with its request; the one-shot path omits it. */
+  requestId?: number
   app?: string
   element?: BridgeElement
   fromElement?: BridgeElement

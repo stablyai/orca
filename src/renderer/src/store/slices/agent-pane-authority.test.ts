@@ -74,6 +74,20 @@ describe('agent pane authority', () => {
     expect(retirePaneAuthority).toHaveBeenCalledWith(TARGET)
   })
 
+  it('re-retiring an already-retired pane keeps the retired-key map identity and epochs', () => {
+    const store = createTestStore()
+    store.getState().setAgentStatus(TARGET, { state: 'working', prompt: 'target' })
+    store.getState().retireAgentPaneAuthority(TARGET)
+    const before = store.getState()
+
+    store.getState().retireAgentPaneAuthority(TARGET)
+
+    const after = store.getState()
+    expect(after.recentlyRetiredAgentStatusPaneKeys).toBe(before.recentlyRetiredAgentStatusPaneKeys)
+    expect(after.agentStatusEpoch).toBe(before.agentStatusEpoch)
+    expect(after.sortEpoch).toBe(before.sortEpoch)
+  })
+
   it('retires the pane activity cutoff with the rest of its pane-owned state', () => {
     const store = createTestStore()
     store.setState({
@@ -142,7 +156,7 @@ describe('agent pane authority', () => {
     expect(store.getState().agentStatusByPaneKey[SIBLING]).toBeUndefined()
   })
 
-  it('can retire live pane authority while retaining a migration recovery fence', () => {
+  it('can retire live pane authority while retaining its sleeping session', () => {
     const store = createTestStore()
     store.getState().setAgentStatus(TARGET, { state: 'working', prompt: 'target' })
     store.getState().registerAgentLaunchConfig(TARGET, { agentArgs: '', agentEnv: {} })
@@ -157,8 +171,7 @@ describe('agent pane authority', () => {
           prompt: 'continue',
           state: 'working',
           capturedAt: 1,
-          updatedAt: 1,
-          automaticResumeBlockedBy: 'legacy-orchestration-worker'
+          updatedAt: 1
         }
       }
     })
@@ -169,7 +182,7 @@ describe('agent pane authority', () => {
     expect(state.agentStatusByPaneKey[TARGET]).toBeUndefined()
     expect(state.agentLaunchConfigByPaneKey[TARGET]).toBeUndefined()
     expect(state.sleepingAgentSessionsByPaneKey[TARGET]).toMatchObject({
-      automaticResumeBlockedBy: 'legacy-orchestration-worker'
+      providerSession: { key: 'session_id', id: 'session-1' }
     })
     expect(state.recentlyRetiredAgentStatusPaneKeys[TARGET]).toBe(true)
     expect(retirePaneAuthority).toHaveBeenCalledWith(TARGET)
