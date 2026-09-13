@@ -24,6 +24,7 @@ const COMMAND_DISCOVERY_TTL_MS = 30_000
 const FAILED_COMMAND_DISCOVERY_TTL_MS = 1_000
 
 const LANGUAGE_SERVER_CANDIDATES: Record<string, LanguageServerCandidate[]> = {
+  kotlin: [{ command: 'kotlin-lsp', args: ['--stdio'], probeArgs: ['--version'] }],
   rust: [{ command: 'rust-analyzer', args: [], probeArgs: ['--version'] }],
   c: [{ command: 'clangd', args: [], probeArgs: ['--version'] }],
   cpp: [{ command: 'clangd', args: [], probeArgs: ['--version'] }],

@@ -100,3 +100,7 @@ export type LspDiagnosticsEvent = {
   runtimeEnvironmentId?: string
   diagnostics: LspDiagnostic[]
 }
+
+export type LspReferenceRequestContext = LspRequestContext & {
+  includeDeclaration: boolean
+}

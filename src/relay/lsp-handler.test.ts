@@ -50,6 +50,13 @@ function handle(message) {
     })
     return
   }
+  if (message.method === 'textDocument/references') {
+    send({ jsonrpc: '2.0', id: message.id, result: [{
+      uri: message.params.textDocument.uri,
+      range: { start: message.params.position, end: message.params.position }
+    }] })
+    return
+  }
   if (message.method === 'textDocument/hover') {
     send({ jsonrpc: '2.0', id: message.id, result: { contents: 'relay hover' } })
     return
@@ -185,6 +192,16 @@ describe('LspHandler', () => {
         position: { line: 0, character: 1 }
       })
     ).resolves.toEqual({ contents: 'relay hover' })
+    await expect(
+      dispatcher.callRequest('lsp.references', {
+        worktreeId: 'repo::worktree',
+        worktreePath: dir,
+        filePath,
+        languageId: 'rust',
+        position: { line: 3, character: 5 },
+        includeDeclaration: false
+      })
+    ).resolves.toMatchObject([{ range: { start: { line: 3, character: 5 } } }])
   })
 
   it('does not start relay LSP sessions for runtime environments yet', async () => {

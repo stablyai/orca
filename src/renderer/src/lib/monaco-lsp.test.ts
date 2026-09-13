@@ -10,6 +10,7 @@ import type {
   LspDocumentIdentity,
   LspHover,
   LspLocation,
+  LspReferenceRequestContext,
   LspRequestContext,
   LspServerStatus
 } from '../../../shared/lsp-types'
@@ -25,6 +26,15 @@ type DefinitionProvider = {
   provideDefinition: (
     model: ModelMock,
     position: { lineNumber: number; column: number }
+  ) => Promise<unknown[]>
+}
+
+type ReferenceProvider = {
+  provideReferences: (
+    model: ModelMock,
+    position: { lineNumber: number; column: number },
+    context: { includeDeclaration: boolean },
+    token: { isCancellationRequested: boolean }
   ) => Promise<unknown[]>
 }
 
@@ -62,7 +72,12 @@ async function waitForAssertion(assertion: () => void): Promise<void> {
 
 function installWindowApi(lsp: unknown): void {
   Object.defineProperty(globalThis, 'window', {
-    value: { api: { lsp } },
+    value: {
+      api: {
+        lsp,
+        fs: { readFile: vi.fn(async () => ({ content: 'fun caller() {}', isBinary: false })) }
+      }
+    },
     configurable: true
   })
 }
@@ -75,6 +90,7 @@ function createLspApi(
     closeDocument: (args: Omit<LspDocumentChange, 'content'>) => Promise<void>
     completion: (args: LspRequestContext) => Promise<LspCompletionResult | null>
     hover: (args: LspRequestContext) => Promise<LspHover | null>
+    references: (args: LspReferenceRequestContext) => Promise<LspLocation[]>
     definition: (args: LspRequestContext) => Promise<LspLocation[]>
     getStats: () => Promise<{ activeSessions: number; sessions: Record<string, unknown>[] }>
     onDiagnostics: (callback: (event: LspDiagnosticsEvent) => void) => () => void
@@ -94,6 +110,7 @@ function createLspApi(
     completion: vi.fn(async () => null),
     hover: vi.fn(async () => null),
     definition: vi.fn(async () => []),
+    references: vi.fn(async () => []),
     getStats: vi.fn(async () => ({ activeSessions: 0, sessions: [] })),
     onDiagnostics: vi.fn((_callback: (event: LspDiagnosticsEvent) => void) => () => {})
   }
@@ -107,6 +124,7 @@ function createMonacoMock(
   monaco: never
   model: ModelMock
   completionProviders: Map<string, CompletionProvider>
+  referenceProviders: Map<string, ReferenceProvider>
   definitionProviders: Map<string, DefinitionProvider>
   addModel: (uri: string, modelContent?: string) => ModelMock
   setModelContent: (value: string) => void
@@ -124,6 +142,7 @@ function createMonacoMock(
   }
   const models = new Map([[modelUri, model]])
   const completionProviders = new Map<string, CompletionProvider>()
+  const referenceProviders = new Map<string, ReferenceProvider>()
   const definitionProviders = new Map<string, DefinitionProvider>()
   class Range {
     constructor(
@@ -136,7 +155,16 @@ function createMonacoMock(
   const monaco = {
     Range,
     Uri: {
-      parse: (value: string) => ({ toString: () => value })
+      parse: (value: string) => {
+        const uri = new URL(value)
+        return {
+          scheme: uri.protocol.slice(0, -1),
+          authority: uri.host,
+          path: decodeURIComponent(uri.pathname),
+          toString: () => value,
+          with: ({ query }: { query: string }) => ({ toString: () => `${value}?${query}` })
+        }
+      }
     },
     MarkerSeverity: {
       Error: 8,
@@ -180,6 +208,10 @@ function createMonacoMock(
         return { dispose: vi.fn() }
       }),
       registerHoverProvider: vi.fn(() => ({ dispose: vi.fn() })),
+      registerReferenceProvider: vi.fn((language: string, provider: ReferenceProvider) => {
+        referenceProviders.set(language, provider)
+        return { dispose: vi.fn() }
+      }),
       registerDefinitionProvider: vi.fn((language: string, provider: DefinitionProvider) => {
         definitionProviders.set(language, provider)
         return { dispose: vi.fn() }
@@ -187,7 +219,9 @@ function createMonacoMock(
     },
     editor: {
       getModel: vi.fn((uri: { toString: () => string }) => models.get(uri.toString()) ?? null),
-      setModelMarkers: vi.fn()
+      setModelMarkers: vi.fn(),
+      createModel: vi.fn(() => ({ dispose: vi.fn() })),
+      registerEditorOpener: vi.fn(() => ({ dispose: vi.fn() }))
     }
   }
   return {
@@ -195,6 +229,7 @@ function createMonacoMock(
     model,
     completionProviders,
     definitionProviders,
+    referenceProviders,
     addModel: (uri, value = content) => {
       let addedModelContent = value
       const addedModel = createModel(uri, () => addedModelContent)
@@ -725,6 +760,64 @@ describe('monaco-lsp', () => {
       }
     })
 
+    dispose()
+  })
+  it('syncs Kotlin edits before finding usages and preserves SSH ownership and positions', async () => {
+    vi.resetModules()
+    const api = createLspApi({
+      references: vi.fn(async () => [
+        {
+          uri: 'file:///tmp/project/Caller.kt',
+          range: { start: { line: 8, character: 3 }, end: { line: 8, character: 9 } }
+        }
+      ])
+    })
+    installWindowApi(api)
+    const { monaco, model, referenceProviders, definitionProviders } = createMonacoMock()
+    const { registerMonacoLspDocument, updateMonacoLspDocumentContent } =
+      await import('./monaco-lsp')
+    const dispose = registerMonacoLspDocument(
+      monaco,
+      documentArgs('fun expire() {}', {
+        languageId: 'kotlin',
+        filePath: '/tmp/project/Seat.kt',
+        connectionId: 'ssh-1'
+      })
+    )
+    await waitForAssertion(() => expect(api.openDocument).toHaveBeenCalledTimes(1))
+    expect(definitionProviders.has('kotlin')).toBe(true)
+    updateMonacoLspDocumentContent(model.uri.toString(), 'fun expire(id: Long) {}')
+    const provider = referenceProviders.get('kotlin')!
+    const result = await provider.provideReferences(
+      model,
+      { lineNumber: 2, column: 5 },
+      { includeDeclaration: false },
+      { isCancellationRequested: false }
+    )
+    expect(api.references).toHaveBeenCalledWith(
+      expect.objectContaining({
+        connectionId: 'ssh-1',
+        languageId: 'kotlin',
+        includeDeclaration: false,
+        position: { line: 1, character: 4 }
+      })
+    )
+    expect(api.references).toHaveBeenCalledWith(
+      expect.not.objectContaining({ content: expect.any(String) })
+    )
+    expect(api.changeDocument).toHaveBeenCalledWith(
+      expect.objectContaining({ content: 'fun expire(id: Long) {}' })
+    )
+    expect(result[0]).toMatchObject({
+      range: { startLineNumber: 9, startColumn: 4, endLineNumber: 9, endColumn: 10 }
+    })
+    await provider.provideReferences(
+      model,
+      { lineNumber: 2, column: 5 },
+      { includeDeclaration: true },
+      { isCancellationRequested: true }
+    )
+    expect(api.references).toHaveBeenCalledTimes(1)
     dispose()
   })
 })

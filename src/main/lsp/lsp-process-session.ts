@@ -272,6 +272,25 @@ export class LspProcessSession {
     return this.normalizeLocation(result)
   }
 
+  async references(
+    filePath: string,
+    position: LspPosition,
+    includeDeclaration: boolean,
+    text?: string
+  ): Promise<LspLocation[]> {
+    await (text !== undefined ? this.changeDocument(filePath, text) : this.ensureInitialized())
+    const result = await this.request(
+      'textDocument/references',
+      {
+        textDocument: { uri: lspPathToUri(filePath) },
+        position,
+        context: { includeDeclaration }
+      },
+      DEFAULT_REQUEST_TIMEOUT_MS
+    )
+    return Array.isArray(result) ? result.flatMap((item) => this.normalizeLocation(item)) : []
+  }
+
   async dispose(): Promise<void> {
     if (this.disposed) {
       return
@@ -392,6 +411,7 @@ export class LspProcessSession {
             hover: {
               contentFormat: ['markdown', 'plaintext']
             },
+            references: { dynamicRegistration: false },
             definition: {
               linkSupport: true
             },
