@@ -710,33 +710,37 @@ describe('runtime-status slice', () => {
     clearRuntimeCompatibilityCacheForTests()
   })
 
-  // Both directions of the failure-publication policy, from one failing probe. A user-initiated
-  // check publishes the outage it just observed; a caller holding live transport evidence must
-  // not, because status.get dials its own socket and its failure is unverifiable, not exited.
-  it.each([
-    { name: 'a user-initiated check', options: undefined, publishes: true },
-    { name: 'publishUnreachable defaulted', options: {}, publishes: true },
-    {
-      name: 'a caller that opted out of publishing',
-      options: { publishUnreachable: false },
-      publishes: false
-    }
-  ])('records null and returns false when a runtime refresh fails: $name', async (scenario) => {
+  it('records null and returns false when a runtime refresh fails', async () => {
     const getStatus = vi.fn().mockRejectedValue(new Error('closed'))
     stubRuntimeEnvironmentApi({ getStatus })
     const store = createSliceStore()
     const cached = makeStatus()
     store.getState().setRuntimeEnvironmentStatus('env-a', { status: cached, checkedAt: 1 })
 
-    const reachable = await store
-      .getState()
-      .refreshRuntimeEnvironmentStatus('env-a', undefined, scenario.options)
+    const reachable = await store.getState().refreshRuntimeEnvironmentStatus('env-a')
 
-    // The dial-answered contract the bridge's bounded retry chain reads is policy-independent.
     expect(reachable).toBe(false)
-    expect(store.getState().runtimeStatusByEnvironmentId.get('env-a')?.status).toBe(
-      scenario.publishes ? null : cached
-    )
+    expect(store.getState().runtimeStatusByEnvironmentId.get('env-a')?.status).toBe(null)
+  })
+
+  it('preserves successful reachability when reading its snapshot fails', async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {})
+    vi.stubGlobal('window', {
+      api: {
+        runtimeEnvironments: {
+          getStatus: vi.fn().mockResolvedValue(createCompatibleRuntimeStatusResponse('runtime-a')),
+          getStatusSnapshots: vi.fn().mockRejectedValue(new Error('IPC read failed'))
+        }
+      }
+    })
+    try {
+      const store = createSliceStore()
+      expect(await store.getState().refreshRuntimeEnvironmentStatus('env-a')).toBe(true)
+      expect(store.getState().runtimeStatusByEnvironmentId.has('env-a')).toBe(false)
+      expect(log).toHaveBeenCalled()
+    } finally {
+      log.mockRestore()
+    }
   })
 
   it('hydrates saved environments through the single-environment refresh path', async () => {

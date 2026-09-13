@@ -117,7 +117,7 @@ function blockContent(message: NativeChatMessage): string {
   if (block.type === 'tool-result') {
     return block.output
   }
-  return block.path ?? block.url ?? block.alt ?? ''
+  return block.type === 'image-ref' ? (block.path ?? block.url ?? block.alt ?? '') : block.groupId
 }
 
 function messageWeight(message: NativeChatMessage, content: string): number {

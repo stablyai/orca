@@ -8,6 +8,7 @@ import {
   clineMessagesPathForMetadata,
   isClineSessionMetadataPath
 } from './session-scanner-cline-parser'
+import { cursorChatMetaPath } from './session-scanner-cursor-chat-meta'
 import { resolveKimiSessionsDir } from './session-scanner-kimi-paths'
 import { OMP_SESSION_ARTIFACT_DIR_PATTERN } from './session-scanner-omp-subagent-transcripts'
 import { claudeProjectsRootDirs, OMP_SESSIONS_DIR, sessionRootDirs } from './session-scanner-roots'
@@ -61,8 +62,9 @@ export type AiVaultAgentSource = {
   rootDirs: (options: AiVaultScanOptions, wslHomeDirs: readonly string[]) => string[]
   extensions: readonly string[]
   filePredicate?: (filePath: string) => boolean
-  // A sibling whose stat participates in candidate freshness and recency.
-  contentDependencyPath?: (filePath: string) => string
+  // A sibling whose stat participates in candidate freshness and recency; async
+  // for agents that have to look the sibling up rather than derive its path.
+  contentDependencyPath?: (filePath: string) => string | undefined | Promise<string | undefined>
   // Return false to skip a directory; depth 0 is a child of the root.
   directoryPredicate?: (name: string, depth: number) => boolean
   // Roots that are alternates for one install rather than distinct locations,
@@ -126,7 +128,8 @@ export const AI_VAULT_AGENT_SOURCES: AiVaultAgentSourceTable = {
         'projects'
       ]),
     extensions: ['.jsonl'],
-    filePredicate: (filePath) => pathSegments(filePath).includes('agent-transcripts')
+    filePredicate: (filePath) => pathSegments(filePath).includes('agent-transcripts'),
+    contentDependencyPath: cursorChatMetaPath
   },
   grok: {
     rootDirs: (options, wslHomeDirs) =>

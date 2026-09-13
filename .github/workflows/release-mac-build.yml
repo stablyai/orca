@@ -64,13 +64,15 @@ jobs:
       # Electron binary from GitHub release assets. GitHub's download CDN
       # occasionally returns 504s that fail the whole release. Retry on
       # failure so transient network errors don't require a manual re-run.
+      # Why both CPUs: the mac config packages x64 and arm64 from this arm64
+      # runner, so the install must carry both variants of the native optional deps.
       - name: Install dependencies
         uses: nick-fields/retry@v4
         with:
           timeout_minutes: 10
           max_attempts: 3
           retry_wait_seconds: 30
-          command: pnpm install --frozen-lockfile
+          command: pnpm install --frozen-lockfile --cpu=current,x64,arm64
 
       - name: Verify macOS signing environment
         run: node config/scripts/verify-macos-release-env.mjs

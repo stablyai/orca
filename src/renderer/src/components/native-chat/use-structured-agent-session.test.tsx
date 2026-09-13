@@ -10,6 +10,8 @@ const mocks = vi.hoisted(() => ({
 }))
 let fence = 3
 let sessionCommands: { name: string; kind: 'command' | 'skill' }[] | undefined
+let items: AgentJournalRenderItem[] = []
+let submissions: AgentJournalSubmission[] = []
 
 vi.mock('@/runtime/structured-agent-session-client', () => ({
   callStructuredAgentSession: mocks.call
@@ -24,8 +26,8 @@ vi.mock('./use-structured-agent-session-read', () => ({
     state: {
       fence,
       commands: sessionCommands,
-      items: [],
-      submissions: [],
+      items,
+      submissions,
       status: 'ready',
       error: null,
       hasOlder: false,
@@ -47,6 +49,10 @@ vi.mock('./use-structured-agent-session-outbox', () => ({
   })
 }))
 
+import type {
+  AgentJournalRenderItem,
+  AgentJournalSubmission
+} from '../../../../shared/agent-session-journal-types'
 import {
   applyNativeChatSessionOptionSettingsMutation,
   resolveStructuredLaunchSeedOptions
@@ -95,10 +101,72 @@ const OPTIONS = {
   current: { model: 'gpt-live', effort: 'medium' }
 }
 
+describe('useStructuredAgentSession working state', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    fence = 3
+    submissions = []
+    mocks.call.mockResolvedValue(null)
+  })
+
+  it('reports work from an unanswered dispatch, and keeps the turn id provider-minted', () => {
+    submissions = [
+      {
+        clientMessageId: 'client-1',
+        fence: 3,
+        payloadFingerprint: 'fingerprint-1',
+        dispatchState: 'pending',
+        providerItemId: null,
+        reason: null,
+        submittedAt: 1,
+        resolvedAt: null
+      }
+    ]
+    const { result } = renderHook(() =>
+      useStructuredAgentSession({
+        sessionId: 'session-1',
+        agent: 'codex',
+        target: LOCAL_TARGET,
+        isVisible: true
+      })
+    )
+
+    expect(result.current.isWorking).toBe(true)
+    // Only the provider can mint a cancellable turn, so Stop stays unavailable here.
+    expect(result.current.turnId).toBeNull()
+  })
+
+  it('reports no work once the dispatch resolves and no turn is running', () => {
+    submissions = [
+      {
+        clientMessageId: 'client-1',
+        fence: 3,
+        payloadFingerprint: 'fingerprint-1',
+        dispatchState: 'accepted',
+        providerItemId: 'codex:thread-1:turn-1',
+        reason: null,
+        submittedAt: 1,
+        resolvedAt: 2
+      }
+    ]
+    const { result } = renderHook(() =>
+      useStructuredAgentSession({
+        sessionId: 'session-1',
+        agent: 'codex',
+        target: LOCAL_TARGET,
+        isVisible: true
+      })
+    )
+
+    expect(result.current.isWorking).toBe(false)
+  })
+})
+
 describe('useStructuredAgentSession options', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     fence = 3
+    submissions = []
     mocks.operationId
       .mockReset()
       .mockReturnValueOnce('operation-1')
@@ -477,6 +545,73 @@ describe('useStructuredAgentSession options', () => {
     })
 
     expect(mocks.enqueueSettingsWrite).not.toHaveBeenCalled()
+  })
+})
+
+describe('turn timing', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    items = []
+    mocks.call.mockImplementation((_target, method) =>
+      method === 'agentSession.options' ? Promise.resolve(OPTIONS) : Promise.resolve(null)
+    )
+  })
+
+  it('exposes host-settled durations and a skew-free live anchor', () => {
+    vi.useFakeTimers()
+    try {
+      vi.setSystemTime(50_000)
+      const item = (
+        itemId: string,
+        observedAt: number,
+        body: AgentJournalRenderItem['body']
+      ): AgentJournalRenderItem => ({ itemId, revision: 0, sequence: observedAt, observedAt, body })
+      const user: AgentJournalRenderItem['body'] = {
+        kind: 'message',
+        role: 'user',
+        blocks: [{ type: 'text', text: 'go' }]
+      }
+      items = [
+        item('u1', 9_000_000, user),
+        item('l1', 9_000_100, {
+          kind: 'status',
+          text: 'Done',
+          turnLifecycle: {
+            turnId: 't1',
+            state: 'completed',
+            startedAt: 9_000_000,
+            completedAt: 9_004_000
+          }
+        }),
+        item('u2', 9_010_000, user),
+        item('l2', 9_010_300, {
+          kind: 'status',
+          text: 'Working',
+          turnLifecycle: { turnId: 't2', state: 'running', startedAt: 9_010_000 }
+        })
+      ]
+      const { result, rerender } = renderHook(() =>
+        useStructuredAgentSession({
+          sessionId: 'session-1',
+          target: LOCAL_TARGET,
+          agent: 'codex',
+          isVisible: true
+        })
+      )
+      expect(result.current.isWorking).toBe(true)
+      expect(result.current.workingStartedAt).toBe(50_000 - 300)
+      // t2 is still running, so the host has no duration for it: an explicit null
+      // that outranks whatever this client clocked locally.
+      expect([...result.current.settledTurns]).toEqual([
+        ['u1', { startedAt: 9_000_000, workedSeconds: 4 }],
+        ['u2', null]
+      ])
+      vi.setSystemTime(80_000)
+      rerender()
+      expect(result.current.workingStartedAt).toBe(50_000 - 300)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })
 

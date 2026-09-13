@@ -6,6 +6,52 @@ import {
 import { getDefaultWorkspaceSession } from './constants'
 
 describe('remote workspace session projection', () => {
+  // The transient set this boundary mirrors. `recovery` is the tab's in-flight
+  // heal, timestamped with THIS machine's clock, and `pendingActivationSpawn` is
+  // a one-shot mount handoff — neither means anything on another client's row,
+  // and a foreign `startedAt` would be compared against the reader's Date.now().
+  it('strips client-local transient tab fields on the way out', () => {
+    const session = {
+      ...getDefaultWorkspaceSession(),
+      activeRepoId: 'repo-a',
+      activeWorktreeId: 'repo-a::/srv/app',
+      activeTabId: 'tab-1',
+      tabsByWorktree: {
+        'repo-a::/srv/app': [
+          {
+            id: 'tab-1',
+            ptyId: 'pty-1',
+            worktreeId: 'repo-a::/srv/app',
+            title: 'Remote',
+            customTitle: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1,
+            pendingActivationSpawn: true,
+            recovery: {
+              attemptedAt: [1_000],
+              generation: 1,
+              outcome: 'failed' as const,
+              startedAt: 1_000,
+              reason: 'reattach-unverifiable' as const,
+              tabGeneration: 1
+            }
+          }
+        ]
+      },
+      terminalLayoutsByTabId: {}
+    }
+
+    const projected = exportRemoteWorkspaceSession(session, {
+      isTargetWorktree: (worktreeId) => worktreeId.startsWith('repo-a::')
+    })
+
+    const exported = projected.tabsByWorktreePath['/srv/app'][0] as Record<string, unknown>
+    expect(exported.recovery).toBeUndefined()
+    expect(exported.pendingActivationSpawn).toBeUndefined()
+    expect(exported.id).toBe('tab-1')
+  })
+
   it('exports terminal state using remote worktree paths instead of local repo ids', () => {
     const session = {
       ...getDefaultWorkspaceSession(),

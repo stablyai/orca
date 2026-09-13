@@ -38,7 +38,8 @@ CREATE TABLE IF NOT EXISTS federated_dispatches (
 );
 
 CREATE TABLE IF NOT EXISTS remote_dispatch_attachments (
-  home_run_id             TEXT NOT NULL,
+  -- DEFAULT: a rolled-back v1.4.198 host still inserts here without a home Run.
+  home_run_id             TEXT NOT NULL DEFAULT '',
   dispatch_id             TEXT PRIMARY KEY,
   task_id                 TEXT NOT NULL,
   home_peer_fingerprint   TEXT NOT NULL,

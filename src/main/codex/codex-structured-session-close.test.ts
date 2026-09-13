@@ -10,6 +10,7 @@ import {
   type CodexStructuredSessionEvent
 } from './codex-structured-session-adapter'
 import { handleCodexSessionExit } from './codex-structured-session-close'
+import { CodexBackgroundTaskTracker } from './codex-background-task-tracker'
 import type { CodexSession } from './codex-structured-session-state'
 import type { StructuredAgentSessionAdapter } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import { StructuredAgentSessionAdapterRouter } from '../native-chat/agent-session-wire/structured-agent-session-adapter-router'
@@ -90,6 +91,7 @@ describe('Codex structured session close lifecycle', () => {
     } as unknown as NonNullable<CodexSession['translator']>
     const session = {
       connection,
+      backgroundTasks: new CodexBackgroundTaskTracker('thread-1'),
       ended: false,
       requestedClose: false,
       fence: 7,

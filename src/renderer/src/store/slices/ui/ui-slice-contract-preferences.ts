@@ -175,10 +175,14 @@ export type UISlicePersistence = {
   dismissedUpdateVersion: string | null
   dismissUpdate: (versionOverride?: string) => void
   clearDismissedUpdateVersion: () => void
+  /** App version that dismissed the unexpected-sign-out card; null = never dismissed. */
+  dismissedUnexpectedSignoutVersion: string | null
+  unexpectedSignoutDismissedVersions: string[]
+  dismissUnexpectedSignoutCard: (version: string) => void
   /** Dev-only channel override; null follows the running build's own channel. */
   releaseChannelOverride: ReleaseChannel | null
   setReleaseChannelOverride: (channel: ReleaseChannel | null) => void
-  // Why: ephemeral, renderer-only — never persisted; resets each session and on every phase transition (see setUpdateStatus).
+  // Ephemeral disclosure state; setUpdateStatus initializes it when the phase or error actionability changes.
   updateCardCollapsed: boolean
   setUpdateCardCollapsed: (collapsed: boolean) => void
   updateReassuranceSeen: boolean

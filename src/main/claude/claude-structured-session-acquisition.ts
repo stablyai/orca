@@ -121,12 +121,16 @@ export async function acquireClaudeSession({
           deps.onDispatchSettledLate?.({ sessionId, ...settlement })
         )
       : false
+    // Turn endpoints are stamped on the host clock, never the frame's own timestamp.
+    const observedAt =
+      startsTurn || message.type === 'result' ? { observedAt: deps.now?.() ?? Date.now() } : {}
     callbacks.deliver(attempt, sessionId, () =>
       callbacks.emit(liveSession, input.events, {
         type: 'message',
         sessionId,
         message,
-        ...(startsTurn ? { startsTurn: true } : {})
+        ...(startsTurn ? { startsTurn: true } : {}),
+        ...observedAt
       })
     )
   }

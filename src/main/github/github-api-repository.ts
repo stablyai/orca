@@ -32,7 +32,10 @@ export {
   githubRepositoryWebHost
 } from './github-repository-host'
 export type GitHubApiRepository = GitHubOwnerRepo
-export type GitHubRepoExecOptions = ReturnType<typeof ghRepoExecOptions> & { host?: string }
+export type GitHubRepoExecOptions = ReturnType<typeof ghRepoExecOptions> & {
+  host?: string
+  env?: NodeJS.ProcessEnv
+}
 export type GitHubRepoExecution = {
   ownerRepo: GitHubApiRepository | null
   ghOptions: GitHubRepoExecOptions

@@ -33,6 +33,14 @@ Never use vague names like `helpers`, `utils`, `common`, `misc`, or `shared-stuf
 
 ## Type Declarations: Prefer `.ts` Over `.d.ts`
 
+## Type Assertions: Prefer Checked Types
+
+Avoid type assertions except `as const`. Unavoidable casts need a line-specific `SAFETY:` explanation:
+
+```ts
+// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Explain the verified invariant here.
+```
+
 # Verifying Changes
 
 - **Typecheck**: `pnpm tc` (or `tc:node` / `tc:cli` / `tc:web`)
@@ -60,6 +68,10 @@ Orca targets macOS, Linux, and Windows. Keep all platform-dependent behavior beh
 - **WSL commands**: build argv with `buildWslExecArgs` (always `--exec` — under `--`, `wsl.exe` expands `$name` in every argument and silently rewrites the script), and fence anything whose stdout you parse with `buildWslCapturedLoginShellCommand`, because the interactive login shell prints the distro banner to stdout. See [`docs/reference/wsl-command-execution.md`](./docs/reference/wsl-command-execution.md).
 - **Linux native modules**: keep the glibc floor at Ubuntu 20.04 / glibc 2.31. A module compiled from source on a newer runner can reference symbol versions absent on the floor and crash the app on startup. See [`docs/reference/linux-glibc-compatibility.md`](./docs/reference/linux-glibc-compatibility.md); packaging fails if a bundled native binary needs newer glibc.
 
+## Native Dependency Installs
+
+Ordinary `pnpm install` covers the host OS and CPU only. Before packaging for another architecture — including `pnpm build:mac`, which builds x64 and arm64 by default — run `pnpm install:release`. electron-builder only warns on a missing `extraResources` source, so the `beforePack` guard is what turns a thin install into a build failure instead of a silently broken artifact; see [`docs/reference/pnpm-install-policy.md`](./docs/reference/pnpm-install-policy.md).
+
 ## SSH Use Case
 
 All changes must consider the SSH use case. Don't assume local-only execution. Before changing anything that reports on, stops, or lists remote work, follow [`docs/reference/ssh-execution-boundary.md`](./docs/reference/ssh-execution-boundary.md): the execution host owns everything that touches execution, and loss of contact is never evidence of process death — the verdict vocabulary is `live` / `unverifiable` / `exited`, with no synonyms.
@@ -67,6 +79,14 @@ All changes must consider the SSH use case. Don't assume local-only execution. B
 ## Folder Workspace Use Case
 
 All changes must consider folder workspaces as well as git worktrees. Don't assume every workspace is a git worktree.
+
+## Agent Status
+
+The execution host owns agent status in one store, the hook server's, and every reader (sidebar, `worktree ps`, mobile, dashboard) subscribes to it. Before adding a producer, a cache, or a reader-side precedence rule, read [`docs/reference/agent-status-store.md`](./docs/reference/agent-status-store.md): new producers write into that store, and readers keep only presentation policy.
+
+## Agent Terminal Screens
+
+A rule that reads what an agent CLI paints on a terminal — readiness, blocked prompts, idle — must be written against a captured transcript, not a remembered screen. Record one with [`docs/reference/agent-pty-transcript-capture.md`](./docs/reference/agent-pty-transcript-capture.md), which keeps escapes and wrapping intact and scrubs account identifiers before they reach git. Antigravity readiness has no transcript yet and five failed attempts without one; before touching it, read [`docs/reference/antigravity-readiness-evidence.md`](./docs/reference/antigravity-readiness-evidence.md).
 
 ## Remote Wire Compatibility
 

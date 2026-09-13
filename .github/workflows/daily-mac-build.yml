@@ -90,7 +90,8 @@ jobs:
         uses: actions/checkout@v6
         with:
           ref: main
-          fetch-depth: 0
+          # Version helpers only read HEAD; published versions come from the release API.
+          fetch-depth: 1
           # Why: this job only reads stablyai/orca and never pushes; every write
           # goes to the daily repo through a minted App token passed by env.
           # Not persisting the checkout credential shrinks the blast radius if a
@@ -167,6 +168,8 @@ jobs:
           restore-keys: |
             electron-builder-mac-
 
+      # Why both CPUs: the mac config packages x64 and arm64 from this arm64
+      # runner, so the install must carry both variants of the native optional deps.
       - name: Install dependencies
         if: steps.freshness.outputs.should_build == 'true'
         uses: nick-fields/retry@v4
@@ -174,7 +177,7 @@ jobs:
           timeout_minutes: 10
           max_attempts: 3
           retry_wait_seconds: 30
-          command: pnpm install --frozen-lockfile
+          command: pnpm install --frozen-lockfile --cpu=current,x64,arm64
 
       # Why: signing is what makes a daily installable over an existing Orca, so
       # a missing cert must fail here rather than after a 20-minute build.

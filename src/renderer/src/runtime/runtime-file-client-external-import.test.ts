@@ -182,7 +182,7 @@ describe('runtime file client', () => {
 
   it('chunks large staged runtime uploads below the WebSocket frame budget', async () => {
     const firstChunk = 'A'.repeat(512 * 1024)
-    const secondChunk = 'BBBBBBBB'
+    const secondChunk = 'AA=='
     fsStageExternalPathsForRuntimeUpload.mockResolvedValue({
       sources: [
         {

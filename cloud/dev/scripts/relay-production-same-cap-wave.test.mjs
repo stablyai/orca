@@ -109,6 +109,41 @@ test('seals and verifies canary authority for later batches', () => {
   }), /does not match/)
 })
 
+test('reuses a canary across selector advances only within the same control epoch', () => {
+  const authority = canaryAuthority({
+    cellIds: 'production-gce-c7', targetDigest, rollbackDigest,
+    confirmation: `ROLL_RELAY_SAME_CAP ${targetDigest} production-gce-c7`,
+    commitSha: 'c'.repeat(40), runId: '42', selectorGeneration: '11', rehomeGeneration: '4'
+  })
+  const expected = {
+    commitSha: 'c'.repeat(40), runId: '42', targetDigest, rollbackDigest,
+    selectorGeneration: '21', rehomeGeneration: '4'
+  }
+  for (const generation of ['13', '14', '21', '29']) {
+    assert.equal(verifyCanaryAuthority(authority, {
+      ...expected, selectorGeneration: generation
+    }), authority)
+  }
+  for (const generation of ['12', '-1', 'NaN', 'Infinity', '13.5', '9007199254740992']) {
+    assert.throws(() => verifyCanaryAuthority(authority, {
+      ...expected, selectorGeneration: generation
+    }), /does not match/)
+  }
+  for (const generation of [-1, NaN, Infinity, 13.5, '13', Number.MAX_SAFE_INTEGER + 1]) {
+    assert.throws(() => verifyCanaryAuthority({
+      ...authority, selectorGeneration: generation
+    }, expected), /does not match/)
+  }
+  for (const mismatch of [
+    { rehomeGeneration: '3' }, { rehomeGeneration: '5' },
+    { targetDigest: rollbackDigest }, { rollbackDigest: targetDigest }, { runId: '43' }
+  ]) {
+    assert.throws(() => verifyCanaryAuthority(authority, {
+      ...expected, ...mismatch
+    }), /does not match/)
+  }
+})
+
 function gitIn(root, ...args) {
   return execFileSync('git', ['-C', root, ...args], { encoding: 'utf8' }).trim()
 }
@@ -158,7 +193,7 @@ test('a batch trusts a canary sealed by identical code at an ancestor commit', a
       runId: '42',
       targetDigest,
       rollbackDigest,
-      selectorGeneration: '13',
+      selectorGeneration: '21',
       rehomeGeneration: '4'
     }, repositoryRoot)
     assert.equal(verifyAt(repository.sameCode, repository.root).cellId, 'production-gce-c7')

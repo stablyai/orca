@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from 'react'
-import { Animated, Pressable, StyleSheet, Text, View } from 'react-native'
+import { useEffect, useState } from 'react'
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native'
 import { ChevronRight } from 'lucide-react-native'
 import {
+  formatNativeChatActiveTurnLabel,
   formatNativeChatTurnStatusLabel,
   NATIVE_CHAT_TURN_STATUS_COPY,
   nativeChatElapsedSeconds
@@ -25,48 +26,38 @@ function useElapsedSeconds(startedAt: number | null, counting: boolean): number 
   return counting ? nativeChatElapsedSeconds(startedAt, mountedAt, now) : 0
 }
 
-/** The per-turn status row — "Thinking", then "Working for 12s" while the turn
- *  runs, settling to a tappable "Worked for 3m 4s" that discloses the turn's
- *  tool activity. Desktop parity: `NativeChatWorkingStatus`. */
+/** The per-turn status row. While the turn runs it is the one live indicator — a
+ *  spinner beside what the provider says it is doing, else "Thinking", else
+ *  "Working for 12s". It settles to a tappable "Worked for 3m 4s" that discloses
+ *  the turn's tool activity. Desktop parity: `NativeChatTurnActivityLine` for the
+ *  live row, `NativeChatWorkingStatus` for the settled one. */
 export function MobileNativeChatTurnStatus({
   startedAt,
   thinking,
   workedSeconds,
+  activityText,
   expanded = false,
   onToggleExpanded
 }: {
   startedAt: number | null
   thinking: boolean
   workedSeconds?: number | null
+  /** Provider activity copy for a live turn; outranks the other two labels. */
+  activityText?: string | null
   expanded?: boolean
   onToggleExpanded?: () => void
 }): React.JSX.Element {
-  const counting = !thinking && workedSeconds == null
+  const settled = workedSeconds != null
+  const counting = !settled && !thinking && !activityText?.trim()
   const elapsedSeconds = useElapsedSeconds(startedAt, counting)
-  const label = formatNativeChatTurnStatusLabel({ thinking, workedSeconds, elapsedSeconds })
+  const label = settled
+    ? formatNativeChatTurnStatusLabel({ thinking, workedSeconds, elapsedSeconds })
+    : formatNativeChatActiveTurnLabel({ activityText, thinking, elapsedSeconds })
 
-  const pulse = useRef(new Animated.Value(1)).current
-  useEffect(() => {
-    if (!thinking) {
-      pulse.setValue(1)
-      return
-    }
-    const animation = Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulse, { toValue: 0.45, duration: 700, useNativeDriver: true }),
-        Animated.timing(pulse, { toValue: 1, duration: 700, useNativeDriver: true })
-      ])
-    )
-    animation.start()
-    return () => animation.stop()
-  }, [pulse, thinking])
-
-  const rowStyle = [styles.row, thinking ? null : styles.rowSettled]
-
-  if (workedSeconds != null && onToggleExpanded) {
+  if (settled && onToggleExpanded) {
     return (
       <Pressable
-        style={({ pressed }) => [...rowStyle, pressed && styles.pressed]}
+        style={({ pressed }) => [styles.row, styles.rowSettled, pressed && styles.pressed]}
         onPress={onToggleExpanded}
         hitSlop={6}
         accessibilityRole="button"
@@ -83,11 +74,14 @@ export function MobileNativeChatTurnStatus({
 
   return (
     <View
-      style={rowStyle}
+      style={[styles.row, settled ? styles.rowSettled : null]}
       accessibilityLiveRegion="polite"
       accessibilityLabel={NATIVE_CHAT_TURN_STATUS_COPY.responding}
     >
-      <Animated.Text style={[styles.label, thinking && { opacity: pulse }]}>{label}</Animated.Text>
+      {settled ? null : <ActivityIndicator size="small" color={colors.textMuted} />}
+      <Text style={styles.label} numberOfLines={1}>
+        {label}
+      </Text>
     </View>
   )
 }
@@ -109,7 +103,8 @@ const styles = StyleSheet.create({
   },
   label: {
     color: colors.textMuted,
-    fontSize: typography.bodySize
+    fontSize: typography.bodySize,
+    flexShrink: 1
   },
   caretOpen: {
     transform: [{ rotate: '90deg' }]

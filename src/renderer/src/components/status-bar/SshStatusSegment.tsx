@@ -33,7 +33,7 @@ import {
 } from './remote-host-connection-status'
 import {
   isConnectedRuntimeHostState,
-  runtimeHostConnectionState,
+  runtimeHostConnectionStateForEntry,
   runtimeStatusForOverall
 } from '@/runtime/runtime-host-connection-state'
 import { refreshRuntimeProjectWorktreesAndLineage } from '@/hooks/runtime-project-refresh-scheduler'
@@ -74,7 +74,7 @@ export function SshStatusSegment({
   const settings = useAppStore((s) => s.settings)
   const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
   const runtimeStatusByEnvironmentId = useAppStore((s) => s.runtimeStatusByEnvironmentId)
-  const setRuntimeEnvironmentStatus = useAppStore((s) => s.setRuntimeEnvironmentStatus)
+  const readRuntimeHostStatusSnapshots = useAppStore((s) => s.readRuntimeHostStatusSnapshots)
   const hydrateRuntimeEnvironmentStatuses = useAppStore((s) => s.hydrateRuntimeEnvironmentStatuses)
   const remoteWorkspaceSyncStatusByTargetId = useAppStore(
     (s) => s.remoteWorkspaceSyncStatusByTargetId
@@ -105,7 +105,7 @@ export function SshStatusSegment({
       return {
         id: environment.id,
         label: override || environment.name || environment.id,
-        hasStatusEntry: Boolean(statusEntry),
+        snapshot: statusEntry?.snapshot,
         status: statusEntry?.status ?? null,
         active: settings?.activeRuntimeEnvironmentId === environment.id,
         remoteControl: statusEntry?.remoteControl ?? statusEntry?.status?.remoteControl ?? null
@@ -113,7 +113,7 @@ export function SshStatusSegment({
     })
   const runtimeHostRows = runtimeHosts.map((host) => ({
     ...host,
-    state: runtimeHostConnectionState(host)
+    state: runtimeHostConnectionStateForEntry(runtimeStatusByEnvironmentId.get(host.id))
   }))
   // Available remote servers are online even when they are not the active runtime.
   // Keep host health separate from the advanced active-server selection.
@@ -152,11 +152,7 @@ export function SshStatusSegment({
     async (environmentId: string): Promise<void> => {
       try {
         await window.api.runtimeEnvironments.disconnect({ selector: environmentId })
-        setRuntimeEnvironmentStatus(
-          environmentId,
-          { status: null, checkedAt: Date.now() },
-          { suppressDisconnectToast: true }
-        )
+        await readRuntimeHostStatusSnapshots()
         recordFeatureInteraction('ssh')
       } catch (err) {
         toast.error(
@@ -169,7 +165,7 @@ export function SshStatusSegment({
         )
       }
     },
-    [recordFeatureInteraction, setRuntimeEnvironmentStatus]
+    [recordFeatureInteraction, readRuntimeHostStatusSnapshots]
   )
 
   if (targets.length === 0 && runtimeHosts.length === 0) {

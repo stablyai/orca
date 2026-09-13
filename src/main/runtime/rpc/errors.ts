@@ -120,6 +120,7 @@ const STRUCTURED_RUNTIME_PASSTHROUGH_CODES: ReadonlySet<string> = new Set([
   'legacy_read_only',
   'orchestration_migration_required',
   'operation_unknown',
+  'dispatch_preamble_undelivered',
   'question_not_found',
   'answer_conflict',
   'stale_delivery',

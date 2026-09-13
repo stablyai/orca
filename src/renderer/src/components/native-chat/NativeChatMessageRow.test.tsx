@@ -23,7 +23,7 @@ function renderMessage(role: NativeChatMessage['role'], timestamp: number | null
   )
 }
 
-describe('MessageRow hover timestamps', () => {
+describe('MessageRow control visibility', () => {
   it('appends time to the existing agent controls and inherits their reveal', () => {
     renderMessage('assistant')
     const copy = screen.getByRole('button', { name: 'Copy message' })
@@ -31,24 +31,32 @@ describe('MessageRow hover timestamps', () => {
     const time = screen.getByRole('time')
     expect(Array.from(copy.parentElement!.children)).toEqual([copy, scroll, time])
     expect(copy.parentElement).toHaveClass(
-      'opacity-0',
+      'can-hover:opacity-0',
+      'can-hover:pointer-events-none',
       'group-hover:opacity-100',
-      'group-focus-within:opacity-100'
+      'group-has-[:focus-visible]:opacity-100',
+      'group-hover:pointer-events-auto',
+      'group-has-[:focus-visible]:pointer-events-auto'
     )
+    expect(copy.parentElement).not.toHaveClass('opacity-0', 'pointer-events-none')
     expect(time).not.toHaveAttribute('tabindex')
     copy.focus()
     expect(copy).toHaveFocus()
   })
 
-  it('gives user bubbles only a hover/focus timestamp', () => {
+  it('gives user bubbles a timestamp that only hides on hover-capable devices', () => {
     renderMessage('user')
     const time = screen.getByRole('time')
     expect(screen.queryByRole('button')).toBeNull()
     expect(time).toHaveClass(
-      'opacity-0',
+      'can-hover:opacity-0',
+      'can-hover:pointer-events-none',
       'group-hover:opacity-100',
-      'group-focus-within:opacity-100'
+      'group-has-[:focus-visible]:opacity-100',
+      'group-hover:pointer-events-auto',
+      'group-has-[:focus-visible]:pointer-events-auto'
     )
+    expect(time).not.toHaveClass('opacity-0', 'pointer-events-none')
     expect(time.parentElement).toHaveClass('group')
     time.focus()
     expect(time).toHaveFocus()

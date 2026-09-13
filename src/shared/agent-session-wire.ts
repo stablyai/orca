@@ -1,4 +1,11 @@
+import type {
+  AgentSessionBackgroundTask,
+  AgentSessionBackgroundTaskState
+} from './agent-session-background-task-wire'
 import type { AgentSessionRewindReason, AgentSessionRewindSupport } from './agent-session-rewind'
+import type { AgentSessionWireRefusal } from './agent-session-wire-refusals'
+
+export * from './agent-session-wire-refusals'
 import type { AgentSessionConversationCommand } from './agent-session-conversation-command'
 // ─── Structured agent-session wire contract ─────────────────────────────────
 // The shapes `agentSession.*` accepts and publishes. Phase 2 builds provider
@@ -56,19 +63,12 @@ export type AgentSessionHandoffRequest = {
 
 export type AgentSessionHandoffResult = { status: AgentSessionHandoffStatus }
 
-export type AgentSessionBackgroundTask = {
-  id: string
-  kind: 'agent' | 'workflow' | 'command' | 'monitor' | 'unknown'
-  description?: string
-}
-
-export type AgentSessionBackgroundTaskState = {
-  state: 'monitoring'
-  /** Optional so mixed-version clients can consume state-only hosts. */
-  tasks?: AgentSessionBackgroundTask[]
-  /** Optional so clients only send targeted stops to hosts that accept them. */
-  supportsTaskStop?: boolean
-}
+export type {
+  AgentSessionBackgroundTask,
+  AgentSessionBackgroundTaskRunState,
+  AgentSessionBackgroundTaskState
+} from './agent-session-background-task-wire'
+export { agentSessionBackgroundTasksEqual } from './agent-session-background-task-wire'
 
 export type AgentSessionTurnActivity = {
   turnId: string
@@ -120,6 +120,9 @@ export type AgentSessionHistoryPage = {
   hasNewer: boolean
   /** Present on hosts that expose provider-owned background task lifecycle. */
   backgroundTasks?: AgentSessionBackgroundTaskState | null
+  /** Host wall clock (ms epoch) when the page was read, so a client attaching mid-turn
+   *  can anchor a live counter on the real start. Absent from older hosts. */
+  hostNow?: number
 }
 
 export type AgentSessionHistoryResult =
@@ -144,8 +147,11 @@ export type AgentSessionJournalBatch = {
   submissions: AgentJournalSubmission[]
 }
 
+/** Host wall clock (ms epoch) stamped once per published frame; see `AgentSessionHistoryPage`. */
+type AgentSessionHostClockField = { hostNow?: number }
+
 export type AgentSessionSubscribeEvent =
-  | {
+  | ({
       type: 'snapshot'
       sessionId: string
       page: AgentSessionHistoryPage
@@ -156,8 +162,8 @@ export type AgentSessionSubscribeEvent =
       commands?: AgentSessionSlashCommand[] | null
       /** Latest provider-authored turn activity; optional for mixed-version hosts. */
       activity?: AgentSessionTurnActivity | null
-    }
-  | {
+    } & AgentSessionHostClockField)
+  | ({
       type: 'batch'
       sessionId: string
       batch: AgentSessionJournalBatch
@@ -169,8 +175,8 @@ export type AgentSessionSubscribeEvent =
       commands?: AgentSessionSlashCommand[] | null
       /** Additive ephemeral state; it never creates or advances journal rows. */
       activity?: AgentSessionTurnActivity | null
-    }
-  | {
+    } & AgentSessionHostClockField)
+  | ({
       type: 'reset'
       sessionId: string
       reset: AgentJournalResetReason
@@ -181,7 +187,7 @@ export type AgentSessionSubscribeEvent =
       /** Omitted when unchanged; null clears a previous provider catalog. */
       commands?: AgentSessionSlashCommand[] | null
       activity?: AgentSessionTurnActivity | null
-    }
+    } & AgentSessionHostClockField)
   | { type: 'end' }
 
 // ─── Status feed ────────────────────────────────────────────────────────────
@@ -196,6 +202,8 @@ export type AgentSessionStatusSummary = {
   agent: AgentSessionRecord['provider']
   /** Null until the journal holds a persisted user or assistant message. */
   status: StructuredAgentSessionProjectedStatus | null
+  /** Present only while this host has the provider child executing the session. */
+  hostExecutionOwned?: true
   latestPrompt: string
   /** Provider model in force for the next turn; absent until the host has read the options. */
   model?: string
@@ -204,6 +212,10 @@ export type AgentSessionStatusSummary = {
   toolInput?: string
   /** Preview of the newest assistant prose, so a settled row says what the agent said. */
   lastAssistantMessage?: string
+  /** Live provider-owned background tasks, so session lists can render
+   *  subagent children without holding a journal reader open. Optional for
+   *  mixed-version hosts. */
+  backgroundTasks?: AgentSessionBackgroundTask[]
   providerSession?: AgentProviderSessionMetadata
   updatedAt: number
 }
@@ -229,47 +241,6 @@ export type AgentSessionMutationEnvelope = {
   expectedRuntimeFence: number | null
   /** Client-declared; the host recomputes it and compares. */
   payloadFingerprint: string
-}
-
-export const AGENT_SESSION_WIRE_REFUSAL_CODES = [
-  'structured_agent_session_unsupported',
-  'agent_session_checkpoint_stale',
-  'agent_session_conflict',
-  'agent_session_ownership_unknown',
-  'agent_session_operation_conflict',
-  'agent_session_operation_expired',
-  'agent_session_operation_capacity',
-  'agent_session_operation_invalid',
-  'agent_session_operation_unknown',
-  'agent_session_item_revision_stale',
-  'agent_session_already_resolved',
-  'agent_session_identity_required',
-  'agent_session_journal_unreadable',
-  'execution_owner_reconciling'
-] as const
-export type AgentSessionWireRefusalCode = (typeof AGENT_SESSION_WIRE_REFUSAL_CODES)[number]
-
-/** For a host path that raises its refusal as the thrown code. Narrowing through this keeps an
- *  unrelated fault from being reported to the client as a tidy, wrong refusal. */
-export function isAgentSessionWireRefusalCode(
-  value: unknown
-): value is AgentSessionWireRefusalCode {
-  return (
-    typeof value === 'string' &&
-    (AGENT_SESSION_WIRE_REFUSAL_CODES as readonly string[]).includes(value)
-  )
-}
-
-export type AgentSessionWireRefusal = {
-  rewindReason?: AgentSessionRewindReason
-  code: AgentSessionWireRefusalCode
-  message: string
-  /** On a stale fence, so the client can retry without another round trip. */
-  currentFence?: number
-  /** On a lost compare-and-set: the winning answer and who gave it. */
-  resolution?: AgentJournalResolution
-  /** On a lost compare-and-set: the revision the host actually holds. */
-  currentRevision?: number
 }
 
 export type AgentSessionMutationResult<TValue> =
@@ -340,6 +311,10 @@ export type AgentSessionSlashCommand = {
   kind: 'command' | 'skill'
   /** Membership is authoritative, but this provider report did not classify the name. */
   kindUnspecified?: true
+  /** Provider-authored row text; absent when the report carried names only. */
+  description?: string
+  /** Provider-authored argument sketch, e.g. `<issue-url>`. */
+  argumentHint?: string
 }
 
 /** The provider's own command surface, read per session. Additive read-only

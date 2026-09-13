@@ -71,6 +71,9 @@ describe('RuntimeTerminalIdlePolls timer budget', () => {
       getTabTitle: () => null,
       getForegroundProcess: () => null,
       getAdoptedPtyIdleStatus: () => null,
+      getPaneAgent: () => null,
+      getFirstPartyAgentStatus: () => null,
+      getLiveLeaf: (leaf) => leaf,
       resolve: (waiter, result) => resolved.push({ handle: waiter.handle, result })
     })
 
@@ -103,6 +106,9 @@ describe('RuntimeTerminalIdlePolls timer budget', () => {
       getTabTitle: () => null,
       getForegroundProcess: () => null,
       getAdoptedPtyIdleStatus: () => null,
+      getPaneAgent: () => null,
+      getFirstPartyAgentStatus: () => null,
+      getLiveLeaf: (leaf) => leaf,
       resolve: () => {}
     })
 
@@ -125,6 +131,9 @@ describe('RuntimeTerminalIdlePolls timer budget', () => {
       getTabTitle: () => null,
       getForegroundProcess: () => null,
       getAdoptedPtyIdleStatus: () => null,
+      getPaneAgent: () => null,
+      getFirstPartyAgentStatus: () => null,
+      getLiveLeaf: (leaf) => leaf,
       resolve: () => {}
     })
     const first = makeWaiter('a')
@@ -152,6 +161,9 @@ describe('RuntimeTerminalIdlePolls timer budget', () => {
           gates.push(resolve)
         }),
       getAdoptedPtyIdleStatus: () => null,
+      getPaneAgent: () => null,
+      getFirstPartyAgentStatus: () => null,
+      getLiveLeaf: (leaf) => leaf,
       resolve: (waiter) => resolved.push(waiter.handle)
     })
 

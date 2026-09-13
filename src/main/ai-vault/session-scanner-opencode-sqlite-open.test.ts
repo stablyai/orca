@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Worker } from 'node:worker_threads'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AiVaultScanIssue } from '../../shared/ai-vault-types'
 import Database from '../sqlite/sync-database'
 import { listOpenCodeSqliteSessions } from './session-scanner-opencode-sqlite-list'
@@ -20,6 +20,7 @@ let tempDirs: string[] = []
 let lockHolders: Worker[] = []
 
 afterEach(async () => {
+  vi.restoreAllMocks()
   await Promise.all(lockHolders.splice(0).map((worker) => worker.terminate()))
   lockHolders = []
   for (const dir of tempDirs) {
@@ -66,20 +67,29 @@ const LOCK_HOLDER_SOURCE = `
   db.exec('BEGIN EXCLUSIVE')
   db.exec("INSERT INTO session (id, time_created, time_updated) VALUES ('locked-write', 1, 1)")
   parentPort.postMessage('locked')
-  setTimeout(() => {
-    db.exec('ROLLBACK')
-    db.close()
-    parentPort.postMessage('released')
-  }, workerData.holdMs)
+  parentPort.once('message', (message) => {
+    if (message !== 'reader-started') {
+      throw new Error('Unexpected lock-holder message')
+    }
+    setTimeout(() => {
+      db.exec('ROLLBACK')
+      db.close()
+      parentPort.postMessage('released')
+    }, workerData.releaseDelayMs)
+  })
 `
 
-async function holdWriteLock(path: string, holdMs: number): Promise<void> {
-  const worker = new Worker(LOCK_HOLDER_SOURCE, { eval: true, workerData: { path, holdMs } })
+async function holdWriteLock(path: string, releaseDelayMs: number): Promise<Worker> {
+  const worker = new Worker(LOCK_HOLDER_SOURCE, {
+    eval: true,
+    workerData: { path, releaseDelayMs }
+  })
   lockHolders.push(worker)
   await new Promise<void>((resolve, reject) => {
     worker.once('message', () => resolve())
     worker.once('error', reject)
   })
+  return worker
 }
 
 describe('listOpenCodeSqliteSessions against a database OpenCode is writing to', () => {
@@ -117,9 +127,9 @@ describe('listOpenCodeSqliteSessions against a database OpenCode is writing to',
 
   it('reads the sessions once the write finishes inside the busy timeout', async () => {
     const path = seededDatabase('opencode.db', 'session-a')
-    // Long enough that only a real busy timeout — not a lucky fast open — survives it.
-    await holdWriteLock(path, 900)
+    const worker = await holdWriteLock(path, 200)
     const issues: AiVaultScanIssue[] = []
+    worker.postMessage('reader-started')
 
     const candidates = await listOpenCodeSqliteSessions({ dbPaths: [path], limit: 10, issues })
 
@@ -144,6 +154,63 @@ describe('readOpenCodeDatabase', () => {
 
     expect(rows).toEqual([{ id: 'session-a' }])
     expect(() => captured!.prepare('SELECT 1')).toThrow(/not open/i)
+  })
+
+  it('closes the handle when query_only setup fails', () => {
+    const path = seededDatabase('opencode.db', 'session-a')
+    const setupError = new Error('query_only setup failed')
+    const originalClose = Database.prototype.close
+    const pragmaSpy = vi.spyOn(Database.prototype, 'pragma').mockImplementationOnce(() => {
+      throw setupError
+    })
+    const closeSpy = vi.spyOn(Database.prototype, 'close')
+    const read = vi.fn()
+
+    try {
+      expect(() => readOpenCodeDatabase({ dbPath: path, read })).toThrow(setupError)
+      expect(read).not.toHaveBeenCalled()
+      expect(closeSpy).toHaveBeenCalledOnce()
+      expect(() => (pragmaSpy.mock.contexts[0] as Database).prepare('SELECT 1')).toThrow(
+        /not open/i
+      )
+    } finally {
+      try {
+        originalClose.call(pragmaSpy.mock.contexts[0] as Database)
+      } catch {
+        // Keep the regression safe to run against the leaking implementation too.
+      }
+    }
+  })
+
+  it('preserves the setup error when closing also fails', () => {
+    const path = seededDatabase('opencode.db', 'session-a')
+    const setupError = new Error('query_only setup failed')
+    const closeError = new Error('close failed')
+    const originalClose = Database.prototype.close
+    vi.spyOn(Database.prototype, 'pragma').mockImplementationOnce(() => {
+      throw setupError
+    })
+    vi.spyOn(Database.prototype, 'close').mockImplementationOnce(function (this: Database) {
+      originalClose.call(this)
+      throw closeError
+    })
+
+    const read = vi.fn()
+    expect(() => readOpenCodeDatabase({ dbPath: path, read })).toThrow(setupError)
+    expect(Database.prototype.close).toHaveBeenCalledOnce()
+    expect(read).not.toHaveBeenCalled()
+  })
+
+  it('keeps the query-only guard enabled for successful reads', () => {
+    const path = seededDatabase('opencode.db', 'session-a')
+    readOpenCodeDatabase({
+      dbPath: path,
+      read: (db) => {
+        expect(db.pragma('query_only', { simple: true })).toBe(1)
+        expect(() => db.exec('DELETE FROM session')).toThrow(/readonly/i)
+        expect(db.prepare('SELECT id FROM session').all()).toEqual([{ id: 'session-a' }])
+      }
+    })
   })
 
   it('closes the handle when the read throws', () => {

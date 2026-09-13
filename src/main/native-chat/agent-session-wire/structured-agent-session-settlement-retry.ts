@@ -4,6 +4,7 @@ import type {
   StructuredAgentSessionHostDeps,
   StructuredAgentSessionHostSession
 } from './structured-agent-session-host-types'
+import { turnVerdictFromDeathEvidence } from './structured-agent-session-stale-turn-verdict'
 import {
   retryUnexpectedExitSettlement,
   type StructuredAgentSessionUnexpectedExitContext
@@ -80,7 +81,9 @@ export async function retryLoadedStructuredAgentSessionSettlement(input: {
       acquisitionGeneration: retrySession.acquisitionGeneration ?? 'recovery'
     },
     session: retrySession,
-    stableSettlementId: record.lease.settlementRetryId
+    stableSettlementId: record.lease.settlementRetryId,
+    // Only an observed exit earns an end time; a probe-proven death never saw one.
+    verdict: turnVerdictFromDeathEvidence(record.lease.deathEvidence)
   })
   if (!ok) {
     return false

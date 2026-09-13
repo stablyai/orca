@@ -11,6 +11,7 @@ import { useContextualCopySetup } from './useContextualCopySetup'
 import { MonacoGutterContextMenu } from './MonacoGutterContextMenu'
 import { useInlineGitBlame } from './useInlineGitBlame'
 import { isLinuxUserAgent } from '../terminal-pane/pane-helpers'
+import { MAX_TOKENIZATION_LINE_LENGTH } from '@/lib/monaco-languages/monarch-embed-entry-budget'
 import { buildFileEditorWordWrapOptions } from './file-editor-word-wrap-options'
 import { getMonacoAutoHeightForContent, isMonacoAutoHeightCapped } from './monaco-auto-height'
 import { monacoFindOptions } from './monaco-find-options'
@@ -240,6 +241,11 @@ export default function MonacoEditor({
         onChange={contentSync.handleChange}
         onMount={handleMount}
         options={{
+          // `IGlobalEditorOptions`, not per-editor: setting it here pins it for every
+          // Monaco surface (diff, Peek) too, so this is the only site that needs it.
+          // Defense-in-depth only — it does NOT guard the Monarch embed recursion,
+          // which overflowed at ~17_000 chars, under this cap. See the budget module.
+          maxTokenizationLineLength: MAX_TOKENIZATION_LINE_LENGTH,
           // Why: only the file editor honors this; Monaco 0.55 DiffEditor hard-overrides minimap.enabled=false on sub-editors (see diffEditorEditors._adjustOptionsForSubEditor).
           minimap: { enabled: settings?.editorMinimapEnabled ?? false },
           scrollBeyondLastLine: false,

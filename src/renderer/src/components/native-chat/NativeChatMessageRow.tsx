@@ -1,24 +1,23 @@
-import { memo, useCallback, useMemo, useRef } from 'react'
+import { memo, useCallback, useRef } from 'react'
 import CommentMarkdown, {
   type CommentMarkdownLinkClickHandler
 } from '@/components/sidebar/CommentMarkdown'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
-import {
-  isSubagentGroupFallbackText,
-  subagentGroupBlocks
-} from '../../../../shared/native-chat-subagent-summary'
-import { isSubagentGroupBlock, type NativeChatMessage } from '../../../../shared/native-chat-types'
-import { splitNativeChatBlocks } from './native-chat-tool-fold'
+import type {
+  NativeChatMessage,
+  NativeChatToolCallBlock
+} from '../../../../shared/native-chat-types'
+import { deriveNativeChatRowContent } from './native-chat-row-content'
 import { NativeChatToolRun } from './NativeChatToolRun'
 import { NativeChatNoticeRow } from './NativeChatNoticeRow'
 import { NativeChatMessageTimestamp } from './NativeChatMessageTimestamp'
-import { nativeChatProseToMarkdown } from './native-chat-prose'
 import {
   NativeChatAgentControls,
   NativeChatImageAttachments,
   ProviderFrameRow
 } from './NativeChatTranscriptChrome'
+import type { NativeChatDiffReveal } from './native-chat-turn-diffs'
 import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client'
 
 /** One message: its prose first, then a collapsible run folding all of the
@@ -28,6 +27,9 @@ import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client'
  *  keep their block identity, so only the changed row re-renders. */
 export const MessageRow = memo(function MessageRow({
   message,
+  previousTodoWrite,
+  previousUpdatePlan,
+  revealedDiff,
   expandSignal,
   activeTurnIsWorking,
   onScrollMessageToTop,
@@ -39,6 +41,9 @@ export const MessageRow = memo(function MessageRow({
   runtimeContext
 }: {
   message: NativeChatMessage
+  previousTodoWrite?: NativeChatToolCallBlock
+  previousUpdatePlan?: NativeChatToolCallBlock
+  revealedDiff?: NativeChatDiffReveal
   expandSignal: boolean
   activeTurnIsWorking?: boolean
   /** Align this message's top to the top of the scroll viewport. */
@@ -51,32 +56,11 @@ export const MessageRow = memo(function MessageRow({
   runtimeContext?: RuntimeFileOperationArgs | null
 }): React.JSX.Element | null {
   const rowRef = useRef<HTMLDivElement | null>(null)
-  // One pass per block set: a streaming turn re-renders this row on every frame, and these
-  // derivations used to re-run each time even though `message.blocks` had not changed.
-  const { hasImages, markdown, prose, subagentGroups, tools } = useMemo(() => {
-    const split = splitNativeChatBlocks(message.blocks)
-    const groups = subagentGroupBlocks(split.prose)
-    // A spawn-group row carries a plain-text twin so a client without the block
-    // type still reads the roster. This one draws the block, so the twin is
-    // dropped rather than printed beside it — only the twin, never the prose
-    // beside it: the block is provider-agnostic, so a lane that folds a roster
-    // into a message with real text must not lose that text here.
-    const prose =
-      groups.length === 0
-        ? split.prose
-        : split.prose.filter(
-            (block) =>
-              !isSubagentGroupBlock(block) &&
-              !(block.type === 'text' && isSubagentGroupFallbackText(block.text))
-          )
-    return {
-      tools: split.tools,
-      prose,
-      subagentGroups: groups,
-      markdown: nativeChatProseToMarkdown(prose),
-      hasImages: prose.some((block) => block.type === 'image-ref')
-    }
-  }, [message.blocks])
+  // One pass per block set, shared with the list that decides whether this row
+  // occupies a slot — so "draws nothing" means the same thing to both.
+  const { hasImages, markdown, prose, subagentGroups, tools } = deriveNativeChatRowContent(
+    message.blocks
+  )
   const isUser = message.role === 'user'
   const isReasoning = message.role === 'reasoning'
   const isSystem = message.role === 'system'
@@ -153,7 +137,7 @@ export const MessageRow = memo(function MessageRow({
         <NativeChatMessageTimestamp
           timestamp={message.timestamp}
           focusable
-          className="pointer-events-none select-none opacity-0 transition-opacity group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100"
+          className="select-none transition-opacity can-hover:pointer-events-none can-hover:opacity-0 group-hover:pointer-events-auto group-hover:opacity-100 group-has-[:focus-visible]:pointer-events-auto group-has-[:focus-visible]:opacity-100"
         />
         {deliveryFailed ? (
           <div className="max-w-[85%] text-[11px] text-destructive/80">
@@ -168,7 +152,7 @@ export const MessageRow = memo(function MessageRow({
   }
 
   // Plain assistant prose is the copyable unit; reasoning/system asides stay
-  // chrome-free. The controls reveal on hover (and on keyboard focus-within).
+  // chrome-free. Controls reveal on hover/keyboard focus and stay visible on touch.
   const showControls = !isReasoning && !isSystem && markdown.length > 0
 
   return (
@@ -199,12 +183,17 @@ export const MessageRow = memo(function MessageRow({
       {tools.length > 0 || subagentGroups.length > 0 ? (
         <NativeChatToolRun
           blocks={tools}
+          previousTodoWrite={previousTodoWrite}
+          previousUpdatePlan={previousUpdatePlan}
+          revealedDiff={revealedDiff}
+          onRevealDiff={onScrollMessageToTop}
           onLinkClick={onLinkClick}
           subagentGroups={subagentGroups}
           expandSignal={expandSignal}
           expandOverride={activityExpandOverride}
           activeTurnIsWorking={activeTurnIsWorking}
           structuredActivityUi={structuredActivityUi}
+          disclosureId={message.id}
         />
       ) : null}
       {showControls ? (
@@ -212,7 +201,7 @@ export const MessageRow = memo(function MessageRow({
           markdown={markdown}
           timestamp={message.timestamp}
           onScrollToTop={scrollToTop}
-          className="pointer-events-none mt-1 -mb-5 w-fit select-none opacity-0 transition-opacity group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100"
+          className="mt-1 -mb-5 w-fit select-none transition-opacity can-hover:pointer-events-none can-hover:opacity-0 group-hover:pointer-events-auto group-hover:opacity-100 group-has-[:focus-visible]:pointer-events-auto group-has-[:focus-visible]:opacity-100"
         />
       ) : null}
     </div>

@@ -1,3 +1,4 @@
+import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
 import {
   agentJournalItemKey,
   agentJournalSubmissionKey,
@@ -19,6 +20,7 @@ import { conversationCommandBlocked } from './structured-conversation-command-ad
 import { rewindRefusal } from './structured-rewind-refusal'
 import { persistRewindRecord, recoverStructuredRewind } from './structured-rewind-recovery'
 import { replaceClaudeRewindOwner } from './structured-rewind-claude-owner'
+import { mergeRetainedHostLifecycleRows } from './structured-rewind-retained-host-rows'
 
 export async function rewindStructuredAgentSession(
   context: StructuredAgentSessionMutationContext,
@@ -108,7 +110,7 @@ export async function rewindStructuredAgentSession(
                 (identity?.provider === 'codex' &&
                   identity.threadId === key.threadId &&
                   identity.turnId === key.turnId) ||
-                (item.body.kind === 'status' && item.body.turnLifecycle?.turnId === key.turnId)
+                readAgentJournalTurn(item.body)?.turnId === key.turnId
               )
             })
           } else if (key.provider === 'claude' && head.provider === 'claude') {
@@ -172,11 +174,14 @@ export async function rewindStructuredAgentSession(
                 fence: ctx.fence,
                 beforeTurnId: key.provider === 'codex' ? key.turnId : '',
                 onPrepared: async (items) => {
-                  const retained = items.map(({ identity, body }) => ({
-                    itemId: agentJournalItemKey(identity),
-                    body,
-                    observedAt: ctx.now()
-                  }))
+                  const retained = mergeRetainedHostLifecycleRows(
+                    prepared.retained,
+                    items.map(({ identity, body }) => ({
+                      itemId: agentJournalItemKey(identity),
+                      body,
+                      observedAt: ctx.now()
+                    }))
+                  )
                   if (
                     retained.length > 10_000 ||
                     Buffer.byteLength(JSON.stringify(retained), 'utf8') >
@@ -215,11 +220,14 @@ export async function rewindStructuredAgentSession(
             return rewindRefusal(reason)
           }
           const confirmed = provider.items
-            ? provider.items.map(({ identity, body }) => ({
-                itemId: agentJournalItemKey(identity),
-                body,
-                observedAt: ctx.now()
-              }))
+            ? mergeRetainedHostLifecycleRows(
+                prepared.retained,
+                provider.items.map(({ identity, body }) => ({
+                  itemId: agentJournalItemKey(identity),
+                  body,
+                  observedAt: ctx.now()
+                }))
+              )
             : prepared.retained
           if (
             Buffer.byteLength(JSON.stringify(confirmed), 'utf8') >

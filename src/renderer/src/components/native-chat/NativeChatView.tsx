@@ -17,6 +17,7 @@ export default function NativeChatView(props: NativeChatViewProps): React.JSX.El
 function NativeChatBridgeView({
   terminalTabId,
   isVisible,
+  isFocusedGroup,
   paneKey: preferredPaneKey,
   targetPtyId = null,
   launchAgent,
@@ -45,6 +46,7 @@ function NativeChatBridgeView({
           sessionId={resolution.sessionId}
           transcriptPath={resolution.transcriptPath}
           isVisible={isVisible}
+          isFocusedGroup={isFocusedGroup}
           targetPtyId={targetPtyId}
           terminalTabId={terminalTabId}
           ownsTabWideLaunchDraft={ownsTabWideLaunchDraft}

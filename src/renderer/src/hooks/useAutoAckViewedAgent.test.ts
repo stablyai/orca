@@ -398,8 +398,8 @@ describe('resolveAutoAckTabTargets', () => {
 
   it('scans the floating tab alongside the main tab while the panel is visible', () => {
     expect(resolveAutoAckTabTargets(baseState, { floatingPanelVisible: true })).toEqual([
-      { tabId: 'tab-1', worktreeId: 'wt-1' },
-      { tabId: FLOATING_TAB_ID, worktreeId: FLOATING_TERMINAL_WORKTREE_ID }
+      { tabId: FLOATING_TAB_ID, worktreeId: FLOATING_TERMINAL_WORKTREE_ID },
+      { tabId: 'tab-1', worktreeId: 'wt-1' }
     ])
   })
 
@@ -427,13 +427,13 @@ describe('resolveAutoAckTabTargets', () => {
     ).toEqual([])
   })
 
-  it('keeps the real worktree when one tab id is claimed by both worktrees', () => {
+  it('prefers the visible floating worktree when both worktrees claim one tab id', () => {
     expect(
       resolveAutoAckTabTargets(
         { ...baseState, activeTabId: FLOATING_TAB_ID },
         { floatingPanelVisible: true }
       )
-    ).toEqual([{ tabId: FLOATING_TAB_ID, worktreeId: 'wt-1' }])
+    ).toEqual([{ tabId: FLOATING_TAB_ID, worktreeId: FLOATING_TERMINAL_WORKTREE_ID }])
   })
 })
 

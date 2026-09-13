@@ -36,24 +36,33 @@ export function resolveNativeChatSessionOptionDefaults(
  *  mid-session, never seeded at launch. */
 export const STRUCTURED_LAUNCH_SEED_OPTION_IDS = ['model', 'effort'] as const
 
+/** Any chosen option set narrowed to what a structured create may seed: the seedable ids only,
+ *  each a non-empty string. An empty result is `undefined` rather than `{}` — an empty map fails
+ *  the durable record's bounded-string guard, and `agent_session_options_invalid` is not a wire
+ *  refusal code, so the throw strands the launch with no fallback.
+ *
+ *  Shared with orchestration, whose `--model`/`--effort` seed a worker's session the same way a
+ *  saved selection seeds the user's own chat. */
+export function narrowStructuredLaunchSeedOptions(
+  values: Readonly<Record<string, unknown>> | null | undefined
+): Record<string, string> | undefined {
+  const seeded: Record<string, string> = {}
+  for (const id of STRUCTURED_LAUNCH_SEED_OPTION_IDS) {
+    const value = values?.[id]
+    if (typeof value === 'string' && value.trim()) {
+      seeded[id] = value
+    }
+  }
+  return Object.keys(seeded).length > 0 ? seeded : undefined
+}
+
 /** The saved selection a structured create seeds into its reservation, narrowed
  *  to the wire-safe string subset the durable record and both providers accept. */
 export function resolveStructuredLaunchSeedOptions(
   persisted: PersistedNativeChatSessionOptions | null | undefined,
   agent: AgentType
 ): Record<string, string> | undefined {
-  const defaults = resolveNativeChatSessionOptionDefaults(persisted, agent)
-  if (!defaults) {
-    return undefined
-  }
-  const seeded: Record<string, string> = {}
-  for (const id of STRUCTURED_LAUNCH_SEED_OPTION_IDS) {
-    const value = defaults[id]
-    if (typeof value === 'string' && value.trim()) {
-      seeded[id] = value
-    }
-  }
-  return Object.keys(seeded).length > 0 ? seeded : undefined
+  return narrowStructuredLaunchSeedOptions(resolveNativeChatSessionOptionDefaults(persisted, agent))
 }
 
 /** Fold a settled batch of picks onto the durable record. A surface that must send the

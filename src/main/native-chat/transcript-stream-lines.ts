@@ -13,29 +13,17 @@ export async function decodeTranscriptStream(
   includeTrailingLine: boolean
 ): Promise<{ messages: NativeChatMessage[]; consumedBytes: number }> {
   const messages: NativeChatMessage[] = []
-  // Why: a Buffer chunk can end mid-codepoint, and decoding it standalone would
-  // both corrupt the line and shift `consumedBytes` (which seeds fallback ids).
-  const decoder = new StringDecoder('utf8')
-  let pending = ''
   let consumedBytes = 0
-
-  for await (const chunk of stream) {
-    pending += typeof chunk === 'string' ? chunk : decoder.write(Buffer.from(chunk))
-    let newlineIndex = pending.indexOf('\n')
-    while (newlineIndex !== -1) {
-      const segment = pending.slice(0, newlineIndex + 1)
-      decodeLine(segment.slice(0, -1), consumedBytes)
-      consumedBytes += Buffer.byteLength(segment, 'utf8')
-      pending = pending.slice(newlineIndex + 1)
-      newlineIndex = pending.indexOf('\n')
+  const framer = createTranscriptLineFramer((line, byteLength, terminated) => {
+    if (terminated || includeTrailingLine) {
+      decodeLine(line, consumedBytes)
+      consumedBytes += byteLength
     }
+  })
+  for await (const chunk of stream) {
+    framer.write(chunk)
   }
-  pending += decoder.end()
-
-  if (includeTrailingLine && pending.length > 0) {
-    decodeLine(pending, consumedBytes)
-    consumedBytes += Buffer.byteLength(pending, 'utf8')
-  }
+  framer.end()
 
   return { messages, consumedBytes }
 
@@ -48,5 +36,66 @@ export async function decodeTranscriptStream(
     if (message) {
       messages.push(message)
     }
+  }
+}
+
+type TranscriptLine = { line: string; byteLength: number; terminated: boolean }
+
+export async function* splitTranscriptStreamLines(
+  stream: AsyncIterable<Buffer | string>
+): AsyncGenerator<TranscriptLine> {
+  let records: TranscriptLine[] = []
+  const framer = createTranscriptLineFramer((line, byteLength, terminated) => {
+    records.push({ line, byteLength, terminated })
+  })
+  for await (const chunk of stream) {
+    framer.write(chunk)
+    for (const record of records) {
+      yield record
+    }
+    records = []
+  }
+  framer.end()
+  for (const record of records) {
+    yield record
+  }
+}
+
+/** Frame chunks synchronously so native decoding avoids a promise per record. */
+function createTranscriptLineFramer(
+  emit: (line: string, byteLength: number, terminated: boolean) => void
+): { write(chunk: Buffer | string): void; end(): void } {
+  const decoder = new StringDecoder('utf8')
+  let pending: string[] = []
+  return { write, end }
+
+  function write(chunk: Buffer | string): void {
+    const text = typeof chunk === 'string' ? chunk : decoder.write(chunk)
+    let lineStart = 0
+    let newlineIndex = text.indexOf('\n')
+    while (newlineIndex !== -1) {
+      let segment = text.slice(lineStart, newlineIndex + 1)
+      if (pending.length > 0) {
+        pending.push(segment)
+        segment = pending.join('')
+        pending = []
+      }
+      emit(segment.slice(0, -1), Buffer.byteLength(segment, 'utf8'), true)
+      lineStart = newlineIndex + 1
+      newlineIndex = text.indexOf('\n', lineStart)
+    }
+    if (lineStart < text.length) {
+      pending.push(text.slice(lineStart))
+    }
+  }
+
+  function end(): void {
+    const tail = decoder.end()
+    if (tail) {
+      pending.push(tail)
+    }
+    const line = pending.join('')
+    emit(line, Buffer.byteLength(line, 'utf8'), false)
+    pending = []
   }
 }

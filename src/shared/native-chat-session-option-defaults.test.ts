@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   clearNativeChatSessionOptionModel,
+  narrowStructuredLaunchSeedOptions,
   resolveNativeChatSessionOptionDefaults,
   resolveStructuredLaunchSeedOptions,
   updateNativeChatSessionOptionDefaults
@@ -136,5 +137,32 @@ describe('resolveStructuredLaunchSeedOptions', () => {
     expect(
       resolveStructuredLaunchSeedOptions({ codex: { valuesByModel: {} } }, 'codex')
     ).toBeUndefined()
+  })
+})
+
+describe('narrowStructuredLaunchSeedOptions', () => {
+  it('keeps the seedable ids an explicit selection names', () => {
+    expect(narrowStructuredLaunchSeedOptions({ model: 'opus', effort: 'high' })).toEqual({
+      model: 'opus',
+      effort: 'high'
+    })
+  })
+
+  it('drops ids no structured create may seed', () => {
+    expect(
+      narrowStructuredLaunchSeedOptions({ model: 'opus', mode: 'plan', fastMode: true })
+    ).toEqual({ model: 'opus' })
+  })
+
+  it.each([
+    ['nothing at all', {}],
+    ['whitespace only', { model: '   ', effort: '\t' }],
+    ['no usable string', { model: 5, effort: null }],
+    ['undefined', undefined]
+  ])('resolves %s to undefined rather than {}', (_name, values) => {
+    // An empty map fails the durable record's bounded-string guard, and
+    // `agent_session_options_invalid` is not a wire refusal code: the throw escapes as a raw
+    // error the client reads as unknown, stranding the launch with no fallback.
+    expect(narrowStructuredLaunchSeedOptions(values as never)).toBeUndefined()
   })
 })
