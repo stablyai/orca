@@ -190,6 +190,25 @@ describe('createSessionWriteSubscriber', () => {
     cleanup()
   })
 
+  it('persists defaultTerminalTabsAppliedByWorktreeId after markDefaultTerminalTabsApplied', () => {
+    const persist = vi.fn<(payload: WorkspaceSessionWrite) => void>()
+    const cleanup = createSessionWriteSubscriber({ store: useAppStore, persist })
+
+    useAppStore.setState({ workspaceSessionReady: true, hydrationSucceeded: true })
+    vi.advanceTimersByTime(200)
+    persist.mockClear()
+
+    const worktreeId = 'repo1::/wt-1'
+    useAppStore.getState().markDefaultTerminalTabsApplied(worktreeId)
+    vi.advanceTimersByTime(200)
+
+    expect(persist).toHaveBeenCalledTimes(1)
+    expect(persist.mock.calls[0][0].patch.defaultTerminalTabsAppliedByWorktreeId).toEqual({
+      [worktreeId]: true
+    })
+    cleanup()
+  })
+
   it('writes exactly once when a relevant field changes', () => {
     const persist = vi.fn<(payload: WorkspaceSessionWrite) => void>()
     const cleanup = createSessionWriteSubscriber({ store: useAppStore, persist })
