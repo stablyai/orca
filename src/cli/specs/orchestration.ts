@@ -113,7 +113,8 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
       'On Windows PowerShell, quote comma-separated type filters, e.g. --types "worker_done,escalation".',
       '--types is the wake condition for --wait; a returned Delivery is always the whole FIFO batch, so it is never filtered by type. Only --peek and --all filter their rows.',
       '--format renders the returned rows as local text only; it never writes to another terminal.',
-      'A bound Run replays the same Delivery until --ack; process every message before acknowledging.'
+      'A bound Run replays the same Delivery until --ack; process every message before acknowledging.',
+      '--peek and --all return at most 100 rows and no Delivery id, so the rows they show cannot be acknowledged and a peek-only loop keeps seeing the same pending ones; an --ack passed alongside them still acknowledges that Delivery. To drain a mailbox, repeat plain check and --ack each Delivery until deliveryId is null.'
     ]
   },
   {
