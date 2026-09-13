@@ -2,8 +2,10 @@ import { isExplicitAgentStatusFresh } from '@/lib/agent-status'
 import type { useAppStore } from '@/store'
 import { getWorktreeMapFromState } from '@/store/selectors'
 import { AGENT_STATUS_STALE_AFTER_MS } from '../../../../shared/agent-status-types'
+import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../../shared/execution-host'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
 import type { TerminalPaneLayoutNode } from '../../../../shared/terminal-tab-types'
+import { getPtyExecutionHost } from '../../../../shared/terminal-execution-host'
 
 type StoreSnapshot = ReturnType<typeof useAppStore.getState>
 
@@ -109,7 +111,8 @@ export function isCurrentLivePaneKey(
 export function isCurrentKnownPaneKey(
   state: StoreSnapshot,
   worktreeId: string,
-  paneKey: string
+  paneKey: string,
+  executionHostId?: ExecutionHostId
 ): boolean {
   const parsed = parsePaneKey(paneKey)
   if (!parsed) {
@@ -137,6 +140,16 @@ export function isCurrentKnownPaneKey(
   }
 
   const leafPtyId = layout?.ptyIdsByLeafId?.[parsed.leafId]
+  const ownerPtyId = leafPtyId ?? targetTabPtyId
+  if (executionHostId) {
+    if (!ownerPtyId) {
+      return false
+    }
+    const paneHost = getPtyExecutionHost(ownerPtyId)
+    if (paneHost === 'foreign' || (paneHost ?? LOCAL_EXECUTION_HOST_ID) !== executionHostId) {
+      return false
+    }
+  }
   // Why: when there is no live PTY map yet, a tab/leaf PTY hint proves this is
   // an inactive-but-current pane. If hydration has no hint yet, keep accepting
   // known-tab hook snapshots; only explicit suppressed hints mean teardown.
