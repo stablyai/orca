@@ -45,10 +45,15 @@ function toSafeDirName(id: string): string {
   return createHash('sha256').update(id).digest('hex').slice(0, 32)
 }
 
+/** Builds the generated status plugin module for the primary OpenCode hook path. */
 export function getOpenCodePluginSource(): string {
   return getOpenCodeFamilyPluginSource('/hook/opencode', { emitSessionStart: true })
 }
 
+/**
+ * Builds the generated OpenCode-family plugin module for one hook pathname:
+ * the shared status engine plus the OpenCode 2 compatibility layer.
+ */
 export function getOpenCodeFamilyPluginSource(
   hookPathname: string,
   options: { emitSessionStart: boolean }

@@ -1,3 +1,7 @@
+/**
+ * Builds the shared status engine factory and the default export that satisfies
+ * both the OpenCode 1.x (`server`) and OpenCode 2.x (`setup`) plugin loaders.
+ */
 export function getStatusPluginFactorySource(options: { emitSessionStart: boolean }): string[] {
   return [
     '// Why: accept the factory argument as an optional opaque parameter instead',
