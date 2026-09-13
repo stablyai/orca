@@ -47,13 +47,29 @@ describe('runtime host workspace session self-heal', () => {
     expect(log).toHaveBeenCalledTimes(1)
   })
 
-  it('prunes when the registry is present and explicitly empty', () => {
+  it('logs the pruned host ids at warn level', () => {
+    addEnvironmentFromPairingCode(userDataPath, {
+      name: 'saved',
+      pairingCode: encodePairingOffer({
+        v: 2,
+        endpoint: 'ws://127.0.0.1:6768',
+        deviceToken: 'test-token',
+        publicKeyB64: Buffer.alloc(32, 1).toString('base64')
+      })
+    })
+    heal()
+    expect(log).toHaveBeenCalledExactlyOnceWith(expect.stringContaining('runtime:removed'))
+  })
+
+  it('refuses to prune when the registry is valid but lists no environments', () => {
+    // A lost concurrent write can empty the registry; an empty pass would wipe every runtime tab.
     writeFileSync(
       getEnvironmentStorePath(userDataPath),
       JSON.stringify({ version: 1, environments: [] })
     )
     heal()
-    expect(prune).toHaveBeenCalledExactlyOnceWith(new Set())
+    expect(prune).not.toHaveBeenCalled()
+    expect(log).toHaveBeenCalledExactlyOnceWith(expect.stringContaining('empty'))
   })
 
   it.each(['missing', 'invalid', 'unsupported-version'])(

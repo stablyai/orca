@@ -10,7 +10,7 @@ export function selfHealRuntimeHostWorkspaceSessions({
   store,
   userDataPath,
   listKnownEnvironments = listEnvironments,
-  log = console.info
+  log = console.warn
 }: {
   store: RuntimeHostSessionStore
   userDataPath: string
@@ -24,10 +24,18 @@ export function selfHealRuntimeHostWorkspaceSessions({
   } catch {
     return
   }
+  if (environments.length === 0) {
+    // The registry has no locking; a lost concurrent write can empty it. Never wipe every runtime
+    // partition on that evidence — the deletion is irreversible.
+    log('[runtime-host-session] registry is empty; skipping orphaned runtime host session prune')
+    return
+  }
   const removed = store.pruneOrphanedRuntimeHostWorkspaceSessions(
     new Set(environments.map((environment) => environment.id))
   )
   if (removed.length > 0) {
-    log(`[runtime-host-session] pruned ${removed.length} orphaned runtime host session(s)`)
+    log(
+      `[runtime-host-session] pruned ${removed.length} orphaned runtime host session(s) not in the environment registry: ${removed.join(', ')}`
+    )
   }
 }
