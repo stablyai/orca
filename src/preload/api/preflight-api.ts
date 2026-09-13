@@ -24,6 +24,13 @@ export type PreflightStatus = {
     baseUrl: string | null
     tokenConfigured: boolean
   }
+  /** Optional — present only when the context names an SSH execution host and the remote gh/glab probe succeeds. */
+  hostForge?: {
+    connectionId: string
+    hostLabel: string
+    gh?: { installed: boolean; authenticated: boolean }
+    glab?: { installed: boolean; authenticated: boolean }
+  }
 }
 
 export type RefreshAgentsResult = {
@@ -41,6 +48,8 @@ export type PreflightRuntimeContext = {
   wslDistro?: string | null
   wslDefault?: boolean
   projectRuntime?: ProjectExecutionRuntimeResolution
+  /** Names the SSH execution host whose forge CLIs preflight should additionally probe. */
+  sshHost?: { connectionId: string; hostLabel: string }
 }
 
 export type PreflightApi = {

@@ -15,7 +15,6 @@ import { getBitbucketAuthStatus } from '../bitbucket/client'
 import { getGiteaAuthStatus } from '../gitea/client'
 import { _resetKnownHostsCache } from '../gitlab/gl-utils'
 import { mergePersistedWindowsPathAsync } from '../pty/windows-environment-path'
-import { getActiveMultiplexer } from '../ssh/ssh-target-registry'
 import {
   detectWslCommandsOnPath,
   type WslPreflightTarget
@@ -28,13 +27,7 @@ import {
 
 export type { PreflightRuntimeContext }
 import { hydrateShellPathForAgentDetection } from '../ipc/agent-detection-shell-path'
-import {
-  execCommandInWslOrThrow,
-  execLocalPreflightCommandOrThrow,
-  isCommandAvailable,
-  isCommandOnPath,
-  shellQuote
-} from '../ipc/preflight-command-exec'
+import { isCommandAvailable, isCommandOnPath } from '../ipc/preflight-command-exec'
 import {
   detectRemoteWindowsTerminalCapabilities,
   type RemoteWindowsTerminalCapabilities
@@ -45,6 +38,14 @@ import {
   resolveDetectedTuiAgentIds
 } from '../ipc/tui-agent-detection-commands'
 import { invalidateWslGuestEnvironment } from '../wsl/wsl-guest-environment'
+import {
+  detectRemoteAgents,
+  detectRemoteForgeClis,
+  isGhAuthenticated,
+  isGlabAuthenticated
+} from './agent-forge-detection-probes'
+
+export { detectRemoteAgents, detectRemoteForgeClis }
 
 export type PreflightStatus = {
   git: { installed: boolean }
@@ -68,6 +69,14 @@ export type PreflightStatus = {
     account: string | null
     baseUrl: string | null
     tokenConfigured: boolean
+  }
+  // Why: only present when the SSH execution host answers the forge CLI probe.
+  // A missing value means unavailable, never unauthenticated.
+  hostForge?: {
+    connectionId: string
+    hostLabel: string
+    gh?: { installed: boolean; authenticated: boolean }
+    glab?: { installed: boolean; authenticated: boolean }
   }
 }
 
@@ -105,8 +114,12 @@ let preflightCacheEpoch = 0
 
 const LOCAL_PREFLIGHT_CACHE_KEY = 'local'
 
-function preflightCacheKey(wslTarget: WslPreflightTarget | null): string {
-  return wslTarget ? `wsl:${wslTarget.distro ?? ''}` : LOCAL_PREFLIGHT_CACHE_KEY
+function preflightCacheKey(
+  wslTarget: WslPreflightTarget | null,
+  sshConnectionId?: string
+): string {
+  const runtimeKey = wslTarget ? `wsl:${wslTarget.distro ?? ''}` : LOCAL_PREFLIGHT_CACHE_KEY
+  return sshConnectionId ? `${runtimeKey}:ssh:${sshConnectionId}` : runtimeKey
 }
 
 /** @internal - tests need a clean preflight cache between cases. */
@@ -118,10 +131,6 @@ export function _resetPreflightCache(): void {
   // Why bump rather than just clear: a probe already in flight would otherwise
   // settle after this and repopulate the cache an integration just invalidated.
   preflightCacheEpoch += 1
-}
-
-function uniqueAgentIds(ids: Iterable<string>): string[] {
-  return [...new Set(ids)]
 }
 
 async function detectCommandRuntime(
@@ -238,62 +247,16 @@ export async function refreshShellPathAndDetectAgents(
   }
 }
 
-export async function detectRemoteAgents(args: { connectionId: string }): Promise<string[]> {
-  const mux = getActiveMultiplexer(args.connectionId)
-  if (!mux || mux.isDisposed()) {
-    // Why: remote agent detection is passive UI polling. A disconnected host has
-    // no detectable agents until reconnect, but should not spam IPC errors.
-    return []
-  }
-  const result = (await mux.request('preflight.detectAgents', {
-    commands: KNOWN_TUI_AGENT_DETECTION_COMMANDS
-  })) as { agents: string[] }
-  return uniqueAgentIds(result.agents)
-}
-
-async function isGhAuthenticated(wslTarget?: WslPreflightTarget): Promise<boolean> {
-  try {
-    await (wslTarget
-      ? execCommandInWslOrThrow(wslTarget, `${shellQuote('gh')} auth status`)
-      : execLocalPreflightCommandOrThrow('gh', ['auth', 'status']))
-    // Why: for plain-text `gh auth status`, exit 0 means gh did not detect any
-    // authentication issues for the checked hosts/accounts.
-    return true
-  } catch (error) {
-    // Why: some environments may surface partial command output on the thrown
-    // error object. Keep a compatibility fallback so we avoid a false auth
-    // warning if success markers are present despite a non-zero result.
-    const stdout = (error as { stdout?: string }).stdout ?? ''
-    const stderr = (error as { stderr?: string }).stderr ?? ''
-    const output = `${stdout}\n${stderr}`
-    return output.includes('Logged in') || output.includes('Active account: true')
-  }
-}
-
-// Why: parallel to isGhAuthenticated for the glab CLI. glab writes auth
-// status to stderr in some versions and stdout in others; check both.
-async function isGlabAuthenticated(wslTarget?: WslPreflightTarget): Promise<boolean> {
-  try {
-    await (wslTarget
-      ? execCommandInWslOrThrow(wslTarget, `${shellQuote('glab')} auth status`)
-      : execLocalPreflightCommandOrThrow('glab', ['auth', 'status']))
-    return true
-  } catch (error) {
-    const stdout = (error as { stdout?: string }).stdout ?? ''
-    const stderr = (error as { stderr?: string }).stderr ?? ''
-    const output = `${stdout}\n${stderr}`
-    return output.includes('Logged in')
-  }
-}
-
 export async function runPreflightCheck(
   force = false,
   context?: PreflightRuntimeContext
 ): Promise<PreflightStatus> {
   const wslTarget = getPreflightWslTarget(context)
-  const cacheKey = preflightCacheKey(wslTarget)
+  const sshHost = context?.sshHost
+  const cacheable = !sshHost
+  const cacheKey = preflightCacheKey(wslTarget, sshHost?.connectionId)
 
-  if (!force) {
+  if (!force && cacheable) {
     if (wslTarget) {
       const entry = cachedByWslDistro.get(cacheKey)
       if (entry && entry.expiresAt > Date.now()) {
@@ -320,7 +283,7 @@ export async function runPreflightCheck(
     // return what we probed, but do not let it become the cached answer.
     const isCurrent =
       latestPreflightRun.get(cacheKey) === runId && epochAtStart === preflightCacheEpoch
-    if (isCurrent) {
+    if (isCurrent && cacheable) {
       if (wslTarget) {
         cachedByWslDistro.set(cacheKey, {
           result,
@@ -359,10 +322,12 @@ async function executePreflightCheck(
     _resetKnownHostsCache()
   }
 
-  const [gitProbe, ghProbe, glabProbe] = await Promise.all([
+  const sshHost = context?.sshHost
+  const [gitProbe, ghProbe, glabProbe, hostForgeResults] = await Promise.all([
     detectCommandRuntime('git', context),
     detectCommandRuntime('gh', context),
-    detectCommandRuntime('glab', context)
+    detectCommandRuntime('glab', context),
+    sshHost ? detectRemoteForgeClis({ connectionId: sshHost.connectionId }) : Promise.resolve(null)
   ])
 
   const [ghAuthenticated, glabAuthenticated, bitbucket, azureDevOps, gitea] = await Promise.all([
@@ -373,13 +338,22 @@ async function executePreflightCheck(
     getGiteaAuthStatus()
   ])
 
-  const result = {
+  const result: PreflightStatus = {
     git: { installed: gitProbe.installed },
     gh: { installed: ghProbe.installed, authenticated: ghAuthenticated },
     glab: { installed: glabProbe.installed, authenticated: glabAuthenticated },
     bitbucket,
     azureDevOps,
     gitea
+  }
+
+  if (sshHost && (hostForgeResults?.gh || hostForgeResults?.glab)) {
+    result.hostForge = {
+      connectionId: sshHost.connectionId,
+      hostLabel: sshHost.hostLabel,
+      gh: hostForgeResults.gh,
+      glab: hostForgeResults.glab
+    }
   }
 
   return result

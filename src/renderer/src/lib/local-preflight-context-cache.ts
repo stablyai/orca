@@ -6,6 +6,9 @@ export type LocalPreflightContext =
       wslDefault?: boolean
       runtimeContextKey?: string
       projectRuntime?: ProjectExecutionRuntimeResolution
+      /** Mirrors `PreflightRuntimeContext.sshHost`: names the SSH execution host
+       *  whose forge CLIs preflight should additionally probe. */
+      sshHost?: { connectionId: string; hostLabel: string }
     }
   | undefined
 
@@ -13,15 +16,18 @@ export type LocalPreflightContext =
 // churn as repos are added and removed during a long-lived renderer session.
 const WSL_PREFLIGHT_CONTEXT_CACHE_MAX = 128
 const PROJECT_RUNTIME_PREFLIGHT_CONTEXT_CACHE_MAX = 2048
+const SSH_HOST_PREFLIGHT_CONTEXT_CACHE_MAX = 128
 
 // Why: these reads run inside broad store selectors. Insertion-order eviction
 // keeps cache hits read-only instead of adding Map mutations to every store update.
 const wslPreflightContextsByDistro = new Map<string, NonNullable<LocalPreflightContext>>()
 const projectRuntimePreflightContextsByKey = new Map<string, NonNullable<LocalPreflightContext>>()
+const sshHostPreflightContextsByKey = new Map<string, NonNullable<LocalPreflightContext>>()
 
 export function resetLocalPreflightContextCachesForTests(): void {
   wslPreflightContextsByDistro.clear()
   projectRuntimePreflightContextsByKey.clear()
+  sshHostPreflightContextsByKey.clear()
 }
 
 export function _getWslPreflightContextCacheSizeForTest(): number {
@@ -50,6 +56,28 @@ export function getWslPreflightContext(wslDistro: string): NonNullable<LocalPref
   // here triggers a useSyncExternalStore loop when Settings observes WSL repos.
   const context = Object.freeze({ wslDistro })
   storeCacheEntry(wslPreflightContextsByDistro, wslDistro, context, WSL_PREFLIGHT_CONTEXT_CACHE_MAX)
+  return context
+}
+
+export function getSshHostPreflightContext(
+  connectionId: string,
+  hostLabel: string
+): NonNullable<LocalPreflightContext> {
+  // Why: the label is part of the key — a renamed target must produce a fresh
+  // snapshot so the card stops showing the old host name.
+  const cacheKey = JSON.stringify([connectionId, hostLabel])
+  const cached = sshHostPreflightContextsByKey.get(cacheKey)
+  if (cached) {
+    return cached
+  }
+
+  const context = Object.freeze({ sshHost: Object.freeze({ connectionId, hostLabel }) })
+  storeCacheEntry(
+    sshHostPreflightContextsByKey,
+    cacheKey,
+    context,
+    SSH_HOST_PREFLIGHT_CONTEXT_CACHE_MAX
+  )
   return context
 }
 
