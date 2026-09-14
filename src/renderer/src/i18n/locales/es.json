@@ -12824,6 +12824,17 @@
           "ac31d2cd60": "filas",
           "a233d55b77": "Archivo vacío"
         },
+        "SpreadsheetFileSurface": {
+          "readFailed": "No se pudo leer el archivo como una hoja de cálculo.",
+          "save": "Guardar",
+          "saveFailed": "No se pudo guardar la hoja de cálculo. Inténtalo de nuevo.",
+          "saving": "Guardando…"
+        },
+        "OfficeDocumentViewer": {
+          "loading": "Cargando documento…",
+          "readFailed": "No se pudo mostrar el documento."
+        },
+
         "DiffNotesSendMenu": {
           "f1aa04b5cf": "Este archivo",
           "8b87612461": "Todas las notas no enviadas"

@@ -1,6 +1,6 @@
 import { open } from 'node:fs/promises'
 import { validateFileRangeRequest } from '../shared/file-range-read'
-import { readFullStreamChunk } from './fs-handler-file-read'
+import { readFullStreamChunk } from './fs-handler-stream-chunk'
 
 /** Positional read for tailing an append-only file. Fills the window until
  *  `length` is satisfied or the file genuinely ends, so a short result always

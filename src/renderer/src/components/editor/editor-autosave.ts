@@ -38,6 +38,8 @@ export type EditorSaveQuiesceDetail = EditorSaveQuiesceTarget & {
 export type EditorSaveFileTarget = {
   fileId: string
   fallbackContent?: string
+  /** When set, fallbackContent is an encoded blob (e.g. base64 xlsx) written with this encoding. */
+  encoding?: 'utf-8' | 'base64'
 }
 
 export type EditorSaveFileDetail = EditorSaveFileTarget & {

@@ -32,13 +32,34 @@ export async function readRuntimeDirectory(
 export async function writeRuntimeFile(
   context: RuntimeFileOperationArgs,
   filePath: string,
-  content: string
+  content: string,
+  encoding?: 'utf-8' | 'base64'
 ): Promise<void> {
   const remoteArgs = getRemoteFileArgs(context, filePath)
   if (!remoteArgs) {
     assertLocalFilesystemFallbackAllowed(context)
     await window.api.fs.writeFile(
-      withSshMutationExpectation(context, { filePath, content, connectionId: context.connectionId })
+      withSshMutationExpectation(context, {
+        filePath,
+        content,
+        connectionId: context.connectionId,
+        encoding
+      })
+    )
+    return
+  }
+  // Why: the runtime's text write path cannot carry a binary workbook, so route
+  // base64 payloads through the dedicated files.writeBase64 mutation.
+  if (encoding === 'base64') {
+    await callRuntimeFileMutation(
+      remoteArgs.target,
+      'files.writeBase64',
+      withSshMutationExpectation(context, {
+        worktree: remoteArgs.worktreeSelector,
+        relativePath: remoteArgs.relativePath,
+        contentBase64: content
+      }),
+      30_000
     )
     return
   }

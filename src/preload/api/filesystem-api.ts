@@ -33,6 +33,8 @@ export type FilesystemApi = {
       content: string
       isBinary: boolean
       isImage?: boolean
+      isSpreadsheet?: boolean
+      isOfficeDocument?: boolean
       mimeType?: string
       fileIdentity?: string
     }>
@@ -75,6 +77,7 @@ export type FilesystemApi = {
         filePath: string
         content: string
         connectionId?: string
+        encoding?: 'utf-8' | 'base64'
       } & SshMutationExpectation
     ) => Promise<void>
     createFile: (

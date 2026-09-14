@@ -6,26 +6,34 @@ import { MAX_CONCURRENT_STREAMS, STREAM_ACK_WINDOW_CHUNKS, STREAM_CHUNK_SIZE } f
 import { TooManyStreamsError, type RelayStreamRegistry } from './fs-stream-registry'
 import {
   BINARY_PROBE_BYTES,
-  IMAGE_MIME_TYPES,
   MAX_PREVIEWABLE_BINARY_SIZE,
   MAX_TEXT_FILE_SIZE,
   isBinaryBuffer,
-  isBinaryFilePrefix
+  isBinaryFilePrefix,
+  resolvePreviewableBinaryMime
 } from './fs-handler-utils'
+import { readFullStreamChunk } from './fs-handler-stream-chunk'
 
 export async function readRelayFileContent(filePath: string) {
   const stats = await stat(filePath)
-  const mimeType = IMAGE_MIME_TYPES[extname(filePath).toLowerCase()]
-  const sizeLimit = mimeType ? MAX_PREVIEWABLE_BINARY_SIZE : MAX_TEXT_FILE_SIZE
+  const { spreadsheetMimeType, officeDocumentMimeType, binaryMimeType } =
+    resolvePreviewableBinaryMime(extname(filePath).toLowerCase())
+  const sizeLimit = binaryMimeType ? MAX_PREVIEWABLE_BINARY_SIZE : MAX_TEXT_FILE_SIZE
   if (stats.size > sizeLimit) {
     throw new Error(
       `File too large: ${(stats.size / 1024 / 1024).toFixed(1)}MB exceeds ${sizeLimit / 1024 / 1024}MB limit`
     )
   }
-
-  if (mimeType) {
+  if (binaryMimeType) {
     const buffer = await readFile(filePath)
-    return { content: buffer.toString('base64'), isBinary: true, isImage: true, mimeType }
+    return {
+      content: buffer.toString('base64'),
+      isBinary: true,
+      isImage: spreadsheetMimeType || officeDocumentMimeType ? undefined : true,
+      isSpreadsheet: spreadsheetMimeType ? true : undefined,
+      isOfficeDocument: officeDocumentMimeType ? true : undefined,
+      mimeType: binaryMimeType
+    }
   }
 
   if (stats.size > BINARY_PROBE_BYTES && (await isBinaryFilePrefix(filePath))) {
@@ -44,6 +52,8 @@ export type StreamMetadata = {
   totalSize: number
   isBinary: boolean
   isImage?: boolean
+  isSpreadsheet?: boolean
+  isOfficeDocument?: boolean
   mimeType?: string
   /** On-the-wire encoding of each chunk's `data` field. Always 'base64'. */
   chunkEncoding?: 'base64'
@@ -51,15 +61,6 @@ export type StreamMetadata = {
   resultEncoding?: 'base64' | 'utf-8'
   /** True for empty files and binary archives that short-circuit without pumping. */
   empty?: boolean
-}
-
-type StreamChunkReader = {
-  read(
-    buffer: Buffer,
-    offset: number,
-    length: number,
-    position: number
-  ): Promise<{ bytesRead: number }>
 }
 
 export type StreamPumpOptions = {
@@ -79,8 +80,13 @@ export async function readRelayFileStreamMetadata(
   pumpOptions?: StreamPumpOptions
 ): Promise<StreamMetadata> {
   const stats = await stat(filePath)
-  const mimeType = IMAGE_MIME_TYPES[extname(filePath).toLowerCase()]
-  const sizeLimit = mimeType ? MAX_PREVIEWABLE_BINARY_SIZE : MAX_TEXT_FILE_SIZE
+  const {
+    imageMimeType: mimeType,
+    spreadsheetMimeType,
+    officeDocumentMimeType,
+    binaryMimeType
+  } = resolvePreviewableBinaryMime(extname(filePath).toLowerCase())
+  const sizeLimit = binaryMimeType ? MAX_PREVIEWABLE_BINARY_SIZE : MAX_TEXT_FILE_SIZE
   if (stats.size > sizeLimit) {
     throw new Error(
       `File too large: ${(stats.size / 1024 / 1024).toFixed(1)}MB exceeds ${sizeLimit / 1024 / 1024}MB limit`
@@ -90,16 +96,16 @@ export async function readRelayFileStreamMetadata(
   if (stats.size === 0) {
     return {
       totalSize: 0,
-      isBinary: !!mimeType,
-      mimeType,
+      isBinary: !!binaryMimeType,
+      mimeType: binaryMimeType,
       isImage: mimeType ? true : undefined,
+      isSpreadsheet: spreadsheetMimeType ? true : undefined,
+      isOfficeDocument: officeDocumentMimeType ? true : undefined,
       empty: true
     }
   }
-  // Why: unlike the legacy single-shot path, streaming does not read the full
-  // buffer before classifying content. Probe every unknown file so small binary
-  // files do not get decoded as UTF-8 text over SSH.
-  if (!mimeType && (await isBinaryFilePrefix(filePath))) {
+  // Why: streaming doesn't buffer before classifying, so probe unknown small files as binary.
+  if (!binaryMimeType && (await isBinaryFilePrefix(filePath))) {
     return { totalSize: 0, isBinary: true, empty: true }
   }
 
@@ -138,11 +144,13 @@ export async function readRelayFileStreamMetadata(
   return {
     streamId,
     totalSize: stats.size,
-    isBinary: !!mimeType,
+    isBinary: !!binaryMimeType,
     isImage: mimeType ? true : undefined,
-    mimeType,
+    isSpreadsheet: spreadsheetMimeType ? true : undefined,
+    isOfficeDocument: officeDocumentMimeType ? true : undefined,
+    mimeType: binaryMimeType,
     chunkEncoding: 'base64',
-    resultEncoding: mimeType ? 'base64' : 'utf-8'
+    resultEncoding: binaryMimeType ? 'base64' : 'utf-8'
   }
 }
 
@@ -330,30 +338,4 @@ async function pumpChunks(
       releaseTerminalFrameSlot()
     }
   }
-}
-
-// Why: fs.read() may return fewer bytes than requested before EOF. Fill each
-// protocol chunk so strict clients reject corruption, not valid short reads.
-// Shared with fs.readFileRange, where the same rule makes a short result mean
-// EOF and nothing else.
-export async function readFullStreamChunk(
-  handle: StreamChunkReader,
-  buffer: Buffer,
-  length: number,
-  offset: number
-): Promise<number> {
-  let totalRead = 0
-  while (totalRead < length) {
-    const { bytesRead } = await handle.read(
-      buffer,
-      totalRead,
-      length - totalRead,
-      offset + totalRead
-    )
-    if (bytesRead === 0) {
-      break
-    }
-    totalRead += bytesRead
-  }
-  return totalRead
 }
