@@ -1,5 +1,6 @@
 import { homedir } from 'node:os'
 import { basename, dirname, extname, join, relative } from 'node:path'
+import { resolveAbsoluteDirOverride } from '../../shared/absolute-dir-override'
 import type { AiVaultAgent } from '../../shared/ai-vault-types'
 import type { AiVaultDeletableAgent } from '../../shared/ai-vault-session-deletion'
 import { resolveGrokSessionsDir } from '../../shared/grok-session-paths'
@@ -18,18 +19,21 @@ import { normalizeAgentSessionsDir, primeAgentSessionsDirFromEnv } from './sessi
 
 export const DEFAULT_CODEX_HOME_DIR = join(homedir(), '.codex')
 const CODEX_SESSIONS_DIR = join(
-  process.env.CODEX_HOME?.trim() || DEFAULT_CODEX_HOME_DIR,
+  resolveAbsoluteDirOverride(process.env.CODEX_HOME, DEFAULT_CODEX_HOME_DIR),
   'sessions'
 )
 const GEMINI_SESSIONS_DIR = join(homedir(), '.gemini', 'tmp')
 const COPILOT_SESSIONS_DIR = join(
-  process.env.COPILOT_HOME?.trim() || join(homedir(), '.copilot'),
+  resolveAbsoluteDirOverride(process.env.COPILOT_HOME, join(homedir(), '.copilot')),
   'session-state'
 )
 const CURSOR_PROJECTS_DIR = join(homedir(), '.cursor', 'projects')
 const HERMES_SESSIONS_DIR = join(homedir(), '.hermes', 'sessions')
 const ROVO_SESSIONS_DIR = join(homedir(), '.rovodev', 'sessions')
-const OPENCLAW_STATE_DIR = process.env.OPENCLAW_STATE_DIR?.trim() || join(homedir(), '.openclaw')
+const OPENCLAW_STATE_DIR = resolveAbsoluteDirOverride(
+  process.env.OPENCLAW_STATE_DIR,
+  join(homedir(), '.openclaw')
+)
 const PI_SESSIONS_DIR = normalizeAgentSessionsDir(
   process.env.PI_CODING_AGENT_DIR?.trim() || join(homedir(), '.pi', 'agent', 'sessions'),
   '.pi'
@@ -40,7 +44,10 @@ const PI_SESSIONS_DIR = normalizeAgentSessionsDir(
 const PRIME_AGENT_SESSIONS_DIR = primeAgentSessionsDirFromEnv()
 // Why: Devin ATIF transcripts are stored under <DEVIN_HOME>/transcripts.
 const DEVIN_TRANSCRIPTS_DIR = join(
-  process.env.DEVIN_HOME?.trim() || join(homedir(), '.local', 'share', 'devin', 'cli'),
+  resolveAbsoluteDirOverride(
+    process.env.DEVIN_HOME,
+    join(homedir(), '.local', 'share', 'devin', 'cli')
+  ),
   'transcripts'
 )
 const DROID_SESSIONS_DIR = join(homedir(), '.factory', 'sessions')
