@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest'
+import { structuredAgentSessionTabId } from '../../../../shared/structured-agent-session-projection'
 import type { Tab } from '../../../../shared/tab-types'
 import type { DashboardAgentRow } from './useDashboardData'
 import { resolveDashboardCardSurface } from './dashboard-card-surface'
 
 const TAB_ID = 'session-tab'
 const SESSION_ID = 'session-1'
+const HOST_OWNED_TAB_ID = structuredAgentSessionTabId(SESSION_ID)
 
 function structuredTab(overrides: Partial<Tab> = {}): Tab {
   return {
@@ -57,7 +59,20 @@ describe('resolveDashboardCardSurface', () => {
     })
   })
 
-  it('classifies a host-owned structured feed without inventing a session id', () => {
+  it('recovers the session id from a host-owned structured tab id', () => {
+    expect(
+      resolveDashboardCardSurface({
+        row: row({ structuredHostOwned: true, tabId: HOST_OWNED_TAB_ID }),
+        tabId: HOST_OWNED_TAB_ID,
+        unifiedTabs: []
+      })
+    ).toEqual({
+      surfaceKind: 'structured-chat',
+      structuredSessionId: SESSION_ID
+    })
+  })
+
+  it('does not invent a session id for host-owned rows with a non-canonical tab id', () => {
     expect(
       resolveDashboardCardSurface({
         row: row({ structuredHostOwned: true }),
@@ -74,7 +89,7 @@ describe('resolveDashboardCardSurface', () => {
         tabId: TAB_ID,
         unifiedTabs: [
           structuredTab({
-            id: 'other-tab',
+            id: TAB_ID,
             contentType: 'terminal',
             entityId: 'pty-1'
           })

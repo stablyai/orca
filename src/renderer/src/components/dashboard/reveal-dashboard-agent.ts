@@ -1,13 +1,12 @@
 import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
+import { activateAiVaultStructuredSession } from '@/lib/activate-ai-vault-structured-session'
 import { activateAndRevealWorkspace } from '@/lib/worktree-activation'
 import {
   activateStructuredAgentSessionById,
   activateStructuredAgentSessionTab
 } from '@/lib/structured-agent-session-tab-activation'
-import {
-  isDashboardStructuredChatCard,
-  type DashboardRevealAgentArgs
-} from '../../../../shared/dashboard-snapshot'
+import type { DashboardRevealAgentArgs } from '../../../../shared/dashboard-snapshot'
+import { structuredAgentSessionIdFromTabId } from '../../../../shared/structured-agent-session-projection'
 
 /**
  * Click-to-focus from either Agent Dashboard surface (pop-out relay or in-window drawer).
@@ -28,19 +27,29 @@ export function revealDashboardAgent(args: DashboardRevealAgentArgs): boolean {
   if (activated === false) {
     return false
   }
-  if (isDashboardStructuredChatCard({ surfaceKind: args.surfaceKind, ptyId: null })) {
-    if (
-      args.structuredSessionId &&
-      activateStructuredAgentSessionById({
-        worktreeId: args.worktreeId,
-        sessionId: args.structuredSessionId
-      })
-    ) {
-      return true
-    }
-    activateStructuredAgentSessionTab({ worktreeId: args.worktreeId, tabId: args.tabId })
+  if (args.surfaceKind !== 'structured-chat') {
+    activateTabAndFocusPane(args.tabId, args.leafId, { flashFocusedPane: true })
     return true
   }
-  activateTabAndFocusPane(args.tabId, args.leafId, { flashFocusedPane: true })
+  const sessionId = args.structuredSessionId ?? structuredAgentSessionIdFromTabId(args.tabId)
+  if (
+    sessionId &&
+    activateStructuredAgentSessionById({
+      worktreeId: args.worktreeId,
+      sessionId
+    })
+  ) {
+    return true
+  }
+  if (activateStructuredAgentSessionTab({ worktreeId: args.worktreeId, tabId: args.tabId })) {
+    return true
+  }
+  // Host-owned cards can exist without a mounted tab; republish instead of faking success.
+  if (!sessionId) {
+    return false
+  }
+  void activateAiVaultStructuredSession({
+    structuredSession: { workspaceId: args.worktreeId, sessionId }
+  })
   return true
 }

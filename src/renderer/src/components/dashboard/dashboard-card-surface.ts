@@ -1,4 +1,5 @@
 import type { DashboardCardSurfaceKind } from '../../../../shared/dashboard-snapshot'
+import { structuredAgentSessionIdFromTabId } from '../../../../shared/structured-agent-session-projection'
 import type { Tab } from '../../../../shared/tab-types'
 import type { DashboardAgentRow } from './useDashboardData'
 
@@ -16,7 +17,9 @@ export function resolveDashboardCardSurface(args: {
   const structuredSessionId =
     typeof structuredTab?.entityId === 'string' && structuredTab.entityId.length > 0
       ? structuredTab.entityId
-      : undefined
+      : args.row.entry.structuredHostOwned === true
+        ? structuredAgentSessionIdFromTabId(args.tabId)
+        : undefined
   if (structuredTab || args.row.entry.structuredHostOwned === true) {
     return {
       surfaceKind: 'structured-chat',
