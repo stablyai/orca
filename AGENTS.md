@@ -84,6 +84,10 @@ All changes must consider folder workspaces as well as git worktrees. Don't assu
 
 The execution host owns agent status in one store, the hook server's, and every reader (sidebar, `worktree ps`, mobile, dashboard) subscribes to it. Before adding a producer, a cache, or a reader-side precedence rule, read [`docs/reference/agent-status-store.md`](./docs/reference/agent-status-store.md): new producers write into that store, and readers keep only presentation policy.
 
+## Crash Report Breadcrumbs
+
+A crash bundle is uploaded off the user's machine, so a breadcrumb records a key and a bounded value, never user content — settings alone hold tokens, account ids, absolute paths, repo names, hostnames and agent commands. Before adding a crumb or widening what one carries, read [`docs/reference/crash-report-settings-breadcrumb.md`](./docs/reference/crash-report-settings-breadcrumb.md): unrecognised values are shapes by default, and the ring is coalesced so a high-frequency producer cannot evict the rest of the evidence.
+
 ## Agent Terminal Screens
 
 A rule that reads what an agent CLI paints on a terminal — readiness, blocked prompts, idle — must be written against a captured transcript, not a remembered screen. Record one with [`docs/reference/agent-pty-transcript-capture.md`](./docs/reference/agent-pty-transcript-capture.md), which keeps escapes and wrapping intact and scrubs account identifiers before they reach git. Antigravity readiness has no transcript yet and five failed attempts without one; before touching it, read [`docs/reference/antigravity-readiness-evidence.md`](./docs/reference/antigravity-readiness-evidence.md).

@@ -20,6 +20,7 @@ import { normalizeProxyBypassRules, normalizeProxyUrl } from '../../shared/netwo
 import { normalizeAppIconId } from '../../shared/app-icon'
 import { normalizeUiLanguage } from '../../shared/ui-language'
 import { applyAppIcon } from '../app-icon'
+import { recordSettingsChangeCrashBreadcrumb } from '../crash-reporting/settings-change-breadcrumb'
 import { normalizeTerminalCustomThemes } from '../../shared/terminal-custom-themes'
 import { normalizeDesktopTerminalScrollbackRows } from '../../shared/terminal-scrollback-policy'
 import { normalizeTerminalLineHeight } from '../../shared/terminal-line-height-settings'
@@ -267,6 +268,19 @@ export function registerSettingsHandlers(
       applyAppIcon(result.appIcon)
     }
 
+    // One comparator for both lanes below: the settings UI re-saves the same
+    // value on a blur after a no-op edit, and neither product analytics nor the
+    // crash record should show a flip that never happened.
+    const beforeValues: Readonly<Record<string, unknown>> = before
+    const afterValues: Readonly<Record<string, unknown>> = result
+    const changedKeys = Object.keys(sanitizedArgs).filter(
+      (key) => !Object.is(beforeValues[key], afterValues[key])
+    )
+    // Why: the crash bundle's breadcrumb lane carried no record of settings ever
+    // changing, so field report 0d740d3f's user note ("turning of the always on
+    // mode") could be neither corroborated nor refuted from the payload.
+    recordSettingsChangeCrashBreadcrumb(changedKeys, afterValues)
+
     // Why: telemetry-plan.md§Settings — fire `settings_changed` only for
     // whitelisted keys, with `value_kind` distinguishing booleans from
     // string-enum settings. We deliberately do NOT send the raw value for
@@ -275,15 +289,11 @@ export function registerSettingsHandlers(
     // the path the v1 enum has a slot for. If a non-bool whitelisted
     // setting is ever added, extend the discriminator here at the same
     // time the schema's `value_kind` enum gains the new value.
-    for (const key of Object.keys(sanitizedArgs)) {
+    for (const key of changedKeys) {
       if (!SETTINGS_CHANGED_WHITELIST_SET.has(key)) {
         continue
       }
-      const beforeValue = (before as Record<string, unknown>)[key]
-      const afterValue = (result as Record<string, unknown>)[key]
-      if (beforeValue === afterValue) {
-        continue
-      }
+      const afterValue = afterValues[key]
       if (typeof afterValue !== 'boolean') {
         // No non-bool whitelist entries today; skip rather than guess.
         continue
