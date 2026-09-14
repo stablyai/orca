@@ -1,3 +1,4 @@
+import type { AgentResumeCommand } from '../../../shared/agent-resume-command'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type { Tab } from '../../../shared/tab-types'
 import type { TuiAgent } from '../../../shared/tui-agent'
@@ -39,6 +40,7 @@ export type WorktreeActivationStore = Partial<WorktreeRuntimeOwnerState> & {
       command: string
       env?: Record<string, string>
       launchConfig?: SleepingAgentLaunchConfig
+      agentResume?: AgentResumeCommand
       resumeProviderSession?: AgentProviderSessionMetadata
       launchToken?: string
       launchAgent?: TuiAgent

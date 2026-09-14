@@ -1,3 +1,4 @@
+import type { AgentResumeCommand } from '../../../../shared/agent-resume-command'
 import type { PtyTransport } from './pty-transport'
 import type { SessionRestoredBannerReason } from './session-restored-banner-pane-state'
 import type { ReplayingPanesRef } from './replay-guard'
@@ -27,6 +28,7 @@ export type PtyPaneStartup = {
   env?: Record<string, string>
   envToDelete?: string[]
   launchConfig?: SleepingAgentLaunchConfig
+  agentResume?: AgentResumeCommand
   resumeProviderSession?: AgentProviderSessionMetadata
   launchToken?: string
   launchAgent?: TuiAgent

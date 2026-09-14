@@ -1,3 +1,4 @@
+import type { AgentResumeCommand } from '../../../../shared/agent-resume-command'
 import type { TerminalState } from './terminal-state'
 import type { Tab } from '../../../../shared/tab-types'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
@@ -204,6 +205,7 @@ export type TerminalActions = {
       env?: Record<string, string>
       envToDelete?: string[]
       launchConfig?: SleepingAgentLaunchConfig
+      agentResume?: AgentResumeCommand
       resumeProviderSession?: AgentProviderSessionMetadata
       launchToken?: string
       launchAgent?: TuiAgent
@@ -230,6 +232,7 @@ export type TerminalActions = {
     env?: Record<string, string>
     envToDelete?: string[]
     launchConfig?: SleepingAgentLaunchConfig
+    agentResume?: AgentResumeCommand
     resumeProviderSession?: AgentProviderSessionMetadata
     launchToken?: string
     launchAgent?: TuiAgent

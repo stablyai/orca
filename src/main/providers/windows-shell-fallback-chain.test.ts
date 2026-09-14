@@ -55,6 +55,33 @@ describe('buildWindowsPowerShellSpawnAttempts', () => {
     expect(attempts[2].shellArgs[0]).toBe('/K')
   })
 
+  it('keeps every shell attempt when a custom PowerShell script cannot be translated', () => {
+    restorePlatform = setPlatform('win32')
+    const attempts = buildWindowsPowerShellSpawnAttempts({
+      shellPath: 'pwsh.exe',
+      cwd: 'C:\\repo',
+      defaultCwd: 'C:\\Users\\dev',
+      agentResume: {
+        agent: 'claude',
+        providerSession: { key: 'session_id', id: 'session-1' },
+        cmdOverrides: {},
+        sourceShell: 'powershell',
+        agentCommand: 'claude --model $env:MODEL'
+      },
+      resolveOptions: {
+        platform: 'win32',
+        env: WIN_ENV,
+        isRealExecutable: (p) => p === PWSH7 || p === WINDOWS_POWERSHELL
+      }
+    })
+    // The cmd.exe last resort must survive (dropping it can cost the terminal
+    // itself on machines that block PowerShell); it opens bare instead of
+    // receiving a resume quoted for the wrong shell.
+    expect(attempts.map((attempt) => attempt.shellPath)).toEqual([PWSH7, WINDOWS_POWERSHELL, CMD])
+    expect(attempts[2].shellArgs.join(' ')).not.toContain('claude')
+    expect(attempts[2].startupCommandDeliveredInShellArgs).toBe(false)
+  })
+
   it('repro: when pwsh is only a Store alias, the primary attempt is the real Windows PowerShell', () => {
     restorePlatform = setPlatform('win32')
     const aliasStub = 'C:\\Users\\dev\\AppData\\Local\\Microsoft\\WindowsApps\\pwsh.exe'

@@ -1,3 +1,4 @@
+import { resolveAgentResumeDeliveryCommand } from '../../shared/agent-resume-command'
 import { randomUUID } from 'node:crypto'
 import { win32 as pathWin32 } from 'node:path'
 import * as pty from 'node-pty'
@@ -22,6 +23,7 @@ export async function spawnLocalPty(
   args: PtySpawnOptions,
   getOptions: () => LocalPtyProviderOptions
 ): Promise<PtySpawnResult> {
+  args = { ...args }
   const reattachId = normalizeLocalCallerSessionId(args.sessionId, args.attachOnly === true)
   if (reattachId) {
     const pendingShutdown = ptyShutdownOperations.get(reattachId)
@@ -88,6 +90,12 @@ export async function spawnLocalPty(
   })
   args.onPtySpawnCommitted?.()
   plan.shellPath = spawnResult.shellPath
+  if (process.platform === 'win32' && args.agentResume) {
+    args = {
+      ...args,
+      command: resolveAgentResumeDeliveryCommand(args.agentResume, plan.shellPath, args.command)
+    }
+  }
   // Why: a Windows fallback embeds its startup command in argv; honor the winning shell's delivery flag to avoid a double write.
   if (spawnResult.startupCommandDeliveredInShellArgs !== undefined) {
     plan.startupCommandDeliveredInShellArgs = spawnResult.startupCommandDeliveredInShellArgs

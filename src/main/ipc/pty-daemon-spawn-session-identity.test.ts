@@ -71,6 +71,49 @@ describe('registerPtyHandlers', () => {
         mainWindow
       })
 
+      it.each([false, true])(
+        'validates structured resume identity at IPC ingress (mismatch=%s)',
+        async (mismatch) => {
+          const platform = Object.getOwnPropertyDescriptor(process, 'platform')!
+          Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+          try {
+            const daemonSpawn = setupDaemonAdapter()
+            handlers.clear()
+            registerPtyHandlers(mainWindow as never)
+            const launch = handlers.get('pty:spawn')!(null, {
+              cols: 80,
+              rows: 24,
+              command: "codex 'resume' 'session-1'",
+              launchAgent: 'codex',
+              resumeProviderSession: { key: 'session_id', id: 'session-1' },
+              agentResume: {
+                agent: 'codex',
+                providerSession: {
+                  key: 'session_id',
+                  id: mismatch ? 'wrong-session' : 'session-1'
+                },
+                cmdOverrides: {}
+              }
+            })
+            if (mismatch) {
+              await expect(launch).rejects.toThrow(/identity/)
+              expect(daemonSpawn).not.toHaveBeenCalled()
+            } else {
+              await launch
+              expect(daemonSpawn).toHaveBeenCalledWith(
+                expect.objectContaining({
+                  agentResume: expect.objectContaining({
+                    providerSession: { key: 'session_id', id: 'session-1' }
+                  })
+                })
+              )
+            }
+          } finally {
+            Object.defineProperty(process, 'platform', platform)
+          }
+        }
+      )
+
       // Why: under the daemon, LocalPtyProvider.buildSpawnEnv never runs, so host-local env injection must happen in the pty:spawn handler instead.
       it('materializes the full guard for a legacy daemon host', async () => {
         const env = await daemonSpawnAndGetEnv(

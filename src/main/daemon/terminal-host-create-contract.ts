@@ -1,3 +1,4 @@
+import type { AgentResumeCommand } from '../../shared/agent-resume-command'
 import type { StartupCommandDelivery } from '../../shared/codex-startup-delivery'
 import type { TuiAgent } from '../../shared/tui-agent'
 import type { ShellReadyState, TerminalSnapshot } from './types'
@@ -18,6 +19,7 @@ export type CreateOrAttachOptions = {
   env?: Record<string, string>
   envToDelete?: string[]
   command?: string
+  agentResume?: AgentResumeCommand
   startupCommandDelivery?: StartupCommandDelivery
   launchAgent?: TuiAgent
   /** Missing ownership is not permission to create during stable-pane adoption. */

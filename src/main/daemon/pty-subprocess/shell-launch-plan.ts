@@ -34,7 +34,10 @@ import {
   type RecognizedAgentProcess
 } from '../../../shared/agent-process-recognition'
 import { ORCA_HERMES_STARTUP_QUERY_ENV } from '../../../shared/hermes-startup-query'
-import { WINDOWS_GIT_BASH_SHELL } from '../../../shared/windows-terminal-shell'
+import {
+  resolveWindowsShellStartupFamily,
+  WINDOWS_GIT_BASH_SHELL
+} from '../../../shared/windows-terminal-shell'
 import { getShellLaunchConfig, resolvePtyShellPath } from '../shell-ready'
 import { resolveWslSessionContext } from '../wsl-session-context'
 import { finalizeDaemonPtyEnvironment, rescrubDaemonPtyEnvironment } from './spawn-environment'
@@ -68,6 +71,12 @@ export function createPtyShellLaunchPlan(
   let validationCwd = spawnCwd
 
   if (process.platform === 'win32') {
+    if (opts.agentResume) {
+      opts.agentResume = {
+        ...opts.agentResume,
+        sourceShell: resolveWindowsShellStartupFamily(shellPath)
+      }
+    }
     const normalizedShellFamily = pathWin32.basename(shellPath).toLowerCase()
     const resolvedGitBashPath = resolveWindowsGitBashShellPath(shellPath)
     const resolvedShellFamily: WindowsPowerShellShellFamily =
@@ -107,7 +116,8 @@ export function createPtyShellLaunchPlan(
       cwd: spawnCwd,
       defaultCwd: resolveSafePtyDefaultCwd(),
       wslContext: resolvedWslContext,
-      startupCommand: opts.command
+      startupCommand: opts.command,
+      agentResume: opts.agentResume
     })
     const primaryAttempt = windowsFallbackAttempts[0]
     if (primaryAttempt) {
@@ -123,7 +133,8 @@ export function createPtyShellLaunchPlan(
         resolveSafePtyDefaultCwd(),
         resolvedWslContext,
         opts.command,
-        env.ORCA_CODEX_LAUNCH_PREFLIGHT
+        env.ORCA_CODEX_LAUNCH_PREFLIGHT,
+        opts.agentResume
       )
       shellArgs = resolved.shellArgs
       spawnCwd = resolved.effectiveCwd
@@ -151,7 +162,8 @@ export function createPtyShellLaunchPlan(
               resolveSafePtyDefaultCwd(),
               { distro: codexHomeWslInfo.distro },
               opts.command,
-              env.ORCA_CODEX_LAUNCH_PREFLIGHT
+              env.ORCA_CODEX_LAUNCH_PREFLIGHT,
+              opts.agentResume
             )
             shellArgs = resolved.shellArgs
             spawnCwd = resolved.effectiveCwd

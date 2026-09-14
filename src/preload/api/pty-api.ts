@@ -1,3 +1,4 @@
+import type { AgentResumeCommand } from '../../shared/agent-resume-command'
 import type {
   AgentProviderSessionMetadata,
   SleepingAgentLaunchConfig
@@ -27,6 +28,7 @@ export type PtyApi = {
     env?: Record<string, string>
     envToDelete?: string[]
     command?: string
+    agentResume?: AgentResumeCommand
     commandDelivery?: 'renderer' | 'provider'
     launchConfig?: SleepingAgentLaunchConfig
     resumeProviderSession?: AgentProviderSessionMetadata

@@ -1,3 +1,4 @@
+import type { AgentResumeCommand } from '../../shared/agent-resume-command'
 import type { StartupCommandDelivery } from '../../shared/codex-startup-delivery'
 import type { TuiAgent } from '../../shared/tui-agent'
 import type { SubprocessHandle } from './session-subprocess-handle'
@@ -12,6 +13,7 @@ export type TerminalHostOptions = {
     env?: Record<string, string>
     envToDelete?: string[]
     command?: string
+    agentResume?: AgentResumeCommand
     startupCommandDelivery?: StartupCommandDelivery
     launchAgent?: TuiAgent
     shellOverride?: string

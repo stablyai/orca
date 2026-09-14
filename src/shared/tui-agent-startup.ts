@@ -1,3 +1,4 @@
+import type { AgentResumeCommand } from './agent-resume-command'
 import { isShellProcess } from './agent-detection'
 import type { SleepingAgentLaunchConfig } from './agent-session-resume'
 import {
@@ -21,6 +22,7 @@ export { buildAgentResumeStartupPlan } from './tui-agent-resume-startup'
 export type AgentStartupPlan = {
   agent: TuiAgent
   launchCommand: string
+  agentResume?: AgentResumeCommand
   expectedProcess: string
   followupPrompt: string | null
   launchConfig: SleepingAgentLaunchConfig

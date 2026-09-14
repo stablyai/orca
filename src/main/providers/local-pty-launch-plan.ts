@@ -1,6 +1,9 @@
 import { win32 as pathWin32 } from 'node:path'
 import { recognizeAgentProcessFromCommandLine } from '../../shared/agent-process-recognition'
-import { WINDOWS_GIT_BASH_SHELL } from '../../shared/windows-terminal-shell'
+import {
+  resolveWindowsShellStartupFamily,
+  WINDOWS_GIT_BASH_SHELL
+} from '../../shared/windows-terminal-shell'
 import { resolveWindowsGitBashShellPath } from '../git-bash'
 import { getDefaultWslDistro, parseWslPath } from '../wsl'
 import {
@@ -119,6 +122,12 @@ function createWindowsLocalPtyLaunchPlan(
   if (!seed.launchWslContext && pathWin32.basename(shellFamily).toLowerCase() === 'wsl.exe') {
     seed.launchWslContext = getWslContextFromPreferredDistro(getDefaultWslDistro())
   }
+  if (args.agentResume) {
+    args.agentResume = {
+      ...args.agentResume,
+      sourceShell: resolveWindowsShellStartupFamily(shellFamily)
+    }
+  }
   const normalizedShellFamily = pathWin32.basename(shellFamily).toLowerCase()
   const resolvedGitBashPath = resolveWindowsGitBashShellPath(shellFamily)
   // Why: normalize setting-value and path forms to the PowerShell family so the resolver can fall back to inbox powershell.exe.
@@ -156,7 +165,8 @@ function createWindowsLocalPtyLaunchPlan(
       cwd,
       defaultCwd,
       wslContext: seed.launchWslContext,
-      startupCommand: args.command
+      startupCommand: args.command,
+      agentResume: args.agentResume
     })
     const primaryAttempt = windowsFallbackAttempts[0]
     if (primaryAttempt) {
@@ -174,7 +184,9 @@ function createWindowsLocalPtyLaunchPlan(
       cwd,
       defaultCwd,
       seed.launchWslContext,
-      args.command
+      args.command,
+      undefined,
+      args.agentResume
     )
     return finalizeLocalPtyLaunchPlan(seed, {
       shellPath,

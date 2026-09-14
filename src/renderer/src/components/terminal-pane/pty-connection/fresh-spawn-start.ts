@@ -104,12 +104,13 @@ export function bindStartFreshSpawn(session: ConnectPanePtySession): void {
       ...(startupOverride?.env
         ? { env: session.mergeStartupEnvWithPaneIdentity(startupOverride.env) }
         : {}),
-      ...(coldRestoreOverride ? { launchConfig: coldRestoreOverride.launchConfig } : {}),
-      ...(coldRestoreOverride
-        ? { resumeProviderSession: coldRestoreOverride.resumeProviderSession }
-        : {}),
-      ...(coldRestoreOverride ? { launchToken: coldRestoreOverride.launchToken } : {}),
-      ...(coldRestoreOverride ? { launchAgent: coldRestoreOverride.agent } : {}),
+      ...(coldRestoreOverride && {
+        launchConfig: coldRestoreOverride.launchConfig,
+        resumeProviderSession: coldRestoreOverride.resumeProviderSession,
+        agentResume: coldRestoreOverride.agentResume,
+        launchToken: coldRestoreOverride.launchToken,
+        launchAgent: coldRestoreOverride.agent
+      }),
       ...(session.shouldDeclareHiddenAtSpawn() ? { initiallyHidden: true } : {}),
       shouldContinue: () =>
         !session.disposed &&

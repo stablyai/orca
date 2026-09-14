@@ -38,6 +38,16 @@ export async function spawnIpcPty(
   } = transportOptions
   const shouldSendLocalCwdFallback =
     cwdFallback === 'worktree' && !connectionId && !admittedSessionId
+  // Why the command gates: agentResume is the structured twin of the startup
+  // command. Without any command the owner must not deliver a resume the
+  // renderer did not send, and a transport-level resume paired with a fresh
+  // per-connect command would resume the old session instead of running it.
+  const effectiveCommand = connectOptions.command ?? command
+  const agentResume =
+    effectiveCommand === undefined
+      ? undefined
+      : (connectOptions.agentResume ??
+        (connectOptions.command === undefined ? transportOptions.agentResume : undefined))
   return window.api.pty.spawn({
     cols: connectOptions.cols ?? 80,
     rows: connectOptions.rows ?? 24,
@@ -47,7 +57,8 @@ export async function spawnIpcPty(
     ...((connectOptions.envToDelete ?? envToDelete)
       ? { envToDelete: connectOptions.envToDelete ?? envToDelete }
       : {}),
-    command: connectOptions.command ?? command,
+    command: effectiveCommand,
+    ...(!connectionId && agentResume ? { agentResume } : {}),
     ...((connectOptions.commandDelivery ?? commandDelivery)
       ? { commandDelivery: connectOptions.commandDelivery ?? commandDelivery }
       : {}),

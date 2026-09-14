@@ -35,6 +35,7 @@ export function installLocalPtyProviderEnvSandbox(): void {
   let origShell: string | undefined
   let origPowerlevelWizardDisable: string | undefined
   let origHistFile: string | undefined
+  let origCodexLaunchPreflight: string | undefined
   let origPlatform: PropertyDescriptor | undefined
 
   beforeEach(() => {
@@ -43,10 +44,13 @@ export function installLocalPtyProviderEnvSandbox(): void {
     origShell = process.env.SHELL
     origPowerlevelWizardDisable = process.env.POWERLEVEL9K_DISABLE_CONFIGURATION_WIZARD
     origHistFile = process.env.HISTFILE
+    origCodexLaunchPreflight = process.env.ORCA_CODEX_LAUNCH_PREFLIGHT
     process.env.SHELL = '/bin/zsh'
     delete process.env.POWERLEVEL9K_DISABLE_CONFIGURATION_WIZARD
     // injectHistoryEnv preserves an inherited HISTFILE, so clear it for hermetic history assertions.
     delete process.env.HISTFILE
+    // A dev shell inside Orca exports this; tests opt in per spawn instead.
+    delete process.env.ORCA_CODEX_LAUNCH_PREFLIGHT
   })
 
   afterEach(() => {
@@ -68,6 +72,11 @@ export function installLocalPtyProviderEnvSandbox(): void {
       delete process.env.HISTFILE
     } else {
       process.env.HISTFILE = origHistFile
+    }
+    if (origCodexLaunchPreflight === undefined) {
+      delete process.env.ORCA_CODEX_LAUNCH_PREFLIGHT
+    } else {
+      process.env.ORCA_CODEX_LAUNCH_PREFLIGHT = origCodexLaunchPreflight
     }
   })
 }

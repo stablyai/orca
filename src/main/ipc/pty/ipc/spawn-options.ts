@@ -1,3 +1,5 @@
+import { agentResumeCommandSchema } from '../../../../shared/agent-resume-command'
+import { agentProviderSessionsEqual } from '../../../../shared/agent-session-resume'
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import { CLAUDE_AUTH_ENV_VARS } from '../../../claude-accounts/environment'
 import { LEGACY_TERMINAL_SHIM_REMOTE_ENV_KEYS } from '../../../pty/legacy-terminal-shim-dir'
@@ -68,6 +70,26 @@ export async function buildPtyIpcSpawnOptions(
   }
   if (ctx.launchCommand !== undefined) {
     ctx.spawnOptions.command = ctx.launchCommand
+  }
+  if (
+    process.platform === 'win32' &&
+    !args.connectionId &&
+    args.agentResume &&
+    ctx.launchCommand === args.command
+  ) {
+    const request = agentResumeCommandSchema.parse(args.agentResume)
+    if (
+      request.agent !== args.launchAgent ||
+      !args.resumeProviderSession ||
+      !agentProviderSessionsEqual(
+        request.agent,
+        request.providerSession,
+        args.resumeProviderSession
+      )
+    ) {
+      throw new Error('Agent resume identity does not match the terminal launch.')
+    }
+    ctx.spawnOptions.agentResume = request
   }
   if (args.commandDelivery !== undefined) {
     ctx.spawnOptions.commandDelivery = args.commandDelivery

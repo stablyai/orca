@@ -83,7 +83,10 @@ export function installPtyInputRecovery(session: ConnectPanePtySession): void {
       ? { launchConfig: session.paneStartup.launchConfig }
       : {}),
     ...(session.paneStartup?.resumeProviderSession
-      ? { resumeProviderSession: session.paneStartup.resumeProviderSession }
+      ? {
+          resumeProviderSession: session.paneStartup.resumeProviderSession,
+          agentResume: session.paneStartup.agentResume
+        }
       : {}),
     ...((session.paneStartup?.initialAgentStatus?.prompt ?? session.paneStartup?.draftPrompt)
       ? {
