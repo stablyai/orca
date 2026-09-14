@@ -96,6 +96,27 @@ describe('resolveClaudeSubmitGesture', () => {
       'enter'
     )
   })
+
+  it('rejects modifier supersets the pty cannot send, falling back to Enter', () => {
+    // Ctrl+Alt+Enter / Shift+Alt+Enter / Ctrl+Alt+J are not pty-representable, so
+    // mapping them to alt-enter/ctrl-j would strand the message; Enter is the safe fallback.
+    expect(resolveClaudeSubmitGesture(withChatBindings({ 'ctrl+alt+enter': 'chat:submit' }))).toBe(
+      'enter'
+    )
+    expect(resolveClaudeSubmitGesture(withChatBindings({ 'shift+alt+enter': 'chat:submit' }))).toBe(
+      'enter'
+    )
+    expect(resolveClaudeSubmitGesture(withChatBindings({ 'ctrl+alt+j': 'chat:submit' }))).toBe(
+      'enter'
+    )
+  })
+
+  it('still resolves an exact single-modifier submit chord', () => {
+    expect(resolveClaudeSubmitGesture(withChatBindings({ 'alt+enter': 'chat:submit' }))).toBe(
+      'alt-enter'
+    )
+    expect(resolveClaudeSubmitGesture(withChatBindings({ 'ctrl+j': 'chat:submit' }))).toBe('ctrl-j')
+  })
 })
 
 describe('claudeSubmitGestureMatchesKeyboardEvent', () => {

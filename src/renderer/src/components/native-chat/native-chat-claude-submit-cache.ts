@@ -48,7 +48,8 @@ export function getClaudeSubmitBytes(): string {
  *  keybindings file. Only Claude reads `~/.claude/keybindings.json` today; a
  *  second agent becomes one more case here, not another scattered `=== 'claude'`. */
 export function agentResolvesSubmitKeybinding(agent: AgentType): boolean {
-  return agent === 'claude'
+  // OpenClaude follows Claude Code's path and reads the same ~/.claude config.
+  return agent === 'claude' || agent === 'openclaude'
 }
 
 /** Kick off the keybindings read for agents that have one; no-op otherwise. */

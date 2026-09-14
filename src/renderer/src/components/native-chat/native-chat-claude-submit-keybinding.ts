@@ -35,17 +35,21 @@ function submitGestureForKeystroke(keystroke: string): ClaudeSubmitGesture | nul
     if (modifiers.size === 0) {
       return 'enter'
     }
+    // Only a lone alt/meta modifier is pty-representable as ESC+CR. Reject supersets
+    // (Ctrl+Alt+Enter, Shift+Alt+Enter): the pty can't send the chord, so mapping them
+    // would strand the message instead of falling back to Enter.
     if (
-      modifiers.has('meta') ||
-      modifiers.has('alt') ||
-      modifiers.has('opt') ||
-      modifiers.has('option')
+      modifiers.size === 1 &&
+      (modifiers.has('meta') ||
+        modifiers.has('alt') ||
+        modifiers.has('opt') ||
+        modifiers.has('option'))
     ) {
       return 'alt-enter'
     }
     return null
   }
-  if (key === 'j' && modifiers.has('ctrl')) {
+  if (key === 'j' && modifiers.size === 1 && modifiers.has('ctrl')) {
     return 'ctrl-j'
   }
   return null

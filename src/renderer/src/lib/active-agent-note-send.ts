@@ -25,6 +25,7 @@ import {
 } from './active-agent-note-send-delivery'
 import { seedNativeChatLaunchDraftForAgentTab } from '@/lib/agent-launch-prompt-delivery'
 import { canMirrorLaunchDraftToNativeChat } from '@/lib/native-chat-launch-draft-mirrorability'
+import { isNativeChatSupportedAgent } from '../../../shared/native-chat-agent-support'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import type { Tab } from '../../../shared/tab-types'
 
@@ -56,6 +57,7 @@ export function seedNoteAsChatComposerDraft(args: {
   if (
     args.viewMode !== 'chat' ||
     !args.launchAgent ||
+    !isNativeChatSupportedAgent(args.launchAgent) ||
     !canMirrorLaunchDraftToNativeChat(args.text)
   ) {
     return null
