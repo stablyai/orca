@@ -88,9 +88,14 @@ describe('runtime access diagnostics', () => {
     expect(kill).not.toHaveBeenCalled()
   })
 
-  it.each(['EPERM', 'EACCES', 'EIO', undefined])(
+  it.each([
+    ['EPERM', 'runtime_permission_denied', 'permission_denied'],
+    ['EACCES', 'runtime_permission_denied', 'permission_denied'],
+    ['EIO', 'runtime_unverifiable', 'probe_failed'],
+    [undefined, 'runtime_unverifiable', 'probe_failed']
+  ] as const)(
     'keeps an unsuccessful PID probe (%s) unverifiable',
-    async (code) => {
+    async (code, expectedCode, expectedReason) => {
       vi.spyOn(process, 'kill').mockImplementation(() => {
         throw Object.assign(new Error('probe failed'), { code })
       })
@@ -98,8 +103,18 @@ describe('runtime access diagnostics', () => {
       rejectConnection('ECONNREFUSED')
       const error = await pending.catch((failure: unknown) => failure)
       expect(error).toMatchObject({
-        data: { operation: 'probe_process', processState: 'unverifiable', pid: metadata.pid }
+        code: expectedCode,
+        data: {
+          reason: expectedReason,
+          operation: 'probe_process',
+          processState: 'unverifiable',
+          pid: metadata.pid,
+          ...(code ? { systemCode: code } : {})
+        }
       })
+      if (code === undefined) {
+        expect(error).not.toHaveProperty('data.systemCode')
+      }
       expect(formatCliError(error)).not.toMatch(/not running|orca open|Restart/)
     }
   )
