@@ -22,7 +22,7 @@ import {
 import { readWindowsConsoleAttachedProcessIds } from './windows-console-attached-processes'
 import { isWindowsPtyJobReadable, readWindowsPtyJobProcessIds } from './windows-pty-job-membership'
 
-export async function inspectLocalPtyChildProcesses(id: string): Promise<PtyChildProcessVerdict> {
+export function inspectLocalPtyChildProcesses(id: string): PtyChildProcessVerdict {
   const proc = ptyProcesses.get(id)
   if (!proc) {
     return 'no-children'
@@ -41,7 +41,7 @@ export async function inspectLocalPtyChildProcesses(id: string): Promise<PtyChil
 }
 
 export async function hasLocalPtyChildProcesses(id: string): Promise<boolean> {
-  return (await inspectLocalPtyChildProcesses(id)) === 'children'
+  return inspectLocalPtyChildProcesses(id) === 'children'
 }
 
 /**

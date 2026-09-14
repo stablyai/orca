@@ -130,12 +130,10 @@ export class LocalPtyProvider implements IPtyProvider {
   }
 
   async inspectProcess(id: string): Promise<PtyProcessInspection> {
-    const childProcessEvidence = await inspectLocalPtyChildProcesses(id)
-    if (childProcessEvidence === 'unverifiable') {
-      return { foregroundProcess: null, hasChildProcesses: false, childProcessEvidence }
-    }
+    const foregroundProcess = await getLocalPtyForegroundProcess(id)
+    const childProcessEvidence = inspectLocalPtyChildProcesses(id)
     return {
-      foregroundProcess: await getLocalPtyForegroundProcess(id),
+      foregroundProcess,
       hasChildProcesses: childProcessEvidence === 'children',
       childProcessEvidence
     }
