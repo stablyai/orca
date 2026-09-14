@@ -1,10 +1,12 @@
 import { LinearIcon } from '@/components/icons/LinearIcon'
+import { PlaneIcon } from '@/components/icons/PlaneIcon'
 import { getAccountsPaneSearchEntries } from '@/components/settings/accounts-search'
 import { getAgentsPaneSearchEntries } from '@/components/settings/agents-search'
 import { getComputerUsePaneSearchEntries } from '@/components/settings/computer-use-search'
 import { getGeneralPaneSearchEntries } from '@/components/settings/general-search'
 import { getIntegrationsPaneSearchEntries } from '@/components/settings/integrations-search'
 import { getLinearAgentSkillPaneSearchEntries } from '@/components/settings/linear-agent-skill-search'
+import { getPlaneAgentSkillPaneSearchEntries } from '@/components/settings/plane-agent-skill-search'
 import { getMobileSettingsPaneSearchEntries } from '@/components/settings/mobile-settings-search'
 import { getOrcaAccountSettingsSearchEntries } from '@/components/settings/orca-account-settings-search'
 import { OrcaLogoSettingsIcon } from '@/components/settings/orca-logo-settings-icon'
@@ -28,7 +30,8 @@ import type { SettingsNavigationBuildOptions } from './settings-navigation-build
 export function buildCapabilitySettingsSections({
   isLocalWindowsHost,
   isWebClient,
-  isLinearConnected
+  isLinearConnected,
+  isPlaneConnected
 }: SettingsNavigationBuildOptions): SettingsNavSection[] {
   const showDesktopOnlySettings = !isWebClient
   return [
@@ -87,6 +90,21 @@ export function buildCapabilitySettingsSections({
             ),
             icon: LinearIcon,
             searchEntries: getLinearAgentSkillPaneSearchEntries(),
+            group: 'capabilities'
+          }
+        ]
+      : []),
+    ...(isPlaneConnected
+      ? [
+          {
+            id: 'plane',
+            title: translate('auto.hooks.useSettingsNavigationMetadata.planeTitle', 'Plane'),
+            description: translate(
+              'auto.hooks.useSettingsNavigationMetadata.planeDescription',
+              'How Plane works in Orca, setup checklist, agent skill, and example prompts.'
+            ),
+            icon: PlaneIcon,
+            searchEntries: getPlaneAgentSkillPaneSearchEntries(),
             group: 'capabilities'
           }
         ]

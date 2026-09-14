@@ -238,6 +238,26 @@ export const HANDLER_GROUPS: readonly HandlerGroup[] = [
     load: async () => (await import('./handlers/linear.js')).LINEAR_HANDLERS
   },
   {
+    name: 'plane',
+    keys: [
+      'plane status',
+      'plane connect',
+      'plane disconnect',
+      'plane workspace list',
+      'plane workspace select',
+      'plane project list',
+      'plane state list',
+      'plane list',
+      'plane issue',
+      'plane create',
+      'plane status set',
+      'plane priority set',
+      'plane priority clear',
+      'plane comment add'
+    ],
+    load: async () => (await import('./handlers/plane.js')).PLANE_HANDLERS
+  },
+  {
     name: 'vm',
     keys: ['vm recipe doctor'],
     load: async () => (await import('./handlers/vm.js')).VM_HANDLERS

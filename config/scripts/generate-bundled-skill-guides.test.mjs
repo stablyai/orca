@@ -247,9 +247,11 @@ describe('bundled skill guide generator', () => {
         const marker = `<!-- bundled-reference: references/${reference} -->`
         expect(guide.fullMarkdown.split(marker)).toHaveLength(2)
         expect(guide.fullMarkdown).toContain(
-          await readFile(
-            path.join(projectDir, 'skill-guides', guide.name, 'references', reference),
-            'utf8'
+          normalizeMarkdown(
+            await readFile(
+              path.join(projectDir, 'skill-guides', guide.name, 'references', reference),
+              'utf8'
+            )
           )
         )
       }
@@ -295,20 +297,20 @@ describe('bundled skill guide generator', () => {
     for (const name of CANONICAL_GUIDE_NAMES) {
       const sourcePath = path.join(root, 'skill-guides', `${name}.md`)
       const source = await readFile(sourcePath, 'utf8')
-      await writeFile(sourcePath, source.replaceAll('\n', '\r\n'))
+      await writeFile(sourcePath, source.replaceAll('\r\n', '\n').replaceAll('\n', '\r\n'))
     }
     for (const name of STUB_TOPICS) {
       const stubPath = path.join(root, 'skill-stubs', `${name}.md`)
       const stubSource = await readFile(stubPath, 'utf8')
-      await writeFile(stubPath, stubSource.replaceAll('\n', '\r\n'))
+      await writeFile(stubPath, stubSource.replaceAll('\r\n', '\n').replaceAll('\n', '\r\n'))
     }
     const sharedStubPath = path.join(root, ...SHARED_STUB_SOURCE.split('/'))
     const sharedStubSource = await readFile(sharedStubPath, 'utf8')
-    await writeFile(sharedStubPath, sharedStubSource.replaceAll('\n', '\r\n'))
+    await writeFile(sharedStubPath, sharedStubSource.replaceAll('\r\n', '\n').replaceAll('\n', '\r\n'))
     for (const [guide, reference] of GUIDE_REFERENCE_PATHS) {
       const referencePath = path.join(root, 'skill-guides', guide, 'references', reference)
       const source = await readFile(referencePath, 'utf8')
-      await writeFile(referencePath, source.replaceAll('\n', '\r\n'))
+      await writeFile(referencePath, source.replaceAll('\r\n', '\n').replaceAll('\n', '\r\n'))
     }
 
     const actual = await buildArtifacts(root)

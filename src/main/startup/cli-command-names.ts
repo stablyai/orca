@@ -47,6 +47,7 @@ export const CLI_COMMAND_NAMES = [
   'open-url',
   'orchestration',
   'pdf',
+  'plane',
   'project',
   'reload',
   'repo',
