@@ -32,8 +32,8 @@ import {
 } from '../../shared/office-preview-channels'
 import { officeFailure, type OfficeMethodResult } from '../../shared/office-preview-contracts'
 import {
-  isValidOfficeDocumentPath,
   isValidOfficeRelativePath,
+  readOfficeWorkspaceRoot,
   parseOfficeSkillInstallPairs,
   isValidOfficeElementPath,
   OFFICE_CLEAR_MARKS_METHOD,
@@ -74,14 +74,14 @@ function ownerOf(request: unknown): OfficeHostOwner | null {
   return isValidOfficeHostOwner(owner) ? owner : null
 }
 
-function workspaceRootOf(request: unknown): string | null {
-  const root = field(request, 'workspaceRoot')
-  return isValidOfficeDocumentPath(root) ? root : null
+/** Null is "supplied but unusable", which must never read as the absent-means-default-lane case. */
+function workspaceRootOf(request: unknown): { workspaceRoot?: string } | null {
+  return readOfficeWorkspaceRoot(field(request, 'workspaceRoot'))
 }
 
 /** Both halves or nothing: the host will not accept a document it cannot bind to a workspace. */
 function documentOf(request: unknown): { workspaceRoot: string; relativePath: string } | null {
-  const workspaceRoot = workspaceRootOf(request)
+  const workspaceRoot = workspaceRootOf(request)?.workspaceRoot
   const relativePath = field(request, 'relativePath')
   return workspaceRoot && isValidOfficeRelativePath(relativePath)
     ? { workspaceRoot, relativePath }
@@ -115,8 +115,11 @@ export function registerOfficePreviewHandlers(): void {
       return refused()
     }
     const workspaceRoot = workspaceRootOf(request)
+    if (!workspaceRoot) {
+      return refused()
+    }
     return dispatchOfficeRequest(owner, OFFICE_PROBE_METHOD, {
-      ...(workspaceRoot ? { workspaceRoot } : {}),
+      ...workspaceRoot,
       ...(request?.refresh === true ? { refresh: true } : {})
     })
   })
@@ -232,11 +235,9 @@ export function registerOfficePreviewHandlers(): void {
       return refused()
     }
     const workspaceRoot = workspaceRootOf(request)
-    return dispatchOfficeRequest(
-      owner,
-      OFFICE_SKILLS_LIST_METHOD,
-      workspaceRoot ? { workspaceRoot } : {}
-    )
+    return workspaceRoot
+      ? dispatchOfficeRequest(owner, OFFICE_SKILLS_LIST_METHOD, workspaceRoot)
+      : refused()
   })
 
   ipcMain.handle(
@@ -247,13 +248,13 @@ export function registerOfficePreviewHandlers(): void {
       }
       const owner = ownerOf(request)
       const pairs = parseOfficeSkillInstallPairs(request?.pairs)
-      if (!owner || !pairs) {
+      const workspaceRoot = workspaceRootOf(request)
+      if (!owner || !pairs || !workspaceRoot) {
         return refused()
       }
-      const workspaceRoot = workspaceRootOf(request)
       return dispatchOfficeRequest(owner, OFFICE_SKILLS_INSTALL_METHOD, {
         pairs,
-        ...(workspaceRoot ? { workspaceRoot } : {})
+        ...workspaceRoot
       })
     }
   )

@@ -9,7 +9,7 @@
  * Skipped where `officecli` is absent — the render half genuinely needs it, and a mocked host
  * would only prove our own plumbing calls itself.
  */
-import { copyFileSync, writeFileSync } from 'node:fs'
+import { copyFileSync, rmSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
 import { expect, test } from './helpers/orca-app'
 import { waitForActiveWorktree, waitForSessionReady } from './helpers/store'
@@ -26,7 +26,10 @@ function requiredWorktreePath(worktreePath: string | null): string {
 }
 
 test.describe('office document preview', () => {
-  test('renders a .docx inside the preview partition', async ({ orcaPage: page }, testInfo) => {
+  test('renders a .docx inside the preview partition', async ({
+    orcaPage: page,
+    registerPostElectronShutdownCleanup
+  }, testInfo) => {
     test.skip(!(await hasOfficecliInstalled()), 'officecli is not installed on this machine')
     await waitForSessionReady(page)
     const worktreeId = await waitForActiveWorktree(page)
@@ -37,6 +40,9 @@ test.describe('office document preview', () => {
     // Not `document`: shadowing the DOM global inside a page.evaluate is how a stray query
     // silently reads a string instead of the page.
     const documentPath = path.join(requiredWorktreePath(worktreePath), 'report.docx')
+    // The seeded repo is worker-scoped, so a fixture left behind is a dirty worktree every later
+    // test in this worker sees. Cleanup runs post-shutdown, once the watch process has let go.
+    registerPostElectronShutdownCleanup(async () => rmSync(documentPath, { force: true }))
     copyFileSync(path.join(FIXTURES, 'sample.docx'), documentPath)
 
     await page.evaluate(
@@ -87,7 +93,10 @@ test.describe('office document preview', () => {
     })
   })
 
-  test('names an unrenderable format without mentioning officecli', async ({ orcaPage: page }) => {
+  test('names an unrenderable format without mentioning officecli', async ({
+    orcaPage: page,
+    registerPostElectronShutdownCleanup
+  }) => {
     await waitForSessionReady(page)
     const worktreeId = await waitForActiveWorktree(page)
     const worktreePath = await page.evaluate(
@@ -95,6 +104,7 @@ test.describe('office document preview', () => {
       worktreeId
     )
     const legacy = path.join(requiredWorktreePath(worktreePath), 'legacy.doc')
+    registerPostElectronShutdownCleanup(async () => rmSync(legacy, { force: true }))
     writeFileSync(legacy, 'not really a Word 97 file')
 
     await page.evaluate(

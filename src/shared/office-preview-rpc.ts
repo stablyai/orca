@@ -78,6 +78,21 @@ export function isValidOfficeDocumentPath(value: unknown): value is string {
   )
 }
 
+/**
+ * Reads the optional `workspaceRoot` as three states rather than two.
+ *
+ * Absent means "this host's default lane", which is a legitimate answer for a probe or a skills
+ * call. A supplied-yet-unusable root must NOT collapse into that same answer: it would silently
+ * probe — or install skills into — the native lane while the caller named a WSL workspace. Returns
+ * null for the invalid case so callers refuse, and the spreadable object otherwise.
+ */
+export function readOfficeWorkspaceRoot(value: unknown): { workspaceRoot?: string } | null {
+  if (value === undefined) {
+    return {}
+  }
+  return isValidOfficeDocumentPath(value) ? { workspaceRoot: value } : null
+}
+
 /** A workspace-relative path: never absolute, never empty, and length-bounded. */
 export function isValidOfficeRelativePath(value: unknown): value is string {
   return (

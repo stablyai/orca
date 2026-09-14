@@ -6,8 +6,8 @@
  */
 import { officeFailure, type OfficeMethodResult } from '../../shared/office-preview-contracts'
 import {
-  isValidOfficeDocumentPath,
   isValidOfficeRelativePath,
+  readOfficeWorkspaceRoot,
   parseOfficeSkillInstallPairs,
   isValidOfficeElementPath,
   OFFICE_CLEAR_MARKS_METHOD,
@@ -49,14 +49,18 @@ function field(params: unknown, name: string): unknown {
   return isRecord(params) ? params[name] : undefined
 }
 
-function optionalWorkspaceRoot(params: unknown): string | undefined {
-  const candidate = field(params, 'workspaceRoot')
-  return isValidOfficeDocumentPath(candidate) ? candidate : undefined
+function optionalWorkspaceRoot(params: unknown): { workspaceRoot?: string } | null {
+  return readOfficeWorkspaceRoot(field(params, 'workspaceRoot'))
+}
+
+/** The typed refusal for a root the caller supplied but this host cannot use. */
+function unusableWorkspaceRoot(): OfficeMethodResult {
+  return officeFailure('OFFICECLI_FILE_NOT_FOUND', 'The workspace root named is not a usable path')
 }
 
 /** The (root, relative) pair every document method names, or null when either half is unusable. */
 function documentRef(params: unknown): OfficeDocumentRef | null {
-  const root = optionalWorkspaceRoot(params)
+  const root = optionalWorkspaceRoot(params)?.workspaceRoot
   const relativePath = field(params, 'relativePath')
   return root && isValidOfficeRelativePath(relativePath)
     ? officeDocumentRef(root, relativePath)
@@ -93,20 +97,29 @@ export async function executeOfficeMethod(
 ): Promise<OfficeMethodResult> {
   switch (method) {
     case OFFICE_PROBE_METHOD: {
-      const workspaceRoot = optionalWorkspaceRoot(params)
+      const root = optionalWorkspaceRoot(params)
+      if (!root) {
+        return unusableWorkspaceRoot()
+      }
       if (field(params, 'refresh') === true) {
         // Why the host and not the client caches this: a cached "not installed" surviving the
         // install the reader just ran is how a preview keeps asking for what already happened.
-        invalidateOfficeProbeForWorkspace(workspaceRoot)
+        invalidateOfficeProbeForWorkspace(root.workspaceRoot)
       }
-      return probeOfficeForWorkspace(workspaceRoot)
+      return probeOfficeForWorkspace(root.workspaceRoot)
     }
-    case OFFICE_SKILLS_LIST_METHOD:
-      return listOfficeSkillsLocally(optionalWorkspaceRoot(params))
+    case OFFICE_SKILLS_LIST_METHOD: {
+      const root = optionalWorkspaceRoot(params)
+      return root ? listOfficeSkillsLocally(root.workspaceRoot) : unusableWorkspaceRoot()
+    }
     case OFFICE_SKILLS_INSTALL_METHOD: {
+      const root = optionalWorkspaceRoot(params)
+      if (!root) {
+        return unusableWorkspaceRoot()
+      }
       const pairs = parseOfficeSkillInstallPairs(field(params, 'pairs'))
       return pairs
-        ? installOfficeSkillsLocally(pairs, optionalWorkspaceRoot(params))
+        ? installOfficeSkillsLocally(pairs, root.workspaceRoot)
         : officeFailure('OFFICECLI_RENDER_FAILED', 'No valid skill/agent pairs were requested')
     }
     case OFFICE_RENDER_METHOD:

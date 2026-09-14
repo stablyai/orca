@@ -7,6 +7,7 @@
  */
 import { describe, expect, it } from 'vitest'
 import { OFFICE_RPC_METHODS } from '../../shared/office-preview-rpc'
+import { executeOfficeMethod } from './office-method-executor'
 import { OFFICE_METHODS } from '../runtime/rpc/methods/office'
 import { OfficeHandler } from '../../relay/office-handler'
 
@@ -62,5 +63,28 @@ describe('office surface parity', () => {
     expect(
       install?.params?.safeParse({ pairs: [{ skill: 'rm -rf /', agent: 'claude' }] }).success
     ).toBe(false)
+  })
+
+  it('refuses a supplied-yet-unusable workspace root rather than reading it as absent', async () => {
+    // The relay and the local IPC path hand params to the executor with no schema in between, so
+    // absent and invalid must not answer the same: absent means this host's default lane, and a
+    // skills install that quietly took it would land in the native lane for a WSL workspace.
+    for (const method of ['office.probe', 'office.skillsList'] as const) {
+      await expect(executeOfficeMethod(method, { workspaceRoot: '   ' })).resolves.toEqual({
+        ok: false,
+        code: 'OFFICECLI_FILE_NOT_FOUND',
+        detail: 'The workspace root named is not a usable path'
+      })
+    }
+    await expect(
+      executeOfficeMethod('office.skillsInstall', {
+        pairs: [{ skill: 'docx', agent: 'claude' }],
+        workspaceRoot: '/w/repo\u0000'
+      })
+    ).resolves.toEqual({
+      ok: false,
+      code: 'OFFICECLI_FILE_NOT_FOUND',
+      detail: 'The workspace root named is not a usable path'
+    })
   })
 })

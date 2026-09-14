@@ -80,9 +80,10 @@ describe('office watch lifecycle', () => {
   }, 120_000)
 
   it('stops a watch whose start is still in flight', async (ctx) => {
-    // The reader clicking Live and closing the tab inside the readiness budget. Before the stop
-    // path awaited `starting`, it found no session, returned ok, and the child registered a moment
-    // later held its process and port for the rest of the run.
+    // The reader clicking Live and closing the tab inside the readiness budget. The stop has to
+    // wait on the lexical intent the start claims before canonicalising: waiting only on the
+    // canonical key loses whenever the stop's own `realpath` resolves first, and the child the
+    // start registers a moment later then holds its process and port for the rest of the run.
     if (!installed) {
       ctx.skip()
       return

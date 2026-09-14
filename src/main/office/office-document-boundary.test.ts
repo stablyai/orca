@@ -17,7 +17,11 @@ import {
 } from './office-document-path'
 import { NATIVE_OFFICECLI_LANE } from './officecli-lane'
 import { isPathInsideOrEqual } from '../../shared/cross-platform-path'
-import { isValidOfficeRelativePath, joinOfficeRelativePath } from '../../shared/office-preview-rpc'
+import {
+  isValidOfficeRelativePath,
+  joinOfficeRelativePath,
+  readOfficeWorkspaceRoot
+} from '../../shared/office-preview-rpc'
 
 let root = ''
 let outside = ''
@@ -107,5 +111,15 @@ describe('office workspace boundary', () => {
     expect(joinOfficeRelativePath('\\\\wsl$\\Ubuntu\\home', 'a.docx')).toBe(
       '\\\\wsl$\\Ubuntu\\home\\a.docx'
     )
+  })
+
+  it('keeps an absent workspace root apart from an unusable one', () => {
+    // Absent is a real answer — "this host's default lane". Collapsing an unusable root into it is
+    // what would silently probe, or install skills into, the wrong lane.
+    expect(readOfficeWorkspaceRoot(undefined)).toEqual({})
+    expect(readOfficeWorkspaceRoot('/w/repo')).toEqual({ workspaceRoot: '/w/repo' })
+    for (const unusable of ['', '   ', '/w/repo\u0000', 42, null, {}]) {
+      expect(readOfficeWorkspaceRoot(unusable)).toBeNull()
+    }
   })
 })

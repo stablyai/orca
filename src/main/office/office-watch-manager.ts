@@ -55,6 +55,16 @@ type WatchSession = {
 const sessions = new Map<string, WatchSession>()
 /** Serialises concurrent starts for one document, so two tabs cannot race into two watch servers. */
 const starting = new Map<string, Promise<OfficeWatchOutcome>>()
+/**
+ * The same serialisation, claimed before a start has canonicalised anything.
+ *
+ * `starting` is keyed on the canonical path, which only exists after a `realpath` — and on a WSL
+ * lane that await can hold for the full readlink budget. A stop whose own canonicalisation lands
+ * first would find no in-flight start and no session, answer ok, and leave the child the start
+ * registers a moment later running for the rest of the session. This key is lexical, so both sides
+ * compute it synchronously and the stop always has something to wait on.
+ */
+const startingIntents = new Map<string, Promise<OfficeWatchOutcome>>()
 
 export function officeWatchSessionPort(key: string): number | null {
   const session = sessions.get(key)
@@ -63,6 +73,12 @@ export function officeWatchSessionPort(key: string): number | null {
 
 export function officeWatchSessionKeyFor(lane: OfficecliLane, canonicalPath: string): string {
   return officeSessionKey(officecliLaneKey(lane), canonicalPath)
+}
+
+/** Lexical, so a start can claim it before its first await and a stop can wait on it. */
+function officeWatchIntentKeyFor(ref: OfficeDocumentRef): string {
+  const joined = joinOfficeRelativePath(ref.workspaceRoot, ref.relativePath)
+  return officeWatchSessionKeyFor(ref.lane, joined ?? `${ref.workspaceRoot}/${ref.relativePath}`)
 }
 
 /** Read side for the refresh path, which needs the port and the exact path the server was given. */
@@ -139,7 +155,31 @@ async function startOnPort(
   return officeFailure('OFFICECLI_PORT_TIMEOUT', stderr.trim() || undefined)
 }
 
-export async function startOfficeWatch(ref: OfficeDocumentRef): Promise<OfficeWatchOutcome> {
+/**
+ * Claims the lexical intent key synchronously, then does the real work.
+ *
+ * The claim must land before the first await: an async function runs to its first suspension
+ * point synchronously, so `startingIntents.set` below is guaranteed to have executed before any
+ * stop can observe the map.
+ */
+export function startOfficeWatch(ref: OfficeDocumentRef): Promise<OfficeWatchOutcome> {
+  const intentKey = officeWatchIntentKeyFor(ref)
+  const inFlight = startingIntents.get(intentKey)
+  if (inFlight) {
+    return inFlight
+  }
+  const pending = (async () => {
+    try {
+      return await runOfficeWatchStart(ref)
+    } finally {
+      startingIntents.delete(intentKey)
+    }
+  })()
+  startingIntents.set(intentKey, pending)
+  return pending
+}
+
+async function runOfficeWatchStart(ref: OfficeDocumentRef): Promise<OfficeWatchOutcome> {
   const { lane } = ref
   if (!isOfficeRenderable(ref.relativePath)) {
     return officeFailure('OFFICECLI_UNSUPPORTED_FORMAT')
@@ -213,6 +253,10 @@ async function stopWatchSession(session: WatchSession): Promise<void> {
 
 export async function stopOfficeWatch(ref: OfficeDocumentRef): Promise<OfficeAckOutcome> {
   const { lane } = ref
+  // Before this stop's own canonicalisation, not after: a start that has not reached its canonical
+  // key yet is only visible under the lexical intent key, and waiting here is what stops the child
+  // it is about to register from outliving the tab that asked for it.
+  await startingIntents.get(officeWatchIntentKeyFor(ref))?.catch(() => undefined)
   let canonicalPath: string
   try {
     canonicalPath = await resolveOfficeDocumentTarget(ref.workspaceRoot, ref.relativePath, lane)
