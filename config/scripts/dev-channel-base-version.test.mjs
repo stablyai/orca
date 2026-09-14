@@ -39,6 +39,28 @@ describe('dev channel base version', () => {
     )
   })
 
+  // Why tags rather than GitHub releases: a cut tags before it publishes, and a
+  // failed cut can delete the GitHub release while leaving the tag. Releases-only
+  // made 1.4.202 vanish from the list while the tag (and any installed 1.4.202)
+  // remained, so hourlies sat on 1.4.202-hourly and sorted below that stable.
+  it('climbs past a tagged stable that has no GitHub release', () => {
+    expect(resolveDevChannelBaseVersion('1.4.197', ['v1.4.201', 'v1.4.202'])).toBe('1.4.203')
+  })
+
+  // The 2026-09-14 regression: hourlies had already shipped as 1.4.203, then the
+  // main GitHub release list dropped back to v1.4.201. Without the channel tags
+  // as a floor, the next hourlies would have been 1.4.202-hourly, which
+  // electron-updater will not install over 1.4.203-hourly.
+  it('does not drop below an already-published channel version', () => {
+    expect(
+      resolveDevChannelBaseVersion('1.4.197', [
+        'v1.4.201',
+        'v1.4.202-hourly.202609141912',
+        'v1.4.203-hourly.202609140417'
+      ])
+    ).toBe('1.4.203')
+  })
+
   it('treats package.json as a floor when it leads the tags', () => {
     expect(resolveDevChannelBaseVersion('1.5.0-rc.0', ['v1.4.167'])).toBe('1.5.0')
   })

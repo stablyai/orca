@@ -25,8 +25,11 @@ function compareTriples(a, b) {
  * 2026-08-03 main read `1.4.165-rc.0` for twenty hours while 1.4.165, 1.4.166 and
  * 1.4.167 all shipped — so hourlies built from that main claimed 1.4.165 while
  * carrying code newer than 1.4.167, and sorted *below* the stable their user was
- * already running. Published tags are the only honest answer to "what number is
- * taken"; package.json is a floor, not a source of truth.
+ * already running. Git tags (not GitHub releases) are the honest answer to "what
+ * number is taken": a cut tags before it publishes, and a failed cut can delete
+ * the GitHub release while leaving the tag. Channel tags (`1.4.203-hourly.*`)
+ * are a second floor so a vanished main release cannot drag the series backwards.
+ * package.json is a floor, not a source of truth.
  */
 export function resolveDevChannelBaseVersion(packageVersion, publishedVersions = []) {
   const fromPackage = parseVersionTriple(packageVersion)

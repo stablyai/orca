@@ -137,7 +137,7 @@ jobs:
         uses: actions/checkout@v6
         with:
           ref: ${{ needs.preflight.outputs.head_sha }}
-          # Version helpers only read HEAD; published versions come from the release API.
+          # Version helpers only read HEAD; published versions come from git tags.
           fetch-depth: 1
           # Why: this job only reads stablyai/orca and never pushes; every write
           # goes to the hourly repo through a minted App token passed by env.
@@ -213,17 +213,25 @@ jobs:
           # number free", where a stranded draft still holds one.
           names="$(gh release list --repo "$HOURLY_REPO" --limit 200 --json name \
             --jq '.[].name // empty')"
-          # Why the main repo's tags decide the base version rather than
-          # package.json: main's version only moves on `release:` commits, and
-          # stable patches are cut from release branches that never merge back, so
-          # package.json can sit several patches behind what users are running. A
-          # separate token because GH_TOKEN above is the App's, scoped to the
-          # hourly repo. Empty on failure — the script then falls back to
+          # Why git tags, not GitHub releases: a cut tags before it publishes, and
+          # a failed cut can delete the GitHub release while leaving the tag. On
+          # 2026-09-14, v1.4.202 was tagged and hourlies climbed to 1.4.203; then
+          # the GitHub release vanished, so `gh release list` fell back to
+          # v1.4.201 and the next hourlies shipped as 1.4.202-hourly — which
+          # electron-updater will not install over 1.4.203-hourly or over stable
+          # 1.4.202. A separate token because GH_TOKEN above is the App's, scoped
+          # to the hourly repo. Empty on failure — the script then falls back to
           # package.json, which is stale but never wrong enough to fail a build.
-          published="$(GH_TOKEN="$MAIN_REPO_TOKEN" gh release list \
-            --repo "$GITHUB_REPOSITORY" --limit 100 --exclude-drafts \
-            --json tagName --jq '.[].tagName' || true)"
-          echo "Highest published tag seen: $(head -1 <<<"$published")"
+          main_tags="$(GH_TOKEN="$MAIN_REPO_TOKEN" gh api \
+            "repos/$GITHUB_REPOSITORY/git/matching-refs/tags/v" \
+            --jq '.[].ref | sub("^refs/tags/"; "")' || true)"
+          # Already-shipped channel tags are a second floor: even if main's tag
+          # list is empty this run, a 1.4.203-hourly already out must not be
+          # followed by a 1.4.202-hourly.
+          channel_tags="$(gh release list --repo "$HOURLY_REPO" --limit 200 --json tagName \
+            --jq '.[].tagName' || true)"
+          published="$main_tags"$'\n'"$channel_tags"
+          echo "Published version sources: $(grep -c . <<<"$main_tags" || true) main tags, $(grep -c . <<<"$channel_tags" || true) channel tags"
           ORCA_PUBLISHED_VERSIONS="$published" ORCA_HOURLY_RELEASE_NAMES="$names" \
             node config/scripts/hourly-build-version.mjs \
             >"$RUNNER_TEMP/hourly-identity.txt"
