@@ -35,6 +35,22 @@ describe('waitForDraftPasteReadySignal', () => {
     expect(unsubscribe).toHaveBeenCalledOnce()
   })
 
+  it('accepts a recurring cursor after a same-process anchor was already verified', async () => {
+    const unsubscribe = vi.fn()
+
+    await expect(
+      waitForDraftPasteReadySignal({
+        readySignal: 'render-cursor-after-bracketed-paste',
+        subscribe: () => unsubscribe,
+        readRecentOutput: () => SHOW_CURSOR,
+        timeoutMs: 1_000,
+        quietMs: 100,
+        markerAnchorWasObserved: true
+      })
+    ).resolves.toBe(true)
+    expect(unsubscribe).toHaveBeenCalledOnce()
+  })
+
   it('resolves false at the hard deadline when no signal arrives', async () => {
     vi.useFakeTimers()
     const unsubscribe = vi.fn()
@@ -154,6 +170,13 @@ describe('createDraftPasteReadyScanner', () => {
         ready: false,
         armQuietTimer: false
       })
+    })
+
+    it('uses a previously verified non-revocable anchor for a later cursor frame', () => {
+      const scanner = createDraftPasteReadyScanner('render-cursor-after-bracketed-paste', {
+        markerAnchorWasObserved: true
+      })
+      expect(scanner.observe(SHOW_CURSOR)).toEqual({ ready: true, armQuietTimer: false })
     })
   })
 

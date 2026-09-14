@@ -255,5 +255,7 @@ export class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWithRuntimeId
   // ready marker. Keep a bounded raw buffer so fast startup output is replayed.
   protected recentPtyOutputById = new Map<string, RecentPtyOutputBuffer>()
 
+  protected qwenPromptReadyGenerationByPtyId = new Map<string, number>()
+
   protected setupCompletionTokenByPtyId = new Map<string, string>()
 }

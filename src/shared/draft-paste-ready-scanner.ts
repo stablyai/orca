@@ -85,13 +85,17 @@ export type DraftPasteReadyWaitInput = {
   readRecentOutput: () => string | undefined
   timeoutMs: number
   quietMs: number
+  /** A non-revocable marker anchor already verified for this PTY process generation. */
+  markerAnchorWasObserved?: boolean
   signal?: AbortSignal
 }
 
 /** Wait for an agent's configured composer-ready signal, including buffered PTY output. */
 export function waitForDraftPasteReadySignal(input: DraftPasteReadyWaitInput): Promise<boolean> {
   return new Promise((resolve) => {
-    const scanner = createDraftPasteReadyScanner(input.readySignal)
+    const scanner = createDraftPasteReadyScanner(input.readySignal, {
+      markerAnchorWasObserved: input.markerAnchorWasObserved
+    })
     let settled = false
     let quietTimer: ReturnType<typeof setTimeout> | null = null
     let hardTimer: ReturnType<typeof setTimeout> | null = null
@@ -178,7 +182,10 @@ export function waitForDraftPasteReadySignal(input: DraftPasteReadyWaitInput): P
  * A 512-byte ring (`recent` / `postAnchorRecent`) covers escape sequences
  * split across chunk boundaries without retaining terminal scrollback.
  */
-export function createDraftPasteReadyScanner(readySignal: DraftPasteReadySignal): {
+export function createDraftPasteReadyScanner(
+  readySignal: DraftPasteReadySignal,
+  options: { markerAnchorWasObserved?: boolean } = {}
+): {
   observe: (data: string) => DraftPasteReadyScanResult
 } {
   let recent = ''
@@ -196,6 +203,9 @@ export function createDraftPasteReadyScanner(readySignal: DraftPasteReadySignal)
     marker: signalMarker,
     quietAnchor
   } = DRAFT_PASTE_READY_SIGNALS[readySignal]
+  if (options.markerAnchorWasObserved === true && markerAnchorEnd === null) {
+    sawMarkerAnchor = true
+  }
 
   /**
    * Why: an anchor the agent can leave (the alternate screen) has to be tracked in

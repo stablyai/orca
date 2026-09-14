@@ -49,6 +49,8 @@ export class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithReso
             readRecentOutput: () => this.recentPtyOutputById.get(ptyId)?.read(),
             timeoutMs: resolveDraftPasteReadyTimeoutMs(promptAgent),
             quietMs: 1_500,
+            markerAnchorWasObserved:
+              this.qwenPromptReadyGenerationByPtyId.get(ptyId) === generation,
             signal: options.signal
           }),
           options.signal
@@ -58,6 +60,7 @@ export class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithReso
       if (!composerReady) {
         throw new Error('agent_prompt_ready_timeout')
       }
+      this.qwenPromptReadyGenerationByPtyId.set(ptyId, generation)
     }
     const permissionBaseline = this.getAgentPromptActivity(handle, ptyId)
     this.assertAgentPromptPermissionSafe(permissionBaseline, permissionBaseline)

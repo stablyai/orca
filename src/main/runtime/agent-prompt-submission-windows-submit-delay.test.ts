@@ -402,6 +402,33 @@ describe('agent prompt render gate on a ConPTY host', () => {
     expect(writes).toHaveLength(0)
   })
 
+  it('delivers a later Qwen prompt after the startup anchor leaves the replay window', async () => {
+    useHostPlatform('win32')
+    vi.useFakeTimers()
+    const { runtime, handle, writes } = await createSettlementRuntime({
+      launchAgent: 'qwen-code'
+    })
+    const firstSubmission = runtime.sendTerminalAgentPrompt(handle, 'first review')
+    const firstStalled = expect(firstSubmission).rejects.toThrow('agent_prompt_stalled')
+
+    await vi.runAllTimersAsync()
+    await firstStalled
+    runtime.onPtyData(PTY_ID, 'x'.repeat(70_000), Date.now())
+    const writesBeforeSecondPrompt = writes.length
+    const secondSubmission = runtime.sendTerminalAgentPrompt(handle, 'second review')
+    const secondStalled = expect(secondSubmission).rejects.toThrow('agent_prompt_stalled')
+
+    await vi.advanceTimersByTimeAsync(0)
+    expect(writes).toHaveLength(writesBeforeSecondPrompt)
+    runtime.onPtyData(PTY_ID, '\x1b[?25h', Date.now())
+    await vi.runAllTimersAsync()
+
+    expect(
+      writes.slice(writesBeforeSecondPrompt).some((data) => data.includes('second review'))
+    ).toBe(true)
+    await secondStalled
+  })
+
   it('does not let a mid-ingest marker plus quiet settle a large paste early', async () => {
     useHostPlatform('win32')
     vi.useFakeTimers()
