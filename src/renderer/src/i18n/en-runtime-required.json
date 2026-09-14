@@ -1201,6 +1201,7 @@
         "sourceHostCount_other": "{{count}} source hosts",
         "unavailableCount_one": "{{count}} unavailable",
         "unavailableCount_other": "{{count}} unavailable"
+
       },
       "terminal": {
         "pane": {
