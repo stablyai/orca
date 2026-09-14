@@ -110,6 +110,17 @@ describe('default disabled agents on mobile', () => {
     expect(pickWorkspaceAgent({ defaultTuiAgent: 'bob' }, new Set(['bob', 'codex']))).toBe('codex')
   })
 
+  it('keeps IBM Bob opted out when the host sent a null or malformed disabledTuiAgents', () => {
+    for (const disabledTuiAgents of [null, 'bob', { bob: true }]) {
+      expect(
+        pickWorkspaceAgent(
+          { defaultTuiAgent: 'bob', disabledTuiAgents } as never,
+          new Set(['bob', 'codex'])
+        )
+      ).toBe('codex')
+    }
+  })
+
   it('honors an explicit empty disabled list', () => {
     expect(
       pickWorkspaceAgent(

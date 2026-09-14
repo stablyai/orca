@@ -80,18 +80,21 @@ async function keepsDetectedAgent(
   foundCommands: ReadonlySet<string>,
   probe: IdentityProbe
 ): Promise<boolean> {
-  const candidate = commands.find(
+  // Why every found candidate: an override path can be the real agent while bare `bob` is not.
+  const candidates = commands.filter(
     (command) => command.id === id && command.identityExclusion && foundCommands.has(command.cmd)
   )
-  if (!candidate?.identityExclusion) {
-    return true
+  for (const candidate of candidates) {
+    const exclusion = candidate.identityExclusion!
+    try {
+      if (identityProbeKeepsAgent(exclusion, await probe(candidate.cmd, exclusion.args))) {
+        return true
+      }
+    } catch {
+      // Why: a probe that cannot run says nothing about identity; hiding a real
+      // install is worse than the collision this guards against.
+      return true
+    }
   }
-  try {
-    const output = await probe(candidate.cmd, candidate.identityExclusion.args)
-    return identityProbeKeepsAgent(candidate.identityExclusion, output)
-  } catch {
-    // Why: a probe that cannot run says nothing about identity; hiding a real
-    // install is worse than the collision this guards against.
-    return true
-  }
+  return candidates.length === 0
 }

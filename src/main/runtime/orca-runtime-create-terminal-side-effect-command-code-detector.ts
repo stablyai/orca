@@ -38,22 +38,17 @@ export class OrcaRuntimeWithCreateTerminalSideEffectCommandCodeDetector extends 
   protected createTerminalSideEffectBobApprovalDetector(
     ptyId: string
   ): NonNullable<RuntimePtyTitleTrackerEntry['bobApprovalDetector']> {
-    return createBobApprovalPromptDetector(
-      { startupCommand: this.terminalSpawnCommandsByPtyId.get(ptyId) ?? null },
-      () => {
-        this.emitTerminalAgentStatusEvents(ptyId, {
-          cleanData: '',
-          lastPayloadCleanOffset: null,
-          payloads: [
-            {
-              state: 'waiting',
-              prompt: '',
-              agentType: 'bob'
-            }
-          ]
-        })
-      }
-    )
+    return createBobApprovalPromptDetector({
+      startupCommand: this.terminalSpawnCommandsByPtyId.get(ptyId) ?? null
+    })
+  }
+
+  protected emitBobApprovalWaiting(ptyId: string): void {
+    this.emitTerminalAgentStatusEvents(ptyId, {
+      cleanData: '',
+      lastPayloadCleanOffset: null,
+      payloads: [{ state: 'waiting', prompt: '', agentType: 'bob' }]
+    })
   }
 
   protected extractLastOsc7CwdForPty(
