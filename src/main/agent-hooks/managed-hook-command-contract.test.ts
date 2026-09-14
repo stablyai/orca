@@ -39,7 +39,8 @@ afterEach(() => vi.restoreAllMocks())
 
 type CommandBuilders = {
   local: (scriptPath: string) => string[]
-  remote: (scriptPath: string) => string[]
+  // Absent for local-only agents: no installRemote, so no remote command exists.
+  remote?: (scriptPath: string) => string[]
 }
 
 // Why: Gemini/Droid/Command Code keep their thin builders private; exercise the wrappers they call.
@@ -67,7 +68,9 @@ const buildersByAgent = new Map<string, CommandBuilders>([
       local: (path) =>
         [true, false].map(
           (gitBashAvailable) =>
-            getManagedLifecycleHook(path, CLAUDE_HOOK_SETTINGS, { gitBashAvailable }).command
+            getManagedLifecycleHook(path, CLAUDE_HOOK_SETTINGS, {
+              gitBashAvailable
+            }).command
         ),
       remote: (path) => [getClaudeRemoteCommand(path)]
     }
@@ -141,6 +144,14 @@ const buildersByAgent = new Map<string, CommandBuilders>([
       local: (path) => [wrapPosixHookCommand(path.replaceAll('\\', '/'))],
       remote: (path) => [wrapPosixHookCommand(path)]
     }
+  ],
+  [
+    'mistral-vibe',
+    {
+      // Why: POSIX-only — VibeHookService skips install on win32, so the local
+      // command is always the POSIX wrapper.
+      local: (path) => [wrapPosixHookCommand(path.replaceAll('\\', '/'))]
+    }
   ]
 ])
 
@@ -154,7 +165,7 @@ describe('managed hook command contract', () => {
   it.each([
     ['local', MANAGED_AGENT_HOOK_INSTALLERS.map(([agent]) => agent)],
     ['remote', REMOTE_MANAGED_HOOK_INSTALLER_AGENTS]
-  ] as const)('covers the %s installer registry in both directions', (_target, agents) => {
+  ] as const)('covers the %s installer registry in both directions', (target, agents) => {
     // Why: mirror the remote installer coverage ratchet (#7253); a new provider cannot opt out silently.
     for (const agent of agents) {
       expect(
@@ -164,6 +175,10 @@ describe('managed hook command contract', () => {
     }
     const registered = new Set<string>(agents)
     for (const agent of [...buildersByAgent.keys(), ...exemptionsByAgent.keys()]) {
+      // A local-only agent (no remote builder) is never in the remote registry.
+      if (target === 'remote' && buildersByAgent.get(agent)?.remote === undefined) {
+        continue
+      }
       expect(registered.has(agent), `${agent} is absent from the installer registry`).toBe(true)
     }
   })
@@ -177,7 +192,9 @@ describe('managed hook command contract', () => {
       const paths = homes.map((home) => `${home}/.orca/agent-hooks/${agent}-hook.${extension}`)
       const commands = [
         ...paths.flatMap((path) => builders.local(path)),
-        ...builders.remote(`/home/remote user/.orca/agent-hooks/${agent}-hook.sh`)
+        ...(builders.remote
+          ? builders.remote(`/home/remote user/.orca/agent-hooks/${agent}-hook.sh`)
+          : [])
       ]
       expect(commands.length).toBeGreaterThan(0)
       for (const command of commands) {

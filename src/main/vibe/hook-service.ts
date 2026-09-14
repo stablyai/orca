@@ -40,6 +40,10 @@ function getConfigPath(): string {
 // is not yet supported (see VIBE_INTEGRATION.md).
 const MANAGED_SCRIPT_FILE_NAME = 'mistral-vibe-hook.sh'
 
+// Ownership test for every managed-block path: status, install, remove and the
+// win32 stale-block cleanup all agree on what counts as an Orca-written hook.
+const isManagedVibeCommand = createManagedCommandMatcher(MANAGED_SCRIPT_FILE_NAME)
+
 // Why: Vibe spawns hook commands via asyncio.create_subprocess_shell (cmd.exe on
 // Windows), so a /bin/sh script is not directly executable there. Unlike Kimi
 // (Git Bash on Windows), Vibe has no working shell for `.sh` on win32 — installing
@@ -70,7 +74,7 @@ function stripStaleManagedBlock(): void {
   if (text === null || text.length === 0) {
     return
   }
-  const { text: nextText, changed } = removeManagedVibeHooks(text)
+  const { text: nextText, changed } = removeManagedVibeHooks(text, isManagedVibeCommand)
   if (changed) {
     writeConfigToml(configPath, nextText)
   }
@@ -143,7 +147,13 @@ function buildStatus(present: Set<string>, configPath: string): AgentHookInstall
     state = 'partial'
     detail = `Managed hook missing for types: ${missing.join(', ')}`
   }
-  return { agent: 'mistral-vibe', state, configPath, managedHooksPresent: present.size > 0, detail }
+  return {
+    agent: 'mistral-vibe',
+    state,
+    configPath,
+    managedHooksPresent: present.size > 0,
+    detail
+  }
 }
 
 export class VibeHookService {
@@ -169,8 +179,7 @@ export class VibeHookService {
         detail: 'Could not read Vibe hooks.toml'
       }
     }
-    const isManagedCommand = createManagedCommandMatcher(MANAGED_SCRIPT_FILE_NAME)
-    return buildStatus(readManagedVibeHookTypes(text, isManagedCommand), configPath)
+    return buildStatus(readManagedVibeHookTypes(text, isManagedVibeCommand), configPath)
   }
 
   install(): AgentHookInstallStatus {
@@ -195,7 +204,7 @@ export class VibeHookService {
     const command = getManagedCommand(scriptPath)
     // Write the script first so hooks.toml never points at a missing script.
     writeManagedScript(scriptPath, getVibeManagedScript())
-    writeConfigToml(configPath, applyManagedVibeHooks(text, command))
+    writeConfigToml(configPath, applyManagedVibeHooks(text, command, isManagedVibeCommand))
     return this.getStatus()
   }
 
@@ -217,7 +226,7 @@ export class VibeHookService {
         detail: 'Could not read Vibe hooks.toml'
       }
     }
-    const { text: nextText, changed } = removeManagedVibeHooks(text)
+    const { text: nextText, changed } = removeManagedVibeHooks(text, isManagedVibeCommand)
     if (changed) {
       writeConfigToml(configPath, nextText)
     }
