@@ -208,7 +208,8 @@ export function buildDefaultSettings(args: {
     agentDefaultArgs: { ...DEFAULT_TUI_AGENT_ARGS },
     agentDefaultEnv: { ...DEFAULT_TUI_AGENT_ENV },
     agentYoloDefaultsMigrated: true,
-    agentStatusHooksEnabled: true,
+    // Why: installing managed hooks into other tools' configs needs explicit user consent.
+    agentStatusHooksEnabled: false,
     tabAutoGenerateTitle: false,
     confirmClosePinnedTab: true,
     keepComputerAwakeWhileAgentsRun: false,

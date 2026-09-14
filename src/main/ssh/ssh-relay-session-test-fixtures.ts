@@ -16,6 +16,8 @@ type SshRelaySessionTestDeps = {
 export function createMockDeps(): SshRelaySessionTestDeps {
   const mockConn = {} as SshConnection
   const mockStore = {
+    // Why: these suites pin remote hook delivery, not the consent gate itself.
+    getSettings: vi.fn().mockReturnValue({ agentStatusHooksEnabled: true }),
     getRepos: vi.fn().mockReturnValue([]),
     getSshPtyConsumerRecovery: vi.fn().mockReturnValue(null),
     upsertSshPtyConsumerRecovery: vi.fn(),

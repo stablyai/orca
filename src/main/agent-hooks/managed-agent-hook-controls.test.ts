@@ -54,6 +54,7 @@ import {
   shouldInstallStartupManagedAgentHook,
   shouldContinueManagedHookStartup
 } from './managed-agent-hook-controls'
+import { getDefaultSettings } from '../../shared/constants'
 
 function status(agent: 'claude' | 'codex', state: 'installed' | 'not_installed') {
   return {
@@ -306,10 +307,15 @@ describe('startup managed hook reconciliation (STA-5679)', () => {
     expect(resolveStartupManagedHookAction({ agentStatusHooksEnabled: false })).toBe('skip')
   })
 
-  it('installs when hooks are enabled or the setting is unset', () => {
+  it('installs only when hooks are explicitly enabled', () => {
     expect(resolveStartupManagedHookAction({ agentStatusHooksEnabled: true })).toBe('install')
-    expect(resolveStartupManagedHookAction({})).toBe('install')
-    expect(resolveStartupManagedHookAction(null)).toBe('install')
+    expect(resolveStartupManagedHookAction({})).toBe('skip')
+    expect(resolveStartupManagedHookAction(null)).toBe('skip')
+  })
+
+  it('skips startup install until the user has explicitly granted hook installation', () => {
+    // A fresh profile's real default settings, not a hand-rolled fixture.
+    expect(resolveStartupManagedHookAction(getDefaultSettings('/tmp'))).toBe('skip')
   })
 
   it('only allows startup installs for globally enabled and agent-enabled hooks', () => {
