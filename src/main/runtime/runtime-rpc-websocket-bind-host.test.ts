@@ -54,11 +54,15 @@ describe('OrcaRuntimeRpcServer WebSocket bind host (STA-2370)', () => {
 
   it('widens the listener to all interfaces when a mobile pairing offer is created', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    // Why mutable: consent is granted mid-session (Settings toggle) without a restart, so the
+    // widen must read a fresh value, not the one captured at server construction.
+    let consentGranted = false
     const server = new OrcaRuntimeRpcServer({
       runtime: new OrcaRuntimeService(),
       userDataPath,
       enableWebSocket: true,
-      wsPort: 0
+      wsPort: 0,
+      networkExposureConsent: () => consentGranted
     })
 
     await server.start()
@@ -66,6 +70,7 @@ describe('OrcaRuntimeRpcServer WebSocket bind host (STA-2370)', () => {
       const loopbackPort = wsTransportOf(server)?.resolvedPort
       expect(wsTransportOf(server)?.resolvedHost).toBe('127.0.0.1')
 
+      consentGranted = true
       const offer = await server.createMobilePairingOffer({
         address: '100.64.1.20',
         connectionMode: 'local-only'
@@ -100,10 +105,10 @@ describe('OrcaRuntimeRpcServer WebSocket bind host (STA-2370)', () => {
     }
   })
 
-  it('binds all interfaces at startup when a previously-connected device can reconnect', async () => {
+  it('stays on loopback at startup when a network device connected but consent was never granted', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
-    // Why: a device that has actually connected (lastSeenAt > 0) may reconnect, so the listener must be
-    // reachable at startup without waiting for a new pairing action.
+    // Why: a device merely having connected before is not a record of the user granting network
+    // exposure — only explicit consent does, so pairing history alone must not widen the bind.
     const registry = new DeviceRegistry(userDataPath)
     const device = registry.getOrCreatePendingDevice('Paired phone', 'mobile')
     registry.updateLastSeen(device.deviceId)
@@ -112,7 +117,8 @@ describe('OrcaRuntimeRpcServer WebSocket bind host (STA-2370)', () => {
       runtime: new OrcaRuntimeService(),
       userDataPath,
       enableWebSocket: true,
-      wsPort: 0
+      wsPort: 0,
+      networkExposureConsent: () => false
     })
 
     await server.start()
@@ -123,6 +129,29 @@ describe('OrcaRuntimeRpcServer WebSocket bind host (STA-2370)', () => {
           ?.listDevices()
           .some((d) => d.lastSeenAt > 0)
       ).toBe(true)
+      expect(wsTransportOf(server)?.resolvedHost).toBe('127.0.0.1')
+      await expect(server.ensureNetworkExposure()).rejects.toThrow(/consent/i)
+    } finally {
+      await server.stop()
+    }
+  })
+
+  it('binds all interfaces at startup for a previously-connected device once consent is granted', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    const registry = new DeviceRegistry(userDataPath)
+    const device = registry.getOrCreatePendingDevice('Paired phone', 'mobile')
+    registry.updateLastSeen(device.deviceId)
+
+    const server = new OrcaRuntimeRpcServer({
+      runtime: new OrcaRuntimeService(),
+      userDataPath,
+      enableWebSocket: true,
+      wsPort: 0,
+      networkExposureConsent: () => true
+    })
+
+    await server.start()
+    try {
       expect(wsTransportOf(server)?.resolvedHost).toBe('0.0.0.0')
     } finally {
       await server.stop()
@@ -183,10 +212,10 @@ describe('OrcaRuntimeRpcServer WebSocket bind host (STA-2370)', () => {
     }
   })
 
-  it('binds all interfaces at startup for a connected device paired before pairingReach existed', async () => {
+  it('stays on loopback at startup for a legacy-registry device without consent', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
-    // Why: registries written by older desktops only ever held network-reach grants; a missing field must
-    // keep the reconnect widen or an already-paired phone would be stranded by the upgrade.
+    // Why: registries written by older desktops only ever held network-reach grants, but a
+    // missing pairingReach field must not stand in for the explicit consent this now requires.
     const legacyDevice = {
       deviceId: 'legacy-device',
       name: 'Legacy phone',
@@ -205,7 +234,40 @@ describe('OrcaRuntimeRpcServer WebSocket bind host (STA-2370)', () => {
       runtime: new OrcaRuntimeService(),
       userDataPath,
       enableWebSocket: true,
-      wsPort: 0
+      wsPort: 0,
+      networkExposureConsent: () => false
+    })
+
+    await server.start()
+    try {
+      expect(wsTransportOf(server)?.resolvedHost).toBe('127.0.0.1')
+    } finally {
+      await server.stop()
+    }
+  })
+
+  it('binds all interfaces at startup for a legacy-registry device once consent is granted', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    const legacyDevice = {
+      deviceId: 'legacy-device',
+      name: 'Legacy phone',
+      token: 'legacy-token',
+      scope: 'mobile',
+      pairedAt: Date.now(),
+      lastSeenAt: Date.now()
+    }
+    await writeFile(
+      join(userDataPath, DEVICE_REGISTRY_FILENAME),
+      JSON.stringify([legacyDevice]),
+      'utf-8'
+    )
+
+    const server = new OrcaRuntimeRpcServer({
+      runtime: new OrcaRuntimeService(),
+      userDataPath,
+      enableWebSocket: true,
+      wsPort: 0,
+      networkExposureConsent: () => true
     })
 
     await server.start()
@@ -216,13 +278,14 @@ describe('OrcaRuntimeRpcServer WebSocket bind host (STA-2370)', () => {
     }
   })
 
-  it('upgrades a reused pending grant to network reach so its link survives a relaunch', async () => {
+  it('upgrades a reused pending grant to network reach but still stays on loopback without consent', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
     const server = new OrcaRuntimeRpcServer({
       runtime: new OrcaRuntimeService(),
       userDataPath,
       enableWebSocket: true,
-      wsPort: 0
+      wsPort: 0,
+      networkExposureConsent: () => false
     })
 
     await server.start()
@@ -234,8 +297,9 @@ describe('OrcaRuntimeRpcServer WebSocket bind host (STA-2370)', () => {
         reach: 'this-computer'
       })
       expect(local.available).toBe(true)
-      // Why: without `rotate` the same pending token is re-advertised, now for off-host reach. The mark must
-      // widen with it — keeping it this-computer would leave the LAN link unserved after the next launch.
+      // Why: without `rotate` the same pending token is re-advertised, now for off-host reach. The mark
+      // still upgrades with it (reach tracking is unrelated to consent), but reach alone no longer widens
+      // the bind — only explicit consent does.
       const network = server.createPairingOffer({
         address: '100.64.1.20',
         scope: 'runtime',
@@ -253,11 +317,12 @@ describe('OrcaRuntimeRpcServer WebSocket bind host (STA-2370)', () => {
       runtime: new OrcaRuntimeService(),
       userDataPath,
       enableWebSocket: true,
-      wsPort: 0
+      wsPort: 0,
+      networkExposureConsent: () => false
     })
     await relaunched.start()
     try {
-      expect(wsTransportOf(relaunched)?.resolvedHost).toBe('0.0.0.0')
+      expect(wsTransportOf(relaunched)?.resolvedHost).toBe('127.0.0.1')
     } finally {
       await relaunched.stop()
     }
@@ -265,11 +330,13 @@ describe('OrcaRuntimeRpcServer WebSocket bind host (STA-2370)', () => {
 
   it('keeps the pinned port when a later widen tears down a live loopback client', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    let consentGranted = false
     const server = new OrcaRuntimeRpcServer({
       runtime: new OrcaRuntimeService(),
       userDataPath,
       enableWebSocket: true,
-      wsPort: 0
+      wsPort: 0,
+      networkExposureConsent: () => consentGranted
     })
 
     await server.start()
@@ -285,6 +352,7 @@ describe('OrcaRuntimeRpcServer WebSocket bind host (STA-2370)', () => {
       })
       const closed = new Promise<void>((resolve) => client.once('close', () => resolve()))
 
+      consentGranted = true
       await server.ensureNetworkExposure()
       await closed
 
@@ -304,11 +372,13 @@ describe('OrcaRuntimeRpcServer WebSocket bind host (STA-2370)', () => {
 
   it('keeps the same MobileSocketWiring instance across a pairing widen (relay capture stays valid)', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    let consentGranted = false
     const server = new OrcaRuntimeRpcServer({
       runtime: new OrcaRuntimeService(),
       userDataPath,
       enableWebSocket: true,
-      wsPort: 0
+      wsPort: 0,
+      networkExposureConsent: () => consentGranted
     })
 
     await server.start()
@@ -317,6 +387,7 @@ describe('OrcaRuntimeRpcServer WebSocket bind host (STA-2370)', () => {
       expect(wiringBeforeWiden).not.toBeNull()
       expect(wsTransportOf(server)?.resolvedHost).toBe('127.0.0.1')
 
+      consentGranted = true
       const offer = await server.createMobilePairingOffer({
         address: '100.64.1.20',
         connectionMode: 'local-only'
@@ -345,11 +416,13 @@ describe('OrcaRuntimeRpcServer WebSocket bind host (STA-2370)', () => {
 
   it('coalesces concurrent pairing widens into a single rebind', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    let consentGranted = false
     const server = new OrcaRuntimeRpcServer({
       runtime: new OrcaRuntimeService(),
       userDataPath,
       enableWebSocket: true,
-      wsPort: 0
+      wsPort: 0,
+      networkExposureConsent: () => consentGranted
     })
 
     await server.start()
@@ -360,6 +433,7 @@ describe('OrcaRuntimeRpcServer WebSocket bind host (STA-2370)', () => {
         'widenWebSocketBind'
       )
 
+      consentGranted = true
       await Promise.all([server.ensureNetworkExposure(), server.ensureNetworkExposure()])
 
       // Why: two racing pairing offers must share one rebind via networkExposurePromise — two competing
@@ -374,11 +448,13 @@ describe('OrcaRuntimeRpcServer WebSocket bind host (STA-2370)', () => {
   it('reports pairing unavailable but keeps a serving loopback listener when the widen bind fails', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    let consentGranted = false
     const server = new OrcaRuntimeRpcServer({
       runtime: new OrcaRuntimeService(),
       userDataPath,
       enableWebSocket: true,
-      wsPort: 0
+      wsPort: 0,
+      networkExposureConsent: () => consentGranted
     })
 
     await server.start()
@@ -398,6 +474,7 @@ describe('OrcaRuntimeRpcServer WebSocket bind host (STA-2370)', () => {
         return original(opts)
       })
 
+      consentGranted = true
       const offer = await server.createMobilePairingOffer({
         address: '100.64.1.20',
         connectionMode: 'local-only'
@@ -422,11 +499,13 @@ describe('OrcaRuntimeRpcServer WebSocket bind host (STA-2370)', () => {
   it('keeps the widened listener tracked when persisting pairing metadata fails', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    let consentGranted = false
     const server = new OrcaRuntimeRpcServer({
       runtime: new OrcaRuntimeService(),
       userDataPath,
       enableWebSocket: true,
-      wsPort: 0
+      wsPort: 0,
+      networkExposureConsent: () => consentGranted
     })
 
     await server.start()
@@ -449,6 +528,7 @@ describe('OrcaRuntimeRpcServer WebSocket bind host (STA-2370)', () => {
         return originalWrite()
       })
 
+      consentGranted = true
       const offer = await server.createMobilePairingOffer({
         address: '100.64.1.20',
         connectionMode: 'local-only'
@@ -468,11 +548,13 @@ describe('OrcaRuntimeRpcServer WebSocket bind host (STA-2370)', () => {
   it('does not strand a wide listener when stop() races an in-flight widen', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    let consentGranted = false
     const server = new OrcaRuntimeRpcServer({
       runtime: new OrcaRuntimeService(),
       userDataPath,
       enableWebSocket: true,
-      wsPort: 0
+      wsPort: 0,
+      networkExposureConsent: () => consentGranted
     })
 
     await server.start()
@@ -501,6 +583,7 @@ describe('OrcaRuntimeRpcServer WebSocket bind host (STA-2370)', () => {
     })
 
     // Why: begin a pairing widen but do not await it, then start shutdown while it is still in-flight.
+    consentGranted = true
     const widen = server.ensureNetworkExposure()
     const stopping = server.stop()
     releaseWideStart()
@@ -608,7 +691,8 @@ describe('OrcaRuntimeRpcServer WebSocket bind host (STA-2370)', () => {
       userDataPath,
       enableWebSocket: true,
       wsPort: 0,
-      pinnedBindHost: '0.0.0.0'
+      pinnedBindHost: '0.0.0.0',
+      networkExposureConsent: () => true
     })
 
     await server.start()
@@ -627,7 +711,8 @@ describe('OrcaRuntimeRpcServer WebSocket bind host (STA-2370)', () => {
       runtime: new OrcaRuntimeService(),
       userDataPath,
       enableWebSocket: true,
-      wsPort: 0
+      wsPort: 0,
+      networkExposureConsent: () => true
     })
 
     await server.start()
@@ -643,5 +728,121 @@ describe('OrcaRuntimeRpcServer WebSocket bind host (STA-2370)', () => {
     // widenWebSocketBind and re-open a 0.0.0.0 listener on a server that is supposed to be down.
     await server.ensureNetworkExposure()
     expect(widenSpy).not.toHaveBeenCalled()
+  })
+
+  it('rebinds a live 0.0.0.0 listener back to loopback when consent is revoked', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    let consentGranted = false
+    const server = new OrcaRuntimeRpcServer({
+      runtime: new OrcaRuntimeService(),
+      userDataPath,
+      enableWebSocket: true,
+      wsPort: 0,
+      networkExposureConsent: () => consentGranted
+    })
+
+    await server.start()
+    try {
+      expect(wsTransportOf(server)?.resolvedHost).toBe('127.0.0.1')
+      const boundPort = wsTransportOf(server)?.resolvedPort
+
+      consentGranted = true
+      const offer = await server.createMobilePairingOffer({
+        address: '100.64.1.20',
+        connectionMode: 'local-only'
+      })
+      expect(offer.available).toBe(true)
+      expect(wsTransportOf(server)?.resolvedHost).toBe('0.0.0.0')
+
+      // Why: this is the settings-apply reaction's call when networkExposureConsent flips true→false
+      // (see runtime-client-settings.ts) — revoking consent must re-close the live listener, not just
+      // refuse the next widen.
+      consentGranted = false
+      await server.narrowWebSocketBindToLoopback()
+
+      expect(wsTransportOf(server)?.resolvedHost).toBe('127.0.0.1')
+      // Why: the already-issued endpoint's port must survive the narrow so a client that only
+      // learned the port (not the widened host) can still reconnect once it is back on loopback.
+      expect(wsTransportOf(server)?.resolvedPort).toBe(boundPort)
+    } finally {
+      await server.stop()
+    }
+  })
+
+  it('closes a widen that completes after consent is revoked mid-flight (D1)', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    let consentGranted = false
+    const server = new OrcaRuntimeRpcServer({
+      runtime: new OrcaRuntimeService(),
+      userDataPath,
+      enableWebSocket: true,
+      wsPort: 0,
+      networkExposureConsent: () => consentGranted
+    })
+
+    await server.start()
+    try {
+      const loopbackPort = wsTransportOf(server)?.resolvedPort
+      const target = server as unknown as {
+        startWebSocketTransport: (opts: {
+          host: string
+        }) => Promise<{ transport: WebSocketTransport; endpoint: string }>
+      }
+      const original = target.startWebSocketTransport.bind(server)
+      let releaseWideStart: () => void = () => {}
+      const wideStartGate = new Promise<void>((resolve) => {
+        releaseWideStart = resolve
+      })
+      vi.spyOn(target, 'startWebSocketTransport').mockImplementation(async (opts) => {
+        if (opts.host === '0.0.0.0') {
+          // Why: hold the wide bind mid-flight -- loopback is already stopped but wsBoundHost and
+          // activeTransports still read as pre-widen, which is exactly the window a revocation can land in.
+          await wideStartGate
+        }
+        return original(opts)
+      })
+
+      consentGranted = true
+      const widen = server.ensureNetworkExposure()
+
+      // Why revoked here, before awaiting widen: this reproduces a revocation racing the still-gated
+      // widen above. Before the fix, narrowWebSocketBindToLoopback reads the stale pre-widen
+      // wsBoundHost, decides there is nothing to narrow, and returns immediately -- the gated widen
+      // then completes wide despite consent having been revoked.
+      consentGranted = false
+      const narrow = server.narrowWebSocketBindToLoopback()
+
+      releaseWideStart()
+      await Promise.all([widen, narrow])
+
+      expect(wsTransportOf(server)?.resolvedHost).toBe('127.0.0.1')
+      expect(wsTransportOf(server)?.resolvedPort).toBe(loopbackPort)
+    } finally {
+      await server.stop()
+      errorSpy.mockRestore()
+    }
+  })
+
+  it('does not narrow a bind pinned to all interfaces when consent is revoked', async () => {
+    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
+    const server = new OrcaRuntimeRpcServer({
+      runtime: new OrcaRuntimeService(),
+      userDataPath,
+      enableWebSocket: true,
+      wsPort: 0,
+      pinnedBindHost: '0.0.0.0',
+      networkExposureConsent: () => false
+    })
+
+    await server.start()
+    try {
+      expect(wsTransportOf(server)?.resolvedHost).toBe('0.0.0.0')
+      await server.narrowWebSocketBindToLoopback()
+      // Why: an operator's pin outranks a paired client's Settings toggle.
+      expect(wsTransportOf(server)?.resolvedHost).toBe('0.0.0.0')
+    } finally {
+      await server.stop()
+    }
   })
 })

@@ -209,6 +209,8 @@ export function buildDefaultSettings(args: {
     agentDefaultEnv: { ...DEFAULT_TUI_AGENT_ENV },
     agentYoloDefaultsMigrated: true,
     agentStatusHooksEnabled: true,
+    // Why: widening the runtime WS listener beyond loopback needs explicit consent.
+    networkExposureConsent: false,
     tabAutoGenerateTitle: false,
     confirmClosePinnedTab: true,
     keepComputerAwakeWhileAgentsRun: false,

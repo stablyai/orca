@@ -18,6 +18,13 @@ export class RuntimeRpcNetworkExposure extends RuntimeRpcLifecycle {
         `Runtime bind address is pinned to ${this.pinnedBindHost}; refusing to widen to all interfaces`
       )
     }
+    if (!this.networkExposureConsent()) {
+      // Why: lands in the caller's existing 'network_exposure_failed' branch — refusing beats
+      // silently publishing a LAN endpoint the user never consented to being reachable on.
+      throw new Error(
+        'Network exposure consent has not been granted; refusing to widen to all interfaces'
+      )
+    }
     if (
       !this.enableWebSocket ||
       this.stopping ||
@@ -85,6 +92,39 @@ export class RuntimeRpcNetworkExposure extends RuntimeRpcLifecycle {
         persistError
       )
     }
+  }
+
+  // Why: revoking network exposure consent must re-close a live wide listener, not just refuse future
+  // widens. A pin outranks the settings toggle (an unattended host's pinned config beats a paired
+  // client's Settings flip), same precedence as resolveInitialWebSocketBindHost.
+  async narrowWebSocketBindToLoopback(): Promise<void> {
+    if (this.pinnedBindHost) {
+      return
+    }
+    if (this.networkExposurePromise) {
+      // Why: an in-flight widen can still be stopping the loopback listener when consent is
+      // revoked -- wsBoundHost and activeTransports have not been updated to the wide state yet,
+      // so reading them now would see "already loopback" and return without narrowing, letting
+      // the gated widen complete wide anyway. Wait for it to settle first, then re-evaluate
+      // against the state it actually left behind (D1).
+      await this.networkExposurePromise.catch(() => {})
+    }
+    if (this.networkExposureConsent()) {
+      // Why: consent may have been re-granted while we were waiting above -- a stale revocation
+      // must not tear down a listener a newer widen just (re)established.
+      return
+    }
+    const current = this.activeTransports.find(
+      (transport): transport is WebSocketTransport => transport instanceof WebSocketTransport
+    )
+    if (!current || this.wsBoundHost !== WS_BIND_HOST_ALL_INTERFACES) {
+      return
+    }
+    const index = this.activeTransports.indexOf(current)
+    const previousPort = current.resolvedPort
+    this.detachWebSocketWiring?.()
+    await current.stop()
+    await this.recoverWebSocketBindAfterFailedWiden(index, previousPort)
   }
 
   // Why: a failed widen already tore down the loopback listener; bring one back on the same host/port so the
