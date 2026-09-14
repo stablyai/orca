@@ -119,10 +119,15 @@ describe('WorktreeCatalogSnapshotClient', () => {
     await snapshots.fetch(client, 'host-1')
     admitFetched(snapshots, await snapshots.fetch(client, 'host-1'))
 
-    expect(client.sendRequest).toHaveBeenNthCalledWith(2, 'worktree.ps', {
-      limit: WORKTREE_PS_FULL_LIMIT,
-      afterSnapshotId: null
-    })
+    expect(client.sendRequest).toHaveBeenNthCalledWith(
+      2,
+      'worktree.ps',
+      {
+        limit: WORKTREE_PS_FULL_LIMIT,
+        afterSnapshotId: null
+      },
+      undefined
+    )
   })
 
   it('preserves the last admitted token across transport failures', async () => {
@@ -133,10 +138,15 @@ describe('WorktreeCatalogSnapshotClient', () => {
     snapshots.admit(null)
     await snapshots.fetch(client, 'host-1')
 
-    expect(client.sendRequest).toHaveBeenNthCalledWith(2, 'worktree.ps', {
-      limit: WORKTREE_PS_FULL_LIMIT,
-      afterSnapshotId: 'snapshot-1'
-    })
+    expect(client.sendRequest).toHaveBeenNthCalledWith(
+      2,
+      'worktree.ps',
+      {
+        limit: WORKTREE_PS_FULL_LIMIT,
+        afterSnapshotId: 'snapshot-1'
+      },
+      undefined
+    )
   })
 
   it('clears snapshot ownership after a mismatched unchanged response', async () => {
@@ -151,10 +161,15 @@ describe('WorktreeCatalogSnapshotClient', () => {
     admitFetched(snapshots, await snapshots.fetch(client, 'host-1'))
     await snapshots.fetch(client, 'host-1')
 
-    expect(client.sendRequest).toHaveBeenNthCalledWith(3, 'worktree.ps', {
-      limit: WORKTREE_PS_FULL_LIMIT,
-      afterSnapshotId: null
-    })
+    expect(client.sendRequest).toHaveBeenNthCalledWith(
+      3,
+      'worktree.ps',
+      {
+        limit: WORKTREE_PS_FULL_LIMIT,
+        afterSnapshotId: null
+      },
+      undefined
+    )
   })
 
   it('resets snapshot ownership when the client or host changes', async () => {
@@ -165,10 +180,14 @@ describe('WorktreeCatalogSnapshotClient', () => {
     admitFetched(snapshots, await snapshots.fetch(firstClient, 'host-1'))
     await snapshots.fetch(secondClient, 'host-2')
 
-    expect(secondClient.sendRequest).toHaveBeenCalledWith('worktree.ps', {
-      limit: WORKTREE_PS_FULL_LIMIT,
-      afterSnapshotId: null
-    })
+    expect(secondClient.sendRequest).toHaveBeenCalledWith(
+      'worktree.ps',
+      {
+        limit: WORKTREE_PS_FULL_LIMIT,
+        afterSnapshotId: null
+      },
+      undefined
+    )
   })
 
   it('drops a superseded host response without invalidating the current token', async () => {
@@ -182,10 +201,15 @@ describe('WorktreeCatalogSnapshotClient', () => {
     expect(admitFetched(snapshots, stale)).toBeNull()
 
     await snapshots.fetch(secondClient, 'host-2')
-    expect(secondClient.sendRequest).toHaveBeenNthCalledWith(2, 'worktree.ps', {
-      limit: WORKTREE_PS_FULL_LIMIT,
-      afterSnapshotId: 'snapshot-2'
-    })
+    expect(secondClient.sendRequest).toHaveBeenNthCalledWith(
+      2,
+      'worktree.ps',
+      {
+        limit: WORKTREE_PS_FULL_LIMIT,
+        afterSnapshotId: 'snapshot-2'
+      },
+      undefined
+    )
   })
 
   // Why (STA-3123): a failed worktree.ps rendered as "0 worktrees"; callers need the
@@ -206,10 +230,15 @@ describe('WorktreeCatalogSnapshotClient', () => {
     expect(failed).toEqual({ kind: 'request_failed', code: 'forbidden' })
 
     await snapshots.fetch(client, 'host-1')
-    expect(client.sendRequest).toHaveBeenNthCalledWith(3, 'worktree.ps', {
-      limit: WORKTREE_PS_FULL_LIMIT,
-      afterSnapshotId: 'snapshot-1'
-    })
+    expect(client.sendRequest).toHaveBeenNthCalledWith(
+      3,
+      'worktree.ps',
+      {
+        limit: WORKTREE_PS_FULL_LIMIT,
+        afterSnapshotId: 'snapshot-1'
+      },
+      undefined
+    )
   })
 
   it('falls back to a generic failure code when the error carries none', async () => {

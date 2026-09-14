@@ -1,6 +1,9 @@
 import type { RpcClient } from '../transport/rpc-client'
-import type { RpcFailure, RpcSuccess } from '../transport/types'
 import type { Worktree } from './workspace-list-sections'
+import {
+  captureRpcOperationSettlement,
+  mobileWorktreeCatalog
+} from '../hardware-keyboard/mobile-worktree-keyboard-rpc-operations'
 
 // Why: worktree.ps silently truncates at 200; use a high cap so large hosts don't drop workspaces.
 export const WORKTREE_PS_FULL_LIMIT = 10_000
@@ -71,24 +74,33 @@ export class WorktreeCatalogSnapshotClient {
       this.confirmedWorktrees = null
     }
     const requestedSnapshotId = this.snapshotId
-    const response = await client.sendRequest('worktree.ps', {
+    const settlement = await captureRpcOperationSettlement(client, mobileWorktreeCatalog, {
       limit: WORKTREE_PS_FULL_LIMIT,
       afterSnapshotId: requestedSnapshotId
     })
-    if (!response.ok) {
-      const code = (response as RpcFailure).error?.code
+    if (settlement.status === 'rejected') {
       return {
         kind: 'request_failed',
-        code: typeof code === 'string' && code.length > 0 ? code : 'request_failed'
+        code: 'request_failed'
       }
+    }
+    const outcome = settlement.outcome
+    if (outcome.kind === 'outer-refused') {
+      return {
+        kind: 'request_failed',
+        code:
+          typeof outcome.error.code === 'string' && outcome.error.code.length > 0
+            ? outcome.error.code
+            : 'request_failed'
+      }
+    }
+    if (outcome.kind !== 'decoded') {
+      return { kind: 'request_failed', code: 'incompatible_response' }
     }
     return {
       kind: 'response',
       pending: {
-        admission: admitWorktreeCatalogResponse<Worktree>(
-          (response as RpcSuccess).result,
-          requestedSnapshotId
-        ),
+        admission: admitWorktreeCatalogResponse<Worktree>(outcome.value, requestedSnapshotId),
         client,
         hostId
       }

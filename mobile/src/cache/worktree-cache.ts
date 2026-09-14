@@ -44,6 +44,11 @@ export function getCachedWorktrees(hostId: string): unknown[] | null {
   return readFreshEntry(hostId)?.worktrees ?? null
 }
 
+/** Last listed rows even after the UI freshness window; callers must not treat absence as proof. */
+export function getLastCachedWorktrees(hostId: string): unknown[] | null {
+  return cache.get(hostId)?.worktrees ?? null
+}
+
 /** The rows only when the host listed them itself — null whenever absence cannot be trusted,
  *  which is every unproven or expired entry. */
 export function getProvenCachedWorktrees(hostId: string): unknown[] | null {

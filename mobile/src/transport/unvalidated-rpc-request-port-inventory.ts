@@ -226,6 +226,5 @@ export const UNVALIDATED_RPC_REQUEST_PORT_PENDING: readonly UnvalidatedRpcReques
 
   // src/worktree/ — worktree activation and resume
   { file: 'src/worktree/home-host-worktree-fetch.ts', references: 2 },
-  { file: 'src/worktree/use-retired-worktree-names.ts', references: 1 },
-  { file: 'src/worktree/worktree-catalog-snapshot-client.ts', references: 1 }
+  { file: 'src/worktree/use-retired-worktree-names.ts', references: 1 }
 ]
