@@ -90,6 +90,13 @@ describe('Bob approval prompt detection', () => {
     expect(countFirings(detector, ['  Subagent (general)\n  → Ap', 'pro', 've Once\n'])).toBe(1)
   })
 
+  // Why: the carried tail still holds the first modal when the second completes across writes.
+  it('fires for a split second modal while the tail still holds the first', () => {
+    const detector = armedDetector()
+    expect(countFirings(detector, [SUBAGENT_SPAWN_APPROVAL, IDLE_COMPOSER])).toBe(1)
+    expect(countFirings(detector, ['  Subagent (general)\n  → Ap', 'pro', 've Once\n'])).toBe(1)
+  })
+
   // Why: the safety property that matters most — an unrelated CLI printing this exact menu text
   // must never light up a Bob status row on a pane that never ran Bob.
   it('never fires without first proving the pane is really Bob', () => {
