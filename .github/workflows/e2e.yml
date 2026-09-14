@@ -170,8 +170,39 @@ jobs:
       # artifact instead of starting five concurrent electron-vite builds.
       # ORCA_E2E_FORWARD_APP_LOGS keeps startup failures visible when Electron
       # launches but never creates a BrowserWindow.
+      - name: Balance E2E shard from timing evidence
+        env:
+          ORCA_BACKGROUND_LAUNCH: '1'
+          SKIP_BUILD: '1'
+          ORCA_E2E_FORWARD_APP_LOGS: '1'
+          ORCA_E2E_WEB_CLIENT: '1'
+          ORCA_RELAY_PATH: ${{ github.workspace }}/out/relay
+        run: |
+          mkdir -p ci-shards
+          pnpm exec playwright test --config tests/playwright.config.ts --project=electron-headless --list --reporter=json > ci-shards/discovery.json
+          export ORCA_SHARD_SOURCE_SHA="$(git rev-parse HEAD)"
+          node config/scripts/ci-e2e-shard-plan.mjs ci-shards/discovery.json '${{ matrix.shard }}' ci-shards
+          pnpm exec playwright test --config tests/playwright.config.ts --project=electron-headless --test-list=ci-shards/selected.txt --list --reporter=json > ci-shards/selected-discovery.json
+          node config/scripts/ci-e2e-shard-plan.mjs --verify ci-shards/assignment.json ci-shards/selected-discovery.json
+
       - name: Run E2E tests (${{ matrix.shard_name }})
-        run: xvfb-run --auto-servernum bash .github/scripts/e2e-with-window-manager.sh env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 ORCA_E2E_WEB_CLIENT=1 ORCA_RELAY_PATH="$GITHUB_WORKSPACE/out/relay" pnpm run test:e2e --shard=${{ matrix.shard }}
+        run: xvfb-run --auto-servernum bash .github/scripts/e2e-with-window-manager.sh env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 ORCA_E2E_WEB_CLIENT=1 ORCA_RELAY_PATH="$GITHUB_WORKSPACE/out/relay" pnpm run test:e2e --test-list=ci-shards/selected.txt
+
+      - name: Upload E2E shard assignment
+        if: always()
+        # Diagnostic upload outages must not change the test verdict.
+        continue-on-error: true
+        uses: actions/upload-artifact@v7
+        with:
+          name: e2e-shard-${{ matrix.shard_name }}-attempt-${{ github.run_attempt }}
+          path: ci-shards/
+          retention-days: 14
+          if-no-files-found: warn
+
+      # The frame benchmark needs a mapped window, which the headless shards exclude.
+      - name: Run worktree first-paint benchmark
+        if: matrix.shard == '1/14'
+        run: xvfb-run --auto-servernum bash .github/scripts/e2e-with-window-manager.sh env SKIP_BUILD=1 ORCA_E2E_FORWARD_APP_LOGS=1 pnpm exec playwright test tests/e2e/worktree-switch-first-paint.spec.ts --config tests/playwright.config.ts --project=electron-headful --workers=1
 
       # Why: Playwright retains traces/screenshots only on failure. Uploading
       # them as an artifact makes post-mortem debugging on CI possible without

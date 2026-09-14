@@ -25,8 +25,10 @@ export const PROVIDER_FRAME_CLASSIFICATIONS = {
     'thread/closed': 'status-chrome',
     'skills/changed': 'status-chrome',
     'thread/name/updated': 'status-chrome',
-    'thread/goal/updated': 'status-chrome',
-    'thread/goal/cleared': 'status-chrome',
+    // The goal tool call is never emitted as an item, so these two frames are the only
+    // truthful evidence a goal exists; the model's prose about goals can be wrong.
+    'thread/goal/updated': 'timeline-substantive',
+    'thread/goal/cleared': 'timeline-substantive',
     'thread/environment/connected': 'status-chrome',
     'thread/environment/disconnected': 'status-chrome',
     'thread/settings/updated': 'status-chrome',

@@ -2218,6 +2218,10 @@
                 "7c302f8174": "無題"
               }
             }
+          },
+          "ProjectViewStates": {
+            "3b9c1d5e47": "このビューにはまだ項目がありません。",
+            "7e4a2f80c6": "最近追加した項目は、表示されるまで少し時間がかかることがあります。"
           }
         },
         "GitHubMarkdownComposer": {
@@ -4393,7 +4397,6 @@
           "a30e34eb5c": "ワークスペースボードを閉じる",
           "spaces": "スペース",
           "views": "サイドバービュー",
-          "createMenu": "作成",
           "addProject": "プロジェクトを追加"
         },
         "SidebarNav": {
@@ -14188,8 +14191,6 @@
           "5651b216c6": "不明なプロジェクト",
           "22b22034bc": "スタンドアロンターミナルはアクティビティでは使用できません。",
           "afdc2139a8": "Agent ターミナルが閉じられました。続行するには、このワークスペースで新規ターミナルを開いてください。",
-          "compactModeDescription": "1 行のタイトルと 2 行のステータスメッセージで短いスレッド行を表示します。",
-          "unreadOnlyDescription": "未読の更新があるスレッドのみをアクティビティ一覧に表示します。",
           "clearCompleted": "完了済みをクリア",
           "none": "なし",
           "search": "検索",
@@ -14207,7 +14208,9 @@
             "idle": "アイドル",
             "unverifiable": "最近の更新なし",
             "permission": "要対応"
-          }
+          },
+          "filtersSection": "フィルター",
+          "viewSection": "表示"
         },
         "ActivityScopeFilterControls": {
           "resetScope": "すべてのホストとプロジェクトを表示"
@@ -14651,7 +14654,8 @@
         "chooseInAgentPicker": "Agent の選択画面で選ぶ…",
         "toggleOption": "{{value0}}を切り替える",
         "pillAccessibleName": "{{value0}} {{value1}}",
-        "valueUnknown": "現在の値が不明です — オンまたはオフを選んでください",
+        "valueIsDefault": "既定",
+        "valueNotReported": "未報告",
         "sentNotConfirmed": "Agent に送信済み — 未確認",
         "setWhenSessionStarts": "セッション開始時に設定してください。",
         "availableAfterSessionStarts": "セッション開始後に利用できます。",
@@ -14664,9 +14668,7 @@
           "high": "高",
           "xhigh": "最高",
           "max": "最大",
-          "ultra": "ウルトラ",
-          "on": "オン",
-          "off": "オフ"
+          "ultra": "ウルトラ"
         },
         "noCommandsOrSkills": "一致するコマンドやスキルがありません",
         "commands": "コマンド",
@@ -14957,6 +14959,14 @@
       "hide": "Agent を隠す",
       "action": "Agent を試す",
       "hiddenToast": "Agent タブを非表示にしました。設定 → 実験的機能で再度有効にできます。"
+    }
+  },
+  "notifications": {
+    "agentStatus": {
+      "needsInput": "入力待ち",
+      "working": "処理中",
+      "stopped": "停止",
+      "finished": "完了"
     }
   }
 }

@@ -1,0 +1,1142 @@
+{
+  "operation": "settings.resume-metadata",
+  "family": "settings.resume-metadata",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "16d1ab81d3fd08e342b2f0ac0cc6f9e4aea4aaee",
+  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
+  "recorderSha256": "6a12160a87ceab04e74198f6dd35b8cf9125794222ee95cf6ca1872f29849960",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 3,
+  "values": {
+    "01bc8208ba89": {
+      "name": "projectGroup.list#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "projectGroup.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": ""
+          },
+          "id": "frame-3",
+          "ok": false
+        }
+      }
+    },
+    "14a657727096": {
+      "name": "worktree.ps#1",
+      "json": "{\"id\":\"frame-5\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.ps\",\"params\":{\"limit\":10000,\"supportsWorktreeVisibilitySourceDefaults\":true}}"
+    },
+    "18d27f5a5ff4": {
+      "name": "settings.get#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "settings.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-4",
+          "ok": true,
+          "result": {
+            "settings": {
+              "defaultTuiAgent": "codex",
+              "disabledTuiAgents": ["claude"],
+              "hostSettingOverrides": {},
+              "prBotAuthorOverrides": ["bot-user"],
+              "visibleTaskProviders": ["github", "linear"]
+            }
+          }
+        }
+      }
+    },
+    "1e08ef8dfeae": {
+      "name": "worktree.ps#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.ps"
+        },
+        {
+          "name": "params",
+          "value": {
+            "limit": 10000
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "1e6417970216": {
+      "name": "projectGroup.list#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "projectGroup.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "215a85dc1f8b": {
+      "name": "projectGroup.list#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "projectGroup.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-3",
+          "ok": true,
+          "result": {
+            "error": "refused"
+          }
+        }
+      }
+    },
+    "22f9b426b0c2": {
+      "name": "projectGroup.list#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "projectGroup.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-3",
+          "ok": true,
+          "result": {
+            "$rpc": "null"
+          }
+        }
+      }
+    },
+    "37aefcdc3665": {
+      "name": "folderWorkspace.list#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"folderWorkspace.list\"}"
+    },
+    "3c70da5d6d8e": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "folderWorkspaces": [],
+        "projectGroups": [],
+        "repos": [],
+        "settings": {
+          "defaultTuiAgent": "codex",
+          "disabledTuiAgents": ["claude"],
+          "hostSettingOverrides": {},
+          "prBotAuthorOverrides": ["bot-user"],
+          "visibleTaskProviders": ["github", "linear"]
+        },
+        "worktrees": []
+      }
+    },
+    "3f303df2ad9f": {
+      "name": "settings.get#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "settings.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "4325c9c561d9": {
+      "name": "projectGroup.list#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "projectGroup.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "method_not_found",
+            "message": "Unknown method"
+          },
+          "id": "frame-3",
+          "ok": false
+        }
+      }
+    },
+    "44136fa355b3": {},
+    "49b164f9bbd1": {
+      "name": "projectGroup.list#1",
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"projectGroup.list\"}"
+    },
+    "658e0bc6b0fc": {
+      "name": "folderWorkspace.list#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "folderWorkspace.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "folderWorkspaces": []
+          }
+        }
+      }
+    },
+    "6bdbf70bafa2": {
+      "name": "repo.list#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"repo.list\"}"
+    },
+    "8d2b0b707eda": {
+      "name": "projectGroup.list#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "projectGroup.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": "outer refused"
+          },
+          "id": "frame-3",
+          "ok": false
+        }
+      }
+    },
+    "9270aeb7d9c6": {
+      "status": "pending",
+      "startedAt": 0
+    },
+    "9410355ae6d7": {
+      "name": "projectGroup.list#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "projectGroup.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "transport failure",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "96b29793602c": {
+      "name": "projectGroup.list#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "projectGroup.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-3",
+          "ok": true,
+          "result": {
+            "groups": []
+          }
+        }
+      }
+    },
+    "a36922df60c5": {
+      "name": "projectGroup.list#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "projectGroup.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-3",
+          "ok": true,
+          "result": {
+            "error": {
+              "message": "inner refused"
+            },
+            "ok": false
+          }
+        }
+      }
+    },
+    "a4ae13faed91": {
+      "name": "projectGroup.list#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "projectGroup.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-3",
+          "ok": true
+        }
+      }
+    },
+    "c25d799a53c1": {
+      "name": "projectGroup.list#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "projectGroup.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-3",
+          "ok": true,
+          "result": {
+            "error": "inner refused",
+            "ok": false
+          }
+        }
+      }
+    },
+    "cde27afd4f31": {
+      "name": "repo.list#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "repo.list"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "repos": []
+          }
+        }
+      }
+    },
+    "e4b1a04958da": {
+      "name": "settings.get#1",
+      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"settings.get\"}"
+    },
+    "f11be1e3e504": {
+      "name": "worktree.ps#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.ps"
+        },
+        {
+          "name": "params",
+          "value": {
+            "limit": 10000
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-5",
+          "ok": true,
+          "result": {
+            "worktrees": []
+          }
+        }
+      }
+    }
+  },
+  "recording": {
+    "scenario": "matrix-settings.resume-metadata-projectgroup.list-1",
+    "checkpoints": [
+      {
+        "id": "settings-resume-metadata-fulfilled.normal:settings-pending",
+        "observation": {
+          "sender": [
+            "cde27afd4f31",
+            "658e0bc6b0fc",
+            "96b29793602c",
+            "3f303df2ad9f",
+            "1e08ef8dfeae"
+          ],
+          "payloads": [
+            "6bdbf70bafa2",
+            "37aefcdc3665",
+            "49b164f9bbd1",
+            "e4b1a04958da",
+            "14a657727096"
+          ],
+          "settlements": {
+            "load": "9270aeb7d9c6"
+          },
+          "state": "44136fa355b3",
+          "effects": []
+        }
+      },
+      {
+        "id": "settings-resume-metadata-fulfilled.normal:settled",
+        "observation": {
+          "sender": [
+            "cde27afd4f31",
+            "658e0bc6b0fc",
+            "96b29793602c",
+            "18d27f5a5ff4",
+            "f11be1e3e504"
+          ],
+          "payloads": [
+            "6bdbf70bafa2",
+            "37aefcdc3665",
+            "49b164f9bbd1",
+            "e4b1a04958da",
+            "14a657727096"
+          ],
+          "settlements": {
+            "load": "3c70da5d6d8e"
+          },
+          "state": "44136fa355b3",
+          "effects": []
+        }
+      },
+      {
+        "id": "settings-resume-metadata-fulfilled.result-absent:settings-pending",
+        "observation": {
+          "sender": [
+            "cde27afd4f31",
+            "658e0bc6b0fc",
+            "a4ae13faed91",
+            "3f303df2ad9f",
+            "1e08ef8dfeae"
+          ],
+          "payloads": [
+            "6bdbf70bafa2",
+            "37aefcdc3665",
+            "49b164f9bbd1",
+            "e4b1a04958da",
+            "14a657727096"
+          ],
+          "settlements": {
+            "load": "9270aeb7d9c6"
+          },
+          "state": "44136fa355b3",
+          "effects": []
+        }
+      },
+      {
+        "id": "settings-resume-metadata-fulfilled.result-absent:settled",
+        "observation": {
+          "sender": [
+            "cde27afd4f31",
+            "658e0bc6b0fc",
+            "a4ae13faed91",
+            "18d27f5a5ff4",
+            "f11be1e3e504"
+          ],
+          "payloads": [
+            "6bdbf70bafa2",
+            "37aefcdc3665",
+            "49b164f9bbd1",
+            "e4b1a04958da",
+            "14a657727096"
+          ],
+          "settlements": {
+            "load": "3c70da5d6d8e"
+          },
+          "state": "44136fa355b3",
+          "effects": []
+        }
+      },
+      {
+        "id": "settings-resume-metadata-fulfilled.result-null:settings-pending",
+        "observation": {
+          "sender": [
+            "cde27afd4f31",
+            "658e0bc6b0fc",
+            "22f9b426b0c2",
+            "3f303df2ad9f",
+            "1e08ef8dfeae"
+          ],
+          "payloads": [
+            "6bdbf70bafa2",
+            "37aefcdc3665",
+            "49b164f9bbd1",
+            "e4b1a04958da",
+            "14a657727096"
+          ],
+          "settlements": {
+            "load": "9270aeb7d9c6"
+          },
+          "state": "44136fa355b3",
+          "effects": []
+        }
+      },
+      {
+        "id": "settings-resume-metadata-fulfilled.result-null:settled",
+        "observation": {
+          "sender": [
+            "cde27afd4f31",
+            "658e0bc6b0fc",
+            "22f9b426b0c2",
+            "18d27f5a5ff4",
+            "f11be1e3e504"
+          ],
+          "payloads": [
+            "6bdbf70bafa2",
+            "37aefcdc3665",
+            "49b164f9bbd1",
+            "e4b1a04958da",
+            "14a657727096"
+          ],
+          "settlements": {
+            "load": "3c70da5d6d8e"
+          },
+          "state": "44136fa355b3",
+          "effects": []
+        }
+      },
+      {
+        "id": "settings-resume-metadata-fulfilled.inner-ok-missing:settings-pending",
+        "observation": {
+          "sender": [
+            "cde27afd4f31",
+            "658e0bc6b0fc",
+            "215a85dc1f8b",
+            "3f303df2ad9f",
+            "1e08ef8dfeae"
+          ],
+          "payloads": [
+            "6bdbf70bafa2",
+            "37aefcdc3665",
+            "49b164f9bbd1",
+            "e4b1a04958da",
+            "14a657727096"
+          ],
+          "settlements": {
+            "load": "9270aeb7d9c6"
+          },
+          "state": "44136fa355b3",
+          "effects": []
+        }
+      },
+      {
+        "id": "settings-resume-metadata-fulfilled.inner-ok-missing:settled",
+        "observation": {
+          "sender": [
+            "cde27afd4f31",
+            "658e0bc6b0fc",
+            "215a85dc1f8b",
+            "18d27f5a5ff4",
+            "f11be1e3e504"
+          ],
+          "payloads": [
+            "6bdbf70bafa2",
+            "37aefcdc3665",
+            "49b164f9bbd1",
+            "e4b1a04958da",
+            "14a657727096"
+          ],
+          "settlements": {
+            "load": "3c70da5d6d8e"
+          },
+          "state": "44136fa355b3",
+          "effects": []
+        }
+      },
+      {
+        "id": "settings-resume-metadata-fulfilled.inner-false-string-error:settings-pending",
+        "observation": {
+          "sender": [
+            "cde27afd4f31",
+            "658e0bc6b0fc",
+            "c25d799a53c1",
+            "3f303df2ad9f",
+            "1e08ef8dfeae"
+          ],
+          "payloads": [
+            "6bdbf70bafa2",
+            "37aefcdc3665",
+            "49b164f9bbd1",
+            "e4b1a04958da",
+            "14a657727096"
+          ],
+          "settlements": {
+            "load": "9270aeb7d9c6"
+          },
+          "state": "44136fa355b3",
+          "effects": []
+        }
+      },
+      {
+        "id": "settings-resume-metadata-fulfilled.inner-false-string-error:settled",
+        "observation": {
+          "sender": [
+            "cde27afd4f31",
+            "658e0bc6b0fc",
+            "c25d799a53c1",
+            "18d27f5a5ff4",
+            "f11be1e3e504"
+          ],
+          "payloads": [
+            "6bdbf70bafa2",
+            "37aefcdc3665",
+            "49b164f9bbd1",
+            "e4b1a04958da",
+            "14a657727096"
+          ],
+          "settlements": {
+            "load": "3c70da5d6d8e"
+          },
+          "state": "44136fa355b3",
+          "effects": []
+        }
+      },
+      {
+        "id": "settings-resume-metadata-fulfilled.inner-false-object-error:settings-pending",
+        "observation": {
+          "sender": [
+            "cde27afd4f31",
+            "658e0bc6b0fc",
+            "a36922df60c5",
+            "3f303df2ad9f",
+            "1e08ef8dfeae"
+          ],
+          "payloads": [
+            "6bdbf70bafa2",
+            "37aefcdc3665",
+            "49b164f9bbd1",
+            "e4b1a04958da",
+            "14a657727096"
+          ],
+          "settlements": {
+            "load": "9270aeb7d9c6"
+          },
+          "state": "44136fa355b3",
+          "effects": []
+        }
+      },
+      {
+        "id": "settings-resume-metadata-fulfilled.inner-false-object-error:settled",
+        "observation": {
+          "sender": [
+            "cde27afd4f31",
+            "658e0bc6b0fc",
+            "a36922df60c5",
+            "18d27f5a5ff4",
+            "f11be1e3e504"
+          ],
+          "payloads": [
+            "6bdbf70bafa2",
+            "37aefcdc3665",
+            "49b164f9bbd1",
+            "e4b1a04958da",
+            "14a657727096"
+          ],
+          "settlements": {
+            "load": "3c70da5d6d8e"
+          },
+          "state": "44136fa355b3",
+          "effects": []
+        }
+      },
+      {
+        "id": "settings-resume-metadata-fulfilled.outer-refused:settings-pending",
+        "observation": {
+          "sender": [
+            "cde27afd4f31",
+            "658e0bc6b0fc",
+            "8d2b0b707eda",
+            "3f303df2ad9f",
+            "1e08ef8dfeae"
+          ],
+          "payloads": [
+            "6bdbf70bafa2",
+            "37aefcdc3665",
+            "49b164f9bbd1",
+            "e4b1a04958da",
+            "14a657727096"
+          ],
+          "settlements": {
+            "load": "9270aeb7d9c6"
+          },
+          "state": "44136fa355b3",
+          "effects": []
+        }
+      },
+      {
+        "id": "settings-resume-metadata-fulfilled.outer-refused:settled",
+        "observation": {
+          "sender": [
+            "cde27afd4f31",
+            "658e0bc6b0fc",
+            "8d2b0b707eda",
+            "18d27f5a5ff4",
+            "f11be1e3e504"
+          ],
+          "payloads": [
+            "6bdbf70bafa2",
+            "37aefcdc3665",
+            "49b164f9bbd1",
+            "e4b1a04958da",
+            "14a657727096"
+          ],
+          "settlements": {
+            "load": "3c70da5d6d8e"
+          },
+          "state": "44136fa355b3",
+          "effects": []
+        }
+      },
+      {
+        "id": "settings-resume-metadata-fulfilled.outer-refused-no-message:settings-pending",
+        "observation": {
+          "sender": [
+            "cde27afd4f31",
+            "658e0bc6b0fc",
+            "01bc8208ba89",
+            "3f303df2ad9f",
+            "1e08ef8dfeae"
+          ],
+          "payloads": [
+            "6bdbf70bafa2",
+            "37aefcdc3665",
+            "49b164f9bbd1",
+            "e4b1a04958da",
+            "14a657727096"
+          ],
+          "settlements": {
+            "load": "9270aeb7d9c6"
+          },
+          "state": "44136fa355b3",
+          "effects": []
+        }
+      },
+      {
+        "id": "settings-resume-metadata-fulfilled.outer-refused-no-message:settled",
+        "observation": {
+          "sender": [
+            "cde27afd4f31",
+            "658e0bc6b0fc",
+            "01bc8208ba89",
+            "18d27f5a5ff4",
+            "f11be1e3e504"
+          ],
+          "payloads": [
+            "6bdbf70bafa2",
+            "37aefcdc3665",
+            "49b164f9bbd1",
+            "e4b1a04958da",
+            "14a657727096"
+          ],
+          "settlements": {
+            "load": "3c70da5d6d8e"
+          },
+          "state": "44136fa355b3",
+          "effects": []
+        }
+      },
+      {
+        "id": "settings-resume-metadata-fulfilled.method-not-found:settings-pending",
+        "observation": {
+          "sender": [
+            "cde27afd4f31",
+            "658e0bc6b0fc",
+            "4325c9c561d9",
+            "3f303df2ad9f",
+            "1e08ef8dfeae"
+          ],
+          "payloads": [
+            "6bdbf70bafa2",
+            "37aefcdc3665",
+            "49b164f9bbd1",
+            "e4b1a04958da",
+            "14a657727096"
+          ],
+          "settlements": {
+            "load": "9270aeb7d9c6"
+          },
+          "state": "44136fa355b3",
+          "effects": []
+        }
+      },
+      {
+        "id": "settings-resume-metadata-fulfilled.method-not-found:settled",
+        "observation": {
+          "sender": [
+            "cde27afd4f31",
+            "658e0bc6b0fc",
+            "4325c9c561d9",
+            "18d27f5a5ff4",
+            "f11be1e3e504"
+          ],
+          "payloads": [
+            "6bdbf70bafa2",
+            "37aefcdc3665",
+            "49b164f9bbd1",
+            "e4b1a04958da",
+            "14a657727096"
+          ],
+          "settlements": {
+            "load": "3c70da5d6d8e"
+          },
+          "state": "44136fa355b3",
+          "effects": []
+        }
+      },
+      {
+        "id": "settings-resume-metadata-fulfilled.transport-rejection:settings-pending",
+        "observation": {
+          "sender": [
+            "cde27afd4f31",
+            "658e0bc6b0fc",
+            "9410355ae6d7",
+            "3f303df2ad9f",
+            "1e08ef8dfeae"
+          ],
+          "payloads": [
+            "6bdbf70bafa2",
+            "37aefcdc3665",
+            "49b164f9bbd1",
+            "e4b1a04958da",
+            "14a657727096"
+          ],
+          "settlements": {
+            "load": "9270aeb7d9c6"
+          },
+          "state": "44136fa355b3",
+          "effects": []
+        }
+      },
+      {
+        "id": "settings-resume-metadata-fulfilled.transport-rejection:settled",
+        "observation": {
+          "sender": [
+            "cde27afd4f31",
+            "658e0bc6b0fc",
+            "9410355ae6d7",
+            "18d27f5a5ff4",
+            "f11be1e3e504"
+          ],
+          "payloads": [
+            "6bdbf70bafa2",
+            "37aefcdc3665",
+            "49b164f9bbd1",
+            "e4b1a04958da",
+            "14a657727096"
+          ],
+          "settlements": {
+            "load": "3c70da5d6d8e"
+          },
+          "state": "44136fa355b3",
+          "effects": []
+        }
+      },
+      {
+        "id": "settings-resume-metadata-fulfilled.transport-rejection-no-message:settings-pending",
+        "observation": {
+          "sender": [
+            "cde27afd4f31",
+            "658e0bc6b0fc",
+            "1e6417970216",
+            "3f303df2ad9f",
+            "1e08ef8dfeae"
+          ],
+          "payloads": [
+            "6bdbf70bafa2",
+            "37aefcdc3665",
+            "49b164f9bbd1",
+            "e4b1a04958da",
+            "14a657727096"
+          ],
+          "settlements": {
+            "load": "9270aeb7d9c6"
+          },
+          "state": "44136fa355b3",
+          "effects": []
+        }
+      },
+      {
+        "id": "settings-resume-metadata-fulfilled.transport-rejection-no-message:settled",
+        "observation": {
+          "sender": [
+            "cde27afd4f31",
+            "658e0bc6b0fc",
+            "1e6417970216",
+            "18d27f5a5ff4",
+            "f11be1e3e504"
+          ],
+          "payloads": [
+            "6bdbf70bafa2",
+            "37aefcdc3665",
+            "49b164f9bbd1",
+            "e4b1a04958da",
+            "14a657727096"
+          ],
+          "settlements": {
+            "load": "3c70da5d6d8e"
+          },
+          "state": "44136fa355b3",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

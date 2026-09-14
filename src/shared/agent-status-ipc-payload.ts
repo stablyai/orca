@@ -3,8 +3,14 @@
 // (states, entries, normalization) and the transport envelopes live next to each
 // other. Re-exported from agent-status-types, so existing import sites are unchanged.
 
+import type { StructuredHostStatus } from './agent-hook-listener/listener-event'
 import type { AgentProviderSessionMetadata } from './agent-session-resume'
 import type { WithAgentStatusObservation } from './agent-status-observation'
+import type {
+  AgentStatusExecutionId,
+  AgentStatusProviderAlias,
+  AgentStatusRunId
+} from './agent-status-run'
 import type {
   AgentStatusOrchestrationContext,
   ParsedAgentStatusPayload
@@ -24,6 +30,12 @@ export type MigrationUnsupportedPtyEntry = {
 }
 
 export type AgentStatusIpcPayload = ParsedAgentStatusPayload & {
+  /** Optional run-aware identity; absent on legacy hosts and compatibility projections. */
+  runId?: AgentStatusRunId
+  /** Host-owned process-incarnation attachment for the run-aware row. */
+  executionId?: AgentStatusExecutionId
+  /** Fully qualified provider identity; never a credential or mailbox lookup key. */
+  providerAlias?: AgentStatusProviderAlias
   paneKey: string
   launchToken?: string
   terminalHandle?: string
@@ -49,6 +61,9 @@ export type AgentStatusIpcPayload = ParsedAgentStatusPayload & {
   promptInteractionKey?: string
   /** See AgentStatusEntry.restoredUnconfirmed — hydrated nonterminal provenance. */
   restoredUnconfirmed?: boolean
+  /** Present on rows the structured session host projects; `owned` keeps them fresh past the
+   *  staleness window because the host still runs the provider child. */
+  structuredHost?: StructuredHostStatus
 } & WithAgentStatusObservation
 
 /** Identity used by UI-only cleanup to evict exactly the status it cleared.

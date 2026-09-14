@@ -126,6 +126,9 @@ jobs:
       - uses: ./.github/actions/install-node-dependencies
         with:
           native-runtime: node
+          cache-dependency-path: |
+            pnpm-lock.yaml
+            mobile/pnpm-lock.yaml
 
       - name: Lint
         run: pnpm exec oxlint --format github
@@ -203,6 +206,9 @@ jobs:
       - name: Boot orcad and round-trip a terminal
         run: pnpm run smoke:orcad-terminal
 
+      - name: Verify the generated RPC params catalog
+        run: pnpm run verify:rpc-params-catalog
+
       - name: Verify bundled skill guides
         run: pnpm run verify:bundled-skill-guides
 
@@ -269,6 +275,12 @@ jobs:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: node .github/scripts/check-root-directory-entries.mjs "$BASE_SHA" "$HEAD_SHA"
+
+      # Why here: the READMEs embed media owned by docs/site and resources/onboarding,
+      # and the classifier skips static_analysis for docs-only diffs. This job runs
+      # on every PR and needs no install.
+      - name: Check README local links
+        run: node config/scripts/check-readme-local-links.mjs
 
   typecheck:
     needs: [code_paths]
@@ -772,18 +784,9 @@ jobs:
           [[ "$rpm_marker" == rpm ]] || { echo "Expected rpm marker, got: $rpm_marker"; exit 1; }
 
       - name: Verify headless serve signal shutdown
-        run: node config/scripts/run-headless-serve-shutdown-docker.mjs --appimage dist/orca-linux.AppImage
-
-      - name: Verify extracted launcher serve signal shutdown
         run: >-
           node config/scripts/run-headless-serve-shutdown-docker.mjs
-          --appimage dist/orca-linux.AppImage --entrypoint launcher
-
-      - name: Verify AppImage CLI registration and serve signal shutdown
-        run: >-
-          node config/scripts/run-headless-serve-shutdown-docker.mjs
-          --appimage dist/orca-linux.AppImage --entrypoint appimage
-          --signal-target serving-electron --int-delivery pid
+          --appimage dist/orca-linux.AppImage --all-entrypoints
 
       # A default container reproduces the hostile AppImage launch environment.
       - name: Verify Linux CLI launch contract
@@ -832,9 +835,9 @@ jobs:
         with:
           path: |
             node_modules/.pnpm/node-pty@*/node_modules/node-pty/build
-            node_modules/.pnpm/windows-native-registry@*/node_modules/windows-native-registry/build
-            node_modules/.pnpm/@vscode+windows-process-tree@*/node_modules/@vscode/windows-process-tree/build
-          key: native-modules-${{ runner.os }}-${{ steps.deps.outputs.native-cache-scope }}-${{ runner.arch }}-node-node${{ steps.deps.outputs.node-version }}-${{ hashFiles('pnpm-lock.yaml', '.github/actions/install-node-dependencies/action.yml', 'config/scripts/ensure-native-runtime.mjs', 'config/scripts/rebuild-native-deps.mjs', 'config/patches/node-pty@1.1.0.patch', 'config/patches/@vscode__windows-process-tree@0.8.0.patch') }}
+            native/windows-registry/build
+            node_modules/.pnpm/@vscode+windows-process-tre*/node_modules/@vscode/windows-process-tree/build
+          key: native-modules-${{ runner.os }}-${{ steps.deps.outputs.native-cache-scope }}-${{ runner.arch }}-node-node${{ steps.deps.outputs.node-version }}-${{ hashFiles('pnpm-lock.yaml', '.github/actions/install-node-dependencies/action.yml', 'config/scripts/ensure-native-runtime.mjs', 'config/scripts/rebuild-native-deps.mjs', 'config/patches/node-pty@1.1.0.patch', 'config/patches/@vscode__windows-process-tree@0.8.0.patch', 'native/windows-registry/src/addon.cc', 'native/windows-registry/binding.gyp', 'native/windows-registry/package.json') }}
 
       # vitest runs here directly rather than through `pnpm test`, so the addon
       # assertions only hold once install-node-dependencies has rebuilt natives.
@@ -843,6 +846,11 @@ jobs:
           pnpm exec vitest run --config config/vitest.config.ts
           config/scripts/rebuild-native-deps.test.mjs
           config/scripts/rebuild-native-deps-windows-process-tree.test.mjs
+          src/main/windows-registry-addon.test.ts
+          config/scripts/windows-process-tree-gyp-path.test.mjs
+          config/scripts/windows-process-tree-gyp-rebuild.test.mjs
+          config/scripts/package-electron-runtime-contract.test.mjs
+          config/scripts/electron-builder-runtime-resources.test.mjs
           src/main/browser/browser-client-page-renderer-lifecycle.electron.test.ts
           src/main/browser/browser-route-tcp-egress.electron.test.ts
           src/main/browser/browser-route-webrtc-egress.electron.test.ts
@@ -900,9 +908,9 @@ jobs:
         with:
           path: |
             node_modules/.pnpm/node-pty@*/node_modules/node-pty/build
-            node_modules/.pnpm/windows-native-registry@*/node_modules/windows-native-registry/build
-            node_modules/.pnpm/@vscode+windows-process-tree@*/node_modules/@vscode/windows-process-tree/build
-          key: native-modules-${{ runner.os }}-${{ steps.deps.outputs.native-cache-scope }}-${{ runner.arch }}-electron-node${{ steps.deps.outputs.node-version }}-${{ hashFiles('pnpm-lock.yaml', '.github/actions/install-node-dependencies/action.yml', 'config/scripts/ensure-native-runtime.mjs', 'config/scripts/rebuild-native-deps.mjs', 'config/patches/node-pty@1.1.0.patch', 'config/patches/@vscode__windows-process-tree@0.8.0.patch') }}
+            native/windows-registry/build
+            node_modules/.pnpm/@vscode+windows-process-tre*/node_modules/@vscode/windows-process-tree/build
+          key: native-modules-${{ runner.os }}-${{ steps.deps.outputs.native-cache-scope }}-${{ runner.arch }}-electron-node${{ steps.deps.outputs.node-version }}-${{ hashFiles('pnpm-lock.yaml', '.github/actions/install-node-dependencies/action.yml', 'config/scripts/ensure-native-runtime.mjs', 'config/scripts/rebuild-native-deps.mjs', 'config/patches/node-pty@1.1.0.patch', 'config/patches/@vscode__windows-process-tree@0.8.0.patch', 'native/windows-registry/src/addon.cc', 'native/windows-registry/binding.gyp', 'native/windows-registry/package.json') }}
 
       - name: Prepare Electron native runtime
         run: node config/scripts/ensure-native-runtime.mjs --runtime=electron

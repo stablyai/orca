@@ -1,4 +1,5 @@
 // @ts-nocheck -- mechanically split from OrcaRuntimeService; behavior is covered by AST equivalence and characterization tests.
+import { selectFreshExplicitAgentStatus } from './runtime-hook-agent-row-selection'
 import { OrcaRuntimeWithControllerKnowsPtyIsLive } from './orca-runtime-controller-knows-pty-is-live'
 import type { RuntimeTerminalAgentStatus } from '../../shared/runtime-types'
 import type { RuntimeTerminalAgentStatusSnapshot } from './runtime-terminal-agent-status-query'
@@ -181,7 +182,7 @@ export class OrcaRuntimeWithSerializeAgentPromptSubmission extends OrcaRuntimeWi
     updatedAt: number
     stateStartedAt: number
   } | null {
-    return this.agentRows.getFreshExplicit({
+    return selectFreshExplicitAgentStatus({
       handle,
       paneKey: paneKeyOverride ?? this.getPaneKeyForTerminalHandle(handle),
       hookRows: this.getAgentStatusSnapshotFn?.() ?? []

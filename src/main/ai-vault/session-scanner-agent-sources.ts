@@ -1,5 +1,6 @@
 import { homedir } from 'node:os'
 import { basename, dirname, extname, join, relative } from 'node:path'
+import { resolveAbsoluteDirOverride } from '../../shared/absolute-dir-override'
 import type { AiVaultAgent } from '../../shared/ai-vault-types'
 import type { AiVaultDeletableAgent } from '../../shared/ai-vault-session-deletion'
 import { resolveGrokSessionsDir } from '../../shared/grok-session-paths'
@@ -8,6 +9,7 @@ import {
   clineMessagesPathForMetadata,
   isClineSessionMetadataPath
 } from './session-scanner-cline-parser'
+import { cursorChatMetaPath } from './session-scanner-cursor-chat-meta'
 import { resolveKimiSessionsDir } from './session-scanner-kimi-paths'
 import { OMP_SESSION_ARTIFACT_DIR_PATTERN } from './session-scanner-omp-subagent-transcripts'
 import { claudeProjectsRootDirs, OMP_SESSIONS_DIR, sessionRootDirs } from './session-scanner-roots'
@@ -17,18 +19,21 @@ import { normalizeAgentSessionsDir, primeAgentSessionsDirFromEnv } from './sessi
 
 export const DEFAULT_CODEX_HOME_DIR = join(homedir(), '.codex')
 const CODEX_SESSIONS_DIR = join(
-  process.env.CODEX_HOME?.trim() || DEFAULT_CODEX_HOME_DIR,
+  resolveAbsoluteDirOverride(process.env.CODEX_HOME, DEFAULT_CODEX_HOME_DIR),
   'sessions'
 )
 const GEMINI_SESSIONS_DIR = join(homedir(), '.gemini', 'tmp')
 const COPILOT_SESSIONS_DIR = join(
-  process.env.COPILOT_HOME?.trim() || join(homedir(), '.copilot'),
+  resolveAbsoluteDirOverride(process.env.COPILOT_HOME, join(homedir(), '.copilot')),
   'session-state'
 )
 const CURSOR_PROJECTS_DIR = join(homedir(), '.cursor', 'projects')
 const HERMES_SESSIONS_DIR = join(homedir(), '.hermes', 'sessions')
 const ROVO_SESSIONS_DIR = join(homedir(), '.rovodev', 'sessions')
-const OPENCLAW_STATE_DIR = process.env.OPENCLAW_STATE_DIR?.trim() || join(homedir(), '.openclaw')
+const OPENCLAW_STATE_DIR = resolveAbsoluteDirOverride(
+  process.env.OPENCLAW_STATE_DIR,
+  join(homedir(), '.openclaw')
+)
 const PI_SESSIONS_DIR = normalizeAgentSessionsDir(
   process.env.PI_CODING_AGENT_DIR?.trim() || join(homedir(), '.pi', 'agent', 'sessions'),
   '.pi'
@@ -39,7 +44,10 @@ const PI_SESSIONS_DIR = normalizeAgentSessionsDir(
 const PRIME_AGENT_SESSIONS_DIR = primeAgentSessionsDirFromEnv()
 // Why: Devin ATIF transcripts are stored under <DEVIN_HOME>/transcripts.
 const DEVIN_TRANSCRIPTS_DIR = join(
-  process.env.DEVIN_HOME?.trim() || join(homedir(), '.local', 'share', 'devin', 'cli'),
+  resolveAbsoluteDirOverride(
+    process.env.DEVIN_HOME,
+    join(homedir(), '.local', 'share', 'devin', 'cli')
+  ),
   'transcripts'
 )
 const DROID_SESSIONS_DIR = join(homedir(), '.factory', 'sessions')
@@ -61,8 +69,9 @@ export type AiVaultAgentSource = {
   rootDirs: (options: AiVaultScanOptions, wslHomeDirs: readonly string[]) => string[]
   extensions: readonly string[]
   filePredicate?: (filePath: string) => boolean
-  // A sibling whose stat participates in candidate freshness and recency.
-  contentDependencyPath?: (filePath: string) => string
+  // A sibling whose stat participates in candidate freshness and recency; async
+  // for agents that have to look the sibling up rather than derive its path.
+  contentDependencyPath?: (filePath: string) => string | undefined | Promise<string | undefined>
   // Return false to skip a directory; depth 0 is a child of the root.
   directoryPredicate?: (name: string, depth: number) => boolean
   // Roots that are alternates for one install rather than distinct locations,
@@ -126,7 +135,8 @@ export const AI_VAULT_AGENT_SOURCES: AiVaultAgentSourceTable = {
         'projects'
       ]),
     extensions: ['.jsonl'],
-    filePredicate: (filePath) => pathSegments(filePath).includes('agent-transcripts')
+    filePredicate: (filePath) => pathSegments(filePath).includes('agent-transcripts'),
+    contentDependencyPath: cursorChatMetaPath
   },
   grok: {
     rootDirs: (options, wslHomeDirs) =>

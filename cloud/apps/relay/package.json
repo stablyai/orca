@@ -9,13 +9,14 @@
     "clean": "node -e \"require('fs').rmSync('dist', { recursive: true, force: true })\"",
     "dev": "tsx watch src/index.ts",
     "lint": "tsc -p tsconfig.json --noEmit",
-    "pretest": "pnpm --filter @orca-cloud/relay-contract build",
+    "pretest": "pnpm --filter @orca-cloud/postgres-schema build && pnpm --filter @orca-cloud/relay-contract build",
     "start": "node dist/index.js",
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
     "@hono/node-server": "^1.19.17",
+    "@orca-cloud/postgres-schema": "workspace:*",
     "@orca-cloud/relay-contract": "workspace:*",
     "hono": "^4.13.7",
     "jose": "^6.1.3",

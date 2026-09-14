@@ -10,6 +10,8 @@ const mocks = vi.hoisted(() => ({
 }))
 let fence = 3
 let sessionCommands: { name: string; kind: 'command' | 'skill' }[] | undefined
+let items: AgentJournalRenderItem[] = []
+let submissions: AgentJournalSubmission[] = []
 
 vi.mock('@/runtime/structured-agent-session-client', () => ({
   callStructuredAgentSession: mocks.call
@@ -24,8 +26,8 @@ vi.mock('./use-structured-agent-session-read', () => ({
     state: {
       fence,
       commands: sessionCommands,
-      items: [],
-      submissions: [],
+      items,
+      submissions,
       status: 'ready',
       error: null,
       hasOlder: false,
@@ -47,6 +49,10 @@ vi.mock('./use-structured-agent-session-outbox', () => ({
   })
 }))
 
+import type {
+  AgentJournalRenderItem,
+  AgentJournalSubmission
+} from '../../../../shared/agent-session-journal-types'
 import {
   applyNativeChatSessionOptionSettingsMutation,
   resolveStructuredLaunchSeedOptions
@@ -95,10 +101,88 @@ const OPTIONS = {
   current: { model: 'gpt-live', effort: 'medium' }
 }
 
+const FAST_OPTIONS = {
+  ...OPTIONS,
+  models: OPTIONS.models.map((model) => ({ ...model, supportsFastMode: true })),
+  fastModeSupport: { supported: true },
+  current: { ...OPTIONS.current, fastMode: false, confirmed: ['fastMode'] }
+}
+
+function deferred<T>() {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>((accept) => {
+    resolve = accept
+  })
+  return { promise, resolve }
+}
+
+describe('useStructuredAgentSession working state', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    fence = 3
+    items = []
+    submissions = []
+    mocks.call.mockResolvedValue(null)
+  })
+
+  it('reports work from an unanswered dispatch, and keeps the turn id provider-minted', () => {
+    submissions = [
+      {
+        clientMessageId: 'client-1',
+        fence: 3,
+        payloadFingerprint: 'fingerprint-1',
+        dispatchState: 'pending',
+        providerItemId: null,
+        reason: null,
+        submittedAt: 1,
+        resolvedAt: null
+      }
+    ]
+    const { result } = renderHook(() =>
+      useStructuredAgentSession({
+        sessionId: 'session-1',
+        agent: 'codex',
+        target: LOCAL_TARGET,
+        isVisible: true
+      })
+    )
+
+    expect(result.current.isWorking).toBe(true)
+    // Only the provider can mint a cancellable turn, so Stop stays unavailable here.
+    expect(result.current.turnId).toBeNull()
+  })
+
+  it('reports no work once the dispatch resolves and no turn is running', () => {
+    submissions = [
+      {
+        clientMessageId: 'client-1',
+        fence: 3,
+        payloadFingerprint: 'fingerprint-1',
+        dispatchState: 'accepted',
+        providerItemId: 'codex:thread-1:turn-1',
+        reason: null,
+        submittedAt: 1,
+        resolvedAt: 2
+      }
+    ]
+    const { result } = renderHook(() =>
+      useStructuredAgentSession({
+        sessionId: 'session-1',
+        agent: 'codex',
+        target: LOCAL_TARGET,
+        isVisible: true
+      })
+    )
+
+    expect(result.current.isWorking).toBe(false)
+  })
+})
+
 describe('useStructuredAgentSession options', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     fence = 3
+    submissions = []
     mocks.operationId
       .mockReset()
       .mockReturnValueOnce('operation-1')
@@ -109,18 +193,23 @@ describe('useStructuredAgentSession options', () => {
   })
 
   it('applies provider-reconciled values after a model change', async () => {
-    mocks.call.mockImplementation((_target, method) =>
-      method === 'agentSession.options'
-        ? Promise.resolve(OPTIONS)
-        : Promise.resolve({
-            ok: true,
-            value: {
-              key: 'model',
-              value: 'gpt-fast',
-              options: { model: 'gpt-fast', effort: 'low' }
-            }
-          })
-    )
+    let changed = false
+    mocks.call.mockImplementation((_target, method) => {
+      if (method === 'agentSession.options') {
+        return Promise.resolve(
+          changed ? { ...OPTIONS, current: { model: 'gpt-fast', effort: 'low' } } : OPTIONS
+        )
+      }
+      changed = true
+      return Promise.resolve({
+        ok: true,
+        value: {
+          key: 'model',
+          value: 'gpt-fast',
+          options: { model: 'gpt-fast', effort: 'low' }
+        }
+      })
+    })
     const { result } = renderHook(() =>
       useStructuredAgentSession({
         sessionId: 'session-1',
@@ -478,6 +567,227 @@ describe('useStructuredAgentSession options', () => {
 
     expect(mocks.enqueueSettingsWrite).not.toHaveBeenCalled()
   })
+
+  it('projects supported Fast off and hides the option when old hosts omit capability facts', async () => {
+    mocks.call.mockImplementation((_target, method) =>
+      Promise.resolve(method === 'agentSession.options' ? FAST_OPTIONS : null)
+    )
+    const supported = renderHook(() =>
+      useStructuredAgentSession({
+        sessionId: 'session-supported',
+        target: LOCAL_TARGET,
+        agent: 'codex',
+        isVisible: true
+      })
+    )
+    await waitFor(() =>
+      expect(
+        supported.result.current.optionSnapshot.find((entry) => entry.id === 'fastMode')?.kind
+      ).toMatchObject({ currentValue: false })
+    )
+    supported.unmount()
+
+    mocks.call.mockImplementation((_target, method) =>
+      Promise.resolve(method === 'agentSession.options' ? OPTIONS : null)
+    )
+    const legacy = renderHook(() =>
+      useStructuredAgentSession({
+        sessionId: 'session-legacy',
+        target: LOCAL_TARGET,
+        agent: 'codex',
+        isVisible: true
+      })
+    )
+    await waitFor(() => expect(legacy.result.current.optionSnapshot).toHaveLength(2))
+    expect(legacy.result.current.optionSnapshot.some((entry) => entry.id === 'fastMode')).toBe(
+      false
+    )
+  })
+
+  it('encodes Fast writes at the structured boundary and persists canonical booleans', async () => {
+    let fastMode = false
+    mocks.call.mockImplementation((_target, method) => {
+      if (method === 'agentSession.options') {
+        return Promise.resolve({
+          ...FAST_OPTIONS,
+          current: { ...FAST_OPTIONS.current, fastMode }
+        })
+      }
+      fastMode = true
+      return Promise.resolve({
+        ok: true,
+        value: {
+          key: 'fastMode',
+          value: 'true',
+          options: { model: 'gpt-live', effort: 'medium', fastMode: 'true' }
+        }
+      })
+    })
+    const { result } = renderHook(() =>
+      useStructuredAgentSession({
+        sessionId: 'session-1',
+        target: LOCAL_TARGET,
+        agent: 'codex',
+        isVisible: true
+      })
+    )
+    await waitFor(() => expect(result.current.optionSnapshot).toHaveLength(3))
+
+    await act(async () => {
+      expect(await result.current.setStructuredOption('fastMode', true)).toBe(true)
+    })
+
+    const mutation = mocks.call.mock.calls.find(([, method]) => method === 'agentSession.setOption')
+    expect(mutation?.[2]).toMatchObject({ key: 'fastMode', value: 'true' })
+    expect(
+      result.current.optionSnapshot.find((entry) => entry.id === 'fastMode')?.kind
+    ).toMatchObject({ currentValue: true })
+    expect(mocks.enqueueSettingsWrite).toHaveBeenCalledWith(LOCAL_TARGET, {
+      type: 'apply-picks',
+      agent: 'codex',
+      picks: [
+        { modelId: 'gpt-live', optionId: 'model', value: 'gpt-live' },
+        { modelId: 'gpt-live', optionId: 'effort', value: 'medium' },
+        { modelId: 'gpt-live', optionId: 'fastMode', value: true }
+      ]
+    })
+    expect(seededByNextLaunch()).toEqual({
+      model: 'gpt-live',
+      effort: 'medium',
+      fastMode: 'true'
+    })
+  })
+
+  it('discards an option read that began before a Fast mutation', async () => {
+    const staleRead = deferred<typeof FAST_OPTIONS>()
+    let optionReads = 0
+    mocks.call.mockImplementation((_target, method) => {
+      if (method === 'agentSession.options') {
+        optionReads += 1
+        if (optionReads === 1) {
+          return Promise.resolve(FAST_OPTIONS)
+        }
+        if (optionReads === 2) {
+          return staleRead.promise
+        }
+        return Promise.resolve({
+          ...FAST_OPTIONS,
+          current: { ...FAST_OPTIONS.current, fastMode: true }
+        })
+      }
+      return Promise.resolve({
+        ok: true,
+        value: {
+          key: 'fastMode',
+          value: 'true',
+          options: { model: 'gpt-live', effort: 'medium', fastMode: 'true' }
+        }
+      })
+    })
+    const { result, rerender } = renderHook(() =>
+      useStructuredAgentSession({
+        sessionId: 'session-1',
+        target: LOCAL_TARGET,
+        agent: 'codex',
+        isVisible: true
+      })
+    )
+    await waitFor(() => expect(result.current.optionSnapshot).toHaveLength(3))
+    items = [
+      {
+        itemId: 'turn-status',
+        revision: 0,
+        sequence: 1,
+        observedAt: 1,
+        body: {
+          kind: 'status',
+          text: 'Working',
+          turnLifecycle: { turnId: 'turn-1', state: 'running', startedAt: 1 }
+        }
+      }
+    ]
+    rerender()
+    await waitFor(() => expect(optionReads).toBe(2))
+
+    await act(async () => {
+      expect(await result.current.setStructuredOption('fastMode', true)).toBe(true)
+    })
+    await act(async () => {
+      staleRead.resolve(FAST_OPTIONS)
+      await staleRead.promise
+    })
+
+    expect(
+      result.current.optionSnapshot.find((entry) => entry.id === 'fastMode')?.kind
+    ).toMatchObject({ currentValue: true })
+  })
+})
+
+describe('turn timing', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    items = []
+    mocks.call.mockImplementation((_target, method) =>
+      method === 'agentSession.options' ? Promise.resolve(OPTIONS) : Promise.resolve(null)
+    )
+  })
+
+  it('exposes host-settled durations and a skew-free live anchor', () => {
+    vi.useFakeTimers()
+    try {
+      vi.setSystemTime(50_000)
+      const item = (
+        itemId: string,
+        observedAt: number,
+        body: AgentJournalRenderItem['body']
+      ): AgentJournalRenderItem => ({ itemId, revision: 0, sequence: observedAt, observedAt, body })
+      const user: AgentJournalRenderItem['body'] = {
+        kind: 'message',
+        role: 'user',
+        blocks: [{ type: 'text', text: 'go' }]
+      }
+      items = [
+        item('u1', 9_000_000, user),
+        item('l1', 9_000_100, {
+          kind: 'status',
+          text: 'Done',
+          turnLifecycle: {
+            turnId: 't1',
+            state: 'completed',
+            startedAt: 9_000_000,
+            completedAt: 9_004_000
+          }
+        }),
+        item('u2', 9_010_000, user),
+        item('l2', 9_010_300, {
+          kind: 'status',
+          text: 'Working',
+          turnLifecycle: { turnId: 't2', state: 'running', startedAt: 9_010_000 }
+        })
+      ]
+      const { result, rerender } = renderHook(() =>
+        useStructuredAgentSession({
+          sessionId: 'session-1',
+          target: LOCAL_TARGET,
+          agent: 'codex',
+          isVisible: true
+        })
+      )
+      expect(result.current.isWorking).toBe(true)
+      expect(result.current.workingStartedAt).toBe(50_000 - 300)
+      // t2 is still running, so the host has no duration for it: an explicit null
+      // that outranks whatever this client clocked locally.
+      expect([...result.current.settledTurns]).toEqual([
+        ['u1', { startedAt: 9_000_000, workedSeconds: 4 }],
+        ['u2', null]
+      ])
+      vi.setSystemTime(80_000)
+      rerender()
+      expect(result.current.workingStartedAt).toBe(50_000 - 300)
+    } finally {
+      vi.useRealTimers()
+    }
+  })
 })
 
 describe('session command catalog stream', () => {
@@ -521,5 +831,36 @@ describe('session command catalog stream', () => {
     expect(
       mocks.call.mock.calls.filter(([, method]) => method === 'agentSession.commands')
     ).toHaveLength(0)
+  })
+})
+
+describe('structured option surface snapshot identity', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    fence = 3
+    items = []
+    submissions = []
+    mocks.call.mockResolvedValue(null)
+  })
+
+  /** `SessionOptionsSurface` is read through `useSyncExternalStore` by the sibling
+   *  PTY surface, whose contract is a cached snapshot: an uncached `getSnapshot`
+   *  returns a new array per call and never quiesces. */
+  it('returns the same snapshot instance for repeated reads at one state', async () => {
+    mocks.call.mockResolvedValue(FAST_OPTIONS)
+    const { result } = renderHook(() =>
+      useStructuredAgentSession({
+        sessionId: 'session-1',
+        agent: 'codex',
+        target: LOCAL_TARGET,
+        isVisible: true
+      })
+    )
+    await waitFor(() =>
+      expect(result.current.optionSurface.getSnapshot().length).toBeGreaterThan(0)
+    )
+    expect(result.current.optionSurface.getSnapshot()).toBe(
+      result.current.optionSurface.getSnapshot()
+    )
   })
 })

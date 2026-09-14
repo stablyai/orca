@@ -1,0 +1,89 @@
+{
+  "operation": "source-control.hosted-review-create",
+  "family": "hostedReview.create-chain",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "16d1ab81d3fd08e342b2f0ac0cc6f9e4aea4aaee",
+  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
+  "recorderSha256": "6a12160a87ceab04e74198f6dd35b8cf9125794222ee95cf6ca1872f29849960",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 3,
+  "values": {
+    "1617f98dc371": {
+      "name": "hostedReview.create#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"hostedReview.create\",\"params\":{\"repo\":\"id:repo42\",\"worktree\":\"id:repo42::/p\",\"provider\":\"github\",\"base\":\"main\",\"head\":\"feature\",\"title\":\"Recorded title\",\"body\":\"Recorded body\",\"draft\":false}}"
+    },
+    "3c6a5a164e8a": {
+      "outcome": {
+        "error": "",
+        "ok": false
+      }
+    },
+    "401c5b683797": {
+      "name": "hostedReview.create#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "hostedReview.create"
+        },
+        {
+          "name": "params",
+          "value": {
+            "base": "main",
+            "body": "Recorded body",
+            "draft": false,
+            "head": "feature",
+            "provider": "github",
+            "repo": "id:repo42",
+            "title": "Recorded title",
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "fb4429083480": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "error": "",
+        "ok": false
+      }
+    }
+  },
+  "recording": {
+    "scenario": "sc-create-rejected-empty-message",
+    "checkpoints": [
+      {
+        "id": "settled",
+        "observation": {
+          "sender": ["401c5b683797"],
+          "payloads": ["1617f98dc371"],
+          "settlements": {
+            "create": "fb4429083480"
+          },
+          "state": "3c6a5a164e8a",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

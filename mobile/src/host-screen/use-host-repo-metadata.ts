@@ -1,8 +1,9 @@
+import { optionalSettingsRead } from '../transport/settings-read-operations'
 import { useCallback } from 'react'
 import { getRepoExecutionHostId } from '../../../src/shared/execution-host'
 import { setCachedRepos } from '../cache/repo-cache'
 import type { RpcClient } from '../transport/rpc-client'
-import type { ConnectionState, RpcSuccess } from '../transport/types'
+import type { ConnectionState, RpcResponse, RpcSuccess } from '../transport/types'
 import type { RepoSummary } from '../worktree/host-worktree-rpc-types'
 import { repoColor } from '../worktree/repo-color'
 import {
@@ -15,10 +16,12 @@ const REPO_METADATA_REFRESH_MS = 60_000
 
 type SshTargetSummaryRow = { id: string; label: string }
 
-async function requestResult(client: RpcClient, method: string): Promise<unknown> {
+async function requestMetadataResponse(
+  client: RpcClient,
+  method: 'repo.list' | 'ssh.listTargetSummaries' | 'host.platform'
+): Promise<RpcResponse | null> {
   try {
-    const response = await client.sendRequest(method)
-    return response.ok ? (response as RpcSuccess).result : null
+    return await client.sendRequest(method)
   } catch {
     // Best-effort: hosts that predate a method still list repos; labels degrade to host ids.
     return null
@@ -45,8 +48,8 @@ function readHostPlatform(result: unknown): NodeJS.Platform | null {
 }
 
 function readHostSettingOverrides(result: unknown): unknown {
-  return (result as { settings?: { hostSettingOverrides?: unknown } } | null)?.settings
-    ?.hostSettingOverrides
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
+  return (result as { hostSettingOverrides?: unknown } | null)?.hostSettingOverrides
 }
 
 export function useHostRepoMetadata(args: {
@@ -90,8 +93,12 @@ export function useHostRepoMetadata(args: {
       try {
         do {
           fetchRepoMetadataPendingRef.current.delete(requestClient)
-          const repoResponse = await requestClient.sendRequest('repo.list')
-          if (clientRef.current !== requestClient || hostId !== requestHostId || !repoResponse.ok) {
+          const repoResponse = await requestMetadataResponse(requestClient, 'repo.list')
+          if (
+            clientRef.current !== requestClient ||
+            hostId !== requestHostId ||
+            !repoResponse?.ok
+          ) {
             return
           }
           const repoResult = (repoResponse as RpcSuccess).result as { repos: RepoSummary[] }
@@ -120,20 +127,25 @@ export function useHostRepoMetadata(args: {
           const hostIds = new Set(repoResult.repos.map((repo) => getRepoExecutionHostId(repo)))
           if (hostIds.size > 1) {
             const [sshTargets, hostSettings, hostPlatform] = await Promise.all([
-              requestResult(requestClient, 'ssh.listTargetSummaries'),
-              requestResult(requestClient, 'settings.get'),
-              requestResult(requestClient, 'host.platform')
+              requestMetadataResponse(requestClient, 'ssh.listTargetSummaries'),
+              optionalSettingsRead.request(requestClient).catch(() => null),
+              requestMetadataResponse(requestClient, 'host.platform')
             ])
             if (clientRef.current !== requestClient || hostId !== requestHostId) {
               return
             }
+            const hostSettingsResult = hostSettings
+              ? optionalSettingsRead.interpret(hostSettings)
+              : null
             setHostLabelById(
               buildHostLabelById({
-                sshTargets: readSshTargets(sshTargets),
-                hostSettingOverrides: readHostSettingOverrides(hostSettings)
+                sshTargets: readSshTargets(sshTargets?.ok ? sshTargets.result : null),
+                hostSettingOverrides: readHostSettingOverrides(
+                  hostSettingsResult?.accepted ? hostSettingsResult.value : undefined
+                )
               })
             )
-            setHostPlatform(readHostPlatform(hostPlatform))
+            setHostPlatform(readHostPlatform(hostPlatform?.ok ? hostPlatform.result : null))
           }
         } while (fetchRepoMetadataPendingRef.current.has(requestClient))
       } catch {

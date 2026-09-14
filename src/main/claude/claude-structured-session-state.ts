@@ -12,7 +12,10 @@ import type { ClaudeJournalTranslator } from './claude-structured-journal-transl
 import type { ClaudePendingPrompt, ClaudePromptRegistry } from './claude-structured-prompt-replies'
 import { cancelProcessAcquisition } from '../../shared/child-process/cancel-process-acquisition'
 import { randomUUID } from 'node:crypto'
-import type { AgentSessionBackgroundTaskState } from '../../shared/agent-session-wire'
+import type {
+  AgentSessionBackgroundTaskState,
+  AgentSessionFastModeState
+} from '../../shared/agent-session-wire'
 import type { ClaudeBackgroundTaskTracker } from './claude-background-task-tracker'
 import type { ClaudeSlashCommandCatalog } from './claude-slash-command-catalog'
 
@@ -31,6 +34,8 @@ export type ClaudeStructuredSessionEvent =
       message: Record<string, unknown>
       /** Present only when this replay acknowledged Orca's in-flight dispatch. */
       startsTurn?: true
+      /** Host clock at receipt; stamped on turn boundaries only. */
+      observedAt?: number
     }
   | { type: 'provider-frame'; sessionId: string; kind: string; payload: unknown }
   | { type: 'prompt'; sessionId: string; prompt: ClaudePendingPrompt }
@@ -53,6 +58,8 @@ export type ClaudeStructuredSessionEvent =
       fence?: number
       acquisitionGeneration?: string
       settlementRetryRequired?: boolean
+      /** Host clock when the end was observed. */
+      observedAt?: number
     }
 
 export type ClaudeStructuredSessionAdapterDeps = {
@@ -60,7 +67,7 @@ export type ClaudeStructuredSessionAdapterDeps = {
     identity: AgentSessionJournalIdentity
   }) => Promise<ClaudeStructuredLaunch>
   onEvent?: (event: ClaudeStructuredSessionEvent) => void
-  /** A dispatch whose ack timed out, proven delivered by a later provider replay. */
+  /** Direct settlement path for a provider replay; its durable item row also reconciles delivery. */
   onDispatchSettledLate?: (input: {
     sessionId: string
     clientMessageId: string
@@ -77,7 +84,6 @@ export type ClaudeStructuredSessionAdapterDeps = {
   now?: () => number
   requestTimeoutMs?: number
   initTimeoutMs?: number
-  dispatchAckTimeoutMs?: number
   persistHandle?: (input: {
     sessionId: string
     providerSessionId: string
@@ -96,18 +102,16 @@ export type ClaudeStructuredSessionAdapterDeps = {
 
 export type ClaudeDispatchWaiter = {
   resolve: (uuid: string | null) => void
-  timer: ReturnType<typeof setTimeout>
   acceptsResult: boolean
-  /** Carried so a replay that lands after the ack window can settle the journal
-   *  submission this dispatch came from, not just the in-memory turn identity. */
-  clientMessageId: string
+  /** Submission settled by the replay, or null for provider-control turns. */
+  clientMessageId: string | null
   /** Client uuid echoed by Claude so a replay is tied to its own dispatch. */
   sentUuid: string
   /** Sequence used to fence a late identity from a newer dispatch. */
   dispatchSequence: number
   /** Set when the provider replay settled this waiter before send returned. */
   settledUuid?: string
-  /** The waiter timed out or its write failed, but its replay may still arrive. */
+  /** The write failed or the child died, but a replay may still name it. */
   retired?: boolean
   /** Bounded digest/summary for compatibility CLIs that mint UUIDs. */
   replayContentKey: string
@@ -123,12 +127,15 @@ export type ClaudeSession = {
   acquisitionGeneration: string
   prompts: ClaudePromptRegistry
   dispatchWaiters: ClaudeDispatchWaiter[]
-  /** Bounded identities for dispatches whose ack was unknown when they returned. */
+  /** Bounded identities for dispatches whose child died or whose write failed. */
   retiredDispatchWaiters: ClaudeDispatchWaiter[]
   /** Once a retired waiter is evicted, legacy content-only replay matching is unsafe. */
   replayContentFallbackBlocked: boolean
   options: Map<string, string>
-  reportedOptions: { model?: string; effort?: string }
+  reportedOptions: { model?: string; effort?: string; fastMode?: boolean }
+  fastModeState?: AgentSessionFastModeState
+  fastModeDisabledReason?: string
+  fastModePerSessionOptIn?: boolean
   /** `optionMutationSequence` when `reportedOptions.model` was last observed, so a
    *  write still awaiting its first turn outranks the report it will replace. */
   reportedModelMutation: number

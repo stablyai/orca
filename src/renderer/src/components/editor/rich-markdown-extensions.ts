@@ -37,6 +37,7 @@ import type { RichMarkdownEditorCodec } from './rich-markdown-source-transport'
 import { createRichMarkdownHtmlSuperscriptLink } from './rich-markdown-html-superscript-link'
 import type { RichMarkdownHtmlSuperscriptLinkContext } from './rich-markdown-html-superscript-link-context'
 import { RichMarkdownOrderedList } from './rich-markdown-ordered-list'
+import { RichMarkdownParagraph } from './rich-markdown-paragraph'
 import { RichMarkdownCodeBlockLowlight } from './rich-markdown-lowlight'
 import { RichMarkdownTaskList } from './rich-markdown-task-list'
 import { createCachedLowlight } from './rich-markdown-lowlight-cache'
@@ -77,8 +78,10 @@ export function createRichMarkdownExtensions({
       link: false,
       code: false,
       codeBlock: false,
-      orderedList: false
+      orderedList: false,
+      paragraph: false
     }),
+    RichMarkdownParagraph,
     RichMarkdownCode,
     RichMarkdownCodeBlockLowlight.extend({
       addNodeView() {
@@ -116,8 +119,12 @@ export function createRichMarkdownExtensions({
           // native image drag (which sends image bytes) from conflicting with
           // ProseMirror's node-level drag (which serializes the schema node
           // for relocation within the document).
-          const dom = document.createElement('div')
+          const dom = document.createElement('span')
+          // Why: the wrapper sits in inline content, so it must not introduce a
+          // block box or the surrounding text would break onto its own line.
+          dom.style.display = 'inline-block'
           dom.style.lineHeight = '0'
+          dom.style.maxWidth = '100%'
 
           const img = document.createElement('img')
           img.draggable = false
@@ -205,7 +212,11 @@ export function createRichMarkdownExtensions({
         }
       }
     }).configure({
-      allowBase64: true
+      allowBase64: true,
+      // Why: the markdown parser nests images inside paragraphs, so a block image
+      // node yields a schema-invalid document that only throws on the first edit
+      // that reassembles the paragraph.
+      inline: true
     }),
     RichMarkdownOrderedList,
     RichMarkdownTaskList,

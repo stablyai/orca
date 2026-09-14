@@ -1,3 +1,4 @@
+import { settingsRead } from '../transport/settings-read-operations'
 import type { WorkspaceSshStateModel } from './use-mobile-tasks-workspace-ssh-state'
 import {
   WORKTREE_CREATE_TIMEOUT_MS,
@@ -72,11 +73,11 @@ export function useMobileTasksWorkspaceCreateActions(model: WorkspaceSshStateMod
         await ensureWorkspaceSshReady(targetRepo)
         let latestRuntimeTaskSettings = runtimeTaskSettings
         try {
-          const settingsResponse = await client.sendRequest('settings.get')
-          if (isSuccess(settingsResponse)) {
-            latestRuntimeTaskSettings = ((
-              settingsResponse.result as { settings?: RuntimeTaskSettings }
-            ).settings ?? {}) as RuntimeTaskSettings
+          const settingsReply = await settingsRead.request(client)
+          const settingsResult = settingsRead.interpret(settingsReply)
+          if (settingsResult.accepted) {
+            // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
+            latestRuntimeTaskSettings = (settingsResult.value ?? {}) as RuntimeTaskSettings
             setRuntimeTaskSettings(latestRuntimeTaskSettings)
           }
         } catch {

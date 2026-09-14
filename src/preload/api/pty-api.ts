@@ -4,7 +4,7 @@ import type {
 } from '../../shared/agent-session-resume'
 import type { StartupCommandDelivery } from '../../shared/codex-startup-delivery'
 import type { ProjectExecutionRuntimeResolution } from '../../shared/project-execution-runtime'
-import type { PtyListedSession } from '../../shared/pty-listed-session'
+import type { PtyListedSession, PtySessionListScope } from '../../shared/pty-listed-session'
 import type { PtyMainDeliveryDiagnostics } from '../../shared/pty-delivery-diagnostics'
 import type { PtyModelRestoreNeededEvent } from '../../shared/pty-model-restore-marker'
 import type {
@@ -123,7 +123,7 @@ export type PtyApi = {
   confirmForegroundProcess: (id: string) => Promise<string | null>
   getCwd: (id: string) => Promise<string>
   getSize: (id: string) => Promise<{ cols: number; rows: number } | null>
-  listSessions: () => Promise<PtyListedSession[]>
+  listSessions: (scope?: PtySessionListScope) => Promise<PtyListedSession[]>
   getAuthoritativeBufferSnapshotCapabilities?: (
     ids: string[]
   ) => Promise<{ id: string; authoritative: boolean | null }[]>

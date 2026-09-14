@@ -32,6 +32,7 @@ import {
 } from './claude-structured-session-close'
 import { readClaudeTranscriptLeafWithReproof } from './claude-transcript-branch-proof'
 import type { AgentSessionBackgroundTaskState } from '../../shared/agent-session-wire'
+import { resolveClaudeProviderHistoryWindow } from './claude-structured-history-window'
 
 export type { ClaudeStructuredLaunch } from './claude-structured-launch-resolution'
 export type {
@@ -39,8 +40,6 @@ export type {
   ClaudeStructuredSessionAdapterDeps,
   ClaudeStructuredSessionEvent
 } from './claude-structured-session-state'
-
-const DISPATCH_ACK_TIMEOUT_MS = 10_000
 
 function backgroundTaskState(session: ClaudeSession): AgentSessionBackgroundTaskState | null {
   const state = session.backgroundTasks.state
@@ -154,7 +153,8 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
         reason: exit.error.message,
         cause: 'unexpected-exit',
         fence: exit.session.fence,
-        acquisitionGeneration: exit.session.acquisitionGeneration
+        acquisitionGeneration: exit.session.acquisitionGeneration,
+        observedAt: this.deps.now?.() ?? Date.now()
       }
       try {
         this.emit(exit.session, ended)
@@ -164,6 +164,17 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
     })()
     return exit.settlementPromise
   }
+
+  /** Restart reconciliation reads the transcript a resume replays; these maps track liveness. */
+  providerHistoryWindow: NonNullable<StructuredAgentSessionAdapter['providerHistoryWindow']> = (
+    input
+  ) =>
+    resolveClaudeProviderHistoryWindow({
+      identity: input.identity,
+      accountHomePath: input.accountHome.path,
+      hasLiveSession:
+        this.sessions.has(input.identity.sessionId) || this.exits.has(input.identity.sessionId)
+    })
 
   private async persistSessionHandle(sessionId: string, session: ClaudeSession): Promise<void> {
     try {
@@ -219,19 +230,10 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
   }
 
   dispatch: StructuredAgentSessionAdapter['dispatch'] = (input) =>
-    dispatchClaudeTurn(
-      this.session(input.sessionId),
-      input,
-      this.deps.dispatchAckTimeoutMs ?? DISPATCH_ACK_TIMEOUT_MS
-    )
+    dispatchClaudeTurn(this.session(input.sessionId), input)
 
   compact: NonNullable<StructuredAgentSessionAdapter['compact']> = (input) =>
-    compactClaudeSession(
-      this.session(input.sessionId),
-      this.compactions,
-      input,
-      this.deps.dispatchAckTimeoutMs ?? DISPATCH_ACK_TIMEOUT_MS
-    )
+    compactClaudeSession(this.session(input.sessionId), this.compactions, input)
 
   cancelTurn: StructuredAgentSessionAdapter['cancelTurn'] = (input) => {
     const session = this.session(input.sessionId)

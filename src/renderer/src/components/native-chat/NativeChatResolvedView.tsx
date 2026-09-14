@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useNativeChatComposerRevealFocus } from './use-native-chat-composer-reveal-focus'
 import { useAppStore } from '../../store'
 import { useNativeChatLaunchDraftSignal } from './use-native-chat-launch-draft-adoption'
 import { useNativeChatRetainedSession } from './use-native-chat-retained-session'
@@ -63,6 +64,7 @@ export function NativeChatResolvedView({
   sessionId,
   transcriptPath,
   isVisible,
+  isFocusedGroup,
   targetPtyId,
   terminalTabId,
   ownsTabWideLaunchDraft,
@@ -130,6 +132,13 @@ export function NativeChatResolvedView({
     rootRef,
     composerRef,
     questionAnswerInputRef
+  })
+  useNativeChatComposerRevealFocus({
+    rootRef,
+    composerRef,
+    isVisible,
+    isFocusedGroup,
+    composerReady: !questionActive && targetPtyId !== null && canSend
   })
   const contextMenu = useNativeChatContextMenu({
     rootRef,

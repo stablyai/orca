@@ -1,3 +1,4 @@
+import { settingsRead } from '../transport/settings-read-operations'
 import { useEffect, useState } from 'react'
 import type { PersistedTrustedOrcaHooks } from '../../../src/shared/orca-yaml-hook-types'
 import type { RpcClient } from '../transport/rpc-client'
@@ -39,20 +40,18 @@ export function useNewWorkspaceRuntimeContext(
         client.sendRequest('linear.status')
       ])
       const [settingsRes, uiRes] = await Promise.allSettled([
-        client.sendRequest('settings.get'),
+        settingsRead.request(client),
         client.sendRequest('ui.get')
       ])
       if (stale) {
         return
       }
 
-      const settingsResult = settledSuccess(settingsRes)
-      const settingsValue = settingsResult
-        ? (
-            settingsResult.result as {
-              settings: NewWorktreeRuntimeSettings & { visibleTaskProviders?: unknown }
-            }
-          ).settings
+      const settingsResult =
+        settingsRes.status === 'fulfilled' ? settingsRead.interpret(settingsRes.value) : null
+      const settingsValue = settingsResult?.accepted
+        ? // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
+          (settingsResult.value as NewWorktreeRuntimeSettings & { visibleTaskProviders?: unknown })
         : null
       if (settingsValue) {
         setRuntimeSettings(settingsValue)

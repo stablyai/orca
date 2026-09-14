@@ -109,9 +109,13 @@ export function settleWorkerReportInTransaction(
     (dispatch.status === 'pending' || dispatch.status === 'dispatched') &&
     task.status === 'blocked' &&
     reportingWorker?.state === 'start_unknown'
+  const reportingStart =
+    dispatch.status === 'pending' &&
+    task.status === 'dispatched' &&
+    reportingWorker?.state === 'starting'
   const previousDispatchStatus = settledByUnobservedPrompt
     ? 'failed'
-    : reconnectingStart
+    : reconnectingStart || reportingStart
       ? dispatch.status
       : 'dispatched'
   const previousTaskStatus = settledByUnobservedPrompt
@@ -198,7 +202,7 @@ export function settleWorkerReportInTransaction(
     const dispatchTransition = transitionLifecycleWithDb(this.db, {
       entity: 'dispatch',
       id: params.dispatchId,
-      from: reconnectingStart ? ['pending', 'dispatched'] : 'dispatched',
+      from: reconnectingStart || reportingStart ? ['pending', 'dispatched'] : 'dispatched',
       to: expectedDispatchStatus,
       projection: {
         completed_at: new Date().toISOString(),
@@ -234,11 +238,11 @@ export function settleWorkerReportInTransaction(
       projection: { stage: 'settled', updated_at: new Date().toISOString() },
       correction: 'unobserved_prompt_report'
     })
-  } else if (reconnectingStart && params.outcome === 'succeeded') {
+  } else if ((reconnectingStart || reportingStart) && params.outcome === 'succeeded') {
     transitionLifecycleWithDb(this.db, {
       entity: 'worker',
       id: params.dispatchId,
-      from: 'start_unknown',
+      from: reportingStart ? 'starting' : 'start_unknown',
       to: 'ready'
     })
     transitionLifecycleWithDb(this.db, {
@@ -253,7 +257,7 @@ export function settleWorkerReportInTransaction(
       entity: 'worker',
       id: params.dispatchId,
       // A start_unknown success report reconnects through 'ready' above; only failure settles here.
-      from: params.outcome === 'succeeded' ? 'ready' : ['ready', 'start_unknown'],
+      from: params.outcome === 'succeeded' ? 'ready' : ['ready', 'start_unknown', 'starting'],
       to: params.outcome === 'succeeded' ? 'succeeded' : 'failed',
       projection: { stage: 'settled', updated_at: new Date().toISOString() }
     })

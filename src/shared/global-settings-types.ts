@@ -183,6 +183,8 @@ export type GlobalSettings = {
   terminalFocusFollowsMouse: boolean
   /** X11/gnome-terminal "copy on select": selecting text auto-copies to the clipboard; default off. */
   terminalClipboardOnSelect: boolean
+  /** Drops the left gutter agent CLIs paint their output behind when copying a terminal selection; default on. */
+  terminalCopyTrimsGutter: boolean
   /** Enables OSC 52 clipboard writes for TUIs (tmux/Zellij/nvim, incl. over SSH); default on. Clipboard *queries* stay blocked and payload size is capped, so this is write-only exposure. */
   terminalAllowOsc52Clipboard: boolean
   /** One-shot stamp: profiles saved under the old off default get flipped on once, after which an explicit opt-out sticks. */

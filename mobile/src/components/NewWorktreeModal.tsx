@@ -55,8 +55,16 @@ export function NewWorktreeModal(props: NewWorktreeModalProps) {
 }
 
 function NewWorktreeModalContent(props: NewWorktreeModalProps) {
-  const { visible, client, hostId, existingWorktreePaths, existingWorktrees, onCreated, onClose } =
-    props
+  const {
+    visible,
+    client,
+    hostId,
+    existingWorktreePaths,
+    existingWorktrees,
+    openExternalUrl,
+    onCreated,
+    onClose
+  } = props
   const { repos, selectedRepo, setSelectedRepo, loading } = useNewWorkspaceRepositories({
     client,
     hostId,
@@ -217,6 +225,7 @@ function NewWorktreeModalContent(props: NewWorktreeModalProps) {
         creating={createSubmit.creating}
         canCreate={canCreate}
         onClose={onClose}
+        onOpenExternalUrl={openExternalUrl}
         onOpenProject={() => openPicker('project')}
         onOpenRunTarget={() => openPicker('runTarget')}
         onOpenSource={navigation.openSourceDrawer}

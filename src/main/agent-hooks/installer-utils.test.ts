@@ -36,6 +36,7 @@ import {
   WINDOWS_POWERSHELL_HOOK_ENVIRONMENT_GUARD
 } from './hook-stdin-contract'
 import { wrapRuntimeHomeHookCommand } from './runtime-home-hook-command'
+import { findBareHookCommandVariables } from './managed-hook-command-env.test-fixture'
 
 let tmpDir: string
 let configPath: string
@@ -765,8 +766,7 @@ describe('wrapRuntimeHomeHookCommand', () => {
       const command = wrapRuntimeHomeHookCommand('claude-hook', options)
 
       expect(command).toContain('"${SYSTEMROOT-}/System32/WindowsPowerShell/v1.0/powershell.exe"')
-      expect(command).not.toMatch(/\$(?!\{)[A-Za-z_]/)
-      expect(command).not.toMatch(/\$\{[A-Za-z_][A-Za-z0-9_]*\}/)
+      expect(findBareHookCommandVariables(command)).toEqual([])
     }
   )
 

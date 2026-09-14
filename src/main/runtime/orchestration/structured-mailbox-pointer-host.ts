@@ -33,10 +33,10 @@ export function structuredSessionPointerCallerKey(sessionId: string): string {
 /**
  * The idle gate for a structured session, read off its FULL reduced timeline.
  *
- * Never a bounded page. Settlement tombstones the running turn's lifecycle item rather than
- * rewriting it to `completed`, so on any tail window an idle session and a busy one whose
- * lifecycle item scrolled off look identical — and idle-with-history is the normal steady state of
- * a working agent. Shared so the pointer lane and group addressing cannot disagree about it.
+ * Never a bounded page. A settled turn's lifecycle item is revised in place, so on any tail window
+ * an idle session and a busy one whose lifecycle item scrolled off look identical — and
+ * idle-with-history is the normal steady state of a working agent. Shared so the pointer lane and
+ * group addressing cannot disagree about it.
  */
 export function readStructuredSessionGateFacts(
   sessionId: string
@@ -86,9 +86,7 @@ export function createStructuredMailboxPointerHost(): StructuredMailboxPointerHo
             expectedRuntimeFence: input.expectedRuntimeFence,
             payloadFingerprint: input.payloadFingerprint
           },
-          body: input.body,
-          // The recorded unknown is the only thing that unlocks a redispatch of the same id.
-          retryUnknown: true
+          body: input.body
         }
       )
       if (!result.ok) {

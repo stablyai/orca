@@ -82,6 +82,8 @@ export type StructuredAgentSessionRuntimeDeps = {
   /** Every structured-session status projection, for host-side reactions such as the first-work
    *  workspace rename that CLI agents get from their hooks. */
   onSessionStatusChanged?: StructuredAgentSessionHostDeps['onSessionStatusChanged']
+  /** The agent-status store; see `StructuredAgentSessionHostDeps.statusSink`. */
+  statusSink?: StructuredAgentSessionHostDeps['statusSink']
   handoffTransport?: StructuredAgentSessionHandoffTransport
   reapOrphanChildren?: typeof stopOrphanAgentSessionChildren
 }
@@ -169,13 +171,41 @@ async function tearDownRuntime(installed: InstalledRuntime): Promise<void> {
   // Drain an in-flight recovery before stopping children; recovery may still
   // be writing lifecycle rows or acquiring a replacement child.
   await installed.waitForRecovery()
+  const failures: unknown[] = []
+  // Host teardown runs FIRST, which inverts the older order. It is what stops this host's
+  // provider children now: it evicts each owned session through the adapter, and that eviction
+  // only releases the lease once `disposeSession` PROVES the child gone. Closing the adapter
+  // first would hand every one of those steps a vacuous receipt from an already-closed router,
+  // and would race the attach drain the host runs in the same teardown.
+  //
+  // Tail rows are protected by eviction's own per-session ordering — stop the child, drain what
+  // it already published, settle, then unbind the sink — not by which of the two teardowns runs
+  // first. `closeAll` is only a backstop for children eviction never took: an acquisition that
+  // failed before the host indexed it, or a session whose eviction was refused and left indexed.
+  // A row a child delivers during that backstop close is not captured, and was not captured
+  // under the old order either. The drain below keeps a late callback from outliving the runtime.
   try {
-    await installed.adapter.closeAll()
-  } finally {
-    // closeAll can itself deliver a final exit callback; observe that callback
-    // before flushing and releasing the host's journal resources.
-    await installed.waitForRecovery()
     await installed.host.flushAllStreamedEvents()
+  } catch (error) {
+    failures.push(error)
+  }
+  try {
+    // Backstop for children eviction never took: unindexed acquisitions and refused evictions.
+    await installed.adapter.closeAll()
+  } catch (error) {
+    failures.push(error)
+  }
+  // A backstop close can still deliver a final exit callback.
+  try {
+    await installed.waitForRecovery()
+  } catch (error) {
+    failures.push(error)
+  }
+  if (failures.length === 1) {
+    throw failures[0]
+  }
+  if (failures.length > 1) {
+    throw new AggregateError(failures, 'structured agent-session runtime teardown failed')
   }
 }
 
@@ -225,6 +255,8 @@ async function install(deps: StructuredAgentSessionRuntimeDeps): Promise<Install
       }),
       ...(deps.openCodexConnection ? { openConnection: deps.openCodexConnection } : {}),
       ...(deps.readProcessStartTime ? { readProcessStartTime: deps.readProcessStartTime } : {}),
+      onBackgroundTasksChanged: (sessionId, state) =>
+        host?.publishBackgroundTaskState(sessionId, state),
       onEvent: (event) => {
         if (event.type !== 'ended' || !('cause' in event) || event.cause !== 'unexpected-exit') {
           return
@@ -298,6 +330,7 @@ async function install(deps: StructuredAgentSessionRuntimeDeps): Promise<Install
       ...(deps.onSessionStatusChanged
         ? { onSessionStatusChanged: deps.onSessionStatusChanged }
         : {}),
+      ...(deps.statusSink ? { statusSink: deps.statusSink } : {}),
       persistTuiProviderHandle: async ({ sessionId, link, now }) => {
         await store.transitionHandoff(sessionId, (record) =>
           recordAgentSessionProviderHandle({ record, fence: record.lease.runtimeFence, link, now })

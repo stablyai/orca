@@ -55,7 +55,7 @@ async function flush(): Promise<void> {
 // cutover). Records every call so tests can assert on the clientMutationId.
 function scriptedClient(
   outcomes: Array<
-    | { id: string; displayName?: string }
+    | { id: string; displayName?: string; warning?: string }
     | { errorMessage: string }
     // takesMs models how long the ambiguity took to SURFACE — a clean close is
     // instant, a half-open socket waits out the liveness watchdog or the timeout.
@@ -107,7 +107,8 @@ function scriptedClient(
           worktree: {
             id: outcome.id,
             ...(outcome.displayName !== undefined ? { displayName: outcome.displayName } : {})
-          }
+          },
+          ...(outcome.warning !== undefined ? { warning: outcome.warning } : {})
         },
         _meta: { runtimeId: 'r' }
       }
@@ -116,6 +117,41 @@ function scriptedClient(
 }
 
 describe('createWorktreeWithNameRetry', () => {
+  // Why: `worktree.create` succeeds even when the startup terminal failed to spawn (pty
+  // exhaustion), and `warning` is the only place the host says so.
+  it('returns the host create warning alongside the worktree', async () => {
+    const attempts: Attempt[] = []
+    const client = scriptedClient(
+      [{ id: 'wt-warned', warning: 'Failed to create the startup terminal for /w: no pty' }],
+      attempts
+    )
+    await expect(
+      createWorktreeWithNameRetry({
+        client,
+        baseName: 'puffin',
+        buildParams: (name) => ({ repo: 'id:r', name }),
+        worktreeCreateIdempotency: Promise.resolve(IDEMPOTENT_CREATE_SUPPORT)
+      })
+    ).resolves.toEqual({
+      worktreeId: 'wt-warned',
+      name: 'puffin',
+      warning: 'Failed to create the startup terminal for /w: no pty'
+    })
+  })
+
+  it('omits a blank create warning', async () => {
+    const attempts: Attempt[] = []
+    const client = scriptedClient([{ id: 'wt-clean', warning: '  ' }], attempts)
+    await expect(
+      createWorktreeWithNameRetry({
+        client,
+        baseName: 'puffin',
+        buildParams: (name) => ({ repo: 'id:r', name }),
+        worktreeCreateIdempotency: Promise.resolve(IDEMPOTENT_CREATE_SUPPORT)
+      })
+    ).resolves.toEqual({ worktreeId: 'wt-clean', name: 'puffin' })
+  })
+
   it('waits for capability detection before sending a create', async () => {
     const attempts: Attempt[] = []
     const client = scriptedClient([{ id: 'wt-ready' }], attempts)

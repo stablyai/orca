@@ -6,12 +6,16 @@
 // row the next attach settles as `unknown`, whereas the reverse would lose a
 // turn the provider already accepted.
 
-import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
+import type {
+  AgentJournalMessageItem,
+  AgentJournalSubmission
+} from '../../../shared/agent-session-journal-types'
 import type {
   AgentSessionCancelResult,
   AgentSessionSendResult,
   AgentSessionWireRefusal
 } from '../../../shared/agent-session-wire'
+import { DISPATCH_DOUBT_PERSISTENCE_FAILED } from '../agent-session-journal/journal-dispatch-doubt-reasons'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type {
   AgentSessionDispatchOutcome,
@@ -73,13 +77,20 @@ async function appendStatus(
   ctx.publish()
 }
 
+/**
+ * One id, one delivery. A submission that already exists replays its recorded
+ * outcome and NEVER goes back on the wire, whatever state it is in and whatever
+ * `retryUnknown` the client sent: `unknown` cannot prove non-delivery — that is
+ * the whole content of the word — and one message reached the model five times
+ * when this was a judgement call instead of an invariant. A distinct send after
+ * a terminal rejection uses a fresh id, which is a first delivery.
+ */
 export async function performSend(
   ctx: AgentSessionTurnContext,
   input: {
     clientMessageId: string
     payloadFingerprint: string
     body: AgentJournalMessageItem
-    retryUnknown?: true
   }
 ): Promise<TurnOutcome<AgentSessionSendResult>> {
   const existing = ctx.journal
@@ -88,18 +99,31 @@ export async function performSend(
   if (existing && existing.payloadFingerprint !== input.payloadFingerprint) {
     return invalid(`Message id ${input.clientMessageId} was already used for another send.`)
   }
-  if (existing && !(input.retryUnknown && existing.dispatchState === 'unknown')) {
+  if (existing) {
     return {
       ok: true,
       value: { clientMessageId: input.clientMessageId, submission: existing }
     }
   }
-  if (!(input.retryUnknown && existing?.dispatchState === 'unknown')) {
+  try {
     await ctx.journal.appendSubmission({ ...input, fence: ctx.fence })
-    ctx.publish()
+  } catch {
+    return invalid('The message could not be recorded and was not sent.')
   }
+  ctx.publish()
 
   const outcome = await dispatchSafely(ctx, input.clientMessageId, input.body)
+  // An admission needs no dispatch row: the submission is already pending.
+  if (outcome.state === 'admitted') {
+    ctx.publish()
+    return {
+      ok: true,
+      value: {
+        clientMessageId: input.clientMessageId,
+        submission: requireSubmission(ctx, input.clientMessageId)
+      }
+    }
+  }
   try {
     await ctx.journal.resolveDispatch(
       outcome.state === 'accepted'
@@ -123,9 +147,8 @@ export async function performSend(
       await ctx.journal.resolveDispatch({
         clientMessageId: input.clientMessageId,
         state: 'unknown',
-        reason: 'dispatch_result_persistence_failed',
-        fence: ctx.fence,
-        recovered: true
+        reason: DISPATCH_DOUBT_PERSISTENCE_FAILED,
+        fence: ctx.fence
       })
     } catch {
       // Nothing further to record; the pending row is settled on the next attach.
@@ -134,14 +157,26 @@ export async function performSend(
     throw error
   }
   ctx.publish()
+  return {
+    ok: true,
+    value: {
+      clientMessageId: input.clientMessageId,
+      submission: requireSubmission(ctx, input.clientMessageId)
+    }
+  }
+}
 
+function requireSubmission(
+  ctx: AgentSessionTurnContext,
+  clientMessageId: string
+): AgentJournalSubmission {
   const submission = ctx.journal
     .submissions()
-    .find((entry) => entry.clientMessageId === input.clientMessageId)
+    .find((entry) => entry.clientMessageId === clientMessageId)
   if (!submission) {
     throw new Error('agent_session_submission_lost')
   }
-  return { ok: true, value: { clientMessageId: input.clientMessageId, submission } }
+  return submission
 }
 
 export async function performCancel(

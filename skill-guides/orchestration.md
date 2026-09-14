@@ -137,8 +137,8 @@ After three consecutive empty waits, stop waiting blindly and enumerate with
 `ORCA orchestration worker-list --include-remote --json` (defaults to the bound
 Run; `--run <run_id>` overrides; the receipt's `scope` names which), acting on
 each row's `projection.attention` categories, `projection.attention.requiresAction`, and literal `projection.nextAction` argv.
-An `inspect` `nextAction` on a `live` row with `attention.requiresAction` false
-is informational, not a command to re-run: keep waiting with `check --wait`.
+A `none` `nextAction` has no argv to run: read `liveness.reason` and keep waiting
+with `check --wait`. Absence never earns an argv; settlement and pending work still do.
 Leave the wait only on positive proof the agent stopped: `exited` liveness, the
 worker's own observation of process exit, or a transcript whose final agent turn
 sent no `worker_done`. Then load `references/recovery-and-cleanup.md` and choose

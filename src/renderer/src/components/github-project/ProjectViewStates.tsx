@@ -224,3 +224,41 @@ export function ProjectTableSkeleton(): React.JSX.Element {
     </div>
   )
 }
+
+/**
+ * Empty result for a project view, worded from the view's own filter.
+ *
+ * Why: an unfiltered view has no filter to blame, so "no items match this
+ * view's filter" reads as data loss when a freshly populated board momentarily
+ * comes back empty (#12648). `ProjectV2.items(query:)` defaults to `""`, so
+ * there is no non-search request shape to fall back to — the honest remedy is
+ * to name the state correctly and say the emptiness may be transient.
+ */
+export function ProjectItemsEmptyState({ filter }: { filter: string }): React.JSX.Element {
+  if (filter.trim().length > 0) {
+    return (
+      <div className="flex min-h-[120px] items-center justify-center p-6 text-sm text-muted-foreground">
+        {translate(
+          'auto.components.github.project.ProjectViewList.4f57d2e0b1',
+          "No items match this view's filter."
+        )}
+      </div>
+    )
+  }
+  return (
+    <div className="flex min-h-[120px] flex-col items-center justify-center gap-1 p-6 text-center text-sm text-muted-foreground">
+      <span>
+        {translate(
+          'auto.components.github.project.ProjectViewStates.3b9c1d5e47',
+          'This view has no items yet.'
+        )}
+      </span>
+      <span className="text-xs">
+        {translate(
+          'auto.components.github.project.ProjectViewStates.7e4a2f80c6',
+          'Recently added items can take a while to appear.'
+        )}
+      </span>
+    </div>
+  )
+}

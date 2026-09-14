@@ -60,6 +60,7 @@ export function buildRuntimeMobileAgentStatusProjection(
   // A status ping replaces one entry and re-spreads the map; reuse every other entry.
   const entries = new Map<string, AgentStatusProjectionCacheEntry>()
   const parts: string[] = []
+  let projectionUnchanged = cached != null && nextEntries.length === cached.entries.size
   // Code-unit order, not `localeCompare`: this projection is only ever compared with `===`, so it
   // must be deterministic, not locale-correct — and an ICU collator per comparison is ~4.5k calls
   // per ping at the 500-entry cap.
@@ -71,8 +72,10 @@ export function buildRuntimeMobileAgentStatusProjection(
         : { entry, projection: serializeAgentStatusEntry(paneKey, entry) }
     entries.set(paneKey, entryCache)
     parts.push(entryCache.projection)
+    projectionUnchanged &&= previous?.projection === entryCache.projection
   }
-  const projection = `[${parts.join(',')}]`
+  // Same-bucket heartbeats must not rejoin every pane's accumulated preview text.
+  const projection = projectionUnchanged && cached ? cached.projection : `[${parts.join(',')}]`
   graphState.cachedAgentStatusProjection = {
     source: agentStatusByPaneKey,
     entries,

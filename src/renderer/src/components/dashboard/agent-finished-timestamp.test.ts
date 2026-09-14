@@ -52,3 +52,11 @@ describe('lastEnteredDoneAt shares the Smart Sort completion clock', () => {
     expect(agentEntryCompletionAt(entry)).toBeNull()
   })
 })
+
+describe('lastEnteredDoneAt subagent rows', () => {
+  it('does not report a synthetic completion when the child is unverifiable', () => {
+    const entry = doneEntry()
+
+    expect(lastEnteredDoneAt({ rowSource: 'subagent', state: 'unverifiable', entry })).toBeNull()
+  })
+})

@@ -193,3 +193,25 @@ export async function settleStructuredAgentSessionLateDispatch(
   })
   context.publish(input.sessionId, session.journal)
 }
+
+/** The host's thin mutation surface. Each call re-reads the context, so a session
+ *  map or fence that moves between calls is never captured by a stale closure. */
+export function structuredAgentSessionMutationDelegates(
+  context: () => StructuredAgentSessionMutationContext
+) {
+  return {
+    cancel: (
+      caller: StructuredAgentSessionCaller,
+      params: Parameters<typeof cancelStructuredAgentSessionTurn>[2]
+    ) => cancelStructuredAgentSessionTurn(context(), caller, params),
+    respondToPrompt: (
+      caller: StructuredAgentSessionCaller,
+      params: Parameters<typeof respondToStructuredAgentSessionPrompt>[2]
+    ) => respondToStructuredAgentSessionPrompt(context(), caller, params),
+    setOption: (
+      caller: StructuredAgentSessionCaller,
+      params: Parameters<typeof setStructuredAgentSessionOption>[2]
+    ) => setStructuredAgentSessionOption(context(), caller, params),
+    readOptions: (sessionId: string) => readStructuredAgentSessionOptions(context(), sessionId)
+  }
+}

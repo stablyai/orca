@@ -140,7 +140,12 @@ export function useInstalledAgentSkillNames(
   const candidateSkillNames = useMemo(() => skillNamesKey.split('\n'), [skillNamesKey])
   const runtimeTarget = useActiveSkillDiscoveryRuntimeTarget()
   const discoveryTargetKey = runtimeTarget
-    ? getRuntimeScopedSkillDiscoveryKey(runtimeTarget, discoveryTarget)
+    ? getRuntimeScopedSkillDiscoveryKey(
+        runtimeTarget,
+        discoveryTarget,
+        candidateSkillNames,
+        sourceKinds
+      )
     : UNRESOLVED_RUNTIME_DISCOVERY_KEY
   // Why: callers derive the target inside a store-backed useMemo, so unrelated
   // store writes hand us a new object with the same key. Two targets with the
@@ -165,7 +170,15 @@ export function useInstalledAgentSkillNames(
   const [error, setError] = useState<string | null>(null)
   const currentDiscoveryTargetKeyRef = useRef(discoveryTargetKey)
   const refreshGenerationRef = useRef(0)
-  const stateResetInputRef = useRef({ discoveryTargetKey, enabled })
+  // Why: the runtime target only changes identity when the owning peer does
+  // (switch or same-id re-pair), so it resets state alongside the key. State,
+  // not a ref: a render-phase ref write survives a render React discards, which
+  // would skip the reset and keep painting the retired peer's list.
+  const [stateResetInput, setStateResetInput] = useState({
+    discoveryTargetKey,
+    enabled,
+    runtimeTarget
+  })
   currentDiscoveryTargetKeyRef.current = discoveryTargetKey
   // Why: skill scans can outlive transient settings/onboarding panels; keep
   // the module cache update but skip React state writes after unmount.
@@ -174,12 +187,13 @@ export function useInstalledAgentSkillNames(
   let loadingForRender = loading
   let errorForRender = error
   if (
-    stateResetInputRef.current.discoveryTargetKey !== discoveryTargetKey ||
-    stateResetInputRef.current.enabled !== enabled
+    stateResetInput.discoveryTargetKey !== discoveryTargetKey ||
+    stateResetInput.enabled !== enabled ||
+    stateResetInput.runtimeTarget !== runtimeTarget
   ) {
     const nextCachedDiscovery = getCachedSkillDiscovery(discoveryTargetKey)
     const nextLoading = enabled && !nextCachedDiscovery
-    stateResetInputRef.current = { discoveryTargetKey, enabled }
+    setStateResetInput({ discoveryTargetKey, enabled, runtimeTarget })
     resultForRender = nextCachedDiscovery
     loadingForRender = nextLoading
     errorForRender = null
@@ -220,7 +234,13 @@ export function useInstalledAgentSkillNames(
       }
       let installedAfterRefresh = false
       try {
-        const next = await discoverInstalledAgentSkills(force, stableDiscoveryTarget, runtimeTarget)
+        const next = await discoverInstalledAgentSkills(
+          force,
+          stableDiscoveryTarget,
+          runtimeTarget,
+          candidateSkillNames,
+          sourceKinds
+        )
         installedAfterRefresh = hasInstalledAgentSkillNamed(next.skills, candidateSkillNames, {
           sourceKinds
         })

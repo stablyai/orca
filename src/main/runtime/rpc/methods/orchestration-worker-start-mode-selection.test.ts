@@ -125,6 +125,29 @@ describe('worker-start honours the settings default', () => {
     }
   }
 
+  function mockWorktreeCreation() {
+    vi.spyOn(runtime, 'showManagedWorktree').mockResolvedValue({
+      id: 'repo::wt',
+      repoId: 'repo'
+    } as never)
+    vi.spyOn(runtime, 'showRepo').mockResolvedValue({ id: 'repo', kind: 'git' } as never)
+    vi.spyOn(runtime, 'listTerminals').mockResolvedValue({ terminals: [] } as never)
+    return vi.spyOn(runtime, 'createManagedWorktree').mockImplementation(
+      async (createArgs) =>
+        ({
+          worktree: { id: 'repo::child', repoId: 'repo' },
+          ...(createArgs.startupAgent
+            ? { startupTerminal: { spawned: true, handle: TERMINAL_HANDLE } }
+            : {}),
+          setupReceipt: {
+            hookFound: false,
+            startupPolicy: 'start-immediately',
+            state: 'not_configured'
+          }
+        }) as never
+    )
+  }
+
   it('starts a structured chat worker when structured native chat is the default', async () => {
     const result = await startWorker(STRUCTURED_DEFAULT)
 
@@ -172,12 +195,74 @@ describe('worker-start honours the settings default', () => {
     expect(createExistingWorktreeWorkerTerminal).toHaveBeenCalledTimes(1)
   })
 
-  it('falls back instead of refusing a launch preference the structured default cannot apply', async () => {
+  it('seeds --model and --effort into the structured session instead of downgrading', async () => {
+    // These two used to force a PTY worker, which is half of why orchestration never produced a
+    // structured chat: choosing a model is the ordinary way to dispatch one.
     const result = await startWorker(STRUCTURED_DEFAULT, { model: 'opus', effort: 'high' })
 
     expect(result).toMatchObject({
       state: 'ready',
-      mode: { mode: 'terminal', preferred: 'structured', reason: 'launch_preferences' }
+      mode: { mode: 'structured', preferred: 'structured', reason: 'user_default' }
+    })
+    expect(createExistingWorktreeWorkerTerminal).not.toHaveBeenCalled()
+    expect(createStructuredWorkerSessionForWorktree).toHaveBeenCalledWith(
+      expect.objectContaining({ launchPreferences: { model: 'opus', effort: 'high' } })
+    )
+  })
+
+  it('creates a new worktree WITHOUT an agent terminal and gives it a structured session', async () => {
+    // The other half: `createWorkerWorktree` creates agent-first, so a `--worktree new-child`
+    // dispatch could only ever end up a PTY terminal worker.
+    const created = mockWorktreeCreation()
+
+    const result = await startWorker(STRUCTURED_DEFAULT, {
+      worktree: 'new-child',
+      name: 'worker-child'
+    })
+
+    expect(result).toMatchObject({
+      state: 'ready',
+      mode: { mode: 'structured', preferred: 'structured', reason: 'user_default' }
+    })
+    expect(created).toHaveBeenCalledWith(
+      expect.not.objectContaining({ startupAgent: expect.anything() })
+    )
+    expect(createStructuredWorkerSessionForWorktree).toHaveBeenCalledWith(
+      expect.objectContaining({ worktreeId: 'repo::child' })
+    )
+    expect(createExistingWorktreeWorkerTerminal).not.toHaveBeenCalled()
+  })
+
+  it('still creates the new worktree agent-first when the default is a terminal worker', async () => {
+    const created = mockWorktreeCreation()
+
+    const result = await startWorker(
+      { ...STRUCTURED_DEFAULT, experimentalStructuredNativeChat: false },
+      { worktree: 'new-child', name: 'worker-child' }
+    )
+
+    expect(result).toMatchObject({ state: 'ready', mode: { mode: 'terminal' } })
+    expect(created).toHaveBeenCalledWith(expect.objectContaining({ startupAgent: 'claude' }))
+    expect(createStructuredWorkerSessionForWorktree).not.toHaveBeenCalled()
+  })
+
+  it('falls back to a terminal agent in the worktree it just created when the host refuses', async () => {
+    // The host can only answer for a workspace that exists, so a created worktree settles its mode
+    // after creation — and a refusal must not fail a routine dispatch.
+    mockWorktreeCreation()
+    vi.mocked(runtime.getStructuredAgentSessionCreateSupport).mockResolvedValue({
+      supported: false,
+      reason: 'wsl'
+    })
+
+    const result = await startWorker(STRUCTURED_DEFAULT, {
+      worktree: 'new-child',
+      name: 'worker-child'
+    })
+
+    expect(result).toMatchObject({
+      state: 'ready',
+      mode: { mode: 'terminal', preferred: 'structured', reason: 'wsl_execution_runtime' }
     })
     expect(createExistingWorktreeWorkerTerminal).toHaveBeenCalledTimes(1)
     expect(createStructuredWorkerSessionForWorktree).not.toHaveBeenCalled()

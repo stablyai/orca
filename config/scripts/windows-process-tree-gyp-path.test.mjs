@@ -38,12 +38,16 @@ describe('windows-process-tree node-addon-api gyp path', () => {
     expect(rebuildScript).toContain('stageWindowsProcessTreeNodeAddonApiHeaders()')
   })
 
-  it('resolves node_addon_api.gyp to a real file from the package directory', () => {
-    const resolved = execFileSync(process.execPath, ['-p', RESOLVED_GYP], {
-      cwd: PACKAGE_DIR,
-      encoding: 'utf8'
-    }).trim()
-    expect(isAbsolute(resolved)).toBe(true)
-    expect(existsSync(resolved)).toBe(true)
-  })
+  // The installed Windows dependency is exercised by the Windows CI lane.
+  it.runIf(process.platform === 'win32')(
+    'resolves node_addon_api.gyp to a real file from the package directory',
+    () => {
+      const resolved = execFileSync(process.execPath, ['-p', RESOLVED_GYP], {
+        cwd: PACKAGE_DIR,
+        encoding: 'utf8'
+      }).trim()
+      expect(isAbsolute(resolved)).toBe(true)
+      expect(existsSync(resolved)).toBe(true)
+    }
+  )
 })

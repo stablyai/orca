@@ -1,4 +1,5 @@
 import { isAgentSessionRewindRecord, type AgentSessionRewindRecord } from './agent-session-rewind'
+import { isAgentSessionConversationName } from './agent-session-conversation-name'
 /**
  * Durable agent-session record and its single-writer lease.
  *
@@ -132,6 +133,8 @@ export type AgentSessionRecord = {
   options?: Record<string, string>
   rewind?: AgentSessionRewindRecord
   conversationCommand?: AgentSessionConversationCommandRecord
+  /** The name Orca gave this conversation, so a later acquisition need not name it again. */
+  conversationName?: string
   launchArgs?: AgentSessionLaunchArgs
   lease: AgentSessionLease
   createdAt: number
@@ -345,6 +348,8 @@ export function isAgentSessionRecord(value: unknown): value is AgentSessionRecor
     (record.rewind === undefined || isAgentSessionRewindRecord(record.rewind)) &&
     (record.conversationCommand === undefined ||
       isAgentSessionConversationCommandRecord(record.conversationCommand)) &&
+    (record.conversationName === undefined ||
+      isAgentSessionConversationName(record.conversationName)) &&
     (record.launchArgs === undefined || isAgentSessionLaunchArgs(record.launchArgs)) &&
     !Object.hasOwn(record, 'launchEnv') &&
     isAgentSessionLease(record.lease) &&

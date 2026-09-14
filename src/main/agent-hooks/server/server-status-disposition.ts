@@ -41,7 +41,8 @@ export abstract class AgentHookServerStatusDisposition extends AgentHookServerSt
     const paneRetired =
       this.closedAgentStatusPaneKeys.has(paneKey) ||
       this.closedAgentStatusPaneKeys.has(ownerPaneKey)
-    const tabId = parsePaneKey(ownerPaneKey)?.tabId
+    const tabId =
+      parsePaneKey(ownerPaneKey)?.tabId ?? parseLegacyNumericPaneKey(ownerPaneKey)?.tabId
     if (tabId && this.closedAgentStatusTabIds.has(tabId)) {
       return 'suppress'
     }
