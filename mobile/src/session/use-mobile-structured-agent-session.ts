@@ -1,9 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 import { dispatchMobileStructuredCommand } from './mobile-structured-composer-command'
-import type {
-  AgentSessionCancelResult,
-  AgentSessionSendResult
-} from '../../../src/shared/agent-session-wire'
+import type { AgentSessionCancelResult } from '../../../src/shared/agent-session-wire'
 import {
   structuredAgentSessionSendBody,
   type StructuredAgentSessionAttachment
@@ -11,7 +8,12 @@ import {
 import { encodeNativeChatTranscriptIdentity } from '../../../src/shared/native-chat-transcript-retention'
 import type { MobileNativeChatSendOutcome } from './mobile-native-chat-send'
 import { projectStructuredAgentSessionMessages } from '../../../src/shared/structured-agent-session-message-projection'
-import { activeStructuredAgentSessionTurnId } from '../../../src/shared/structured-agent-session-projection'
+import { hasUnansweredStructuredAgentSessionDispatch } from '../../../src/shared/structured-agent-session-projection'
+import {
+  activeStructuredAgentSessionTurnId,
+  isStructuredAgentSessionThinking
+} from '../../../src/shared/structured-agent-session-live-turn'
+import { selectStructuredAgentTurnActivity } from '../../../src/shared/native-chat-turn-activity'
 import {
   pendingStructuredApproval,
   pendingStructuredQuestion,
@@ -28,41 +30,62 @@ import type { RpcClient } from '../transport/rpc-client'
 import type { MobileChatPermission } from './mobile-native-chat-permission'
 import type { MobileChatQuestion } from './mobile-native-chat-question'
 import type { MobileNativeChatSession } from './use-mobile-native-chat-session'
+import type { NativeChatLiveTurnIndicator } from '../../../src/shared/native-chat-turn-status'
 import { useMobileStructuredAgentState } from './use-mobile-structured-agent-state'
 import { useMobileStructuredPromptResponses } from './use-mobile-structured-prompt-responses'
 import { useMobileStructuredAgentOptions } from './use-mobile-structured-agent-options'
+import { useMobileStructuredAgentTurnTiming } from './use-mobile-structured-agent-turn-timing'
+import { sendMobileStructuredAgentSessionMessage } from './mobile-structured-agent-session-send'
+import { useMobileStructuredSendOperationReconciliation } from './use-mobile-structured-send-operation-reconciliation'
 
-type StructuredMobileAttachment = StructuredAgentSessionAttachment & { id?: string }
-
-type StructuredMobileSession = ReturnType<typeof useMobileStructuredAgentOptions> & {
-  session: MobileNativeChatSession
-  isWorking: boolean
-  turnId: string | null
-  sendWithOutcome: (
-    text: string,
-    images?: string[],
-    deadline?: number,
-    attachments?: readonly StructuredMobileAttachment[]
-  ) => Promise<MobileNativeChatSendOutcome>
-  cancel: () => void
-  permission: MobileChatPermission | null
-  question: MobileChatQuestion | null
-  respondPermission: (optionId: string) => Promise<boolean>
-  respondQuestion: (answer: string) => Promise<boolean>
+type StructuredMobileAttachment = StructuredAgentSessionAttachment & {
+  id?: string
+  contentFingerprint?: string
 }
+
+type StructuredMobileSession = ReturnType<typeof useMobileStructuredAgentOptions> &
+  ReturnType<typeof useMobileStructuredAgentTurnTiming> & {
+    session: MobileNativeChatSession
+    isWorking: boolean
+    turnId: string | null
+    /** What labels the live turn's one indicator row. */
+    turnIndicator: NativeChatLiveTurnIndicator
+    sendWithOutcome: (
+      text: string,
+      images?: string[],
+      deadline?: number,
+      attachments?: readonly StructuredMobileAttachment[]
+    ) => Promise<MobileNativeChatSendOutcome>
+    cancel: () => void
+    permission: MobileChatPermission | null
+    question: MobileChatQuestion | null
+    respondPermission: (optionId: string) => Promise<boolean>
+    respondQuestion: (answer: string) => Promise<boolean>
+  }
 
 export function useMobileStructuredAgentSession(args: {
   client: RpcClient | null
   sessionId: string | null
   /** Host/workspace scope used to keep same provider ids isolated. */
   sourceIdentity?: string
+  /** Authenticated identity the host keys mutation admission under. */
+  callerIdentity?: string
   enabled: boolean
   /** Live transport only; gates the connection-scoped hold, nothing else. */
   connected: boolean
   agent: string | null
   onSendError: (message: string) => void
 }): StructuredMobileSession {
-  const { agent, client, connected, sessionId, sourceIdentity = '', enabled, onSendError } = args
+  const {
+    agent,
+    callerIdentity = '',
+    client,
+    connected,
+    sessionId,
+    sourceIdentity = '',
+    enabled,
+    onSendError
+  } = args
   const sessionKey = encodeNativeChatTranscriptIdentity([sourceIdentity, agent, sessionId])
   const operationIdsRef = useRef(new Map<string, string>())
   const commandPendingRef = useRef(false)
@@ -71,6 +94,7 @@ export function useMobileStructuredAgentSession(args: {
     retainStructuredOpId(operationIdsRef.current, key, operationId)
   const stateArgs = { client, sessionId, sessionKey, enabled, connected }
   const { state, stateRef, loadingOlder, loadEarlier } = useMobileStructuredAgentState(stateArgs)
+  useMobileStructuredSendOperationReconciliation(state.submissions)
 
   const mutate = useCallback(
     async <TValue>(
@@ -103,9 +127,9 @@ export function useMobileStructuredAgentSession(args: {
         }
       }
       if (result.status === 'unknown') {
-        // Prompt/option/cancel plans cannot redispatch an unknown ledger row;
+        // Prompt/option plans cannot repeat a harmful effect under a fresh id;
         // issue a fresh id so a retry can be admitted after the user checks the
-        // stream. Sends opt into explicit retryUnknown below.
+        // stream. Sends keep theirs — see `mobile-structured-send-delivery.ts`.
         operationIdsRef.current.delete(key)
         return result
       }
@@ -116,15 +140,7 @@ export function useMobileStructuredAgentSession(args: {
     [client, enabled, onSendError, sessionId, sessionKey]
   )
 
-  const {
-    conversationCommands,
-    optionPickerRequest,
-    invokeStructuredOption,
-    optionSnapshot,
-    optionSurface,
-    pendingOptionId,
-    setStructuredOption
-  } = useMobileStructuredAgentOptions({
+  const options = useMobileStructuredAgentOptions({
     agent,
     client,
     sessionId,
@@ -132,6 +148,8 @@ export function useMobileStructuredAgentSession(args: {
     fence: state.fence,
     mutate
   })
+  const { conversationCommands, invokeStructuredOption, optionSnapshot, setStructuredOption } =
+    options
 
   const sendWithOutcome = useCallback(
     async (
@@ -186,34 +204,21 @@ export function useMobileStructuredAgentSession(args: {
       if (body.blocks.length === 0) {
         return 'rejected'
       }
-      const fields = { body }
-      const key = `${sessionKey}:agentSession.send:${JSON.stringify(fields)}`
-      const priorOperationId = operationIdsRef.current.get(key)
-      const clientOperationId = retainOperationId(key, priorOperationId)
-      const result = await requestStructuredAgentSessionMutation<AgentSessionSendResult>({
+      return sendMobileStructuredAgentSessionMessage({
         client,
-        method: 'agentSession.send',
-        fingerprintMethod: 'agentSession.send',
         sessionId,
+        sessionKey,
+        callerIdentity,
         expectedRuntimeFence: currentFence,
-        fields,
-        clientOperationId,
-        ...(priorOperationId ? { retryUnknown: true } : {}),
-        timeoutMs
+        text,
+        attachments: sendAttachments,
+        deadline,
+        onError: onSendError
       })
-      if (result.status === 'accepted') {
-        operationIdsRef.current.delete(key)
-        return 'accepted'
-      }
-      if (result.status === 'unknown') {
-        return 'unknown'
-      }
-      operationIdsRef.current.delete(key)
-      onSendError(result.message === 'Request not sent' ? 'Message not sent' : result.message)
-      return 'rejected'
     },
     [
       agent,
+      callerIdentity,
       client,
       conversationCommands,
       enabled,
@@ -269,6 +274,14 @@ export function useMobileStructuredAgentSession(args: {
     () => projectStructuredAgentSessionMessages(state.items, [], state.submissions),
     [state.items, state.submissions]
   )
+  const turnId = activeStructuredAgentSessionTurnId(state.items)
+  const turnTiming = useMobileStructuredAgentTurnTiming(state, turnId)
+  const activityText =
+    selectStructuredAgentTurnActivity(state.items, turnId, state.activity)?.text ?? null
+  const thinking = isStructuredAgentSessionThinking(state.items)
+  // Stable while the readings hold, so a streaming turn does not re-render the
+  // whole chat surface on every journal batch.
+  const turnIndicator = useMemo(() => ({ thinking, activityText }), [thinking, activityText])
   const status = state.status === 'idle' ? 'idle' : state.status
   const approvalPrompt = useMemo(
     () => state.items.find(pendingStructuredApproval) ?? null,
@@ -280,8 +293,7 @@ export function useMobileStructuredAgentSession(args: {
   )
 
   return {
-    conversationCommands,
-    optionPickerRequest,
+    ...options,
     session: {
       messages,
       status,
@@ -291,18 +303,18 @@ export function useMobileStructuredAgentSession(args: {
       loadingEarlier: loadingOlder,
       loadEarlier
     },
-    isWorking: activeStructuredAgentSessionTurnId(state.items) !== null,
-    turnId: activeStructuredAgentSessionTurnId(state.items),
+    // A dispatch the provider has not answered yet is already work — see the desktop hook.
+    isWorking:
+      turnId !== null ||
+      hasUnansweredStructuredAgentSessionDispatch(state.submissions, state.fence),
+    turnId,
+    turnIndicator,
+    ...turnTiming,
     sendWithOutcome,
     cancel,
     permission: projectStructuredPermission(approvalPrompt),
     question: projectStructuredQuestion(questionPrompt, groupedDraft),
-    optionSnapshot,
-    optionSurface,
-    pendingOptionId,
     respondPermission,
-    respondQuestion,
-    setStructuredOption,
-    invokeStructuredOption
+    respondQuestion
   }
 }

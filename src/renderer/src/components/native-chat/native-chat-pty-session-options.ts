@@ -142,11 +142,20 @@ export function createNativeChatPtySessionOptions(
    *  persist time because a probe can settle mid-pick. Before one, `isDefault` is just
    *  the seed's guess, so only an id the session actually tracks is evidence of
    *  anything; after one, an authoritative list that omits the id proves it retired —
-   *  adopting either would emit an `-m` that is fatal on an account without it. */
-  const modelIsAdoptableAsLaunchDefault = (modelId: string): boolean =>
-    modelsAreDiscovered
-      ? !catalog.discoveredModelsAreAuthoritative || models.some((model) => model.id === modelId)
+   *  adopting either would emit an `-m` that is fatal on an account without it.
+   *  Both branches sit behind one precondition: some real list must carry the id.
+   *  A raw launch flag and an agent report both enter the record verbatim, so an id
+   *  neither list knows names nothing, whatever put it there. */
+  const modelIsAdoptableAsLaunchDefault = (modelId: string): boolean => {
+    const listedIn = (list: readonly CatalogModel[]): boolean =>
+      list.some((model) => model.id === modelId)
+    if (!listedIn(models) && !listedIn(catalog.models)) {
+      return false
+    }
+    return modelsAreDiscovered
+      ? !catalog.discoveredModelsAreAuthoritative || listedIn(models)
       : record.model !== undefined
+  }
 
   /** Every persist path — picker applies and typed commands — funnels through here. */
   const persist = (modelId: string | null, optionId: string, value: SessionOptionValue): void => {

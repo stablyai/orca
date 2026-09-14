@@ -130,7 +130,7 @@ export function MobileNativeChatComposer({
     if (trigger.kind === 'slash') {
       const commands =
         structuredCommands !== undefined
-          ? structuredSlashCommands(structuredCommands)
+          ? structuredSlashCommands(structuredCommands, agent)
           : agent
             ? getVerifiedNativeChatCommands(agent)
             : []

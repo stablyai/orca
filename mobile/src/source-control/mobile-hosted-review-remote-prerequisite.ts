@@ -1,8 +1,8 @@
-import type { RpcClient } from '../transport/rpc-client'
 import type { MobileGitStatusResult } from './mobile-git-status'
 import type { MobileHostedReviewCreateIntentProgress } from './mobile-hosted-review-create-intent'
 import type { MobilePrPrefill } from './mobile-pr-create'
-import { sendMobileHostedReviewGitMutation } from './mobile-hosted-review-git-preparation'
+import { pushMobileHostedReviewBranch } from './mobile-hosted-review-git-preparation'
+import type { MobileSourceControlRpcSender } from './mobile-source-control-rpc-sender'
 
 type RemotePrerequisiteInput = {
   status: MobileGitStatusResult | null
@@ -10,28 +10,27 @@ type RemotePrerequisiteInput = {
 }
 
 export async function applyMobileHostedReviewRemotePrerequisite(
-  client: Pick<RpcClient, 'sendRequest'>,
+  client: MobileSourceControlRpcSender,
   worktreeId: string,
   prefill: MobilePrPrefill,
   input: RemotePrerequisiteInput
 ): Promise<{ ok: true; ran: boolean } | { ok: false; error: string }> {
+  const worktree = `id:${worktreeId}`
   switch (prefill.blockedReason) {
     case 'no_upstream': {
       input.onProgress?.('publishing')
-      const result = await sendMobileHostedReviewGitMutation(
+      const result = await pushMobileHostedReviewBranch(
         client,
-        'git.push',
-        { worktree: `id:${worktreeId}`, publish: true },
+        { worktree, publish: true },
         'Failed to publish branch'
       )
       return result.ok ? { ok: true, ran: true } : result
     }
     case 'needs_push': {
       input.onProgress?.('pushing')
-      const result = await sendMobileHostedReviewGitMutation(
+      const result = await pushMobileHostedReviewBranch(
         client,
-        'git.push',
-        { worktree: `id:${worktreeId}` },
+        { worktree },
         'Failed to push commits'
       )
       return result.ok ? { ok: true, ran: true } : result
@@ -41,10 +40,9 @@ export async function applyMobileHostedReviewRemotePrerequisite(
         return { ok: true, ran: false }
       }
       input.onProgress?.('force_pushing')
-      const result = await sendMobileHostedReviewGitMutation(
+      const result = await pushMobileHostedReviewBranch(
         client,
-        'git.push',
-        { worktree: `id:${worktreeId}`, forceWithLease: true },
+        { worktree, forceWithLease: true },
         'Failed to force push with lease'
       )
       return result.ok ? { ok: true, ran: true } : result

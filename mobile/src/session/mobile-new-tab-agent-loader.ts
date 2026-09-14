@@ -1,3 +1,4 @@
+import { newTabSettingsRead } from '../transport/settings-read-operations'
 import type { RpcClient } from '../transport/rpc-client'
 import type { RpcFailure, RpcSuccess } from '../transport/types'
 import { isFloatingWorkspaceWorktreeId } from './floating-workspace'
@@ -23,22 +24,16 @@ export async function loadMobileNewTabAgentOptions(args: {
     ? client.sendRequest('preflight.detectAgents')
     : loadWorkspaceDetectedAgents(client, worktreeId)
   const [settingsResponse, detectedResponse] = await Promise.all([
-    client.sendRequest('settings.get'),
+    newTabSettingsRead.request(client),
     detectedAgentsRequest
   ])
-  if (!settingsResponse.ok) {
-    throw new Error((settingsResponse as RpcFailure).error.message)
-  }
+  const readSettings = newTabSettingsRead.interpret(settingsResponse)
   if (!detectedResponse.ok) {
     throw new Error((detectedResponse as RpcFailure).error.message)
   }
-  const settings = (
-    (settingsResponse as RpcSuccess).result as {
-      settings?: MobileNewTabAgentSettings
-    }
-  ).settings
   return buildMobileNewTabAgentOptions(
-    settings,
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
+    readSettings() as MobileNewTabAgentSettings | undefined,
     (detectedResponse as RpcSuccess).result as unknown[]
   )
 }

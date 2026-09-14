@@ -1,4 +1,8 @@
-import { clampUtf8TextTail, getUtf8ByteLength } from './utf8-byte-limits'
+import {
+  clampUtf8TextTail,
+  getUtf8ByteLength,
+  isUtf8ByteLengthWithinLimit
+} from './utf8-byte-limits'
 
 export const PR_CHECK_LOG_TAIL_LINES = 200
 export const PR_CHECK_LOG_TAIL_RECENT_LINES = 100
@@ -13,7 +17,7 @@ const ERROR_LINE_PATTERN =
   /(?:##\[error\]|::error::|::error\b|\berror:|FAILED|exit code|ENOENT|EACCES|panic:|AssertionError)/i
 
 function applyLogTailByteCap(text: string): string {
-  if (getUtf8ByteLength(text) <= PR_CHECK_LOG_TAIL_BYTES) {
+  if (isUtf8ByteLengthWithinLimit(text, PR_CHECK_LOG_TAIL_BYTES)) {
     return text
   }
   return clampUtf8TextTail(text, PR_CHECK_LOG_TAIL_BYTES).text
@@ -21,7 +25,9 @@ function applyLogTailByteCap(text: string): string {
 
 function joinLogExcerptWithByteCap(prefixLines: string[], recentLines: string[]): string {
   const prefix = prefixLines.join('\n')
-  const prefixByteLength = getUtf8ByteLength(prefix)
+  // UTF-16 length is a lower bound; oversized prefixes need no exact byte count.
+  const prefixByteLength =
+    prefix.length >= PR_CHECK_LOG_TAIL_BYTES ? PR_CHECK_LOG_TAIL_BYTES : getUtf8ByteLength(prefix)
   if (prefixByteLength >= PR_CHECK_LOG_TAIL_BYTES) {
     return clampUtf8TextTail(prefix, PR_CHECK_LOG_TAIL_BYTES).text
   }
@@ -34,14 +40,18 @@ function joinLogExcerptWithByteCap(prefixLines: string[], recentLines: string[])
 
 function collectEarlierErrorLineIndexes(lines: string[], recentStart: number): number[] {
   const indexes = new Set<number>()
-  for (let index = 0; index < recentStart; index += 1) {
+  // Newest-first errors and descending windows add the newest unique indexes first.
+  for (let index = recentStart - 1; index >= 0; index -= 1) {
     if (!ERROR_LINE_PATTERN.test(lines[index] ?? '')) {
       continue
     }
     const contextStart = Math.max(0, index - PR_CHECK_LOG_TAIL_ERROR_CONTEXT_LINES)
     const contextEnd = Math.min(recentStart - 1, index + PR_CHECK_LOG_TAIL_ERROR_CONTEXT_LINES)
-    for (let contextIndex = contextStart; contextIndex <= contextEnd; contextIndex += 1) {
+    for (let contextIndex = contextEnd; contextIndex >= contextStart; contextIndex -= 1) {
       indexes.add(contextIndex)
+      if (indexes.size === PR_CHECK_LOG_TAIL_MAX_EARLIER_LINES) {
+        return [...indexes].sort((left, right) => left - right)
+      }
     }
   }
   return [...indexes].sort((left, right) => left - right)

@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import type { AgentStatusIpcPayload } from '../../../shared/agent-status-types'
 import { OrcaRuntimeService, electronMocks } from '../orca-runtime-test-mocks.spec'
 import {
   HEADLESS_LEAF_ID,
@@ -284,7 +285,11 @@ describe('OrcaRuntimeService', () => {
     const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession(
       makeWorkspaceSessionWithHeadlessTerminal()
     )
-    const runtime = new OrcaRuntimeService(runtimeStore as never)
+    let rows: AgentStatusIpcPayload[] = []
+    const runtime = new OrcaRuntimeService(runtimeStore as never, undefined, {
+      getAgentStatusSnapshot: () => rows,
+      getAgentProviderSessionRowsForPane: () => []
+    })
     runtime.setPtyController({
       write: () => true,
       kill: () => true,
@@ -293,7 +298,27 @@ describe('OrcaRuntimeService', () => {
         { id: 'persisted-pty', cwd: TEST_WORKTREE_PATH, title: 'Unrelated PTY' }
       ]
     })
+    runtime.registerPty('persisted-pty', TEST_WORKTREE_ID, null, {
+      tabId: 'other-tab',
+      leafId: '99999999-9999-4999-8999-999999999999'
+    })
     runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
+    const unrelatedPty = runtime['ptysById'].get('persisted-pty')!
+    const unrelatedHandle = runtime['issuePtyHandle'](unrelatedPty)
+    rows = [
+      {
+        paneKey: 'other-tab:99999999-9999-4999-8999-999999999999',
+        tabId: 'other-tab',
+        worktreeId: TEST_WORKTREE_ID,
+        terminalHandle: unrelatedHandle,
+        connectionId: null,
+        state: 'working',
+        prompt: 'unrelated task',
+        agentType: 'codex',
+        receivedAt: Date.now(),
+        stateStartedAt: Date.now()
+      }
+    ]
 
     const listed = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
 
@@ -304,6 +329,45 @@ describe('OrcaRuntimeService', () => {
       status: 'pending-handle',
       terminal: null
     })
+    expect(listed.tabs[0]).not.toHaveProperty('agentStatus')
+  })
+
+  it('reads and indexes the full agent-status snapshot once per mobile projection', async () => {
+    const tabCount = 20
+    const session = makeWorkspaceSessionWithHeadlessTerminal()
+    const tabs = Array.from({ length: tabCount }, (_, index) => ({
+      ...session.tabsByWorktree[TEST_WORKTREE_ID]![0]!,
+      id: `host-tab-${index}`,
+      ptyId: `missing-pty-${index}`
+    }))
+    const terminalLayoutsByTabId = Object.fromEntries(
+      tabs.map((tab, index) => [
+        tab.id,
+        makeHeadlessTerminalLayout({ [HEADLESS_LEAF_ID]: `missing-pty-${index}` })
+      ])
+    )
+    const { runtimeStore } = makeRuntimeStoreWithWorkspaceSession({
+      ...session,
+      tabsByWorktree: { [TEST_WORKTREE_ID]: tabs },
+      terminalLayoutsByTabId
+    })
+    const getAgentStatusSnapshot = vi.fn(() => [])
+    const runtime = new OrcaRuntimeService(runtimeStore as never, undefined, {
+      getAgentStatusSnapshot,
+      getAgentProviderSessionRowsForPane: () => []
+    })
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null,
+      listProcesses: async () => []
+    })
+    runtime.syncWindowGraph(0, { tabs: [], leaves: [] })
+
+    const listed = await runtime.listMobileSessionTabs(`id:${TEST_WORKTREE_ID}`)
+
+    expect(listed.tabs).toHaveLength(tabCount)
+    expect(getAgentStatusSnapshot).toHaveBeenCalledOnce()
   })
 
   it('kills persisted SSH PTYs when closing hydrated headless tabs before pane metadata is restored', async () => {

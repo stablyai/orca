@@ -3,6 +3,7 @@ import type { RpcClient } from '../transport/rpc-client'
 import { isRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 import { isLogicalClientCutoverError } from '../transport/stable-logical-rpc-client'
 import { isTerminalSendRpcAccepted } from '../terminal/terminal-send-rpc-response'
+import { reportWorkerTerminalUserInput } from '../terminal/worker-terminal-takeover-report'
 import { openMobileNativeChatSendBudget } from './mobile-native-chat-send'
 
 export function useMobileNativeChatStop(args: {
@@ -111,6 +112,8 @@ export function useMobileNativeChatStop(args: {
         .then((response) => {
           if (isTerminalSendRpcAccepted(response)) {
             sawAccepted = true
+            // A deliberate Stop is human input; it takes the worker over like any other key.
+            reportWorkerTerminalUserInput(client, handle)
           } else {
             sawRejected = true
           }

@@ -3,6 +3,8 @@ import type { PtyListedSession } from '../../../shared/pty-listed-session'
 import { parsePtySessionId, PTY_SESSION_ID_SEPARATOR } from '../../../shared/pty-session-id-format'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
+import { worktreeIdsEqual } from '../../../shared/worktree/id'
+import { listActivationPtySessions } from './worktree-activation-pty-inventory'
 import {
   resumeSleepingAgentSessionsForWorktree,
   type ResumeSleepingAgentSessionsOptions
@@ -193,8 +195,13 @@ export async function runWorktreeAgentActivationGate(
     return 'blocked'
   }
 
-  const liveWorkspaceSessions = sessions.filter((session) =>
-    sessionBelongsToWorkspace(session.id, worktreeId)
+  // Why either signal rather than a preference: a relay row's worktreeId can be seeded from the
+  // host's own ORCA_WORKTREE_ID, so it must widen the id-prefix match, never replace it — a session
+  // dropped from this set is a live agent the gate would fork a second writer onto.
+  const liveWorkspaceSessions = sessions.filter(
+    (session) =>
+      (session.worktreeId !== undefined && worktreeIdsEqual(session.worktreeId, worktreeId)) ||
+      sessionBelongsToWorkspace(session.id, worktreeId)
   )
   const liveWorkspacePtyIds = new Set(liveWorkspaceSessions.map((session) => session.id))
   for (const owner of structuredInventory?.ownerBySessionId.values() ?? []) {
@@ -266,7 +273,9 @@ export function gateWorktreeAgentActivation(
     getState: () => useAppStore.getState(),
     awaitReady: waitForWorkspaceSessionReady,
     listSessions: () =>
-      typeof window === 'undefined' ? Promise.resolve([]) : window.api.pty.listSessions(),
+      typeof window === 'undefined'
+        ? Promise.resolve([])
+        : listActivationPtySessions(useAppStore.getState(), worktreeId),
     listSurfaceOwners: readWorktreeLiveTerminalSurfaceOwners,
     hasStructuredSession: readWorktreeStructuredActivationInventory,
     resume: resumeSleepingAgentSessionsForWorktree

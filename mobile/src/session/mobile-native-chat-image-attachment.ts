@@ -1,5 +1,6 @@
 import type { RpcClient } from '../transport/rpc-client'
 import { saveMobileClipboardImageAsTempFile } from './mobile-clipboard-image'
+import { structuredAgentSessionDomainFingerprint } from '../../../src/shared/structured-agent-session-mutation'
 // Type-only import so this module (and its unit test) stays free of the expo/
 // react-native picker chain; the concrete `pickImage` is injected by the hook.
 import type { MobileImageSource, PickedMobileImage } from './mobile-image-source-picker'
@@ -11,6 +12,16 @@ export type PendingNativeChatImage = {
   readonly id: string
   readonly path: string
   readonly previewUri: string
+  /** Stable across repeat uploads of the same bytes; never contains the image. */
+  readonly contentFingerprint?: string
+}
+
+export function mobileNativeChatImageContentFingerprint(base64: string): string {
+  return structuredAgentSessionDomainFingerprint({
+    domain: 'mobile.nativeChat.image',
+    sessionId: '',
+    fields: { base64 }
+  })
 }
 
 export function appendPendingNativeChatImages(
@@ -71,7 +82,11 @@ export async function uploadMobileNativeChatImages(
     // Prefer the picker's local URI for the thumbnail; fall back to an inline data
     // URI when the source omitted one (RN <Image> renders both).
     const previewUri = image.uri ?? `data:image/png;base64,${image.base64}`
-    const result = { path, previewUri }
+    const result = {
+      path,
+      previewUri,
+      contentFingerprint: mobileNativeChatImageContentFingerprint(image.base64)
+    }
     uploaded.push(result)
     onImageUploaded?.(result)
   }

@@ -7,6 +7,8 @@ import {
 } from './codex-app-server-connection'
 import { isCodexAppServerUnsupportedError } from './codex-app-server-session'
 import { readCodexTurnId } from './codex-structured-thread-facts'
+import { DISPATCH_DOUBT_CODEX_TURN_UNNAMED } from '../native-chat/agent-session-journal/journal-dispatch-doubt-reasons'
+import { decodeStructuredAgentSessionOptionValue } from '../../shared/structured-agent-session-option-codec'
 
 // Starting a Codex turn and learning its id, which are not the same event:
 // `turn/start` returns the id on newer builds and acks before it exists on
@@ -28,7 +30,8 @@ const CODEX_TURN_OPTION_KEYS = new Set([
   'approvalPolicy',
   'approvalsReviewer',
   'personality',
-  'serviceTier'
+  'serviceTier',
+  'fastMode'
 ])
 
 export function isCodexTurnOptionKey(key: string): boolean {
@@ -42,6 +45,8 @@ export type CodexTurnHost = {
   connection: Pick<CodexAppServerConnection, 'request'>
   threadId: string
   options: Map<string, string>
+  reportedOptions?: { model?: string }
+  fastModeTierByModel: ReadonlyMap<string, string>
   turnIdWaiters: ((turnId: string) => void)[]
 }
 
@@ -57,6 +62,33 @@ function turnInputFor(body: AgentJournalMessageItem): Record<string, unknown>[] 
     }
   }
   return input
+}
+
+function codexTurnOptions(host: CodexTurnHost): Record<string, string> {
+  const options = Object.fromEntries(
+    [...host.options].filter(([key]) => key !== 'fastMode' && key !== 'serviceTier')
+  )
+  const encodedFastMode = host.options.get('fastMode')
+  if (encodedFastMode === undefined) {
+    return options
+  }
+  const fastMode = decodeStructuredAgentSessionOptionValue('fastMode', encodedFastMode)
+  if (typeof fastMode !== 'boolean') {
+    throw new Error('codex fast mode must be encoded as true or false')
+  }
+  if (!fastMode) {
+    return { ...options, serviceTier: 'default' }
+  }
+  const model = host.options.get('model') ?? host.reportedOptions?.model
+  const tierId = model ? host.fastModeTierByModel.get(model) : undefined
+  // Fast is on but nothing has named the tier for this model yet, so there is no
+  // value to route to. Deliberately Standard rather than an omission: the tier
+  // persists on the thread, so omitting would silently keep routing a paid tier we
+  // cannot currently name, and discovery recovers the exact tier on a later turn.
+  if (!tierId) {
+    return { ...options, serviceTier: 'default' }
+  }
+  return { ...options, serviceTier: tierId }
 }
 
 /**
@@ -82,7 +114,7 @@ export async function startCodexTurn(
         threadId: host.threadId,
         clientUserMessageId: input.clientMessageId,
         input: turnInputFor(input.body),
-        ...Object.fromEntries(host.options)
+        ...codexTurnOptions(host)
       },
       { timeoutMs: input.timeoutMs }
     )
@@ -115,7 +147,7 @@ export async function dispatchCodexTurn(
     throw error
   }
   return turnId === null
-    ? { state: 'unknown', reason: 'codex app-server started a turn it did not name in time' }
+    ? { state: 'unknown', reason: DISPATCH_DOUBT_CODEX_TURN_UNNAMED }
     : {
         state: 'accepted',
         providerIdentity: {

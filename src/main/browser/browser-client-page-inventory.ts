@@ -103,6 +103,10 @@ export function prepareBrowserClientPageInventoryForAttach(
     inventory.push(parsed.data)
   }
   let inventoryBytes = browserClientHostedPageInventoryByteLength(inventory)
+  if (inventoryBytes <= BROWSER_CLIENT_HOST_PAGE_INVENTORY_MAX_BYTES) {
+    const prepared = BrowserClientHostedPageInventoryList.safeParse(inventory)
+    return prepared.success ? prepared.data : undefined
+  }
   const optionalUrls = inventory
     .flatMap((page, index) => {
       if (page.currentUrl === undefined) {

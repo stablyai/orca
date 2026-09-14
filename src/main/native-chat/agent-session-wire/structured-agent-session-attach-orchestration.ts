@@ -1,3 +1,5 @@
+import type { StructuredAgentSessionAcquireInput } from './structured-agent-session-adapter'
+import { recoverStructuredRewind } from './structured-rewind-recovery'
 import { recoverInterruptedCompaction } from './structured-compaction-recovery'
 // The host's attach, lifted out of the host class.
 //
@@ -20,7 +22,9 @@ import {
 } from './structured-agent-session-launch-env'
 import { refuseAgentSessionMutation } from './structured-agent-session-mutation-admission'
 import { retryPendingStructuredAgentSessionSettlement } from './structured-agent-session-settlement-retry'
+import { settleStaleRunningTurnsOnAcquire } from './structured-agent-session-stale-turn-verdict'
 import type { StructuredAgentSessionAttachContext } from './structured-agent-session-attach-context'
+import { forgetStructuredAgentSession } from './structured-agent-session-host-lifetime'
 import type { DeferredStructuredAgentSessionEventSink } from './structured-agent-session-event-sink'
 import { agentSessionJournalCloseRetries } from '../agent-session-journal/journal-close-retry'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
@@ -29,7 +33,8 @@ export function attachStructuredAgentSession(
   context: StructuredAgentSessionAttachContext,
   callerKey: string,
   params: AgentSessionAttachParams,
-  admitRecoveryTicket?: () => boolean
+  admitRecoveryTicket?: () => boolean,
+  rewind?: StructuredAgentSessionAcquireInput['rewind']
 ): Promise<AgentSessionMutationResult<AgentSessionAttachResult>> {
   const sessionId = params.envelope.sessionId
   const attaching = context.serialize(sessionId, async () => {
@@ -61,6 +66,7 @@ export function attachStructuredAgentSession(
     }
     const eventSink = context.runtimeState.eventSinkFor(sessionId)
     const attached = await performAttach({
+      rewind,
       store: context.deps.store,
       adapter: context.deps.adapter,
       journalRoot: context.deps.journalRoot,
@@ -86,18 +92,26 @@ export function attachStructuredAgentSession(
       // Site 9: this closes the PRIOR map entry it drops, never the provisional
       // journal — it has no reference to that one. `onAttached` owns that.
       onAttachFailed: async () => {
-        await context.sessions.get(sessionId)?.journal.close()
-        context.sessions.delete(sessionId)
+        await forgetStructuredAgentSession(context, sessionId)
         eventSink.close()
         context.runtimeState.discardEventSink(sessionId)
       },
-      onAttached: async (attached, acquisitionGeneration) => {
+      onAttached: async (attached, acquisitionGeneration, acquiredOwner) => {
         const fence = context.deps.store.getRecord(sessionId)?.lease.runtimeFence ?? 0
         const previous = context.sessions.get(sessionId)
         const previousFence = previous?.fence
         // Site 8: the provisional journal has no owner until the map takes it,
         // and the barrier below throws by design.
         try {
+          if (acquiredOwner) {
+            // Before the drain: the buffered events are the new child's, never a stale row's.
+            await settleStaleRunningTurnsOnAcquire({
+              journal: attached.journal,
+              sessionId,
+              fence,
+              acquisitionGeneration
+            })
+          }
           await bindAndDrain(eventSink, attached.journal, fence, (activity) =>
             context.subscribers.publish(sessionId, attached.journal, activity)
           )
@@ -124,6 +138,16 @@ export function attachStructuredAgentSession(
           hasProviderChild: true,
           acquisitionGeneration: acquisitionGeneration ?? previous?.acquisitionGeneration ?? null
         })
+        if (!rewind) {
+          await recoverStructuredRewind(
+            context.deps.store,
+            sessionId,
+            attached.journal,
+            fence,
+            context.deps.adapter,
+            context.now
+          )
+        }
         await recoverInterruptedCompaction(context.deps.store, sessionId, attached.journal, fence)
         if (attached.recovery) {
           context.subscribers.reset(sessionId, attached.journal, attached.recovery.reset, fence)

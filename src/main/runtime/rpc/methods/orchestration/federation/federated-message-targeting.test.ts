@@ -25,6 +25,7 @@ describe('orchestration federated message targeting', () => {
     vi.spyOn(runtime, 'getTerminalPaneKey').mockReturnValue(paneKey)
     vi.spyOn(runtime, 'getTerminalProcessIncarnation').mockReturnValue(processIncarnation)
     db.createRemoteDispatchAttachment({
+      runId: 'run-home',
       dispatchId,
       taskId: 'task_remote_targeting',
       homePeerFingerprint: 'home_peer',

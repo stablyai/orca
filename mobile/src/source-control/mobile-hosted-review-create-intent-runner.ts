@@ -1,4 +1,3 @@
-import type { RpcClient } from '../transport/rpc-client'
 import type { MobileGitStatusResult } from './mobile-git-status'
 import {
   createMobilePr,
@@ -11,6 +10,7 @@ import {
   prepareMobileHostedReviewCreateIntent,
   type MobileHostedReviewCreateIntentProgress
 } from './mobile-hosted-review-create-intent'
+import type { MobileSourceControlRpcSender } from './mobile-source-control-rpc-sender'
 
 type RunInput = {
   branch: string
@@ -47,7 +47,7 @@ export function isMobileHostedReviewCommitFailure(
 }
 
 export async function runMobileHostedReviewCreateIntent(
-  client: Pick<RpcClient, 'sendRequest'>,
+  client: MobileSourceControlRpcSender,
   worktreeId: string,
   input: RunInput
 ): Promise<MobileHostedReviewCreateIntentRunOutcome> {

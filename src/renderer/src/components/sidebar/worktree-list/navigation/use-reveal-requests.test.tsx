@@ -82,7 +82,8 @@ beforeEach(() => {
   args = {
     groupBy: 'repo',
     renderedSidebarRowKeys: new Set(),
-    renderedWorktreeIdentities: [],
+    visibleWorktrees: [],
+    visibleFolderWorkspaces: [],
     currentSidebarWorktreeId: worktree.id,
     currentSidebarExecutionHostId: 'ssh:dev',
     worktreeMap: new Map([[worktree.id, worktree]]),
@@ -133,7 +134,7 @@ describe('revealing a filtered workspace', () => {
       args = {
         ...args,
         hasFilters: visible,
-        renderedWorktreeIdentities: visible ? ['ssh:dev|wt-1'] : []
+        visibleWorktrees: visible ? args.worktrees : []
       }
       await render()
       await act(async () => requestScrollToCurrentWorkspaceReveal())
@@ -142,6 +143,41 @@ describe('revealing a filtered workspace', () => {
       expect(state.revealWorktreeInSidebar).toHaveBeenCalledTimes(1)
     }
   )
+
+  it.each(['ssh:dev', null] as const)(
+    'reveals a collapsed workspace that passes filters with active host %s',
+    async (executionHostId) => {
+      args = {
+        ...args,
+        currentSidebarExecutionHostId: executionHostId,
+        visibleWorktrees: args.worktrees
+      }
+      await render()
+      await act(async () => requestScrollToCurrentWorkspaceReveal())
+      expect(document.querySelector('[role="dialog"]')).toBeNull()
+      expect(args.clearFilters).not.toHaveBeenCalled()
+      expect(state.revealWorktreeInSidebar).toHaveBeenCalledTimes(1)
+    }
+  )
+
+  it('does not let a visible same-id workspace on another host bypass confirmation', async () => {
+    args = { ...args, visibleWorktrees: [{ ...args.worktrees[0], hostId: 'local' }] }
+    await render()
+    await act(async () => requestScrollToCurrentWorkspaceReveal())
+    expect(document.querySelector('[role="dialog"]')).not.toBeNull()
+    expect(state.revealWorktreeInSidebar).not.toHaveBeenCalled()
+    await click('Keep filters')
+  })
+
+  it('preserves filters when the target becomes included while confirmation is open', async () => {
+    await render()
+    await act(async () => requestScrollToCurrentWorkspaceReveal())
+    args = { ...args, visibleWorktrees: args.worktrees }
+    await render()
+    await click('Clear filters and reveal')
+    expect(args.clearFilters).not.toHaveBeenCalled()
+    expect(state.revealWorktreeInSidebar).toHaveBeenCalledTimes(1)
+  })
 
   it('does not apply a stale confirmation after switching workspaces', async () => {
     await render()
@@ -153,39 +189,47 @@ describe('revealing a filtered workspace', () => {
     expect(state.revealWorktreeInSidebar).not.toHaveBeenCalled()
   })
 
-  it('confirms filtered folder workspaces and preserves the rename request', async () => {
-    args = {
-      ...args,
-      currentSidebarWorktreeId: folderWorkspaceKey('folder-1'),
-      currentSidebarExecutionHostId: null,
-      folderWorkspaces: [
-        {
-          id: 'folder-1',
-          projectGroupId: 'project-1',
-          name: 'Notes',
-          folderPath: '/notes',
-          linkedTask: null,
-          comment: '',
-          isArchived: false,
-          isUnread: false,
-          isPinned: false,
-          sortOrder: 1,
-          lastActivityAt: 1,
-          createdAt: 1,
-          updatedAt: 1
-        }
-      ]
+  it.each([true, false])(
+    'reveals folder workspaces and preserves rename (filtered: %s)',
+    async (filtered) => {
+      args = {
+        ...args,
+        currentSidebarWorktreeId: folderWorkspaceKey('folder-1'),
+        currentSidebarExecutionHostId: null,
+        folderWorkspaces: [
+          {
+            id: 'folder-1',
+            projectGroupId: 'project-1',
+            name: 'Notes',
+            folderPath: '/notes',
+            linkedTask: null,
+            comment: '',
+            isArchived: false,
+            isUnread: false,
+            isPinned: false,
+            sortOrder: 1,
+            lastActivityAt: 1,
+            createdAt: 1,
+            updatedAt: 1
+          }
+        ]
+      }
+      args.visibleFolderWorkspaces = filtered ? [] : args.folderWorkspaces
+      await render()
+      await act(async () => requestScrollToCurrentWorkspaceRevealAndRename())
+      expect(args.clearFilters).not.toHaveBeenCalled()
+      if (filtered) {
+        await click('Clear filters and reveal')
+        expect(args.clearFilters).toHaveBeenCalledTimes(1)
+      } else {
+        expect(document.querySelector('[role="dialog"]')).toBeNull()
+      }
+      expect(state.revealWorktreeInSidebar).toHaveBeenCalledWith(folderWorkspaceKey('folder-1'), {
+        behavior: 'smooth',
+        highlight: true,
+        beginRename: true,
+        executionHostId: undefined
+      })
     }
-    await render()
-    await act(async () => requestScrollToCurrentWorkspaceRevealAndRename())
-    expect(args.clearFilters).not.toHaveBeenCalled()
-    await click('Clear filters and reveal')
-    expect(args.clearFilters).toHaveBeenCalledTimes(1)
-    expect(state.revealWorktreeInSidebar).toHaveBeenCalledWith(folderWorkspaceKey('folder-1'), {
-      behavior: 'smooth',
-      highlight: true,
-      beginRename: true,
-      executionHostId: undefined
-    })
-  })
+  )
 })

@@ -80,7 +80,10 @@ export function requireStructuredCleanupHost(ctx: RpcContext): StructuredAgentSe
 export async function ensureStructuredHostInstalled(ctx: RpcContext): Promise<void> {
   // Gated first: a client that cannot read structured sessions must not be able
   // to make the host exist, which is an observable side effect of the surface.
-  if (!supportsStructuredSessions(ctx) || getStructuredAgentSessionHost()) {
+  if (!supportsStructuredSessions(ctx)) {
+    return
+  }
+  if (getStructuredAgentSessionHost()) {
     return
   }
   await ctx.runtime.ensureStructuredAgentSessionHost()

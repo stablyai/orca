@@ -141,8 +141,10 @@ export class OrcaRuntimeWithCreateRuntimeOwnedMobileSessionTerminal extends Orca
       ...(existing?.tabGroupLayout ? { tabGroupLayout: existing.tabGroupLayout } : {}),
       tabs
     }
-    this.storeMobileSessionSnapshot(worktreeId, next)
-    const result = this.toMobileSessionTabsResult(next)
+    // Why: emit the stored snapshot, not the pre-store one — storing grafts on retirement
+    // proofs, and subscribers dedupe on version so they would never see them otherwise.
+    const stored = this.storeMobileSessionSnapshot(worktreeId, next)
+    const result = this.toMobileSessionTabsResult(stored)
     const changeSequence = ++this.mobileSessionTabsChangeSequence
     for (const subscription of this.mobileSessionTabListeners) {
       subscription.listener(

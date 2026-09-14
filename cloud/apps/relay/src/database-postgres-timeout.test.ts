@@ -34,7 +34,11 @@ vi.mock('pg', () => ({
   }
 }))
 
-import { openRelayDatabase, relayPostgresStatementTimeoutMs } from './database.js'
+import {
+  openRelayDatabase,
+  POSTGRES_SCHEMA_MIGRATIONS,
+  relayPostgresStatementTimeoutMs
+} from './database.js'
 import { applyPostgresSchema } from './postgres-schema-startup.js'
 
 const SCHEMA_POOL = {
@@ -118,7 +122,9 @@ describe('PostgreSQL relay deadlines', () => {
     // Statements can open with a leading `--` rationale comment.
     const body = (statement: string): string =>
       statement.replace(/^(?:\s*--[^\n]*\n)*\s*/, '')
-    expect(ddl.every((statement) => /^CREATE\b/i.test(body(statement)))).toBe(true)
+    expect(
+      ddl.every((statement) => /^(?:CREATE|ALTER TABLE)\b/i.test(body(statement)))
+    ).toBe(true)
     // The backfill is DML, so it stays on the deadline-bearing serving pool.
     expect(ddl.some((statement) => statement.includes('INSERT INTO'))).toBe(false)
     await database.close()
@@ -261,6 +267,54 @@ describe('PostgreSQL schema startup', () => {
     await applyPostgresSchema([statement], query, { wait: async () => undefined })
 
     expect(query).toHaveBeenCalledTimes(2)
+  })
+
+  it('treats an existing constraint as an applied ADD CONSTRAINT', async () => {
+    // Postgres has no `ADD CONSTRAINT IF NOT EXISTS`, and a retry would only
+    // repeat 42710, so a re-run and a concurrent startup both move on.
+    const error = Object.assign(new Error('already exists'), { code: '42710' })
+    const query = vi
+      .fn<(statement: string) => Promise<unknown>>()
+      .mockRejectedValueOnce(error)
+      .mockResolvedValue(undefined)
+    const pause = vi.fn(async () => undefined)
+
+    await applyPostgresSchema(
+      ['ALTER TABLE test ADD CONSTRAINT test_check CHECK (id > 0)', 'CREATE TABLE test2'],
+      query,
+      { wait: pause }
+    )
+
+    expect(pause).not.toHaveBeenCalled()
+    expect(query).toHaveBeenCalledTimes(2)
+    expect(query).toHaveBeenLastCalledWith('CREATE TABLE test2')
+  })
+
+  it('recognises every shipped ADD CONSTRAINT migration as re-runnable', async () => {
+    // Guards the statement text against the pattern that classifies it.
+    const shipped = POSTGRES_SCHEMA_MIGRATIONS.filter((statement) =>
+      statement.includes('ADD CONSTRAINT')
+    )
+    expect(shipped.length).toBeGreaterThan(0)
+    const error = Object.assign(new Error('already exists'), { code: '42710' })
+    const query = vi.fn<(statement: string) => Promise<unknown>>().mockRejectedValue(error)
+
+    await applyPostgresSchema(shipped, query, { wait: async () => undefined })
+
+    expect(query).toHaveBeenCalledTimes(shipped.length)
+  })
+
+  it('still fails an ADD CONSTRAINT that violates existing rows', async () => {
+    const error = Object.assign(new Error('check violation'), { code: '23514' })
+    const query = vi.fn<(statement: string) => Promise<unknown>>().mockRejectedValue(error)
+
+    await expect(
+      applyPostgresSchema(
+        ['ALTER TABLE test ADD CONSTRAINT test_check CHECK (id > 0)'],
+        query,
+        { wait: async () => undefined }
+      )
+    ).rejects.toBe(error)
   })
 
   it.each([

@@ -1,13 +1,15 @@
 import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
 import type { TuiAgent } from '../../../shared/tui-agent'
 
+/** Silent best-effort mark; no prompt is shown. Trust-gated agents consume the
+ *  first bracketed paste as menu input, so this runs before any prompt delivery. */
 export async function preflightAgentTrust(args: {
   agent: TuiAgent | null | undefined
-  workspacePath: string
+  /** Folder and prospective workspaces can resolve to no path yet. */
+  workspacePath: string | null | undefined
   connectionId?: string | null
 }): Promise<void> {
-  // Trust-gated agents consume the first bracketed paste as menu input.
-  if (!args.agent || !window.api.agentTrust?.markTrusted) {
+  if (!args.agent || !args.workspacePath || !window.api.agentTrust?.markTrusted) {
     return
   }
   const preset = TUI_AGENT_CONFIG[args.agent].preflightTrust

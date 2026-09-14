@@ -20,36 +20,6 @@
       "rules": {
         "max-lines": ["error", { "max": 379, "skipBlankLines": true, "skipComments": true }]
       }
-    },
-    {
-      "files": ["app/h/*/source-control/*.tsx"],
-      "rules": {
-        "max-lines": ["error", { "max": 2152, "skipBlankLines": true, "skipComments": true }]
-      }
-    },
-    {
-      "files": ["app/index.tsx"],
-      "rules": {
-        "max-lines": ["error", { "max": 1422, "skipBlankLines": true, "skipComments": true }]
-      }
-    },
-    {
-      "files": ["src/transport/rpc-client.ts"],
-      "rules": {
-        "max-lines": ["error", { "max": 1074, "skipBlankLines": true, "skipComments": true }]
-      }
-    },
-    {
-      "files": ["scripts/mock-server.ts"],
-      "rules": {
-        "max-lines": ["error", { "max": 407, "skipBlankLines": true, "skipComments": true }]
-      }
-    },
-    {
-      "files": ["app/h/*/files/*.tsx"],
-      "rules": {
-        "max-lines": ["error", { "max": 402, "skipBlankLines": true, "skipComments": true }]
-      }
     }
   ]
 }

@@ -1,3 +1,4 @@
+import { settingsRead } from '../transport/settings-read-operations'
 import { decodeAccountsSnapshot, type AccountsSnapshot } from '../components/AccountUsage'
 import type { HomeStatsSummary } from '../stats/home-stats-total'
 import {
@@ -73,7 +74,7 @@ export function fetchMobileHomeTaskProviders(
   disposed: () => boolean
 ): void {
   Promise.all([
-    sendSingleFlightRequest(client, hostId, 'settings.get'),
+    settingsRead.requestSingleFlight(client, hostId),
     sendSingleFlightRequest(client, hostId, 'preflight.check'),
     sendSingleFlightRequest(client, hostId, 'linear.status')
   ])
@@ -81,9 +82,10 @@ export function fetchMobileHomeTaskProviders(
       if (disposed()) {
         return
       }
-      const settings = settingsResponse.ok
-        ? (((settingsResponse.result as { settings?: HomeTaskSettings }).settings ??
-            {}) as HomeTaskSettings)
+      const settingsResult = settingsRead.interpret(settingsResponse)
+      const settings = settingsResult.accepted
+        ? // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
+          ((settingsResult.value ?? {}) as HomeTaskSettings)
         : {}
       const preflight = preflightResponse.ok
         ? (preflightResponse.result as HomePreflightStatus)

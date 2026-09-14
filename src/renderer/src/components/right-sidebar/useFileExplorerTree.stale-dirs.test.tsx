@@ -152,4 +152,26 @@ describe('useFileExplorerTree stale collapsed dirs', () => {
     })
     expect(result.current.isDirStale('/repo/src')).toBe(false)
   })
+
+  it('keeps the rendered cache bound to its loaded workspace until reset', async () => {
+    const props = { path: '/repo', worktreeId: 'wt-1' }
+    const { result, rerender } = renderHook(
+      ({ path, worktreeId }: typeof props) => useFileExplorerTree(path, new Set(), worktreeId),
+      { initialProps: props }
+    )
+
+    await act(async () => {
+      await result.current.loadDir('/repo', -1)
+    })
+    expect(result.current.sourceWorkspaceId).toBe('wt-1')
+
+    rerender({ path: '/repo', worktreeId: 'wt-2' })
+    expect(result.current.sourceWorkspaceId).toBe('wt-1')
+
+    await act(async () => {
+      result.current.resetAndLoad()
+      await Promise.resolve()
+    })
+    expect(result.current.sourceWorkspaceId).toBe('wt-2')
+  })
 })

@@ -3,7 +3,6 @@ import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { formatMessageBanner } from '../../../../orchestration/formatter'
 import { exposeMessages } from './mailbox-message-receipt'
-import { ORCHESTRATION_LEGACY_RUN_ID } from '../../../../../../shared/orchestration-rpc-contract'
 import { routeAllMailboxPages } from '../schemas'
 import { asDispatchFence, callerHoldsDispatchPane, dispatchFenced } from './dispatch-mailbox-fence'
 import type { CheckParams } from '../schemas'
@@ -46,13 +45,15 @@ export async function checkWorkerMailbox(args: {
     : remoteAttachment
       ? {
           dispatchId: remoteAttachment.dispatch_id,
-          runId: undefined,
+          runId: remoteAttachment.home_run_id,
           generation: remoteAttachment.consumer_generation
         }
       : undefined
   if (!workerMailbox) {
     return undefined
   }
+  const deliveryRunId = workerMailbox.runId
+  db.requireRun(deliveryRunId)
   const address = `dispatch:${workerMailbox.dispatchId}`
   // Why: a federated worker host has no dispatch_contexts row, so its generation lives on the
   // remote_dispatch_attachments row instead.
@@ -164,7 +165,6 @@ export async function checkWorkerMailbox(args: {
     }
   }
   await revalidateWorkerMailbox()
-  const deliveryRunId = workerMailbox.runId ?? ORCHESTRATION_LEGACY_RUN_ID
   let acknowledged
   try {
     acknowledged = params.ack
@@ -172,6 +172,7 @@ export async function checkWorkerMailbox(args: {
           runId: deliveryRunId,
           mailboxHandle: address,
           consumerGeneration: workerMailbox.generation,
+          consumerSource: activeDispatch ? 'dispatch' : 'attachment',
           deliveryId: params.ack
         })
       : undefined
@@ -181,16 +182,12 @@ export async function checkWorkerMailbox(args: {
   const showAll = params.all === true || (params.unread === false && params.peek !== true)
   const readPeek = () => db.getUnreadMessages(address, typeFilter)
   const readDelivery = (wakeTypes?: MessageType[]) => {
-    // Why: re-read live, or a re-attach landing on an await above mints a Delivery at a generation
-    // the row has already left, which then fences the legitimate worker on every later check.
-    if (readCurrentGeneration() !== workerMailbox.generation) {
-      throw dispatchFenced()
-    }
     try {
       return db.getOrCreateMailboxDelivery({
         runId: deliveryRunId,
         mailboxHandle: address,
         consumerGeneration: workerMailbox.generation,
+        consumerSource: activeDispatch ? 'dispatch' : 'attachment',
         wakeTypes
       })
     } catch (error) {

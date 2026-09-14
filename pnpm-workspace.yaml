@@ -2,7 +2,13 @@
 # with its own pnpm-workspace.yaml and lockfile, so keep it out of the root
 # package graph. Without this file `pnpm -r` auto-discovers mobile/ and its
 # nested package, and the root's patchedDependencies fail as ERR_PNPM_UNUSED_PATCH.
-packages: []
+#
+# native/windows-registry is listed explicitly rather than reached by a glob: as a `file:`
+# dependency pnpm re-linked it on every install (including --frozen-lockfile), and that
+# virtual-store churn raced node-gyp reading the same tree, which lost @vscode/windows-process-tree's
+# binding.gyp mid-rebuild on Windows CI. A workspace link is resolved once instead.
+packages:
+  - native/windows-registry
 
 minimumReleaseAge: 4320
 # 6.3.289 was published 2026-08-29T12:48Z; it clears the 3-day gate on 2026-09-01T12:48Z.
@@ -10,6 +16,7 @@ minimumReleaseAge: 4320
 minimumReleaseAgeExclude:
   - pdfjs-dist@6.3.289
   - zod@4.5.4
+  - electron@43.7.0
 shamefullyHoist: true
 
 # Orca always launches the user's own resolved Claude CLI via
@@ -26,16 +33,13 @@ ignoredOptionalDependencies:
   - '@anthropic-ai/claude-agent-sdk-win32-arm64'
   - '@anthropic-ai/claude-agent-sdk-win32-x64'
 
+# Development and test jobs need only their host. Cross-target packaging opts in
+# with pnpm install:release (or explicit pnpm install --os / --cpu targets).
 supportedArchitectures:
   os:
     - current
-    - darwin
-    - linux
-    - win32
   cpu:
     - current
-    - x64
-    - arm64
 
 allowBuilds:
   '@parcel/watcher': true
@@ -49,10 +53,10 @@ allowBuilds:
   node-pty: true
   sherpa-onnx: true
   ssh2: false
-  windows-native-registry: false
+  "@orca/windows-registry": false
 
 overrides:
-  monaco-editor>dompurify: 3.4.13
+  monaco-editor>dompurify: 3.4.14
 
 patchedDependencies:
   node-pty@1.1.0: config/patches/node-pty@1.1.0.patch

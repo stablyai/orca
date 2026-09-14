@@ -1,0 +1,179 @@
+{
+  "operation": "source-control.git-history",
+  "family": "git.history-read",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "16d1ab81d3fd08e342b2f0ac0cc6f9e4aea4aaee",
+  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
+  "recorderSha256": "6a12160a87ceab04e74198f6dd35b8cf9125794222ee95cf6ca1872f29849960",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 3,
+  "values": {
+    "17bc1e177fe1": {
+      "name": "git.history#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "git.history"
+        },
+        {
+          "name": "params",
+          "value": {
+            "limit": 50,
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "437d7f38d098": {
+      "rows": [
+        {
+          "author": "dev",
+          "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "parentId": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "relativeTime": "1h",
+          "shortId": "aaaaaaa",
+          "subject": "first"
+        },
+        {
+          "author": "",
+          "id": "cccccccccccccccccccccccccccccccccccccccc",
+          "parentId": {
+            "$rpc": "null"
+          },
+          "relativeTime": "",
+          "shortId": "ccccccc",
+          "subject": "(no commit message)"
+        }
+      ]
+    },
+    "6b280ce22422": {
+      "name": "git.history#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "git.history"
+        },
+        {
+          "name": "params",
+          "value": {
+            "limit": 50,
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "items": [
+              {
+                "author": "dev",
+                "displayId": "aaaaaaa",
+                "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+                "parentIds": ["bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"],
+                "subject": "first",
+                "timestamp": 1767222000000
+              },
+              {
+                "id": "cccccccccccccccccccccccccccccccccccccccc",
+                "parentIds": [],
+                "subject": "",
+                "timestamp": {
+                  "$rpc": "null"
+                }
+              }
+            ]
+          }
+        }
+      }
+    },
+    "7d520ecb92ad": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": [
+        {
+          "author": "dev",
+          "id": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "parentId": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "relativeTime": "1h",
+          "shortId": "aaaaaaa",
+          "subject": "first"
+        },
+        {
+          "author": "",
+          "id": "cccccccccccccccccccccccccccccccccccccccc",
+          "parentId": {
+            "$rpc": "null"
+          },
+          "relativeTime": "",
+          "shortId": "ccccccc",
+          "subject": "(no commit message)"
+        }
+      ]
+    },
+    "9270aeb7d9c6": {
+      "status": "pending",
+      "startedAt": 0
+    },
+    "d2ac5468a6f5": {
+      "name": "git.history#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"git.history\",\"params\":{\"worktree\":\"id:repo42::/p\",\"limit\":50}}"
+    },
+    "ef169a494b41": {
+      "rows": "unloaded"
+    }
+  },
+  "recording": {
+    "scenario": "sc-history-loaded",
+    "checkpoints": [
+      {
+        "id": "pending",
+        "observation": {
+          "sender": ["17bc1e177fe1"],
+          "payloads": ["d2ac5468a6f5"],
+          "settlements": {
+            "load": "9270aeb7d9c6"
+          },
+          "state": "ef169a494b41",
+          "effects": []
+        }
+      },
+      {
+        "id": "settled",
+        "observation": {
+          "sender": ["6b280ce22422"],
+          "payloads": ["d2ac5468a6f5"],
+          "settlements": {
+            "load": "7d520ecb92ad"
+          },
+          "state": "437d7f38d098",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

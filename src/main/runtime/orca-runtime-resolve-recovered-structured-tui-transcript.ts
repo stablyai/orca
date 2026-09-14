@@ -22,6 +22,8 @@ import { hasPersistedStructuredAgentSessionStore as hasPersistedStructuredAgentS
 import { getProfileUserDataPath } from '../orca-profiles/profile-storage-paths'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
+import { parseWslUncPath } from '../../shared/wsl-paths'
+import { parseWorkspaceKey } from '../../shared/workspace-scope'
 
 export class OrcaRuntimeWithResolveRecoveredStructuredTuiTranscript extends OrcaRuntimeWithStopStructuredSessionProcess {
   protected async resolveRecoveredStructuredTuiTranscript(input: {
@@ -95,14 +97,23 @@ export class OrcaRuntimeWithResolveRecoveredStructuredTuiTranscript extends Orca
   protected async resolveStructuredAgentSessionLocation(worktreeSelector: string) {
     const target = await this.resolveRuntimeFileTarget(worktreeSelector)
     const repo = this.store?.getRepo(target.worktree.repoId)
-    // WSL routing describes *this* machine; no remote or runtime host may inherit it.
-    const wslDistro =
-      repo && target.executionHostId === LOCAL_EXECUTION_HOST_ID
+    const folderScope = parseWorkspaceKey(target.worktree.id)
+    const folderWorkspace = folderScope?.type === 'folder'
+    // WSL routing describes *this* machine; no remote or runtime host may inherit
+    // it. Both branches key on executionHostId: the target no longer carries a
+    // connectionId, which used to spell remote, unresolved and local alike.
+    const isLocalHost = target.executionHostId === LOCAL_EXECUTION_HOST_ID
+    const configuredWslDistro =
+      repo && isLocalHost
         ? (getLocalProjectWorktreeGitOptions(this.requireStore(), repo).wslDistro ?? null)
         : null
-    const folderWorkspace = this.store
-      ?.getFolderWorkspaces?.()
-      .some((workspace) => workspace.id === target.worktree.id)
+    // Folder workspaces have no repo Git options, so a WSL UNC path is the only
+    // durable signal that native Windows structured Codex cannot safely use it.
+    const wslDistro =
+      configuredWslDistro ??
+      (folderWorkspace && isLocalHost
+        ? (parseWslUncPath(target.worktree.path)?.distro ?? null)
+        : null)
     return {
       executionHostId: target.executionHostId,
       wslDistro,

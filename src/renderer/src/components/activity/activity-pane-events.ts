@@ -1,3 +1,4 @@
+import { isHistoricalActivityState } from './activity-event-state'
 import type {
   AgentStateHistoryEntry,
   AgentStatusEntry
@@ -5,14 +6,12 @@ import type {
 import type { Repo } from '../../../../shared/repo-types'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { Worktree } from '../../../../shared/worktree/types'
-import type { ActivityEvent, ActivityEventState } from './activity-thread-types'
+import type {
+  ActivityEvent,
+  ActivityEventState,
+  ActivityLiveAgentState
+} from './activity-thread-types'
 import { EVENTS_PER_PANE_CAP } from './activity-event-cap'
-
-export function isActivityEventState(
-  state: AgentStatusEntry['state']
-): state is ActivityEventState {
-  return state === 'done' || state === 'blocked' || state === 'waiting'
-}
 
 function historyEntrySnapshot(
   entry: AgentStatusEntry,
@@ -39,7 +38,7 @@ export function newestActivityHistoryEntries(
 ): AgentStateHistoryEntry[] {
   const newest: AgentStateHistoryEntry[] = []
   for (let i = history.length - 1; i >= 0 && newest.length < cap; i -= 1) {
-    if (isActivityEventState(history[i].state)) {
+    if (isHistoricalActivityState(history[i].state)) {
       newest.push(history[i])
     }
   }
@@ -55,6 +54,7 @@ type PaneEventInputs = {
   agentAlive: boolean
   acknowledgedAt: number
   clearedAt: number
+  liveState: ActivityLiveAgentState | null
   migrationUnsupportedPtyId?: string
 }
 
@@ -97,12 +97,17 @@ export function buildPaneActivityEvents(args: PaneEventInputs): ActivityEvent[] 
     )
   }
 
-  if (!isActivityEventState(args.entry.state) || args.entry.sessionBoundary === true) {
+  // Monitoring live turns surface only via the 'monitoring' snapshot, never as a working event.
+  const currentState =
+    args.liveState === 'working' || isHistoricalActivityState(args.entry.state)
+      ? args.entry.state
+      : null
+  if (currentState === null || args.entry.sessionBoundary === true) {
     return events
   }
   if (args.entry.stateStartedAt <= args.clearedAt) {
     return events
   }
-  append(args.entry.state, args.entry.stateStartedAt, args.entry)
+  append(currentState, args.entry.stateStartedAt, args.entry)
   return events
 }

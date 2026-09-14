@@ -4,6 +4,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { setStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
 import {
+  AGENT_SESSION_PENDING_SEND_RESULT_RUNTIME_CAPABILITY,
   RUNTIME_CAPABILITIES,
   RUNTIME_PROTOCOL_VERSION,
   STRUCTURED_AGENT_SESSION_HOLD_RUNTIME_CAPABILITY,
@@ -146,6 +147,7 @@ describe('capability gating', () => {
 
   it('advertises the capability without bumping the protocol version', () => {
     expect(RUNTIME_CAPABILITIES).toContain(STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY)
+    expect(RUNTIME_CAPABILITIES).toContain(AGENT_SESSION_PENDING_SEND_RESULT_RUNTIME_CAPABILITY)
     expect(RUNTIME_CAPABILITIES).toContain(STRUCTURED_AGENT_SESSION_HOLD_RUNTIME_CAPABILITY)
     expect(RUNTIME_CAPABILITIES).toContain(STRUCTURED_AGENT_SESSION_REVEAL_RUNTIME_CAPABILITY)
     // Additive methods do not break an old client; bumping would strand every
@@ -160,7 +162,7 @@ describe('capability gating', () => {
     }
     // Bump deliberately: the whole agentSession.* surface is behind the structured capability,
     // so an additive method is invisible to old clients and needs no protocol bump.
-    expect(STRUCTURED_AGENT_SESSION_METHODS).toHaveLength(21)
+    expect(STRUCTURED_AGENT_SESSION_METHODS).toHaveLength(22)
   })
 
   it('hides the surface from a declared client that did not advertise it', async () => {
@@ -205,6 +207,124 @@ describe('capability gating', () => {
     const response = await call('agentSession.send', sendParams(), STRUCTURED_CLIENT)
     expect(response).toMatchObject({ ok: true })
     expect(hostCalls.send).toHaveBeenCalledTimes(1)
+  })
+
+  it('returns a settlement to older structured clients when observed within the window', async () => {
+    const pendingSubmission = {
+      clientMessageId: 'client-1',
+      fence: 1,
+      payloadFingerprint: 'fingerprint',
+      dispatchState: 'pending' as const,
+      providerItemId: null,
+      reason: null,
+      submittedAt: 1,
+      resolvedAt: null
+    }
+    hostCalls.send.mockResolvedValueOnce({
+      ok: true,
+      replayed: true,
+      fence: 7,
+      cursor: { epoch: 'epoch-a', sequence: 1 },
+      value: { clientMessageId: 'client-1', submission: pendingSubmission }
+    })
+    hostCalls.waitForSendSettlement.mockResolvedValueOnce({
+      cursor: { epoch: 'epoch-a', sequence: 2 },
+      value: {
+        clientMessageId: 'client-1',
+        submission: {
+          ...pendingSubmission,
+          dispatchState: 'accepted',
+          providerItemId: 'provider-1',
+          resolvedAt: 2
+        }
+      }
+    })
+    const controller = new AbortController()
+
+    const response = await call('agentSession.send', sendParams(), {
+      clientKind: 'runtime',
+      clientCapabilities: [STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY],
+      signal: controller.signal
+    })
+
+    expect(hostCalls.waitForSendSettlement).toHaveBeenCalledWith(
+      SESSION,
+      'client-1',
+      controller.signal
+    )
+    expect(response).toMatchObject({
+      ok: true,
+      result: {
+        ok: true,
+        replayed: true,
+        fence: 7,
+        cursor: { sequence: 2 },
+        value: { submission: { dispatchState: 'accepted' } }
+      }
+    })
+  })
+
+  it('returns durable pending when an older-client settlement observer cannot be retained', async () => {
+    hostCalls.send.mockResolvedValueOnce({
+      ok: true,
+      replayed: false,
+      fence: 1,
+      cursor: { epoch: 'epoch-a', sequence: 1 },
+      value: {
+        clientMessageId: 'client-1',
+        submission: {
+          clientMessageId: 'client-1',
+          fence: 1,
+          payloadFingerprint: 'fingerprint',
+          dispatchState: 'pending',
+          providerItemId: null,
+          reason: null,
+          submittedAt: 1,
+          resolvedAt: null
+        }
+      }
+    })
+    hostCalls.waitForSendSettlement.mockResolvedValueOnce(undefined)
+
+    const response = await call('agentSession.send', sendParams(), {
+      clientKind: 'runtime',
+      clientCapabilities: [STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY]
+    })
+
+    expect(response).toMatchObject({
+      ok: true,
+      result: { value: { submission: { dispatchState: 'pending' } } }
+    })
+  })
+
+  it('returns durable pending immediately to clients that understand admission', async () => {
+    hostCalls.send.mockResolvedValueOnce({
+      ok: true,
+      replayed: false,
+      fence: 1,
+      cursor: { epoch: 'epoch-a', sequence: 1 },
+      value: {
+        clientMessageId: 'client-1',
+        submission: {
+          clientMessageId: 'client-1',
+          fence: 1,
+          payloadFingerprint: 'fingerprint',
+          dispatchState: 'pending',
+          providerItemId: null,
+          reason: null,
+          submittedAt: 1,
+          resolvedAt: null
+        }
+      }
+    })
+
+    const response = await call('agentSession.send', sendParams(), STRUCTURED_CLIENT)
+
+    expect(hostCalls.waitForSendSettlement).not.toHaveBeenCalled()
+    expect(response).toMatchObject({
+      ok: true,
+      result: { value: { submission: { dispatchState: 'pending' } } }
+    })
   })
 
   it('requires the host structured-chat setting for mobile clients', async () => {
@@ -666,5 +786,23 @@ describe('agentSession.subscribeStatus', () => {
       }
     })
     expect(hostCalls.subscribeStatus).toHaveBeenCalledOnce()
+  })
+})
+
+describe('rewind wire boundary', () => {
+  it('routes the exact item and epoch through the structured capability gate', async () => {
+    const params = { envelope: envelope(), itemId: 'chosen', expectedEpoch: 'current' }
+    const result = await call('agentSession.rewind', params, STRUCTURED_CLIENT)
+    expect(result).toMatchObject({ result: { ok: true } })
+    expect(hostCalls.rewind).toHaveBeenCalledWith(expect.anything(), params)
+  })
+  it('rejects absent epoch and caller-supplied provider keys', async () => {
+    for (const params of [
+      { envelope: envelope(), itemId: 'chosen' },
+      { envelope: envelope(), itemId: 'chosen', expectedEpoch: 'current', beforeTurnId: 'forged' }
+    ]) {
+      expect(await call('agentSession.rewind', params, STRUCTURED_CLIENT)).toHaveProperty('error')
+    }
+    expect(hostCalls.rewind).not.toHaveBeenCalled()
   })
 })

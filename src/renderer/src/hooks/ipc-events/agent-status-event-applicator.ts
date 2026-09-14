@@ -69,7 +69,8 @@ export function createAgentStatusEventApplicator(args: {
       repoConnectionId,
       repoConnectionResolved,
       owningWorktreeId,
-      titleUsesTabTitle
+      titleUsesTabTitle,
+      tabTitle
     } = resolvePaneKeyFromRoutingIndex(routingIndex, paneKey)
     const projectedTitles =
       titleUsesTabTitle && ownerTabId
@@ -79,6 +80,7 @@ export function createAgentStatusEventApplicator(args: {
       title = projectedTitles.title
       identityTitle = projectedTitles.identityTitle
     }
+    tabTitle = options?.batch?.tabTitlesByTabId.get(ownerTabId ?? '') ?? tabTitle
     if (!exists && data.worktreeId && hasRuntimeBackedWorktreeAttribution(data)) {
       const fallbackOwnership = resolveWorktreeConnectionFromRoutingIndex(
         routingIndex,
@@ -266,14 +268,13 @@ export function createAgentStatusEventApplicator(args: {
       options.batch.notificationEffects.push(applyPostCommitNotification)
       if (
         terminalTitle &&
-        shouldApplyResolvedAgentTerminalTitleToTab(store, paneKey, title, terminalTitle)
+        shouldApplyResolvedAgentTerminalTitleToTab(store, paneKey, tabTitle, terminalTitle)
       ) {
-        const tabId = parsePaneKey(paneKey)?.tabId
-        if (tabId) {
-          options.batch.tabTitlesByTabId.set(tabId, terminalTitle)
+        if (ownerTabId) {
+          options.batch.tabTitlesByTabId.set(ownerTabId, terminalTitle)
           if (titleUsesTabTitle) {
             const titleChanges = !title || !isDecorativeAgentTitleFrameChange(title, terminalTitle)
-            options.batch.projectedTitlesByTabId.set(tabId, {
+            options.batch.projectedTitlesByTabId.set(ownerTabId, {
               title: titleChanges ? terminalTitle : title,
               identityTitle: titleChanges ? terminalTitle : identityTitle
             })
@@ -289,7 +290,7 @@ export function createAgentStatusEventApplicator(args: {
         update.routing,
         update.metadata
       )
-      applyResolvedAgentTerminalTitleToTab(useAppStore.getState(), paneKey, title, terminalTitle)
+      applyResolvedAgentTerminalTitleToTab(useAppStore.getState(), paneKey, tabTitle, terminalTitle)
       applyPostCommitNotification()
     }
     return 'applied'

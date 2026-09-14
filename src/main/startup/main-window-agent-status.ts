@@ -43,9 +43,15 @@ export function installMainWindowAgentStatusListeners(options: MainWindowAgentSt
       promptInteractionKey,
       restoredUnconfirmed,
       observation,
-      isReplay
+      isReplay,
+      structuredHost
     }) => {
       if (state.mainWindow?.isDestroyed()) {
+        return
+      }
+      // Why: the renderer still derives structured rows from its own feed subscription; forwarding
+      // these too would give one pane key two writers until that bridge is retired.
+      if (structuredHost) {
         return
       }
       if (providerSessionOnly) {

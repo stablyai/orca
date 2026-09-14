@@ -38,6 +38,9 @@ export class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWithGetUnper
       pty.lastOscTitleEpochMs = observedAtEpochMs
       pty.lastAgentStatus = agentStatus
       pty.lastAgentStatusObservedLive = true
+      if (prevStatus === 'working' && agentStatus === null) {
+        this.confirmPtyAgentExit(ptyId, true)
+      }
       if (prevStatus !== agentStatus) {
         pty.lastAgentStatusStartedAtEpochMs = observedAtEpochMs
       }
@@ -55,7 +58,15 @@ export class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWithGetUnper
         this.setPtyManagementTitleFromObservedTitle(pty, normalizedTitle, observedAt)
       }
       ptyRecordChanged = prevTitle !== recordedTitle || prevStatus !== agentStatus
-      if (agentStatus === 'idle' && prevStatus !== 'idle') {
+      // Why `!== 'permission'` rather than `!== 'idle'`: a name-only idle leaves the waiter
+      // parked on its poll, so the later explicit idle is an idle→idle step that still has
+      // to be offered. The resolve helper re-ranks and returns early when it is not yet
+      // satisfying evidence, which is what the old edge guard was really protecting.
+      // Why also gated on a change: re-ranking an unchanged idle title cannot reach a
+      // different verdict. Tier 1 and 2 depend only on the title and the status; tier 3
+      // needs the stream to go quiet, which cannot happen on the frame that just wrote to
+      // it. Repainted frames would otherwise re-scan the pane tail for nothing.
+      if (agentStatus === 'idle' && prevStatus !== 'permission' && ptyRecordChanged) {
         this.resolvePtyTuiIdleWaiters(pty, ptyId)
       }
       const shouldDelayMobileSnapshot =
@@ -92,6 +103,7 @@ export class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWithGetUnper
       // the shell took over the title — the stuck-spinner bug in #1437.
       const prevStatus = leaf.lastAgentStatus
       const prevObservedLive = leaf.lastAgentStatusObservedLive
+      const prevLeafTitle = leaf.lastOscTitle
       leaf.lastOscTitle = recordedTitle
       leaf.lastOscTitleAt = identityOnlyTitle ? null : this.nextTitleObservationSequence()
       // Why: when a new OSC title doesn't classify as an agent state (e.g.
@@ -109,7 +121,15 @@ export class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWithGetUnper
       // working→idle transition that never comes. Permission→idle is excluded:
       // it means the agent was blocked on user approval and the user said no,
       // which isn't a task-completion signal.
-      if (agentStatus === 'idle' && prevStatus !== 'idle') {
+      // Why not `prevStatus !== 'idle'`: see the pty branch — the resolve helper re-ranks,
+      // so an idle→idle step that upgrades weak evidence to explicit must still be offered.
+      // Why the change gate: see the pty branch — an unchanged idle title re-ranks to the
+      // same verdict, so repainted frames must not re-scan the tail.
+      if (
+        agentStatus === 'idle' &&
+        prevStatus !== 'permission' &&
+        (prevStatus !== agentStatus || prevLeafTitle !== recordedTitle)
+      ) {
         this.resolveTuiIdleWaiters(leaf)
       }
       // Why the second condition: push delivery is gated on LIVE idle, so its
@@ -152,6 +172,9 @@ export class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWithGetUnper
       pty.lastOscTitleAt = null
       pty.lastOscTitleEpochMs = null
       pty.lastAgentStatus = null
+      // Why: the prior process's first-party status would otherwise veto idle for its
+      // replacement — a stale `working` keeps tui-idle unresolved on the new generation.
+      pty.lastExplicitAgentStatus = null
       // Why: the prior process's live frames say nothing about the replacement,
       // so the seed a same-id restore applies must not inherit its authority.
       pty.lastAgentStatusObservedLive = false
@@ -170,8 +193,8 @@ export class OrcaRuntimeWithApplyTrackedPtyTitle extends OrcaRuntimeWithGetUnper
       leaf.waitBlockedAt = null
       leaf.tailWaitState = undefined
     }
+    this.reconcileAgentStatusForEndedProcessFn?.(this.collectAgentStatusPaneKeysForPty(ptyId))
     this.primeWaitBlockedBaselineFromSeededTail(ptyId)
-    this.clearAgentRowSnapshotsForPty(ptyId)
   }
 
   protected setTerminalSideEffectConsumerAvailable(available: boolean): void {

@@ -598,7 +598,8 @@ describe('ClaudeStructuredSessionAdapter transcript-derived recovery', () => {
         reason: 'crashed before replacement',
         cause: 'unexpected-exit',
         fence: 7,
-        acquisitionGeneration: firstAcquisition.acquisitionGeneration
+        acquisitionGeneration: firstAcquisition.acquisitionGeneration,
+        observedAt: 1_700_000_000_500
       }
     ])
     expect(replacement.link).toMatchObject({

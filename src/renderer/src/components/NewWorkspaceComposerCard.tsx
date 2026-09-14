@@ -242,17 +242,11 @@ export default function NewWorkspaceComposerCard(
           selector: action.environmentId,
           timeoutMs: 15_000
         })
-        const runtimeStatus = unwrapRuntimeRpcResult<RuntimeStatus>(response)
-        useAppStore.getState().setRuntimeEnvironmentStatus(action.environmentId, {
-          status: runtimeStatus,
-          checkedAt: Date.now()
-        })
+        unwrapRuntimeRpcResult<RuntimeStatus>(response)
+        await useAppStore.getState().readRuntimeHostStatusSnapshots()
       } catch (error) {
         if (action.kind === 'runtime') {
-          useAppStore.getState().setRuntimeEnvironmentStatus(action.environmentId, {
-            status: null,
-            checkedAt: Date.now()
-          })
+          await useAppStore.getState().readRuntimeHostStatusSnapshots()
         }
         toast.error(
           error instanceof Error

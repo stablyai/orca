@@ -101,7 +101,10 @@ export function parseAskFromStatus(
  *  live cannot vanish from pending state after a reconnect/replay. */
 export function extractPendingAsk(messages: readonly NativeChatMessage[]): AskPrompt | null {
   let pending: AskPrompt | null = null
-  const outstanding: (AskPrompt | null)[] = []
+  // The FIFO is two counters, not a queue: a result only needs to know how far the
+  // call that produced `pending` sits from the head, so nothing is retained per call.
+  let outstanding = 0
+  let pendingDepth = -1
   for (const message of messages) {
     // A new user turn (or an interrupt row) ends the turn that owns whatever
     // calls are still in flight: their results never arrive, and `tool_use_id`
@@ -110,7 +113,8 @@ export function extractPendingAsk(messages: readonly NativeChatMessage[]): AskPr
     // transcript and strands an answered ask as a permanent card over the
     // composer (#11761). Claude's tool-result turns decode as role 'tool'.
     if (message.role === 'user' || isInterruptedStatusMessage(message)) {
-      outstanding.length = 0
+      outstanding = 0
+      pendingDepth = -1
       pending = null
     }
     for (const block of message.blocks) {
@@ -118,12 +122,16 @@ export function extractPendingAsk(messages: readonly NativeChatMessage[]): AskPr
         const parsed = parseToolInput(block.name, block.input)
         if (parsed) {
           pending = parsed
+          pendingDepth = outstanding
         }
-        outstanding.push(parsed)
-      } else if (block.type === 'tool-result' && outstanding.length > 0) {
-        const resolved = outstanding.shift()
-        if (resolved && resolved === pending) {
+        outstanding += 1
+      } else if (block.type === 'tool-result' && outstanding > 0) {
+        outstanding -= 1
+        if (pendingDepth === 0) {
           pending = null
+          pendingDepth = -1
+        } else if (pendingDepth > 0) {
+          pendingDepth -= 1
         }
       }
     }

@@ -251,6 +251,7 @@ describe('GrokHookService', () => {
         'SessionEnd',
         'SessionStart',
         'Stop',
+        'StopCancelled',
         'StopFailure',
         'UserPromptSubmit'
       ].sort()
@@ -262,7 +263,8 @@ describe('GrokHookService', () => {
     // Why: Grok matchers are real regexes; bare `*` does not match-all.
     expect(config.hooks.PostToolUseFailure[0].matcher).toBe('.*')
     expect(config.hooks.PostToolUse[0].matcher).toBe('.*')
-    // Why: StopFailure must not carry a tool matcher — lifecycle-only event.
+    // Why: cancellation/failure are lifecycle-only events and must not inherit a tool matcher.
+    expect(config.hooks.StopCancelled[0].matcher).toBeUndefined()
     expect(config.hooks.StopFailure[0].matcher).toBeUndefined()
     expect(config.hooks.Notification[0].matcher).toBeUndefined()
     // Why: assert the shipped helper still matches what install wrote (regression
@@ -279,7 +281,7 @@ describe('GrokHookService', () => {
       expect(command).toContain(join(homeDir, '.orca'))
       // Why: with no Orca pane in the environment the guard short-circuits, so a standalone Grok
       // session never spawns a shell for the managed script at all.
-      expect(command).toMatch(/^if \[ -n "\$ORCA_PANE_KEY" \] && /)
+      expect(command).toMatch(/^if \[ -n "\$\{ORCA_PANE_KEY-\}" \] && /)
     }
 
     const script = readFileSync(

@@ -684,3 +684,33 @@ describe('getProjectHostSetupWorktreeMeta host selection', () => {
     expect(getProjectHostSetupWorktreeMeta(setups, sshRepo).hostId).toBe('ssh:build-box')
   })
 })
+
+it('appends project source IDs without repeatedly copying an accumulating array', () => {
+  const repos = Array.from({ length: 2000 }, (_, i) =>
+    repo({
+      id: `source-${i}`,
+      path: `/repos/${i}`,
+      displayName: `Repo ${i}`,
+      upstream: { owner: 'acme', repo: 'project' }
+    })
+  )
+  let copied = 0
+  const iterator = Array.prototype[Symbol.iterator]
+  Array.prototype[Symbol.iterator] = function (this: unknown[]) {
+    if (this[0] === 'source-0') {
+      copied += this.length
+    }
+    return iterator.call(this)
+  }
+  let result: ReturnType<typeof projectHostSetupProjectionFromRepos>
+  try {
+    result = projectHostSetupProjectionFromRepos([...repos, repos[0]])
+  } finally {
+    Array.prototype[Symbol.iterator] = iterator
+  }
+  expect(copied).toBeLessThan(10_000)
+  expect(result.projects).toHaveLength(1)
+  expect(result.projects[0].sourceRepoIds).toEqual(repos.map((repo) => repo.id))
+  expect(result.setups).toHaveLength(2001)
+  expect(repos[0].displayName).toBe('Repo 0')
+})

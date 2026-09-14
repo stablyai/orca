@@ -24,7 +24,8 @@ vi.mock('@/i18n/i18n', () => ({
 }))
 
 vi.mock('@/lib/agent-catalog', () => ({
-  getAgentCatalog: () => [{ id: 'codex', label: 'Codex' }]
+  getAgentCatalog: () => [{ id: 'codex', label: 'Codex' }],
+  getAgentLabel: () => 'Codex'
 }))
 
 vi.mock('@/runtime/structured-agent-session-client', () => ({
@@ -38,7 +39,7 @@ vi.mock('@/runtime/local-structured-session-tabs-sync', () => ({
 
 vi.mock('@/store', () => ({
   useAppStore: {
-    getState: () => ({ unifiedTabsByWorktree: {} }),
+    getState: () => ({ unifiedTabsByWorktree: {}, clearNativeChatLaunchDraft: () => {} }),
     subscribe: () => () => {}
   }
 }))
@@ -58,6 +59,9 @@ type CreateReply = { ok: boolean; refusal?: { code: string; message: string } }
 function replyToCreates(...replies: CreateReply[]): void {
   let index = 0
   mocks.call.mockImplementation(async (_target: unknown, method: string, params: unknown) => {
+    if (method === 'agentSession.createSupport') {
+      return { supported: true }
+    }
     if (method !== 'agentSession.create') {
       return { ok: true, page: { fence: 1 } }
     }

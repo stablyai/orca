@@ -1,5 +1,6 @@
 import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
 import { createAgentSessionDeltaCoalescer } from '../native-chat/agent-session-wire/agent-session-delta-coalescer'
+import { CodexItemStreamRetention } from './codex-item-stream-retention'
 import {
   codexJournalItem,
   codexStreamingJournalItem,
@@ -10,7 +11,6 @@ import {
   MAX_CODEX_ITEM_STREAM_PENDING_PATCHES,
   MAX_CODEX_ITEM_STREAM_PENDING_PATCH_BYTES,
   MAX_CODEX_ITEM_STREAM_RETAINED_BYTES,
-  MAX_CODEX_ITEM_STREAM_STATES,
   boundStreamItem,
   pendingPatchBytes
 } from './codex-structured-item-stream-bounds'
@@ -47,8 +47,9 @@ export {
 export function createCodexStructuredItemStreams(
   deps: CodexItemStreamDeps
 ): CodexStructuredItemStreams {
-  const states = new Map<string, CodexItemStreamState>()
+  const states = new CodexItemStreamRetention(deps.maxMetadataBytes)
   const checkpointLengths = new Map<string, number>()
+  const pendingCheckpoints = new Set<string>()
   // Patch updates are authoritative item snapshots. Keep the latest rejected
   // snapshot until the journal admits it; unlike streamed deltas, there is no
   // coalescer timer to retry these events for us.
@@ -57,8 +58,9 @@ export function createCodexStructuredItemStreams(
 
   const forgetState = (key: string): void => {
     coalescer.forget(key)
-    states.delete(key)
+    states.forget(key)
     checkpointLengths.delete(key)
+    pendingCheckpoints.delete(key)
     const pending = pendingPatches.get(key)
     if (pending) {
       retainedPatchBytes = Math.max(0, retainedPatchBytes - pendingPatchBytes(pending))
@@ -67,8 +69,8 @@ export function createCodexStructuredItemStreams(
   }
 
   const trimStates = (): void => {
-    while (states.size > MAX_CODEX_ITEM_STREAM_STATES) {
-      const oldest = states.keys().next().value
+    while (states.overCapacity) {
+      const oldest = states.oldestEvictable()
       if (typeof oldest !== 'string') {
         break
       }
@@ -124,6 +126,7 @@ export function createCodexStructuredItemStreams(
     const state = states.get(key)
     if (state && append(state, text)) {
       checkpointLengths.set(key, text.length)
+      pendingCheckpoints.delete(key)
       return true
     }
     return false
@@ -133,6 +136,7 @@ export function createCodexStructuredItemStreams(
     windowMs: deps.coalesceMs,
     maxRetainedBytes: deps.maxRetainedBytes,
     maxTotalRetainedBytes: deps.maxTotalRetainedBytes,
+    isProtected: (key) => states.isPersistent(key),
     schedule: deps.schedule,
     emit: (key, text) => {
       return persist(key, text, false)
@@ -144,7 +148,7 @@ export function createCodexStructuredItemStreams(
     itemId: string,
     type: string,
     params: unknown
-  ): CodexItemStreamState => {
+  ): CodexItemStreamState | null => {
     const key = codexStructuredItemKey(threadId, itemId)
     const existing = states.get(key)
     if (existing) {
@@ -152,36 +156,25 @@ export function createCodexStructuredItemStreams(
     }
     const item = { type, id: itemId }
     const state = { item, identity: deps.identityFor(threadId, params, item) }
-    states.set(key, state)
+    if (!states.retain(key, state)) {
+      return null
+    }
     trimStates()
     return state
   }
 
   const flush = (): boolean => {
     let flushed = coalescer.flushAll()
-    for (const key of states.keys()) {
+    for (const key of pendingCheckpoints) {
       const snapshot = coalescer.snapshot(key)
       if (snapshot && checkpointLengths.get(key) !== snapshot.text.length) {
         flushed = persist(key, snapshot.text, true) && flushed
+      } else {
+        pendingCheckpoints.delete(key)
       }
     }
-    for (const [key, pending] of pendingPatches) {
-      const admission = deps.sink.tryAppendItem
-        ? deps.sink.tryAppendItem(pending.identity, pending.body)
-        : (deps.sink.appendItem(pending.identity, pending.body), { accepted: true as const })
-      if (!admission.accepted) {
-        flushed = false
-        continue
-      }
-      const published = deps.sink.tryPublish
-        ? deps.sink.tryPublish()
-        : (deps.sink.publish(), { accepted: true as const })
-      if (!published.accepted) {
-        flushed = false
-        continue
-      }
-      retainedPatchBytes = Math.max(0, retainedPatchBytes - pendingPatchBytes(pending))
-      pendingPatches.delete(key)
+    for (const key of pendingPatches.keys()) {
+      flushed = flushPatch(key).accepted && flushed
     }
     return flushed
   }
@@ -209,11 +202,21 @@ export function createCodexStructuredItemStreams(
   }
 
   return {
+    get persistentCount() {
+      return states.persistentSize
+    },
+    canTrack: (threadId, item, identity) =>
+      states.canRetain(codexStructuredItemKey(threadId, item.id), {
+        item: boundStreamItem(item) as CodexThreadItem,
+        identity
+      }),
     track: (threadId, item, identity) => {
       const key = codexStructuredItemKey(threadId, item.id)
-      states.delete(key)
-      states.set(key, { item: boundStreamItem(item) as CodexThreadItem, identity })
+      if (!states.retain(key, { item: boundStreamItem(item) as CodexThreadItem, identity })) {
+        return false
+      }
       trimStates()
+      return true
     },
     handle: (threadId, method, params) => {
       const paramsRecord = readCodexItemStreamRecord(params)
@@ -230,6 +233,9 @@ export function createCodexStructuredItemStreams(
         const key = codexStructuredItemKey(threadId, itemId)
         const streamFlushed = coalescer.flush(key)
         const state = ensureState(threadId, itemId, 'fileChange', params)
+        if (!state) {
+          return { handled: true, admission: { accepted: false, reason: 'failed' } }
+        }
         state.item = { ...state.item, changes: paramsRecord.changes }
         const translated = codexJournalItem(state.item)
         if (translated.body) {
@@ -269,9 +275,14 @@ export function createCodexStructuredItemStreams(
         return { handled: true, admission: { accepted: true } }
       }
       const state = ensureState(threadId, itemId, type ?? 'reasoning', params)
+      if (!state) {
+        return { handled: true, admission: { accepted: false, reason: 'failed' } }
+      }
       const delta = method === REASONING_PART_METHOD ? '\n' : paramsRecord.delta
       if (typeof delta === 'string') {
-        const accepted = coalescer.append(codexStructuredItemKey(threadId, state.item.id), delta)
+        const key = codexStructuredItemKey(threadId, state.item.id)
+        pendingCheckpoints.add(key)
+        const accepted = coalescer.append(key, delta)
         if (!accepted) {
           return { handled: true, admission: { accepted: false, reason: 'backpressure' } }
         }
@@ -287,6 +298,7 @@ export function createCodexStructuredItemStreams(
       coalescer.dispose()
       states.clear()
       checkpointLengths.clear()
+      pendingCheckpoints.clear()
       pendingPatches.clear()
       retainedPatchBytes = 0
     },

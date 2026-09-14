@@ -133,7 +133,10 @@ describe('committed adopting create RPC replay', () => {
     const selectAccountHome = vi.fn(() => selectedHome)
     const runtime = new OrcaRuntimeService(
       {
-        getSettings: () => ({ agentDefaultEnv: { codex: {} } })
+        getSettings: () => ({
+          experimentalStructuredNativeChat: true,
+          agentDefaultEnv: { codex: {} }
+        })
       } as never,
       undefined,
       { prepareCodexStructuredLaunch: selectAccountHome }

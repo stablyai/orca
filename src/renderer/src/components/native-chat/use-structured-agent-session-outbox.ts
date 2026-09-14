@@ -6,13 +6,16 @@ import type {
 } from '../../../../shared/agent-session-wire'
 import { createStructuredAgentSessionOperationId } from '../../../../shared/structured-agent-session-mutation'
 import {
-  classifyStructuredAgentSessionSendFailure,
   createStructuredAgentSessionOutboxEntry,
   reconcileStructuredAgentSessionOutbox,
-  requeueStructuredAgentSessionSendRefusal,
   structuredAgentSessionSendRequest,
   type StructuredAgentSessionOutboxEntry
 } from '../../../../shared/structured-agent-session-outbox'
+import {
+  disposeStructuredAgentSessionSendFailure,
+  disposeStructuredAgentSessionSendResult,
+  type StructuredAgentSessionSendDisposition
+} from '../../../../shared/structured-agent-session-send-disposition'
 import type { RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
 import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
 import { readOutbox, writeOutbox } from './structured-agent-session-outbox-storage'
@@ -49,6 +52,7 @@ export function useStructuredAgentSessionOutbox(args: {
   const dispatchingRef = useRef(false)
   const dispatchGenerationRef = useRef(0)
   const blockedIdRef = useRef<string | null>(null)
+  const retryWithFreshClientMessageIdRef = useRef<string | null>(null)
   const probeAttemptsRef = useRef({ id: null as string | null, attempts: 0 })
   const [error, setError] = useState<string | null>(null)
   const [errorSession, setErrorSession] = useState(sessionId)
@@ -67,6 +71,7 @@ export function useStructuredAgentSessionOutbox(args: {
     dispatchGenerationRef.current += 1
     dispatchingRef.current = false
     blockedIdRef.current = null
+    retryWithFreshClientMessageIdRef.current = null
     probeAttemptsRef.current = { id: null, attempts: 0 }
   }, [fence, sessionId, targetKey])
 
@@ -89,16 +94,47 @@ export function useStructuredAgentSessionOutbox(args: {
   }, [fence, sessionId, target])
 
   useEffect(() => {
-    const next = reconcileStructuredAgentSessionOutbox(outboxRef.current, submissions)
-    if (
-      next.some((entry, index) => entry !== outboxRef.current[index]) ||
-      next.length !== outboxRef.current.length
-    ) {
+    const current = outboxRef.current
+    const headSubmission = submissions.find(
+      (submission) => submission.clientMessageId === current[0]?.clientMessageId
+    )
+    const hostOwnsHead =
+      headSubmission?.dispatchState === 'pending' || headSubmission?.dispatchState === 'accepted'
+    const hostSettledHeadError =
+      current[0]?.state === 'unconfirmed' ||
+      blockedIdRef.current === headSubmission?.clientMessageId
+    const next = reconcileStructuredAgentSessionOutbox(current, submissions)
+    if (next.some((entry, index) => entry !== current[index]) || next.length !== current.length) {
       outboxRef.current = next
       setOutbox(next)
       writeOutbox(sessionId, next)
     }
+    if (hostOwnsHead) {
+      if (dispatchingRef.current) {
+        dispatchGenerationRef.current += 1
+        dispatchingRef.current = false
+      }
+      if (blockedIdRef.current === headSubmission.clientMessageId) {
+        blockedIdRef.current = null
+      }
+      if (hostSettledHeadError) {
+        setError(null)
+      }
+    }
   }, [sessionId, submissions])
+
+  // The one place that owns the refs, the React state and the storage write.
+  const applyDisposition = useCallback(
+    (disposition: StructuredAgentSessionSendDisposition): void => {
+      blockedIdRef.current = disposition.blockedClientMessageId
+      retryWithFreshClientMessageIdRef.current = disposition.retryWithFreshClientMessageId
+      setError(disposition.error)
+      outboxRef.current = disposition.entries
+      setOutbox(disposition.entries)
+      writeOutbox(sessionId, disposition.entries)
+    },
+    [sessionId]
+  )
 
   useEffect(() => {
     const next = outbox[0]
@@ -135,92 +171,49 @@ export function useStructuredAgentSessionOutbox(args: {
         if (dispatchGenerationRef.current !== dispatchGeneration) {
           return
         }
-        if (!result.ok) {
-          setError(result.refusal.message)
-          const updated = outboxRef.current.map((entry) =>
-            entry.clientMessageId === next.clientMessageId
-              ? requeueStructuredAgentSessionSendRefusal(
-                  entry,
-                  result.refusal.code,
-                  structuredSessionOperationId
-                )
-              : entry
-          )
-          blockedIdRef.current = updated[0]?.clientMessageId ?? null
-          outboxRef.current = updated
-          setOutbox(updated)
-          writeOutbox(sessionId, updated)
-          return
-        }
-        const submission = result.value.submission
-        if (submission.dispatchState === 'rejected') {
-          blockedIdRef.current = next.clientMessageId
-          setError(submission.reason ?? 'Message was not accepted')
-        } else {
-          setError(null)
-        }
-        const updated =
-          submission.dispatchState === 'accepted'
-            ? outboxRef.current.filter((entry) => entry.clientMessageId !== next.clientMessageId)
-            : outboxRef.current.map((entry) =>
-                entry.clientMessageId === next.clientMessageId
-                  ? {
-                      ...entry,
-                      state:
-                        submission.dispatchState === 'unknown' ||
-                        submission.dispatchState === 'pending'
-                          ? ('unconfirmed' as const)
-                          : ('queued' as const)
-                    }
-                  : entry
-              )
-        outboxRef.current = updated
-        setOutbox(updated)
-        writeOutbox(sessionId, updated)
+        applyDisposition(
+          disposeStructuredAgentSessionSendResult({
+            entries: outboxRef.current,
+            entry: next,
+            blockedClientMessageId: blockedIdRef.current,
+            result,
+            createOperationId: structuredSessionOperationId
+          })
+        )
       })
       .catch((caught) => {
         if (dispatchGenerationRef.current !== dispatchGeneration) {
           return
         }
-        const failure = classifyStructuredAgentSessionSendFailure(caught, isDesktopDeliveryUnknown)
-        if (failure === 'failed') {
-          blockedIdRef.current = next.clientMessageId
-        }
-        const updated = outboxRef.current.map((entry) =>
-          entry.clientMessageId === next.clientMessageId
-            ? {
-                ...entry,
-                state:
-                  failure === 'delivery-unknown' ? ('unconfirmed' as const) : ('queued' as const)
-              }
-            : entry
+        applyDisposition(
+          disposeStructuredAgentSessionSendFailure({
+            entries: outboxRef.current,
+            entry: next,
+            blockedClientMessageId: blockedIdRef.current,
+            cause: caught,
+            isDeliveryUnknown: isDesktopDeliveryUnknown
+          })
         )
-        setError(
-          failure === 'delivery-unknown' ? 'Message delivery is unconfirmed' : String(caught)
-        )
-        outboxRef.current = updated
-        setOutbox(updated)
-        writeOutbox(sessionId, updated)
       })
       .finally(() => {
         if (dispatchGenerationRef.current === dispatchGeneration) {
           dispatchingRef.current = false
         }
       })
-  }, [fence, outbox, sessionId, target])
+  }, [applyDisposition, fence, outbox, sessionId, target])
 
   // A transport-side unknown may never have reached the host, and nothing else
   // moves it out of `unconfirmed`, so one wedges the whole FIFO queue. Re-issuing
   // the same envelope without `retryUnknown` is idempotent: the operation ledger
   // replays a recorded outcome, or the host performs a genuine first delivery.
-  // A host-confirmed unknown stays parked — forcing past that redispatches, which
-  // is the user's call via Retry.
+  // A host-confirmed unknown stays parked until the user explicitly asks Retry
+  // to replay the same operation.
   const head = outbox[0]
   // Depend on primitives: `submissions` is rebuilt on every streaming batch, so an
   // array-identity dep would reset the backoff forever while the agent is working.
-  // A non-null `retryAfterUnknownSubmittedAt` means the user already force-retried,
-  // so the request would carry `retryUnknown` and redispatch host-side. Only entries
-  // that have never been force-retried are safe to re-issue automatically.
+  // A non-null `retryAfterUnknownSubmittedAt` means the user already retried, so
+  // another request would repeat that explicit action. Only entries that have
+  // never been retried are safe to probe automatically.
   const probeId =
     head &&
     head.sessionId === sessionId &&
@@ -285,13 +278,19 @@ export function useStructuredAgentSessionOutbox(args: {
     // A provider-history reconciliation can settle an earlier unknown as
     // rejected before the user presses Retry. Reusing that operation id only
     // replays the settled rejection forever, so rotate the id for a safe resend.
-    if (current && submission?.dispatchState === 'rejected') {
+    if (
+      current &&
+      (submission?.dispatchState === 'rejected' ||
+        retryWithFreshClientMessageIdRef.current === clientMessageId)
+    ) {
+      retryWithFreshClientMessageIdRef.current = null
       const rotated = outboxRef.current.map((entry) =>
         entry.clientMessageId === clientMessageId
           ? {
               ...entry,
               clientMessageId: structuredSessionOperationId(),
               state: 'queued' as const,
+              lastAttemptAt: null,
               retryAfterUnknownSubmittedAt: null
             }
           : entry

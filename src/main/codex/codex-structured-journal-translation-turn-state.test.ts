@@ -40,4 +40,16 @@ describe('CodexJournalActiveTurns', () => {
     expect(active.size).toBe(0)
     expect(active.bytes).toBe(0)
   })
+
+  it('remembers each turn start time until the turn is forgotten', () => {
+    const active = new CodexJournalActiveTurns()
+
+    expect(active.remember('thread', 'turn-1', 1_000)).toBe(true)
+    expect(active.remember('thread', 'turn-1', 2_000)).toBe(true)
+    expect(active.startedAt('thread', 'turn-1')).toBe(1_000)
+    expect(active.startedAt('thread', 'turn-missing')).toBeUndefined()
+
+    active.forget('thread', 'turn-1')
+    expect(active.startedAt('thread', 'turn-1')).toBeUndefined()
+  })
 })

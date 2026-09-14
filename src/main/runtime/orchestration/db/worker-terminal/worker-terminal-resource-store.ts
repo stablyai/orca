@@ -2,6 +2,7 @@ import type {
   WorkerTerminalResourceRow,
   WorkerTerminalOwnershipState
 } from '../../worker-terminal-ownership'
+import { WORKER_SETTLED_STATES } from '../../worker-terminal-ownership'
 import { OrchestrationError } from '../../orchestration-error'
 import { generateId } from '../generated-id'
 import type { OrchestrationDb } from '../orchestration-db'
@@ -199,9 +200,40 @@ export function transferWorkerTerminalResourceStatement(
   return this.getWorkerTerminalResource(params.resourceId) as WorkerTerminalResourceRow
 }
 
+// A new process in the same pane is ordinary user work, not the settled Dispatch's resource.
+export function retainReplacedWorkerTerminalResources(
+  this: OrchestrationDb,
+  params: { paneKey: string; worktreeId: string; hostScope: string; processIncarnation: string }
+): number {
+  return Number(
+    this.db
+      .prepare(
+        `UPDATE worker_terminal_resources
+          SET release_state = 'retained', retained_reason = 'identity_unproven',
+              updated_at = datetime('now')
+        WHERE pane_key = ? AND worktree_id = ? AND host_scope = ?
+          AND process_incarnation IS NOT NULL AND process_incarnation != ?
+          AND ownership_state = 'owned' AND release_state = 'not_requested'
+          AND EXISTS (
+            SELECT 1 FROM worker_dispatches w
+             WHERE w.dispatch_id = worker_terminal_resources.owner_dispatch_id
+               AND w.state IN (${WORKER_SETTLED_STATES.map(() => '?').join(', ')})
+          )`
+      )
+      .run(
+        params.paneKey,
+        params.worktreeId,
+        params.hostScope,
+        params.processIncarnation,
+        ...WORKER_SETTLED_STATES
+      ).changes
+  )
+}
+
 // Finds an owned, settled, exact-match resource for an explicitly reused terminal.
 
 export type WorkerTerminalResourceStoreMethods = {
+  retainReplacedWorkerTerminalResources: typeof retainReplacedWorkerTerminalResources
   backfillWorkerTerminalResources: typeof backfillWorkerTerminalResources
   createWorkerTerminalResourceStatement: typeof createWorkerTerminalResourceStatement
   getWorkerTerminalResource: typeof getWorkerTerminalResource
@@ -214,6 +246,7 @@ export type WorkerTerminalResourceStoreMethods = {
 
 export function attachWorkerTerminalResourceStore(ctor: { prototype: object }): void {
   Object.assign(ctor.prototype, {
+    retainReplacedWorkerTerminalResources,
     backfillWorkerTerminalResources,
     createWorkerTerminalResourceStatement,
     getWorkerTerminalResource,

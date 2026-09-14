@@ -1,5 +1,8 @@
 import type { AgentSessionJournalIdentity } from '../../../shared/agent-session-journal-types'
-import type { AgentSessionExecutionLocation } from '../../../shared/agent-session-record'
+import type {
+  AgentSessionAccountHome,
+  AgentSessionExecutionLocation
+} from '../../../shared/agent-session-record'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 
 type RoutedAgent = 'claude' | 'codex'
@@ -46,6 +49,20 @@ export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessi
   dispatch: StructuredAgentSessionAdapter['dispatch'] = (input) =>
     this.owner(input.sessionId).dispatch(input)
 
+  rewindSupport: NonNullable<StructuredAgentSessionAdapter['rewindSupport']> = (sessionId) =>
+    this.owners.get(sessionId)?.rewindSupport?.(sessionId) ?? {
+      supported: false,
+      reason: 'unsupported'
+    }
+
+  rewind: NonNullable<StructuredAgentSessionAdapter['rewind']> = (input) =>
+    this.owner(input.sessionId).rewind?.(input) ??
+    Promise.resolve({ ok: false, reason: 'unsupported' })
+
+  recoverRewind: NonNullable<StructuredAgentSessionAdapter['recoverRewind']> = (input) =>
+    this.owner(input.sessionId).recoverRewind?.(input) ??
+    Promise.resolve({ ok: false, reason: 'unsupported' })
+
   compact: NonNullable<StructuredAgentSessionAdapter['compact']> = (input) => {
     const compact = this.owner(input.sessionId).compact
     if (!compact) {
@@ -90,6 +107,11 @@ export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessi
 
   historyFilePath = (input: { identity: AgentSessionJournalIdentity }) =>
     this.requireAgent(input.identity).historyFilePath?.(input) ?? Promise.resolve(null)
+
+  providerHistoryWindow = (input: {
+    identity: AgentSessionJournalIdentity
+    accountHome: AgentSessionAccountHome
+  }) => this.requireAgent(input.identity).providerHistoryWindow?.(input) ?? Promise.resolve(null)
 
   closeSession = (sessionId: string): Promise<boolean> =>
     this.stopSession(sessionId, (adapter) => adapter.closeSession)

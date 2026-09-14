@@ -176,6 +176,7 @@ describe.skipIf(!claudeAuthenticated)('real Claude TUI resume proof', () => {
     const providerSessionId = randomUUID()
     const claudeConfigDir = process.env.CLAUDE_CONFIG_DIR?.trim() || join(homedir(), '.claude')
     const events: ClaudeStructuredSessionEvent[] = []
+    const settlements: { clientMessageId: string }[] = []
     const adapter = new ClaudeStructuredSessionAdapter({
       resolveLaunch: async () => ({
         pathToClaudeCodeExecutable: command,
@@ -191,6 +192,7 @@ describe.skipIf(!claudeAuthenticated)('real Claude TUI resume proof', () => {
         resumed: false
       }),
       onEvent: (event) => events.push(event),
+      onDispatchSettledLate: (settlement) => settlements.push(settlement),
       readProcessStartTime: async () => 1
     })
     let resumed: RunningTui | null = null
@@ -211,8 +213,12 @@ describe.skipIf(!claudeAuthenticated)('real Claude TUI resume proof', () => {
             blocks: [{ type: 'text', text: 'Reply only with ORCA_RESUME_READY.' }]
           }
         })
-      ).resolves.toMatchObject({ state: 'accepted' })
+      ).resolves.toEqual({ state: 'admitted' })
       await waitForStructuredResult(events)
+      // The real CLI's replay is what settles the send; dispatch only admitted it.
+      expect(settlements.map((settlement) => settlement.clientMessageId)).toContain(
+        'real-product-turn'
+      )
       const started = await waitForHook(eventsPath, 'startup')
       const transcriptPath = String(started.transcript_path)
       transcripts.push(transcriptPath)

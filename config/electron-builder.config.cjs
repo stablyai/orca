@@ -7,6 +7,7 @@ const {
   verifyPackagedDaemonEntryBoots
 } = require('./scripts/verify-packaged-daemon-entry.cjs')
 const {
+  assertPackagedNativeVariantsInstalled,
   createPackagedRuntimeNodeModuleResources,
   prunePackagedRuntimeNodeModules,
   verifyPackagedMainRuntimeDeps
@@ -147,6 +148,16 @@ const rpmElectronRuntimeDependencies = [
 // config/nsis/orca-installer-hooks.nsh, which registers the same set on Windows.
 const MARKDOWN_FILE_EXTENSIONS = ['md', 'markdown', 'mdx']
 
+// Why: the config must load on a host-only install without resolving unused Windows addons.
+// This is load-time tolerance only; beforePack enforces that the target's natives are installed.
+// Why one package: @vscode/windows-process-tree is the only os: win32 npm addon;
+// @orca/windows-registry is a workspace link present on every host, so its presence proves nothing.
+const windowsRuntimeResources = existsSync(
+  join(__dirname, '..', 'node_modules', '@vscode', 'windows-process-tree', 'package.json')
+)
+  ? createPackagedRuntimeNodeModuleResources('win32')
+  : []
+
 /** @type {import('electron-builder').Configuration} */
 module.exports = {
   appId,
@@ -278,17 +289,10 @@ module.exports = {
       verifyStaticAppImagePackage(file, arch)
     }
   },
+  beforePack: (context) => {
+    assertPackagedNativeVariantsInstalled(context.electronPlatformName, context.arch)
+  },
   afterPack: async (context) => {
-    // Why: a Linux runner-image glibc bump silently shipped a node-pty pty.node
-    // requiring GLIBC_2.34, crashing the app on startup on Ubuntu 20.04 (#9902).
-    // Fail packaging if any bundled native binary exceeds the supported floor.
-    if (context.electronPlatformName === 'linux') {
-      // Why the arch is passed: symbol-version checks pass happily on a wrong-architecture binary,
-      // so a cross-built slice could ship the host's pty.node and only fail at runtime.
-      verifyLinuxGlibcFloor(context.appOutDir, {
-        targetArch: { 1: 'x64', 3: 'arm64' }[context.arch]
-      })
-    }
     const resourcesDir =
       context.electronPlatformName === 'darwin'
         ? join(
@@ -326,6 +330,19 @@ module.exports = {
     }
     stampPackagedCliVersion(resourcesDir, context.packager.appInfo.version)
     prunePackagedRuntimeNodeModules(resourcesDir, context.electronPlatformName, context.arch)
+    // Why: a Linux runner-image glibc bump silently shipped a node-pty pty.node
+    // requiring GLIBC_2.34, crashing the app on startup on Ubuntu 20.04 (#9902).
+    // Fail packaging if any bundled native binary exceeds the supported floor.
+    // Why after the prune: `pnpm install:release` widens the CPU set for cross-builds,
+    // so an arm64 slice can still carry the x64 @parcel/watcher until
+    // prunePackagedRuntimeNodeModules drops it.
+    if (context.electronPlatformName === 'linux') {
+      // Why the arch is passed: symbol-version checks pass happily on a wrong-architecture binary,
+      // so a cross-built slice could ship the host's pty.node and only fail at runtime.
+      verifyLinuxGlibcFloor(context.appOutDir, {
+        targetArch: { 1: 'x64', 3: 'arm64' }[context.arch]
+      })
+    }
     verifyPackagedMainRuntimeDeps(resourcesDir)
     // Why: boot the packaged daemon-entry under plain Node, but only for the
     // slice matching the packaging host's arch — daemon-entry.js is JS, yet it
@@ -415,7 +432,7 @@ module.exports = {
     ...(isWinDevChannel ? { verifyUpdateCodeSignature: false } : {}),
     extraResources: [
       ...commonExtraResources,
-      ...createPackagedRuntimeNodeModuleResources('win32'),
+      ...windowsRuntimeResources,
       winSpeechNativeResource,
       {
         from: 'resources/win32/bin/orca.cmd',

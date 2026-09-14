@@ -83,15 +83,20 @@ export function removePaneKeys<T>(
   record: Record<string, T>,
   paneKeys: ReadonlySet<string>
 ): Record<string, T> {
-  const matchingKeys = Object.keys(record).filter((key) => paneKeys.has(key))
-  if (matchingKeys.length === 0) {
-    return record
-  }
-  const next = { ...record }
-  for (const key of matchingKeys) {
+  // Probe the requested keys instead of enumerating the record, and copy only once a key
+  // actually matches: pane retirement calls this across a dozen records that usually hold
+  // none of the retired keys, so the no-op path must stay allocation-free and keep returning
+  // the same reference. `propertyIsEnumerable` is own-only, so inherited keys such as
+  // `toString` or `__proto__` are never deletable.
+  let next: Record<string, T> | null = null
+  for (const key of paneKeys) {
+    if (!Object.prototype.propertyIsEnumerable.call(record, key)) {
+      continue
+    }
+    next ??= { ...record }
     delete next[key]
   }
-  return next
+  return next ?? record
 }
 
 export function removePaneKeysByTabPrefix<T>(

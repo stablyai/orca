@@ -16,6 +16,8 @@ import {
   useTabDragSplit
 } from './useTabDragSplit'
 
+globalThis.IS_REACT_ACT_ENVIRONMENT = true
+
 vi.mock('../browser-pane/host-guest/webview-registry', () => ({
   acquireWebviewsDragPassthrough: vi.fn(() => vi.fn())
 }))
@@ -94,10 +96,13 @@ function makeDragEvent(activeData: TabDragItemData, pointer: { x: number; y: num
   }
 }
 
-function renderDragHook(): ReturnType<typeof useTabDragSplit> {
+function renderDragHook(
+  onRender?: (drag: ReturnType<typeof useTabDragSplit>) => void
+): ReturnType<typeof useTabDragSplit> {
   let result: ReturnType<typeof useTabDragSplit> | null = null
   function Probe(): null {
     result = useTabDragSplit({ worktreeId: WT })
+    onRender?.(result)
     return null
   }
 
@@ -267,6 +272,68 @@ describe('canDropTabIntoPaneBody', () => {
 })
 
 describe('useTabDragSplit', () => {
+  it.each(['split', 'insertion'])(
+    'does not restore a %s preview after blur cleared the drag',
+    async (preview) => {
+      if (preview === 'split') {
+        addPanelGeometry(
+          'group-2',
+          rect({ left: 500, top: 0, width: 400, height: 600 }),
+          rect({ left: 500, top: 32, width: 400, height: 568 })
+        )
+      }
+      const onRender = vi.fn()
+      const drag = renderDragHook(onRender)
+      const event = {
+        ...makeDragEvent(makeDragData('group-1'), { x: 880, y: 300 }),
+        ...(preview === 'insertion'
+          ? {
+              over: {
+                data: { current: makeDragData('group-2', 'tab-2') },
+                rect: rect({ left: 500, top: 0, width: 400, height: 32 })
+              }
+            }
+          : {})
+      }
+      const previewKey = preview === 'split' ? 'hoveredDropTarget' : 'hoveredTabInsertion'
+      act(() => drag.onDragStart(event as unknown as Parameters<typeof drag.onDragStart>[0]))
+      act(() => drag.onDragMove(event as unknown as Parameters<typeof drag.onDragMove>[0]))
+      expect(onRender.mock.lastCall?.[0][previewKey]).not.toBeNull()
+
+      await act(async () => {
+        window.dispatchEvent(new Event('blur'))
+        await new Promise((resolve) => window.setTimeout(resolve, 0))
+      })
+      expect(onRender.mock.lastCall?.[0][previewKey]).toBeNull()
+      act(() => drag.onDragMove(event as unknown as Parameters<typeof drag.onDragMove>[0]))
+
+      expect(onRender.mock.lastCall?.[0][previewKey]).toBeNull()
+      expect(drag.isTabDragActiveRef.current).toBe(false)
+    }
+  )
+
+  it('does not commit a drop after blur cleared the drag', async () => {
+    addPanelGeometry(
+      'group-2',
+      rect({ left: 500, top: 0, width: 400, height: 600 }),
+      rect({ left: 500, top: 32, width: 400, height: 568 })
+    )
+    const dropUnifiedTab = vi.fn(() => true)
+    const reorderUnifiedTabs = vi.fn()
+    useAppStore.setState({ dropUnifiedTab, reorderUnifiedTabs })
+    const drag = renderDragHook()
+    const event = makeDragEvent(makeDragData('group-1'), { x: 880, y: 300 })
+    act(() => drag.onDragStart(event as unknown as Parameters<typeof drag.onDragStart>[0]))
+    await act(async () => {
+      window.dispatchEvent(new Event('blur'))
+      await new Promise((resolve) => window.setTimeout(resolve, 0))
+    })
+    act(() => drag.onDragEnd(event as unknown as Parameters<typeof drag.onDragEnd>[0]))
+
+    expect(dropUnifiedTab).not.toHaveBeenCalled()
+    expect(reorderUnifiedTabs).not.toHaveBeenCalled()
+  })
+
   it.each(['pointerup', 'pointercancel', 'blur', 'focus'])(
     'clears a stuck active drag when %s arrives without a dnd end event',
     async (eventName) => {

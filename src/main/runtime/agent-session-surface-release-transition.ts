@@ -27,6 +27,8 @@ export function releaseAgentSessionOwnerAfterSurfaceClose(args: {
   record: AgentSessionRecord
   expectedFence: number
   now: number
+  /** Exit receipt can precede a delayed journal settlement and lease release. */
+  exitObservedAt?: number
   settlementRetry?: { settlementId: string; detail: string }
 }): AgentSessionRecord {
   const { record } = args
@@ -48,7 +50,7 @@ export function releaseAgentSessionOwnerAfterSurfaceClose(args: {
     deathEvidence: {
       kind: 'exit-observed',
       detail: args.settlementRetry?.detail ?? 'the last surface holding this session released it',
-      observedAt: args.now
+      observedAt: args.exitObservedAt ?? args.now
     }
   })
 }
@@ -60,6 +62,7 @@ export function releaseStoredAgentSessionOwnerAfterSurfaceClose(
     sessionId: string
     expectedFence: number
     now: number
+    exitObservedAt?: number
     settlementRetry?: { settlementId: string; detail: string }
   }
 ): Promise<AgentSessionRecord> {

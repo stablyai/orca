@@ -1,10 +1,28 @@
 import { describe, expect, it } from 'vitest'
 import {
   getSyntheticAgentTerminalTitle,
+  isSyntheticAgentPermissionTitle,
   shouldDriveSyntheticAgentTitleFromHook
 } from './synthetic-agent-title'
 
 describe('synthetic agent titles', () => {
+  it.each(['Codex - action required', ' Pi - action required ', 'OMP - action required'])(
+    'recognizes the generated permission label %s',
+    (title) => {
+      expect(isSyntheticAgentPermissionTitle(title)).toBe(true)
+    }
+  )
+
+  it.each([
+    '✋ Gemini CLI',
+    'π ! approve command',
+    'OpenCode - action required',
+    'Codex ready',
+    'Codex - action required for deployment'
+  ])('keeps native and contextual titles outside generated permission suppression: %s', (title) => {
+    expect(isSyntheticAgentPermissionTitle(title)).toBe(false)
+  })
+
   it('provides terminal-state titles for Codex hook completion', () => {
     expect(getSyntheticAgentTerminalTitle('codex', 'done')).toBe('Codex ready')
     expect(getSyntheticAgentTerminalTitle('codex', 'waiting')).toBe('Codex - action required')

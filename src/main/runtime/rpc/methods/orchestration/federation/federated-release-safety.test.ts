@@ -3,6 +3,7 @@ import { ORCHESTRATION_CONTRACT_VERSION } from '../../../../../../shared/protoco
 import { OrcaRuntimeService } from '../../../../orca-runtime'
 import { OrchestrationDb } from '../../../../orchestration/db'
 import { ORCHESTRATION_METHODS } from '../../orchestration'
+import { eraseRpcMethods } from '../../../core'
 
 const HOME_FINGERPRINT = 'home-peer'
 const PANE_KEY = 'tab_remote:bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb'
@@ -152,6 +153,7 @@ describe('federated worker release ownership', () => {
 
   function createAttachment(dispatchId: string, terminalOwnership?: 'created' | 'external'): void {
     db.createRemoteDispatchAttachment({
+      runId: 'run-home',
       dispatchId,
       taskId: `task_${dispatchId}`,
       homePeerFingerprint: HOME_FINGERPRINT,
@@ -190,7 +192,9 @@ describe('federated worker release ownership', () => {
     dispatchId: string,
     params: Record<string, unknown> = { dispatchId }
   ): Promise<unknown> {
-    const method = ORCHESTRATION_METHODS.find((candidate) => candidate.name === name)
+    const method = eraseRpcMethods(ORCHESTRATION_METHODS).find(
+      (candidate) => candidate.name === name
+    )
     if (!method) {
       throw new Error(`Method not found: ${name}`)
     }

@@ -2,6 +2,7 @@ import {
   formatAssignmentInventorySnapshot,
   readAssignmentInventorySnapshot
 } from './assignment-inventory-snapshot.js'
+import { readRegionCorrectionOutcomes } from './region-correction-outcomes.js'
 import { RelayAssignmentStore } from './assignment-store.js'
 import { loadRelayConfig } from './config.js'
 import { startCellHeartbeat } from './cell-heartbeat-client.js'
@@ -71,6 +72,13 @@ const migrationInventoryTimer = roleOwnsAssignmentMaintenance(config.role)
       void runRelayBackgroundOperation(async () => {
         const inventory = await readRegisteredMigrationInventory(database, Date.now())
         for (const line of formatRegisteredMigrationInventory(inventory)) console.warn(line)
+        console.log(
+          JSON.stringify({
+            event: 'orca_relay_region_correction_outcomes',
+            observedAt: Date.now(),
+            outcomes: await readRegionCorrectionOutcomes(database, Date.now())
+          })
+        )
       }, '[orca-relay] migration inventory failed')
     }, 5 * 60_000)
   : null

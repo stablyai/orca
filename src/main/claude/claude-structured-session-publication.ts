@@ -26,9 +26,14 @@ export function createClaudeSessionPublication(input: {
   capabilities: readonly string[]
   /** Read from `get_settings`; `system/init` never reports an effort. */
   effort: string | null
+  fastMode: boolean | null
+  fastModePerSessionOptIn: boolean | null
+  fastModeState?: ClaudeSession['fastModeState']
+  fastModeDisabledReason?: string
 }): { acquisition: AgentSessionAcquisition; session: ClaudeSession } {
   const model = input.init.model
   const effort = input.effort
+  const fastMode = input.fastMode
   return {
     acquisition: {
       process: input.process,
@@ -61,10 +66,21 @@ export function createClaudeSessionPublication(input: {
       capabilities: input.capabilities,
       reportedOptions: {
         ...(model ? { model } : {}),
-        ...(effort ? { effort } : {})
+        ...(effort ? { effort } : {}),
+        ...(fastMode !== null ? { fastMode } : {})
       },
+      ...(input.fastModeState ? { fastModeState: input.fastModeState } : {}),
+      ...(input.fastModeDisabledReason
+        ? { fastModeDisabledReason: input.fastModeDisabledReason }
+        : {}),
+      ...(input.fastModePerSessionOptIn !== null
+        ? { fastModePerSessionOptIn: input.fastModePerSessionOptIn }
+        : {}),
       reportedModelMutation: 0,
-      confirmedOptions: new Set(effort ? ['effort'] : []),
+      confirmedOptions: new Set([
+        ...(effort ? ['effort'] : []),
+        ...(fastMode !== null ? ['fastMode'] : [])
+      ]),
       restoreSkippedOptions: new Set(),
       translator: input.translator,
       events: input.events

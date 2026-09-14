@@ -1,3 +1,4 @@
+import type { PathExistenceResult } from '../../shared/path-existence-batch'
 import type { SearchOptions, SearchResult } from '../../shared/code-search-types'
 import type {
   DirEntry,
@@ -111,6 +112,10 @@ export type FilesystemApi = {
       filePath: string
       connectionId?: string
     }) => Promise<{ size: number; isDirectory: boolean; mtime: number }>
+    pathsExist?: (args: {
+      filePaths: string[]
+      connectionId?: string
+    }) => Promise<PathExistenceResult[]>
     pathExists: (args: { filePath: string; connectionId?: string }) => Promise<boolean>
     listFiles: (args: {
       rootPath: string

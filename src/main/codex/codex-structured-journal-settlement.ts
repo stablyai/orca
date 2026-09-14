@@ -1,6 +1,7 @@
 import type {
   AgentJournalItemBody,
-  AgentJournalItemIdentity
+  AgentJournalItemIdentity,
+  AgentJournalTurnLifecycle
 } from '../../shared/agent-session-journal-types'
 import { partitionJournalLifecycleMutations } from '../native-chat/agent-session-journal/journal-lifecycle-batch-partition'
 import type { JournalLifecycleMutationInput } from '../native-chat/agent-session-journal/journal-row-builders'
@@ -20,6 +21,11 @@ import {
 } from './codex-structured-item-translation'
 import type { CodexStructuredItemStreams } from './codex-structured-item-streams'
 import type { CodexStructuredSessionEvent } from './codex-structured-session-adapter'
+import { codexCommandOutlivesTurn } from './codex-command-lifecycle'
+import {
+  codexTurnLifecycleBody,
+  codexTurnLifecycleIdentity
+} from './codex-structured-journal-translation-turns'
 
 export type CodexActiveJournalItem = {
   threadId: string
@@ -44,6 +50,8 @@ export function settleCodexJournalSession(input: {
   currentTurnIds: ReadonlyMap<string, ReadonlySet<string>>
   primaryThreadId: string | null
   ordinals: CodexTurnOrdinals
+  /** Terminal lifecycle for a turn the provider left running when it ended. */
+  settledTurnLifecycle: (threadId: string, turnId: string) => AgentJournalTurnLifecycle
 }): StructuredAgentSessionSinkAdmission {
   const mutations: JournalLifecycleMutationInput[] = []
   const turnOrdinalsToForget: { threadId: string; turnId: string }[] = []
@@ -83,13 +91,9 @@ export function settleCodexJournalSession(input: {
     }
     for (const turnId of turnIds) {
       mutations.push({
-        kind: 'tombstone',
-        identity: {
-          provider: 'legacy',
-          agent: 'codex',
-          sessionId: input.event.sessionId,
-          recordId: `turn-lifecycle:${turnId}`
-        }
+        kind: 'item',
+        identity: codexTurnLifecycleIdentity(input.event.sessionId, turnId),
+        body: codexTurnLifecycleBody(input.settledTurnLifecycle(threadId, turnId))
       })
       turnOrdinalsToForget.push({ threadId, turnId })
     }
@@ -108,6 +112,8 @@ export function settleCodexJournalTurn(input: {
   sessionId: string
   threadId: string
   turnId: string
+  /** Null off the primary thread: only the primary turn owns a lifecycle row. */
+  turnLifecycle: AgentJournalTurnLifecycle | null
   sink: StructuredAgentSessionEventSink
   streams: CodexStructuredItemStreams
   activeItems: Map<string, CodexActiveJournalItem>
@@ -116,6 +122,9 @@ export function settleCodexJournalTurn(input: {
   const activeItemsToForget: { key: string; threadId: string; itemId: string }[] = []
   for (const [key, active] of input.activeItems) {
     if (active.threadId !== input.threadId || active.turnId !== input.turnId) {
+      continue
+    }
+    if (codexCommandOutlivesTurn(active.item)) {
       continue
     }
     const streamed = input.streams.snapshot(active.threadId, active.item.id)
@@ -128,15 +137,17 @@ export function settleCodexJournalTurn(input: {
     }
     activeItemsToForget.push({ key, threadId: active.threadId, itemId: active.item.id })
   }
-  mutations.push({
-    kind: 'tombstone',
-    identity: {
-      provider: 'legacy',
-      agent: 'codex',
-      sessionId: input.sessionId,
-      recordId: `turn-lifecycle:${input.turnId}`
-    }
-  })
+  // Revised, never tombstoned: the terminal row keeps the turn's duration durable.
+  if (input.turnLifecycle) {
+    mutations.push({
+      kind: 'item',
+      identity: codexTurnLifecycleIdentity(input.sessionId, input.turnId),
+      body: codexTurnLifecycleBody(input.turnLifecycle)
+    })
+  }
+  if (mutations.length === 0) {
+    return ADMITTED
+  }
   const admission = appendLifecycleMutations(
     input.sink,
     `turn-completed:${input.sessionId}:${input.threadId}:${input.turnId}`,

@@ -173,6 +173,28 @@ describe('rebuild-native-deps patched node-pty rebuild', () => {
     }
   })
 
+  it('refuses a Windows rebuild when the process creation-time patch is missing', () => {
+    const projectDir = mkTempProject()
+
+    try {
+      writeFakeUsableElectronPackage(projectDir, { platform: 'win32' })
+      writeFakeElectronRebuild(projectDir)
+      writeFakeNodePtyConptyPayload(projectDir, 'x64')
+      writeFakeWindowsProcessTreeWithNodeAddonApi(projectDir, { creationTimePatchApplied: false })
+
+      const result = runRebuildScript(
+        projectDir,
+        { npm_config_platform: 'win32', npm_config_arch: 'x64' },
+        ['--platform=win32', '--arch=x64', '--force']
+      )
+
+      expect(result.status).not.toBe(0)
+      expect(result.stderr).toContain('process creation-time patch')
+    } finally {
+      removeTreeSync(projectDir)
+    }
+  })
+
   it('restores the ConPTY runtime payload after a Windows Electron rebuild', () => {
     const projectDir = mkTempProject()
 
@@ -217,9 +239,9 @@ describe('rebuild-native-deps patched node-pty rebuild', () => {
         })
 
         expect(result.status, result.stderr).toBe(0)
-        expect(result.stdout).toContain('Rebuilding failed native modules: windows-native-registry')
+        expect(result.stdout).toContain('Rebuilding failed native modules: @orca/windows-registry')
         const rebuildCall = JSON.parse(readFileSync(rebuildLogPath, 'utf8').trim())
-        expect(rebuildCall.onlyModules).toEqual(['windows-native-registry'])
+        expect(rebuildCall.onlyModules).toEqual(['@orca/windows-registry'])
       } finally {
         removeTreeSync(projectDir)
       }
