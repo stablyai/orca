@@ -415,6 +415,30 @@ describe('sendNativeChatMessageWithImageAttachments', () => {
       false
     )
   })
+
+  it('submits an image + text message with the resolved gesture bytes, not the default CR', () => {
+    const altEnter = '\x1b\r'
+    sendNativeChatMessageWithImageAttachments(SETTINGS, PTY, 'what do you see?', ['/tmp/a.png'], {
+      submitBytes: altEnter
+    })
+    vi.advanceTimersByTime(NATIVE_CHAT_IMAGE_ATTACHMENT_SETTLE_MS + NATIVE_CHAT_SUBMIT_DELAY_MS)
+    expect(sendRuntimePtyInput).toHaveBeenLastCalledWith(SETTINGS, PTY, altEnter)
+    expect(sendRuntimePtyInput.mock.calls.some((call) => call[2] === NATIVE_CHAT_SUBMIT)).toBe(
+      false
+    )
+  })
+
+  it('submits an attachment-only message with the resolved gesture bytes', () => {
+    const altEnter = '\x1b\r'
+    sendNativeChatMessageWithImageAttachments(SETTINGS, PTY, '', ['/tmp/a.png'], {
+      submitBytes: altEnter
+    })
+    vi.advanceTimersByTime(NATIVE_CHAT_SUBMIT_DELAY_MS)
+    expect(sendRuntimePtyInput).toHaveBeenLastCalledWith(SETTINGS, PTY, altEnter)
+    expect(sendRuntimePtyInput.mock.calls.some((call) => call[2] === NATIVE_CHAT_SUBMIT)).toBe(
+      false
+    )
+  })
 })
 
 describe('empty prompt submit', () => {
