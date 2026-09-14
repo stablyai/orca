@@ -33,6 +33,8 @@ describe('TUI_AGENT_CONFIG', () => {
   it('resolves configured executable names to their stable agent ids', () => {
     expect(resolveTuiAgent('qwen')).toBe('qwen-code')
     expect(resolveTuiAgent('qwen-code')).toBe('qwen-code')
+    expect(resolveTuiAgent('vibe')).toBe('mistral-vibe')
+    expect(resolveTuiAgent('auggie')).toBe('aug')
     expect(resolveTuiAgent('not-an-agent')).toBeUndefined()
   })
 })

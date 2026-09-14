@@ -307,7 +307,6 @@ describe('agent prompt render gate on a ConPTY host', () => {
       noiseUntilMs?: number
       qwenComposerReady?: boolean
       qwenAfterSubmitLines?: string[]
-      qwenAfterSubmitDraft?: string
     } = {}
   ): Promise<{
     runtime: OrcaRuntimeService
@@ -343,18 +342,18 @@ describe('agent prompt render gate on a ConPTY host', () => {
       launchAgent: agentOutput.launchAgent ?? 'claude'
     })
     if (agentOutput.launchAgent === 'qwen-code') {
-      let composerReady = agentOutput.qwenComposerReady ?? true
+      const emitQwenComposerReady = (): void => {
+        runtime.onPtyData(PTY_ID, '\x1b[?2004h\x1b[?25h', Date.now())
+      }
+      if (agentOutput.qwenComposerReady ?? true) {
+        emitQwenComposerReady()
+      }
       Object.defineProperty(runtime, 'readVisibleTerminalState', {
         value: async () => ({
           lines:
             countSubmits(writes) > 0 && agentOutput.qwenAfterSubmitLines
               ? agentOutput.qwenAfterSubmitLines
-              : composerReady
-                ? ['*   Type your message or @path/to/file']
-                : [],
-          ...(countSubmits(writes) > 0 && agentOutput.qwenAfterSubmitDraft
-            ? { draft: agentOutput.qwenAfterSubmitDraft }
-            : {})
+              : []
         })
       })
       return {
@@ -362,9 +361,7 @@ describe('agent prompt render gate on a ConPTY host', () => {
         handle: terminal.handle,
         writes,
         submitTimes,
-        setQwenComposerReady: () => {
-          composerReady = true
-        }
+        setQwenComposerReady: emitQwenComposerReady
       }
     }
     return { runtime, handle: terminal.handle, writes, submitTimes, setQwenComposerReady: () => {} }
@@ -489,21 +486,6 @@ describe('agent prompt render gate on a ConPTY host', () => {
     const { runtime, handle, writes } = await createSettlementRuntime({
       launchAgent: 'qwen-code',
       qwenAfterSubmitLines: ['* [Pasted Content 2790 chars]']
-    })
-    const submission = runtime.sendTerminalAgentPrompt(handle, 'review this')
-    const stalled = expect(submission).rejects.toThrow('agent_prompt_stalled')
-
-    await vi.runAllTimersAsync()
-    expect(countSubmits(writes)).toBe(2)
-    await stalled
-  })
-
-  it('retries exactly once when Qwen still exposes a non-empty composer draft', async () => {
-    useHostPlatform('win32')
-    vi.useFakeTimers()
-    const { runtime, handle, writes } = await createSettlementRuntime({
-      launchAgent: 'qwen-code',
-      qwenAfterSubmitDraft: 'read the target file'
     })
     const submission = runtime.sendTerminalAgentPrompt(handle, 'review this')
     const stalled = expect(submission).rejects.toThrow('agent_prompt_stalled')

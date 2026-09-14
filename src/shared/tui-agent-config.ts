@@ -249,7 +249,8 @@ const TUI_AGENT_CONFIG_SOURCE: Record<TuiAgent, TuiAgentConfigSource> = {
     // Why: package is qwen-code but its installed CLI binary on PATH is `qwen`.
     detectCmd: 'qwen',
     promptInjectionMode: 'stdin-after-start',
-    // Why: local provider initialization varies with the host; wait for the real composer instead of guessing a delay.
+    // Why: captured Qwen PTY output shows cursor after bracketed paste only once its composer is mounted.
+    draftPasteReadySignal: 'render-cursor-after-bracketed-paste',
     draftPasteReadyTimeoutMs: 30_000
   },
   rovo: {

@@ -1,6 +1,6 @@
 import { isShellProcess } from '../../shared/agent-detection'
 import { isExpectedAgentProcess } from '../../shared/agent-process-recognition'
-import { createDraftPasteReadyScanner } from '../../shared/draft-paste-ready-scanner'
+import { waitForDraftPasteReadySignal } from '../../shared/draft-paste-ready-scanner'
 import { resolveDraftPasteReadyTimeoutMs } from '../../shared/draft-paste-ready-timeout'
 import { TUI_AGENT_CONFIG } from '../../shared/tui-agent-config'
 import type { TuiAgent } from '../../shared/tui-agent'
@@ -97,43 +97,11 @@ export function waitForWorktreeStartupDraft(
   }
   const signal =
     TUI_AGENT_CONFIG[agent].draftPasteReadySignal ?? 'render-quiet-after-bracketed-paste'
-  return new Promise((resolve) => {
-    let settled = false
-    const scanner = createDraftPasteReadyScanner(signal)
-    let quietTimer: NodeJS.Timeout | null = null
-    let hardTimer: NodeJS.Timeout | null = null
-    let unsubscribe: (() => void) | null = null
-    const finish = (value: string | null): void => {
-      if (settled) {
-        return
-      }
-      settled = true
-      if (quietTimer) {
-        clearTimeout(quietTimer)
-      }
-      if (hardTimer) {
-        clearTimeout(hardTimer)
-      }
-      unsubscribe?.()
-      resolve(value)
-    }
-    const observe = (data: string): void => {
-      const result = scanner.observe(data)
-      if (result.ready) {
-        return finish(ptyId)
-      }
-      if (result.armQuietTimer) {
-        if (quietTimer) {
-          clearTimeout(quietTimer)
-        }
-        quietTimer = setTimeout(() => finish(ptyId), BRACKETED_PASTE_QUIET_MS)
-      }
-    }
-    unsubscribe = host.subscribeToData(ptyId, observe)
-    const replay = host.readRecentOutput(ptyId)
-    if (replay) {
-      observe(replay)
-    }
-    hardTimer = setTimeout(() => finish(null), resolveDraftPasteReadyTimeoutMs(agent))
-  })
+  return waitForDraftPasteReadySignal({
+    readySignal: signal,
+    subscribe: (listener) => host.subscribeToData(ptyId, listener),
+    readRecentOutput: () => host.readRecentOutput(ptyId),
+    timeoutMs: resolveDraftPasteReadyTimeoutMs(agent),
+    quietMs: BRACKETED_PASTE_QUIET_MS
+  }).then((ready) => (ready ? ptyId : null))
 }

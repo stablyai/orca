@@ -20,13 +20,12 @@ import {
   verifyAgentPromptSubmission
 } from './agent-prompt-submission-verification'
 import {
-  hasReadyQwenCodeComposer,
   hasPendingQwenCodePastedContent,
-  hasPendingQwenCodeComposerDraft,
-  QWEN_CODE_COMPOSER_READY_POLL_MS,
   QWEN_CODE_SUBMIT_RETRY_DELAY_MS
 } from './qwen-code-prompt-submit'
 import { resolveDraftPasteReadyTimeoutMs } from '../../shared/draft-paste-ready-timeout'
+import { waitForDraftPasteReadySignal } from '../../shared/draft-paste-ready-scanner'
+import { TUI_AGENT_CONFIG } from '../../shared/tui-agent-config'
 
 export class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithResolveAuthoritativeTerminalWaitPermission {
   protected async writeTerminalAgentPrompt(
@@ -40,20 +39,22 @@ export class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithReso
     this.assertAgentPromptGeneration(ptyId, generation)
     const promptAgent = this.getPtyAgent(ptyId)
     if (promptAgent === 'qwen-code') {
-      const deadline = Date.now() + resolveDraftPasteReadyTimeoutMs(promptAgent)
-      let composerReady = false
-      while (Date.now() < deadline) {
-        const visible = await waitForAgentPromptPromise(
-          this.readVisibleTerminalState(ptyId),
+      const readySignal = TUI_AGENT_CONFIG[promptAgent].draftPasteReadySignal
+      const composerReady =
+        readySignal !== undefined &&
+        (await waitForAgentPromptPromise(
+          waitForDraftPasteReadySignal({
+            readySignal,
+            subscribe: (listener) => this.subscribeToTerminalData(ptyId, listener),
+            readRecentOutput: () => this.recentPtyOutputById.get(ptyId)?.read(),
+            timeoutMs: resolveDraftPasteReadyTimeoutMs(promptAgent),
+            quietMs: 1_500,
+            signal: options.signal
+          }),
           options.signal
-        )
-        if (visible && hasReadyQwenCodeComposer(visible.lines)) {
-          composerReady = true
-          break
-        }
-        await waitForAgentPromptDelay(QWEN_CODE_COMPOSER_READY_POLL_MS, options.signal)
-        this.assertAgentPromptGeneration(ptyId, generation)
-      }
+        ))
+      assertAgentPromptRequestActive(options.signal)
+      this.assertAgentPromptGeneration(ptyId, generation)
       if (!composerReady) {
         throw new Error('agent_prompt_ready_timeout')
       }
@@ -128,10 +129,7 @@ export class OrcaRuntimeWithWriteTerminalAgentPrompt extends OrcaRuntimeWithReso
         this.readVisibleTerminalState(ptyId),
         options.signal
       )
-      if (
-        visible &&
-        (hasPendingQwenCodePastedContent(visible.lines) || hasPendingQwenCodeComposerDraft(visible))
-      ) {
+      if (visible && hasPendingQwenCodePastedContent(visible.lines)) {
         await options.beforeWrite?.(ptyId)
         assertAgentPromptRequestActive(options.signal)
         this.assertAgentPromptGeneration(ptyId, generation)

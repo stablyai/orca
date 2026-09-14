@@ -1,12 +1,10 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
+import { createDraftPasteReadyScanner } from '../../shared/draft-paste-ready-scanner'
+import { TUI_AGENT_CONFIG } from '../../shared/tui-agent-config'
 import { createTranscriptPane, TRANSCRIPT_PANE_PTY_ID } from './agent-transcript-pane-test-harness'
-import {
-  hasPendingQwenCodePastedContent,
-  hasPendingQwenCodeComposerDraft,
-  hasReadyQwenCodeComposer
-} from './qwen-code-prompt-submit'
+import { hasPendingQwenCodePastedContent } from './qwen-code-prompt-submit'
 
 vi.mock('electron', () => ({
   BrowserWindow: { fromId: vi.fn(() => null) },
@@ -19,7 +17,7 @@ const FIXTURE_DIR = join(__dirname, '__fixtures__')
 const ESC = String.fromCharCode(27)
 
 async function visibleLines(name: string): Promise<string[]> {
-  const transcript = readFileSync(join(FIXTURE_DIR, `${name}.txt`), 'utf8')
+  const transcript = readTranscript(name)
   expect(transcript).toContain(ESC)
   const { runtime } = await createTranscriptPane({
     paneTitle: 'Qwen - fixture',
@@ -39,6 +37,10 @@ async function visibleLines(name: string): Promise<string[]> {
     : []
 }
 
+function readTranscript(name: string): string {
+  return readFileSync(join(FIXTURE_DIR, `${name}.txt`), 'utf8')
+}
+
 describe('Qwen Code prompt submission, decided by captured transcripts', () => {
   it('recognizes a large paste whose first Enter was swallowed', async () => {
     await expect(
@@ -54,13 +56,16 @@ describe('Qwen Code prompt submission, decided by captured transcripts', () => {
     ).resolves.toBe(false)
   })
 
-  it("recognizes Qwen's mounted visible composer", () => {
-    expect(hasReadyQwenCodeComposer(['*   Type your message or @path/to/file'])).toBe(true)
-  })
-
-  it('recognizes a non-empty projected composer draft', () => {
-    expect(hasPendingQwenCodeComposerDraft({ draft: 'read the target file' })).toBe(true)
-    expect(hasPendingQwenCodeComposerDraft({ draft: '   ' })).toBe(false)
-    expect(hasPendingQwenCodeComposerDraft({})).toBe(false)
+  it("recognizes Qwen's composer-ready control sequence in a captured PTY transcript", () => {
+    const signal = TUI_AGENT_CONFIG['qwen-code'].draftPasteReadySignal
+    expect(signal).toBe('render-cursor-after-bracketed-paste')
+    if (!signal) {
+      throw new Error('Qwen Code has no draft-paste readiness signal')
+    }
+    const scanner = createDraftPasteReadyScanner(signal)
+    expect(scanner.observe(readTranscript('qwen-code-windows-large-paste-submitted'))).toEqual({
+      ready: true,
+      armQuietTimer: false
+    })
   })
 })
