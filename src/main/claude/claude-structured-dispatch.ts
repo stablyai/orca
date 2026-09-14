@@ -29,6 +29,8 @@ const MAX_ACTIVE_DISPATCH_WAITERS = 64
 export type ClaudeLateDispatchSettlement = (input: {
   clientMessageId: string
   providerIdentity: AgentJournalItemIdentity
+  /** Acceptance instant of the settling send, for the turn this replay opens. */
+  requestedAt?: number
 }) => void
 
 export function resolveClaudeReplayWaiter(
@@ -147,16 +149,29 @@ function settleWaiter(
   waiter.resolve(uuid)
   // Dispatch returned on admission. Settle delivery unfenced while the sequence
   // still fences which turn owns the identity; see `recoverLateIdentity`.
-  if (waiter.clientMessageId) {
-    onSettledLate?.({
-      clientMessageId: waiter.clientMessageId,
-      providerIdentity: { provider: 'claude', sessionId: session.providerSessionId, uuid }
-    })
-  }
+  settleDelivery(session, waiter, uuid, onSettledLate)
   if (waiter.dispatchSequence === session.dispatchSequence) {
     session.activeTurnId = uuid
     session.activeTurnSequence = waiter.dispatchSequence
   }
+}
+
+/** Delivery settlement for a waiter the provider answered. The acceptance
+ *  instant rides along: this echo is what opens the turn that waited for it. */
+function settleDelivery(
+  session: ClaudeSession,
+  waiter: ClaudeDispatchWaiter,
+  uuid: string,
+  onSettledLate?: ClaudeLateDispatchSettlement
+): void {
+  if (!waiter.clientMessageId) {
+    return
+  }
+  onSettledLate?.({
+    clientMessageId: waiter.clientMessageId,
+    providerIdentity: { provider: 'claude', sessionId: session.providerSessionId, uuid },
+    ...(waiter.requestedAt === undefined ? {} : { requestedAt: waiter.requestedAt })
+  })
 }
 
 function forgetRetiredWaiter(session: ClaudeSession, waiter: ClaudeDispatchWaiter): void {
@@ -179,12 +194,7 @@ function recoverLateIdentity(
   // The provider acted on this dispatch, so the send it came from is delivered.
   // Unfenced on purpose: the dispatch-sequence check below only decides which
   // turn owns the identity, while delivery is settled for good either way.
-  if (waiter.clientMessageId) {
-    onSettledLate?.({
-      clientMessageId: waiter.clientMessageId,
-      providerIdentity: { provider: 'claude', sessionId: session.providerSessionId, uuid }
-    })
-  }
+  settleDelivery(session, waiter, uuid, onSettledLate)
   if (waiter.dispatchSequence === session.dispatchSequence) {
     session.activeTurnId = uuid
     session.activeTurnSequence = waiter.dispatchSequence
@@ -204,7 +214,8 @@ function waitForReplay(
   acceptsResult: boolean,
   sentUuid: string,
   replayContentKey: string,
-  clientMessageId: string | null
+  clientMessageId: string | null,
+  requestedAt: number | undefined
 ): { waiter: ClaudeDispatchWaiter; promise: Promise<string | null> } {
   let waiter!: ClaudeDispatchWaiter
   const promise = new Promise<string | null>((resolve) => {
@@ -214,7 +225,8 @@ function waitForReplay(
       sentUuid,
       dispatchSequence: session.dispatchSequence,
       replayContentKey,
-      resolve
+      resolve,
+      ...(requestedAt === undefined ? {} : { requestedAt })
     }
     session.dispatchWaiters.push(waiter)
   })
@@ -255,7 +267,7 @@ export function retireClaudeDispatchWaiters(session: ClaudeSession): void {
 
 export async function dispatchClaudeTurn(
   session: ClaudeSession,
-  input: { clientMessageId?: string; body: AgentJournalMessageItem }
+  input: { clientMessageId?: string; body: AgentJournalMessageItem; requestedAt?: number }
 ): Promise<AgentSessionDispatchOutcome> {
   let content: unknown[]
   try {
@@ -271,12 +283,14 @@ export async function dispatchClaudeTurn(
   // whether Claude runs a command, so the two cannot disagree about which frame settles this.
   const acceptsResult = claudeDispatchInvokesSlashCommand(content)
   const sentUuid = randomUUID()
+  // Stamped before the write: a message the provider queues waited from here.
   const replay = waitForReplay(
     session,
     acceptsResult,
     sentUuid,
     claudeDispatchContentKey(content),
-    input.clientMessageId ?? null
+    input.clientMessageId ?? null,
+    input.requestedAt
   )
   const replayed = replay.promise
   try {

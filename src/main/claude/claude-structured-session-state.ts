@@ -36,6 +36,9 @@ export type ClaudeStructuredSessionEvent =
       startsTurn?: true
       /** Host clock at receipt; stamped on turn boundaries only. */
       observedAt?: number
+      /** Host clock when the send this replay acknowledges was accepted, for the
+       *  turn it opens. Absent when no submission is behind the turn. */
+      requestedAt?: number
     }
   | { type: 'provider-frame'; sessionId: string; kind: string; payload: unknown }
   | { type: 'prompt'; sessionId: string; prompt: ClaudePendingPrompt }
@@ -115,6 +118,8 @@ export type ClaudeDispatchWaiter = {
   retired?: boolean
   /** Bounded digest/summary for compatibility CLIs that mint UUIDs. */
   replayContentKey: string
+  /** Host clock when the submission behind this dispatch was accepted. */
+  requestedAt?: number
 }
 
 export type ClaudeSession = {

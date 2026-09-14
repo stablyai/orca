@@ -49,6 +49,25 @@ describe('send', () => {
     expect(page.providerSession).toEqual({ key: 'session_id', id: THREAD })
   })
 
+  it('dispatches with the submission row own acceptance stamp, not a second clock read', async () => {
+    await attach()
+    const journal = (
+      host as unknown as { sessions: Map<string, { journal: AgentSessionJournal }> }
+    ).sessions.get(SESSION)!.journal
+    // A stamp no clock in this process can produce, so reading one instead of
+    // the durable row is visible here and nowhere else.
+    const ACCEPTED_AT = NOW - 133_000
+    const submissions = journal.submissions.bind(journal)
+    vi.spyOn(journal, 'submissions').mockImplementation(() =>
+      submissions().map((submission) => ({ ...submission, submittedAt: ACCEPTED_AT }))
+    )
+    const body = hostTestMessage('queued behind a running turn')
+
+    await host.send(CALLER, { envelope: envelope('agentSession.send', { body }), body })
+
+    expect(dispatch).toHaveBeenCalledWith(expect.objectContaining({ requestedAt: ACCEPTED_AT }))
+  })
+
   it('settles a submission write failure as rejected before provider dispatch', async () => {
     await attach()
     const journal = (

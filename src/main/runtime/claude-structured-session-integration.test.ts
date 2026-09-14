@@ -3,9 +3,13 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session-mutation-envelope'
+import { readAgentJournalTurn } from '../../shared/agent-session-turn-record'
 import type { AgentJournalRenderItem } from '../../shared/agent-session-journal-types'
 import type { AgentSessionSubscribeEvent } from '../../shared/agent-session-wire'
-import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY } from '../../shared/protocol-version'
+import {
+  AGENT_SESSION_PENDING_SEND_RESULT_RUNTIME_CAPABILITY,
+  STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
+} from '../../shared/protocol-version'
 import type {
   ClaudeStreamJsonConnection,
   ClaudeStreamJsonConnectionHandlers,
@@ -25,6 +29,7 @@ import type {
 } from '../native-chat/agent-session-wire/structured-agent-session-handoff-types'
 import type { OrcaRuntimeService } from './orca-runtime'
 import type { RpcRequest, RpcResponse } from './rpc/core'
+import type { RpcDispatchStreamingOptions } from './rpc/dispatcher-stream-options'
 import type { ClaudeStructuredAuthPolicy } from '../claude-accounts/claude-structured-auth-policy'
 import { RpcDispatcher } from './rpc/dispatcher'
 import { STRUCTURED_AGENT_SESSION_METHODS } from './rpc/methods/structured-agent-session'
@@ -44,6 +49,15 @@ const WORKSPACE = 'workspace-claude'
 const CLIENT = {
   clientKind: 'runtime' as const,
   clientCapabilities: [STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY]
+}
+// A client that takes the pending send result instead of blocking on the echo,
+// which is the only way to observe the queued window from the outside.
+const PENDING_SEND_CLIENT: RpcDispatchStreamingOptions = {
+  ...CLIENT,
+  clientCapabilities: [
+    STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
+    AGENT_SESSION_PENDING_SEND_RESULT_RUNTIME_CAPABILITY
+  ]
 }
 
 const { readClaudeTranscriptLeafUuid, resolveSessionFilePath } = vi.hoisted(() => ({
@@ -253,18 +267,26 @@ let transcriptPath: string
 let claudeAuthPolicy: ClaudeStructuredAuthPolicy
 let claudeLaunchEnv: Record<string, string>
 
-async function call(method: string, params: unknown): Promise<RpcResponse> {
+async function call(
+  method: string,
+  params: unknown,
+  client: RpcDispatchStreamingOptions = CLIENT
+): Promise<RpcResponse> {
   const replies: RpcResponse[] = []
   const request: RpcRequest = { id: `req-${operations}`, authToken: 'token', method, params }
-  await dispatcher.dispatchStreaming(request, (raw) => replies.push(JSON.parse(raw)), CLIENT)
+  await dispatcher.dispatchStreaming(request, (raw) => replies.push(JSON.parse(raw)), client)
   if (!replies[0]) {
     throw new Error(`no reply for ${method}`)
   }
   return replies[0]
 }
 
-async function ok<T>(method: string, params: unknown): Promise<T> {
-  const response = await call(method, params)
+async function ok<T>(
+  method: string,
+  params: unknown,
+  client: RpcDispatchStreamingOptions = CLIENT
+): Promise<T> {
+  const response = await call(method, params, client)
   expect(response, JSON.stringify(response)).toMatchObject({ ok: true })
   const result = (response as { result: { ok: boolean; value?: T } }).result
   expect(result).toMatchObject({ ok: true })
@@ -710,6 +732,51 @@ describe('a structured Claude session over agentSession.*', () => {
       },
       origin: 'resumed'
     })
+  })
+
+  it('records when a send queued behind a running turn was accepted', async () => {
+    const created = await ok<{ fence: number }>('agentSession.create', createIntentParams())
+    const stream = await subscribe()
+    const first = { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'one' }] }
+    await ok('agentSession.send', {
+      envelope: envelope('agentSession.send', { body: first }, created.fence),
+      body: first
+    })
+
+    // Turn one is running, so Claude holds the next send inside its own queue:
+    // the echo that starts a turn cannot arrive until the running turn ends.
+    const provider = claude.live()
+    const deliver = provider.handlers.onMessage
+    const held: Record<string, unknown>[] = []
+    provider.handlers.onMessage = (frame) => held.push({ ...frame, uuid: 'user-2' })
+    const second = { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'two' }] }
+    const queued = await ok<{ submission: { dispatchState: string; submittedAt: number } }>(
+      'agentSession.send',
+      { envelope: envelope('agentSession.send', { body: second }, created.fence), body: second },
+      PENDING_SEND_CLIENT
+    )
+    // The whole wait: accepted and journaled, with no provider answer yet.
+    expect(queued.submission.dispatchState).toBe('pending')
+
+    provider.handlers.onMessage = deliver
+    deliver?.({
+      type: 'result',
+      subtype: 'success',
+      session_id: PROVIDER_SESSION,
+      uuid: 'result-1'
+    })
+    for (const frame of held) {
+      deliver?.(frame)
+    }
+    await getStructuredAgentSessionHost()?.flushStreamedEvents(SESSION)
+
+    const turn = itemsOf(stream)
+      .map((item) => readAgentJournalTurn(item.body))
+      .find((row) => row?.turnId === 'user-2')
+    // The acceptance instant is the submission row's own stamp, distinct from
+    // the start the echo gave the turn.
+    expect(turn?.requestedAt).toBe(queued.submission.submittedAt)
+    expect(turn?.startedAt ?? 0).toBeGreaterThanOrEqual(turn?.requestedAt ?? 0)
   })
 
   it('completes a scripted native to TUI to native cycle with provider-history rehydration', async () => {

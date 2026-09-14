@@ -27,6 +27,7 @@ import {
   activeStructuredAgentSessionTurnId,
   hasUnansweredStructuredAgentSessionDispatch
 } from '../../../../shared/structured-agent-session-projection'
+import { selectStructuredAgentSessionQueuedSends } from '../../../../shared/structured-agent-session-queued-sends'
 import type { RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
 import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
 import { useStructuredAgentSessionHold } from './use-structured-agent-session-hold'
@@ -109,6 +110,10 @@ export function useStructuredAgentSession(args: {
     [state.activity, state.items, turnId]
   )
   const turnTiming = useStructuredAgentTurnTiming(state, turnId)
+  const queuedSends = useMemo(
+    () => selectStructuredAgentSessionQueuedSends(state.items, state.submissions, state.fence),
+    [state.fence, state.items, state.submissions]
+  )
   const backgroundTasks = structuredSessionBackgroundTasksView(state.backgroundTasks, turnId)
 
   useEffect(() => {
@@ -268,6 +273,7 @@ export function useStructuredAgentSession(args: {
     isWorking,
     workingStartedAt: turnTiming.workingStartedAt,
     settledTurns: turnTiming.settledTurns,
+    queuedSends,
     turnActivity,
     backgroundTasks,
     turnId,

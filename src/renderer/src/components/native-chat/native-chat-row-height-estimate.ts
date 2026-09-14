@@ -25,6 +25,8 @@ export type NativeChatRowContentMetrics = {
 export type NativeChatRowChromeMetrics = {
   hasReceipt: boolean
   hasStatus: boolean
+  /** The queued-send line drawn under a sent row the provider has not started. */
+  hasQueued: boolean
   hasTurnDiff: boolean
 }
 
@@ -36,6 +38,7 @@ const IMAGE_STRIP_PX = 88
 const TOOL_RUN_PX = 40
 const SUBAGENT_ROW_PX = 32
 const STATUS_ROW_PX = 28
+const QUEUED_ROW_PX = 16
 const TURN_DIFF_PX = 28
 const RECEIPT_PX = 56
 const ROW_MIN_PX = 24
@@ -115,6 +118,10 @@ export function estimateNativeChatRowHeight(
   }
   if (chrome.hasStatus) {
     height += STATUS_ROW_PX
+    partCount += 1
+  }
+  if (chrome.hasQueued) {
+    height += QUEUED_ROW_PX
     partCount += 1
   }
   if (chrome.hasTurnDiff) {

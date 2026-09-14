@@ -30,6 +30,7 @@ import { useNativeChatTranscriptScroll } from './use-native-chat-transcript-scro
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
 import { isStructuredAgentSessionThinking } from '../../../../shared/structured-agent-session-live-turn'
 import type { NativeChatSettledTurns } from '../../../../shared/native-chat-turn-status'
+import type { StructuredAgentSessionQueuedSend } from '../../../../shared/structured-agent-session-queued-sends'
 import {
   nativeChatTurnDiffs,
   type NativeChatDiffReveal,
@@ -40,6 +41,7 @@ import {
 export { ProviderFrameRow } from './NativeChatTranscriptChrome'
 
 const MAX_EXPANDED_TURNS = 128
+const NO_QUEUED_SENDS: ReadonlyMap<string, StructuredAgentSessionQueuedSend> = new Map()
 
 export function NativeChatMessageList({
   session,
@@ -51,6 +53,7 @@ export function NativeChatMessageList({
   allowFileUriLinks = false,
   workingStartedAt,
   settledTurns,
+  queuedSends,
   failedDeliveryMessageIds,
   showTurnStatus = true,
   showLiveTurnActivity = true,
@@ -67,6 +70,8 @@ export function NativeChatMessageList({
   workingStartedAt?: number | null
   /** Host-recorded turn durations keyed by user message id (structured lane). */
   settledTurns?: NativeChatSettledTurns
+  /** Sends the provider has accepted but not started, keyed by journal item key. */
+  queuedSends?: ReadonlyMap<string, StructuredAgentSessionQueuedSend>
   onLinkClick?: CommentMarkdownLinkClickHandler
   allowFileUriLinks?: boolean
   failedDeliveryMessageIds?: ReadonlySet<string>
@@ -178,6 +183,7 @@ export function NativeChatMessageList({
         receipts,
         turnStatuses,
         turnDiffs,
+        queuedSends: queuedSends ?? NO_QUEUED_SENDS,
         showTurnStatus,
         isWorking,
         lifecycleWorking
@@ -188,6 +194,7 @@ export function NativeChatMessageList({
       latestUserIndex,
       lifecycleWorking,
       messages,
+      queuedSends,
       receipts,
       showTurnStatus,
       turnDiffs,

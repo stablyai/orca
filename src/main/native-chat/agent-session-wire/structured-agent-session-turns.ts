@@ -50,14 +50,16 @@ function invalid(message: string): { ok: false; refusal: AgentSessionWireRefusal
 async function dispatchSafely(
   ctx: AgentSessionTurnContext,
   clientMessageId: string,
-  body: AgentJournalMessageItem
+  body: AgentJournalMessageItem,
+  requestedAt: number
 ): Promise<AgentSessionDispatchOutcome> {
   try {
     return await ctx.adapter.dispatch({
       sessionId: ctx.sessionId,
       clientMessageId,
       body,
-      fence: ctx.fence
+      fence: ctx.fence,
+      requestedAt
     })
   } catch (error) {
     return { state: 'unknown', reason: error instanceof Error ? error.message : String(error) }
@@ -112,7 +114,10 @@ export async function performSend(
   }
   ctx.publish()
 
-  const outcome = await dispatchSafely(ctx, input.clientMessageId, input.body)
+  // The acceptance instant is the row's own stamp, never a second clock read:
+  // the bubble and the turn it opens must name the same moment.
+  const accepted = requireSubmission(ctx, input.clientMessageId)
+  const outcome = await dispatchSafely(ctx, input.clientMessageId, input.body, accepted.submittedAt)
   // An admission needs no dispatch row: the submission is already pending.
   if (outcome.state === 'admitted') {
     ctx.publish()

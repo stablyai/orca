@@ -39,6 +39,7 @@ function build(
     receipts: new Map<string, NativeChatResolvedPrompt>(),
     turnStatuses: NO_STATUSES,
     turnDiffs: new Map<string, NativeChatTurnDiff>(),
+    queuedSends: new Map(),
     showTurnStatus: true,
     isWorking: false,
     lifecycleWorking: false,
@@ -62,6 +63,32 @@ describe('transcript slots', () => {
     })
     expect(slots).toHaveLength(1)
     expect(slots[0]?.status).toBe(status)
+  })
+
+  it('reserves height for the queued line the row draws under a waiting send', () => {
+    const queued = { clientMessageId: 'm2', submittedAt: 34_000, waitingOn: 'turn-busy' } as const
+    const [plain] = build([text('u', 'ask', 'user')])
+    const [waiting] = build([text('u', 'ask', 'user')], {
+      queuedSends: new Map([['u', queued]])
+    })
+
+    expect(waiting?.queued).toBe(queued)
+    // Windowing places every row from this estimate; a line the estimator does
+    // not know about becomes a gap exactly while the reader is looking at it.
+    expect(waiting?.estimatedHeight).toBeGreaterThan(plain?.estimatedHeight ?? 0)
+  })
+
+  it('keeps a message whose only content is its queued line', () => {
+    const queued = {
+      clientMessageId: 'm2',
+      submittedAt: 34_000,
+      waitingOn: 'turn-starting'
+    } as const
+    const slots = build([text('blank', '', 'user')], {
+      queuedSends: new Map([['blank', queued]])
+    })
+    expect(slots).toHaveLength(1)
+    expect(slots[0]?.queued).toBe(queued)
   })
 
   it('keeps a message whose only content is its turn diff rollup', () => {

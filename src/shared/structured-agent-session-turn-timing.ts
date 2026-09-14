@@ -12,10 +12,19 @@ import type {
 import { readAgentJournalTurn } from './agent-session-turn-record'
 import type { NativeChatSettledTurn, NativeChatSettledTurns } from './native-chat-turn-status'
 
+/** Below this the gap between acceptance and provider start is ordinary echo
+ *  lag, not a wait worth naming beside the turn's own duration. */
+const QUEUED_TURN_VISIBILITY_MS = 2_000
+
 export type StructuredAgentTurnTiming = {
   state: AgentJournalTurnLifecycleState
+  /** Host clock when the send that opened the turn was accepted, before it
+   *  reached the provider; absent when no submission opened the turn. */
+  requestedAt?: number
   /** Host clock at provider turn-start receipt. */
   startedAt: number
+  /** Provider key of the user row this turn names, when it named one. */
+  userItemId?: string
   /** Host clock at the terminal provider event; absent while running or unverifiable. */
   completedAt?: number
   /** The provider's own measured duration; outranks the host interval. */
@@ -30,10 +39,14 @@ function readTiming(item: AgentJournalRenderItem): StructuredAgentTurnTiming | n
   if (!turn) {
     return null
   }
-  const { state, startedAt, completedAt, durationMs } = turn
+  const { state, startedAt, completedAt, durationMs, requestedAt, userItemId } = turn
   if (startedAt === undefined || !Number.isFinite(startedAt) || startedAt <= 0) {
     return null
   }
+  const accepted =
+    requestedAt !== undefined && Number.isFinite(requestedAt) && requestedAt > 0
+      ? requestedAt
+      : undefined
   const end =
     completedAt !== undefined && Number.isFinite(completedAt) && completedAt >= startedAt
       ? completedAt
@@ -44,7 +57,9 @@ function readTiming(item: AgentJournalRenderItem): StructuredAgentTurnTiming | n
       : undefined
   return {
     state,
+    ...(accepted !== undefined ? { requestedAt: accepted } : {}),
     startedAt,
+    ...(userItemId !== undefined ? { userItemId } : {}),
     ...(end !== undefined ? { completedAt: end } : {}),
     ...(measured !== undefined ? { durationMs: measured } : {}),
     observedAt: item.observedAt
@@ -122,6 +137,20 @@ export function completedStructuredAgentTurnSeconds(
     : null
 }
 
+/** Whole seconds a turn waited between acceptance and the provider starting it,
+ *  or null when the host recorded no acceptance instant or the wait is short
+ *  enough to be ordinary echo lag. Never folded into the turn's own duration:
+ *  that number is the provider's own measurement of work it actually did. */
+export function queuedStructuredAgentTurnSeconds(
+  timing: StructuredAgentTurnTiming | null | undefined
+): number | null {
+  if (!timing || timing.requestedAt === undefined) {
+    return null
+  }
+  const waited = timing.startedAt - timing.requestedAt
+  return waited >= QUEUED_TURN_VISIBILITY_MS ? Math.floor(waited / 1000) : null
+}
+
 /** A local-clock anchor for the live counter that carries no host/client skew.
  *  With the host's own clock at publish time, the anchor is the client's first
  *  sighting moved back by how long the host says the turn has already run, so a
@@ -151,11 +180,16 @@ export function selectStructuredAgentSettledTurns(
   const settled = new Map<string, NativeChatSettledTurn | null>()
   for (const [userItemId, timing] of selectStructuredAgentTurnTimings(items, submissions)) {
     const workedSeconds = completedStructuredAgentTurnSeconds(timing)
+    const queuedSeconds = queuedStructuredAgentTurnSeconds(timing)
     settled.set(
       userItemId,
       workedSeconds === null || timing === null
         ? null
-        : { startedAt: timing.startedAt, workedSeconds }
+        : {
+            startedAt: timing.startedAt,
+            workedSeconds,
+            ...(queuedSeconds === null ? {} : { queuedSeconds })
+          }
     )
   }
   return settled

@@ -38,9 +38,11 @@ import {
   claudeStreamTurnStartSource,
   claudeStreamTurnSource,
   claudeTurnOpenedBySendEcho,
+  claudeTurnTiming,
   createClaudeTurnOpener,
   isRootClaudeFrame,
-  type ClaudeTurnSource
+  type ClaudeTurnSource,
+  type ClaudeTurnTiming
 } from './claude-turn-opening'
 import {
   claudeTurnEndForResult,
@@ -165,7 +167,7 @@ export function createClaudeJournalTranslator(
   const handleMessage = (
     message: Record<string, unknown>,
     startsTurn: boolean,
-    observedAt: number
+    timing: ClaudeTurnTiming
   ): boolean => {
     const envelope = readClaudeMessageEnvelope(message)
     if (!envelope) {
@@ -188,17 +190,17 @@ export function createClaudeJournalTranslator(
       uuid: envelope.uuid,
       assistant: envelope.role === 'assistant'
     }
-    const openOutputTurn = (): void => ensureTurnOpen(message, source, observedAt)
+    const openOutputTurn = (): void => ensureTurnOpen(message, source, timing.observedAt)
     if (body) {
       // Opening before the append is what brackets a turn around its own first
       // output; a reader that scans back to the turn record and stops would
       // otherwise look straight past the row that opened it.
-      ensureTurnOpen(message, source, observedAt)
+      ensureTurnOpen(message, source, timing.observedAt)
       deps.sink.appendItem(identity, body)
       changed = true
     }
     for (const tool of claudeToolUses(outputEnvelope)) {
-      ensureTurnOpen(message, source, observedAt)
+      ensureTurnOpen(message, source, timing.observedAt)
       tools.set(tool.id, tool)
       deps.sink.appendItem(
         claudeToolIdentity(envelope.sessionId, tool.id),
@@ -223,7 +225,7 @@ export function createClaudeJournalTranslator(
       changed = true
     }
     if (thinking) {
-      ensureTurnOpen(message, source, observedAt)
+      ensureTurnOpen(message, source, timing.observedAt)
       deps.sink.appendItem(claudeThinkingIdentity(envelope.sessionId, envelope.uuid), {
         kind: 'message',
         role: 'reasoning',
@@ -240,12 +242,12 @@ export function createClaudeJournalTranslator(
       envelope,
       frame: message,
       startsTurn,
-      observedAt,
+      timing,
       userItemId: agentJournalItemKey(identity)
     })
     if (sendEchoTurn) {
       reopenSuppressed = false
-      openTurn(sendEchoTurn, observedAt)
+      openTurn(sendEchoTurn, timing.observedAt)
     }
     if (changed) {
       deps.sink.publish()
@@ -324,9 +326,7 @@ export function createClaudeJournalTranslator(
         // fallback below still drops the raw frame instead of printing an opcode.
         subagents.observeSystemFrame(event.message)
         const kind = claudeProviderFrameKind(event.message)
-        if (
-          !handleMessage(event.message, event.startsTurn === true, event.observedAt ?? Date.now())
-        ) {
+        if (!handleMessage(event.message, event.startsTurn === true, claudeTurnTiming(event))) {
           providerFallback.append(kind, event.message)
         }
         publishActivity(kind, event.message)

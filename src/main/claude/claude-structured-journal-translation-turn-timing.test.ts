@@ -34,12 +34,17 @@ function sinkState() {
   return { sink, items, tombstones, lifecycle }
 }
 
-function userTurn(uuid: string, observedAt?: number): ClaudeStructuredSessionEvent {
+function userTurn(
+  uuid: string,
+  observedAt?: number,
+  requestedAt?: number
+): ClaudeStructuredSessionEvent {
   return {
     type: 'message',
     sessionId: 'orca-session',
     startsTurn: true,
     ...(observedAt === undefined ? {} : { observedAt }),
+    ...(requestedAt === undefined ? {} : { requestedAt }),
     message: {
       type: 'user',
       uuid,
@@ -208,6 +213,81 @@ describe('Claude structured turn timing', () => {
       startedAt: 50_000,
       completedAt: 56_000
     })
+  })
+
+  it('carries the send acceptance instant onto every revision of the turn it opened', () => {
+    const state = sinkState()
+    const translator = createClaudeJournalTranslator({ sink: state.sink })
+
+    // Accepted at 1_000, echoed 133s later: the provider held it behind a
+    // running turn, and the turn's own work then took 40s.
+    translator.handle(userTurn('user-1', 134_000, 1_000))
+    translator.handle(result(174_000, { duration_ms: 40_000 }))
+
+    expect(state.lifecycle().map(({ options: _options, ...row }) => row)).toEqual([
+      {
+        turnId: 'user-1',
+        state: 'running',
+        requestedAt: 1_000,
+        startedAt: 134_000,
+        userItemId: USER_1_KEY
+      },
+      {
+        turnId: 'user-1',
+        state: 'completed',
+        requestedAt: 1_000,
+        startedAt: 134_000,
+        completedAt: 174_000,
+        durationMs: 40_000,
+        userItemId: USER_1_KEY
+      }
+    ])
+  })
+
+  it('records no acceptance instant for a turn no submission opened', () => {
+    const state = sinkState()
+    const translator = createClaudeJournalTranslator({ sink: state.sink })
+
+    translator.handle(userTurn('user-1', 1_000))
+    translator.handle(result(4_500))
+
+    for (const row of state.lifecycle()) {
+      expect(row).not.toHaveProperty('requestedAt')
+    }
+  })
+
+  it('acquisition puts the dispatch acceptance instant on the replay that starts the turn', async () => {
+    const claude = fakeClaude({ replayUuid: null })
+    const events: ClaudeStructuredSessionEvent[] = []
+    const adapter = await acquired(claude, {}, events)
+    const dispatch = adapter.dispatch({
+      sessionId: 'session-1',
+      clientMessageId: 'client-1',
+      body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'ship it' }] },
+      fence: 7,
+      requestedAt: 1_700_000_000_000
+    })
+    await Promise.resolve()
+    const connection = claude.connections[0]!
+    connection.handlers.onMessage?.({ ...connection.sent[0], uuid: 'turn-1' })
+    await dispatch
+    connection.handlers.onMessage?.({
+      type: 'result',
+      subtype: 'success',
+      uuid: 'result-1',
+      session_id: connection.sent[0]?.session_id,
+      is_error: false,
+      result: 'ok'
+    })
+
+    const messages = events.filter(
+      (event) => event.type === 'message' && event.message.type !== 'system'
+    )
+    // Only the replay that opens the turn carries it; the result never does.
+    expect(messages).toEqual([
+      expect.objectContaining({ startsTurn: true, requestedAt: 1_700_000_000_000 }),
+      expect.not.objectContaining({ requestedAt: expect.anything() })
+    ])
   })
 
   it('acquisition stamps turn boundaries from the host clock, never the frame timestamp', async () => {

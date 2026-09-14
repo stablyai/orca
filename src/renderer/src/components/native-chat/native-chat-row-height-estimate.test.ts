@@ -7,7 +7,7 @@ import {
   nativeChatRowContentMetrics
 } from './native-chat-row-height-estimate'
 
-const NO_CHROME = { hasReceipt: false, hasStatus: false, hasTurnDiff: false }
+const NO_CHROME = { hasReceipt: false, hasStatus: false, hasQueued: false, hasTurnDiff: false }
 
 function message(text: string, role: NativeChatMessage['role'] = 'assistant'): NativeChatMessage {
   return {
@@ -96,16 +96,19 @@ describe('transcript row height estimate', () => {
     const receipt = estimateNativeChatRowHeight(empty, {
       hasReceipt: true,
       hasStatus: false,
+      hasQueued: false,
       hasTurnDiff: false
     })
     const diff = estimateNativeChatRowHeight(empty, {
       hasReceipt: false,
       hasStatus: false,
+      hasQueued: false,
       hasTurnDiff: true
     })
     const together = estimateNativeChatRowHeight(empty, {
       hasReceipt: true,
       hasStatus: false,
+      hasQueued: false,
       hasTurnDiff: true
     })
 

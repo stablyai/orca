@@ -108,6 +108,46 @@ describe('Claude structured dispatch admission', () => {
     expect(session.connection.send).toHaveBeenCalledTimes(64)
   })
 
+  it('stamps the acceptance instant on the waiter before the write, and reports it on the echo', async () => {
+    let stampedBeforeWrite: number | undefined
+    // The write is where a queued message enters the provider's own queue, so
+    // the instant it waited from has to be on the waiter before this resolves.
+    const send = vi.fn().mockImplementation(async () => {
+      stampedBeforeWrite = session.dispatchWaiters[0]?.requestedAt
+    })
+    const session = sessionFor(send)
+    const settled = vi.fn()
+
+    await dispatchClaudeTurn(session, {
+      clientMessageId: 'client-1',
+      body: userMessage([{ type: 'text', text: 'queued' }]),
+      requestedAt: 1_700_000_000_000
+    })
+    expect(stampedBeforeWrite).toBe(1_700_000_000_000)
+
+    const uuid = session.dispatchWaiters[0]!.sentUuid
+    expect(resolveClaudeReplayWaiter(session, userReplayFrame(uuid, 'queued'), settled)).toBe(true)
+    expect(settled).toHaveBeenCalledWith({
+      clientMessageId: 'client-1',
+      providerIdentity: { provider: 'claude', sessionId: 'provider-session', uuid },
+      requestedAt: 1_700_000_000_000
+    })
+  })
+
+  it('reports no acceptance instant for a dispatch that carried none', async () => {
+    const session = sessionFor()
+    const settled = vi.fn()
+    await dispatchClaudeTurn(session, {
+      clientMessageId: 'client-1',
+      body: userMessage([{ type: 'text', text: 'no submission stamp' }])
+    })
+    const uuid = session.dispatchWaiters[0]!.sentUuid
+
+    resolveClaudeReplayWaiter(session, userReplayFrame(uuid, 'no submission stamp'), settled)
+
+    expect(settled.mock.calls[0]?.[0]).not.toHaveProperty('requestedAt')
+  })
+
   it('does not publish a journal settlement for a provider-control turn', async () => {
     const session = sessionFor()
     const settled = vi.fn()

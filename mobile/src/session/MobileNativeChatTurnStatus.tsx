@@ -35,6 +35,7 @@ export function MobileNativeChatTurnStatus({
   startedAt,
   thinking,
   workedSeconds,
+  queuedSeconds,
   activityText,
   expanded = false,
   onToggleExpanded
@@ -42,6 +43,8 @@ export function MobileNativeChatTurnStatus({
   startedAt: number | null
   thinking: boolean
   workedSeconds?: number | null
+  /** The wait before this turn started, reported beside its duration. */
+  queuedSeconds?: number | null
   /** Provider activity copy for a live turn; outranks the other two labels. */
   activityText?: string | null
   expanded?: boolean
@@ -51,7 +54,7 @@ export function MobileNativeChatTurnStatus({
   const counting = !settled && !thinking && !activityText?.trim()
   const elapsedSeconds = useElapsedSeconds(startedAt, counting)
   const label = settled
-    ? formatNativeChatTurnStatusLabel({ thinking, workedSeconds, elapsedSeconds })
+    ? formatNativeChatTurnStatusLabel({ thinking, workedSeconds, queuedSeconds, elapsedSeconds })
     : formatNativeChatActiveTurnLabel({ activityText, thinking, elapsedSeconds })
 
   if (settled && onToggleExpanded) {

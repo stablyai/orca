@@ -18,6 +18,42 @@ import {
   type ClaudeCurrentTurn
 } from './claude-turn-lifecycle-item'
 
+/** The host-clock instants a turn boundary carries: when the host saw the
+ *  boundary, and when the send behind it was accepted. */
+export type ClaudeTurnTiming = {
+  observedAt: number
+  /** Absent unless a submission opened this turn. */
+  requestedAt?: number
+}
+
+/** Turn timing for one delivered provider event, defaulting the boundary stamp. */
+export function claudeTurnTiming(event: {
+  observedAt?: number
+  requestedAt?: number
+}): ClaudeTurnTiming {
+  return {
+    observedAt: event.observedAt ?? Date.now(),
+    ...(event.requestedAt === undefined ? {} : { requestedAt: event.requestedAt })
+  }
+}
+
+/** The turn-boundary fields a delivered message event carries. Endpoints are
+ *  stamped on the host clock here, never read off the frame's own timestamp. */
+export function claudeTurnBoundaryEventFields(
+  input: { message: Record<string, unknown>; startsTurn: boolean; requestedAt?: number },
+  now?: () => number
+): { startsTurn?: true; observedAt?: number; requestedAt?: number } {
+  return {
+    ...(input.startsTurn ? { startsTurn: true as const } : {}),
+    ...(input.startsTurn && input.requestedAt !== undefined
+      ? { requestedAt: input.requestedAt }
+      : {}),
+    ...(input.startsTurn || input.message.type === 'result'
+      ? { observedAt: now?.() ?? Date.now() }
+      : {})
+  }
+}
+
 export type ClaudeSendEchoTurnInput = {
   envelope: ClaudeMessageEnvelope
   /** The raw frame: an absent `parent_tool_use_id` is not the same claim as an
@@ -25,7 +61,7 @@ export type ClaudeSendEchoTurnInput = {
   frame: Record<string, unknown>
   /** Orca dispatched this send and the provider is replaying it back. */
   startsTurn: boolean
-  observedAt: number
+  timing: ClaudeTurnTiming
   /** Provider key of the user row this turn is anchored to. */
   userItemId: string
 }
@@ -42,8 +78,9 @@ export function claudeTurnOpenedBySendEcho(
     ? {
         sessionId: envelope.sessionId,
         turnId: envelope.uuid,
-        startedAt: input.observedAt,
-        userItemId: input.userItemId
+        startedAt: input.timing.observedAt,
+        userItemId: input.userItemId,
+        ...(input.timing.requestedAt === undefined ? {} : { requestedAt: input.timing.requestedAt })
       }
     : null
 }

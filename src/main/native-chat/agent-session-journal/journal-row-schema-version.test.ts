@@ -63,4 +63,46 @@ describe('journal row schema versions', () => {
       opened.db.close()
     }
   })
+
+  it('keeps a turn carrying an acceptance instant at v3, so no older host latches read-only', async () => {
+    const journal = await opener.open({
+      identity: {
+        sessionId: 'session-2',
+        workspaceId: 'workspace-1',
+        hostId: 'local',
+        agent: 'claude',
+        providerHandle: { kind: 'claude', sessionId: 'provider-1', leafUuid: null }
+      },
+      now: () => 1_000,
+      journalDir: join(root, 'session-2')
+    })
+    await journal.appendItem(
+      {
+        provider: 'legacy',
+        agent: 'claude',
+        sessionId: 'session-2',
+        recordId: 'turn-lifecycle:t1'
+      },
+      agentJournalTurnBody({
+        turnId: 't1',
+        state: 'running',
+        requestedAt: 1_000,
+        startedAt: 134_000
+      }),
+      { fence: 1 }
+    )
+    await journal.close()
+    const opened = openJournalDatabase(journalDatabaseFile(join(root, 'session-2')))
+    try {
+      const stored = opened.db
+        .prepare('SELECT row_json FROM journal_rows ORDER BY seq')
+        .all()
+        .map((row) => JSON.parse(String((row as { row_json: string }).row_json)))
+        .filter((row: { kind: string }) => row.kind === 'item')
+        .map((row: { kind: string; v: number }) => [row.kind, row.v])
+      expect(stored).toEqual([['item', 3]])
+    } finally {
+      opened.db.close()
+    }
+  })
 })

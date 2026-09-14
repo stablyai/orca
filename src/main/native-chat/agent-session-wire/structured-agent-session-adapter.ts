@@ -160,6 +160,9 @@ export type StructuredAgentSessionAdapter = {
     clientMessageId: string
     body: AgentJournalMessageItem
     fence: number
+    /** Host clock at acceptance, from the submission row already journaled for
+     *  this send. A provider that queues the message carries it onto the turn. */
+    requestedAt?: number
   }): Promise<AgentSessionDispatchOutcome>
   rewindSupport?(sessionId: string): AgentSessionRewindSupport
   recoverRewind?(input: {

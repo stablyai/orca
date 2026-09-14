@@ -9,7 +9,11 @@ import { CLAUDE_AUTH_SWITCH_IN_PROGRESS_MESSAGE } from '../claude-accounts/envir
 import { isClaudeAuthSwitchInProgress } from '../claude-accounts/live-pty-gate'
 import { openClaudeStreamJsonConnection } from './claude-stream-json-connection'
 import { buildClaudePermissionCallbacks } from './claude-structured-inbound-control'
-import { resolveClaudeReplayWaiter } from './claude-structured-dispatch'
+import {
+  resolveClaudeReplayWaiter,
+  type ClaudeLateDispatchSettlement
+} from './claude-structured-dispatch'
+import { claudeTurnBoundaryEventFields } from './claude-turn-opening'
 import {
   claudeAuthDiagnostic,
   readClaudeCapabilities,
@@ -121,23 +125,19 @@ export async function acquireClaudeSession({
       liveSession.leafUuid = observedLeafUuid
       observeClaudeFastModeFacts(liveSession, message)
     }
+    // At most one waiter settles per frame, and it is the one this replay starts
+    // a turn for, so its acceptance instant reaches the turn with no second lookup.
+    let requestedAt: number | undefined
+    const onSettled: ClaudeLateDispatchSettlement = ({ requestedAt: accepted, ...settlement }) => {
+      requestedAt = accepted
+      deps.onDispatchSettledLate?.({ sessionId, ...settlement })
+    }
     const startsTurn = liveSession
-      ? resolveClaudeReplayWaiter(liveSession, message, (settlement) =>
-          deps.onDispatchSettledLate?.({ sessionId, ...settlement })
-        )
+      ? resolveClaudeReplayWaiter(liveSession, message, onSettled)
       : false
-    // Turn endpoints are stamped on the host clock, never the frame's own timestamp.
-    const observedAt =
-      startsTurn || message.type === 'result' ? { observedAt: deps.now?.() ?? Date.now() } : {}
-    callbacks.deliver(attempt, sessionId, () =>
-      callbacks.emit(liveSession, input.events, {
-        type: 'message',
-        sessionId,
-        message,
-        ...(startsTurn ? { startsTurn: true } : {}),
-        ...observedAt
-      })
-    )
+    const turnFields = claudeTurnBoundaryEventFields({ message, startsTurn, requestedAt }, deps.now)
+    const event = { type: 'message' as const, sessionId, message, ...turnFields }
+    callbacks.deliver(attempt, sessionId, () => callbacks.emit(liveSession, input.events, event))
   }
   const { canUseTool, onUserDialog } = buildClaudePermissionCallbacks({
     sessionId,

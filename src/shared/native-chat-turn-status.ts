@@ -7,6 +7,11 @@ export const NATIVE_CHAT_TURN_STATUS_COPY = {
   thinking: 'Thinking',
   workingFor: 'Working for {{value0}}',
   workedFor: 'Worked for {{value0}}',
+  /** Two readings, never one: the duration is the provider's measure of the work
+   *  it did, the wait is the time the send spent queued before any of it began. */
+  workedForQueued: 'Worked for {{value0}} · queued {{value1}}',
+  queuedBehindTurn: 'Queued — waiting for the current turn · {{value0}}',
+  queuedStarting: 'Queued — starting · {{value0}}',
   toggleDetails: 'Toggle turn details',
   responding: 'Agent is responding'
 } as const
@@ -31,19 +36,58 @@ export function formatNativeChatDuration(seconds: number): string {
 export function describeNativeChatTurnStatus({
   thinking,
   workedSeconds,
+  queuedSeconds,
   elapsedSeconds
 }: {
   thinking: boolean
   workedSeconds?: number | null
+  /** Whole seconds the send waited before the provider started the turn. */
+  queuedSeconds?: number | null
   elapsedSeconds: number
-}): { key: 'thinking' | 'workingFor' | 'workedFor'; duration: string | null } {
+}): {
+  key: 'thinking' | 'workingFor' | 'workedFor' | 'workedForQueued'
+  duration: string | null
+  queuedDuration?: string
+} {
   if (workedSeconds != null) {
-    return { key: 'workedFor', duration: formatNativeChatDuration(workedSeconds) }
+    const duration = formatNativeChatDuration(workedSeconds)
+    return queuedSeconds == null
+      ? { key: 'workedFor', duration }
+      : {
+          key: 'workedForQueued',
+          duration,
+          queuedDuration: formatNativeChatDuration(queuedSeconds)
+        }
   }
   if (thinking) {
     return { key: 'thinking', duration: null }
   }
   return { key: 'workingFor', duration: formatNativeChatDuration(elapsedSeconds) }
+}
+
+/** Which copy key a queued send's own line renders, and its live wait. The send
+ *  is inside the provider's queue: Orca cannot recall, reorder, or edit it, so
+ *  the line reports the wait and offers no action. */
+export function describeNativeChatQueuedSend({
+  waitingOn,
+  elapsedSeconds
+}: {
+  waitingOn: 'turn-busy' | 'turn-starting'
+  elapsedSeconds: number
+}): { key: 'queuedBehindTurn' | 'queuedStarting'; duration: string } {
+  return {
+    key: waitingOn === 'turn-busy' ? 'queuedBehindTurn' : 'queuedStarting',
+    duration: formatNativeChatDuration(elapsedSeconds)
+  }
+}
+
+/** A queued send's line in English. For platforms without i18n (mobile). */
+export function formatNativeChatQueuedSendLabel(input: {
+  waitingOn: 'turn-busy' | 'turn-starting'
+  elapsedSeconds: number
+}): string {
+  const { key, duration } = describeNativeChatQueuedSend(input)
+  return NATIVE_CHAT_TURN_STATUS_COPY[key].replaceAll('{{value0}}', duration)
 }
 
 /** The two readings that label a live turn's one indicator row, carried together
@@ -96,11 +140,16 @@ export function formatNativeChatActiveTurnLabel(input: {
 export function formatNativeChatTurnStatusLabel(input: {
   thinking: boolean
   workedSeconds?: number | null
+  queuedSeconds?: number | null
   elapsedSeconds: number
 }): string {
-  const { key, duration } = describeNativeChatTurnStatus(input)
+  const { key, duration, queuedDuration } = describeNativeChatTurnStatus(input)
   const copy = NATIVE_CHAT_TURN_STATUS_COPY[key]
-  return duration == null ? copy : copy.replaceAll('{{value0}}', duration)
+  if (duration == null) {
+    return copy
+  }
+  const worked = copy.replaceAll('{{value0}}', duration)
+  return queuedDuration === undefined ? worked : worked.replaceAll('{{value1}}', queuedDuration)
 }
 
 export type NativeChatTurnTiming = {
@@ -112,6 +161,9 @@ export type NativeChatTurnStatus = {
   startedAt: number | null
   thinking: boolean
   workedSeconds: number | null
+  /** Whole seconds this turn's send waited in the provider's queue, when the host
+   *  recorded an acceptance instant far enough ahead of the start to be worth naming. */
+  queuedSeconds?: number
 }
 
 export type NativeChatTurnTimingByTurn = Readonly<Record<string, NativeChatTurnTiming>>
@@ -191,7 +243,12 @@ export function reduceNativeChatTurnTiming(
 
 /** A turn duration the execution host recorded, which outranks anything this
  *  platform observed locally. */
-export type NativeChatSettledTurn = { startedAt: number; workedSeconds: number }
+export type NativeChatSettledTurn = {
+  startedAt: number
+  workedSeconds: number
+  /** The wait before the provider started this turn, never folded into `workedSeconds`. */
+  queuedSeconds?: number
+}
 
 /** Per turn: the host's duration, or null when the host recorded the turn but
  *  has no duration to show (still running, or its end was never observed).
@@ -234,7 +291,8 @@ export function selectNativeChatTurnStatuses(
     completedByTurn[turnKey] = {
       startedAt: settled.startedAt,
       thinking: false,
-      workedSeconds: settled.workedSeconds
+      workedSeconds: settled.workedSeconds,
+      ...(settled.queuedSeconds === undefined ? {} : { queuedSeconds: settled.queuedSeconds })
     }
   }
   return {

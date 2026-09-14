@@ -173,6 +173,10 @@ export type AgentJournalTurnLifecycle = {
    *  submission alias through it. A lifecycle row may key itself when provider
    *  output opened a turn with no user item; absent means an older host. */
   userItemId?: string
+  /** Host clock when the send that opened this turn was accepted, stamped before
+   *  the message reached the provider and never re-derived from a later event.
+   *  Absent when no submission opened the turn (resume, provider-opened, older host). */
+  requestedAt?: number
   startedAt?: number
   completedAt?: number
   /** The provider's own measured turn duration, preferred over the host interval. */

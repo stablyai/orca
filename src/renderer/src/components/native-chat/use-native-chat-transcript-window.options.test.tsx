@@ -48,6 +48,7 @@ function slot(id: string): NativeChatTranscriptSlot {
     activeTurnIsWorking: false,
     receipt: undefined,
     status: undefined,
+    queued: undefined,
     turnDiff: undefined,
     estimatedHeight: 48
   }

@@ -4,6 +4,7 @@ import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client'
 import { MessageRow } from './NativeChatMessageRow'
 import { NativeChatResolutionReceipt } from './NativeChatResolutionReceipt'
 import { NativeChatWorkingStatus } from './NativeChatWorkingStatus'
+import { NativeChatQueuedSendLine } from './NativeChatQueuedSendLine'
 import { NativeChatTurnDiffRollup } from './NativeChatTurnDiffRollup'
 import type { NativeChatTaskListPredecessors } from './native-chat-task-list-history'
 import type { NativeChatTranscriptSlot } from './native-chat-transcript-slots'
@@ -39,7 +40,7 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
   slot: NativeChatTranscriptSlot
   context: NativeChatTranscriptRowContext
 }): React.JSX.Element {
-  const { message, turnKey, status, receipt, turnDiff } = slot
+  const { message, turnKey, status, queued, receipt, turnDiff } = slot
   const predecessors = context.taskListPredecessors.get(message.id)
   const expanded = turnKey ? context.expandedTurnIds.has(turnKey) : undefined
   return (
@@ -65,11 +66,13 @@ export const NativeChatTranscriptRow = memo(function NativeChatTranscriptRow({
           runtimeContext={context.runtimeContext}
         />
       )}
+      {queued ? <NativeChatQueuedSendLine queued={queued} /> : null}
       {status ? (
         <NativeChatWorkingStatus
           startedAt={status.startedAt}
           thinking={status.thinking}
           workedSeconds={status.workedSeconds}
+          queuedSeconds={status.queuedSeconds}
           expanded={expanded === true}
           onToggleExpanded={
             status.workedSeconds != null && turnKey

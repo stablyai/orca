@@ -78,6 +78,28 @@ const CANONICAL_BODIES: AgentJournalItemBody[] = [
     kind: 'status',
     text: 'turn',
     turnLifecycle: { turnId: 'turn-3', state: 'unverifiable', startedAt: 1_000 }
+  },
+  // A turn a submission waited in the provider's queue for, in both carriers.
+  {
+    kind: 'status',
+    text: 'turn',
+    turnLifecycle: {
+      turnId: 'turn-4',
+      state: 'completed',
+      requestedAt: 1_000,
+      startedAt: 134_000,
+      completedAt: 174_000
+    }
+  },
+  { kind: 'turn', turnId: 'turn-5', state: 'running', startedAt: 1_000 },
+  {
+    kind: 'turn',
+    turnId: 'turn-6',
+    state: 'completed',
+    requestedAt: 1_000,
+    startedAt: 134_000,
+    completedAt: 174_000,
+    durationMs: 40_000
   }
 ]
 

@@ -176,6 +176,7 @@ export const AgentJournalItemBodySchema = z.discriminatedUnion('kind', [
         turnId: z.string(),
         state: z.string().min(1),
         userItemId: z.string().min(1).optional(),
+        requestedAt: z.number().finite().positive().optional(),
         startedAt: z.number().finite().positive().optional(),
         completedAt: z.number().finite().positive().optional(),
         durationMs: z.number().finite().nonnegative().optional()
@@ -188,6 +189,7 @@ export const AgentJournalItemBodySchema = z.discriminatedUnion('kind', [
     turnId: z.string(),
     state: z.string().min(1),
     userItemId: z.string().min(1).optional(),
+    requestedAt: z.number().finite().positive().optional(),
     startedAt: z.number().finite().positive().optional(),
     completedAt: z.number().finite().positive().optional(),
     durationMs: z.number().finite().nonnegative().optional()

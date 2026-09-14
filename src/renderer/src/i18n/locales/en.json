@@ -17155,6 +17155,9 @@
         "thinking": "Thinking",
         "workingFor": "Working for {{value0}}",
         "workedFor": "Worked for {{value0}}",
+        "workedForQueued": "Worked for {{value0}} · queued {{value1}}",
+        "queuedBehindTurn": "Queued — waiting for the current turn · {{value0}}",
+        "queuedStarting": "Queued — starting · {{value0}}",
         "toggleDetails": "Toggle turn details"
       },
       "backgroundTasks": {

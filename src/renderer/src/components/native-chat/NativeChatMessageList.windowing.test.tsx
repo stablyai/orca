@@ -49,6 +49,7 @@ function marker(index: number): NativeChatMessage {
 const ROW_PX = estimateNativeChatRowHeight(nativeChatRowContentMetrics(marker(0)), {
   hasReceipt: false,
   hasStatus: false,
+  hasQueued: false,
   hasTurnDiff: false
 })
 const ROW_PITCH_PX = ROW_PX + NATIVE_CHAT_ROW_GAP_PX

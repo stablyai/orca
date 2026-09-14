@@ -2638,10 +2638,13 @@
         }
       },
       "status": {
+        "queuedBehindTurn": "Queued — waiting for the current turn · {{value0}}",
+        "queuedStarting": "Queued — starting · {{value0}}",
         "responding": "Agent is responding",
         "thinking": "Thinking",
         "toggleDetails": "Toggle turn details",
         "workedFor": "Worked for {{value0}}",
+        "workedForQueued": "Worked for {{value0}} · queued {{value1}}",
         "workingFor": "Working for {{value0}}"
       },
       "tool": {

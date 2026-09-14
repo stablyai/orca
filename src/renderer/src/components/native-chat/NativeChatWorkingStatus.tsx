@@ -13,39 +13,52 @@ export function NativeChatWorkingStatus({
   startedAt,
   thinking,
   workedSeconds,
+  queuedSeconds,
   expanded = false,
   onToggleExpanded
 }: {
   startedAt: number | null
   thinking: boolean
   workedSeconds?: number | null
+  /** The wait before this turn started, shown beside its duration, never inside it. */
+  queuedSeconds?: number | null
   expanded?: boolean
   onToggleExpanded?: () => void
 }): React.JSX.Element {
   const counting = !thinking && workedSeconds == null
   const elapsedSeconds = useNativeChatElapsedSeconds(startedAt, counting)
 
-  const { key, duration } = describeNativeChatTurnStatus({
+  const { key, duration, queuedDuration } = describeNativeChatTurnStatus({
     thinking,
     workedSeconds,
+    queuedSeconds,
     elapsedSeconds
   })
   const label =
-    key === 'workedFor'
+    key === 'workedForQueued'
       ? translate(
-          'components.native-chat.status.workedFor',
-          NATIVE_CHAT_TURN_STATUS_COPY.workedFor,
-          {
-            value0: duration
-          }
+          'components.native-chat.status.workedForQueued',
+          NATIVE_CHAT_TURN_STATUS_COPY.workedForQueued,
+          { value0: duration, value1: queuedDuration }
         )
-      : key === 'thinking'
-        ? translate('components.native-chat.status.thinking', NATIVE_CHAT_TURN_STATUS_COPY.thinking)
-        : translate(
-            'components.native-chat.status.workingFor',
-            NATIVE_CHAT_TURN_STATUS_COPY.workingFor,
-            { value0: duration }
+      : key === 'workedFor'
+        ? translate(
+            'components.native-chat.status.workedFor',
+            NATIVE_CHAT_TURN_STATUS_COPY.workedFor,
+            {
+              value0: duration
+            }
           )
+        : key === 'thinking'
+          ? translate(
+              'components.native-chat.status.thinking',
+              NATIVE_CHAT_TURN_STATUS_COPY.thinking
+            )
+          : translate(
+              'components.native-chat.status.workingFor',
+              NATIVE_CHAT_TURN_STATUS_COPY.workingFor,
+              { value0: duration }
+            )
   const className = `flex min-h-8 items-center gap-1 text-sm text-muted-foreground${thinking ? '' : ' border-b border-border'}`
   const caret =
     workedSeconds != null ? (

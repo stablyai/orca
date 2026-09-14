@@ -3,6 +3,7 @@ import type { AgentJournalRenderItem } from './agent-session-journal-types'
 import { selectNativeChatTurnStatuses } from './native-chat-turn-status'
 import {
   completedStructuredAgentTurnSeconds,
+  queuedStructuredAgentTurnSeconds,
   selectStructuredAgentRunningTurnTiming,
   selectStructuredAgentSettledTurns,
   selectStructuredAgentTurnTimings,
@@ -336,5 +337,83 @@ describe('structuredAgentTurnLocalStartedAt with the host clock', () => {
     // Host says the turn has run 40s; client clock is arbitrary.
     expect(structuredAgentTurnLocalStartedAt(timing, 3_600_000, 90_000)).toBe(3_600_000 - 40_000)
     expect(structuredAgentTurnLocalStartedAt(timing, 3_600_000, 40_000)).toBe(3_600_000)
+  })
+})
+
+describe('queuedStructuredAgentTurnSeconds', () => {
+  // The measured defect: the send waited 133s inside the provider's queue and
+  // the turn then worked for 40s. Both numbers are reported, neither absorbs
+  // the other, and the duration keeps meaning the provider's own measurement.
+  const queuedTurn = {
+    state: 'completed' as const,
+    requestedAt: 1_000,
+    startedAt: 134_000,
+    completedAt: 174_000,
+    durationMs: 40_000,
+    observedAt: 134_000
+  }
+
+  it('reports the wait between acceptance and the provider starting the turn', () => {
+    expect(queuedStructuredAgentTurnSeconds(queuedTurn)).toBe(133)
+  })
+
+  it('leaves the turn duration alone, which still prefers the provider measure', () => {
+    expect(completedStructuredAgentTurnSeconds(queuedTurn)).toBe(40)
+  })
+
+  it('reports nothing when the host recorded no acceptance instant', () => {
+    const { requestedAt: _requestedAt, ...noStamp } = queuedTurn
+    expect(queuedStructuredAgentTurnSeconds(noStamp)).toBeNull()
+    expect(queuedStructuredAgentTurnSeconds(null)).toBeNull()
+  })
+
+  it('reports nothing for ordinary sub-threshold echo lag', () => {
+    expect(queuedStructuredAgentTurnSeconds({ ...queuedTurn, startedAt: 2_900 })).toBeNull()
+  })
+
+  it('reads the acceptance instant off the durable row, rejecting a non-finite one', () => {
+    const [accepted] = [
+      ...selectStructuredAgentTurnTimings([
+        user('q1'),
+        lifecycle('qt', {
+          state: 'completed',
+          requestedAt: 1_000,
+          startedAt: 134_000,
+          completedAt: 174_000
+        })
+      ]).values()
+    ]
+    expect(accepted?.requestedAt).toBe(1_000)
+
+    const [rejected] = [
+      ...selectStructuredAgentTurnTimings([
+        user('q2'),
+        lifecycle('qt2', {
+          state: 'completed',
+          requestedAt: Number.NaN,
+          startedAt: 134_000,
+          completedAt: 174_000
+        })
+      ]).values()
+    ]
+    expect(rejected?.requestedAt).toBeUndefined()
+  })
+
+  it('carries the wait onto the settled turn beside its duration', () => {
+    const settled = selectStructuredAgentSettledTurns([
+      user('q3'),
+      lifecycle('qt3', {
+        state: 'completed',
+        requestedAt: 1_000,
+        startedAt: 134_000,
+        completedAt: 174_000,
+        durationMs: 40_000
+      })
+    ])
+    expect(settled.get('q3')).toEqual({
+      startedAt: 134_000,
+      workedSeconds: 40,
+      queuedSeconds: 133
+    })
   })
 })

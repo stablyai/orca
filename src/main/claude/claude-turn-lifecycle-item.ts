@@ -11,6 +11,9 @@ export type ClaudeCurrentTurn = {
   sessionId: string
   turnId: string
   startedAt: number
+  /** Host clock when the send that opened this turn was accepted. Held for the
+   *  life of the turn so every revision restates it rather than re-deriving it. */
+  requestedAt?: number
   /** Provider key of the user echo, or the lifecycle row itself when provider
    *  output opened a turn with no user row to receive its timing. */
   userItemId: string
@@ -69,7 +72,8 @@ export function claudeTurnLifecycleItem(
   options: StructuredAgentSessionAppendOptions
   publishCoalescingKey: string
 } {
-  const { sessionId, turnId, startedAt, userItemId } = turn
+  const { sessionId, turnId, startedAt, userItemId, requestedAt } = turn
+  const accepted = requestedAt === undefined ? {} : { requestedAt }
   return {
     identity: claudeTurnLifecycleIdentity(sessionId, turnId),
     body: agentJournalTurnBody(
@@ -77,12 +81,13 @@ export function claudeTurnLifecycleItem(
         ? {
             turnId,
             state: end.state,
+            ...accepted,
             startedAt,
             completedAt: end.completedAt,
             userItemId,
             ...(end.durationMs === undefined ? {} : { durationMs: end.durationMs })
           }
-        : { turnId, state: 'running', startedAt, userItemId }
+        : { turnId, state: 'running', ...accepted, startedAt, userItemId }
     ),
     // The running row's ts is the turn start itself, so clients read no append lag.
     options: end ? {} : { observedAt: startedAt },

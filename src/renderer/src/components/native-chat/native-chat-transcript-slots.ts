@@ -9,6 +9,7 @@
 
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
 import type { NativeChatTurnStatus } from '../../../../shared/native-chat-turn-status'
+import type { StructuredAgentSessionQueuedSend } from '../../../../shared/structured-agent-session-queued-sends'
 import { nativeChatRowRendersContent } from './native-chat-row-content'
 import {
   estimateNativeChatRowHeight,
@@ -26,6 +27,8 @@ export type NativeChatTranscriptSlot = {
   receipt: NativeChatResolvedPrompt | undefined
   /** Turn timing shown under this row, already filtered to "should render". */
   status: NativeChatTurnStatus | undefined
+  /** Set while the provider has this send queued and has started no turn for it. */
+  queued: StructuredAgentSessionQueuedSend | undefined
   turnDiff: NativeChatTurnDiff | undefined
   /** Height to reserve before the row has ever been measured. */
   estimatedHeight: number
@@ -42,6 +45,8 @@ export type NativeChatTranscriptSlotsInput = {
     completedByTurn: Readonly<Record<string, NativeChatTurnStatus>>
   }
   turnDiffs: ReadonlyMap<string, NativeChatTurnDiff>
+  /** Queued sends keyed by the journal key of the row each one renders as. */
+  queuedSends: ReadonlyMap<string, StructuredAgentSessionQueuedSend>
   showTurnStatus: boolean
   isWorking: boolean
   /** Session-level lifecycle, which outlives a transcript that never said "done". */
@@ -59,6 +64,7 @@ export function buildNativeChatTranscriptSlots(
     receipts,
     turnStatuses,
     turnDiffs,
+    queuedSends,
     showTurnStatus,
     isWorking,
     lifecycleWorking
@@ -76,8 +82,9 @@ export function buildNativeChatTranscriptSlots(
     const status =
       showTurnStatus && candidateStatus?.workedSeconds != null ? candidateStatus : undefined
     const turnDiff = turnKey && turnKeys[index + 1] !== turnKey ? turnDiffs.get(turnKey) : undefined
+    const queued = showTurnStatus ? queuedSends.get(message.id) : undefined
     const drawsRow = receipt !== undefined || nativeChatRowRendersContent(message.blocks)
-    if (!drawsRow && status === undefined && turnDiff === undefined) {
+    if (!drawsRow && status === undefined && turnDiff === undefined && queued === undefined) {
       continue
     }
     slots.push({
@@ -89,10 +96,12 @@ export function buildNativeChatTranscriptSlots(
         (isWorking || lifecycleWorking),
       receipt,
       status: status ?? undefined,
+      queued,
       turnDiff,
       estimatedHeight: estimateNativeChatRowHeight(nativeChatRowContentMetrics(message), {
         hasReceipt: receipt !== undefined,
         hasStatus: status !== undefined,
+        hasQueued: queued !== undefined,
         hasTurnDiff: turnDiff !== undefined
       })
     })
