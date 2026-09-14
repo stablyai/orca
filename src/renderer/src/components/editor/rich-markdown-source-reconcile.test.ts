@@ -400,6 +400,78 @@ describe('serializeRichMarkdownForReconcile (real editor pipeline)', () => {
   const serialize = (md: string): string | null =>
     serializeRichMarkdownForReconcile(md, serializerContext)
 
+  it('patches an edit at the end of a dollar-and-ampersand doc with the real serializer', () => {
+    // Why: the parser used to drop `\\$` and the serializer still writes `&amp;` and re-pads tables;
+    // an end-of-file edit must keep the untouched source bytes instead of canonicalizing the file.
+    const originalSource =
+      'Cost was \\$1,200 for Nell & Mary.\n\n| Item         | Amount |\n|--------------|-------:|\n| Fee          | \\$500  |\n\nTrailing paragraph.\n'
+    const baseCanonical = serialize(originalSource)!
+    // getMarkdown has no trailing newline for a source that ends in a single newline
+    expect(baseCanonical.endsWith('\n')).toBe(false)
+    const edited = `${baseCanonical} Added word.`
+
+    const reconciled = reconcileSerializedMarkdown({
+      originalSource,
+      baseCanonical,
+      edited,
+      roundTrip: (md) => serialize(md)
+    })
+
+    expect(reconciled).toBe(
+      'Cost was \\$1,200 for Nell & Mary.\n\n| Item         | Amount |\n|--------------|-------:|\n| Fee          | \\$500  |\n\nTrailing paragraph. Added word.\n'
+    )
+  })
+
+  it('keeps source style when typing into a trailing empty paragraph (source ends in a blank line)', () => {
+    // Why: `text\n\n` parses to a trailing empty paragraph, so canonical ends in `\n\n` too; the
+    // end-of-file body strip must not run here or the whole file falls back to canonical.
+    const originalSource = 'Cost \\$1 for _em_.\n\ntext\n\n'
+    const baseCanonical = serialize(originalSource)!
+    expect(baseCanonical.endsWith('\n\n')).toBe(true)
+    const edited = `${baseCanonical}Added`
+
+    const reconciled = reconcileSerializedMarkdown({
+      originalSource,
+      baseCanonical,
+      edited,
+      roundTrip: (md) => serialize(md)
+    })
+
+    expect(reconciled).toBe('Cost \\$1 for _em_.\n\ntext\n\nAdded')
+  })
+
+  it('keeps source style when appending to a source whose last line is whitespace only', () => {
+    // Why: the trailing run is one newline, so the body strip is tried first; it lands after the
+    // spaces and fails the proof, and the whole-text patch must then take over instead of canonical.
+    const originalSource = 'Cost \\$1 & co.\n\nLast.\n  \n'
+    const baseCanonical = serialize(originalSource)!
+    const edited = `${baseCanonical} Added.`
+
+    const reconciled = reconcileSerializedMarkdown({
+      originalSource,
+      baseCanonical,
+      edited,
+      roundTrip: (md) => serialize(md)
+    })
+
+    expect(reconciled).toBe('Cost \\$1 & co.\n\nLast. Added.\n  \n')
+  })
+
+  it('keeps source style when deleting the trailing empty paragraph', () => {
+    const originalSource = 'Cost \\$1 for _em_.\n\ntext\n\n'
+    const baseCanonical = serialize(originalSource)!
+    const edited = baseCanonical.replace(/\n+$/, '') // Backspace at end of document
+
+    const reconciled = reconcileSerializedMarkdown({
+      originalSource,
+      baseCanonical,
+      edited,
+      roundTrip: (md) => serialize(md)
+    })
+
+    expect(reconciled).toBe('Cost \\$1 for _em_.\n\ntext')
+  })
+
   it('applies normalizeEmptyListItems so empty list items round-trip stably', () => {
     // `3. ` immediately before a heading parses as an empty list item; without the
     // normalize step the safety re-parse would spuriously mismatch and no-op.
@@ -552,5 +624,75 @@ describe('serializeRichMarkdownForReconcile (real editor pipeline)', () => {
     })
 
     expect(serialize(reconciled)!.trimEnd()).toBe(edited.trimEnd())
+  })
+})
+
+describe('reconcileSerializedMarkdown end-of-document edits', () => {
+  // Why: real getMarkdown never emits a trailing newline; mimic that on both the base and the safety re-parse.
+  const canonicalWithoutTrailingNewline = (md: string): string =>
+    fakeCanonicalize(md).replace(/\n+$/, '')
+
+  it('patches an appended edit into a source that ends with a newline', () => {
+    const originalSource = '# Title\n\n_emphasis_ and __strong__\n\nTrailing paragraph.\n'
+    const baseCanonical = canonicalWithoutTrailingNewline(originalSource)
+    const edited = `${baseCanonical} Added word.`
+
+    const reconciled = reconcileSerializedMarkdown({
+      originalSource,
+      baseCanonical,
+      edited,
+      roundTrip: canonicalWithoutTrailingNewline
+    })
+
+    expect(reconciled).toBe(
+      '# Title\n\n_emphasis_ and __strong__\n\nTrailing paragraph. Added word.\n'
+    )
+  })
+
+  it('patches an appended edit into a CRLF source that ends with a newline', () => {
+    const originalSource = '# Title\r\n\r\n_emphasis_\r\n\r\nTrailing paragraph.\r\n'
+    const baseCanonical = canonicalWithoutTrailingNewline(originalSource.replace(/\r\n/g, '\n'))
+    const edited = `${baseCanonical} Added word.`
+
+    const reconciled = reconcileSerializedMarkdown({
+      originalSource,
+      baseCanonical,
+      edited,
+      roundTrip: canonicalWithoutTrailingNewline
+    })
+
+    expect(reconciled).toBe('# Title\r\n\r\n_emphasis_\r\n\r\nTrailing paragraph. Added word.\r\n')
+  })
+
+  it('keeps the source trailing newline when falling back to canonical output', () => {
+    // Branch 3 (oversize) is the simplest guaranteed fallback.
+    const body = '# Title\n\n_emphasis_\n\n'.repeat(4_000)
+    const originalSource = `${body}Trailing paragraph.\n`
+    const baseCanonical = canonicalWithoutTrailingNewline(originalSource)
+    const edited = `${baseCanonical} Added word.`
+
+    const reconciled = reconcileSerializedMarkdown({
+      originalSource,
+      baseCanonical,
+      edited,
+      roundTrip: canonicalWithoutTrailingNewline
+    })
+
+    expect(reconciled).toBe(`${edited}\n`)
+  })
+
+  it('still patches an edit at the end of a source without a trailing newline', () => {
+    const originalSource = '# Title\n\n_emphasis_\n\nTrailing paragraph.'
+    const baseCanonical = canonicalWithoutTrailingNewline(originalSource)
+    const edited = `${baseCanonical} Added word.`
+
+    const reconciled = reconcileSerializedMarkdown({
+      originalSource,
+      baseCanonical,
+      edited,
+      roundTrip: canonicalWithoutTrailingNewline
+    })
+
+    expect(reconciled).toBe('# Title\n\n_emphasis_\n\nTrailing paragraph. Added word.')
   })
 })

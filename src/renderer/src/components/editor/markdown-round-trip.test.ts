@@ -26,6 +26,27 @@ function roundTripMarkdown(content: string): string {
   }
 }
 
+function countInlineMathNodes(content: string): number {
+  const codec = createRichMarkdownEditorCodec()
+  const editor = new Editor({
+    element: null,
+    extensions: createRichMarkdownExtensions({ codec }),
+    content: encodeRawMarkdownHtmlForRichEditor(content, codec),
+    contentType: 'markdown'
+  })
+  try {
+    let count = 0
+    editor.state.doc.descendants((node) => {
+      if (node.type.name === 'inlineMath') {
+        count += 1
+      }
+    })
+    return count
+  } finally {
+    editor.destroy()
+  }
+}
+
 function markdownAfterTextReplace(content: string, search: string, replacement: string): string {
   const codec = createRichMarkdownEditorCodec()
   const editor = new Editor({
@@ -338,6 +359,137 @@ describe('rich markdown round trip', () => {
       `<details class="orca-details" data-orca-toggle="${variant}" open>\n<summary></summary>\n\n\n\n</details>`
     )
     expect(slashCommandSelectionParent(commandId)).toBe('detailsSummary')
+  })
+
+  it('round-trips backslash-escaped characters byte for byte', () => {
+    // Why: Tiptap's parser dropped marked's `escape` token (the character vanished on load), and its
+    // serializer never re-escapes, so a bare character would become syntax on the next open.
+    const content = [
+      'cost was \\$1,200, rate 5\\*, file\\_name, see \\[note\\](y).',
+      '\\# not a heading',
+      '1\\. not a list',
+      '\\- not a bullet',
+      '\\*\\*not bold\\*\\* and \\_not em\\_',
+      '\\`not code\\` and \\~\\~not strike\\~\\~',
+      'C:\\\\Program Files\\\\(x86)',
+      'shell \\$HOME\\$ var',
+      // Why: marks must stay continuous around an escape; consecutive escapes need one backslash each.
+      '**cost \\$5 total** and **\\$5 fee** and **bold \\$**',
+      '[a \\$ b](http://x) and *a \\_ b* and *\\*literal\\**',
+      '**\\*\\*not bold\\*\\*** inside bold'
+    ].join('\n\n')
+    const once = roundTripMarkdown(`${content}\n`)
+    expect(once).toBe(content)
+    expect(roundTripMarkdown(`${once}\n`)).toBe(content)
+  })
+
+  it('does not escape inside code marks and drops the backslash for entity-encoded characters', () => {
+    expect(roundTripMarkdown('a \\& b and \\< c\n')).toBe('a &amp; b and &lt; c')
+    // Why: a code span never contains an escape token, so an escaped mark can only reach code
+    // through editing; the serializer must then emit the literal character.
+    const codec = createRichMarkdownEditorCodec()
+    const editor = new Editor({
+      element: null,
+      extensions: createRichMarkdownExtensions({ codec }),
+      content: encodeRawMarkdownHtmlForRichEditor('cost \\$5\n', codec),
+      contentType: 'markdown'
+    })
+    try {
+      editor.commands.setTextSelection({ from: 1, to: editor.state.doc.content.size - 1 })
+      editor.commands.setCode()
+      expect(editor.getMarkdown()).toBe('`cost $5`')
+    } finally {
+      editor.destroy()
+    }
+  })
+
+  it('keeps escaped dollars inside table cells', () => {
+    expect(roundTripMarkdown('| Item | Amount |\n|---|---|\n| Fee | \\$500 |\n')).toContain(
+      '\\$500'
+    )
+  })
+
+  it('does not turn escaped dollars into inline math', () => {
+    const content = 'shell \\$HOME\\$ var, \\$x\\$ too, and costs $5 to \\$x here'
+    expect(countInlineMathNodes(content)).toBe(0)
+    expect(roundTripMarkdown(`${content}\n`)).toBe(content)
+  })
+
+  it('keeps escaped characters as searchable text', () => {
+    const codec = createRichMarkdownEditorCodec()
+    const editor = new Editor({
+      element: null,
+      extensions: createRichMarkdownExtensions({ codec }),
+      content: encodeRawMarkdownHtmlForRichEditor('cost \\$1,200 and file\\_name\n', codec),
+      contentType: 'markdown'
+    })
+    try {
+      // Why: find/replace treats atoms as read-only, so escapes must stay ordinary text.
+      expect(editor.state.doc.textContent).toBe('cost $1,200 and file_name')
+    } finally {
+      editor.destroy()
+    }
+  })
+
+  it('keeps dollar amounts as text instead of inline math', () => {
+    const content = 'from $10 to $20, then (deficit −$509,542 by end-2020) entered 2021 at $0'
+    expect(countInlineMathNodes(content)).toBe(0)
+    expect(roundTripMarkdown(`${content}\n`)).toBe(content)
+    // Why: Pandoc boundaries — a space inside either `$` or a digit after the closing `$` means money.
+    for (const text of ['$x$2 apples', 'costs $ x$ here', 'costs $x $ here', '$5-$6 range']) {
+      expect(countInlineMathNodes(text)).toBe(0)
+    }
+  })
+
+  it('still parses inline math that touches its dollar signs', () => {
+    expect(countInlineMathNodes('Energy is $E = mc^2$ here, and $x_1$ too.')).toBe(2)
+    expect(roundTripMarkdown('Energy is $E = mc^2$ here.\n')).toBe('Energy is $E = mc^2$ here.')
+    // Why: a formula may wrap across a soft line break, and may end in a LaTeX line break.
+    expect(countInlineMathNodes('wrap $a +\nb$ end')).toBe(1)
+    expect(countInlineMathNodes('break $x\\\\$ end')).toBe(1)
+  })
+
+  it('escapes pipes inside table cells so the row keeps its columns', () => {
+    // Why: marked unescapes `\\|` per cell before inline lexing, so the source form must add it back.
+    const once = roundTripMarkdown('| a \\| b | c |\n|---|---|\n| x \\| y | `p \\| q` |\n')
+    expect(once).toContain('a \\| b')
+    expect(once).toContain('x \\| y')
+    expect(once).toContain('`p \\| q`')
+    expect(roundTripMarkdown(`${once}\n`)).toBe(once)
+  })
+
+  it('keeps parentheses in link and image destinations escaped', () => {
+    expect(roundTripMarkdown('[a](b\\)c) and ![g](h\\(1\\).png)\n')).toBe(
+      '[a](b\\)c) and ![g](h\\(1\\).png)'
+    )
+    expect(roundTripMarkdown('[a](x "say \\"hi\\"")\n')).toBe('[a](x "say \\"hi\\"")')
+    expect(roundTripMarkdown('![a \\] b](x.png)\n')).toBe('![a \\] b](x.png)')
+  })
+
+  it('does not split a paragraph at a mid-line $$', () => {
+    const content = 'costs $$ big money $$ here, honestly'
+    expect(roundTripMarkdown(`${content}\n`)).toBe(content)
+    expect(roundTripMarkdown('text\n\n$$\nx^2\n$$\n')).toBe('text\n\n$$\nx^2\n$$')
+  })
+
+  it('parses display math that is indented or holds an escaped dollar', () => {
+    for (const source of [
+      'text\n\n  $$\nx^2\n$$\n',
+      'text\n $$\nx^2\n$$\n',
+      'text\n\t$$\nx^2\n$$\n'
+    ]) {
+      expect(roundTripMarkdown(source)).toBe('text\n\n$$\nx^2\n$$')
+    }
+    expect(roundTripMarkdown('$$\n\\$5 + x\n$$\n')).toBe('$$\n\\$5 + x\n$$')
+  })
+
+  it('escapes pipes inside link and image attributes in table cells', () => {
+    const once = roundTripMarkdown(
+      '| a | b |\n|---|---|\n| ![x \\| y](img.png) | [c \\| d](http://e "f \\| g") |\n'
+    )
+    expect(once).toContain('![x \\| y](img.png)')
+    expect(once).toContain('[c \\| d](http://e "f \\| g")')
+    expect(roundTripMarkdown(`${once}\n`)).toBe(once)
   })
 
   it('preserves markdown tables', () => {

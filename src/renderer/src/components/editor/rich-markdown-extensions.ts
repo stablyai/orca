@@ -39,6 +39,8 @@ import type { RichMarkdownHtmlSuperscriptLinkContext } from './rich-markdown-htm
 import { RichMarkdownOrderedList } from './rich-markdown-ordered-list'
 import { RichMarkdownParagraph } from './rich-markdown-paragraph'
 import { RichMarkdownCodeBlockLowlight } from './rich-markdown-lowlight'
+import { RichMarkdownEscapedCharacter } from './rich-markdown-escaped-character'
+import { RichMarkdownSerializerFidelity } from './rich-markdown-serializer-fidelity'
 import { RichMarkdownTaskList } from './rich-markdown-task-list'
 import { createCachedLowlight } from './rich-markdown-lowlight-cache'
 
@@ -48,6 +50,49 @@ const RichMarkdownLink = Link.extend({
   // Why: link's priority must stay below code's default 100 so Markdown
   // serializes code-styled labels as [`label`](href).
   priority: 90
+})
+
+// Why: Pandoc's rule keeps money as text — both `$` must touch the formula, the closing one
+// must not be followed by a digit, and an escaped `\$` never closes — where upstream turned
+// "$10 to $20" into math.
+const INLINE_MATH_PATTERN = /^\$(?![\s$])((?:\\[\s\S]|[^$\\])*?)(?<!\s)\$(?!\d)/
+
+const RichMarkdownInlineMath = InlineMath.extend({
+  markdownTokenizer: {
+    name: 'inlineMath',
+    level: 'inline',
+    start: (src: string) => src.indexOf('$'),
+    tokenize: (src: string) => {
+      const match = src.match(INLINE_MATH_PATTERN)
+      if (!match) {
+        return undefined
+      }
+      return { type: 'inlineMath', raw: match[0], latex: match[1] }
+    }
+  }
+})
+
+// Why: marked ends a paragraph wherever a block tokenizer's `start` points, so upstream's
+// `indexOf('$$')` split prose at a mid-line `$$`; display math only opens at a (possibly
+// indented) line start, and its body may hold `\$` where upstream's `[^$]+` refused it.
+const BLOCK_MATH_START_PATTERN = /\n[ \t]*\$\$/
+const BLOCK_MATH_PATTERN = /^[ \t]*\$\$((?:(?!\$\$)[\s\S])+?)\$\$/
+
+const RichMarkdownBlockMath = BlockMath.extend({
+  markdownTokenizer: {
+    name: 'blockMath',
+    level: 'block',
+    // Why: marked cuts the paragraph at the returned index + 1; pointing at the newline keeps
+    // the indent out of the paragraph and lets the block tokenizer see the whole opener line.
+    start: (src: string) => BLOCK_MATH_START_PATTERN.exec(src)?.index ?? -1,
+    tokenize: (src: string) => {
+      const match = src.match(BLOCK_MATH_PATTERN)
+      if (!match) {
+        return undefined
+      }
+      return { type: 'blockMath', raw: match[0], latex: match[1].trim() }
+    }
+  }
 })
 
 const RichMarkdownCode = Code.extend({
@@ -230,17 +275,18 @@ export function createRichMarkdownExtensions({
     TableRow,
     TableHeader,
     TableCell,
-    InlineMath.configure({
+    RichMarkdownInlineMath.configure({
       katexOptions: {
         throwOnError: false
       }
     }),
-    BlockMath.configure({
+    RichMarkdownBlockMath.configure({
       katexOptions: {
         displayMode: true,
         throwOnError: false
       }
     }),
+    RichMarkdownEscapedCharacter,
     createRichMarkdownLiteral(codec.transport),
     ...(htmlSuperscriptLinks
       ? [createRichMarkdownHtmlSuperscriptLink(codec.transport, htmlSuperscriptLinkContext!)]
@@ -255,6 +301,8 @@ export function createRichMarkdownExtensions({
         gfm: true
       }
     }),
+    // Why: wraps the getMarkdown that Markdown's onBeforeCreate installs, so it must follow it.
+    RichMarkdownSerializerFidelity,
     createRichMarkdownAnnotationHighlightExtension()
   ]
 
