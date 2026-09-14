@@ -66,7 +66,7 @@ export function installRuntimeLinearCommandSurface(target: object): void {
     const method = {
       [name](this: LinearFacadeInstance, ...args: unknown[]): unknown {
         const commands = this.linearCommands as unknown as LinearMethodBag
-        return Reflect.apply(commands[name], overrideAwareReceiver(this, commands, names), args)
+        return commands[name].call(overrideAwareReceiver(this, commands, names), ...args)
       }
     }[name]
     delegators.add(method)

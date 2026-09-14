@@ -21,7 +21,7 @@ export function installPersistenceCallProbe() {
       const epoch = Date.now()
       let result
       try {
-        result = Reflect.apply(original, this, args)
+        result = original.call(this, ...args)
         return result
       } finally {
         const durationMs = performance.now() - start
