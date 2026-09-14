@@ -10,8 +10,7 @@ import { useNativeChatComposerRecall } from './use-native-chat-composer-recall'
 import { useNativeChatLaunchDraftAdoption } from './use-native-chat-launch-draft-adoption'
 import { NativeChatComposerField } from './NativeChatComposerField'
 import type { NativeChatResolvedTarget } from './native-chat-composer-target'
-import { nativeChatComposerTargetIsRemote } from './native-chat-composer-target'
-import { useComposerSubmitKeyMatch } from './use-claude-submit-gesture'
+import { useComposerSubmitGesture } from './use-claude-submit-gesture'
 import { useNativeChatComposerAttachments } from './use-native-chat-composer-attachments'
 import { nativeChatImageSendBlock } from './native-chat-image-reattach'
 import { useNativeChatComposerHandle } from './use-native-chat-composer-handle'
@@ -156,6 +155,8 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
       return { ptyId: targetPtyId }
     }, [targetPtyId])
 
+    const { matchesSubmitKey, submitGesturePending } = useComposerSubmitGesture(agent, targetPtyId)
+
     const attachments = useNativeChatComposerAttachments({
       attachmentScopeKey: draftScopeKey,
       allowWithoutTarget: Boolean(structuredTransport),
@@ -178,7 +179,8 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
       disabled ||
       structuredTransport?.sendOut === true ||
       imageBlock.holdsSend ||
-      structuredTransport?.sendBlockedReason !== undefined
+      structuredTransport?.sendBlockedReason !== undefined ||
+      submitGesturePending
     const sendButtonDisabled = isWorking
       ? !hasPty || !onStop
       : sendHeld || (draft.trim() === '' && imageAttachments.length === 0)
@@ -296,6 +298,7 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
       draftScopeKey,
       draft,
       caret,
+      submitGesturePending,
       imageAttachments,
       disabled,
       sendPty,
@@ -323,11 +326,6 @@ const NativeChatComposerPane = forwardRef<NativeChatComposerHandle, NativeChatCo
           ? sendStructured(`/${command.name}`)
           : dispatchPtyPickerCommand(command),
       [dispatchPtyPickerCommand, sendStructured, structuredTransport]
-    )
-
-    const matchesSubmitKey = useComposerSubmitKeyMatch(
-      agent,
-      nativeChatComposerTargetIsRemote(targetPtyId)
     )
 
     const handleKeyDown = useNativeChatComposerKeyDown({
