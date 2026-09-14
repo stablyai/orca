@@ -4,7 +4,7 @@ import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
  *  and other surfaces (e.g. the Agents thread list) can feed synthetic rows. */
 export type AgentLineageSourceRow = {
   paneKey: string
-  entry: Pick<AgentStatusEntry, 'terminalHandle' | 'orchestration'>
+  entry: Pick<AgentStatusEntry, 'terminalHandle' | 'orchestration' | 'subagent'>
 }
 
 export type AgentRowLineageTree<T extends AgentLineageSourceRow> = {
@@ -30,7 +30,10 @@ export function resolveAgentRowParentPaneKey<T extends AgentLineageSourceRow>(
   rowsByPaneKey: ReadonlyMap<string, T>,
   paneKeyByTerminalHandle: ReadonlyMap<string, string>
 ): string | undefined {
-  const explicitParentPaneKey = row.entry.orchestration?.parentPaneKey
+  // Why: an in-process subagent row stamps its parent link on `subagent`, never
+  // `orchestration` — it is not a Task/Dispatch (issue #8251).
+  const explicitParentPaneKey =
+    row.entry.subagent?.parentPaneKey ?? row.entry.orchestration?.parentPaneKey
   if (
     explicitParentPaneKey &&
     explicitParentPaneKey !== row.paneKey &&

@@ -13,16 +13,15 @@ export function groupSubagentsByParentPaneKey(
     if (row.rowSource !== 'subagent') {
       continue
     }
-    const parentPaneKey = row.entry.orchestration?.parentPaneKey
+    // Why: this row's parent link is stamped on `subagent`, never
+    // `orchestration` — it is an in-process child, not a dispatch (issue #8251).
+    const parentPaneKey = row.entry.subagent?.parentPaneKey
     if (!parentPaneKey) {
       continue
     }
     const subagent: DashboardCardSubagent = {
       id: row.paneKey,
-      name:
-        nonEmpty(row.entry.orchestration?.displayName) ??
-        nonEmpty(row.entry.prompt) ??
-        row.agentType,
+      name: nonEmpty(row.entry.prompt) ?? row.agentType,
       dotState: dashboardCardDotState(row.state)
     }
     const existing = byParentPaneKey.get(parentPaneKey)
