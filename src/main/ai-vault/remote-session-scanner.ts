@@ -50,6 +50,8 @@ export async function scanRemoteAiVaultSessions(args: {
   provider: RemoteSessionFilesystemProvider
   executionHostId: ExecutionHostId
   remoteHome: string
+  // Host-resolved only; omission preserves legacy client-side fallback discovery.
+  ompSessionsDir?: string
   hostPlatform: RemoteHostPlatform
   limit?: number
   unlimited?: boolean
@@ -85,7 +87,7 @@ export async function scanRemoteAiVaultSessions(args: {
   const candidates = dedupeCodexRolloutFileAliases(
     (
       await mapRemoteScanBatches(
-        remoteSessionSources(args.remoteHome, args.hostPlatform),
+        remoteSessionSources(args.remoteHome, args.hostPlatform, args.ompSessionsDir),
         REMOTE_SCAN_CONCURRENCY,
         (source) => discoverRemoteSourceCandidates({ source, context, issues }),
         args.signal

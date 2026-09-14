@@ -30,6 +30,15 @@ export const RUNTIME_ENV_ALLOWLIST = [
   'NUMBER_OF_PROCESSORS'
 ] as const
 
+const OMP_ROOT_ENV_ALLOWLIST = [
+  'OMP_CODING_AGENT_DIR',
+  'OMP_PROFILE',
+  'PI_CODING_AGENT_DIR',
+  'PI_CONFIG_DIR',
+  'PI_PROFILE',
+  'XDG_DATA_HOME'
+] as const
+
 // Why: the desktop child resolves agent roots from its own environment, so
 // dropping one hides every session of a user who relocated that agent's home.
 const AGENT_ROOT_ENV_ALLOWLIST = [
@@ -39,19 +48,12 @@ const AGENT_ROOT_ENV_ALLOWLIST = [
   'DEVIN_HOME',
   'GROK_HOME',
   'KIMI_CODE_HOME',
-  'OMP_CODING_AGENT_DIR',
-  'OMP_PROFILE',
   'OPENCLAW_STATE_DIR',
   'OPENCODE_DB',
-  'PI_CODING_AGENT_DIR',
-  'PI_CONFIG_DIR',
-  'PI_PROFILE',
   'PRIME_AGENT_CODING_AGENT_DIR',
   'PRIME_AGENT_CODING_AGENT_SESSION_DIR',
   'PRIME_AGENT_SESSION_DIR',
-  // Why: OpenCode and migrated OMP session stores use the XDG data dir,
-  // so this one is an agent root here rather than generic runtime state.
-  'XDG_DATA_HOME'
+  ...OMP_ROOT_ENV_ALLOWLIST
 ] as const
 
 export function pickAllowedEnv(
@@ -94,10 +96,10 @@ export function buildAiVaultServiceEnv(
   return env
 }
 
-/** Relay: the sidecar takes every root from its init message, not the environment. */
+/** Relay: resolve OMP storage from the execution host, never the client. */
 export function buildRelayAiVaultServiceEnv(
   baseEnv: NodeJS.ProcessEnv = process.env,
   platform: NodeJS.Platform = process.platform
 ): NodeJS.ProcessEnv {
-  return pickAllowedEnv(RUNTIME_ENV_ALLOWLIST, baseEnv, platform)
+  return pickAllowedEnv([...RUNTIME_ENV_ALLOWLIST, ...OMP_ROOT_ENV_ALLOWLIST], baseEnv, platform)
 }

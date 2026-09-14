@@ -17,7 +17,6 @@ import { parseHermesSessionContent } from './session-scanner-hermes-parser'
 import { partitionSubagentTranscriptPaths } from './session-scanner-subagent-transcripts'
 import { partitionOmpSubagentTranscriptPaths } from './session-scanner-omp-subagent-transcripts'
 import type { FileWithMtime } from './session-scanner-types'
-import { normalizeAgentSessionsDir } from './session-scanner-values'
 import { remoteCodexIndexedTitleReader } from './remote-session-scanner-codex-index'
 import { remoteClineSource } from './remote-session-scanner-cline-source'
 import type {
@@ -25,6 +24,9 @@ import type {
   RemoteScannerContext,
   RemoteSessionSource
 } from './remote-session-scanner-types'
+
+const PI_SESSIONS_SEGMENTS = ['.pi', 'agent', 'sessions']
+const OMP_SESSIONS_SEGMENTS = ['.omp', 'agent', 'sessions']
 
 type RemoteContentParser<T = string> = (
   file: FileWithMtime,
@@ -37,7 +39,8 @@ type RemoteContentParser<T = string> = (
 
 export function remoteSessionSources(
   remoteHome: string,
-  hostPlatform: RemoteHostPlatform
+  hostPlatform: RemoteHostPlatform,
+  ompSessionsDir?: string
 ): RemoteSessionSource[] {
   return [
     ...remoteCodexSources(remoteHome, hostPlatform),
@@ -97,14 +100,16 @@ export function remoteSessionSources(
       ['.json'],
       parseDevinSessionContent
     ),
-    jsonlSource('pi', remoteHome, hostPlatform, remotePiSessionsSegments(), piParser),
-    {
-      ...jsonlSource('omp', remoteHome, hostPlatform, remoteOmpSessionsSegments(), ompParser),
-      // Same posture as Claude above: OMP stores task-subagent transcripts in
-      // the session's same-named artifact dir; the walk supplies counts and the
-      // partition keeps the children out of the top-level list (#9330).
-      partitionSubagentTranscripts: partitionOmpSubagentTranscriptPaths
-    },
+    jsonlSource('pi', remoteHome, hostPlatform, PI_SESSIONS_SEGMENTS, piParser),
+    ...(ompSessionsDir === ''
+      ? []
+      : [
+          {
+            ...jsonlSource('omp', remoteHome, hostPlatform, OMP_SESSIONS_SEGMENTS, ompParser),
+            ...(ompSessionsDir === undefined ? {} : { rootDir: ompSessionsDir }),
+            partitionSubagentTranscripts: partitionOmpSubagentTranscriptPaths
+          }
+        ]),
     jsonlSource(
       'prime-agent',
       remoteHome,
@@ -309,14 +314,6 @@ function openClawParser(
 
 function remotePathSegments(path: string): string[] {
   return path.replace(/\\/g, '/').split('/').filter(Boolean)
-}
-
-function remotePiSessionsSegments(): string[] {
-  return normalizeAgentSessionsDir('/.pi/agent/sessions', '.pi').split('/').filter(Boolean)
-}
-
-function remoteOmpSessionsSegments(): string[] {
-  return normalizeAgentSessionsDir('/.omp/agent/sessions', '.omp').split('/').filter(Boolean)
 }
 
 // Why: remote roots are posix regardless of the client platform, so these stay literal

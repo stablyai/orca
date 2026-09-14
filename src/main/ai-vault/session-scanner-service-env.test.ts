@@ -118,9 +118,7 @@ describe('buildRelayAiVaultServiceEnv', () => {
     expect(env.HOME).toBe('/home/ada')
   })
 
-  // The sidecar takes remoteHome and hostPlatform from its init message, so an
-  // agent-home override on the remote host is not part of how it finds roots.
-  it('withholds the agent-home variables the desktop child needs', () => {
+  it('withholds unrelated agent-home variables', () => {
     const env = buildRelayAiVaultServiceEnv(
       { CODEX_HOME: '/remote/.codex', PATH: '/usr/bin' },
       'linux'
@@ -135,7 +133,7 @@ describe('buildRelayAiVaultServiceEnv', () => {
   })
 })
 
-it('carries OMP root/profile inputs only to the desktop service, retaining empty canonical profile', () => {
+it('carries OMP root/profile inputs to both services, retaining empty canonical profile', () => {
   const roots = {
     OMP_PROFILE: '',
     PI_PROFILE: 'work',
@@ -144,5 +142,30 @@ it('carries OMP root/profile inputs only to the desktop service, retaining empty
     XDG_DATA_HOME: '/home/dev/data'
   }
   expect(buildAiVaultServiceEnv(roots, 'linux')).toEqual({ ...roots, ELECTRON_RUN_AS_NODE: '1' })
-  expect(buildRelayAiVaultServiceEnv(roots, 'linux')).toEqual({})
+  expect(buildRelayAiVaultServiceEnv(roots, 'linux')).toEqual(roots)
+})
+
+it('carries Windows OMP roots case-insensitively without forwarding other agent roots', () => {
+  expect(
+    buildRelayAiVaultServiceEnv(
+      {
+        omp_profile: 'work',
+        omp_coding_agent_dir: 'D:\\omp',
+        pi_profile: 'old',
+        pi_config_dir: '.custom',
+        pi_coding_agent_dir: 'D:\\inherited',
+        xdg_data_home: 'D:\\data',
+        codex_home: 'D:\\codex',
+        AWS_SECRET_ACCESS_KEY: 'secret'
+      },
+      'win32'
+    )
+  ).toEqual({
+    OMP_PROFILE: 'work',
+    OMP_CODING_AGENT_DIR: 'D:\\omp',
+    PI_PROFILE: 'old',
+    PI_CONFIG_DIR: '.custom',
+    PI_CODING_AGENT_DIR: 'D:\\inherited',
+    XDG_DATA_HOME: 'D:\\data'
+  })
 })
