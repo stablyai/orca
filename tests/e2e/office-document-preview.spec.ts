@@ -17,6 +17,14 @@ import { hasOfficecliInstalled } from './helpers/officecli-availability'
 
 const FIXTURES = path.join(process.cwd(), 'src', 'main', 'office', '__fixtures__')
 
+/** The store always knows the active worktree's path here; a null means the fixture never opened one. */
+function requiredWorktreePath(worktreePath: string | null): string {
+  if (worktreePath === null) {
+    throw new Error('the active worktree has no path')
+  }
+  return worktreePath
+}
+
 test.describe('office document preview', () => {
   test('renders a .docx inside the preview partition', async ({ orcaPage: page }, testInfo) => {
     test.skip(!(await hasOfficecliInstalled()), 'officecli is not installed on this machine')
@@ -26,10 +34,9 @@ test.describe('office document preview', () => {
       (id) => window.__store?.getState().getKnownWorktreeById(id)?.path ?? null,
       worktreeId
     )
-    expect(worktreePath).not.toBeNull()
     // Not `document`: shadowing the DOM global inside a page.evaluate is how a stray query
     // silently reads a string instead of the page.
-    const documentPath = path.join(worktreePath as string, 'report.docx')
+    const documentPath = path.join(requiredWorktreePath(worktreePath), 'report.docx')
     copyFileSync(path.join(FIXTURES, 'sample.docx'), documentPath)
 
     await page.evaluate(
@@ -52,16 +59,20 @@ test.describe('office document preview', () => {
       .poll(
         () =>
           page.evaluate(async () => {
-            const guest = document.querySelector('webview[src^="orca-preview://"]') as {
-              executeJavaScript?: (code: string) => Promise<unknown>
-            } | null
-            if (!guest?.executeJavaScript) {
+            const guest = document.querySelector('webview[src^="orca-preview://"]')
+            if (!guest || !('executeJavaScript' in guest)) {
+              return null
+            }
+            const executeJavaScript = guest.executeJavaScript
+            if (typeof executeJavaScript !== 'function') {
               return null
             }
             try {
-              return (await guest.executeJavaScript('document.body?.innerText ?? null')) as
-                | string
-                | null
+              const text: unknown = await executeJavaScript.call(
+                guest,
+                'document.body?.innerText ?? null'
+              )
+              return typeof text === 'string' ? text : null
             } catch {
               return null
             }
@@ -83,7 +94,7 @@ test.describe('office document preview', () => {
       (id) => window.__store?.getState().getKnownWorktreeById(id)?.path ?? null,
       worktreeId
     )
-    const legacy = path.join(worktreePath as string, 'legacy.doc')
+    const legacy = path.join(requiredWorktreePath(worktreePath), 'legacy.doc')
     writeFileSync(legacy, 'not really a Word 97 file')
 
     await page.evaluate(

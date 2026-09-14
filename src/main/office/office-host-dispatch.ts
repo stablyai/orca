@@ -57,6 +57,7 @@ export async function dispatchOfficeRequest(
         }
       }))
       if (response.ok) {
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the reply comes from an `office.*` method, whose only success shapes are OfficeMethodResult's, and renderOfficeOnHost re-checks every field it reads.
         return response.result as OfficeMethodResult
       }
       // Fail closed on an old host, the way `doc-preview-file-reader` already does for scoped
@@ -86,8 +87,7 @@ export async function renderOfficeOnHost(
   if (!outcome.ok) {
     return outcome
   }
-  const rendered = outcome as { ok: true; html?: unknown; kind?: unknown }
-  return typeof rendered.html === 'string' && isOfficeDocKind(rendered.kind)
-    ? { ok: true, html: rendered.html, kind: rendered.kind }
+  return 'html' in outcome && typeof outcome.html === 'string' && isOfficeDocKind(outcome.kind)
+    ? { ok: true, html: outcome.html, kind: outcome.kind }
     : officeFailure('OFFICECLI_RENDER_FAILED', 'The host answered a render with no document')
 }

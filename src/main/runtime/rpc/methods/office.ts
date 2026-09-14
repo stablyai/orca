@@ -12,11 +12,6 @@
  * The host-side work is `executeOfficeMethod`, identical to the local and SSH implementations:
  * `officecli` runs on the machine that owns the document, with that machine's fonts and locale.
  */
-import { z } from 'zod'
-import {
-  isValidOfficeDocumentPath,
-  isValidOfficeRelativePath
-} from '../../../../shared/office-preview-rpc'
 import {
   OFFICE_CLEAR_MARKS_METHOD,
   OFFICE_GOTO_METHOD,
@@ -28,75 +23,72 @@ import {
   OFFICE_SKILLS_LIST_METHOD,
   OFFICE_WATCH_REFRESH_METHOD,
   OFFICE_WATCH_START_METHOD,
-  OFFICE_WATCH_STOP_METHOD,
-  type OfficeRpcMethod
+  OFFICE_WATCH_STOP_METHOD
 } from '../../../../shared/office-preview-rpc'
+import {
+  OfficeDocumentParams,
+  OfficeElementParams,
+  OfficeOptionalDocumentParams,
+  OfficeProbeParams,
+  OfficeSkillInstallParams
+} from '../../../../shared/rpc-contract/office-params'
 import { executeOfficeMethod } from '../../../office/office-method-executor'
-import { defineMethod, type RpcMethod } from '../core'
+import { defineMethod } from '../core'
 
-// Refined through the shared predicates rather than restating their rules: zod alone accepted a
-// whitespace-only or NUL-carrying string that `isValidOfficeDocumentPath` rejects, and an invalid
-// optional `workspaceRoot` then read as absent — silently probing this host's default lane instead
-// of failing the call.
-const WorkspaceRoot = z
-  .string()
-  .max(4096)
-  .refine(isValidOfficeDocumentPath, { message: 'workspaceRoot is not a usable path' })
-/**
- * Never absolute: the host joins this onto the workspace root and refuses anything that
- * canonicalises outside it, matching every neighbouring `files.*` method.
- */
-const RelativePath = z.string().max(2048).refine(isValidOfficeRelativePath, {
-  message: 'relativePath must be a non-empty path relative to the workspace root'
-})
-const WorkspaceDocument = { workspaceRoot: WorkspaceRoot, relativePath: RelativePath }
-const SkillId = z
-  .string()
-  .min(1)
-  .max(64)
-  .regex(/^[a-z0-9][a-z0-9-]*$/i)
-
-const OptionalDocumentParams = z.object({ workspaceRoot: WorkspaceRoot.optional() }).strict()
-const ProbeParams = z
-  .object({ workspaceRoot: WorkspaceRoot.optional(), refresh: z.boolean().optional() })
-  .strict()
-const RequiredDocumentParams = z.object(WorkspaceDocument).strict()
-const ElementParams = z
-  .object({ ...WorkspaceDocument, elementPath: z.string().min(1).max(1024).startsWith('/') })
-  .strict()
-const SkillInstallParams = z
-  .object({
-    pairs: z
-      .array(z.object({ skill: SkillId, agent: SkillId }).strict())
-      .min(1)
-      .max(200),
-    workspaceRoot: WorkspaceRoot.optional()
+export const OFFICE_METHODS = [
+  defineMethod({
+    name: OFFICE_PROBE_METHOD,
+    params: OfficeProbeParams,
+    handler: async (params) => executeOfficeMethod(OFFICE_PROBE_METHOD, params)
+  }),
+  defineMethod({
+    name: OFFICE_SKILLS_LIST_METHOD,
+    params: OfficeOptionalDocumentParams,
+    handler: async (params) => executeOfficeMethod(OFFICE_SKILLS_LIST_METHOD, params)
+  }),
+  defineMethod({
+    name: OFFICE_SKILLS_INSTALL_METHOD,
+    params: OfficeSkillInstallParams,
+    handler: async (params) => executeOfficeMethod(OFFICE_SKILLS_INSTALL_METHOD, params)
+  }),
+  defineMethod({
+    name: OFFICE_RENDER_METHOD,
+    params: OfficeDocumentParams,
+    handler: async (params) => executeOfficeMethod(OFFICE_RENDER_METHOD, params)
+  }),
+  defineMethod({
+    name: OFFICE_WATCH_START_METHOD,
+    params: OfficeDocumentParams,
+    handler: async (params) => executeOfficeMethod(OFFICE_WATCH_START_METHOD, params)
+  }),
+  defineMethod({
+    name: OFFICE_WATCH_REFRESH_METHOD,
+    params: OfficeDocumentParams,
+    handler: async (params) => executeOfficeMethod(OFFICE_WATCH_REFRESH_METHOD, params)
+  }),
+  defineMethod({
+    name: OFFICE_WATCH_STOP_METHOD,
+    params: OfficeDocumentParams,
+    handler: async (params) => executeOfficeMethod(OFFICE_WATCH_STOP_METHOD, params)
+  }),
+  defineMethod({
+    name: OFFICE_SELECTION_METHOD,
+    params: OfficeDocumentParams,
+    handler: async (params) => executeOfficeMethod(OFFICE_SELECTION_METHOD, params)
+  }),
+  defineMethod({
+    name: OFFICE_MARKS_METHOD,
+    params: OfficeDocumentParams,
+    handler: async (params) => executeOfficeMethod(OFFICE_MARKS_METHOD, params)
+  }),
+  defineMethod({
+    name: OFFICE_CLEAR_MARKS_METHOD,
+    params: OfficeDocumentParams,
+    handler: async (params) => executeOfficeMethod(OFFICE_CLEAR_MARKS_METHOD, params)
+  }),
+  defineMethod({
+    name: OFFICE_GOTO_METHOD,
+    params: OfficeElementParams,
+    handler: async (params) => executeOfficeMethod(OFFICE_GOTO_METHOD, params)
   })
-  .strict()
-
-function officeMethod<TSchema extends z.ZodTypeAny>(
-  name: OfficeRpcMethod,
-  params: TSchema
-): RpcMethod {
-  return defineMethod({
-    name,
-    params,
-    handler: (parsed) => executeOfficeMethod(name, parsed)
-  })
-}
-
-export function createOfficeMethods(): RpcMethod[] {
-  return [
-    officeMethod(OFFICE_PROBE_METHOD, ProbeParams),
-    officeMethod(OFFICE_SKILLS_LIST_METHOD, OptionalDocumentParams),
-    officeMethod(OFFICE_SKILLS_INSTALL_METHOD, SkillInstallParams),
-    officeMethod(OFFICE_RENDER_METHOD, RequiredDocumentParams),
-    officeMethod(OFFICE_WATCH_START_METHOD, RequiredDocumentParams),
-    officeMethod(OFFICE_WATCH_REFRESH_METHOD, RequiredDocumentParams),
-    officeMethod(OFFICE_WATCH_STOP_METHOD, RequiredDocumentParams),
-    officeMethod(OFFICE_SELECTION_METHOD, RequiredDocumentParams),
-    officeMethod(OFFICE_MARKS_METHOD, RequiredDocumentParams),
-    officeMethod(OFFICE_CLEAR_MARKS_METHOD, RequiredDocumentParams),
-    officeMethod(OFFICE_GOTO_METHOD, ElementParams)
-  ]
-}
+]

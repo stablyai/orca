@@ -34,6 +34,15 @@ beforeAll(async () => {
 
 afterAll(() => rm(join(root, '..'), { recursive: true, force: true }))
 
+/** The join under test never returns null for these inputs; narrowing here keeps the assertions honest. */
+function joined(workspaceRoot: string, relativePath: string): string {
+  const path = joinOfficeRelativePath(workspaceRoot, relativePath)
+  if (path === null) {
+    throw new Error(`expected ${workspaceRoot} + ${relativePath} to join`)
+  }
+  return path
+}
+
 describe('office workspace boundary', () => {
   it('resolves a document inside the workspace', async () => {
     await expect(
@@ -82,13 +91,13 @@ describe('office workspace boundary', () => {
     // `isPathInsideOrEqual` folds separators and case but does not resolve `..`, so without the
     // collapse `/w/repo/../../elsewhere/x.docx` reads as inside `/w/repo`. This is what the stop
     // path relies on once the document is deleted and `realpath` can no longer answer.
-    const escaped = joinOfficeRelativePath('/w/repo', '../../elsewhere/x.docx')
+    const escaped = joined('/w/repo', '../../elsewhere/x.docx')
     expect(escaped).toBe('/elsewhere/x.docx')
-    expect(isPathInsideOrEqual('/w/repo', escaped as string)).toBe(false)
+    expect(isPathInsideOrEqual('/w/repo', escaped)).toBe(false)
 
-    const inside = joinOfficeRelativePath('/w/repo', 'docs/../docs/a.docx')
+    const inside = joined('/w/repo', 'docs/../docs/a.docx')
     expect(inside).toBe('/w/repo/docs/a.docx')
-    expect(isPathInsideOrEqual('/w/repo', inside as string)).toBe(true)
+    expect(isPathInsideOrEqual('/w/repo', inside)).toBe(true)
   })
 
   it('joins without inventing a separator the host cannot read', () => {

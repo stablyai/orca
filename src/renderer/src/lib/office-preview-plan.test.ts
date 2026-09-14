@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import type { AppState } from '@/store/types'
 import { resolveOfficePreviewRouting } from './office-preview-plan'
 
 vi.mock('@/lib/connection-owner-resolution', () => ({
@@ -38,6 +39,9 @@ describe('office preview routing', () => {
   })
 })
 
+// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: both collaborators that read the store are mocked above, so resolveOfficeHostOwner only forwards this opaque value.
+const STORE_STATE = {} as AppState
+
 describe('office host owner resolution', () => {
   it('never answers local for an unresolved owner', async () => {
     const { getConnectionIdForFileFromState } = await import('@/lib/connection-owner-resolution')
@@ -45,14 +49,14 @@ describe('office host owner resolution', () => {
     vi.mocked(getConnectionIdForFileFromState).mockReturnValue(undefined)
     // Rendering here would hand a remote path to this machine's officecli and its fonts.
     // See docs/reference/ssh-execution-boundary.md.
-    expect(resolveOfficeHostOwner({} as never, 'w1', '/w/a.docx')).toBeNull()
+    expect(resolveOfficeHostOwner(STORE_STATE, 'w1', '/w/a.docx')).toBeNull()
   })
 
   it('names the SSH target that owns the file', async () => {
     const { getConnectionIdForFileFromState } = await import('@/lib/connection-owner-resolution')
     const { resolveOfficeHostOwner } = await import('./office-preview-plan')
     vi.mocked(getConnectionIdForFileFromState).mockReturnValue('build-box-01')
-    expect(resolveOfficeHostOwner({} as never, 'w1', '/w/a.docx')).toEqual({
+    expect(resolveOfficeHostOwner(STORE_STATE, 'w1', '/w/a.docx')).toEqual({
       kind: 'ssh',
       connectionId: 'build-box-01'
     })
@@ -64,11 +68,11 @@ describe('office host owner resolution', () => {
     const { resolveOfficeHostOwner } = await import('./office-preview-plan')
     vi.mocked(getConnectionIdForFileFromState).mockReturnValue(null)
     vi.mocked(getRuntimeEnvironmentIdForWorktree).mockReturnValue('env-7')
-    expect(resolveOfficeHostOwner({} as never, 'w1', '/w/a.docx')).toEqual({
+    expect(resolveOfficeHostOwner(STORE_STATE, 'w1', '/w/a.docx')).toEqual({
       kind: 'runtime',
       environmentId: 'env-7'
     })
     vi.mocked(getRuntimeEnvironmentIdForWorktree).mockReturnValue(null)
-    expect(resolveOfficeHostOwner({} as never, 'w1', '/w/a.docx')).toEqual({ kind: 'local' })
+    expect(resolveOfficeHostOwner(STORE_STATE, 'w1', '/w/a.docx')).toEqual({ kind: 'local' })
   })
 })

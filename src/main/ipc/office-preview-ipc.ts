@@ -60,20 +60,29 @@ import { isTrustedBrowserRenderer } from './browser-renderer-trust'
 
 const SNAPSHOT_CONTENT_TYPE = 'text/html; charset=utf-8'
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null
+}
+
+/** Renderer payloads arrive unvalidated over IPC, so every read goes through one unknown-safe lookup. */
+function field(request: unknown, name: string): unknown {
+  return isRecord(request) ? request[name] : undefined
+}
+
 function ownerOf(request: unknown): OfficeHostOwner | null {
-  const owner = (request as { owner?: unknown } | null)?.owner
+  const owner = field(request, 'owner')
   return isValidOfficeHostOwner(owner) ? owner : null
 }
 
 function workspaceRootOf(request: unknown): string | null {
-  const root = (request as { workspaceRoot?: unknown } | null)?.workspaceRoot
+  const root = field(request, 'workspaceRoot')
   return isValidOfficeDocumentPath(root) ? root : null
 }
 
 /** Both halves or nothing: the host will not accept a document it cannot bind to a workspace. */
 function documentOf(request: unknown): { workspaceRoot: string; relativePath: string } | null {
   const workspaceRoot = workspaceRootOf(request)
-  const relativePath = (request as { relativePath?: unknown } | null)?.relativePath
+  const relativePath = field(request, 'relativePath')
   return workspaceRoot && isValidOfficeRelativePath(relativePath)
     ? { workspaceRoot, relativePath }
     : null

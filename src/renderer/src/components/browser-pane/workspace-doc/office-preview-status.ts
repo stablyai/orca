@@ -7,8 +7,8 @@
  */
 import {
   OFFICE_FORMAT_LABELS,
-  type OfficeDocKind,
-  type OfficeUnrenderableExtension
+  OFFICE_IDENTIFIED_UNRENDERABLE_EXTENSIONS,
+  type OfficeDocKind
 } from '../../../../../shared/office-file-extensions'
 import type { OfficeErrorCode } from '../../../../../shared/office-preview-contracts'
 import { translate } from '@/i18n/i18n'
@@ -138,7 +138,8 @@ export function officeFailureDetail(code: OfficeErrorCode, hostLabel: string | n
  * an install would send the reader off to fix something that is already fine.
  */
 export function officeUnrenderableMessage(extension: string): string {
-  const label = OFFICE_FORMAT_LABELS[extension as OfficeUnrenderableExtension]
+  const known = OFFICE_IDENTIFIED_UNRENDERABLE_EXTENSIONS.find((entry) => entry === extension)
+  const label = known ? OFFICE_FORMAT_LABELS[known] : null
   return label
     ? translate(
         'auto.components.office.preview.unrenderableNamed',

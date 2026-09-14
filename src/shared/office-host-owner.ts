@@ -22,22 +22,25 @@ export function officeHostOwnerKey(owner: OfficeHostOwner): string {
   }
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null
+}
+
 export function isValidOfficeHostOwner(value: unknown): value is OfficeHostOwner {
-  const owner = value as OfficeHostOwner | null
-  if (!owner || typeof owner !== 'object') {
+  if (!isRecord(value)) {
     return false
   }
   // Not a switch: this validates a value off the wire, so the compiler's exhaustiveness over the
   // union says nothing about what actually arrived, and a `default` on an exhaustive switch is
   // itself a lint finding. An explicit table keeps the unknown-kind case reachable and honest.
-  if (owner.kind === 'local') {
+  if (value.kind === 'local') {
     return true
   }
-  if (owner.kind === 'ssh') {
-    return typeof owner.connectionId === 'string' && owner.connectionId.trim().length > 0
+  if (value.kind === 'ssh') {
+    return typeof value.connectionId === 'string' && value.connectionId.trim().length > 0
   }
-  if (owner.kind === 'runtime') {
-    return typeof owner.environmentId === 'string' && owner.environmentId.trim().length > 0
+  if (value.kind === 'runtime') {
+    return typeof value.environmentId === 'string' && value.environmentId.trim().length > 0
   }
   return false
 }

@@ -49,9 +49,8 @@ describe('office file extensions', () => {
   })
 
   it('keeps the renderable and unrenderable tables disjoint', () => {
-    const overlap = OFFICE_RENDERABLE_EXTENSIONS.filter((extension) =>
-      (OFFICE_IDENTIFIED_UNRENDERABLE_EXTENSIONS as readonly string[]).includes(extension)
-    )
+    const unrenderable = new Set<string>(OFFICE_IDENTIFIED_UNRENDERABLE_EXTENSIONS)
+    const overlap = OFFICE_RENDERABLE_EXTENSIONS.filter((extension) => unrenderable.has(extension))
     expect(overlap).toEqual([])
   })
 

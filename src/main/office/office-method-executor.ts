@@ -40,15 +40,24 @@ import {
   type OfficeDocumentRef
 } from './office-local-execution'
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null
+}
+
+/** Params arrive parsed but untyped here, so every read goes through one unknown-safe lookup. */
+function field(params: unknown, name: string): unknown {
+  return isRecord(params) ? params[name] : undefined
+}
+
 function optionalWorkspaceRoot(params: unknown): string | undefined {
-  const candidate = (params as { workspaceRoot?: unknown } | null)?.workspaceRoot
+  const candidate = field(params, 'workspaceRoot')
   return isValidOfficeDocumentPath(candidate) ? candidate : undefined
 }
 
 /** The (root, relative) pair every document method names, or null when either half is unusable. */
 function documentRef(params: unknown): OfficeDocumentRef | null {
   const root = optionalWorkspaceRoot(params)
-  const relativePath = (params as { relativePath?: unknown } | null)?.relativePath
+  const relativePath = field(params, 'relativePath')
   return root && isValidOfficeRelativePath(relativePath)
     ? officeDocumentRef(root, relativePath)
     : null
@@ -85,7 +94,7 @@ export async function executeOfficeMethod(
   switch (method) {
     case OFFICE_PROBE_METHOD: {
       const workspaceRoot = optionalWorkspaceRoot(params)
-      if ((params as { refresh?: unknown } | null)?.refresh === true) {
+      if (field(params, 'refresh') === true) {
         // Why the host and not the client caches this: a cached "not installed" surviving the
         // install the reader just ran is how a preview keeps asking for what already happened.
         invalidateOfficeProbeForWorkspace(workspaceRoot)
@@ -95,7 +104,7 @@ export async function executeOfficeMethod(
     case OFFICE_SKILLS_LIST_METHOD:
       return listOfficeSkillsLocally(optionalWorkspaceRoot(params))
     case OFFICE_SKILLS_INSTALL_METHOD: {
-      const pairs = parseOfficeSkillInstallPairs((params as { pairs?: unknown } | null)?.pairs)
+      const pairs = parseOfficeSkillInstallPairs(field(params, 'pairs'))
       return pairs
         ? installOfficeSkillsLocally(pairs, optionalWorkspaceRoot(params))
         : officeFailure('OFFICECLI_RENDER_FAILED', 'No valid skill/agent pairs were requested')
@@ -115,7 +124,7 @@ export async function executeOfficeMethod(
     case OFFICE_CLEAR_MARKS_METHOD:
       return withDocument(params, clearOfficeMarksLocally)
     case OFFICE_GOTO_METHOD: {
-      const elementPath = (params as { elementPath?: unknown } | null)?.elementPath
+      const elementPath = field(params, 'elementPath')
       return isValidOfficeElementPath(elementPath)
         ? withDocument(params, (ref) => gotoOfficeElementLocally(ref, elementPath))
         : officeFailure('OFFICECLI_RENDER_FAILED', 'No element path was supplied')

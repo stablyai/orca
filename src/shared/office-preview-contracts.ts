@@ -50,7 +50,7 @@ export function officeFailure(code: OfficeErrorCode, detail?: string): OfficeFai
 }
 
 export function isOfficeErrorCode(value: unknown): value is OfficeErrorCode {
-  return typeof value === 'string' && (OFFICE_ERROR_CODES as readonly string[]).includes(value)
+  return typeof value === 'string' && OFFICE_ERROR_CODES.some((code) => code === value)
 }
 
 /** Host platforms the install guidance distinguishes. `unknown` gets the releases page alone. */

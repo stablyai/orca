@@ -20,6 +20,7 @@ export async function requestSshOffice(
   params: Record<string, unknown> | undefined
 ): Promise<OfficeMethodResult> {
   try {
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the relay is bundle-hash-locked to this client, so an `office.*` reply is this same build's executeOfficeMethod output; a transport failure throws and is mapped below.
     return (await mux.request(method, params)) as OfficeMethodResult
   } catch (error) {
     if (isMethodNotFoundError(error)) {

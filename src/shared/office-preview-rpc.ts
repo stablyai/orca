@@ -128,6 +128,10 @@ export function isValidOfficeSkillId(value: unknown): value is string {
   return typeof value === 'string' && SKILL_ID_PATTERN.test(value)
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null
+}
+
 export function parseOfficeSkillInstallPairs(
   value: unknown
 ): { skill: string; agent: string }[] | null {
@@ -136,11 +140,14 @@ export function parseOfficeSkillInstallPairs(
   }
   const pairs: { skill: string; agent: string }[] = []
   for (const entry of value) {
-    const record = entry as { skill?: unknown; agent?: unknown } | null
-    if (!record || !isValidOfficeSkillId(record.skill) || !isValidOfficeSkillId(record.agent)) {
+    if (
+      !isRecord(entry) ||
+      !isValidOfficeSkillId(entry.skill) ||
+      !isValidOfficeSkillId(entry.agent)
+    ) {
       return null
     }
-    pairs.push({ skill: record.skill, agent: record.agent })
+    pairs.push({ skill: entry.skill, agent: entry.agent })
   }
   return pairs
 }

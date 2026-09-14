@@ -5,28 +5,31 @@
  * runtime and forgotten on the relay produces a feature that works on a paired host and silently
  * does nothing over SSH. The method list is the contract, so it is what these tests compare against.
  */
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { OFFICE_RPC_METHODS } from '../../shared/office-preview-rpc'
-import { createOfficeMethods } from '../runtime/rpc/methods/office'
+import { OFFICE_METHODS } from '../runtime/rpc/methods/office'
 import { OfficeHandler } from '../../relay/office-handler'
 
 describe('office surface parity', () => {
   it('registers every method on the SSH relay', () => {
-    const onRequest = vi.fn()
-    new OfficeHandler({ onRequest })
-    const registered = onRequest.mock.calls.map((call) => call[0] as string)
+    const registered: string[] = []
+    new OfficeHandler({
+      onRequest: (method) => {
+        registered.push(method)
+      }
+    })
     // Sorted arrays rather than sets: a set hides a method registered twice, which is a real way
     // to break a dispatcher.
     expect([...registered].sort()).toEqual([...OFFICE_RPC_METHODS].sort())
   })
 
   it('registers every method on a paired runtime', () => {
-    const registered = createOfficeMethods().map((method) => method.name)
+    const registered = OFFICE_METHODS.map((method) => method.name)
     expect([...registered].sort()).toEqual([...OFFICE_RPC_METHODS].sort())
   })
 
   it('validates params on the runtime, where a mixed-version client can send anything', () => {
-    const byName = new Map(createOfficeMethods().map((method) => [method.name, method]))
+    const byName = new Map(OFFICE_METHODS.map((method) => [method.name, method]))
     const render = byName.get('office.render')
     expect(render?.params?.safeParse({ workspaceRoot: '/w', relativePath: 'a.docx' }).success).toBe(
       true
