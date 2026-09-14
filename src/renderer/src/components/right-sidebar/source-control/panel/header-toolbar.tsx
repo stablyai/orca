@@ -29,6 +29,8 @@ type SourceControlHeaderToolbarProps = {
   suppressedGitHubPRNumber: number | null
   onRelinkSuppressedGitHubPR: () => void
   sourceControlViewMode: SourceControlViewMode
+  sourceControlCompactFolders: boolean
+  onToggleCompactFolders: () => void
   viewModeToggleDisabled: boolean
   onToggleViewMode: () => void
   onChangeBaseRef: () => void
@@ -131,6 +133,8 @@ function renderOverflowMenu(
   props: Pick<
     SourceControlHeaderToolbarProps,
     | 'sourceControlViewMode'
+    | 'sourceControlCompactFolders'
+    | 'onToggleCompactFolders'
     | 'viewModeToggleDisabled'
     | 'onToggleViewMode'
     | 'onChangeBaseRef'
@@ -157,6 +161,8 @@ export function SourceControlHeaderToolbar({
   suppressedGitHubPRNumber,
   onRelinkSuppressedGitHubPR,
   sourceControlViewMode,
+  sourceControlCompactFolders,
+  onToggleCompactFolders,
   viewModeToggleDisabled,
   onToggleViewMode,
   onChangeBaseRef,
@@ -175,6 +181,8 @@ export function SourceControlHeaderToolbar({
   const showCollapsedToolbar = !filterExpanded
   const overflowProps = {
     sourceControlViewMode,
+    sourceControlCompactFolders,
+    onToggleCompactFolders,
     viewModeToggleDisabled,
     onToggleViewMode,
     onChangeBaseRef,

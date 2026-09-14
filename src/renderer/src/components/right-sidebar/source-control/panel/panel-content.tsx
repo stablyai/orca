@@ -62,6 +62,7 @@ export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
     selectedKeySet,
     setBaseRefDialogOpen,
     sourceControlAiActionsVisible,
+    sourceControlCompactFolders,
     sourceControlViewMode,
     toggleSection,
     toggleSubmodule,
@@ -213,6 +214,8 @@ export function SourceControlPanelContent(props: SourceControlPanelReadyProps) {
           <GitHistoryPanel
             state={gitHistoryState}
             collapsed={collapsedSections.has('history')}
+            viewMode={sourceControlViewMode}
+            compactFolders={sourceControlCompactFolders}
             onToggle={() => toggleSection('history')}
             onRefresh={() => void refreshGitHistory()}
             onOpenCommit={(item) => void openHistoryCommitDiff(item)}

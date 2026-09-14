@@ -64,6 +64,8 @@ function renderToolbar(options?: {
       suppressedGitHubPRNumber={options?.suppressedGitHubPRNumber ?? null}
       onRelinkSuppressedGitHubPR={vi.fn()}
       sourceControlViewMode="list"
+      sourceControlCompactFolders={false}
+      onToggleCompactFolders={vi.fn()}
       viewModeToggleDisabled={false}
       onToggleViewMode={vi.fn()}
       onChangeBaseRef={vi.fn()}
