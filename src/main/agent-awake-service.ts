@@ -215,9 +215,9 @@ export class AgentAwakeService {
       // awake; on macOS it runs as the caffeinate fallback, where keepDisplayAwake
       // owns whether display sleep is blocked.
       const type =
-        this.platform === 'darwin' && !this.keepDisplayAwake
-          ? 'prevent-app-suspension'
-          : 'prevent-display-sleep'
+        this.keepDisplayAwake || this.platform !== 'darwin'
+          ? 'prevent-display-sleep'
+          : 'prevent-app-suspension'
       const id = this.blocker.start(type)
       this.blockerId = id
       this.reconcileBlocker('post-start')

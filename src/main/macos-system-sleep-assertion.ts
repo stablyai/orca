@@ -4,7 +4,7 @@ export const MACOS_SYSTEM_SLEEP_ASSERTION_RETRY_MS = 30_000
 
 /** Idle system sleep (-i) + system sleep (-s); the awake default keeps the display free to sleep. */
 const CAFFEINATE_BASE_ARGS = ['-i', '-s'] as const
-/** Display sleep assertion, added for keepDisplayAwake: display sleep can lock screen-gated SSH agents. */
+/** Display sleep assertion, added for keepDisplayAwake: display sleep can lock the screen-gated SSH agent. */
 const CAFFEINATE_DISPLAY_ARG = '-d' as const
 
 type Logger = Pick<Console, 'debug' | 'warn'>
