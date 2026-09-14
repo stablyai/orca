@@ -84,6 +84,7 @@ it('asks before adding, batches arrivals, and does not ask again after Later', (
   action.onClick({} as Parameters<Action['onClick']>[0])
   expect(requestWorkspaceMultiplexerAdd).toHaveBeenCalledExactlyOnceWith({
     worktreeId: 'three',
-    executionHostId: 'ssh:box'
+    executionHostId: 'ssh:box',
+    createTerminalIfEmpty: false
   })
 })

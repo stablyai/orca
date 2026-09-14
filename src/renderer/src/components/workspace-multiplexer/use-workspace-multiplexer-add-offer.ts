@@ -73,7 +73,8 @@ export function useWorkspaceMultiplexerAddOffer(
               for (const item of pending.current.values()) {
                 requestWorkspaceMultiplexerAdd({
                   worktreeId: item.worktreeId,
-                  executionHostId: item.executionHostId
+                  executionHostId: item.executionHostId,
+                  createTerminalIfEmpty: false
                 })
               }
             }

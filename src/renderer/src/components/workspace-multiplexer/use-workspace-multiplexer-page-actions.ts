@@ -3,6 +3,7 @@ import { createBrowserUuid } from '@/lib/browser-uuid'
 import { activateTabAndFocusPane } from '@/lib/activate-tab-and-focus-pane'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import { useAppStore } from '@/store'
+import { ensureWorkspaceMultiplexerTerminal } from './workspace-multiplexer-initial-terminal'
 import type { TabSplitDirection } from '@/store/slices/tabs'
 import { getAllWorktreesFromState } from '@/store/selectors'
 import type { WorkspaceMultiplexerSlot } from '../../../../shared/workspace-multiplexer-types'
@@ -101,7 +102,8 @@ export function useWorkspaceMultiplexerPageActions(
     (
       workspace: WorkspaceMultiplexerCatalogItem,
       sourceSlotId?: string | null,
-      direction: TabSplitDirection = 'right'
+      direction: TabSplitDirection = 'right',
+      createTerminalIfEmpty = true
     ): void => {
       let state = useAppStore.getState()
       if (
@@ -184,14 +186,18 @@ export function useWorkspaceMultiplexerPageActions(
         )
       )
       if (focusSlot(slot, workspace) && !terminalTab) {
-        void useAppStore.getState().openNewTerminalTabInActiveWorkspace(groupId)
+        if (createTerminalIfEmpty && tabs.some((tab) => tab.contentType === 'terminal')) {
+          void useAppStore.getState().openNewTerminalTabInActiveWorkspace(groupId)
+        } else {
+          void ensureWorkspaceMultiplexerTerminal(slot, workspace, createTerminalIfEmpty)
+        }
       }
     },
     [focusSlot, focusedSlotId]
   )
   useEffect(() => {
     const handleAddRequest = (event: Event): void => {
-      const { worktreeId, executionHostId, terminal } = (
+      const { worktreeId, executionHostId, terminal, createTerminalIfEmpty } = (
         event as CustomEvent<WorkspaceMultiplexerAddRequestDetail>
       ).detail
       const state = useAppStore.getState()
@@ -247,7 +253,7 @@ export function useWorkspaceMultiplexerPageActions(
       if (existingSlot) {
         focusWorkspaceSlot(existingSlot.id)
       } else {
-        addWorkspace(workspace)
+        addWorkspace(workspace, undefined, 'right', createTerminalIfEmpty)
       }
       if (terminal) {
         activateTabAndFocusPane(terminal.tabId, terminal.leafId, terminal)

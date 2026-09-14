@@ -7,6 +7,7 @@ export type WorkspaceMultiplexerAddRequestDetail = {
   worktreeId: string
   executionHostId?: ExecutionHostId
   terminal?: FocusTerminalPaneDetail
+  createTerminalIfEmpty?: boolean
 }
 
 export function requestWorkspaceMultiplexerAdd(detail: WorkspaceMultiplexerAddRequestDetail): void {

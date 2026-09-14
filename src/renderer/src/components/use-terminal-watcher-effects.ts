@@ -138,7 +138,13 @@ export function useTerminalWatcherEffects(controller: TerminalColdActivationCont
   const activeWorktreeHostAuthority = useAppStore(hostAuthoritySelector)
 
   useEffect(() => {
-    if (!workspaceSessionReady || !terminalStartupRestorationReady || !activeWorktreeId) {
+    // The multiplexer owns seeding: an add offer may be waiting for an agent surface.
+    if (
+      activeView === 'multiplexer' ||
+      !workspaceSessionReady ||
+      !terminalStartupRestorationReady ||
+      !activeWorktreeId
+    ) {
       return
     }
     // Why: the execution host owns terminal creation, and a host that has not answered is not a host
@@ -170,6 +176,7 @@ export function useTerminalWatcherEffects(controller: TerminalColdActivationCont
       cancelled = true
     }
   }, [
+    activeView,
     activeWorktreeId,
     activeWorktreeHasTerminalState,
     activeWorktreeHostAuthority,
