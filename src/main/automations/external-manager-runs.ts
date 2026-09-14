@@ -14,6 +14,14 @@ import {
   requireExternalAutomationMultiplexer
 } from './external-manager-relay'
 import { readHermesCronOutputRunsPage } from './hermes-cron-output'
+import type { SshChannelMultiplexer } from '../ssh/ssh-channel-multiplexer'
+
+/**
+ * Multiplexers whose relay answered `-32601` for `externalAutomations.runHistory`.
+ * Keyed by the multiplexer, which is replaced on reconnect, so a relay upgraded
+ * behind a reconnect is re-probed; without this every page load paid the probe.
+ */
+const runHistoryUnsupportedByMux = new WeakSet<SshChannelMultiplexer>()
 
 /**
  * Runs the relay's paged runs call, translating "no such method" into a code the
@@ -26,11 +34,27 @@ import { readHermesCronOutputRunsPage } from './hermes-cron-output'
  */
 async function requestRemoteExternalRuns(
   connectionId: string,
-  params: { provider: ExternalAutomationProvider; jobId: string; page: number; pageSize: number }
+  params: {
+    provider: ExternalAutomationProvider
+    jobId: string
+    page: number
+    pageSize: number
+    summaryOnly?: boolean
+    runId?: string
+  }
 ): Promise<{ total?: number; runs?: unknown[] }> {
+  const mux = requireExternalAutomationMultiplexer(connectionId)
+  // Old relays ignore optional flags, so negotiate projection through a distinct method.
+  const wantsRunHistory = params.summaryOnly || params.runId !== undefined
+  if (wantsRunHistory && runHistoryUnsupportedByMux.has(mux)) {
+    if (params.runId !== undefined) {
+      throw new ExternalAutomationScopeError(EXTERNAL_AUTOMATION_SCOPE_CODES.runsUnsupported)
+    }
+    return requestRemoteExternalRuns(connectionId, { ...params, summaryOnly: false })
+  }
   try {
-    return (await requireExternalAutomationMultiplexer(connectionId).request(
-      'externalAutomations.runs',
+    return (await mux.request(
+      wantsRunHistory ? 'externalAutomations.runHistory' : 'externalAutomations.runs',
       params
     )) as {
       total?: number
@@ -38,6 +62,12 @@ async function requestRemoteExternalRuns(
     }
   } catch (error) {
     if (isRelayMethodNotFoundError(error)) {
+      if (wantsRunHistory) {
+        runHistoryUnsupportedByMux.add(mux)
+      }
+      if (params.summaryOnly && params.runId === undefined) {
+        return requestRemoteExternalRuns(connectionId, { ...params, summaryOnly: false })
+      }
       throw new ExternalAutomationScopeError(EXTERNAL_AUTOMATION_SCOPE_CODES.runsUnsupported)
     }
     throw error
@@ -65,12 +95,19 @@ export async function listExternalAutomationRuns(
   }
   const result =
     input.target.type === 'local'
-      ? await readHermesCronOutputRunsPage(input.jobId, { page, pageSize })
+      ? await readHermesCronOutputRunsPage(input.jobId, {
+          page,
+          pageSize,
+          summaryOnly: input.summaryOnly,
+          runId: input.runId
+        })
       : await requestRemoteExternalRuns(input.target.connectionId, {
           provider: input.provider,
           jobId: input.jobId,
           page,
-          pageSize
+          pageSize,
+          summaryOnly: input.summaryOnly,
+          runId: input.runId
         })
   return {
     ...identity,

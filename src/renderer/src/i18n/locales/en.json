@@ -17872,5 +17872,14 @@
       "stopped": "stopped",
       "finished": "finished"
     }
+  },
+  "common": {
+    "retry": "Retry"
+  },
+  "automations": {
+    "runOutput": {
+      "loading": "Loading run output...",
+      "unavailable": "Run output is unavailable."
+    }
   }
 }

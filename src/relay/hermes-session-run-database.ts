@@ -143,7 +143,11 @@ export function readHermesSessionDbRunRefs(jobId: string): HermesSessionRunRef[]
   }
 }
 
-export function readHermesSessionDbRunById(jobId: string, runId: string): unknown {
+export function readHermesSessionDbRunById(
+  jobId: string,
+  runId: string,
+  summaryOnly = false
+): unknown {
   if (!existsSync(HERMES_STATE_DB)) {
     return null
   }
@@ -165,14 +169,16 @@ export function readHermesSessionDbRunById(jobId: string, runId: string): unknow
       if (!row) {
         return null
       }
-      const messages = db
-        .prepare(
-          `SELECT role, content, tool_name, reasoning, reasoning_content
+      const messages = summaryOnly
+        ? []
+        : (db
+            .prepare(
+              `SELECT role, content, tool_name, reasoning, reasoning_content
              FROM messages
             WHERE session_id = ?
             ORDER BY timestamp, id`
-        )
-        .all(runId) as Record<string, unknown>[]
+            )
+            .all(runId) as Record<string, unknown>[])
       const title = typeof row.title === 'string' && row.title.trim() ? row.title.trim() : null
       const model = typeof row.model === 'string' && row.model.trim() ? row.model.trim() : null
       const messageCount = typeof row.message_count === 'number' ? row.message_count : null

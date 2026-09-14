@@ -114,9 +114,10 @@ export function useExternalAutomationActions({
   const openExternalRunPage = (
     manager: ExternalAutomationManager,
     job: ExternalAutomationJob,
-    run: ExternalAutomationRun
+    run: ExternalAutomationRun,
+    scope: ExternalAutomationScope
   ): void => {
-    setSelectedExternalRunPage({ manager, job, run })
+    setSelectedExternalRunPage({ manager, job, run, scope })
   }
   const openAutomationRunPage = (run: AutomationRun): void => {
     setSelectedAutomationRunPageId(run.id)

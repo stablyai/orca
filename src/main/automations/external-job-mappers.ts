@@ -79,6 +79,7 @@ function mapExternalRuns({
         runAt,
         status: asExternalRunStatus(run.status),
         outputPreview: asString(run.output_preview) ?? asString(run.outputPreview),
+        ...(run.output_content_deferred === true ? { outputContentDeferred: true as const } : {}),
         outputContent: asString(run.output_content) ?? asString(run.outputContent),
         error: asString(run.error),
         outputPath: asString(run.output_path) ?? asString(run.outputPath)

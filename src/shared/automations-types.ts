@@ -279,6 +279,7 @@ export type ExternalAutomationJob = {
 }
 
 export type ExternalAutomationRun = {
+  outputContentDeferred?: true
   id: string
   managerId: string
   provider: ExternalAutomationProvider
@@ -304,6 +305,8 @@ export type ExternalAutomationRunsPage = {
 }
 
 export type ExternalAutomationRunsInput = {
+  summaryOnly?: boolean
+  runId?: string
   managerId: string
   provider: ExternalAutomationProvider
   target: ExternalAutomationTarget

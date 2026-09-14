@@ -47,7 +47,8 @@ type ExternalAutomationManagersProps = {
   onOpenRun?: (
     manager: ExternalAutomationManager,
     job: ExternalAutomationJob,
-    run: ExternalAutomationRun
+    run: ExternalAutomationRun,
+    scope: ExternalAutomationScope
   ) => void
   onEdit?: (
     manager: ExternalAutomationManager,
@@ -326,7 +327,7 @@ export function ExternalAutomationManagers({
                           job={job}
                           now={now}
                           onFetchRuns={onFetchRuns}
-                          onOpenRun={(run) => onOpenRun?.(manager, job, run)}
+                          onOpenRun={(run) => onOpenRun?.(manager, job, run, scope)}
                         />
                       </div>
                     ) : null}

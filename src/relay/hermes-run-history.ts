@@ -26,8 +26,8 @@ type HermesRunCountCacheEntry = {
 export type HermesRunHistorySources = {
   readOutputRefs: (jobId: string) => Promise<HermesOutputRunRef[]>
   readSessionRefs: (jobId: string) => HermesSessionRunRef[]
-  readOutputRun: (ref: HermesOutputRunRef) => Promise<unknown>
-  readSessionRun: (jobId: string, runId: string) => unknown
+  readOutputRun: (ref: HermesOutputRunRef, summaryOnly?: boolean) => Promise<unknown>
+  readSessionRun: (jobId: string, runId: string, summaryOnly?: boolean) => unknown
 }
 
 const DEFAULT_SOURCES: HermesRunHistorySources = {
@@ -76,7 +76,9 @@ export class HermesRunHistory {
     if (typeof jobId !== 'string' || !EXTERNAL_AUTOMATION_JOB_ID_PATTERN.test(jobId)) {
       throw new Error('Invalid external automation job ID.')
     }
-    if (pageSize === 0) {
+    // A detail request names its run, so pageSize does not gate it.
+    const runId = typeof params.runId === 'string' ? params.runId : undefined
+    if (pageSize === 0 && runId === undefined) {
       return { total: await this.readRunCount(jobId), runs: [] }
     }
     const runRefs = await this.readRunRefs(jobId)
@@ -84,7 +86,10 @@ export class HermesRunHistory {
     return {
       total: runRefs.length,
       runs: await Promise.all(
-        runRefs.slice(start, start + pageSize).map((ref) => this.hydrateRunRef(jobId, ref))
+        (runId !== undefined
+          ? runRefs.filter((ref) => ref.id === runId)
+          : runRefs.slice(start, start + pageSize)
+        ).map((ref) => this.hydrateRunRef(jobId, ref, params.summaryOnly === true))
       )
     }
   }
@@ -111,10 +116,16 @@ export class HermesRunHistory {
     )
   }
 
-  private async hydrateRunRef(jobId: string, ref: HermesMergedRunRef): Promise<unknown> {
-    const outputRun = ref.output ? await this.sources.readOutputRun(ref.output) : null
-    const sessionRun = ref.session ? this.sources.readSessionRun(jobId, ref.session.id) : null
-    return (
+  private async hydrateRunRef(
+    jobId: string,
+    ref: HermesMergedRunRef,
+    summaryOnly = false
+  ): Promise<unknown> {
+    const outputRun = ref.output ? await this.sources.readOutputRun(ref.output, summaryOnly) : null
+    const sessionRun = ref.session
+      ? this.sources.readSessionRun(jobId, ref.session.id, summaryOnly)
+      : null
+    const run =
       mergeHermesOutputAndSessionRuns(
         outputRun ? [outputRun] : [],
         sessionRun ? [sessionRun] : []
@@ -122,7 +133,9 @@ export class HermesRunHistory {
       outputRun ??
       sessionRun ??
       ref
-    )
+    return summaryOnly && typeof run === 'object' && run !== null
+      ? { ...run, output_content: null, output_content_deferred: true }
+      : run
   }
 
   private async readRunCount(jobId: string): Promise<number> {

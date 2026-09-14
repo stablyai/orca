@@ -14,6 +14,13 @@ const execFileMock = vi.hoisted(() =>
 )
 
 vi.mock('child_process', () => ({ execFile: execFileMock }))
+const listRunsMock = vi.hoisted(() => vi.fn(async () => ({ total: 0, runs: [] })))
+vi.mock('./hermes-run-history', () => ({
+  HermesRunHistory: class {
+    listRuns = listRunsMock
+    clearRunCount = vi.fn()
+  }
+}))
 
 type CapturedHandler = (params?: Record<string, unknown>) => Promise<unknown>
 
@@ -33,14 +40,21 @@ beforeEach(() => {
 })
 
 describe('ExternalAutomationsHandler', () => {
-  it('preserves the five external automation routes', () => {
+  it('preserves legacy routes and registers opt-in run history', () => {
     expect([...createHandlerHarness().keys()]).toEqual([
       'externalAutomations.list',
+      'externalAutomations.runHistory',
       'externalAutomations.runs',
       'externalAutomations.create',
       'externalAutomations.update',
       'externalAutomations.act'
     ])
+  })
+
+  it('forwards summaryOnly and runId through the opt-in run history route', async () => {
+    const params = { provider: 'hermes', jobId: 'job-1', summaryOnly: true, runId: 'run-1' }
+    await createHandlerHarness().get('externalAutomations.runHistory')?.(params)
+    expect(listRunsMock).toHaveBeenCalledWith(params)
   })
 
   it('runs lifecycle actions without shell wrapping', async () => {

@@ -12,7 +12,7 @@ import type {
 } from '../../../../shared/automations-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { AutomationDetail } from './AutomationDetail'
-import { HermesCronOutputView } from './HermesCronOutputView'
+import { ExternalAutomationRunOutput } from './ExternalAutomationRunOutput'
 import { AutomationRunPageFrame } from './AutomationRunPageFrame'
 import { AutomationRunHistory } from './AutomationRunHistory'
 import { ExternalAutomationManagers } from './ExternalAutomationManagers'
@@ -22,7 +22,6 @@ import type { ExternalAutomationScope } from './external-automation-scope-client
 import {
   formatExternalDate,
   getExternalProviderLabel,
-  getExternalRunContent,
   getExternalRunStatusLabel,
   getExternalRunStatusVariant
 } from './external-automation-display'
@@ -68,7 +67,8 @@ type AutomationsDetailPaneProps = {
   openExternalRunPage: (
     manager: ExternalAutomationManager,
     job: ExternalAutomationJob,
-    run: ExternalAutomationRun
+    run: ExternalAutomationRun,
+    scope: ExternalAutomationScope
   ) => void
   openEditExternalDialog: (
     manager: ExternalAutomationManager,
@@ -181,7 +181,7 @@ export function AutomationsDetailPane({
               statusVariant={getExternalRunStatusVariant(selectedExternalRunPage.run)}
               onBack={onClearExternalRunPage}
             >
-              <HermesCronOutputView content={getExternalRunContent(selectedExternalRunPage.run)} />
+              <ExternalAutomationRunOutput selected={selectedExternalRunPage} />
             </AutomationRunPageFrame>
           ) : (
             <ExternalAutomationManagers

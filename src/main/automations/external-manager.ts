@@ -102,7 +102,9 @@ export function createScopedExternalAutomations(
         target: scope.target,
         jobId: request.jobId,
         page: request.page,
-        pageSize: request.pageSize
+        pageSize: request.pageSize,
+        summaryOnly: request.summaryOnly,
+        runId: request.runId
       })
     },
     async create(request) {
