@@ -46,6 +46,7 @@ import { buildDashboardSnapshotFilterOptions } from './dashboard-snapshot-filter
 import { groupSubagentsByParentPaneKey } from './dashboard-subagent-cards'
 import { selectDashboardOrchestration } from './dashboard-orchestration-selection'
 import { dashboardRowBucketProjection } from './dashboard-row-bucket'
+import { resolveDashboardCardSurface } from './dashboard-card-surface'
 
 /** The store slices the snapshot builder reads. Kept as a Pick so unit tests
  *  can pass a partial store without constructing the whole AppState. */
@@ -182,6 +183,11 @@ export function buildDashboardSnapshot(
         layoutPtyId && (state.ptyIdsByTabId?.[tabId] ?? []).includes(layoutPtyId)
           ? layoutPtyId
           : null
+      const surface = resolveDashboardCardSurface({
+        row,
+        tabId,
+        unifiedTabs: state.unifiedTabsByWorktree?.[worktreeId]
+      })
       // Why: only a live pty can open a preview terminal, and only a
       // card-rendering caller can open one — the sidebar's bucket counts must
       // not pay host resolution on every agent-status tick.
@@ -214,6 +220,7 @@ export function buildDashboardSnapshot(
       cards.push({
         paneKey: row.paneKey,
         ptyId,
+        ...surface,
         agentType: row.agentType,
         bucket,
         dotState,
