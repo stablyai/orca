@@ -37,30 +37,8 @@ import {
   resolveCreateParentSelector
 } from './worktree-create-parent-selector'
 import { getOptionalLinearIssueLinkFlag } from './worktree-linear-issue-link'
-
-type HookWarningResult = {
-  warning?: string
-}
-
-type PreservedBranchResult = {
-  preservedBranch?: {
-    branchName: string
-  }
-}
-
-function printHookWarning(result: HookWarningResult, json: boolean): void {
-  if (!json && result.warning) {
-    console.error(`warning: ${result.warning}`)
-  }
-}
-
-function printPreservedBranchWarning(result: PreservedBranchResult, json: boolean): void {
-  if (!json && result.preservedBranch) {
-    console.error(
-      `warning: local branch "${result.preservedBranch.branchName}" was kept because Git could not safely delete it`
-    )
-  }
-}
+import { getOptionalPinFlag } from './worktree-pin-flags'
+import { printHookWarning, printPreservedBranchWarning } from './worktree-command-warnings'
 
 function assertParentWorktreeFlagsCompatible(flags: Map<string, string | boolean>): void {
   if (flags.has('parent-worktree') && flags.get('no-parent') === true) {
@@ -288,6 +266,7 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
       ...linearIssueLink,
       comment: getOptionalStringFlag(flags, 'comment'),
       workspaceStatus: getOptionalStringFlag(flags, 'workspace-status'),
+      isPinned: getOptionalPinFlag(flags),
       parentWorktree: await getOptionalWorktreeSelector(flags, 'parent-worktree', cwd, client),
       noParent: flags.get('no-parent') === true
     })
