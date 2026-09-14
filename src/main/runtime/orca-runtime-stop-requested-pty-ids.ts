@@ -28,6 +28,10 @@ import type { OrchestrationDb } from './orchestration/db'
 import { OrchestrationMailboxOwner } from './orchestration/mailbox-owner'
 import { OrchestrationMailboxDeliveryTarget } from './orchestration/mailbox-delivery-target'
 import { OrchestrationMailboxPointerDelivery } from './orchestration/mailbox-pointer-delivery'
+import {
+  mailboxLeafForBackgroundPtyKey,
+  mailboxLeafFromBackgroundPty
+} from './orchestration/mailbox-background-pty-leaf'
 import { OrchestrationMailboxNotificationCoordinator } from './orchestration/mailbox-notification-coordinator'
 import type { RuntimeMessageWaiter } from './runtime-message-waiters'
 import { RuntimeMessageWaiters } from './runtime-message-waiters'
@@ -200,13 +204,34 @@ export class OrcaRuntimeWithStopRequestedPtyIds extends OrcaRuntimeWithRuntimeId
     mailboxOwner: this.orchestrationMailboxOwner,
     deliveryTarget: this.orchestrationMailboxDeliveryTarget,
     getDb: () => this._orchestrationDb,
-    getLeaf: (leafKey) => this.leaves.get(leafKey),
+    getLeaf: (leafKey) =>
+      this.leaves.get(leafKey) ??
+      mailboxLeafForBackgroundPtyKey(leafKey, this.ptysById.values(), (tabId, leafId) =>
+        this.getLeafKey(tabId, leafId)
+      ) ??
+      undefined,
     getLeafKey: (tabId, leafId) => this.getLeafKey(tabId, leafId),
     getLiveLeafForHandle: (handle) => this.getLiveLeafForHandle(handle).leaf,
+    getLiveBackgroundPtyLeafForHandle: (handle) => {
+      const live = this.getLivePtyForHandle(handle)
+      return live ? mailboxLeafFromBackgroundPty(live.pty) : null
+    },
     getMessageWaiters: (mailboxHandle) => this.messageWaiters.get(mailboxHandle),
     getTabTitle: (tabId) => this.tabs.get(tabId)?.title,
     getCliCommand: (terminalHandle) => this.getTerminalOrchestrationCliCommand(terminalHandle),
     getTerminalHandleForLeafKey: (leafKey) => this.handleByLeafKey.get(leafKey),
+    getTerminalHandleForMailboxLeaf: (leaf) => {
+      const fromLeaf = this.handleByLeafKey.get(this.getLeafKey(leaf.tabId, leaf.leafId))
+      if (fromLeaf) {
+        return fromLeaf
+      }
+      if (!leaf.ptyId) {
+        return undefined
+      }
+      const handle = this.handleByPtyId.get(leaf.ptyId)
+      const record = handle ? this.handles.get(handle) : undefined
+      return record?.tabId.startsWith('pty:') ? handle : undefined
+    },
     resolveSubmitTarget: (leaf, ptyId) => this.resolveOrchestrationPointerSubmitTarget(leaf, ptyId),
     isLeafPtyProvenAbsent: (ptyId) => this.isLeafPtyProvenAbsent(ptyId),
     redriveMailbox: (mailboxHandle, reservedTypes) =>
