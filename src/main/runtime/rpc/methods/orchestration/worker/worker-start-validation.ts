@@ -43,10 +43,7 @@ export function validateFederatedWorkerStartPlacement(
   // Why: an explicit --agent must be a known id; an omitted one is resolved by the
   // worker host against its own Settings default.
   if (!params.terminal && params.agent && !isTuiAgent(params.agent)) {
-    throw new OrchestrationError(
-      'agent_unconfigured',
-      'An enabled --agent (or an enabled default agent in Settings) is required when remote worker-start creates a terminal.'
-    )
+    throw new OrchestrationError('agent_unconfigured', `Unknown --agent "${params.agent}".`)
   }
 }
 

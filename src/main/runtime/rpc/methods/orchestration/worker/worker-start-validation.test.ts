@@ -1,25 +1,31 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
+import { OrcaRuntimeWithGetTerminalInteractiveWait } from '../../../../orca-runtime-get-terminal-interactive-wait'
 import type { TuiAgent } from '../../../../../../shared/tui-agent'
-import { prepareLocalWorkerStart } from './worker-start-validation'
+import {
+  prepareLocalWorkerStart,
+  validateFederatedWorkerStartPlacement
+} from './worker-start-validation'
 
+vi.mock('electron', () => ({
+  BrowserWindow: { fromId: vi.fn(() => null) },
+  webContents: { fromId: vi.fn(() => null) },
+  ipcMain: { on: vi.fn(), removeListener: vi.fn() },
+  app: { getPath: vi.fn(() => '/tmp') }
+}))
+
+// Why the real prototype methods: the Settings resolution under test lives on the runtime.
 function fakeRuntime(
   defaultTuiAgent: TuiAgent | 'blank' | null,
-  disabled: TuiAgent[] = []
+  disabledTuiAgents: TuiAgent[] = []
 ): { runtime: OrcaRuntimeService; resolveDefault: ReturnType<typeof vi.fn> } {
-  const resolveDefault = vi.fn(() =>
-    defaultTuiAgent && defaultTuiAgent !== 'blank' && !disabled.includes(defaultTuiAgent)
-      ? defaultTuiAgent
-      : null
-  )
+  const proto = OrcaRuntimeWithGetTerminalInteractiveWait.prototype
   const runtime = {
-    resolveDefaultOrchestrationAgent: resolveDefault,
-    validateOrchestrationAgentLauncher: vi.fn((agent: TuiAgent) => {
-      if (disabled.includes(agent)) {
-        throw new Error('disabled')
-      }
-    })
-  } as unknown as OrcaRuntimeService
+    store: { getSettings: () => ({ defaultTuiAgent, disabledTuiAgents }) },
+    validateOrchestrationAgentLauncher: proto.validateOrchestrationAgentLauncher
+  } as unknown as OrcaRuntimeService & { resolveDefaultOrchestrationAgent: () => TuiAgent | null }
+  const resolveDefault = vi.fn(() => proto.resolveDefaultOrchestrationAgent.call(runtime))
+  runtime.resolveDefaultOrchestrationAgent = resolveDefault
   return { runtime, resolveDefault }
 }
 
@@ -71,6 +77,14 @@ describe('worker-start agent resolution', () => {
     }
   })
 
+  it('names the unknown --agent on the remote path too', () => {
+    expect(
+      captureError(() =>
+        validateFederatedWorkerStartPlacement({ ...baseParams, agent: 'codx' }, false)
+      )
+    ).toMatchObject({ code: 'agent_unconfigured', message: 'Unknown --agent "codx".' })
+  })
+
   it('still fails when --agent is omitted and no usable default exists', () => {
     for (const { runtime } of [
       fakeRuntime(null),
@@ -86,6 +100,18 @@ describe('worker-start agent resolution', () => {
         message: expect.stringContaining('--agent')
       })
     }
+  })
+
+  it('refuses an explicit --agent that Settings disables', () => {
+    expect(
+      captureError(() =>
+        prepareLocalWorkerStart({
+          params: { ...baseParams, agent: 'codex' },
+          createsWorktree: false,
+          runtime: fakeRuntime('gemini', ['codex']).runtime
+        })
+      )
+    ).toMatchObject({ code: 'agent_unconfigured' })
   })
 
   it('does not consult the default when reusing a terminal', () => {
