@@ -401,6 +401,142 @@ describe('MobileNativeChatComposer', () => {
     expect(texts).not.toContain('/cost')
   })
 
+  it("serves the structured session's reported commands over every curated list", async () => {
+    await act(async () => {
+      renderer = create(
+        createElement(MobileNativeChatComposer, {
+          value: '/',
+          onChangeText: vi.fn(),
+          onSend: vi.fn().mockResolvedValue(true),
+          sendSurfaceId: 'tab-a',
+          getSendCompletionGeneration: getCurrentSendCompletionGeneration,
+          agent: 'claude',
+          structuredCommands: [],
+          sessionCommands: [
+            { name: 'clear', kind: 'command' },
+            { name: 'opsx:apply', kind: 'command' }
+          ]
+        })
+      )
+    })
+    const input = renderer!.root.find((node) => node.type === 'TextInput') as {
+      props: { onSelectionChange: (e: { nativeEvent: { selection: { end: number } } }) => void }
+    }
+    await act(async () => input.props.onSelectionChange({ nativeEvent: { selection: { end: 1 } } }))
+    const texts = renderer!.root
+      .findAll((node) => node.type === 'Text')
+      .map((node) => (node.props as { children?: unknown }).children)
+    // The report is the authority: its commands show (described where the
+    // curated catalog knows the name) and neither curated-only entries nor the
+    // structured base commands resurface.
+    expect(texts).toContain('/clear')
+    expect(texts).toContain('Clear conversation history')
+    expect(texts).toContain('/opsx:apply')
+    expect(texts).not.toContain('/compact')
+    expect(texts).not.toContain('/model')
+  })
+
+  it("offers the session's reported skills in the slash menu, marked and insertable", async () => {
+    const onChangeText = vi.fn()
+    await act(async () => {
+      renderer = create(
+        createElement(MobileNativeChatComposer, {
+          value: '/to',
+          onChangeText,
+          onSend: vi.fn().mockResolvedValue(true),
+          sendSurfaceId: 'tab-a',
+          getSendCompletionGeneration: getCurrentSendCompletionGeneration,
+          agent: 'claude',
+          structuredCommands: [],
+          sessionCommands: [
+            { name: 'clear', kind: 'command' },
+            { name: 'to-spec', kind: 'skill' }
+          ]
+        })
+      )
+    })
+    const input = renderer!.root.find((node) => node.type === 'TextInput') as {
+      props: { onSelectionChange: (e: { nativeEvent: { selection: { end: number } } }) => void }
+    }
+    await act(async () => input.props.onSelectionChange({ nativeEvent: { selection: { end: 4 } } }))
+    const texts = renderer!.root
+      .findAll((node) => node.type === 'Text')
+      .map((node) => (node.props as { children?: unknown }).children)
+    // The reported skill matches the prefix; the unmatched command does not show.
+    expect(texts).toContain('/to-spec')
+    expect(texts).toContain('skill')
+    expect(texts).not.toContain('/clear')
+
+    const skillRow = renderer!.root.findAll(
+      (node) => node.type === 'Pressable' && !node.props.accessibilityLabel
+    )[0] as { props: { onPress: () => void } }
+    await act(async () => skillRow.props.onPress())
+    expect(onChangeText).toHaveBeenCalledWith('/to-spec ')
+  })
+
+  it('keeps a command that collides with a skill name as the described command row', async () => {
+    await act(async () => {
+      renderer = create(
+        createElement(MobileNativeChatComposer, {
+          value: '/',
+          onChangeText: vi.fn(),
+          onSend: vi.fn().mockResolvedValue(true),
+          sendSurfaceId: 'tab-a',
+          getSendCompletionGeneration: getCurrentSendCompletionGeneration,
+          agent: 'claude',
+          structuredCommands: [],
+          sessionCommands: [
+            { name: 'clear', kind: 'command' },
+            { name: 'clear', kind: 'skill' },
+            { name: 'to-spec', kind: 'skill' }
+          ]
+        })
+      )
+    })
+    const input = renderer!.root.find((node) => node.type === 'TextInput') as {
+      props: { onSelectionChange: (e: { nativeEvent: { selection: { end: number } } }) => void }
+    }
+    await act(async () => input.props.onSelectionChange({ nativeEvent: { selection: { end: 1 } } }))
+    const texts = renderer!.root
+      .findAll((node) => node.type === 'Text')
+      .map((node) => (node.props as { children?: unknown }).children)
+    expect(texts.filter((text) => text === '/clear')).toHaveLength(1)
+    expect(texts).toContain('Clear conversation history')
+  })
+
+  it('offers discovered worktree skills with descriptions on the PTY lane', async () => {
+    const onChangeText = vi.fn()
+    await act(async () => {
+      renderer = create(
+        createElement(MobileNativeChatComposer, {
+          value: '/de',
+          onChangeText,
+          onSend: vi.fn().mockResolvedValue(true),
+          sendSurfaceId: 'tab-a',
+          getSendCompletionGeneration: getCurrentSendCompletionGeneration,
+          agent: 'claude',
+          skillSuggestions: [{ name: 'deploy-check', description: 'Verify the deploy' }]
+        })
+      )
+    })
+    const input = renderer!.root.find((node) => node.type === 'TextInput') as {
+      props: { onSelectionChange: (e: { nativeEvent: { selection: { end: number } } }) => void }
+    }
+    await act(async () => input.props.onSelectionChange({ nativeEvent: { selection: { end: 4 } } }))
+    const texts = renderer!.root
+      .findAll((node) => node.type === 'Text')
+      .map((node) => (node.props as { children?: unknown }).children)
+    expect(texts).toContain('/deploy-check')
+    expect(texts).toContain('Verify the deploy')
+    expect(texts).toContain('skill')
+
+    const skillRow = renderer!.root.findAll(
+      (node) => node.type === 'Pressable' && !node.props.accessibilityLabel
+    )[0] as { props: { onPress: () => void } }
+    await act(async () => skillRow.props.onPress())
+    expect(onChangeText).toHaveBeenCalledWith('/deploy-check ')
+  })
+
   it('wires the mic for hold vs toggle dictation like the terminal composer', async () => {
     const onMicPress = vi.fn()
     const onMicPressIn = vi.fn()
