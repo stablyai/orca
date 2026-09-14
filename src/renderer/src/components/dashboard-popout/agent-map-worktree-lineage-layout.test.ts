@@ -43,7 +43,7 @@ function layoutWithNumericMapSetCount(worktrees: ReturnType<typeof buildChain>) 
     if (typeof key === 'number') {
       numericMapSets += 1
     }
-    return Reflect.apply(set, this, [key, value])
+    return set.call(this, key, value)
   } as typeof Map.prototype.set
   try {
     return { layout: layoutAgentMapWorktreeLineage(worktrees), numericMapSets }
@@ -64,7 +64,7 @@ function layoutWithWorktreePushCount(count: number) {
         typeof item.id === 'string' &&
         item.id.startsWith('worktree-')
     ).length
-    return Reflect.apply(push, this, items)
+    return push.call(this, ...items)
   }
   try {
     return {
