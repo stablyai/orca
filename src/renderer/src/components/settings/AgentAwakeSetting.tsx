@@ -6,7 +6,6 @@ import {
   getAgentAwakeSearchKeywords,
   getAgentAwakeTitle,
   getKeepDisplayAwakeDescription,
-  getKeepDisplayAwakeSearchKeywords,
   getKeepDisplayAwakeTitle
 } from './agent-awake-copy'
 import { SearchableSetting } from './SearchableSetting'
@@ -77,7 +76,6 @@ export function AgentAwakeSetting({
         <SearchableSetting
           title={getKeepDisplayAwakeTitle()}
           description={getKeepDisplayAwakeDescription()}
-          keywords={getKeepDisplayAwakeSearchKeywords()}
         >
           <SettingsSwitchRow
             label={getKeepDisplayAwakeTitle()}

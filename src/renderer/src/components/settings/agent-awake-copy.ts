@@ -53,24 +53,6 @@ export function getKeepDisplayAwakeDescription(): string {
   )
 }
 
-export function getKeepDisplayAwakeSearchKeywords(): string[] {
-  return searchKeywords([
-    { key: 'auto.components.settings.agents.search.ff8de8a2ad', fallback: 'display' },
-    { key: 'auto.components.settings.agents.search.dbc8aca6b0', fallback: 'sleep' },
-    { key: 'auto.components.settings.agents.search.ssh', fallback: 'ssh', englishOnly: true },
-    {
-      key: 'auto.components.settings.agents.search.passwordManager',
-      fallback: 'password manager'
-    },
-    { key: 'auto.components.settings.agents.search.screenLock', fallback: 'screen lock' },
-    {
-      key: 'auto.components.settings.agents.search.onePassword',
-      fallback: '1password',
-      englishOnly: true
-    }
-  ])
-}
-
 export function getAgentAwakeSearchKeywords(
   userAgent = typeof navigator === 'undefined' ? '' : navigator.userAgent
 ): string[] {

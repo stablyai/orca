@@ -8578,10 +8578,6 @@
         },
         "agents": {
           "search": {
-            "ssh": "ssh",
-            "passwordManager": "gestionnaire de mots de passe",
-            "screenLock": "verrouillage d’écran",
-            "onePassword": "1password",
             "2814401339": "installé",
             "719f53350c": "chemin",
             "839e82c81f": "détection",

@@ -7794,10 +7794,6 @@
         },
         "agents": {
           "search": {
-            "ssh": "ssh",
-            "passwordManager": "密码管理器",
-            "screenLock": "屏幕锁定",
-            "onePassword": "1password",
             "2814401339": "已安装",
             "719f53350c": "路径",
             "839e82c81f": "检测",

@@ -7739,10 +7739,6 @@
         },
         "agents": {
           "search": {
-            "ssh": "ssh",
-            "passwordManager": "gestor de contraseñas",
-            "screenLock": "bloqueo de pantalla",
-            "onePassword": "1password",
             "2814401339": "instalado",
             "719f53350c": "ruta",
             "839e82c81f": "detectar",

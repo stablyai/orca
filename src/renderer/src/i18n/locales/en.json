@@ -8911,10 +8911,6 @@
         },
         "agents": {
           "search": {
-            "ssh": "ssh",
-            "passwordManager": "password manager",
-            "screenLock": "screen lock",
-            "onePassword": "1password",
             "2814401339": "installed",
             "719f53350c": "path",
             "839e82c81f": "detect",

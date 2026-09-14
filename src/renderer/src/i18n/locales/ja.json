@@ -7761,10 +7761,6 @@
         },
         "agents": {
           "search": {
-            "ssh": "ssh",
-            "passwordManager": "パスワードマネージャー",
-            "screenLock": "画面ロック",
-            "onePassword": "1password",
             "2814401339": "インストール済み",
             "719f53350c": "パス",
             "839e82c81f": "検出",

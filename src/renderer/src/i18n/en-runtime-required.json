@@ -1587,11 +1587,7 @@
             "ef804b7337": "Agent Location",
             "f2932bf22b": "detected",
             "f412abbba5": "claude",
-            "ff8de8a2ad": "display",
-            "onePassword": "1password",
-            "passwordManager": "password manager",
-            "screenLock": "screen lock",
-            "ssh": "ssh"
+            "ff8de8a2ad": "display"
           }
         },
         "artifacts": {
