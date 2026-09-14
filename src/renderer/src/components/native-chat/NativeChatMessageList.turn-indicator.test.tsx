@@ -57,6 +57,47 @@ const session: NativeChatLiveSession = {
 
 // The live turn renders exactly one indicator row; a settled turn keeps its own.
 describe('NativeChatMessageList turn indicator', () => {
+  it.each([true, false])(
+    'pauses live activity while awaiting input (turn status: %s)',
+    (showTurnStatus) => {
+      const activeSession: NativeChatLiveSession = {
+        ...session,
+        status: 'working',
+        messages: [
+          {
+            id: 'waiting-user',
+            role: 'user',
+            blocks: [{ type: 'text', text: 'Please continue' }],
+            timestamp: 1,
+            source: 'transcript'
+          }
+        ]
+      }
+      const props = {
+        session: activeSession,
+        isWorking: true,
+        showTurnStatus,
+        expandSignal: false,
+        fontScale: 1
+      }
+      const { container, rerender } = render(<NativeChatMessageList {...props} />)
+      const expectActive = () => {
+        if (showTurnStatus) {
+          expect(container.querySelector('[data-native-chat-turn-activity]')).not.toBeNull()
+        } else {
+          expect(screen.getByLabelText('Agent is responding')).toBeInTheDocument()
+        }
+      }
+      expectActive()
+      rerender(<NativeChatMessageList {...props} isAwaitingInput />)
+      expect(container.querySelector('[data-native-chat-turn-activity]')).toBeNull()
+      expect(screen.queryByLabelText('Agent is responding')).toBeNull()
+      expect(screen.getByText('Please continue')).toBeInTheDocument()
+      rerender(<NativeChatMessageList {...props} isAwaitingInput={false} />)
+      expectActive()
+    }
+  )
+
   it('keeps a reduced-motion-safe spinner on the live row of a no-tool Codex turn', () => {
     render(
       <NativeChatMessageList

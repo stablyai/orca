@@ -266,6 +266,8 @@ export function MobileNativeChatView({
     activityText: turnIndicator?.activityText ?? null,
     scopeKey: sendSurfaceId
   })
+  const hasPendingStructuredInteraction =
+    structuredActivityUi && (ask != null || permission != null || question != null)
 
   const renderItem = useCallback(
     ({ item, index }: { item: NativeChatMessage; index: number }) => (
@@ -329,7 +331,10 @@ export function MobileNativeChatView({
                 ) : null
               }
               ListFooterComponent={
-                structuredActivityUi && agentWorking && turns.active ? (
+                structuredActivityUi &&
+                agentWorking &&
+                !hasPendingStructuredInteraction &&
+                turns.active ? (
                   <MobileNativeChatTurnStatus
                     startedAt={turns.active.startedAt}
                     thinking={turns.active.thinking}

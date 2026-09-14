@@ -154,6 +154,62 @@ describe('NativeChatStructuredSession', () => {
     }
   )
 
+  it.each(['question', 'approval'] as const)('keeps turn state while a %s awaits input', (kind) => {
+    mocks.isWorking = true
+    const view = () => (
+      <NativeChatStructuredSession
+        isVisible
+        isFocusedGroup
+        tabId="pending-tab"
+        sessionId="pending-session"
+        target={{ kind: 'local' }}
+        agent="omp"
+      />
+    )
+    const { rerender } = render(view())
+    expect(mocks.messageListProps).toMatchObject({
+      showTurnStatus: true,
+      isWorking: true,
+      isAwaitingInput: false
+    })
+    mocks.promptItems =
+      kind === 'question'
+        ? claudeGroupedQuestionPromptItems
+        : [
+            {
+              itemId: 'approval',
+              revision: 1,
+              sequence: 1,
+              observedAt: 1,
+              body: {
+                kind: 'approval',
+                title: 'Allow tool?',
+                detail: null,
+                options: [{ id: 'allow', label: 'Allow' }],
+                resolution: {
+                  state: 'pending',
+                  selectedOptionId: null,
+                  resolvedBy: null,
+                  resolvedAt: null
+                }
+              }
+            }
+          ]
+    rerender(view())
+    expect(mocks.messageListProps).toMatchObject({
+      showTurnStatus: true,
+      isWorking: true,
+      isAwaitingInput: true
+    })
+    mocks.promptItems = []
+    rerender(view())
+    expect(mocks.messageListProps).toMatchObject({
+      showTurnStatus: true,
+      isWorking: true,
+      isAwaitingInput: false
+    })
+  })
+
   // Every background-task test mounts the same local Claude session; only the ids
   // differ. A fresh element per call also matters for the rerenders below: React
   // bails out of re-rendering an identical one.

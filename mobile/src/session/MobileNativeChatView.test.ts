@@ -85,6 +85,9 @@ type Overrides = {
   turnIndicator?: Parameters<typeof MobileNativeChatView>[0]['turnIndicator']
   agentWorking?: boolean
   canStop?: boolean
+  ask?: Parameters<typeof MobileNativeChatView>[0]['ask']
+  question?: Parameters<typeof MobileNativeChatView>[0]['question']
+  permission?: Parameters<typeof MobileNativeChatView>[0]['permission']
   sendSurfaceId?: string
   keyboardInset?: number
   hasMore?: boolean
@@ -679,6 +682,72 @@ describe('MobileNativeChatView', () => {
       expect(listIds().at(-1)).toBe('a1')
       expect(props.activeTurnIsWorking).toBe(true)
       expect(workingIndicators()).toHaveLength(0)
+    })
+
+    it.each([
+      {
+        label: 'structured question',
+        cardType: 'ChatAsk',
+        interaction: {
+          ask: {
+            questions: [
+              {
+                question: 'Pick destination',
+                multiSelect: false,
+                options: [{ label: 'Choice A' }, { label: 'Choice B' }]
+              }
+            ]
+          }
+        }
+      },
+      {
+        label: 'question',
+        cardType: 'ChatQuestion',
+        interaction: {
+          question: {
+            question: 'Pick destination',
+            options: ['Choice A', 'Choice B'],
+            multiSelect: false,
+            allowOther: true,
+            optionTokens: ['choice-a', 'choice-b']
+          }
+        }
+      },
+      {
+        label: 'approval',
+        cardType: 'ChatPermission',
+        interaction: {
+          permission: {
+            title: 'Allow command?',
+            detail: 'pnpm test',
+            options: [
+              { label: 'Allow', send: 'allow' },
+              { label: 'Deny', send: 'deny' }
+            ]
+          }
+        }
+      }
+    ])('hides live turn activity for a pending $label without settling it', async (testCase) => {
+      const folded = [userTurn('u1', 'go'), assistantTurn('a1', 'waiting for input')]
+      const working = {
+        messages: folded,
+        folded,
+        structuredActivityUi: true,
+        agentWorking: true,
+        canStop: true
+      }
+      await render({ ...working, ...testCase.interaction })
+
+      expect(footerProps()).toBeNull()
+      expect(rowProps('a1').activeTurnIsWorking).toBe(true)
+      expect(
+        renderer!.root.findAll((node) => node.props.accessibilityLabel === 'Stop the agent')
+      ).toHaveLength(1)
+      expect(renderer!.root.findAll((node) => node.type === testCase.cardType)).toHaveLength(1)
+
+      await update(working)
+      expect(footerProps()).toMatchObject({ thinking: false, workedSeconds: null })
+      expect(rowProps('a1').activeTurnIsWorking).toBe(true)
     })
 
     it('reports the live turn as thinking only when its journal says it is reasoning', async () => {

@@ -53,6 +53,7 @@ export function NativeChatMessageList({
   settledTurns,
   failedDeliveryMessageIds,
   showTurnStatus = true,
+  isAwaitingInput = false,
   turnActivity,
   runtimeContext
 }: {
@@ -71,6 +72,8 @@ export function NativeChatMessageList({
   failedDeliveryMessageIds?: ReadonlySet<string>
   /** Turn timing and disclosure are available on structured agent sessions. */
   showTurnStatus?: boolean
+  /** Suppress live activity without settling the active turn. */
+  isAwaitingInput?: boolean
   turnActivity?: NativeChatTurnActivity | null
   runtimeContext?: RuntimeFileOperationArgs | null
 }): React.JSX.Element {
@@ -285,13 +288,15 @@ export function NativeChatMessageList({
                   context={rowContext}
                   window={transcriptWindow}
                 />
-                {showTurnStatus && isWorking ? (
+                {showTurnStatus && isWorking && !isAwaitingInput ? (
                   <NativeChatTurnActivityLine
                     activity={turnActivity}
                     status={turnStatuses.active}
                   />
                 ) : null}
-                {!showTurnStatus && showTypingIndicator ? <NativeChatTypingIndicatorRow /> : null}
+                {!showTurnStatus && showTypingIndicator && !isAwaitingInput ? (
+                  <NativeChatTypingIndicatorRow />
+                ) : null}
               </div>
             </div>
           </div>

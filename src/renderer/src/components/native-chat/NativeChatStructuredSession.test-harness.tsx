@@ -14,18 +14,23 @@ type StructuredSessionSpy = Mock
  * so the factories can close over `mocks` before the mocked modules resolve.
  */
 export function createStructuredSessionMocks() {
+  const messageListState: {
+    messageListProps: null | {
+      allowFileUriLinks?: boolean
+      onLinkClick?: (...args: unknown[]) => void
+      showTurnStatus?: boolean
+      isAwaitingInput?: boolean
+      isWorking?: boolean
+      runtimeContext?: unknown
+    }
+  } = { messageListProps: null }
   const mocks = {
+    ...messageListState,
     call: vi.fn() as StructuredSessionSpy,
     fileLinkClick: vi.fn() as StructuredSessionSpy,
     mode: 'static' as 'static' | 'outbox',
     status: 'ready' as 'idle' | 'loading' | 'ready' | 'error',
     messages: null as null | unknown[],
-    messageListProps: null as null | {
-      allowFileUriLinks?: boolean
-      onLinkClick?: (...args: unknown[]) => void
-      showTurnStatus?: boolean
-      runtimeContext?: unknown
-    },
     composerProps: null as null | {
       launchSeed?: NativeChatLaunchSeed
       structuredTransport?: Record<string, unknown>
