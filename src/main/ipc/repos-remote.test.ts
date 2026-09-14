@@ -34,7 +34,11 @@ import { clearGitCapabilityStateForTests } from '../git/git-capability-state'
 import { resetSshProviderAuthorities } from '../ssh/ssh-provider-authority'
 import { DEFAULT_REPO_BADGE_COLOR } from '../../shared/constants'
 import { clearSubmodulePathsCacheForTests } from '../git/status'
-import { createRepoHandlerHarness, waitForAssertion } from './repos-remote-test-harness'
+import {
+  createRepoHandlerHarness,
+  remoteEnoent,
+  waitForAssertion
+} from './repos-remote-test-harness'
 
 const {
   handleMock,
@@ -79,7 +83,7 @@ describe('repos:addRemote', () => {
       pathDelimiter: ':'
     })
     mockFilesystemProvider.stat.mockReset()
-    mockFilesystemProvider.stat.mockRejectedValue(new Error('not found'))
+    mockFilesystemProvider.stat.mockRejectedValue(remoteEnoent())
     mockFilesystemProvider.createDirNoClobber.mockReset()
     mockFilesystemProvider.createDirNoClobber.mockResolvedValue(undefined)
     mockFilesystemProvider.deletePath.mockReset()
@@ -269,7 +273,7 @@ describe('repos:addRemote', () => {
 
   it('does not delete a fresh SSH clone target after git clone fails', async () => {
     mockGitProvider.clone.mockRejectedValueOnce(new Error('repository not found'))
-    mockFilesystemProvider.stat.mockRejectedValueOnce(new Error('not found'))
+    mockFilesystemProvider.stat.mockRejectedValueOnce(remoteEnoent())
 
     await expect(
       handlers.get('repos:cloneRemote')!(null, {
@@ -494,7 +498,11 @@ describe('repos:addRemote', () => {
     expect(mockStore.addRepo).not.toHaveBeenCalled()
   })
 
-  it('preserves an existing empty SSH directory and removes only .git when commit fails', async () => {
+  it('deletes nothing in an existing empty SSH directory when commit fails', async () => {
+    // STA-6079: this used to delete the remote .git. `git init` is idempotent and never reports
+    // whether it created or reinitialized, so the rollback could not prove that .git was ours —
+    // and on this lane the only thing standing between it and a real repository was a directory
+    // listing. A leftover .git is recoverable; a deleted one is not.
     mockFilesystemProvider.stat.mockResolvedValueOnce({ type: 'directory', size: 0, mtime: 0 })
     mockFilesystemProvider.readDir.mockResolvedValueOnce([])
     mockGitProvider.exec
@@ -510,10 +518,50 @@ describe('repos:addRemote', () => {
 
     expect(result).toEqual({
       error:
-        'Git author identity is not configured on the SSH host. Run `git config --global user.name "Your Name"` and `git config --global user.email "you@example.com"` on that host, then try again.'
+        'Git author identity is not configured on the SSH host. Run `git config --global user.name "Your Name"` and `git config --global user.email "you@example.com"` on that host, then try again. If a .git directory was left behind, remove it before retrying.'
     })
-    expect(mockFilesystemProvider.deletePath).toHaveBeenCalledWith('/home/user/created/.git', true)
-    expect(mockFilesystemProvider.deletePath).not.toHaveBeenCalledWith('/home/user/created', true)
+    expect(mockFilesystemProvider.deletePath).not.toHaveBeenCalled()
+    expect(mockStore.addRepo).not.toHaveBeenCalled()
+  })
+
+  it('refuses when the target stat fails for a reason other than ENOENT', async () => {
+    // A transient relay error says nothing about the target, so it must not become permission
+    // to create into it.
+    mockFilesystemProvider.stat.mockRejectedValueOnce(
+      Object.assign(new Error('EACCES: permission denied'), { code: 'EACCES' })
+    )
+
+    const result = await handlers.get('repos:createRemote')!(null, {
+      connectionId: 'conn-1',
+      parentPath: '/home/user',
+      name: 'created',
+      kind: 'git'
+    })
+
+    expect(result).toMatchObject({ error: expect.stringContaining('Could not check') })
+    expect(mockFilesystemProvider.createDirNoClobber).not.toHaveBeenCalled()
+    expect(mockGitProvider.exec).not.toHaveBeenCalled()
+    expect(mockFilesystemProvider.deletePath).not.toHaveBeenCalled()
+    expect(mockStore.addRepo).not.toHaveBeenCalled()
+  })
+
+  it('refuses when the .git probe fails for a reason other than ENOENT', async () => {
+    // Target exists; whether it holds a repository is unknown. Proceeding here is exactly how
+    // `git init` would reach a real repository and reinitialize it.
+    mockFilesystemProvider.stat
+      .mockResolvedValueOnce({ type: 'directory', size: 0, mtime: 0 })
+      .mockRejectedValueOnce(new Error('relay request timed out'))
+
+    const result = await handlers.get('repos:createRemote')!(null, {
+      connectionId: 'conn-1',
+      parentPath: '/home/user',
+      name: 'created',
+      kind: 'git'
+    })
+
+    expect(result).toMatchObject({ error: expect.stringContaining('Could not check') })
+    expect(mockGitProvider.exec).not.toHaveBeenCalled()
+    expect(mockFilesystemProvider.deletePath).not.toHaveBeenCalled()
     expect(mockStore.addRepo).not.toHaveBeenCalled()
   })
 

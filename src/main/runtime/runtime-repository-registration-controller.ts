@@ -10,9 +10,15 @@ import {
 import type { Repo } from '../../shared/repo-types'
 import { gitExecFileAsync, awaitWindowsHostGitEnvironmentReady } from '../git/runner'
 import { getRepoName, isGitRepo } from '../git/repo'
-import { invalidateAuthorizedRootsCache, isENOENT } from '../ipc/filesystem-auth'
+import { invalidateAuthorizedRootsCache } from '../ipc/filesystem-auth'
 import { detectRepoIconAndUpstream } from '../repo-icon-autodetect'
 import { prepareLocalWorktreeRootForRepo } from '../worktree-root-preparation'
+import {
+  alreadyARepositoryError,
+  LEFTOVER_GIT_DIR_RETRY_HINT,
+  repositoryCheckUnavailableError
+} from '../ipc/repos/repository-creation-messages'
+import { describeError, isProvenAbsent } from '../ipc/repos/proven-absence'
 import type { RuntimeStore } from './runtime-store-contract'
 import { runtimePathsEqual } from './runtime-worktree-path-identity'
 import { runtimeRepoMatchesExecutionHost } from './runtime-worktree-selection'
@@ -117,7 +123,7 @@ export class RuntimeRepositoryRegistrationController {
     try {
       await mkdir(trimmedParentPath, { recursive: true })
       const existingStat = await stat(targetPath).catch((error: unknown) => {
-        if (isENOENT(error)) {
+        if (isProvenAbsent(error)) {
           return null
         }
         throw error
@@ -125,6 +131,23 @@ export class RuntimeRepositoryRegistrationController {
       if (existingStat) {
         if (!existingStat.isDirectory()) {
           return { error: `"${trimmedName}" already exists at this location and is not a folder.` }
+        }
+        // Why: refuse an existing repository before `git init` can silently reinitialize it.
+        const gitPath = join(targetPath, '.git')
+        let gitProbeFailed = false
+        let gitProbeFailure = ''
+        const gitStat = await stat(gitPath).catch((error: unknown) => {
+          if (!isProvenAbsent(error)) {
+            gitProbeFailed = true
+            gitProbeFailure = describeError(error)
+          }
+          return null
+        })
+        if (gitProbeFailed) {
+          return { error: repositoryCheckUnavailableError(trimmedName, gitProbeFailure) }
+        }
+        if (gitStat) {
+          return { error: alreadyARepositoryError(trimmedName) }
         }
         if ((await readdir(targetPath)).length > 0) {
           return { error: `"${trimmedName}" already exists at this location and is not empty.` }
@@ -180,18 +203,22 @@ export class RuntimeRepositoryRegistrationController {
       })
       return null
     } catch (error) {
+      // Why: only an exclusive mkdir proves this path is ours to remove.
+      let targetRemoved = false
       if (createdDir) {
-        await rm(targetPath, { recursive: true, force: true }).catch(() => {})
-      } else if (step === 'commit') {
-        await rm(join(targetPath, '.git'), { recursive: true, force: true }).catch(() => {})
+        targetRemoved = await rm(targetPath, { recursive: true, force: true })
+          .then(() => true)
+          .catch(() => false)
       }
+      // Why: a failed init can leave a partial .git that makes retries ambiguous.
+      const leftover = !targetRemoved ? ` ${LEFTOVER_GIT_DIR_RETRY_HINT}` : ''
       const message = error instanceof Error ? error.message : String(error)
       if (step === 'commit' && /Please tell me who you are|user\.name|user\.email/i.test(message)) {
-        return 'Git author identity is not configured. Run `git config --global user.name "Your Name"` and `git config --global user.email "you@example.com"`, then try again.'
+        return `Git author identity is not configured. Run \`git config --global user.name "Your Name"\` and \`git config --global user.email "you@example.com"\`, then try again.${leftover}`
       }
       const label =
         step === 'init' ? 'Failed to initialize git repository' : 'Failed to create initial commit'
-      return `${label}: ${message}`
+      return `${label}: ${message}${leftover}`
     }
   }
 

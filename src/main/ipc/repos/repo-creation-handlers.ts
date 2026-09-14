@@ -10,6 +10,12 @@ import { DEFAULT_REPO_BADGE_COLOR, getDefaultWorkspaceDir } from '../../../share
 import { normalizeRuntimePathForComparison } from '../../../shared/cross-platform-path'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import { getEffectiveHostSetting } from '../../../shared/host-setting-overrides'
+import {
+  alreadyARepositoryError,
+  LEFTOVER_GIT_DIR_RETRY_HINT,
+  repositoryCheckUnavailableError
+} from './repository-creation-messages'
+import { describeError, isNotADirectory, isProvenAbsent } from './proven-absence'
 import { gitExecFileAsync } from '../../git/runner'
 import { detectRepoIconAndUpstream } from '../../repo-icon-autodetect'
 import { prepareLocalWorktreeRootForRepo } from '../../worktree-root-preparation'
@@ -188,6 +194,21 @@ export function registerRepoCreationHandlers(mainWindow: BrowserWindow, store: S
       }
 
       if (targetExists) {
+        // Why: refuse an existing repository on positive evidence, before `git init` can silently
+        // reinitialize it. A `.git` FILE counts — that is how linked worktrees and submodules point.
+        try {
+          await access(join(targetPath, '.git'))
+          return { error: alreadyARepositoryError(name) }
+        } catch (err) {
+          // Why: probing `<file>/.git` yields ENOTDIR, which is a definite answer about the target
+          // — it is a file — not an indeterminate probe.
+          if (isNotADirectory(err)) {
+            return { error: `"${name}" already exists at this location and is not a folder.` }
+          }
+          if (!isProvenAbsent(err)) {
+            return { error: repositoryCheckUnavailableError(name, describeError(err)) }
+          }
+        }
         try {
           const entries = await readdir(targetPath)
           if (entries.length > 0) {
@@ -232,27 +253,32 @@ export function registerRepoCreationHandlers(mainWindow: BrowserWindow, store: S
             cwd: targetPath
           })
         } catch (err) {
-          // Only rm the dir if we made it (pre-existing folders must survive retry); otherwise strip just the .git/ that git init created.
+          // Why: only the exclusive mkdir proves we made this; `git init` is idempotent and never
+          // reports whether it created or reinitialized, so a .git here may not be ours to delete.
+          let targetRemoved = false
           if (createdDir) {
-            await rm(targetPath, { recursive: true, force: true }).catch(() => {})
-          } else if (step === 'commit') {
-            await rm(join(targetPath, '.git'), { recursive: true, force: true }).catch(() => {})
+            targetRemoved = await rm(targetPath, { recursive: true, force: true })
+              .then(() => true)
+              .catch(() => false)
           }
+          // Why: `git init` is not atomic either — a failed init can leave a partial .git — and
+          // whatever remains makes the folder non-empty, so a silent retry would hit the
+          // "not empty" guard with no clue why.
+          const leftover = !targetRemoved ? ` ${LEFTOVER_GIT_DIR_RETRY_HINT}` : ''
           const message = err instanceof Error ? err.message : String(err)
           if (
             step === 'commit' &&
             /Please tell me who you are|user\.name|user\.email/i.test(message)
           ) {
-            return {
-              error:
-                'Git author identity is not configured. Run `git config --global user.name "Your Name"` and `git config --global user.email "you@example.com"`, then try again.'
-            }
+            const identityHint =
+              'Git author identity is not configured. Run `git config --global user.name "Your Name"` and `git config --global user.email "you@example.com"`, then try again.'
+            return { error: `${identityHint}${leftover}` }
           }
           const stepLabel =
             step === 'init'
               ? 'Failed to initialize git repository'
               : 'Failed to create initial commit'
-          return { error: `${stepLabel}: ${message}` }
+          return { error: `${stepLabel}: ${message}${leftover}` }
         }
       }
 
