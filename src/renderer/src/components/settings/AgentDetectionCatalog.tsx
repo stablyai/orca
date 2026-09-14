@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { AlertTriangle, RefreshCw } from 'lucide-react'
 import type { AgentCatalogEntry } from '@/lib/agent-catalog'
 import { cn } from '@/lib/utils'
@@ -15,7 +16,8 @@ export function AgentDetectionCatalog({
   activeServerEnvironmentId,
   activeServerName,
   onRefresh,
-  getRowProps
+  getRowProps,
+  afterDetectedAgents
 }: {
   detectedAgents: AgentCatalogEntry[]
   undetectedAgents: AgentCatalogEntry[]
@@ -26,6 +28,7 @@ export function AgentDetectionCatalog({
   activeServerName: string | null
   onRefresh: () => void
   getRowProps: (agent: AgentCatalogEntry, isDetected: boolean) => AgentCatalogRowProps
+  afterDetectedAgents?: ReactNode
 }): React.JSX.Element {
   return (
     <>
@@ -95,30 +98,6 @@ export function AgentDetectionCatalog({
         </section>
       )}
 
-      {undetectedAgents.length > 0 && (
-        <section className="space-y-3">
-          <SettingsSubsectionHeader
-            title={
-              <span className="flex items-center gap-2 text-muted-foreground">
-                {translate(
-                  'auto.components.settings.AgentsPane.e8da2af684',
-                  'Available to install'
-                )}
-                <SettingsBadge tone="muted">
-                  {undetectedAgents.length}{' '}
-                  {translate('auto.components.settings.AgentsPane.024bd95089', 'agents')}
-                </SettingsBadge>
-              </span>
-            }
-          />
-          <div className="divide-y divide-border/40">
-            {undetectedAgents.map((agent) => (
-              <AgentCatalogRow key={agent.id} {...getRowProps(agent, false)} />
-            ))}
-          </div>
-        </section>
-      )}
-
       {detectionPending && !detectionFailed && (
         <div className="flex items-center justify-center rounded-md border border-dashed border-border/50 py-6 text-sm text-muted-foreground">
           {translate(
@@ -148,6 +127,32 @@ export function AgentDetectionCatalog({
             {translate('auto.components.settings.AgentsPane.retryDetection', 'Retry')}
           </Button>
         </div>
+      )}
+
+      {afterDetectedAgents}
+
+      {undetectedAgents.length > 0 && (
+        <section className="space-y-3">
+          <SettingsSubsectionHeader
+            title={
+              <span className="flex items-center gap-2 text-muted-foreground">
+                {translate(
+                  'auto.components.settings.AgentsPane.e8da2af684',
+                  'Available to install'
+                )}
+                <SettingsBadge tone="muted">
+                  {undetectedAgents.length}{' '}
+                  {translate('auto.components.settings.AgentsPane.024bd95089', 'agents')}
+                </SettingsBadge>
+              </span>
+            }
+          />
+          <div className="divide-y divide-border/40">
+            {undetectedAgents.map((agent) => (
+              <AgentCatalogRow key={agent.id} {...getRowProps(agent, false)} />
+            ))}
+          </div>
+        </section>
       )}
     </>
   )

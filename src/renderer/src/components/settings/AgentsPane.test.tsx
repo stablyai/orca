@@ -12,8 +12,8 @@ import { getAgentAwakeDescription, getAgentAwakeTitle } from './agent-awake-copy
 import { AgentAwakeSetting } from './AgentAwakeSetting'
 import { AgentRuntimeSetting } from './AgentRuntimeSetting'
 import type * as AgentRuntimeSettingModule from './AgentRuntimeSetting'
+import { AgentAvailabilityControl } from './AgentSettingsRow'
 import {
-  AgentAvailabilityControl,
   AgentPermissionsSetting,
   AgentGeneratedTabTitlesSetting,
   AgentStatusHooksSetting,
@@ -171,6 +171,14 @@ describe('AgentsPane', () => {
     expect(detectedAgentsMock.lastTarget).toEqual({ kind: 'local' })
   })
 
+  it('offers duplicate-as-custom and places custom agents below Installed', () => {
+    const markup = renderPane(getDefaultSettings('/tmp'))
+
+    expect(markup).toContain('Duplicate Claude as custom agent')
+    expect(markup.indexOf('Installed')).toBeLessThan(markup.indexOf('Custom agents'))
+    expect(markup.indexOf('Custom agents')).toBeLessThan(markup.indexOf('Available to install'))
+  })
+
   it('scopes agent detection to the active remote server', () => {
     // Repro for the "Remote Server lists local agents" bug: with an Active
     // Server selected, the Installed list must probe that server's PATH.
@@ -191,6 +199,9 @@ describe('AgentsPane', () => {
 
       expect(detectedAgentsMock.lastTarget).toEqual({ kind: 'runtime', environmentId: 'env-1' })
       expect(markup).toContain('on Coder')
+      expect(markup).toMatch(
+        /<button[^>]*disabled=""[^>]*aria-label="Duplicate Claude as custom agent"/
+      )
     } finally {
       initialState.runtimeEnvironments = priorRuntimeEnvironments
     }

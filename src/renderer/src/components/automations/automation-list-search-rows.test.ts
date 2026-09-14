@@ -66,6 +66,32 @@ describe('automation search row fields', () => {
     expect(fields.workspace).toBe('main')
   })
 
+  it('indexes a custom profile by its name while retaining the base provider id', () => {
+    const fields = fieldsFor(
+      makeAutomationListRow({
+        automation: makeAutomation({
+          agentId: 'codex',
+          customAgentProfileId: 'codex-luna'
+        })
+      }),
+      {
+        repoMap,
+        customAgentProfiles: [
+          {
+            id: 'codex-luna',
+            name: 'Codex Luna',
+            baseAgent: 'codex',
+            baseAgentExecutable: 'codex',
+            executable: 'codex',
+            args: ['--model', 'luna']
+          }
+        ]
+      }
+    )
+
+    expect(fields.agent).toBe('Codex Luna')
+  })
+
   it('keeps the unknown-project term when no repo resolves', () => {
     const fields = fieldsFor(
       makeAutomationListRow({ automation: makeAutomation({ projectId: 'missing' }) }),
