@@ -1,4 +1,5 @@
 import type { MarkdownLexerConfiguration, MarkdownTokenizer } from '@tiptap/core'
+import type { Tokens } from 'marked'
 import { OrderedList } from '@tiptap/extension-list'
 import TaskList from '@tiptap/extension-task-list'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -31,25 +32,37 @@ describe('rich markdown list tokenizers', () => {
     expect(tokenize).not.toHaveBeenCalled()
   })
 
-  it.each([
-    ['ordered', RichMarkdownOrderedList, OrderedList, '3. third\n4. fourth\n'],
-    ['task', RichMarkdownTaskList, TaskList, '- [x] done\n- [ ] todo\n']
-  ] as const)(
-    'calls the %s base tokenizer once for matching source',
-    (_name, guarded, base, source) => {
-      const tokenize = vi.spyOn(getTokenizer(base), 'tokenize')
+  it('calls the task base tokenizer once for matching source', () => {
+    const tokenize = vi.spyOn(getTokenizer(TaskList), 'tokenize')
 
-      expect(getTokenizer(guarded).tokenize(source, [], lexer)).toBeTruthy()
-      expect(tokenize).toHaveBeenCalledOnce()
-    }
-  )
+    expect(
+      getTokenizer(RichMarkdownTaskList).tokenize('- [x] done\n- [ ] todo\n', [], lexer)
+    ).toBeTruthy()
+    expect(tokenize).toHaveBeenCalledOnce()
+  })
+
+  it('tokenizes a matching ordered source without the base tokenizer', () => {
+    const tokenize = vi.spyOn(getTokenizer(OrderedList), 'tokenize')
+
+    expect(
+      getTokenizer(RichMarkdownOrderedList).tokenize('3. third\n4. fourth\n', [], lexer)
+    ).toBeTruthy()
+    expect(tokenize).not.toHaveBeenCalled()
+  })
 
   it('preserves nested ordered-list tokens', () => {
     const source = '3. parent\n   1. child\n   2. child two\n4. sibling\n'
 
-    expect(getTokenizer(RichMarkdownOrderedList).tokenize(source, [], lexer)).toEqual(
-      getTokenizer(OrderedList).tokenize(source, [], lexer)
-    )
+    const token = getTokenizer(RichMarkdownOrderedList).tokenize(source, [], lexer) as Tokens.List
+
+    expect(token.start).toBe(3)
+    expect(token.items).toHaveLength(2)
+    const [parent, sibling] = token.items
+    expect(parent.raw).toBe('3. parent')
+    expect(sibling.raw).toBe('4. sibling\n')
+    const nested = parent.tokens?.find((child) => child.type === 'list') as Tokens.List
+    expect(nested.start).toBe(1)
+    expect(nested.items.map((item) => item.raw)).toEqual(['   1. child', '   2. child two'])
   })
 
   it('preserves nested task-list tokens', () => {
