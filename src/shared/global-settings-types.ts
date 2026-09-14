@@ -402,8 +402,8 @@ export type GlobalSettings = {
   keepComputerAwakeWhileAgentsRun: boolean
   /** Optional for mixed-version compatibility; the legacy boolean maps true to Auto. */
   computerAwakeMode?: ComputerAwakeMode
-  /** Why: display sleep locks the screen-lock-gated SSH agent (e.g. 1Password's), breaking
-   *  agent git pushes; off (default) lets the display sleep while the computer stays awake. */
+  /** Why: display sleep can trigger the screen lock, which locks screen-gated SSH agents (e.g.
+   *  1Password's) and breaks agent git pushes; off (default) lets the display sleep. */
   keepDisplayAwake?: boolean
   /** macOS Option key: compose layout chars (@ German, € French) vs act as Meta/Esc for readline.
    *  'auto' (default) = layout-aware via navigator.keyboard.getLayoutMap() (US → Meta, else compose);
