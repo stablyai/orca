@@ -318,7 +318,7 @@ ConvertTo-Json -InputObject @($results) -Compress
   try {
     const output = await readOpenWithCommandOutput(
       getWindowsPowerShellExePath(),
-      ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', script],
+      ['-NoProfile', '-NonInteractive', '-Command', script],
       DESCRIPTION_LOOKUP_TIMEOUT_MS
     )
     const parsed: unknown = JSON.parse(output)

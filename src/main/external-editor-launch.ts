@@ -27,6 +27,12 @@ export type ExternalEditorExecutableLaunchSpec = {
    * `/B`. Left unset elsewhere because `start` re-parses quoted argv.
    */
   detachedGui?: boolean
+  /**
+   * Hand the argv to CreateProcess unquoted. Only for launchers such as
+   * rundll32's OpenAs_RunDLL that read their raw command-line tail and never
+   * strip the quotes Node would add around a spaced path.
+   */
+  windowsVerbatimArguments?: boolean
   spawnCmd: string
   spawnArgs: string[]
 }
@@ -250,6 +256,7 @@ function resolveExternalEditorSpawn(launchSpec: ExternalEditorLaunchSpec): {
   spawnCmd: string
   spawnArgs: string[]
   windowsHide: boolean
+  windowsVerbatimArguments?: boolean
 } {
   // Why: only shims flagged during resolution (JetBrains) take the start /B
   // detach; every other launcher keeps the waiting form so its argv survives.
@@ -257,7 +264,11 @@ function resolveExternalEditorSpawn(launchSpec: ExternalEditorLaunchSpec): {
     const spawned = getSpawnArgsForWindows(launchSpec.spawnCmd, launchSpec.spawnArgs, {
       detachedGui: launchSpec.detachedGui === true
     })
-    return { ...spawned, windowsHide: launchSpec.hideWindowsConsole }
+    return {
+      ...spawned,
+      windowsHide: launchSpec.hideWindowsConsole,
+      ...(launchSpec.windowsVerbatimArguments ? { windowsVerbatimArguments: true } : {})
+    }
   }
   return {
     spawnCmd: launchSpec.spawnCmd,
@@ -267,9 +278,15 @@ function resolveExternalEditorSpawn(launchSpec: ExternalEditorLaunchSpec): {
 }
 
 export async function launchExternalEditor(launchSpec: ExternalEditorLaunchSpec): Promise<void> {
-  const { spawnCmd, spawnArgs, windowsHide } = resolveExternalEditorSpawn(launchSpec)
+  const { spawnCmd, spawnArgs, windowsHide, windowsVerbatimArguments } =
+    resolveExternalEditorSpawn(launchSpec)
   await new Promise<void>((resolvePromise, rejectPromise) => {
-    const child = spawn(spawnCmd, spawnArgs, { detached: true, stdio: 'ignore', windowsHide })
+    const child = spawn(spawnCmd, spawnArgs, {
+      detached: true,
+      stdio: 'ignore',
+      windowsHide,
+      ...(windowsVerbatimArguments ? { windowsVerbatimArguments } : {})
+    })
     let settled = false
     function cleanup(): void {
       child.off('error', onError)

@@ -1,4 +1,3 @@
-import { spawn } from 'node:child_process'
 import { extname } from 'node:path'
 import {
   OPEN_WITH_CHOOSER_APPLICATION_ID,
@@ -74,58 +73,22 @@ export async function launchOpenWithApplication(
     return false
   }
   try {
-    await (invocation.windowsVerbatimArguments
-      ? spawnDetachedVerbatim(invocation.spawnCmd, invocation.spawnArgs)
-      : launchExternalEditor({
-          kind: 'executable',
-          // Why: windowsHide sets STARTUPINFO SW_HIDE, which Office and other
-          // Win32 apps honor for their first window — the launched app must be
-          // visible, so never hide here.
-          hideWindowsConsole: false,
-          spawnCmd: invocation.spawnCmd,
-          spawnArgs: invocation.spawnArgs
-        }))
+    // Why: windowsHide sets STARTUPINFO SW_HIDE, which Office and other Win32
+    // apps (and anything the Open With dialog launches) honor for their first
+    // window — the launched app must be visible, so never hide here.
+    await launchExternalEditor({
+      kind: 'executable',
+      hideWindowsConsole: false,
+      // Why: rundll32's OpenAs_RunDLL reads its raw tail and keeps Node's quotes,
+      // so a spawn-quoted spaced path never resolves.
+      ...(invocation.windowsVerbatimArguments ? { windowsVerbatimArguments: true } : {}),
+      spawnCmd: invocation.spawnCmd,
+      spawnArgs: invocation.spawnArgs
+    })
     return true
   } catch {
     return false
   }
-}
-
-/**
- * Spawns detached with an unquoted argument tail. rundll32's OpenAs_RunDLL takes
- * its raw command-line tail and does not strip quotes, so a spawn-quoted spaced
- * path never resolves.
- */
-function spawnDetachedVerbatim(spawnCmd: string, spawnArgs: string[]): Promise<void> {
-  return new Promise((resolvePromise, rejectPromise) => {
-    // Why: SW_HIDE from windowsHide propagates into apps launched from the
-    // Open With dialog, leaving them running but invisible.
-    const child = spawn(spawnCmd, spawnArgs, {
-      detached: true,
-      stdio: 'ignore',
-      windowsHide: false,
-      windowsVerbatimArguments: true
-    })
-    let settled = false
-    function settle(callback: () => void): void {
-      if (settled) {
-        return
-      }
-      settled = true
-      child.off('error', onError)
-      child.off('spawn', onSpawn)
-      callback()
-    }
-    function onError(error: Error): void {
-      settle(() => rejectPromise(error))
-    }
-    function onSpawn(): void {
-      child.unref()
-      settle(resolvePromise)
-    }
-    child.once('error', onError)
-    child.once('spawn', onSpawn)
-  })
 }
 
 /** Serves discovery from a per-extension cache, deduping concurrent calls and never caching a failure. */
