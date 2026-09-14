@@ -240,7 +240,10 @@ describe('DaemonPtyAdapter history recovery', () => {
         sessionIds: Iterable<string>,
         opts?: { final?: boolean; teardown?: boolean }
       ): Promise<Set<string>>
-      runExclusiveCheckpoint(operation: () => Promise<void>, options?: object): Promise<void>
+      runExclusiveCheckpoint(
+        operation: () => Promise<void>,
+        options?: { rescheduleDirty?: boolean; callerDeadlineMs?: number }
+      ): Promise<void>
     }
     const originalCheckpointSessions = internals.checkpointSessions.bind(historyAdapter)
     // Call-through spy: entering the exclusive gate is the observable "queued behind the in-flight checkpoint" moment.

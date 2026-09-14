@@ -68,7 +68,7 @@ vi.mock('../browser/browser-manager', () => ({
   }
 }))
 
-import { registerBrowserHandlers, setAgentBrowserBridgeRef } from './browser'
+import { registerBrowserHandlers, setAgentBrowserBridgeRef, type BrowserGuestArgs } from './browser'
 import {
   waitForAnyTabRegistration,
   waitForTabRegistration,
@@ -138,7 +138,7 @@ describe('registerBrowserHandlers', () => {
       registerBrowserHandlers()
       const registerHandler = handleMock.mock.calls.find(
         ([channel]) => channel === 'browser:registerGuest'
-      )?.[1] as (event: { sender: Electron.WebContents }, args: object) => boolean
+      )?.[1] as (event: { sender: Electron.WebContents }, args: BrowserGuestArgs) => boolean
 
       const result = registerHandler(
         {

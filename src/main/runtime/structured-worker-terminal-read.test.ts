@@ -166,7 +166,12 @@ describe('reading a structured worker through the terminal-read path', () => {
       getLivePtyForHandle: () => {
         throw new Error('the PTY lookup must never be reached for a structured worker')
       }
-    }) as { readTerminal: (handle: string, opts?: object) => Promise<{ tail: string[] }> }
+    }) as {
+      readTerminal: (
+        handle: string,
+        opts?: { cursor?: number; limit?: number; screen?: boolean }
+      ) => Promise<{ tail: string[] }>
+    }
     await expect(runtime.readTerminal(handle)).resolves.toMatchObject({
       tail: ['[assistant] hello'],
       source: 'stream'

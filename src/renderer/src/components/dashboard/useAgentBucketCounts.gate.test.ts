@@ -65,7 +65,7 @@ function countAllocations(run: () => void): { entries: number; maps: number } {
   const RealMap = globalThis.Map
   let entries = 0
   let maps = 0
-  Object.entries = ((target: object) => {
+  Object.entries = ((target: Record<string, unknown>) => {
     entries += 1
     return realEntries(target)
   }) as typeof Object.entries

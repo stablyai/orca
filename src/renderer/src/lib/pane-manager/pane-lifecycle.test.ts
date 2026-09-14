@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { ITerminalAddon } from '@xterm/xterm'
 import { WebglAddon } from '@xterm/addon-webgl'
 import type { ManagedPaneInternal } from './pane-manager-types'
 import {
@@ -516,7 +517,7 @@ describe('openTerminal — addon and provider wiring', () => {
       open: vi.fn(() => {
         events.push('open')
       }),
-      loadAddon: vi.fn((addon: object) => {
+      loadAddon: vi.fn((addon: ITerminalAddon) => {
         if (addon === fitAddon) {
           events.push('loadAddon:fit')
         } else if (addon === searchAddon) {

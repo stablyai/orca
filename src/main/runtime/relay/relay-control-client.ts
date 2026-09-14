@@ -269,7 +269,7 @@ export class RelayControlClient {
     this.clearConnectPromise()
   }
 
-  private sendActive(payload: object): void {
+  private sendActive(payload: Record<string, unknown>): void {
     if (!this.socket || (this.state !== 'active' && this.state !== 'draining')) {
       throw new Error('relay_control_not_active')
     }

@@ -22,6 +22,23 @@ export type DeviceCredentialInstallAuthorization =
   | { mode: 'relay-basis'; basisConnId: string }
   | { mode: 'authenticated-direct'; directAuthId: string }
 
+export type DeviceCredentialInstallInput = {
+  relayDeviceId: string
+  newResumeTokenHash: string
+  expectedCurrentHash?: string
+  authorization: DeviceCredentialInstallAuthorization
+}
+
+/** Every control-plane request this class hands to `send`. */
+type RelayControlRequestPayload =
+  | { type: 'invite-create'; reqId: string; relayDeviceId: string }
+  | { type: 'device-revoke'; reqId: string; relayDeviceId: string }
+  | ({ type: 'device-credential-install'; v: 1; reqId: string } & DeviceCredentialInstallInput)
+  | { type: 'device-credential-install-status'; v: 1; reqId: string; relayDeviceId: string }
+  | { type: 'device-resume-confirm'; v: 1; reqId: string; basisConnId: string }
+
+type SendRelayControlRequest = (payload: RelayControlRequestPayload) => void
+
 export class RelayControlRequests {
   private readonly pending = new Map<string, PendingRequest>()
 
@@ -34,7 +51,7 @@ export class RelayControlRequests {
   createInvite(
     reqId: string,
     relayDeviceId: string,
-    send: (payload: object) => void
+    send: SendRelayControlRequest
   ): Promise<RelayInviteCreatedMessage> {
     return this.request(
       reqId,
@@ -44,11 +61,7 @@ export class RelayControlRequests {
     ) as Promise<RelayInviteCreatedMessage>
   }
 
-  revokeDevice(
-    reqId: string,
-    relayDeviceId: string,
-    send: (payload: object) => void
-  ): Promise<void> {
+  revokeDevice(reqId: string, relayDeviceId: string, send: SendRelayControlRequest): Promise<void> {
     return this.request(
       reqId,
       'revoke',
@@ -59,13 +72,8 @@ export class RelayControlRequests {
 
   installCredential(
     reqId: string,
-    input: {
-      relayDeviceId: string
-      newResumeTokenHash: string
-      expectedCurrentHash?: string
-      authorization: DeviceCredentialInstallAuthorization
-    },
-    send: (payload: object) => void
+    input: DeviceCredentialInstallInput,
+    send: SendRelayControlRequest
   ): Promise<RelayDeviceCredentialInstalledMessage> {
     return this.request(
       reqId,
@@ -78,7 +86,7 @@ export class RelayControlRequests {
   credentialInstallStatus(
     reqId: string,
     relayDeviceId: string,
-    send: (payload: object) => void
+    send: SendRelayControlRequest
   ): Promise<RelayDeviceCredentialInstallStatusResultMessage> {
     return this.request(
       reqId,
@@ -91,7 +99,7 @@ export class RelayControlRequests {
   confirmResume(
     reqId: string,
     basisConnId: string,
-    send: (payload: object) => void
+    send: SendRelayControlRequest
   ): Promise<RelayDeviceResumeConfirmedMessage> {
     return this.request(
       reqId,
@@ -156,8 +164,8 @@ export class RelayControlRequests {
   private request(
     reqId: string,
     kind: PendingRequest['kind'],
-    payload: object,
-    send: (payload: object) => void
+    payload: RelayControlRequestPayload,
+    send: SendRelayControlRequest
   ): Promise<unknown> {
     if (this.pending.has(reqId)) {
       return Promise.reject(new Error('duplicate_relay_request_id'))

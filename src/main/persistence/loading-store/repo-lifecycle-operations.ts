@@ -323,7 +323,7 @@ export function hydrateRepo(owner: RepoLifecycleOperations, repo: Repo): Repo {
 }
 
 export function installRepoLifecycleOperationsContext(
-  target: object,
+  target: RepoLifecycleOperations,
   source: RepoLifecycleOperations
 ): void {
   Object.defineProperty(target, repoLifecycleOperationsContext, {

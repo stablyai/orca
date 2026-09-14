@@ -3,7 +3,9 @@ import { RichMarkdownParagraph } from './rich-markdown-paragraph'
 
 vi.mock('@tiptap/extension-paragraph', async () => {
   const actual = (await vi.importActual('@tiptap/extension-paragraph')) as {
-    Paragraph: { extend: (config: object) => { config: Record<string, unknown> } }
+    Paragraph: {
+      extend: (config: Record<string, unknown>) => { config: Record<string, unknown> }
+    }
   }
   // Simulates a Tiptap upgrade that drops `parseMarkdown` from the upstream paragraph.
   const Paragraph = actual.Paragraph.extend({})

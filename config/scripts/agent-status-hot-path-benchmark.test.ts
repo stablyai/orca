@@ -244,7 +244,10 @@ describe('agent-status hot path benchmark', () => {
       let objectAssignCalls = 0
       let objectAssignPropertyCopies = 0
       let freshnessEntryVisits = 0
-      Object.assign = ((target: object, ...sources: object[]) => {
+      Object.assign = ((
+        target: Record<string, unknown>,
+        ...sources: readonly Record<string, unknown>[]
+      ) => {
         objectAssignCalls += 1
         for (const source of sources) {
           if (source && typeof source === 'object') {
@@ -253,7 +256,7 @@ describe('agent-status hot path benchmark', () => {
         }
         return nativeObjectAssign(target, ...sources)
       }) as typeof Object.assign
-      Object.values = ((value: object) => {
+      Object.values = ((value: Record<string, unknown>) => {
         const result = nativeObjectValues(value)
         freshnessEntryVisits += result.length
         return result

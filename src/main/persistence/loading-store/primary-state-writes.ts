@@ -280,7 +280,7 @@ export function writeToDiskSync(
 }
 
 export function installPrimaryStateWriteOperationsContext(
-  target: object,
+  target: PrimaryStateWriteOperations,
   source: PrimaryStateWriteOperations
 ): void {
   Object.defineProperty(target, primaryStateWriteOperationsContext, {

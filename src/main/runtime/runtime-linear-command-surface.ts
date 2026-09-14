@@ -13,9 +13,12 @@ type LinearFacadeInstance = {
 type LinearMethodBag = Record<string, (...values: unknown[]) => unknown>
 
 const delegators = new WeakSet<object>()
-const receiverByCommands = new WeakMap<object, object>()
+const receiverByCommands = new WeakMap<LinearMethodBag, LinearMethodBag>()
 
-function collectMethodNames(instancePrototype: object, stopAt: object | null): Set<string> {
+function collectMethodNames(
+  instancePrototype: RuntimeLinearBrowseCommands,
+  stopAt: RuntimeLinearBrowseCommands | null
+): Set<string> {
   const names = new Set<string>()
   let prototype: object | null = instancePrototype
   while (prototype && prototype !== Object.prototype && prototype !== stopAt) {
@@ -31,10 +34,10 @@ function collectMethodNames(instancePrototype: object, stopAt: object | null): S
 
 // Why: the chain used to live on the facade, so a facade override (test spy) has to win for re-entrant `this` calls too.
 function overrideAwareReceiver(
-  facade: object,
-  commands: object,
+  facade: LinearFacadeInstance,
+  commands: LinearMethodBag,
   surfaceNames: ReadonlySet<string>
-): object {
+): LinearMethodBag {
   const cached = receiverByCommands.get(commands)
   if (cached) {
     return cached
@@ -54,7 +57,7 @@ function overrideAwareReceiver(
   return receiver
 }
 
-export function installRuntimeLinearCommandSurface(target: object): void {
+export function installRuntimeLinearCommandSurface(target: LinearFacadeInstance): void {
   const names = collectMethodNames(
     RuntimeLinearCommands.prototype,
     RuntimeLinearCommandBase.prototype

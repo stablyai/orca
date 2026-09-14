@@ -197,12 +197,15 @@ describe.each([
     terminal.dispose()
   })
 
+  /** The handle this suite's setTimeout stub hands back; only its identity is compared. */
+  type FakeTimerToken = Record<never, never>
+
   it('keeps newer timer slots when canceled callbacks are forced', () => {
     const { terminal, textarea } = openTerminal(TerminalType)
     const callbacks: (() => void)[] = []
-    const cleared = new Set<object>()
+    const cleared = new Set<FakeTimerToken>()
     vi.spyOn(globalThis, 'setTimeout').mockImplementation(((callback: () => void) => {
-      const token = {}
+      const token: FakeTimerToken = {}
       callbacks.push(() => {
         if (!cleared.has(token)) {
           callback()
@@ -210,7 +213,7 @@ describe.each([
       })
       return token
     }) as typeof setTimeout)
-    vi.spyOn(globalThis, 'clearTimeout').mockImplementation(((token: object) => {
+    vi.spyOn(globalThis, 'clearTimeout').mockImplementation(((token: FakeTimerToken) => {
       cleared.add(token)
     }) as typeof clearTimeout)
 

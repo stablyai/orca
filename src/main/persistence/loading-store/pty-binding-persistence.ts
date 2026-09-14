@@ -266,7 +266,7 @@ function applyPtyBinding(
 }
 
 export function installPtyBindingPersistenceOperationsContext(
-  target: object,
+  target: PtyBindingPersistenceOperations,
   source: PtyBindingPersistenceOperations
 ): void {
   Object.defineProperty(target, ptyBindingPersistenceOperationsContext, {
