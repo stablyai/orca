@@ -364,6 +364,7 @@ describe('getStatus', () => {
     const mutation = stageFile('/repo', 'src/file.ts')
     const duringMutation = getStatus('/repo', { signal: new AbortController().signal })
     await vi.waitFor(() => expect(statusCommandCalls).toBe(2))
+    await vi.waitFor(() => expect(releaseMutation).toBeTypeOf('function'))
     releaseMutation()
     await mutation
     const afterMutation = getStatus('/repo', { signal: new AbortController().signal })

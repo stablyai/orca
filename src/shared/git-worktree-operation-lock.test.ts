@@ -46,3 +46,34 @@ describe('git worktree operation lock', () => {
     expect(events).toEqual(['first:start', 'first:end', 'second:start'])
   })
 })
+
+describe('git worktree operation lock ordering', () => {
+  let root: string | undefined
+
+  afterEach(async () => {
+    if (root) {
+      await rm(root, { recursive: true, force: true })
+      root = undefined
+    }
+  })
+
+  it('admits same-tick callers in call order', async () => {
+    root = await mkdtemp(join(tmpdir(), 'git-worktree-operation-lock-order-'))
+    let flips = 0
+    for (let i = 0; i < 500; i++) {
+      const order: string[] = []
+      await Promise.all([
+        runWithGitWorktreeOperationLock(root, undefined, async () => {
+          order.push('stage')
+        }),
+        runWithGitWorktreeOperationLock(root, undefined, async () => {
+          order.push('commit')
+        })
+      ])
+      if (order[0] !== 'stage') {
+        flips += 1
+      }
+    }
+    expect(flips).toBe(0)
+  })
+})

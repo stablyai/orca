@@ -558,6 +558,7 @@ describe('getStagedCommitContext', () => {
     })
     expect(gitExecFileAsyncMock).toHaveBeenNthCalledWith(2, ['diff', '--cached', '--name-status'], {
       cwd: '/repo',
+      env: expect.objectContaining({ GIT_OPTIONAL_LOCKS: '0' }),
       maxBuffer: 10 * 1024 * 1024
     })
     expect(gitExecFileAsyncMock).toHaveBeenNthCalledWith(
@@ -565,6 +566,7 @@ describe('getStagedCommitContext', () => {
       ['diff', '--cached', '--patch', '--minimal', '--no-color', '--no-ext-diff'],
       {
         cwd: '/repo',
+        env: expect.objectContaining({ GIT_OPTIONAL_LOCKS: '0' }),
         maxBuffer: 10 * 1024 * 1024
       }
     )
