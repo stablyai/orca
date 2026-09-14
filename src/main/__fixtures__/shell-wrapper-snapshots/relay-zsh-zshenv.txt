@@ -46,9 +46,10 @@ __orca_deferred_init() {
     [[ -n "${ORCA_OPENCODE_CONFIG_DIR:-}" ]] && export OPENCODE_CONFIG_DIR="${ORCA_OPENCODE_CONFIG_DIR}"
     [[ -n "${ORCA_MIMOCODE_HOME:-}" ]] && export MIMOCODE_HOME="${ORCA_MIMOCODE_HOME}"
     [[ -n "${ORCA_REMOTE_CLI_BIN_DIR:-}" ]] && case ":$PATH:" in *:"${ORCA_REMOTE_CLI_BIN_DIR}":*) ;; *) export PATH="${ORCA_REMOTE_CLI_BIN_DIR}:$PATH" ;; esac
-    # Why: OMP does not auto-load Orca's managed status extension; wrap only
-    # interactive launch invocations so subcommands such as `omp config` keep
-    # their normal argv shape.
+    # Why: OMP does not auto-load Orca's managed status/prefill extensions;
+    # wrap only interactive launch invocations so subcommands such as `omp config`
+    # keep their normal argv shape. Prefill must be passed the same way as status
+    # or ORCA_OMP_PREFILL never reaches the editor (#11245).
     __orca_omp_should_skip_extension() {
       case "${1:-}" in
         help|--help|-h|--version|-v) return 0 ;;
@@ -70,12 +71,21 @@ __orca_deferred_init() {
     __orca_omp_invoke() {
       local __orca_use_extension="$1"
       shift
-      if [[ $__orca_use_extension -eq 1 && -n "${ORCA_OMP_STATUS_EXTENSION:-}" && -f "${ORCA_OMP_STATUS_EXTENSION}" ]]; then
+      local -a __orca_ext_args=()
+      if [[ $__orca_use_extension -eq 1 ]]; then
+        if [[ -n "${ORCA_OMP_STATUS_EXTENSION:-}" && -f "${ORCA_OMP_STATUS_EXTENSION}" ]]; then
+          __orca_ext_args+=(--extension "${ORCA_OMP_STATUS_EXTENSION}")
+        fi
+        if [[ -n "${ORCA_OMP_PREFILL_EXTENSION:-}" && -f "${ORCA_OMP_PREFILL_EXTENSION}" ]]; then
+          __orca_ext_args+=(--extension "${ORCA_OMP_PREFILL_EXTENSION}")
+        fi
+      fi
+      if [[ ${#__orca_ext_args[@]} -gt 0 ]]; then
         if [[ "${1:-}" == "launch" ]]; then
           shift
-          command omp launch --extension "${ORCA_OMP_STATUS_EXTENSION}" "$@"
+          command omp launch "${__orca_ext_args[@]}" "$@"
         else
-          command omp --extension "${ORCA_OMP_STATUS_EXTENSION}" "$@"
+          command omp "${__orca_ext_args[@]}" "$@"
         fi
       else
         command omp "$@"
@@ -102,7 +112,7 @@ __orca_deferred_init() {
         __orca_omp_invoke "$__orca_use_extension" "$@"
       fi
     }
-    if [[ -n "${ORCA_OMP_STATUS_EXTENSION:-}" ]]; then
+    if [[ -n "${ORCA_OMP_STATUS_EXTENSION:-}" || -n "${ORCA_OMP_PREFILL_EXTENSION:-}" ]]; then
       # Why the function reserved word: it suppresses alias expansion of the name, which
       # an `alias omp` otherwise rewrites at parse time, aborting the rest of the file.
       function omp { __orca_omp "$@"; }

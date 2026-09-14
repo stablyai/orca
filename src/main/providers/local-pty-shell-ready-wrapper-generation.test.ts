@@ -339,7 +339,7 @@ describePosix('local PTY shell-ready launch config', () => {
     const codexRestoreLine =
       '[[ -n "${ORCA_CODEX_HOME:-}" ]] && export CODEX_HOME="${ORCA_CODEX_HOME}"'
     const agentTeamsPathRestoreLine = '[[ -n "${ORCA_AGENT_TEAMS_SHIM_DIR:-}" ]] || return 0'
-    const ompWrapperLine = 'command omp --extension "${ORCA_OMP_STATUS_EXTENSION}" "$@"'
+    const ompWrapperLine = 'command omp "${__orca_ext_args[@]}" "$@"'
     expect(zshrc).toContain(restoreLine)
     expect(zlogin).toContain(restoreLine)
     expect(bashRc).toContain(restoreLine)
@@ -361,6 +361,9 @@ describePosix('local PTY shell-ready launch config', () => {
     expect(zshrc).toContain(ompWrapperLine)
     expect(zlogin).toContain(ompWrapperLine)
     expect(bashRc).toContain(ompWrapperLine)
+    expect(zshrc).toContain('ORCA_OMP_PREFILL_EXTENSION')
+    expect(zlogin).toContain('ORCA_OMP_PREFILL_EXTENSION')
+    expect(bashRc).toContain('ORCA_OMP_PREFILL_EXTENSION')
     for (const wrapperFile of [zshrc, zlogin, bashRc]) {
       expect(wrapperFile).not.toContain('prime-agent()')
       expect(wrapperFile).not.toContain('__orca_prime_agent')

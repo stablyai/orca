@@ -1,8 +1,10 @@
 // Why: OMP 15.x discovers built-in user extensions from ~/.omp/agent, but a
-// typed `omp` in an existing terminal still needs Orca's status extension
-// passed explicitly. Do not redirect PI_CODING_AGENT_DIR here: that variable
-// is OMP's mutable home, so config/auth/session commands must keep the user's
-// normal source of truth.
+// typed `omp` in an existing terminal still needs Orca's managed extensions
+// passed explicitly. Status + prefill both ride `--extension` so linked-work
+// drafts (ORCA_OMP_PREFILL) still land when auto-discovery is incomplete.
+// Do not redirect PI_CODING_AGENT_DIR here: that variable is OMP's mutable
+// home, so config/auth/session commands must keep the user's normal source of
+// truth.
 
 const OMP_SUBCOMMANDS = [
   '__complete',
@@ -41,9 +43,10 @@ const OMP_SUBCOMMANDS = [
 
 export function getPosixOmpShellWrapper(): string {
   const subcommands = OMP_SUBCOMMANDS.join('|')
-  return `# Why: OMP does not auto-load Orca's managed status extension; wrap only
-# interactive launch invocations so subcommands such as \`omp config\` keep
-# their normal argv shape.
+  return `# Why: OMP does not auto-load Orca's managed status/prefill extensions;
+# wrap only interactive launch invocations so subcommands such as \`omp config\`
+# keep their normal argv shape. Prefill must be passed the same way as status
+# or ORCA_OMP_PREFILL never reaches the editor (#11245).
 __orca_omp_should_skip_extension() {
   case "\${1:-}" in
     help|--help|-h|--version|-v) return 0 ;;
@@ -65,12 +68,21 @@ __orca_omp_cwd_is_usable() {
 __orca_omp_invoke() {
   local __orca_use_extension="$1"
   shift
-  if [[ $__orca_use_extension -eq 1 && -n "\${ORCA_OMP_STATUS_EXTENSION:-}" && -f "\${ORCA_OMP_STATUS_EXTENSION}" ]]; then
+  local -a __orca_ext_args=()
+  if [[ $__orca_use_extension -eq 1 ]]; then
+    if [[ -n "\${ORCA_OMP_STATUS_EXTENSION:-}" && -f "\${ORCA_OMP_STATUS_EXTENSION}" ]]; then
+      __orca_ext_args+=(--extension "\${ORCA_OMP_STATUS_EXTENSION}")
+    fi
+    if [[ -n "\${ORCA_OMP_PREFILL_EXTENSION:-}" && -f "\${ORCA_OMP_PREFILL_EXTENSION}" ]]; then
+      __orca_ext_args+=(--extension "\${ORCA_OMP_PREFILL_EXTENSION}")
+    fi
+  fi
+  if [[ \${#__orca_ext_args[@]} -gt 0 ]]; then
     if [[ "\${1:-}" == "launch" ]]; then
       shift
-      command omp launch --extension "\${ORCA_OMP_STATUS_EXTENSION}" "$@"
+      command omp launch "\${__orca_ext_args[@]}" "$@"
     else
-      command omp --extension "\${ORCA_OMP_STATUS_EXTENSION}" "$@"
+      command omp "\${__orca_ext_args[@]}" "$@"
     fi
   else
     command omp "$@"
@@ -97,7 +109,7 @@ __orca_omp() {
     __orca_omp_invoke "$__orca_use_extension" "$@"
   fi
 }
-if [[ -n "\${ORCA_OMP_STATUS_EXTENSION:-}" ]]; then
+if [[ -n "\${ORCA_OMP_STATUS_EXTENSION:-}" || -n "\${ORCA_OMP_PREFILL_EXTENSION:-}" ]]; then
   # Why the function reserved word: it suppresses alias expansion of the name, which
   # an \`alias omp\` otherwise rewrites at parse time, aborting the rest of the file.
   function omp { __orca_omp "$@"; }
@@ -107,15 +119,16 @@ fi
 
 export function getPowerShellOmpShellWrapper(): string {
   const subcommands = OMP_SUBCOMMANDS.map((value) => `'${value}'`).join(', ')
-  return `# Why: OMP does not auto-load Orca's managed status extension; wrap only
-# interactive launch invocations so subcommands such as \`omp config\` keep
-# their normal argv shape.
+  return `# Why: OMP does not auto-load Orca's managed status/prefill extensions;
+# wrap only interactive launch invocations so subcommands such as \`omp config\`
+# keep their normal argv shape. Prefill must be passed the same way as status
+# or ORCA_OMP_PREFILL never reaches the editor (#11245).
 function Global:__OrcaOmpShouldSkipExtension {
     param([string]$Name)
     $skip = @("help", "--help", "-h", "--version", "-v") + @(${subcommands})
     return $skip -contains $Name
 }
-if ($env:ORCA_OMP_STATUS_EXTENSION) {
+if ($env:ORCA_OMP_STATUS_EXTENSION -or $env:ORCA_OMP_PREFILL_EXTENSION) {
     function Global:omp {
         $orcaUseExtension = -not (__OrcaOmpShouldSkipExtension -Name ([string]($args[0])))
         $orcaStatus = 0
@@ -123,17 +136,26 @@ if ($env:ORCA_OMP_STATUS_EXTENSION) {
         if (-not $orcaCommand) {
             Write-Error "omp executable not found"
             $orcaStatus = 127
-        } elseif ($orcaUseExtension -and $env:ORCA_OMP_STATUS_EXTENSION -and
-            (Test-Path -LiteralPath $env:ORCA_OMP_STATUS_EXTENSION)) {
-            if ($args.Count -gt 0 -and $args[0] -eq "launch") {
-                $orcaLaunchArgs = @($args | Select-Object -Skip 1)
-                & $orcaCommand.Source launch --extension $env:ORCA_OMP_STATUS_EXTENSION @orcaLaunchArgs
-            } else {
-                & $orcaCommand.Source --extension $env:ORCA_OMP_STATUS_EXTENSION @args
-            }
-            $orcaStatus = $LASTEXITCODE
         } else {
-            & $orcaCommand.Source @args
+            $orcaExtArgs = @()
+            if ($orcaUseExtension) {
+                if ($env:ORCA_OMP_STATUS_EXTENSION -and (Test-Path -LiteralPath $env:ORCA_OMP_STATUS_EXTENSION)) {
+                    $orcaExtArgs += @('--extension', $env:ORCA_OMP_STATUS_EXTENSION)
+                }
+                if ($env:ORCA_OMP_PREFILL_EXTENSION -and (Test-Path -LiteralPath $env:ORCA_OMP_PREFILL_EXTENSION)) {
+                    $orcaExtArgs += @('--extension', $env:ORCA_OMP_PREFILL_EXTENSION)
+                }
+            }
+            if ($orcaExtArgs.Count -gt 0) {
+                if ($args.Count -gt 0 -and $args[0] -eq "launch") {
+                    $orcaLaunchArgs = @($args | Select-Object -Skip 1)
+                    & $orcaCommand.Source launch @orcaExtArgs @orcaLaunchArgs
+                } else {
+                    & $orcaCommand.Source @orcaExtArgs @args
+                }
+            } else {
+                & $orcaCommand.Source @args
+            }
             $orcaStatus = $LASTEXITCODE
         }
 
