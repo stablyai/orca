@@ -14,7 +14,7 @@ import {
 const BOB_SCRIPT_BASE = 'bob-hook'
 
 // Why: Bob's own BOB_HOOK_EVENTS constant — the only events its settings schema accepts.
-// It has no Notification or PermissionRequest hook, so `waiting` rides on PreToolUse.
+// It has no Notification or PermissionRequest hook; `waiting` comes from bob-approval-prompt.ts.
 export const BOB_EVENTS = [
   'SessionStart',
   'UserPromptSubmit',

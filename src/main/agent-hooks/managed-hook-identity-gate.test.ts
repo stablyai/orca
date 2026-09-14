@@ -41,6 +41,18 @@ describe('managed hook identity gate', () => {
     expect([...excluded]).toEqual([])
   })
 
+  it('keeps Bob when the Settings command override is the real Bob Shell', async () => {
+    const probe = vi.fn(async (command: string) => ({
+      stdout: command === '/opt/bobshell/bob' ? BOB_SHELL_HELP : NEOVIM_BOB_HELP,
+      stderr: ''
+    }))
+    const excluded = await agentsFailingHookInstallIdentityProbe([bobTarget], probe, {
+      agentCmdOverrides: { bob: '/opt/bobshell/bob chat --trust' }
+    })
+    expect(probe).toHaveBeenCalledWith('/opt/bobshell/bob', ['--help'])
+    expect([...excluded]).toEqual([])
+  })
+
   // Why: a probe that reaches neither pattern (empty output) must not be read as proof of identity.
   it('excludes Bob when the probe output proves nothing', async () => {
     const excluded = await agentsFailingHookInstallIdentityProbe([bobTarget], async () => ({
