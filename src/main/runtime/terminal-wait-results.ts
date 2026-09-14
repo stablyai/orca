@@ -4,7 +4,7 @@ import type {
   RuntimeTerminalWaitBlockedReason,
   RuntimeTerminalWaitCondition
 } from '../../shared/runtime-types'
-import type { TerminalExitCause } from '../../shared/terminal-exit-cause'
+import { isProvenProcessExit, type TerminalExitCause } from '../../shared/terminal-exit-cause'
 
 type ReadonlyTerminalStateRecord = {
   connected: boolean
@@ -16,7 +16,9 @@ export function getTerminalState(leaf: ReadonlyTerminalStateRecord): RuntimeTerm
   if (leaf.connected) {
     return 'running'
   }
-  if (leaf.lastExitCode !== null) {
+  // Why isProvenProcessExit and not `!== null`: a disconnect stamps the unverified sentinel
+  // (-1) into lastExitCode too, and that is contact lost, not a death certificate.
+  if (leaf.lastExitCode !== null && isProvenProcessExit(leaf.lastExitCode)) {
     return 'exited'
   }
   return 'unknown'
@@ -104,5 +106,8 @@ export function buildTerminalWait(
 }
 
 export function getPtyTerminalState(pty: ReadonlyTerminalStateRecord): RuntimeTerminalState {
-  return pty.connected ? 'running' : pty.lastExitCode !== null ? 'exited' : 'unknown'
+  if (pty.connected) {
+    return 'running'
+  }
+  return pty.lastExitCode !== null && isProvenProcessExit(pty.lastExitCode) ? 'exited' : 'unknown'
 }
