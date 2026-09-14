@@ -123,22 +123,17 @@ function visit(node: unknown, cb: (node: ReactElementLike) => void): void {
   }
 }
 
-function findSwitchRowByLabel(node: unknown, label: string): ReactElementLike | null {
+function findSwitchRowByLabel(node: unknown, label: string): ReactElementLike {
   let found: ReactElementLike | null = null
   visit(node, (entry) => {
     if (entry.props.label === label && typeof entry.props.checked === 'boolean') {
       found = entry
     }
   })
-  return found
-}
-
-function requireSwitchRowByLabel(node: unknown, label: string): ReactElementLike {
-  const row = findSwitchRowByLabel(node, label)
-  if (!row) {
+  if (!found) {
     throw new Error(`switch row "${label}" not found`)
   }
-  return row
+  return found
 }
 
 function invokeSwitchChange(row: ReactElementLike, checked: boolean): void {
@@ -149,18 +144,13 @@ function invokeSwitchChange(row: ReactElementLike, checked: boolean): void {
   onChange(checked)
 }
 
-/** getRendererAppPlatform falls back to the user agent when no preload platform API is installed. */
+/** userAgent is a prototype getter, so the own-property override just gets deleted afterwards. */
 function withUserAgent<T>(userAgent: string, run: () => T): T {
-  const original = Object.getOwnPropertyDescriptor(navigator, 'userAgent')
   Object.defineProperty(navigator, 'userAgent', { value: userAgent, configurable: true })
   try {
     return run()
   } finally {
-    if (original) {
-      Object.defineProperty(navigator, 'userAgent', original)
-    } else {
-      Reflect.deleteProperty(navigator, 'userAgent')
-    }
+    Reflect.deleteProperty(navigator, 'userAgent')
   }
 }
 
@@ -398,7 +388,7 @@ describe('AgentsPane', () => {
     const offElement = withUserAgent(macUserAgent, () =>
       AgentAwakeSetting({ settings: getDefaultSettings('/tmp'), updateSettings })
     )
-    const offRow = requireSwitchRowByLabel(offElement, displayTitle)
+    const offRow = findSwitchRowByLabel(offElement, displayTitle)
     expect(offRow.props.disabled).toBe(true)
     expect(offRow.props.checked).toBe(false)
 
@@ -408,7 +398,7 @@ describe('AgentsPane', () => {
         updateSettings
       })
     )
-    const autoRow = requireSwitchRowByLabel(autoElement, displayTitle)
+    const autoRow = findSwitchRowByLabel(autoElement, displayTitle)
     expect(autoRow.props.disabled).toBe(false)
     invokeSwitchChange(autoRow, true)
     expect(updateSettings).toHaveBeenCalledWith({ keepDisplayAwake: true })
@@ -416,7 +406,7 @@ describe('AgentsPane', () => {
     const windowsElement = withUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64)', () =>
       AgentAwakeSetting({ settings: getDefaultSettings('/tmp'), updateSettings })
     )
-    expect(findSwitchRowByLabel(windowsElement, displayTitle)).toBeNull()
+    expect(() => findSwitchRowByLabel(windowsElement, displayTitle)).toThrow()
   })
 
   it('indexes the display toggle for settings search only where it renders', () => {
