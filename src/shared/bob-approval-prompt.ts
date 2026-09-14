@@ -47,17 +47,17 @@ export function textShowsBobApprovalPrompt(text: string): boolean {
   return BOB_APPROVAL_RES.some((pattern) => pattern.test(text))
 }
 
-function textShowsBobComposer(text: string): boolean {
-  return BOB_BANNER_RE.test(text)
+const BOB_APPROVAL_GLOBAL_RES = BOB_APPROVAL_RES.map((pattern) => new RegExp(pattern.source, 'g'))
+const BOB_BANNER_GLOBAL_RES = [new RegExp(BOB_BANNER_RE.source, 'g')]
+
+function countMatches(text: string, patterns: readonly RegExp[]): number {
+  return patterns.reduce((count, pattern) => count + [...text.matchAll(pattern)].length, 0)
 }
 
-// Why: the carried tail was judged on the previous write; a match living only there is not new.
-function matchIsOnlyCarriedOver(
-  previous: string,
-  data: string,
-  shows: (text: string) => boolean
-): boolean {
-  return shows(stripTerminalControl(previous)) && !shows(stripTerminalControl(data))
+// Why counts: the carried tail was judged on the previous write, but it can still hold an old
+// match while a new one completes across the boundary; only a match reaching into this write is new.
+function hasNewMatch(previous: string, text: string, patterns: readonly RegExp[]): boolean {
+  return countMatches(text, patterns) > countMatches(stripTerminalControl(previous), patterns)
 }
 
 // Why: `bob` alone only opens the TUI on a real TTY; `bob chat` is Orca's launch command and the
@@ -101,23 +101,19 @@ export function createBobApprovalPromptDetector(args: {
         return false
       }
       const text = stripTerminalControl(frame)
-      const showsComposer = mayShowComposer && textShowsBobComposer(text)
+      const showsComposer = mayShowComposer && BOB_BANNER_RE.test(text)
       hasSeenBobUi ||= showsComposer
       if (!hasSeenBobUi) {
         return false
       }
-      if (
-        mayShowModal &&
-        textShowsBobApprovalPrompt(text) &&
-        !matchIsOnlyCarriedOver(previous, data, textShowsBobApprovalPrompt)
-      ) {
+      if (mayShowModal && hasNewMatch(previous, text, BOB_APPROVAL_GLOBAL_RES)) {
         if (armed) {
           return false
         }
         armed = true
         return true
       }
-      if (showsComposer && !matchIsOnlyCarriedOver(previous, data, textShowsBobComposer)) {
+      if (showsComposer && hasNewMatch(previous, text, BOB_BANNER_GLOBAL_RES)) {
         armed = false
       }
       return false
