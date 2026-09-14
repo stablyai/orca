@@ -3,7 +3,7 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it } from 'vitest'
-import type { PlaneConnectionStatus } from '../../../../shared/plane-types'
+import type { PlaneConnectionStatus } from '../../../shared/plane-types'
 import { useAppStore } from '@/store'
 import { usePlaneProviderConnected } from './usePlaneProviderConnected'
 
@@ -35,7 +35,7 @@ describe('usePlaneProviderConnected', () => {
     useAppStore.setState({
       planeStatus: {
         connected: true,
-        viewer: { id: 'u1', email: 'user@example.com', username: 'user', display_name: 'User' },
+        viewer: { id: 'u1', email: 'user@example.com', username: 'user', displayName: 'User' },
         instanceUrl: 'https://api.plane.so',
         authType: 'cloud',
         workspaces: [],
