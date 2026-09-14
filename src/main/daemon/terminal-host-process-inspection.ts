@@ -3,6 +3,7 @@ import { recognizeAgentProcess } from '../../shared/agent-process-recognition'
 import type { RemoteForegroundEvidence } from '../../shared/foreground-process-evidence'
 import { getCheapProcessTableSnapshot } from '../../shared/cheap-process-table-snapshot-reader'
 import { getStrictProcessTableSnapshotWithAge } from '../../shared/process-table-snapshot-reader'
+import { isProvenProcessExit } from '../../shared/terminal-exit-cause'
 import { resolveRemoteForegroundEvidence } from '../providers/agent-foreground-process'
 import { buildPaneProcessFingerprint } from '../providers/posix-pane-foreground-fingerprint'
 import type { Session } from './session'
@@ -46,18 +47,21 @@ export async function inspectTerminalHostProcess(args: {
       retiredIncarnation.expiresAt > Date.now() &&
       expectedIncarnationId === retiredIncarnation.incarnationId
     ) {
+      const observation = {
+        authorityGeneration: args.authorityGeneration,
+        observationEpoch: args.nextObservationEpoch(),
+        capturedAgeMs: 0,
+        ptyId: sessionId,
+        ptyIncarnationId: retiredIncarnation.incarnationId
+      }
+      // A tombstone's code may be UNVERIFIED_PROCESS_EXIT_CODE (contact lost, not vouched-for) —
+      // only a proven code earns a positive `exited` verdict; anything else stays unverifiable.
       return {
         foregroundProcess: null,
         hasChildProcesses: false,
-        foregroundProcessEvidence: {
-          authorityGeneration: args.authorityGeneration,
-          observationEpoch: args.nextObservationEpoch(),
-          capturedAgeMs: 0,
-          ptyId: sessionId,
-          ptyIncarnationId: retiredIncarnation.incarnationId,
-          verdict: 'exited',
-          reason: `pty_exit_${retiredIncarnation.code}`
-        }
+        foregroundProcessEvidence: isProvenProcessExit(retiredIncarnation.code)
+          ? { ...observation, verdict: 'exited', reason: `pty_exit_${retiredIncarnation.code}` }
+          : { ...observation, verdict: 'unverifiable', reason: 'pty_exit_unverified' }
       }
     }
     throw new SessionNotFoundError(sessionId)

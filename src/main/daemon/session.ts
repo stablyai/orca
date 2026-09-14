@@ -33,7 +33,7 @@ export class Session {
   private _exitCode: number | null = null
   private _disposed = false
   private subprocess: SubprocessHandle
-  private readonly onSessionExit?: (code: number) => void
+  private readonly onSessionExit?: (code: number, session: Session) => void
   private readonly output: SessionOutputPlane
   private readonly producerPause: SessionProducerPause
   private readonly shellReady: SessionShellReadyBarrier
@@ -386,7 +386,7 @@ export class Session {
     this.output.broadcastExit(code, this.incarnationId, cause)
 
     // Why: hand off to the owner's reaper (disposes emulator, drops session from host map); else dead sessions accumulate.
-    this.onSessionExit?.(code)
+    this.onSessionExit?.(code, this)
   }
 
   closeStartupQueryAuthority(): number {

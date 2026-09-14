@@ -1,4 +1,5 @@
 import type { SubprocessHandle } from './session-subprocess-handle'
+import type { Session } from './session'
 import type { TuiAgent } from '../../shared/tui-agent'
 import type { PtyStartupIngressIntent } from '../../shared/pty-startup-ingress'
 import type { PtyOwnerBackend } from '../../shared/pty-owner-backend'
@@ -20,7 +21,9 @@ export type SessionOptions = {
   wslDistro?: string
   // Fired once the session reaches a terminal state so the owner (TerminalHost) can reap it; without
   // a reaper, dead sessions and their scrollback emulators accumulate for the daemon's lifetime.
-  onExit?: (code: number) => void
+  // Carries the exiting Session itself: the pre-listener buffer can replay an exit synchronously
+  // inside the constructor, before the caller's `const session` binding exists.
+  onExit?: (code: number, session: Session) => void
   startupIngress?: PtyStartupIngressIntent
   ownerBackend?: PtyOwnerBackend
 }

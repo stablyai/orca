@@ -23,6 +23,7 @@ import { TerminalAttachCanceledError } from './daemon-errors'
 import { rejectOnAbort } from './terminal-attach-cancellation'
 import { randomUUID } from 'node:crypto'
 import { pruneRetiredPtyIncarnations } from '../../shared/retired-pty-incarnations'
+import { UNVERIFIED_PROCESS_EXIT_CODE } from '../../shared/terminal-exit-cause'
 import {
   inspectTerminalHostProcess,
   type TerminalHostProcessInspection
@@ -123,16 +124,16 @@ export class TerminalHost {
             ...(this.reportReadinessEvent
               ? { reportReadinessEvent: this.reportReadinessEvent }
               : {}),
-            onSessionExit: (sessionId, generation) => {
-              const session = this.sessions.get(sessionId)
-              if (session) {
-                pruneRetiredPtyIncarnations(this.retiredIncarnations)
-                this.retiredIncarnations.set(sessionId, {
-                  incarnationId: session.incarnationId,
-                  code: session.exitCode ?? 0,
-                  expiresAt: Date.now() + REMOTE_FOREGROUND_TOMBSTONE_RETENTION_MS
-                })
-              }
+            onSessionExit: (sessionId, generation, exitedSession) => {
+              // `exitedSession` is the exact Session that exited (threaded through onExit), not a
+              // re-lookup by id — a re-lookup can hit a successor already recreated under the same
+              // id and mint that still-running process's tombstone with a fabricated code.
+              pruneRetiredPtyIncarnations(this.retiredIncarnations)
+              this.retiredIncarnations.set(sessionId, {
+                incarnationId: exitedSession.incarnationId,
+                code: exitedSession.exitCode ?? UNVERIFIED_PROCESS_EXIT_CODE,
+                expiresAt: Date.now() + REMOTE_FOREGROUND_TOMBSTONE_RETENTION_MS
+              })
               this.agentSessionOwners.release(sessionId, generation)
               this.agentSessionGenerations.forget(sessionId, generation)
               this.reapSession(sessionId)
