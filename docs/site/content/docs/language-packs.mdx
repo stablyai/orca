@@ -73,7 +73,7 @@ pnpm scaffold:language-pack status --pack ../orca-turkish --source ./new-en.json
 pnpm scaffold:language-pack export-missing --pack ../orca-turkish --source ./new-en.json --out ./delta.json
 ```
 
-`status` shows missing and retired strings. `--fix` removes retired, protected, and oversize entries
+`status` shows missing and retired strings. If more than a fifth of the pack looks retired, `--fix` stops and asks for `--prune-all`, because that usually means `--source` points at a partial or wrong catalog. `--fix` removes retired, protected, and oversize entries
 and rewrites the catalog deterministically. It never edits translated values. Placeholder mismatches
 and structural problems are left for the author to fix by hand. `export-missing` creates the
 translation delta.

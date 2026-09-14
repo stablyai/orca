@@ -47,11 +47,20 @@ function readJson(filePath) {
   return JSON.parse(readFileSync(filePath, 'utf8'))
 }
 
-function makePack(root, catalog, source, locale = 'es') {
+function makePack(root, catalog, source, locale = 'es', manifestOverrides = {}) {
   const pack = path.join(root, 'pack')
   writeJson(path.join(root, 'en.json'), source)
   writeJson(path.join(pack, 'orca-plugin.json'), {
-    contributes: { languagePacks: [{ locale, path: `locales/${locale}.json` }] }
+    manifestVersion: 1,
+    id: 'spanish',
+    publisher: 'example',
+    name: 'Español',
+    version: '1.0.0',
+    engines: { orca: '>=1.4.0' },
+    pluginApi: 1,
+    contributes: { languagePacks: [{ locale, path: `locales/${locale}.json` }] },
+    capabilities: [],
+    ...manifestOverrides
   })
   writeJson(path.join(pack, 'locales', `${locale}.json`), catalog)
   return pack
@@ -435,6 +444,57 @@ describe('scaffold-language-pack', () => {
       )
     ).resolves.toBe(1)
     expect(readFileSync(catalogPath)).toEqual(before)
+  })
+
+  it('status fix refuses to prune most of a pack unless prune-all is passed', async () => {
+    const source = { kept: 'Kept' }
+    const pack = makePack(root, { kept: 'Guardado', a: 'A', b: 'B', c: 'C' }, source)
+    const catalogPath = path.join(pack, 'locales', 'es.json')
+    const before = readFileSync(catalogPath, 'utf8')
+    const argv = ['status', '--pack', pack, '--source', 'en.json', '--fix']
+
+    await expect(withMutedConsole(() => main(root, argv))).resolves.toBe(1)
+    expect(readFileSync(catalogPath, 'utf8')).toBe(before)
+    await expect(withMutedConsole(() => main(root, [...argv, '--prune-all']))).resolves.toBe(0)
+    expect(readJson(catalogPath)).toEqual({ kept: 'Guardado' })
+  })
+
+  it('reports and rejects changes to values the policy keeps in English', async () => {
+    const source = { docs: 'https://example.com/docs', label: 'Label' }
+    const pack = makePack(root, { docs: 'https://evil.example/docs' }, source)
+    await withMutedConsole(async ({ log }) => {
+      expect(await main(root, ['status', '--pack', pack, '--source', 'en.json'])).toBe(0)
+      expect(log).toHaveBeenCalledWith('preserved English changed: docs')
+    })
+    const incoming = path.join(root, 'incoming.json')
+    writeJson(incoming, { docs: 'https://other.example/docs', label: 'Etiqueta' })
+    await expect(
+      withMutedConsole(() =>
+        main(root, ['merge', '--pack', pack, '--source', 'en.json', '--from', incoming])
+      )
+    ).resolves.toBe(0)
+    expect(readJson(path.join(pack, 'locales', 'es.json'))).toEqual({
+      docs: 'https://evil.example/docs',
+      label: 'Etiqueta'
+    })
+  })
+
+  it('rejects a manifest the host schema would refuse', async () => {
+    const source = { label: 'Label' }
+    const cases = [
+      { version: '1.0' },
+      { engines: { orca: '^1.4.0' } },
+      { id: 'Bad Id' },
+      { pluginApi: 2 }
+    ]
+    for (const [index, overrides] of cases.entries()) {
+      const caseRoot = path.join(root, String(index))
+      mkdirSync(caseRoot)
+      const pack = makePack(caseRoot, {}, source, 'es', overrides)
+      await expect(
+        withMutedConsole(() => main(caseRoot, ['status', '--pack', pack, '--source', 'en.json']))
+      ).resolves.toBe(1)
+    }
   })
 
   it('exports a host-valid missing catalog from the real English catalog', async () => {

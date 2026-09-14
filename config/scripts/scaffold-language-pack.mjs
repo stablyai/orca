@@ -22,17 +22,18 @@ const MANIFEST_LOCALE_RE = /^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$/
 export const PERSISTED_LANGUAGE_RE =
   /^plugin:[a-z0-9]+(?:-[a-z0-9]+)*\.[a-z0-9]+(?:-[a-z0-9]+)*\/[a-z]{2,3}(?:-[a-z0-9]{2,8})*$/i
 export const ENGINE_RE = /^>=\d+\.\d+\.\d+$/
+const SEMVER_RE = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?(?:\+[0-9A-Za-z.-]+)?$/
 
 const USAGE = `Usage:
   scaffold-language-pack.mjs init --locale <tag> --publisher <slug> --id <slug> --out <dir> [options]
-  scaffold-language-pack.mjs status --pack <dir> [--locale <tag>] [--source <path>] [--check] [--fix]
+  scaffold-language-pack.mjs status --pack <dir> [--locale <tag>] [--source <path>] [--check] [--fix] [--prune-all]
   scaffold-language-pack.mjs export-missing --pack <dir> --out <file> [--locale <tag>] [--source <path>] [--overwrite]
   scaffold-language-pack.mjs merge --pack <dir> --from <file> [--locale <tag>] [--source <path>] [--overwrite]`
 
 function parseArgs(argv) {
   const [command, ...tokens] = argv
   const options = {}
-  const booleanFlags = new Set(['check', 'fix', 'overwrite'])
+  const booleanFlags = new Set(['check', 'fix', 'overwrite', 'prune-all'])
   for (let index = 0; index < tokens.length; index += 1) {
     const token = tokens[index]
     if (!token.startsWith('--')) {
@@ -193,6 +194,24 @@ async function readJson(filePath, label) {
   }
 }
 
+// Why: the zod schema in plugin-manifest.ts is not importable from plain Node, so the
+// fields the host is strict about are re-checked here before a pack is reported as valid.
+function validateManifestIdentity(manifest) {
+  if (manifest?.manifestVersion !== 1 || manifest?.pluginApi !== 1) {
+    throw new Error('orca-plugin.json must declare manifestVersion 1 and pluginApi 1')
+  }
+  if (!validId(manifest.id) || !validId(manifest.publisher)) {
+    throw new Error('orca-plugin.json id and publisher must be safe kebab-case slugs')
+  }
+  if (typeof manifest.version !== 'string' || !SEMVER_RE.test(manifest.version)) {
+    throw new Error('orca-plugin.json version must be strict semver')
+  }
+  const engines = manifest.engines?.orca
+  if (typeof engines !== 'string' || engines.length > 64 || !ENGINE_RE.test(engines)) {
+    throw new Error('orca-plugin.json engines.orca must use the >=x.y.z form')
+  }
+}
+
 function resolveContribution(manifest, requestedLocale) {
   const contributions = manifest?.contributes?.languagePacks
   if (!Array.isArray(contributions) || contributions.length === 0) {
@@ -253,6 +272,7 @@ async function containedCatalogPath(packDir, relativePath) {
 async function loadPack(root, options) {
   const packDir = path.resolve(root, requireOption(options, 'pack'))
   const manifest = (await readJson(path.join(packDir, 'orca-plugin.json'), 'manifest')).value
+  validateManifestIdentity(manifest)
   const contribution = resolveContribution(manifest, options.locale)
   const catalogPath = await containedCatalogPath(packDir, contribution.path)
   const catalogFile = await readJson(catalogPath, 'language pack')
@@ -294,6 +314,7 @@ function reportStatus(locale, analysis) {
     ['protected', analysis.protected],
     ['oversize', analysis.oversize],
     ['placeholder mismatch', analysis.placeholderMismatch],
+    ['preserved English changed', analysis.preservedEnglishDrift],
     ['catalog limit', analysis.limit]
   ]) {
     printList(label, entries)
@@ -318,6 +339,14 @@ async function statusPack(root, options) {
   )
   reportStatus(loaded.locale, analysis)
   if (options.fix) {
+    // Why: a partial or wrong --source makes every translation look retired; refuse to
+    // delete more than a fifth of the pack unless the author says so.
+    if (analysis.retired.length * 5 > analysis.packLeaves.size && !options['prune-all']) {
+      console.error(
+        `--fix would remove ${analysis.retired.length} of ${analysis.packLeaves.size} entries as retired; check --source, or pass --prune-all to confirm.`
+      )
+      return 1
+    }
     const removable = [
       ...new Set([...analysis.retired, ...analysis.protected, ...analysis.oversize])
     ]
@@ -404,7 +433,11 @@ async function mergePack(root, options) {
     } else if (!placeholdersMatch(english, value)) {
       reason = 'placeholder mismatch'
       fatal = true
-    } else if (value === english && !shouldPreserveEnglishValue(english, key)) {
+    } else if (shouldPreserveEnglishValue(english, key)) {
+      if (value !== english) {
+        reason = 'preserved English changed'
+      }
+    } else if (value === english) {
       reason = 'copied English'
     }
     if (reason) {
@@ -432,7 +465,8 @@ async function mergePack(root, options) {
     'oversize',
     'empty',
     'placeholder mismatch',
-    'copied English'
+    'copied English',
+    'preserved English changed'
   ]) {
     console.log(`Rejected ${reason}: ${rejections[reason] ?? 0}`)
   }

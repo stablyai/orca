@@ -170,6 +170,7 @@ export function analyzeCatalog(enCatalog, packCatalog, packBytes = 0) {
     protected: [...shape.protectedContainers],
     oversize: [],
     placeholderMismatch: [],
+    preservedEnglishDrift: [],
     limit: shape.findings
   }
 
@@ -183,6 +184,8 @@ export function analyzeCatalog(enCatalog, packCatalog, packBytes = 0) {
     }
     if (english === undefined) {
       result.retired.push(key)
+    } else if (value !== english && shouldPreserveEnglishValue(english, key)) {
+      result.preservedEnglishDrift.push(key)
     }
   }
   result.protected = [...new Set(result.protected)]
