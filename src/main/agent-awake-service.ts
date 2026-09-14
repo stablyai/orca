@@ -115,6 +115,9 @@ export class AgentAwakeService {
     this.macosAssertion.setKeepDisplayAwake?.(keepDisplayAwake)
     if (this.platform === 'darwin' && this.getStatus().active) {
       this.stopMacosAssertion('display-preference-change')
+      // Why: when caffeinate failed the Electron blocker is the live macOS
+      // assertion, so an active period must be re-asserted with the new type too.
+      this.stopBlocker('display-preference-change')
       this.refresh('display-preference-change')
     }
   }
@@ -208,9 +211,14 @@ export class AgentAwakeService {
       }
     }
     try {
-      // Unconditional: this path is the only assertion off macOS, where it already
-      // keeps the display awake. keepDisplayAwake exists for the caffeinate path.
-      const id = this.blocker.start('prevent-display-sleep')
+      // Off macOS this blocker is the only assertion and already keeps the display
+      // awake; on macOS it runs as the caffeinate fallback, where keepDisplayAwake
+      // owns whether display sleep is blocked.
+      const type =
+        this.platform === 'darwin' && !this.keepDisplayAwake
+          ? 'prevent-app-suspension'
+          : 'prevent-display-sleep'
+      const id = this.blocker.start(type)
       this.blockerId = id
       this.reconcileBlocker('post-start')
     } catch (err) {

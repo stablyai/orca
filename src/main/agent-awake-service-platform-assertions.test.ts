@@ -108,11 +108,32 @@ describe('AgentAwakeService platform assertions', () => {
     service.setStatuses([workingStatus()])
     service.setEnabled(false)
 
-    expect(blocker.start).toHaveBeenCalledWith('prevent-display-sleep')
+    // The fallback honors keepDisplayAwake (unset): caffeinate owns display sleep on macOS.
+    expect(blocker.start).toHaveBeenCalledWith('prevent-app-suspension')
     expect(blocker.stop).toHaveBeenCalledWith(1)
     expect(macosAssertion.stop).toHaveBeenCalled()
     expect(linuxAssertion.start).toHaveBeenCalledTimes(1)
     expect(linuxAssertion.stop).toHaveBeenCalled()
+  })
+
+  it('restarts a live macOS fallback blocker with the display type on toggle', () => {
+    const blocker = createBlocker()
+    const macosAssertion = createPlatformAssertion()
+    macosAssertion.start.mockImplementation(() => {
+      throw new Error('caffeinate failed')
+    })
+    macosAssertion.dispose = vi.fn()
+    const service = createService(blocker, macosAssertion, createPlatformAssertion(), 'darwin')
+
+    service.setEnabled(true)
+    service.setStatuses([workingStatus()])
+    expect(blocker.start).toHaveBeenLastCalledWith('prevent-app-suspension')
+
+    service.setKeepDisplayAwake(true)
+
+    expect(macosAssertion.setKeepDisplayAwake).toHaveBeenCalledWith(true)
+    expect(blocker.stop).toHaveBeenCalledWith(1)
+    expect(blocker.start).toHaveBeenLastCalledWith('prevent-display-sleep')
   })
 
   it('drops the display-blocking fallback after caffeinate recovers', () => {
@@ -123,8 +144,9 @@ describe('AgentAwakeService platform assertions', () => {
 
     service.setEnabled(true)
     service.setStatuses([workingStatus()])
-    expect(blocker.start).toHaveBeenCalledWith('prevent-display-sleep')
+    expect(blocker.start).toHaveBeenCalledWith('prevent-app-suspension')
 
+    service.setKeepDisplayAwake(true)
     service.setStatuses([{ ...workingStatus(), receivedAt: 1_001 }])
     expect(blocker.stop).toHaveBeenCalledWith(1)
   })
