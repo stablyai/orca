@@ -169,6 +169,46 @@ describe('parseWorkspaceSession', () => {
     }
   })
 
+  it('preserves only literal host-runtime authority on a terminal tab', () => {
+    const session = (forceHostRuntime: unknown) => ({
+      activeRepoId: null,
+      activeWorktreeId: null,
+      activeTabId: null,
+      tabsByWorktree: {
+        wt: [
+          {
+            id: 'tab1',
+            ptyId: null,
+            worktreeId: 'wt',
+            title: 'cmd',
+            customTitle: null,
+            color: null,
+            sortOrder: 0,
+            createdAt: 1,
+            shellOverride: 'cmd.exe',
+            forceHostRuntime
+          }
+        ]
+      },
+      terminalLayoutsByTabId: {}
+    })
+
+    const preserved = parseWorkspaceSession(session(true))
+    expect(preserved.ok).toBe(true)
+    if (preserved.ok) {
+      expect(preserved.value.tabsByWorktree.wt[0].forceHostRuntime).toBe(true)
+      expect(preserved.value.tabsByWorktree.wt[0].shellOverride).toBe('cmd.exe')
+    }
+
+    for (const malformed of [false, 'true', 1, {}]) {
+      const parsed = parseWorkspaceSession(session(malformed))
+      expect(parsed.ok).toBe(true)
+      if (parsed.ok) {
+        expect(parsed.value.tabsByWorktree.wt[0].forceHostRuntime).toBeUndefined()
+      }
+    }
+  })
+
   it('drops an unknown launchAgent without failing the whole session', () => {
     const result = parseWorkspaceSession({
       activeRepoId: null,

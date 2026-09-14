@@ -344,6 +344,9 @@ describe('connectPanePty', () => {
   async function runWindowsColdRestoreResume(args: {
     terminalWindowsShell: string
     tabShellOverride?: string
+    worktreePath?: string
+    cwd?: string
+    forceHostRuntime?: boolean
   }): Promise<string | undefined> {
     const restoreNavigator = temporarilySetNavigatorUserAgent(
       'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'
@@ -390,7 +393,8 @@ describe('connectPanePty', () => {
             {
               id: 'tab-1',
               ptyId: 'restored-session',
-              ...(args.tabShellOverride ? { shellOverride: args.tabShellOverride } : {})
+              ...(args.tabShellOverride ? { shellOverride: args.tabShellOverride } : {}),
+              ...(args.forceHostRuntime ? { forceHostRuntime: true } : {})
             }
           ]
         },
@@ -398,6 +402,15 @@ describe('connectPanePty', () => {
           ...mockStoreState.settings,
           agentCmdOverrides: {},
           terminalWindowsShell: args.terminalWindowsShell
+        },
+        worktreesByRepo: {
+          repo1: [
+            {
+              id: 'wt-1',
+              repoId: 'repo1',
+              path: args.worktreePath ?? 'C:\\Users\\neil\\orca\\workspaces\\orca\\feature'
+            }
+          ]
         },
         sleepingAgentSessionsByPaneKey: {
           [paneKey]: {
@@ -415,6 +428,7 @@ describe('connectPanePty', () => {
         }
       } as StoreState
       const deps = createDeps({
+        cwd: args.cwd ?? 'C:\\Users\\neil\\orca\\workspaces\\orca\\feature',
         restoredLeafId: LEAF_2,
         restoredPtyIdByLeafId: { [LEAF_2]: 'restored-session' }
       })
@@ -449,6 +463,38 @@ describe('connectPanePty', () => {
         tabShellOverride: 'cmd.exe'
       })
     ).resolves.toBe('codex "--dangerously-bypass-approvals-and-sandbox" "resume" "codex-session-1"')
+  })
+
+  it('uses the native spawn cwd when the catalog still points at WSL', async () => {
+    await expect(
+      runWindowsColdRestoreResume({
+        terminalWindowsShell: 'cmd.exe',
+        worktreePath: '\\\\wsl.localhost\\Ubuntu\\home\\neil\\repo',
+        cwd: 'C:\\Users\\neil\\orca\\workspaces\\orca\\feature',
+        forceHostRuntime: true
+      })
+    ).resolves.toBe('codex "--dangerously-bypass-approvals-and-sandbox" "resume" "codex-session-1"')
+    expect(createdTransportOptions.at(-1)).toMatchObject({
+      cwd: 'C:\\Users\\neil\\orca\\workspaces\\orca\\feature',
+      forceHostRuntime: true
+    })
+    expect(createdTransportOptions.at(-1)).not.toHaveProperty('cwdFallback')
+  })
+
+  it('keeps a saved cmd host tab when the global shell and catalog point at WSL', async () => {
+    await expect(
+      runWindowsColdRestoreResume({
+        terminalWindowsShell: 'wsl.exe',
+        tabShellOverride: 'cmd.exe',
+        worktreePath: '\\\\wsl.localhost\\Ubuntu\\home\\neil\\repo',
+        cwd: 'C:\\Users\\neil\\orca\\workspaces\\orca\\feature',
+        forceHostRuntime: true
+      })
+    ).resolves.toBe('codex "--dangerously-bypass-approvals-and-sandbox" "resume" "codex-session-1"')
+    expect(createdTransportOptions.at(-1)).toMatchObject({
+      forceHostRuntime: true,
+      shellOverride: 'cmd.exe'
+    })
   })
 
   it('keeps PowerShell quoting for a cold-restore resume on a PowerShell Windows tab', async () => {

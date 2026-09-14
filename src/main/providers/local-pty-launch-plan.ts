@@ -1,5 +1,6 @@
 import { win32 as pathWin32 } from 'node:path'
 import { recognizeAgentProcessFromCommandLine } from '../../shared/agent-process-recognition'
+import { isWslShellName } from '../../shared/local-windows-terminal-runtime'
 import { WINDOWS_GIT_BASH_SHELL } from '../../shared/windows-terminal-shell'
 import { resolveWindowsGitBashShellPath } from '../git-bash'
 import { getDefaultWslDistro, parseWslPath } from '../wsl'
@@ -108,13 +109,17 @@ function createWindowsLocalPtyLaunchPlan(
   seed: LocalPtyLaunchSeed,
   getOptions: () => LocalPtyProviderOptions
 ): LocalPtyLaunchPlan | DeferredLocalPtyLaunchPlan {
-  const { args, cwd, defaultCwd, worktreeWslContext } = seed
+  const { args, cwd, defaultCwd } = seed
   // Why: shellOverride opens one tab in a non-default shell without changing the user's setting; it wins over the setting.
   const requestedShellFamily =
     args.shellOverride ||
     getOptions().getWindowsShell?.() ||
     process.env.COMSPEC ||
     'powershell.exe'
+  const nativeCwdSelectsHostShell =
+    args.forceHostRuntime === true && seed.wslInfo === null && !isWslShellName(requestedShellFamily)
+  const worktreeWslContext = nativeCwdSelectsHostShell ? undefined : seed.worktreeWslContext
+  seed.worktreeWslContext = worktreeWslContext
   const shellFamily = worktreeWslContext ? 'wsl.exe' : requestedShellFamily
   if (!seed.launchWslContext && pathWin32.basename(shellFamily).toLowerCase() === 'wsl.exe') {
     seed.launchWslContext = getWslContextFromPreferredDistro(getDefaultWslDistro())

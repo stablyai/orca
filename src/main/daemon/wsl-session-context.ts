@@ -30,6 +30,7 @@ export function resolveWslSessionContext(args: {
   sessionId?: string
   shellOverride?: string
   terminalWindowsWslDistro?: string | null
+  forceHostRuntime?: boolean
 }): WslSessionContext | undefined {
   if (process.platform !== 'win32') {
     return undefined
@@ -37,6 +38,9 @@ export function resolveWslSessionContext(args: {
   const cwdDistro = args.cwd ? parseWslUncPath(args.cwd)?.distro : undefined
   if (cwdDistro) {
     return { distro: cwdDistro, treatPosixCwdAsWsl: true }
+  }
+  if (args.forceHostRuntime === true && !isWslShellName(args.shellOverride ?? '')) {
+    return undefined
   }
   return (
     (args.sessionId ? getWslContextFromSessionId(args.sessionId) : undefined) ??

@@ -24,6 +24,8 @@ export type CreateOrAttachOptions = {
   attachOnly?: boolean
   /** Explicit shell the renderer asked for, forwarded to the subprocess. */
   shellOverride?: string
+  /** Current pane explicitly selected the local host instead of its project runtime. */
+  forceHostRuntime?: boolean
   terminalWindowsWslDistro?: string | null
   terminalWindowsPowerShellImplementation?: 'auto' | 'powershell.exe' | 'pwsh.exe'
   shellReadySupported?: boolean
