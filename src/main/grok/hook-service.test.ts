@@ -29,7 +29,10 @@ vi.mock('os', async () => {
 
 import { getGrokToolEventMatcherForTests, GrokHookService } from './hook-service'
 import { buildWindowsGrokHookScript } from './windows-grok-hook-script'
-import { POSIX_HOOK_JSON_STDIN_READER } from '../agent-hooks/hook-stdin-contract'
+import {
+  POSIX_HOOK_JSON_STDIN_PRELUDE,
+  POSIX_HOOK_JSON_STDIN_READER
+} from '../agent-hooks/hook-stdin-contract'
 
 const GROK_SCRIPT_FILE_NAME = process.platform === 'win32' ? 'grok-hook.cmd' : 'grok-hook.sh'
 const WINDOWS_POWERSHELL_LAUNCHER =
@@ -298,6 +301,14 @@ describe('GrokHookService', () => {
     } else {
       // Why: payload is piped to curl via stdin (`payload@-`) so it never lands
       // on the curl command line (EDR oversized-command-line false positive).
+      // Why the ordering: the reader chain dereferences the prelude's variable, so a
+      // prelude emitted after the capture would silently run `python -c ""` and
+      // hand back an empty payload.
+      const prelude = POSIX_HOOK_JSON_STDIN_PRELUDE.join('\n')
+      expect(script).toContain(prelude)
+      expect(script.indexOf(prelude)).toBeLessThan(
+        script.indexOf(`payload=$(${POSIX_HOOK_JSON_STDIN_READER})`)
+      )
       expect(script).toContain(`payload=$(${POSIX_HOOK_JSON_STDIN_READER})`)
       expect(script).toContain('printf \'%s\' "$payload" | curl')
       expect(script).toContain('--data-urlencode "payload@-"')
