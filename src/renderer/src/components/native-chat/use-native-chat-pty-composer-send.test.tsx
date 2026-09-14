@@ -95,6 +95,23 @@ describe('useNativeChatPtyComposerSend submit gesture wiring', () => {
     )
   })
 
+  it('carries the resolved submit gesture into a multi-attachment send with every path', () => {
+    mocks.resolveComposerSubmitBytes.mockReturnValue('\x1b\r')
+    const { result } = renderHook(() =>
+      useNativeChatPtyComposerSend(
+        composerArgs({ imageAttachments: [{ path: '/tmp/a.png' }, { path: '/tmp/b.png' }] })
+      )
+    )
+    act(() => result.current())
+    expect(mocks.sendNativeChatMessageWithImageAttachments).toHaveBeenCalledWith(
+      {},
+      'pty-1',
+      'hello',
+      ['/tmp/a.png', '/tmp/b.png'],
+      expect.objectContaining({ submitBytes: '\x1b\r' })
+    )
+  })
+
   it('carries the resolved submit gesture into a text send', () => {
     mocks.resolveComposerSubmitBytes.mockReturnValue('\x1b\r')
     const { result } = renderHook(() => useNativeChatPtyComposerSend(composerArgs()))

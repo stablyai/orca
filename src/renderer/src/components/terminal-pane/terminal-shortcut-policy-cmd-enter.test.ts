@@ -44,4 +44,9 @@ describe('resolveTerminalShortcutAction Cmd+Enter', () => {
       resolveTerminalShortcutAction(event({ key: 'Enter', code: 'Enter', metaKey: true }), false)
     ).toBeNull()
   })
+
+  it('leaves a plain Enter untouched so xterm writes the default CR (both platforms)', () => {
+    expect(resolveTerminalShortcutAction(event({ key: 'Enter', code: 'Enter' }), true)).toBeNull()
+    expect(resolveTerminalShortcutAction(event({ key: 'Enter', code: 'Enter' }), false)).toBeNull()
+  })
 })
