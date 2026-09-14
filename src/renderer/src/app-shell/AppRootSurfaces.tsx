@@ -71,6 +71,11 @@ const SetupGuideTelemetryObserver = lazy(() =>
     default: module.SetupGuideTelemetryObserver
   }))
 )
+const FloatingFileViewers = lazy(() =>
+  import('../components/floating-file-viewer/FloatingFileViewers').then((module) => ({
+    default: module.FloatingFileViewers
+  }))
+)
 const FloatingTerminalPanel = lazy(() =>
   import('../components/floating-terminal/FloatingTerminalPanel').then((module) => ({
     default: module.FloatingTerminalPanel
@@ -147,6 +152,11 @@ export function AppRootSurfaces(props: {
 
   return (
     <>
+      {persistedUIReady ? (
+        <Suspense fallback={null}>
+          <FloatingFileViewers />
+        </Suspense>
+      ) : null}
       {floatingWorkspace.shouldMountPanel ? (
         <Suspense fallback={null}>
           <OverlayBoundary

@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef } from 'react'
+import { closeFocusedFileViewer } from '@/components/floating-file-viewer/close-focused-file-viewer'
 import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import { canShowRightSidebarForView } from '@/lib/right-sidebar-visibility'
@@ -161,6 +162,10 @@ export function useGlobalKeybindings(args: {
         }
       }
 
+      if (matchShortcut('tab.close') && closeFocusedFileViewer()) {
+        input.preventDefault()
+        return
+      }
       // An empty floating workspace has no tab to close, so Cmd/Ctrl+W hides the overlay before other surfaces act.
       if (
         keybindingMatchesAction('tab.close', input, shortcutPlatform, keybindings, {

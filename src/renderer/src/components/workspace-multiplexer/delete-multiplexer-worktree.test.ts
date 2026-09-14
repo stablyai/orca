@@ -68,3 +68,53 @@ it('does not delete missing or primary worktrees', () => {
   deleteMultiplexerWorktree(slot)
   expect(mocks.remove).not.toHaveBeenCalled()
 })
+
+it.each(['slot', 'b', 'c'])(
+  'preserves surviving split order and ratios when deleting pane %s',
+  (deletedId) => {
+    const leaf = (groupId: string) => ({ type: 'leaf' as const, groupId })
+    const nested = {
+      type: 'split' as const,
+      direction: 'vertical' as const,
+      ratio: 0.3,
+      first: leaf('c'),
+      second: leaf('b')
+    }
+    const tree = {
+      type: 'split' as const,
+      direction: 'horizontal' as const,
+      ratio: 0.65,
+      first: leaf('slot'),
+      second: nested
+    }
+    const layout = normalizeWorkspaceMultiplexerState({
+      slots: ['slot', 'b', 'c'].map((id) => ({ ...slot, id, worktreeId: id })),
+      panes: ['slot', 'b', 'c'].map((id) => ({ id, activeSlotId: id, slotOrder: [id] })),
+      layout: tree
+    })
+    mocks.getState.mockReturnValue({
+      workspaceMultiplexer: {
+        ...layout,
+        activeLayoutId: 'one',
+        savedLayouts: [
+          { id: 'one', name: 'One', layout },
+          { id: 'two', name: 'Two', layout }
+        ]
+      },
+      setWorkspaceMultiplexer: mocks.save
+    })
+    mocks.lookup.mockReturnValue({ id: deletedId, instanceId: 'instance', isMainWorktree: false })
+    deleteMultiplexerWorktree(layout.slots.find((candidate) => candidate.id === deletedId)!)
+    mocks.remove.mock.calls[0]![1].onDeleted([{ id: deletedId, executionHostId: 'ssh:dev' }])
+    const saved = normalizeWorkspaceMultiplexerState(mocks.save.mock.calls[0]![0])
+    const expected =
+      deletedId === 'slot'
+        ? nested
+        : {
+            ...tree,
+            second: leaf(deletedId === 'b' ? 'c' : 'b')
+          }
+    expect(saved.layout).toEqual(expected)
+    expect(saved.savedLayouts!.map((item) => item.layout.layout)).toEqual([expected, expected])
+  }
+)

@@ -8,15 +8,26 @@ import { useAppStore } from '../store'
 import { hasCustomTitleBar } from './app-window-chrome'
 import type { AppChromeLayout } from './use-app-chrome-layout'
 
-export function RightSidebarToggle(): React.JSX.Element {
+export function RightSidebarToggle({
+  showFilesOnOpen = false
+}: { showFilesOnOpen?: boolean } = {}): React.JSX.Element {
   const toggleRightSidebar = useAppStore((s) => s.toggleRightSidebar)
+  const rightSidebarOpen = useAppStore((s) => s.rightSidebarOpen)
+  const showRightSidebarFiles = useAppStore((s) => s.showRightSidebarFiles)
   const rightSidebarShortcutLabel = useShortcutLabel('sidebar.right.toggle')
   return (
     <Tooltip>
       <TooltipTrigger asChild>
         <button
           className="sidebar-toggle mr-2"
-          onClick={toggleRightSidebar}
+          onClick={() => {
+            if (showFilesOnOpen && !rightSidebarOpen) {
+              showRightSidebarFiles()
+            } else {
+              toggleRightSidebar()
+            }
+          }}
+          aria-expanded={rightSidebarOpen}
           aria-label={translate('auto.App.9e0b441a91', 'Toggle right sidebar')}
         >
           <PanelRight size={16} />
@@ -72,7 +83,11 @@ export function TitlebarMainStrip({ layout }: { layout: AppChromeLayout }): Reac
         </Tooltip>
       )}
       {/* Why: the open right sidebar's header renders its own close button, so hide this duplicate. */}
-      {layout.showRightSidebarControls && !layout.rightSidebarOpen ? <RightSidebarToggle /> : null}
+      {layout.showRightSidebarControls &&
+      !layout.rightSidebarOpen &&
+      layout.activeView !== 'multiplexer' ? (
+        <RightSidebarToggle />
+      ) : null}
       {/* Why: reserve space so the Windows/Linux window-controls overlay doesn't obscure content. */}
       {hasCustomTitleBar && <div className="window-controls-titlebar-spacer" />}
     </>

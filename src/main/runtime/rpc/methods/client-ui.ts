@@ -1,4 +1,7 @@
 import { omitPairingLocalUiFields } from '../../../../shared/pairing-local-ui-fields'
+import { z } from 'zod'
+import { normalizeWorkspaceMultiplexerState } from '../../../../shared/workspace-multiplexer-types'
+import { removeWorkspaceMultiplexerSlot } from '../../../../shared/workspace-multiplexer-remove'
 import type { PersistedUIState } from '../../../../shared/persisted-ui-state-types'
 import { defineMethod, type RpcMethod } from '../core'
 import { PRBotAuthorOverrideUpdate, SettingsUpdate } from './client-settings-schemas'
@@ -9,6 +12,25 @@ import { FeatureInteractionIdParam, UiUpdate } from './client-ui-schemas'
 import { TerminalQuickCommandsUpdate } from './terminal-quick-command-rpc-schema'
 
 export const CLIENT_UI_METHODS: RpcMethod[] = [
+  defineMethod({
+    name: 'multiplexer.list',
+    params: null,
+    handler: (_params, { runtime }) => ({
+      multiplexer: normalizeWorkspaceMultiplexerState(runtime.getUIState().workspaceMultiplexer)
+    })
+  }),
+  defineMethod({
+    name: 'multiplexer.remove',
+    params: z.object({ slotId: z.string().min(1) }).strict(),
+    handler: ({ slotId }, { runtime }) => {
+      const current = normalizeWorkspaceMultiplexerState(runtime.getUIState().workspaceMultiplexer)
+      const next = removeWorkspaceMultiplexerSlot(current, slotId)
+      if (next !== current) {
+        runtime.updateUIState({ workspaceMultiplexer: next })
+      }
+      return { slotId, removed: next !== current }
+    }
+  }),
   defineMethod({
     name: 'settings.get',
     params: null,

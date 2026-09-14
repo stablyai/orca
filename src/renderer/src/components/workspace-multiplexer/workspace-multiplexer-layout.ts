@@ -7,6 +7,7 @@ import type {
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import type { TabSplitDirection } from '@/store/slices/tabs'
 import { buildSplitNode, removeLeaf, replaceLeaf } from '@/store/slices/tabs/tabs-layout'
+export { removeWorkspaceMultiplexerSlot } from '../../../../shared/workspace-multiplexer-remove'
 
 export function insertWorkspaceMultiplexerSlot(
   multiplexer: WorkspaceMultiplexerState,
@@ -95,40 +96,6 @@ export function activateWorkspaceMultiplexerSlot(
     panes: multiplexer.panes.map((candidate) =>
       candidate.id === paneId ? { ...candidate, activeSlotId: slotId } : candidate
     )
-  }
-}
-
-export function removeWorkspaceMultiplexerSlot(
-  multiplexer: WorkspaceMultiplexerState,
-  slotId: string
-): WorkspaceMultiplexerState {
-  const pane = findWorkspaceMultiplexerPaneForSlot(multiplexer, slotId)
-  if (!pane) {
-    return multiplexer
-  }
-  const removedIndex = pane.slotOrder.indexOf(slotId)
-  const slotOrder = pane.slotOrder.filter((candidate) => candidate !== slotId)
-  const panes = slotOrder.length
-    ? multiplexer.panes.map((candidate) =>
-        candidate.id === pane.id
-          ? {
-              ...candidate,
-              slotOrder,
-              activeSlotId:
-                candidate.activeSlotId === slotId
-                  ? slotOrder[Math.min(removedIndex, slotOrder.length - 1)]!
-                  : candidate.activeSlotId
-            }
-          : candidate
-      )
-    : multiplexer.panes.filter((candidate) => candidate.id !== pane.id)
-  return {
-    slots: multiplexer.slots.filter((candidate) => candidate.id !== slotId),
-    panes,
-    layout:
-      slotOrder.length || !multiplexer.layout
-        ? multiplexer.layout
-        : removeLeaf(multiplexer.layout, pane.id)
   }
 }
 

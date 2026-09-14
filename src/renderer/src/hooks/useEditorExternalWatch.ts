@@ -1,4 +1,6 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
+import { useFloatingFileViewers } from '@/components/floating-file-viewer/floating-file-viewer-state'
+import { requireMatchingFileExplorerOperationRoute } from '@/components/right-sidebar/file-explorer-operation-owner'
 import { useAppStore } from '@/store'
 import { subscribeRuntimeFileChanges } from '@/runtime/runtime-file-client'
 import { normalizeRuntimePathForComparison } from '../../../shared/cross-platform-path'
@@ -28,7 +30,43 @@ function warnExternalWatchFailure(target: EditorExternalWatchTarget, err: unknow
 
 /** Keeps editor filesystem subscriptions alive beyond any individual editor surface. */
 export function useEditorExternalWatch(): void {
-  const { targets, targetsKey } = useAppStore(selectEditorExternalWatchTargets)
+  const base = useAppStore(selectEditorExternalWatchTargets)
+  const viewers = useFloatingFileViewers((state) => state.viewers)
+  const targets = useMemo(() => {
+    const merged = new Map(
+      base.targets.map((target) => [getEditorExternalWatchTargetKey(target), target])
+    )
+    for (const viewer of viewers) {
+      // Why: one watcher owner per renderer prevents closing a viewer from unwatching its Explorer or editor siblings.
+      if (viewer.owner.kind === 'runtime') {
+        continue
+      }
+      try {
+        const route = requireMatchingFileExplorerOperationRoute(viewer.worktreeId, viewer.owner)
+        const target: EditorExternalWatchTarget = {
+          worktreeId: viewer.worktreeId,
+          worktreePath: viewer.worktreePath,
+          connectionId: route.connectionId,
+          runtimeEnvironmentId: null
+        }
+        if (
+          [...merged.values()].some(
+            (existing) =>
+              existing.worktreePath === target.worktreePath &&
+              existing.connectionId === target.connectionId &&
+              existing.runtimeEnvironmentId === null
+          )
+        ) {
+          continue
+        }
+        merged.set(getEditorExternalWatchTargetKey(target), target)
+      } catch {
+        /* Ownership is rechecked after workspace hydration. */
+      }
+    }
+    return [...merged.values()]
+  }, [base, viewers])
+  const targetsKey = targets.map(getEditorExternalWatchTargetKey).join('\n')
   const targetsRef = useRef<EditorExternalWatchTarget[]>([])
   const latestTargetsRef = useRef<EditorExternalWatchTarget[]>(targets)
   latestTargetsRef.current = targets

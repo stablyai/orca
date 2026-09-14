@@ -1,4 +1,5 @@
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
+import { closeFocusedFileViewer } from '@/components/floating-file-viewer/close-focused-file-viewer'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import {
   createWebRuntimeSessionTerminal,
@@ -88,6 +89,9 @@ export function registerTabLifecycleIpcBridge(unsubs: (() => void)[]): void {
 
   unsubs.push(
     window.api.ui.onCloseActiveTab((payload) => {
+      if (!payload?.sourceId && closeFocusedFileViewer()) {
+        return
+      }
       // Why: the empty-panel toggle is the ambient fallback only. A guest-originated close names a
       // main-workspace target, so an open-but-empty floating panel must not swallow it.
       if (!payload?.sourceId && isEmptyFloatingWorkspacePanelVisible()) {

@@ -50,7 +50,7 @@ export function FileExplorerToolbar({
     <div className="flex h-8 min-h-8 items-center gap-2 border-b border-border px-2">
       <span
         className="min-w-0 flex-1 truncate text-xs font-medium text-foreground"
-        title={repoName}
+        title={`${repoName}\n${worktreePath}`}
       >
         {repoName}
       </span>

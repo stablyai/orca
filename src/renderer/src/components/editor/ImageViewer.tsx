@@ -29,6 +29,8 @@ type ImageViewerProps = {
   filePath: string
   mimeType?: string
   layout?: 'fill' | 'intrinsic'
+  preserveZoomOnUpdate?: boolean
+  disablePopup?: boolean
   // Why: absent means "no PDF scroll memory" — diff and conflict-review callers
   // mount several viewers on one path, so they deliberately pass nothing.
   scrollCacheKey?: string | null
@@ -39,6 +41,8 @@ export default function ImageViewer({
   filePath,
   mimeType = FALLBACK_IMAGE_MIME_TYPE,
   layout = 'fill',
+  preserveZoomOnUpdate = false,
+  disablePopup = false,
   scrollCacheKey = null
 }: ImageViewerProps): JSX.Element {
   const [isPopupOpen, setIsPopupOpen] = useState(false)
@@ -57,9 +61,11 @@ export default function ImageViewer({
   const [lastImageStateKey, setLastImageStateKey] = useState(imageStateKey)
   if (lastImageStateKey !== imageStateKey) {
     setLastImageStateKey(imageStateKey)
-    setInlineZoom(1)
-    setPopupZoom(1)
-    setImageDimensions(null)
+    if (!preserveZoomOnUpdate) {
+      setInlineZoom(1)
+      setPopupZoom(1)
+      setImageDimensions(null)
+    }
   }
   const isPdf = mimeType === 'application/pdf'
   const isIntrinsicLayout = layout === 'intrinsic'
@@ -258,13 +264,18 @@ export default function ImageViewer({
         <div
           ref={setInlineSurfaceRef}
           className={cn(
-            'cursor-pointer bg-muted/20',
+            'bg-muted/20',
+            !disablePopup && 'cursor-pointer',
             isIntrinsicLayout
               ? 'flex justify-center overflow-visible p-4'
               : 'flex-1 overflow-auto scrollbar-editor'
           )}
-          onClick={openPopup}
-          title={translate('auto.components.editor.ImageViewer.77bfc9b35a', 'Open image in popup')}
+          onClick={disablePopup ? undefined : openPopup}
+          title={
+            disablePopup
+              ? undefined
+              : translate('auto.components.editor.ImageViewer.77bfc9b35a', 'Open image in popup')
+          }
         >
           <div
             className={cn(

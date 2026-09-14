@@ -8,6 +8,7 @@ import { FILE_EXPLORER_DRAGGABLE_SELECTOR } from './file-explorer-drag-scroll-ma
 import { DIR_TOGGLE_DOUBLE_CLICK_MS } from './file-explorer-dir-toggle-timing'
 import type { DirToggleTiming } from './file-explorer-dir-toggle-timing'
 import { translate } from '@/i18n/i18n'
+import { openMultiplexerFileViewer } from '../floating-file-viewer/open-multiplexer-file-viewer'
 import {
   getFileExplorerOwnerUnresolvedMessage,
   requireMatchingFileExplorerOperationRoute
@@ -135,6 +136,9 @@ export async function activateFileExplorerNode(args: {
     fileRuntimeEnvironmentId = route.settings.activeRuntimeEnvironmentId?.trim() || null
   } catch {
     toast.error(getFileExplorerOwnerUnresolvedMessage())
+    return
+  }
+  if (openMultiplexerFileViewer(node, activeWorktreeId)) {
     return
   }
   openFile(

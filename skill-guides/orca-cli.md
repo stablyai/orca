@@ -2,11 +2,12 @@
 name: orca-cli
 description: >-
   Use the public `orca` CLI to operate Orca-managed worktrees, folder contexts,
-  terminals, repos, automations, artifacts, skill sharing, worktree comments, and the browser
+  terminals, files and floating viewers, repos, automations, artifacts, skill sharing, worktree comments, and the browser
   embedded inside the Orca app. Use when the user says "$orca-cli", "use orca cli",
   "Orca worktree", "child worktree", "Workspace Multiplexer", "cardStatus", "spawn codex/claude in a worktree",
   "read/wait/send Orca terminal", "full handoff", "handover",
   "give this to another agent", "another worktree", "Orca browser", "orca artifacts",
+  "open a file in Orca", "show a document/image in the multiplexer",
   "share HTML/Markdown", "public artifact link", "share skills", or "control the browser inside
   Orca". Prefer this over raw `git worktree`, ad hoc
   PTYs, Playwright, or Computer Use when the task touches Orca-managed state.
@@ -154,9 +155,25 @@ ORCA worktree create --name task --run-hooks --json
 - `--run-hooks` is a legacy alias for `--setup run`; it also reveals/activates the new worktree.
 - `--activate` and `--run-hooks` reveal the new worktree. `--agent` alone stays in the background.
 - When the user asks to create a worktree and add or show it in Workspace Multiplexer, pass `--activate`. If Workspace Multiplexer is open, Orca inserts and focuses the worktree there; otherwise the normal reveal behavior applies. Do not pass `--activate` for background or orchestration-created worktrees unless the user asks to present them.
+- To remove only a workspace tab from Workspace Multiplexer, run `ORCA multiplexer list --json`, choose its exact slot `id` using `worktreeId` and `executionHostId`, then run `ORCA multiplexer remove --slot <slot-id> --json`. If multiple slots match, ask which one; never remove all matches implicitly. This only changes the active multiplexer layout on the targeted Orca runtime. It does not delete worktrees, stop terminals, close the multiplexer screen, or remove entries from other saved layouts. Repeated removal returns `removed: false`. Do not substitute `worktree rm` or `terminal close`. Older runtimes that reject these commands need an update; do not fall back to destructive commands.
 - Let Orca choose setup terminal placement from repo settings, including tab vs split behavior. Do not manually create extra setup terminals when `--agent` already owns the first tab.
 - If an older installed CLI rejects `--agent`, `--prompt`, or `--setup`, create the worktree normally, then run `orca terminal create --worktree <selector> --command "<requested-agent>"` and `orca terminal send` if a prompt is needed. This can leave a fallback shell when no default tabs are configured; close it only after confirming it is unused.
 - `worktree create` creates a new checkout. For a fresh agent in the **current** checkout (no new worktree), use `orca terminal create --worktree active --command "codex" --json` — that path does not create a second worktree shell.
+
+## Open Files in Orca
+
+When the user asks to show a document, image, or code file in Orca, use the existing file command:
+
+```text
+ORCA file open docs/readme.md --json
+ORCA file open --path assets/preview.png --worktree id:<repoId>::<worktreePath> --json
+ORCA file open --path notes.md --worktree folder:<folderId> --json
+```
+
+- With Workspace Multiplexer visible, `file open` opens a read-only floating viewer without switching the focused workspace or leaving the multiplexer. Different files get separate windows; the same file brings its existing viewer forward. Hidden viewers become visible again.
+- Outside the multiplexer, the same command keeps the existing editor behavior. It does not enable or create a multiplexer layout. `file diff` remains an editor/diff action, not a floating preview.
+- Paths are relative to the selected workspace root, or absolute paths inside that root. Quote paths containing spaces. Omit `--worktree` only when the caller's cwd identifies the intended Orca workspace; do not substitute whichever workspace the user currently has focused. Remote CLI calls require an explicit `--worktree` on the owning runtime.
+- Open only the files the user requested; do not publish them with `artifacts share` or launch a system application. Check `opened` in the JSON result: unsupported binaries, including PDFs, return `opened: false` through this command; PDFs can still be opened from the desktop file explorer. An accepted open request is not proof that file rendering completed; report any visible load error separately. If an older desktop still switches to the editor, update Orca rather than inventing a viewer flag.
 
 ## Worktree Comments
 

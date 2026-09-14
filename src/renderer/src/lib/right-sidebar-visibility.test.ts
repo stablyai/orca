@@ -46,6 +46,7 @@ describe('right sidebar visibility helpers', () => {
 
   it('allows right sidebar controls on workspace views', () => {
     expect(canShowRightSidebarForView('terminal')).toBe(true)
+    expect(canShowRightSidebarForView('multiplexer')).toBe(true)
   })
 
   it('does not treat hidden full-page sidebars as visible PR panels', () => {

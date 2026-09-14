@@ -4,12 +4,13 @@ import { GLOBAL_FLAGS } from '../args'
 export const FILE_COMMAND_SPECS: CommandSpec[] = [
   {
     path: ['file', 'open'],
-    summary: 'Open a workspace file in the Orca editor',
+    summary: 'Open a workspace file in Orca (floating viewer when Multiplexer is visible)',
     usage: 'orca file open <path> [--worktree <selector>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'path', 'worktree'],
     positionalArgs: ['path'],
     notes: [
-      'The path may be relative to the selected worktree or an absolute path inside that worktree. When --worktree is omitted, local CLI calls infer the current Orca worktree from cwd.'
+      'The path may be relative to the selected worktree or an absolute path inside that worktree. When --worktree is omitted, local CLI calls infer the current Orca worktree from cwd.',
+      'When Workspace Multiplexer is visible, opens a read-only floating viewer without switching workspaces. Otherwise opens the existing editor. Opening the same file raises its existing viewer.'
     ],
     examples: [
       'orca file open src/App.tsx',

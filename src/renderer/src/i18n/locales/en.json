@@ -1,5 +1,13 @@
 {
+  "floatingFileViewer": {
+    "show": "Show viewers",
+    "hide": "Hide viewers",
+    "close": "Close viewer",
+    "binary": "Preview is not available for this file type."
+  },
   "multiplexer": {
+    "workspaceActions": "Workspace actions",
+    "terminalList": "Terminal list",
     "deleteWorktree": "Delete worktree…",
     "layoutName": "Multiplexer {{value0}}",
     "addLayout": "Add multiplexer",

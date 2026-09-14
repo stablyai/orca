@@ -1,5 +1,7 @@
 import { ArrowLeft, PanelsTopLeft } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { RightSidebarToggle } from '@/app-shell/TitlebarMainStrip'
+import { FloatingFileViewersToggle } from '../floating-file-viewer/FloatingFileViewers'
 import { translate } from '@/i18n/i18n'
 import { WorkspaceMultiplexerPicker } from './WorkspaceMultiplexerPicker'
 import { WorkspaceMultiplexerSwitcher } from './WorkspaceMultiplexerSwitcher'
@@ -42,6 +44,8 @@ export function WorkspaceMultiplexerHeader({
         onWorkspaceDragStart={onWorkspaceDragStart}
         onWorkspaceDragEnd={onWorkspaceDragEnd}
       />
+      <FloatingFileViewersToggle />
+      <RightSidebarToggle showFilesOnOpen />
       {isDragOver ? (
         <div className="pointer-events-none absolute left-1/2 top-full z-50 mt-2 -translate-x-1/2 rounded-md border border-ring bg-popover px-3 py-1.5 text-xs font-medium text-popover-foreground shadow-sm">
           {translate(

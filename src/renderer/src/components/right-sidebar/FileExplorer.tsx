@@ -34,6 +34,7 @@ function FileExplorerFiles(): React.JSX.Element {
   const showRightSidebarSearch = useAppStore((s) => s.showRightSidebarSearch)
   const searchPanel = useFileSearchPanel(explorerView)
   const activeWorktreeId = useAppStore((s) => s.activeWorktreeId)
+  const inMultiplexer = useAppStore((s) => s.activeView === 'multiplexer')
   const activeWorktree = useActiveWorktree()
   const activeRepo = useRepoById(activeWorktree?.repoId ?? null)
   const expandedDirs = useAppStore((s) => s.expandedDirs)
@@ -54,6 +55,7 @@ function FileExplorerFiles(): React.JSX.Element {
     worktreePath
   })
   const repoName = activeRepo?.displayName ?? (worktreePath ? basename(worktreePath) : '')
+  const workspaceName = activeWorktree?.displayName || activeWorktree?.branch || ''
   const activeRepoSupportsGit = activeRepo ? isGitRepoKind(activeRepo) : false
 
   const expanded = useMemo(
@@ -200,13 +202,14 @@ function FileExplorerFiles(): React.JSX.Element {
       <div
         ref={rowScrolling.setExplorerShellRef}
         data-orca-explorer-shell
+        data-worktree-id={activeWorktreeId ?? undefined}
         data-selected-folder-relative-path={
           selectedNode?.isDirectory ? selectedNode.relativePath : undefined
         }
         className="flex min-h-0 flex-1 flex-col"
       >
         <FileExplorerToolbar
-          repoName={repoName}
+          repoName={inMultiplexer && workspaceName ? `${repoName} · ${workspaceName}` : repoName}
           worktreePath={worktreePath}
           connectionId={activeRepo?.connectionId ?? null}
           refresh={manualRefresh}

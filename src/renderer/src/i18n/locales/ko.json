@@ -1,5 +1,13 @@
 {
+  "floatingFileViewer": {
+    "show": "뷰어 표시",
+    "hide": "뷰어 숨기기",
+    "close": "뷰어 닫기",
+    "binary": "이 파일 형식은 미리보기를 지원하지 않습니다."
+  },
   "multiplexer": {
+    "workspaceActions": "워크스페이스 메뉴",
+    "terminalList": "터미널 목록",
     "deleteWorktree": "워크트리 삭제…",
     "layoutName": "멀티플렉서 {{value0}}",
     "addLayout": "멀티플렉서 추가",

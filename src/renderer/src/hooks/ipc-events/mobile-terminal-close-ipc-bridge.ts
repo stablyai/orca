@@ -6,6 +6,12 @@ import { runSleepWorktree } from '@/components/sidebar/sleep-worktree-flow'
 import { buildWorkspaceSessionPayload } from '@/lib/workspace-session'
 import { persistWorkspaceSessionByHost } from '@/lib/workspace-session-host-persistence'
 import { useAppStore } from '../../store'
+import { toast } from 'sonner'
+import { openMultiplexerFileViewer } from '@/components/floating-file-viewer/open-multiplexer-file-viewer'
+import {
+  getFileExplorerOperationOwner,
+  getFileExplorerOwnerUnresolvedMessage
+} from '@/components/right-sidebar/file-explorer-operation-owner'
 
 export function registerMobileAndTerminalCloseIpcBridge(
   unsubs: (() => void)[],
@@ -16,6 +22,27 @@ export function registerMobileAndTerminalCloseIpcBridge(
       ({ worktreeId, filePath, relativePath, runtimeEnvironmentId }) => {
         const store = useAppStore.getState()
         const basename = relativePath.split(/[\\/]/).pop() || relativePath
+        if (store.activeView === 'multiplexer') {
+          const owner = getFileExplorerOperationOwner(worktreeId)
+          const ownerMatches =
+            !runtimeEnvironmentId ||
+            (owner.kind === 'runtime' && owner.environmentId === runtimeEnvironmentId)
+          if (
+            !ownerMatches ||
+            !openMultiplexerFileViewer(
+              {
+                path: filePath,
+                relativePath,
+                name: basename,
+                operationOwner: owner
+              },
+              worktreeId
+            )
+          ) {
+            toast.error(getFileExplorerOwnerUnresolvedMessage())
+          }
+          return
+        }
         store.setActiveWorktree(worktreeId)
         store.markWorktreeVisited(worktreeId)
         store.setActiveView('terminal')
