@@ -2,6 +2,11 @@ import { spawn as nodeSpawn } from 'node:child_process'
 
 export const MACOS_SYSTEM_SLEEP_ASSERTION_RETRY_MS = 30_000
 
+/** Idle system sleep (-i) + system sleep (-s); the awake default keeps the display free to sleep. */
+const CAFFEINATE_BASE_ARGS = ['-i', '-s'] as const
+/** Display sleep assertion, added for keepDisplayAwake: display sleep can lock screen-gated SSH agents. */
+const CAFFEINATE_DISPLAY_ARG = '-d' as const
+
 type Logger = Pick<Console, 'debug' | 'warn'>
 
 type CaffeinateErrorListener = (error: Error) => void
@@ -77,7 +82,9 @@ export class MacosSystemSleepAssertion {
     try {
       child = this.spawn(
         '/usr/bin/caffeinate',
-        this.keepDisplayAwake ? ['-d', '-i', '-s'] : ['-i', '-s'],
+        this.keepDisplayAwake
+          ? [CAFFEINATE_DISPLAY_ARG, ...CAFFEINATE_BASE_ARGS]
+          : [...CAFFEINATE_BASE_ARGS],
         {
           stdio: 'ignore',
           windowsHide: true
