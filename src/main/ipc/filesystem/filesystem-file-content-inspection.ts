@@ -16,7 +16,8 @@ export const PREVIEWABLE_BINARY_MIME_TYPES: Record<string, string> = {
   '.webp': 'image/webp',
   '.bmp': 'image/bmp',
   '.ico': 'image/x-icon',
-  '.pdf': 'application/pdf'
+  '.pdf': 'application/pdf',
+  '.epub': 'application/epub+zip'
 }
 
 export async function readLocalLogSnapshot(filePath: string): Promise<{

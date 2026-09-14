@@ -46,6 +46,11 @@ export const editorSelectionCache = new Map<string, readonly ISelection[]>()
 export type PdfViewPosition = { pageNumber: number; top: number; left: number }
 export const pdfViewPositionCache = new Map<string, PdfViewPosition>()
 
+// Why: epub.js locations are CFI strings (a position in the spine), not a
+// scrollTop — the book repaginates to the container width, so a pixel offset
+// would restore to the wrong place at a different pane size or font size.
+export const epubLocationCache = new Map<string, string>()
+
 // Why: Diff editors need more than a numeric scroll offset to restore the same
 // working context. Monaco's diff view state also carries cursor/selection state
 // for both sides plus diff model state, which matches VS Code's restore path

@@ -1,9 +1,10 @@
 /* oxlint-disable react-doctor/no-adjust-state-on-prop-change -- Why: image surface size is measured with ResizeObserver and DOM refs, which are external layout systems outside render derivation. */
 import { Image as ImageIcon, RotateCcw, ZoomIn, ZoomOut } from 'lucide-react'
-import { type JSX, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { type JSX, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { cn } from '@/lib/utils'
 import ImageViewerPopup from './ImageViewerPopup'
 import PdfViewer from './PdfViewer'
+import { EpubViewer } from './editor-lazy-views'
 import {
   type ApplyImageViewerZoomChange,
   applyAnchoredImageViewerZoomChange,
@@ -62,6 +63,7 @@ export default function ImageViewer({
     setImageDimensions(null)
   }
   const isPdf = mimeType === 'application/pdf'
+  const isEpub = mimeType === 'application/epub+zip'
   const isIntrinsicLayout = layout === 'intrinsic'
   const previewSrc = useMemo(
     () => buildImageDataUri(mimeType, cleanedContent),
@@ -216,6 +218,20 @@ export default function ImageViewer({
   if (isPdf) {
     return (
       <PdfViewer content={cleanedContent} filePath={filePath} scrollCacheKey={scrollCacheKey} />
+    )
+  }
+
+  if (isEpub) {
+    return (
+      <Suspense
+        fallback={
+          <div className="flex h-full items-center justify-center text-muted-foreground text-sm">
+            {translate('auto.components.editor.ImageViewer.3ef9551ba2', 'Loading preview...')}
+          </div>
+        }
+      >
+        <EpubViewer content={cleanedContent} filePath={filePath} scrollCacheKey={scrollCacheKey} />
+      </Suspense>
     )
   }
 
