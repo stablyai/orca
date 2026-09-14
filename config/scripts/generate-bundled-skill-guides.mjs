@@ -22,6 +22,7 @@ const CANONICAL_GUIDE_NAMES = [
   'orca-jira',
   'orca-linear',
   'orca-per-workspace-env',
+  'orca-plane',
   'orchestration'
 ]
 
@@ -36,6 +37,7 @@ const GUIDE_ALIASES = {
   'orca-jira': [],
   'orca-linear': [],
   'orca-per-workspace-env': [],
+  'orca-plane': ['plane-tickets'],
   orchestration: []
 }
 
@@ -51,6 +53,7 @@ const STUB_TOPICS = [
   'orca-jira',
   'orca-linear',
   'orca-per-workspace-env',
+  'orca-plane',
   'orchestration'
 ]
 

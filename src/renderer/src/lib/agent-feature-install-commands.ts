@@ -3,6 +3,20 @@ import { buildAgentFeatureSkillInstallCommand as buildPinnedSkillInstallCommand 
 import {
   ORCA_CLI_SKILL_NAME,
   ORCA_LINEAR_SKILL_NAME,
+  ORCA_PLANE_SKILL_NAME,
+  ORCHESTRATION_SKILL_NAME
+} from './agent-feature-skill-names'
+
+export {
+  COMPUTER_USE_SKILL_NAME,
+  EPHEMERAL_VMS_SKILL_NAME,
+  LINEAR_AGENT_SKILL_NAMES,
+  LINEAR_TICKETS_SKILL_NAME,
+  ORCA_CLI_SKILL_NAME,
+  ORCA_LINEAR_SKILL_NAME,
+  ORCA_PLANE_SKILL_NAME,
+  PLANE_AGENT_SKILL_NAMES,
+  PLANE_TICKETS_SKILL_NAME,
   ORCHESTRATION_SKILL_NAME
 } from './agent-feature-skill-names'
 
@@ -22,4 +36,8 @@ export const ORCA_CLI_ORCHESTRATION_SKILL_INSTALL_COMMAND = buildAgentFeatureSki
 
 export const ORCA_LINEAR_SKILL_INSTALL_COMMAND = buildAgentFeatureSkillInstallCommand([
   ORCA_LINEAR_SKILL_NAME
+])
+
+export const ORCA_PLANE_SKILL_INSTALL_COMMAND = buildAgentFeatureSkillInstallCommand([
+  ORCA_PLANE_SKILL_NAME
 ])

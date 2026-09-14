@@ -6,7 +6,10 @@ import {
 } from '@/hooks/useInstalledAgentSkills'
 import { useActiveProjectSkillRuntime } from '@/hooks/useActiveProjectSkillRuntime'
 import { useLinearProviderConnected } from '@/hooks/useLinearProviderConnected'
-import { LINEAR_AGENT_SKILL_NAMES } from '@/lib/agent-feature-skill-names'
+import {
+  LINEAR_AGENT_SKILL_NAMES,
+  PLANE_AGENT_SKILL_NAMES
+} from '@/lib/agent-feature-skill-names'
 import { getLocalPreflightContext, localPreflightContextKey } from '@/lib/local-preflight-context'
 import { getProviderRuntimeContextKey } from '@/lib/provider-runtime-context'
 import { useAppStore } from '@/store'
@@ -41,6 +44,15 @@ export function useTaskSourceProviderReadiness(
     settled: linearSkillSettled,
     installedUnverifiable: linearSkillUnverifiable
   } = useInstalledAgentSkillNames(LINEAR_AGENT_SKILL_NAMES, {
+    discoveryTarget: activeSkillRuntime.discoveryTarget,
+    sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
+  })
+
+  const {
+    installed: planeSkillInstalled,
+    loading: planeSkillLoading,
+    settled: planeSkillSettled
+  } = useInstalledAgentSkillNames(PLANE_AGENT_SKILL_NAMES, {
     discoveryTarget: activeSkillRuntime.discoveryTarget,
     sourceKinds: GLOBAL_AGENT_SKILL_SOURCE_KINDS
   })
@@ -98,6 +110,8 @@ export function useTaskSourceProviderReadiness(
       plane: {
         connected: planeConnected,
         checking: planeChecking,
+        skillInstalled: planeSkillInstalled,
+        skillChecking: planeSkillLoading && !planeSkillSettled,
         visible: visible.has('plane')
       }
     }
@@ -114,6 +128,9 @@ export function useTaskSourceProviderReadiness(
     linearSkillUnverifiable,
     planeChecking,
     planeConnected,
+    planeSkillInstalled,
+    planeSkillLoading,
+    planeSkillSettled,
     reviewChecking,
     reviewUnavailable,
     visibleProvidersKey
