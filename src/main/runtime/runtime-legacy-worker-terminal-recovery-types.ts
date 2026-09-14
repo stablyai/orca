@@ -8,6 +8,9 @@ export type LegacyWorkerTerminalRecoveryResult = {
   adoptedDispatchIds: string[]
   exitedDispatchIds: string[]
   deferredDispatchIds: string[]
+  /** Why: the unsupervised-dispatch sweep runs after this result is built and must not fail it
+   *  (O2); set only when that sweep threw, so a caller can see it instead of a dropped console.warn. */
+  unsupervisedRecoveryError?: string
 }
 
 export type LegacyWorkerRecoveryOptions = {
