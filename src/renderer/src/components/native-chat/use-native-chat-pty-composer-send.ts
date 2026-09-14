@@ -92,7 +92,7 @@ export function useNativeChatPtyComposerSend(args: {
         target.ptyId,
         text,
         imagePaths,
-        sendOptions
+        messageOptions
       )
     } else if (text.trim().length > 0) {
       pendingHandle = sendNativeChatMessage(target.settings, target.ptyId, text, messageOptions)

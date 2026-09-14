@@ -100,8 +100,10 @@ describe('per-agent gating (single source of truth)', () => {
     resetClaudeSubmitBytesCacheForTests()
   })
 
-  it('marks only Claude as resolving a submit keybinding', () => {
+  it('resolves the submit keybinding for the Claude family, not other agents', () => {
     expect(agentResolvesSubmitKeybinding('claude')).toBe(true)
+    // OpenClaude reads the same ~/.claude config as Claude Code.
+    expect(agentResolvesSubmitKeybinding('openclaude')).toBe(true)
     expect(agentResolvesSubmitKeybinding('codex')).toBe(false)
   })
 

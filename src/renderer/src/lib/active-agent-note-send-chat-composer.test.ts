@@ -93,6 +93,20 @@ describe('seedNoteAsChatComposerDraft (chat-view routing gate)', () => {
     expect(testState.seedDraft).not.toHaveBeenCalled()
   })
 
+  it('falls back to the terminal when the launch agent is not native-chat supported', () => {
+    // gemini has no native chat surface, so the seed would silently no-op; the gate
+    // must return null (fall through to terminal) rather than report a false 'sent'.
+    expect(
+      seedNoteAsChatComposerDraft({
+        viewMode: 'chat',
+        launchAgent: 'gemini',
+        tabId: 'tab-1',
+        text: 'review this'
+      })
+    ).toBeNull()
+    expect(testState.seedDraft).not.toHaveBeenCalled()
+  })
+
   it('falls back to the terminal when the note cannot be mirrored', () => {
     expect(
       seedNoteAsChatComposerDraft({
