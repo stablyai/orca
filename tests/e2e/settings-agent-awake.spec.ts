@@ -203,10 +203,10 @@ test.describe('Agent awake setting', () => {
     test.skip(process.platform !== 'darwin', 'display-awake toggle is macOS-only')
     await openSettings(orcaPage)
     await dismissTransientAnnouncement(orcaPage)
-    // Pin the pane, then search a term only the new row's catalog entry carries:
-    // the Agents section is hidden entirely when no catalog entry matches the query.
+    // Pin the pane, then search the row's own title: the Agents section is hidden
+    // entirely unless one of its catalog entries matches the query.
     await orcaPage.getByRole('button', { name: 'Agents', exact: true }).click()
-    await orcaPage.getByPlaceholder('Search settings').fill('screen lock')
+    await orcaPage.getByPlaceholder('Search settings').fill('Keep the display awake')
 
     const displaySwitch = orcaPage.getByRole('switch', { name: 'Keep the display awake' })
     await expect(displaySwitch.first()).toBeVisible()

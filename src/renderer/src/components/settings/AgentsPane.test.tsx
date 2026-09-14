@@ -406,7 +406,7 @@ describe('AgentsPane', () => {
     const windowsElement = withUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64)', () =>
       AgentAwakeSetting({ settings: getDefaultSettings('/tmp'), updateSettings })
     )
-    expect(() => findSwitchRowByLabel(windowsElement, displayTitle)).toThrow()
+    expect(() => findSwitchRowByLabel(windowsElement, displayTitle)).toThrow('not found')
   })
 
   it('indexes the display toggle for settings search only where it renders', () => {
