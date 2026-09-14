@@ -515,6 +515,26 @@ describe('orca root help', () => {
     expect(callMock).not.toHaveBeenCalled()
   })
 
+  it('advertises pull request linking on worktree create and set help', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    logSpy.mockClear()
+
+    await main(['worktree', 'create', '--help'], '/tmp/repo')
+
+    const createHelp = String(logSpy.mock.calls[0][0])
+    expect(createHelp).toContain('[--pr <number>]')
+    expect(createHelp).toContain('--pr <number>          Linked pull request number')
+    expect(createHelp).not.toContain('--pr <number|null>')
+
+    logSpy.mockClear()
+    await main(['worktree', 'set', '--help'], '/tmp/repo')
+
+    const setHelp = String(logSpy.mock.calls[0][0])
+    expect(setHelp).toContain('[--pr <number|null>]')
+    expect(setHelp).toContain('--pr <number|null>     Linked pull request number')
+    expect(callMock).not.toHaveBeenCalled()
+  })
+
   it('advertises explicit orchestration task display labels', async () => {
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
     logSpy.mockClear()

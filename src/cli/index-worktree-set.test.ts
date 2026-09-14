@@ -391,4 +391,59 @@ describe('orca cli worktree awareness', () => {
       noParent: false
     })
   })
+  it('passes a linked pull request number through worktree.set', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_set_pr', {
+        worktree: {
+          ...buildWorktree('/tmp/repo/child', 'feature/child'),
+          linkedPR: 42
+        }
+      })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      ['worktree', 'set', '--worktree', 'id:repo::/tmp/repo/child', '--pr', '42', '--json'],
+      '/tmp/repo'
+    )
+
+    expect(callMock).toHaveBeenCalledWith('worktree.set', {
+      worktree: 'id:repo::/tmp/repo/child',
+      displayName: undefined,
+      linkedIssue: undefined,
+      linkedPR: 42,
+      comment: undefined,
+      parentWorktree: undefined,
+      noParent: false
+    })
+  })
+
+  it('clears the pull request link when --pr null is passed to worktree.set', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_set_pr_null', {
+        worktree: {
+          ...buildWorktree('/tmp/repo/child', 'feature/child'),
+          linkedPR: null
+        }
+      })
+    )
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+
+    await main(
+      ['worktree', 'set', '--worktree', 'id:repo::/tmp/repo/child', '--pr', 'null', '--json'],
+      '/tmp/repo'
+    )
+
+    expect(callMock).toHaveBeenCalledWith('worktree.set', {
+      worktree: 'id:repo::/tmp/repo/child',
+      displayName: undefined,
+      linkedIssue: undefined,
+      linkedPR: null,
+      comment: undefined,
+      parentWorktree: undefined,
+      noParent: false
+    })
+  })
 })
