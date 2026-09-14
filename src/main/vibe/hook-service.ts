@@ -4,6 +4,7 @@ import {
   mkdirSync,
   readFileSync,
   renameSync,
+  statSync,
   unlinkSync,
   writeFileSync
 } from 'node:fs'
@@ -106,18 +107,22 @@ function readConfigToml(configPath: string): string | null {
 function writeConfigToml(configPath: string, text: string): void {
   const dir = dirname(configPath)
   mkdirSync(dir, { recursive: true })
+  // Why: renameSync replaces the inode, so the temp file's mode becomes the
+  // config's mode — pin 0600 for new files and keep the user's existing mode.
+  let mode = 0o600
   if (existsSync(configPath)) {
     try {
       if (readFileSync(configPath, 'utf-8') === text) {
         return
       }
+      mode = statSync(configPath).mode & 0o777
     } catch {
       // Fall through to the atomic write path.
     }
   }
   const tmpPath = join(dir, `.${Date.now()}-${randomUUID()}.tmp`)
   try {
-    writeFileSync(tmpPath, text, 'utf-8')
+    writeFileSync(tmpPath, text, { encoding: 'utf-8', mode })
     if (existsSync(configPath)) {
       copyFileSync(configPath, `${configPath}.bak`)
     }

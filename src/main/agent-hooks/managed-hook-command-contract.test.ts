@@ -175,8 +175,9 @@ describe('managed hook command contract', () => {
     }
     const registered = new Set<string>(agents)
     for (const agent of [...buildersByAgent.keys(), ...exemptionsByAgent.keys()]) {
+      const builders = buildersByAgent.get(agent)
       // A local-only agent (no remote builder) is never in the remote registry.
-      if (target === 'remote' && buildersByAgent.get(agent)?.remote === undefined) {
+      if (target === 'remote' && builders !== undefined && builders.remote === undefined) {
         continue
       }
       expect(registered.has(agent), `${agent} is absent from the installer registry`).toBe(true)
