@@ -7,7 +7,7 @@ import {
 } from './daemon-process-identity-query'
 import {
   START_TIME_TOLERANCE_MS,
-  startTimeMatches,
+  startTimeMatchesAsync,
   startTimesWithinTolerance
 } from './daemon-process-start-time'
 import { PROTOCOL_VERSION } from './types'
@@ -76,7 +76,8 @@ export async function inspectDaemonProcessIdentity(
   try {
     const cmdline = readFileSync(`/proc/${pid}/cmdline`, 'utf8')
     return verdict(
-      commandLineMatchesDaemon(cmdline, socketPath, tokenPath) && startTimeMatches(pid, startedAtMs)
+      commandLineMatchesDaemon(cmdline, socketPath, tokenPath) &&
+        (await startTimeMatchesAsync(pid, startedAtMs))
     )
   } catch {
     const identity = await getPsProcessIdentityAsync(pid)

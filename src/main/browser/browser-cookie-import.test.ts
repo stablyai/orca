@@ -4,7 +4,7 @@ import type * as NodeFs from 'node:fs'
 const {
   appGetPathMock,
   copyFileSyncMock,
-  runProcessSyncMock,
+  runProcessMock,
   sessionFromPartitionMock,
   dialogShowOpenDialogMock,
   setPendingCookieImportMock,
@@ -13,7 +13,7 @@ const {
 } = vi.hoisted(() => ({
   appGetPathMock: vi.fn(),
   copyFileSyncMock: vi.fn(),
-  runProcessSyncMock: vi.fn(),
+  runProcessMock: vi.fn(),
   sessionFromPartitionMock: vi.fn(),
   dialogShowOpenDialogMock: vi.fn(),
   setPendingCookieImportMock: vi.fn(),
@@ -29,9 +29,9 @@ vi.mock('./browser-session-registry', () => ({
 }))
 
 // Why mock the chokepoint: command timeouts and hidden-console handling belong to
-// runProcessSync, while this suite only needs to control the credential output.
+// runProcess, while this suite only needs to control the credential output.
 vi.mock('../../shared/child-process/run-process', () => ({
-  runProcessSync: runProcessSyncMock
+  runProcess: runProcessMock
 }))
 vi.mock('node:fs', async (importOriginal) => {
   const actual = await importOriginal<typeof NodeFs>()
@@ -482,8 +482,8 @@ describe('importCookiesFromBrowser Chromium', () => {
     copyFileSyncMock.mockClear()
     setPendingCookieImportMock.mockClear()
     clearPendingCookieImportMock.mockClear()
-    runProcessSyncMock.mockReset()
-    runProcessSyncMock.mockImplementation(() => {
+    runProcessMock.mockReset()
+    runProcessMock.mockImplementation(() => {
       throw new Error('OS credential commands are unavailable in this test')
     })
     sessionFromPartitionMock.mockReset()
@@ -537,7 +537,7 @@ describe('importCookiesFromBrowser Chromium', () => {
           value: 'source-value'
         })
       )
-      expect(runProcessSyncMock).not.toHaveBeenCalled()
+      expect(runProcessMock).not.toHaveBeenCalled()
       expect(copyFileSyncMock.mock.calls.some(([source]) => source === sourceCookiesPath)).toBe(
         true
       )
@@ -570,7 +570,7 @@ describe('importCookiesFromBrowser Chromium', () => {
       }
     ]).close()
     createChromiumCookieTestDatabase(targetCookiesPath, []).close()
-    runProcessSyncMock.mockReturnValue({
+    runProcessMock.mockResolvedValue({
       code: 0,
       signal: null,
       stdout: `${password}\n`,
@@ -586,7 +586,7 @@ describe('importCookiesFromBrowser Chromium', () => {
       )
 
       expect(result.ok).toBe(true)
-      expect(runProcessSyncMock).toHaveBeenCalledWith({
+      expect(runProcessMock).toHaveBeenCalledWith({
         program: 'security',
         args: ['find-generic-password', '-s', 'Chrome Safe Storage', '-a', 'Chrome', '-w'],
         timeoutMs: 30_000

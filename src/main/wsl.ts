@@ -1,4 +1,5 @@
-import { execFile, execFileSync } from 'node:child_process'
+import { runProcess, runProcessSync, type ProcessSpec } from '../shared/child-process/run-process'
+import { buildWslExecArgs } from '../shared/wsl-login-shell-command'
 import { parseWslUncPath, toWindowsWslPath } from '../shared/wsl-paths'
 import { filterUserWslDistros, parseWslDistros } from './wsl-distro-list-output'
 import { wslDistroListRetryDelayMs } from './wsl-distro-retry'
@@ -73,14 +74,12 @@ export function wslUncDirectoryExists(uncPath: string): boolean | null {
   if (!info) {
     return null
   }
+  // Narrow by design: the async twin is the non-blocking path; this one serves
+  // `validateWorkingDirectory`, whose PTY-spawn caller is still synchronous.
   try {
-    const stdout = execFileSync('wsl.exe', getWslDirectoryProbeArgs(info), {
-      stdio: ['pipe', 'pipe', 'pipe'],
-      timeout: 5000,
-      encoding: 'utf8',
-      cwd: resolveWslInteropSpawnCwd()
-    })
-    return parseWslDirectoryProbeOutput(stdout)
+    return parseWslDirectoryProbeOutput(
+      runProcessSync(wslProbe(getWslDirectoryProbeArgs(info))).stdout
+    )
   } catch {
     return null
   }
@@ -94,13 +93,11 @@ export function wslUncDirectoryExistsAsync(uncPath: string): Promise<boolean | n
   if (!info) {
     return Promise.resolve(null)
   }
-  return new Promise((resolve) => {
-    const probeOpts = { timeout: 5000, cwd: resolveWslInteropSpawnCwd() }
-    execFile('wsl.exe', getWslDirectoryProbeArgs(info), probeOpts, (_error, stdout) => {
-      // Why: wsl.exe uses numeric exits for both guest results and host failures; only the guest marker is authoritative.
-      resolve(parseWslDirectoryProbeOutput(stdout))
-    })
-  })
+  // Why the error is ignored: wsl.exe uses numeric exits for both guest results and host
+  // failures; only the guest marker on stdout is authoritative.
+  return runProcess(wslProbe(getWslDirectoryProbeArgs(info)))
+    .then((result) => parseWslDirectoryProbeOutput(result.stdout))
+    .catch(() => null)
 }
 
 // ─── WSL home directory resolution ──────────────────────────────────
@@ -179,15 +176,16 @@ export function listWslDistros(): string[] {
     return wslDistroCache ?? []
   }
 
+  const probeSequence = ++wslDistroProbeSequence
+  // Narrow by design: the async twin single-flights the same probe; this one keeps
+  // `getDefaultWslDistro` answerable for callers that are still synchronous.
   try {
-    const probeSequence = ++wslDistroProbeSequence
-    const output = execFileSync('wsl.exe', ['--list', '--quiet'], {
-      encoding: 'utf-8',
-      stdio: ['pipe', 'pipe', 'pipe'],
-      timeout: 5000,
-      cwd: resolveWslInteropSpawnCwd()
-    })
-    return cacheWslDistroList(parseWslDistros(output), probeSequence)
+    const result = runProcessSync(wslProbe(['--list', '--quiet']))
+    if (result.code !== 0) {
+      armWslDistroListRetry()
+      return wslDistroCache ?? []
+    }
+    return cacheWslDistroList(parseWslDistros(result.stdout), probeSequence)
   } catch {
     armWslDistroListRetry()
     return wslDistroCache ?? []
@@ -223,7 +221,7 @@ export async function listWslDistrosAsync(): Promise<string[]> {
   // lands; one host-wide answer must cost one wsl.exe spawn. `catch` sits ahead of the
   // stored promise, so joiners get the same fail-safe [] a per-caller catch returned.
   const probeSequence = ++wslDistroProbeSequence
-  const probe = execFileUtf8('wsl.exe', ['--list', '--quiet'])
+  const probe = wslProbeStdout(['--list', '--quiet'])
     .then((output) => cacheWslDistroList(parseWslDistros(output), probeSequence))
     .catch(() => {
       armWslDistroListRetry()
@@ -246,7 +244,7 @@ export async function listRunningWslDistrosAsync(): Promise<string[]> {
     return []
   }
   return resolveRunningWslDistros(() =>
-    execFileUtf8('wsl.exe', ['--list', '--running', '--quiet'], {
+    wslProbeStdout(['--list', '--running', '--quiet'], {
       ...process.env,
       WSL_UTF8: '1'
     }).then((output) => filterUserWslDistros(parseWslDistros(output)))
@@ -283,14 +281,11 @@ export function getWslHome(distro: string): string | null {
     return wslHomeCache.get(distro)!
   }
 
+  // Narrow by design: `getWslHomeAsync` is the non-blocking twin and shares this cache;
+  // this one serves the synchronous skill/runtime-home callers.
   try {
-    const home = execFileSync('wsl.exe', ['-d', distro, '--exec', 'bash', '-c', 'echo $HOME'], {
-      encoding: 'utf-8',
-      stdio: ['pipe', 'pipe', 'pipe'],
-      timeout: 5000,
-      cwd: resolveWslInteropSpawnCwd()
-    }).trim()
-
+    const result = runProcessSync(wslProbe(wslHomeProbeArgs(distro)))
+    const home = result.code === 0 ? result.stdout.trim() : ''
     if (!home || !home.startsWith('/')) {
       return null
     }
@@ -318,7 +313,7 @@ export async function getWslHomeAsync(distro: string): Promise<string | null> {
     return inflight
   }
 
-  const probe = execFileUtf8('wsl.exe', ['-d', distro, '--exec', 'bash', '-c', 'echo $HOME'])
+  const probe = wslProbeStdout(wslHomeProbeArgs(distro))
     .then((output) => {
       const home = output.trim()
       if (!home || !home.startsWith('/')) {
@@ -367,7 +362,7 @@ export function _resetWslCachesForTests(): void {
 
 // Why: seeded state expires like real state — an `available: false` seed is re-probed
 // once its window lapses, and a `distros` seed is filtered and arms the retry window.
-// Tests that advance timers past either window must mock child_process.
+// Tests that advance timers past either window must mock the run-process layer.
 export function _setWslCachesForTests(args: {
   available?: boolean | null
   distros?: string[] | null
@@ -382,25 +377,33 @@ export function _setWslCachesForTests(args: {
   }
 }
 
-function execFileUtf8(command: string, args: string[], env?: NodeJS.ProcessEnv): Promise<string> {
-  return new Promise((resolve, reject) => {
-    execFile(
-      command,
-      args,
-      {
-        encoding: 'utf-8',
-        env,
-        timeout: 5000,
-        windowsHide: true,
-        cwd: resolveWslInteropSpawnCwd()
-      },
-      (error, stdout) => {
-        if (error) {
-          reject(error)
-          return
-        }
-        resolve(stdout)
-      }
+const WSL_PROBE_TIMEOUT_MS = 5000
+
+function wslProbe(args: readonly string[], env?: NodeJS.ProcessEnv): ProcessSpec {
+  return {
+    program: 'wsl.exe',
+    args,
+    env,
+    timeoutMs: WSL_PROBE_TIMEOUT_MS,
+    // Why explicit (#16463): inheriting a cwd the user deleted makes CreateProcessW
+    // fail ENOENT, which every probe here would read as "WSL is not installed".
+    cwd: resolveWslInteropSpawnCwd()
+  }
+}
+
+/** `--exec` (never `--`) so wsl.exe hands `$HOME` to bash instead of expanding it itself. */
+function wslHomeProbeArgs(distro: string): string[] {
+  return buildWslExecArgs(distro, ['bash', '-c', 'echo $HOME'])
+}
+
+/** Rejects on anything but a clean exit, so callers keep the failure-caching semantics
+ *  they had when a non-zero wsl.exe threw. */
+async function wslProbeStdout(args: readonly string[], env?: NodeJS.ProcessEnv): Promise<string> {
+  const result = await runProcess(wslProbe(args, env))
+  if (result.code !== 0) {
+    throw new Error(
+      `wsl.exe ${args.join(' ')} exited with ${result.timedOut ? 'a timeout' : result.code}`
     )
-  })
+  }
+  return result.stdout
 }

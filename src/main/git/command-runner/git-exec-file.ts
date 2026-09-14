@@ -1,4 +1,4 @@
-import { execFileSync, type SpawnOptions } from 'node:child_process'
+import { runProcessSync } from '../../../shared/child-process/run-process'
 import { withGitSpan } from '../../observability/instrumentation'
 import { recordSubprocessSpawn } from '../../diagnostics/main-thread-churn-probe'
 import {
@@ -287,31 +287,35 @@ function readCapturedGitString(stdout: string, resolved: ResolvedCommand): strin
 const GIT_EXEC_SYNC_TIMEOUT_MS = 15_000
 
 /**
- * Sync git command execution. Drop-in replacement for
- * `execFileSync('git', args, { cwd, encoding, ... })`.
+ * Sync git command execution, kept ONLY for the synchronous runner-script
+ * builders (`worktree-runner-script.ts`), which are sync all the way up to the
+ * worktree IPC handlers. Every hot IPC path uses `gitExecFileAsync`.
  *
- * Returns trimmed stdout as a string.
+ * Returns stdout as a string and throws on a non-zero exit, so the callers that
+ * catch an `execFileSync`-style failure keep behaving identically.
  */
 export function gitExecFileSync(
   args: string[],
-  options: {
-    cwd: string
-    encoding?: BufferEncoding
-    stdio?: SpawnOptions['stdio']
-    timeout?: number
-  }
+  options: { cwd: string; timeout?: number }
 ): string {
   const resolved = resolveCommand('git', args, options.cwd)
+  const timeoutMs = options.timeout ?? GIT_EXEC_SYNC_TIMEOUT_MS
   const spawnStartedAt = performance.now()
   try {
-    return execFileSync(resolved.binary, resolved.args, {
+    const result = runProcessSync({
+      program: resolved.binary,
+      args: resolved.args,
       cwd: resolved.cwd,
-      encoding: options.encoding ?? 'utf-8',
       env: untranslatedGitOutputEnv(),
-      stdio: options.stdio ?? ['pipe', 'pipe', 'pipe'],
-      timeout: options.timeout ?? GIT_EXEC_SYNC_TIMEOUT_MS,
-      windowsHide: true
-    }) as string
+      timeoutMs
+    })
+    if (result.timedOut) {
+      throw new GitCommandTimeoutError(timeoutMs)
+    }
+    if (result.code !== 0) {
+      throw new Error(`git ${args.join(' ')} failed (${result.code}): ${result.stderr.trim()}`)
+    }
+    return result.stdout
   } finally {
     // Sync exec blocks the main thread for its whole duration — the cost issue #7576 flags.
     recordSubprocessSpawn(resolved.binary, resolved.args, performance.now() - spawnStartedAt)

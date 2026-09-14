@@ -21,24 +21,24 @@ export class CodexConfigMirror {
     private readonly assertManagedHomePath: (
       candidatePath: string,
       expectedAccountId?: string
-    ) => string
+    ) => Promise<string>
   ) {}
 
-  safeSyncToManagedHomes(): void {
+  async safeSyncToManagedHomes(): Promise<void> {
     try {
-      this.syncToManagedHomes()
+      await this.syncToManagedHomes()
     } catch (error) {
       console.warn('[codex-accounts] Failed to sync canonical config:', error)
     }
   }
 
-  safeSyncIntoManagedHome(
+  async safeSyncIntoManagedHome(
     managedHomePath: string,
     canonicalConfig?: CanonicalCodexConfig | null,
     expectedAccountId?: string
-  ): void {
+  ): Promise<void> {
     try {
-      this.syncIntoManagedHome(managedHomePath, canonicalConfig, expectedAccountId)
+      await this.syncIntoManagedHome(managedHomePath, canonicalConfig, expectedAccountId)
     } catch (error) {
       console.warn('[codex-accounts] Failed to seed managed config:', error)
     }
@@ -90,25 +90,28 @@ export class CodexConfigMirror {
     )
   }
 
-  private syncToManagedHomes(): void {
+  private async syncToManagedHomes(): Promise<void> {
     for (const account of this.store.getSettings().codexManagedAccounts) {
       try {
-        this.syncIntoManagedHome(account.managedHomePath, undefined, account.id)
+        await this.syncIntoManagedHome(account.managedHomePath, undefined, account.id)
       } catch (error) {
         console.warn('[codex-accounts] Failed to sync managed config:', error)
       }
     }
   }
 
-  private syncIntoManagedHome(
+  private async syncIntoManagedHome(
     managedHomePath: string,
     canonicalConfig = this.readForManagedHome(managedHomePath),
     expectedAccountId?: string
-  ): void {
+  ): Promise<void> {
     if (canonicalConfig === null) {
       return
     }
-    const trustedManagedHomePath = this.assertManagedHomePath(managedHomePath, expectedAccountId)
+    const trustedManagedHomePath = await this.assertManagedHomePath(
+      managedHomePath,
+      expectedAccountId
+    )
     // Why: every account home is Codex's own CODEX_HOME. Preserve trust Codex
     // granted there while refreshing ordinary settings from the lane's source.
     syncSystemConfigIntoManagedCodexHome({

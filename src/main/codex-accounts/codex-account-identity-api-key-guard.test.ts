@@ -18,9 +18,9 @@ function homeWithAuthJson(auth: Record<string, unknown>): string {
 }
 
 describe('managed-home Codex identity', () => {
-  const identity = new CodexAccountIdentity((candidatePath) => candidatePath)
+  const identity = new CodexAccountIdentity(async (candidatePath) => candidatePath)
 
-  it('resolves no identity for an API-key login that still holds a stale tokens blob', () => {
+  it('resolves no identity for an API-key login that still holds a stale tokens blob', async () => {
     // Why: the stale OAuth email is not who this credential authenticates as, and it is
     // the claim used to prove a shared-home auth.json belongs to the selected account.
     const home = homeWithAuthJson({
@@ -31,7 +31,7 @@ describe('managed-home Codex identity', () => {
       }
     })
 
-    expect(identity.readFromHome(home, 'account-1')).toEqual({
+    expect(await identity.readFromHome(home, 'account-1')).toEqual({
       email: null,
       providerAccountId: null,
       workspaceLabel: null,
@@ -39,7 +39,7 @@ describe('managed-home Codex identity', () => {
     })
   })
 
-  it('still resolves an OAuth identity when no API key is declared', () => {
+  it('still resolves an OAuth identity when no API key is declared', async () => {
     const home = homeWithAuthJson({
       tokens: {
         account_id: 'real-account',
@@ -47,7 +47,7 @@ describe('managed-home Codex identity', () => {
       }
     })
 
-    expect(identity.readFromHome(home, 'account-1')).toMatchObject({
+    expect(await identity.readFromHome(home, 'account-1')).toMatchObject({
       email: 'real@example.com',
       providerAccountId: 'real-account'
     })

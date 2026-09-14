@@ -56,7 +56,6 @@ src/main/claude-accounts/keychain.ts
 src/main/codex-accounts/legacy-wsl-runtime-auth-drain-recovery-script-harness.ts
 src/main/codex-accounts/legacy-wsl-runtime-auth-drain-script-harness.ts
 src/main/codex-accounts/legacy-wsl-runtime-auth-drain-script-interference-shims.ts
-src/main/codex-accounts/service.ts
 src/main/codex/codex-app-server-posix-supervisor.ts
 src/main/codex/codex-app-server-session.ts
 src/main/codex/codex-state-db-backfill-recovery.ts
@@ -68,9 +67,7 @@ src/main/computer/macos-native-provider-transport.ts
 src/main/computer/sidecar-client.ts
 src/main/daemon/daemon-bash-wrapper-osc133-fixture.ts
 src/main/daemon/daemon-launched-child.ts
-src/main/daemon/daemon-process-identity-query.ts
 src/main/daemon/daemon-process-inspection.ts
-src/main/daemon/daemon-process-start-time.ts
 src/main/emulator/android/android-avd-boot.ts
 src/main/emulator/android/android-command-runner.ts
 src/main/emulator/android/scrcpy-stream-session.ts
@@ -80,7 +77,6 @@ src/main/emulator/simctl-simulator-devices.ts
 src/main/emulator/simulator-app-visibility.ts
 src/main/external-editor-launch.ts
 src/main/git/command-runner/exec-file-capture.ts
-src/main/git/command-runner/git-exec-file.ts
 src/main/git/command-runner/git-spawn.ts
 src/main/git/command-runner/git-stream-stdout.ts
 src/main/git/command-runner/spawn-command-capture.ts
@@ -132,8 +128,6 @@ src/main/providers/macos-login-session-pty-probe.ts
 src/main/providers/process-cwd.ts
 src/main/providers/windows-console-attached-processes.ts
 src/main/pty-descendant-termination.ts
-src/main/pty/posix-pty-foreground-group.ts
-src/main/pty/posix-pty-process-groups.ts
 src/main/pty/windows-environment-path.ts
 src/main/rate-limits/codex-fetcher.ts
 src/main/rate-limits/gemini-cli-oauth-extractor.ts
@@ -153,13 +147,10 @@ src/main/startup/ensure-virtual-display.ts
 src/main/startup/hydrate-shell-path.ts
 src/main/startup/windows-install-dir-acl-probe.ts
 src/main/startup/windows-user-data-acl.ts
-src/main/win32-utils.ts
 src/main/window/clipboard-ipc-handlers.ts
 src/main/windows-process-tree-kill.ts
 src/main/workspace-space-analysis.ts
-src/main/wsl-availability.ts
 src/main/wsl-unc-delete.ts
-src/main/wsl.ts
 src/main/zsh-startup-hook-pty-harness.ts
 src/relay/agent-exec-handler.ts
 src/relay/ai-vault-service-client-state.ts

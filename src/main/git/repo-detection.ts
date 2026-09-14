@@ -4,14 +4,14 @@ import { normalizeRuntimePathSeparators } from '../../shared/cross-platform-path
 import { parseWslUncPath } from '../../shared/wsl-paths'
 import { toWindowsWslPath } from '../wsl'
 import { scanGitMarkerSync, resolveRealPathSync } from './repo-git-marker-scan'
-import { gitExecFileSync } from './runner'
+import { gitExecFileAsync } from './runner'
 
 type GitRepoProbeResult = 'repo' | 'not-repo' | 'indeterminate'
 
 let warnedMarkerFallbackThisSession = false
 
 /** Check if a path is a valid git repository (regular or bare). */
-export function isGitRepo(path: string): boolean {
+export async function isGitRepo(path: string): Promise<boolean> {
   try {
     if (!statSync(path, { throwIfNoEntry: false })?.isDirectory()) {
       return false
@@ -20,7 +20,7 @@ export function isGitRepo(path: string): boolean {
     return false
   }
 
-  const gitProbeResult = probeGitRepo(path)
+  const gitProbeResult = await probeGitRepo(path)
   if (gitProbeResult === 'repo') {
     return true
   }
@@ -38,14 +38,16 @@ export function isGitRepo(path: string): boolean {
   return markerScan.status === 'valid'
 }
 
+function revParse(path: string, args: string[]): Promise<string> {
+  return gitExecFileAsync(['rev-parse', ...args], { cwd: path }).then(({ stdout }) => stdout.trim())
+}
+
 /** Only a clean pair of negative Git answers is a definitive non-repo. */
-function probeGitRepo(path: string): GitRepoProbeResult {
+async function probeGitRepo(path: string): Promise<GitRepoProbeResult> {
   let sawFailure = false
 
   try {
-    const insideWorkTree = gitExecFileSync(['rev-parse', '--is-inside-work-tree'], {
-      cwd: path
-    }).trim()
+    const insideWorkTree = await revParse(path, ['--is-inside-work-tree'])
     if (insideWorkTree === 'true') {
       return 'repo'
     }
@@ -57,9 +59,7 @@ function probeGitRepo(path: string): GitRepoProbeResult {
   }
 
   try {
-    const bareRepo = gitExecFileSync(['rev-parse', '--is-bare-repository'], {
-      cwd: path
-    }).trim()
+    const bareRepo = await revParse(path, ['--is-bare-repository'])
     if (bareRepo === 'true') {
       return 'repo'
     }
@@ -73,19 +73,13 @@ function probeGitRepo(path: string): GitRepoProbeResult {
   return sawFailure ? 'indeterminate' : 'not-repo'
 }
 
-export function getGitRepoRoot(path: string): string {
+export async function getGitRepoRoot(path: string): Promise<string> {
   try {
     if (!existsSync(path) || !statSync(path).isDirectory()) {
       return path
     }
-    const insideWorkTree = gitExecFileSync(['rev-parse', '--is-inside-work-tree'], {
-      cwd: path
-    }).trim()
-    if (insideWorkTree === 'true') {
-      const root = gitExecFileSync(['rev-parse', '--show-toplevel'], {
-        cwd: path
-      }).trim()
-      return normalizeGitRepoRootForInputPath(path, root)
+    if ((await revParse(path, ['--is-inside-work-tree'])) === 'true') {
+      return normalizeGitRepoRootForInputPath(path, await revParse(path, ['--show-toplevel']))
     }
   } catch {
     // Fall through to preserving the original path.
@@ -102,17 +96,15 @@ function canonicalizeGitDirPath(path: string): string {
 }
 
 /** Return the main-checkout path only when `path` is a linked worktree. */
-export function getLinkedWorktreeMainRepoRoot(path: string): string | null {
+export async function getLinkedWorktreeMainRepoRoot(path: string): Promise<string | null> {
   try {
     if (!statSync(path, { throwIfNoEntry: false })?.isDirectory()) {
       return null
     }
-    if (gitExecFileSync(['rev-parse', '--is-inside-work-tree'], { cwd: path }).trim() !== 'true') {
+    if ((await revParse(path, ['--is-inside-work-tree'])) !== 'true') {
       return null
     }
-    const [gitDir, commonDir] = gitExecFileSync(['rev-parse', '--git-dir', '--git-common-dir'], {
-      cwd: path
-    })
+    const [gitDir, commonDir] = (await revParse(path, ['--git-dir', '--git-common-dir']))
       .split('\n')
       .map((line) => line.trim())
     if (!gitDir || !commonDir) {
@@ -125,7 +117,7 @@ export function getLinkedWorktreeMainRepoRoot(path: string): string | null {
     if (basename(absoluteCommonDir) !== '.git') {
       return null
     }
-    return getGitRepoRoot(dirname(absoluteCommonDir))
+    return await getGitRepoRoot(dirname(absoluteCommonDir))
   } catch {
     return null
   }

@@ -27,7 +27,7 @@ type CodexAccountSelectionDependencies = {
   configMirror: CodexConfigMirror
   lifecycle: CodexAccountServiceLifecycle
   resolveSystemDefault: () => CodexSystemDefaultIdentity
-  removeManagedHome: (candidatePath: string, expectedAccountId: string) => void
+  removeManagedHome: (candidatePath: string, expectedAccountId: string) => Promise<void>
   discardResetAttempts: (accountId: string) => void
 }
 
@@ -82,7 +82,7 @@ export class CodexAccountSelection {
       this.dependencies.lifecycle.onHostSystemDefaultSelected?.()
     }
 
-    this.dependencies.removeManagedHome(account.managedHomePath, account.id)
+    await this.dependencies.removeManagedHome(account.managedHomePath, account.id)
     // Why: a removed account can no longer appear in the switcher dropdown,
     // so purge its cached usage to avoid stale entries.
     this.dependencies.rateLimits.evictInactiveCodexCache(accountId)
@@ -128,7 +128,7 @@ export class CodexAccountSelection {
         effectiveTarget?.runtime === 'wsl' ? nextSelection.host : accountId,
       activeCodexManagedAccountIdsByRuntime: nextSelection
     })
-    this.dependencies.configMirror.safeSyncToManagedHomes()
+    await this.dependencies.configMirror.safeSyncToManagedHomes()
     this.dependencies.runtimeHome.syncForCurrentSelection(effectiveTarget)
     if (
       accountId === null &&

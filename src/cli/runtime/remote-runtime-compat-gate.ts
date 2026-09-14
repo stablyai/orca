@@ -54,8 +54,11 @@ export class RemoteRuntimeCompatGate {
         }
         this.noteVerifiedStatus(response.result)
         if (this.environmentSelector) {
-          markEnvironmentUsed(this.userDataPath, this.environmentSelector, {
+          // The preflight callback is synchronous and a failed lastUsedAt stamp must not fail the call.
+          void markEnvironmentUsed(this.userDataPath, this.environmentSelector, {
             runtimeId: response._meta.runtimeId
+          }).catch((error: unknown) => {
+            console.warn('[runtime-environments] could not record environment use:', error)
           })
         }
       },

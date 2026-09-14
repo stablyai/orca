@@ -139,9 +139,9 @@ describe('CodexAccountService config sync', () => {
 
       let thrown: Error | null = null
       try {
-        ;(
+        await (
           service as unknown as {
-            readIdentityFromHome(managedHomePath: string, expectedAccountId: string): unknown
+            readIdentityFromHome(managedHomePath: string, expectedAccountId: string): Promise<unknown>
           }
         ).readIdentityFromHome(managedHomePath, 'account-1')
       } catch (error) {
@@ -228,6 +228,7 @@ describe('CodexAccountService config sync', () => {
         rateLimits as never,
         runtimeHome as never
       )
+      await service.ready
 
       await service.selectAccount('account-1')
       await service.selectAccount(null)

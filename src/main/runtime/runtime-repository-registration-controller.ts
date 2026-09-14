@@ -40,7 +40,7 @@ export class RuntimeRepositoryRegistrationController {
     if (kind === 'git') {
       await awaitWindowsHostGitEnvironmentReady({ cwd: path })
     }
-    if (kind === 'git' && !isGitRepo(path)) {
+    if (kind === 'git' && !(await isGitRepo(path))) {
       throw new Error(`Not a valid git repository: ${path}`)
     }
     const existing = store.getRepos().find((repo) => {

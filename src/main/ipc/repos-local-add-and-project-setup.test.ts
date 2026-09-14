@@ -108,7 +108,7 @@ describe('repos:add + repos:clone', () => {
   })
 
   it('canonicalizes local git repos:add to the detected root path', async () => {
-    vi.mocked(getGitRepoRoot).mockReturnValue('/tmp/from-add')
+    vi.mocked(getGitRepoRoot).mockResolvedValue('/tmp/from-add')
 
     const result = await handlers.get('repos:add')!(null, {
       path: '/tmp/from-add/packages/web',
@@ -133,7 +133,7 @@ describe('repos:add + repos:clone', () => {
       badgeColor: '#22c55e'
     }
     mockStore.getRepos.mockReturnValue([existing])
-    vi.mocked(getGitRepoRoot).mockReturnValue('/tmp/from-add')
+    vi.mocked(getGitRepoRoot).mockResolvedValue('/tmp/from-add')
 
     const result = await handlers.get('repos:add')!(null, {
       path: '/tmp/from-add/packages/web',

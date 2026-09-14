@@ -22,12 +22,15 @@ export class CodexAccountIdentity {
     private readonly assertManagedHomePath: (
       candidatePath: string,
       expectedAccountId?: string
-    ) => string
+    ) => Promise<string>
   ) {}
 
-  readFromHome(managedHomePath: string, expectedAccountId: string): ResolvedCodexIdentity {
+  async readFromHome(
+    managedHomePath: string,
+    expectedAccountId: string
+  ): Promise<ResolvedCodexIdentity> {
     const authFilePath = join(
-      this.assertManagedHomePath(managedHomePath, expectedAccountId),
+      await this.assertManagedHomePath(managedHomePath, expectedAccountId),
       'auth.json'
     )
     let contents: string

@@ -34,7 +34,7 @@ const ALLOWLIST: readonly string[] = readAllowlist(
  * the allowlist does not bound this: a swap (one file fixed and delisted, one
  * new file added with its entry) satisfies both membership assertions.
  */
-const UNHIDDEN_SPAWNER_PIN = 65
+const UNHIDDEN_SPAWNER_PIN = 58
 
 const CHILD_PROCESS_IMPORT =
   /from\s+['"](?:node:)?child_process['"]|require\(\s*['"](?:node:)?child_process['"]/
@@ -165,7 +165,9 @@ describe('direct child-process calls hide the Windows console', () => {
     // Naming a file that definitely offends: `offenders + allowlist > N`
     // cannot fail while the allowlist alone exceeds N, so it passed even for a
     // scanner that found nothing.
-    expect(offenders).toContain('main/wsl.ts')
+    // Repoint this when the named file is migrated -- that is the ratchet
+    // working, not a broken test.
+    expect(offenders).toContain('cli/handlers/account.ts')
   })
 
   it('adds no new file that spawns without windowsHide', () => {

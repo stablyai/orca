@@ -83,7 +83,7 @@ export function registerNestedRepoImportHandler(mainWindow: BrowserWindow, store
             importRepoPath = await importTargetResolver.resolveSsh(repoPath, gitProvider)
           } else {
             await awaitWindowsHostGitEnvironmentReady({ cwd: repoPath })
-            if (!isGitRepo(repoPath)) {
+            if (!(await isGitRepo(repoPath))) {
               results.push({
                 path: repoPath,
                 status: 'failed',

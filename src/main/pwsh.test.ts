@@ -268,3 +268,55 @@ describe('isPwshAvailable', () => {
     }
   })
 })
+
+// The highest-breadth sync spawn in this slice. 16 IPC entrypoints reach this
+// module, and `ipcMain.handle('pwsh:isAvailable')` plus `host.pwsh.isAvailable`
+// both answer through `isPwshAvailableAsync`, so a repeat capability read must
+// never reach `runProcessSync` and must not re-fork pwsh.exe.
+describe('IPC capability read', () => {
+  beforeEach(() => {
+    vi.resetModules()
+    vi.useRealTimers()
+    runProcessMock.mockReset()
+    runProcessSyncMock.mockReset()
+  })
+
+  it('probes through the async runner once and serves repeats from cache', async () => {
+    const restorePlatform = setPlatform('win32')
+    runProcessMock.mockResolvedValue(ok)
+
+    try {
+      const { isPwshAvailableAsync } = await import('./pwsh')
+      await expect(isPwshAvailableAsync()).resolves.toBe(true)
+      await expect(isPwshAvailableAsync()).resolves.toBe(true)
+      await expect(isPwshAvailableAsync()).resolves.toBe(true)
+
+      expect(runProcessSyncMock).not.toHaveBeenCalled()
+      expect(runProcessMock).toHaveBeenCalledTimes(1)
+    } finally {
+      restorePlatform()
+    }
+  })
+
+  it('shares one spawn across concurrent capability reads', async () => {
+    const restorePlatform = setPlatform('win32')
+    let settle: ((result: typeof ok) => void) | undefined
+    runProcessMock.mockReturnValue(
+      new Promise<typeof ok>((resolve) => {
+        settle = resolve
+      })
+    )
+
+    try {
+      const { isPwshAvailableAsync } = await import('./pwsh')
+      const reads = [isPwshAvailableAsync(), isPwshAvailableAsync(), isPwshAvailableAsync()]
+      settle?.(ok)
+
+      await expect(Promise.all(reads)).resolves.toEqual([true, true, true])
+      expect(runProcessMock).toHaveBeenCalledTimes(1)
+      expect(runProcessSyncMock).not.toHaveBeenCalled()
+    } finally {
+      restorePlatform()
+    }
+  })
+})

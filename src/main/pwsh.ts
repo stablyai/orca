@@ -42,6 +42,10 @@ function cachePwshProbeFailure(timedOut: boolean, startedAtGeneration: number): 
  * Check whether pwsh.exe is available on this Windows machine.
  * Positive results are cached for the process lifetime; negative results are
  * retried so transient cold-start failures cannot outlive the daemon.
+ *
+ * Narrow sync path: the only caller is the daemon's synchronous
+ * `createPtyShellLaunchPlan`, whose async parent pre-resolves this cache. Every
+ * `ipcMain` reply reads availability through `isPwshAvailableAsync` instead.
  */
 export function isPwshAvailable(): boolean {
   if (pwshAvailableCache && isCacheFresh(pwshAvailableCache)) {

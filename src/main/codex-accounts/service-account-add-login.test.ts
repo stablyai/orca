@@ -94,6 +94,7 @@ describe('CodexAccountService config sync', () => {
       rateLimits as never,
       runtimeHome as never
     )
+    await service.ready
 
     await service.addAccount()
 
@@ -159,6 +160,7 @@ describe('CodexAccountService config sync', () => {
       rateLimits as never,
       runtimeHome as never
     )
+    await service.ready
 
     await service.addAccount()
 
@@ -196,6 +198,7 @@ describe('CodexAccountService config sync', () => {
         rateLimits as never,
         runtimeHome as never
       )
+      await service.ready
 
       await expect(service.addAccount()).rejects.toThrow(
         'Orca cannot add a Codex OAuth account while ~/.codex/config.toml pins the custom provider "codex-lb". Keep using the system-default account for this provider, or remove model_provider (or set it to "openai") before adding an OAuth account. Orca left your config unchanged.'
@@ -282,6 +285,7 @@ describe('CodexAccountService config sync', () => {
       rateLimits as never,
       runtimeHome as never
     )
+    await service.ready
 
     const result = await service.reauthenticateAccount('account-1')
 
@@ -432,6 +436,7 @@ describe('CodexAccountService config sync', () => {
       rateLimits as never,
       runtimeHome as never
     )
+    await service.ready
 
     let result: CodexRateLimitAccountsState | null = null
     if (testCase.outcome === 'login-failure') {
@@ -510,6 +515,7 @@ describe('CodexAccountService config sync', () => {
       rateLimits as never,
       runtimeHome as never
     )
+    await service.ready
 
     await expect(service.reauthenticateAccount('account-1')).rejects.toThrow(
       'Managed Codex home directory does not exist on disk.'
@@ -556,6 +562,7 @@ describe('CodexAccountService config sync', () => {
       rateLimits as never,
       runtimeHome as never
     )
+    await service.ready
 
     await expect(service.reauthenticateAccount('account-1')).rejects.toThrow(
       'Managed Codex home is missing Orca ownership marker.'

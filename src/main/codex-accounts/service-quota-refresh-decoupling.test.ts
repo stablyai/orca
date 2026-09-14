@@ -110,6 +110,7 @@ describe('CodexAccountService config sync', () => {
         rateLimits as never,
         runtimeHome as never
       )
+      await service.ready
 
       const state = await expectResolvesPromptly(
         service.selectAccount('account-1'),
@@ -135,6 +136,7 @@ describe('CodexAccountService config sync', () => {
         rateLimits as never,
         runtimeHome as never
       )
+      await service.ready
 
       const state = await service.selectAccount('account-1')
 
@@ -167,6 +169,7 @@ describe('CodexAccountService config sync', () => {
         rateLimits as never,
         runtimeHome as never
       )
+      await service.ready
 
       const state = await expectResolvesPromptly(service.addAccount(), 'addAccount')
 
@@ -200,6 +203,7 @@ describe('CodexAccountService config sync', () => {
         rateLimits as never,
         runtimeHome as never
       )
+      await service.ready
 
       const state = await service.addAccount()
 

@@ -20,11 +20,11 @@ const alert = {
   title: 'QA',
   body: ''
 }
-it('reconciles an old delivered alert after desktop restart and preserves unrelated identities', () => {
+it('reconciles an old delivered alert after desktop restart and preserves unrelated identities', async () => {
   const h = fixture()
-  h.store.record({ ...alert, ...shown })
+  await h.store.record({ ...alert, ...shown })
   const restarted = new MobileNotificationDismissalStore(h.path)
-  restarted.record({
+  await restarted.record({
     type: 'dismiss',
     notificationId: 'same',
     notificationEpoch: 'new',
@@ -40,17 +40,17 @@ it('reconciles an old delivered alert after desktop restart and preserves unrela
     ])
   ).toEqual([shown])
 })
-it('does not dismiss a newer replacement and does not treat missing or expired history as dismissal', () => {
+it('does not dismiss a newer replacement and does not treat missing or expired history as dismissal', async () => {
   const h = fixture()
   const now = Date.now()
   vi.spyOn(Date, 'now').mockReturnValue(now)
-  h.store.record({ ...alert, ...shown })
-  h.store.record({ type: 'dismiss', ...shown, notificationSeq: 13 })
+  await h.store.record({ ...alert, ...shown })
+  await h.store.record({ type: 'dismiss', ...shown, notificationSeq: 13 })
   expect(h.store.reconcile([shown])).toEqual([shown])
-  h.store.record({ ...alert, ...shown, notificationSeq: 14 })
+  await h.store.record({ ...alert, ...shown, notificationSeq: 14 })
   expect(h.store.reconcile([{ ...shown, notificationSeq: 14 }])).toEqual([])
   expect(h.store.reconcile([shown])).toEqual([shown])
-  h.store.record({ type: 'dismiss', ...shown, notificationSeq: 15 })
+  await h.store.record({ type: 'dismiss', ...shown, notificationSeq: 15 })
   vi.mocked(Date.now).mockReturnValue(now + 7 * 86400_000)
   expect(h.store.reconcile([shown])).toEqual([])
   expect(new MobileNotificationDismissalStore(`${h.path}-unknown`).reconcile([shown])).toEqual([])

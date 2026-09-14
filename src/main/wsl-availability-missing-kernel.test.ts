@@ -1,13 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { execFile, execFileSync } from 'node:child_process'
-import { runProcess, runProcessSync, type ProcessResult } from '../shared/child-process/run-process'
+import {
+  runProcess,
+  runProcessSync,
+  type ProcessResult,
+  type ProcessSpec
+} from '../shared/child-process/run-process'
 import {
   _resetWslAvailabilityCacheForTests,
   isWslAvailable,
   isWslAvailableAsync
 } from './wsl-availability'
 
-vi.mock('node:child_process', () => ({ execFile: vi.fn(), execFileSync: vi.fn() }))
 vi.mock('../shared/child-process/run-process', () => ({
   runProcess: vi.fn(),
   runProcessSync: vi.fn()
@@ -17,7 +20,13 @@ vi.mock('./wsl-interop-spawn-directory', () => ({
 }))
 
 const originalPlatform = process.platform
-const success: ProcessResult = { code: 0, signal: null, stdout: '', stderr: '', timedOut: false }
+const success: ProcessResult = {
+  code: 0,
+  signal: null,
+  stdout: '',
+  stderr: '',
+  timedOut: false
+}
 
 beforeEach(() => {
   vi.resetAllMocks()
@@ -32,39 +41,47 @@ afterEach(() => {
 for (const mode of ['sync', 'async'] as const) {
   describe(`${mode} WSL1 availability without WSL2 kernel`, () => {
     const probe = () => (mode === 'sync' ? isWslAvailable() : isWslAvailableAsync())
-    const guestRunner = () => (mode === 'sync' ? runProcessSync : runProcess)
+    const runner = () => (mode === 'sync' ? vi.mocked(runProcessSync) : vi.mocked(runProcess))
+    // Both probes go through the same runner now, so the guest spawn is identified by argv.
+    const guestCalls = () =>
+      runner().mock.calls.filter(([spec]: [ProcessSpec]) => spec.args?.includes('/bin/true'))
 
-    function failStatus(code: number): void {
-      vi.mocked(execFileSync).mockImplementation(() => {
-        throw { status: code }
+    /** `--status` exits `code`; the guest probe answers with `guest` (thrown/rejected if an Error). */
+    function wire(code: number, guest: ProcessResult | Error): void {
+      const answer = (spec: ProcessSpec): ProcessResult => {
+        if (spec.args?.[0] === '--status') {
+          return { ...success, code }
+        }
+        if (guest instanceof Error) {
+          throw guest
+        }
+        return guest
+      }
+      vi.mocked(runProcessSync).mockImplementation(answer)
+      vi.mocked(runProcess).mockImplementation((spec) => {
+        try {
+          return Promise.resolve(answer(spec))
+        } catch (error) {
+          return Promise.reject(error)
+        }
       })
-      vi.mocked(execFile).mockImplementation((...args: unknown[]) => {
-        const callback = args.at(-1) as (error: unknown) => void
-        callback({ code })
-        return {} as ReturnType<typeof execFile>
-      })
-    }
-    function guestResult(result: ProcessResult): void {
-      vi.mocked(runProcess).mockResolvedValue(result)
-      vi.mocked(runProcessSync).mockReturnValue(result)
     }
 
     // Node reports the Windows DWORD; the console prints its signed equivalent.
     for (const status of [-444, 4_294_966_852]) {
       it(`requires guest execution and caches its success for ${status}`, async () => {
-        failStatus(status)
-        guestResult(success)
+        wire(status, success)
         expect(await probe()).toBe(true)
         expect(await probe()).toBe(true)
-        expect(guestRunner()).toHaveBeenCalledTimes(1)
-        expect(guestRunner()).toHaveBeenCalledWith(
+        expect(guestCalls()).toHaveLength(1)
+        expect(guestCalls()[0]).toEqual([
           expect.objectContaining({
             program: 'wsl.exe',
             args: ['--exec', '/bin/true'],
             timeoutMs: 5000,
             cwd: 'C:\\Windows'
           })
-        )
+        ])
       })
     }
 
@@ -73,26 +90,20 @@ for (const mode of ['sync', 'async'] as const) {
       { ...success, code: null, timedOut: true }
     ]) {
       it(`keeps a failed guest unavailable: ${JSON.stringify(result)}`, async () => {
-        failStatus(-444)
-        guestResult(result)
+        wire(-444, result)
         expect(await probe()).toBe(false)
       })
     }
 
     it('stays unavailable when the guest probe cannot be spawned', async () => {
-      failStatus(-444)
-      vi.mocked(runProcess).mockRejectedValue(new Error('EPERM'))
-      vi.mocked(runProcessSync).mockImplementation(() => {
-        throw new Error('EPERM')
-      })
+      wire(-444, new Error('EPERM'))
       expect(await probe()).toBe(false)
     })
 
     it('does not probe a guest for unrelated status failures', async () => {
-      failStatus(1)
+      wire(1, success)
       expect(await probe()).toBe(false)
-      expect(runProcess).not.toHaveBeenCalled()
-      expect(runProcessSync).not.toHaveBeenCalled()
+      expect(guestCalls()).toHaveLength(0)
     })
   })
 }

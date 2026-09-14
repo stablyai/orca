@@ -1,19 +1,15 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type * as childProcess from 'node:child_process'
+import type { ProcessResult, ProcessSpec } from '../shared/child-process/run-process'
 
-const { execFileMock, execFileSyncMock } = vi.hoisted(() => ({
-  execFileMock: vi.fn(),
-  execFileSyncMock: vi.fn()
+const { runProcessMock, runProcessSyncMock } = vi.hoisted(() => ({
+  runProcessMock: vi.fn<(spec: ProcessSpec) => Promise<ProcessResult>>(),
+  runProcessSyncMock: vi.fn<(spec: ProcessSpec) => ProcessResult>()
 }))
 
-vi.mock('child_process', async (importOriginal) => {
-  const actual = await importOriginal<typeof childProcess>()
-  return {
-    ...actual,
-    execFile: execFileMock,
-    execFileSync: execFileSyncMock
-  }
-})
+vi.mock('../shared/child-process/run-process', () => ({
+  runProcess: runProcessMock,
+  runProcessSync: runProcessSyncMock
+}))
 
 import {
   _resetWslCachesForTests,
@@ -33,13 +29,32 @@ import {
   wslUncDirectoryExistsAsync
 } from './wsl'
 
+/** A wsl.exe run that printed `stdout` and exited with `code`. */
+function exited(stdout: string, code = 0): ProcessResult {
+  return { code, signal: null, stdout, stderr: '', timedOut: false }
+}
+
+/** How `runProcess`/`runProcessSync` report a probe they had to kill. */
+function killedByTimeout(): ProcessResult {
+  return {
+    code: null,
+    signal: 'SIGTERM',
+    stdout: '',
+    stderr: '',
+    timedOut: true
+  }
+}
+
 function withPlatform<T>(value: NodeJS.Platform, fn: () => T): T {
   const original = process.platform
   Object.defineProperty(process, 'platform', { configurable: true, value })
   try {
     return fn()
   } finally {
-    Object.defineProperty(process, 'platform', { configurable: true, value: original })
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: original
+    })
   }
 }
 
@@ -49,26 +64,25 @@ async function withPlatformAsync<T>(value: NodeJS.Platform, fn: () => Promise<T>
   try {
     return await fn()
   } finally {
-    Object.defineProperty(process, 'platform', { configurable: true, value: original })
+    Object.defineProperty(process, 'platform', {
+      configurable: true,
+      value: original
+    })
   }
 }
 
 describe('WSL distro discovery cache', () => {
   afterEach(() => {
-    execFileMock.mockReset()
-    execFileSyncMock.mockReset()
+    runProcessMock.mockReset()
+    runProcessSyncMock.mockReset()
     _resetWslCachesForTests()
   })
 
   it('retries asynchronous discovery after a transient wsl.exe failure', async () => {
     vi.useFakeTimers()
-    execFileMock
-      .mockImplementationOnce((_command, _args, _options, callback) => {
-        callback(new Error('transient failure'), '')
-      })
-      .mockImplementationOnce((_command, _args, _options, callback) => {
-        callback(null, 'Ubuntu\n')
-      })
+    runProcessMock
+      .mockRejectedValueOnce(new Error('transient failure'))
+      .mockResolvedValueOnce(exited('Ubuntu\n'))
 
     try {
       await withPlatformAsync('win32', async () => {
@@ -76,7 +90,7 @@ describe('WSL distro discovery cache', () => {
         expect(getCachedWslDistros()).toBeNull()
         // Brief negative caching bounds the wsl.exe spawn rate between retries.
         await expect(listWslDistrosAsync()).resolves.toEqual([])
-        expect(execFileMock).toHaveBeenCalledTimes(1)
+        expect(runProcessMock).toHaveBeenCalledTimes(1)
         vi.advanceTimersByTime(15_000)
         await expect(listWslDistrosAsync()).resolves.toEqual(['Ubuntu'])
       })
@@ -87,17 +101,36 @@ describe('WSL distro discovery cache', () => {
 
   it('retries synchronous discovery after a transient wsl.exe failure', () => {
     vi.useFakeTimers()
-    execFileSyncMock.mockImplementationOnce(() => {
+    runProcessSyncMock.mockImplementationOnce(() => {
       throw new Error('transient failure')
     })
-    execFileSyncMock.mockReturnValueOnce('Ubuntu\n')
+    runProcessSyncMock.mockReturnValueOnce(exited('Ubuntu\n'))
 
     try {
       withPlatform('win32', () => {
         expect(listWslDistros()).toEqual([])
         expect(getCachedWslDistros()).toBeNull()
         expect(listWslDistros()).toEqual([])
-        expect(execFileSyncMock).toHaveBeenCalledTimes(1)
+        expect(runProcessSyncMock).toHaveBeenCalledTimes(1)
+        vi.advanceTimersByTime(15_000)
+        expect(listWslDistros()).toEqual(['Ubuntu'])
+      })
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  // Why: a non-zero exit no longer throws at the spawn layer, so the retry window has to
+  // be armed from the exit code instead — otherwise a failing `--list` caches as [].
+  it('retries synchronous discovery after wsl.exe exits non-zero', () => {
+    vi.useFakeTimers()
+    runProcessSyncMock.mockReturnValueOnce(exited('', 1))
+    runProcessSyncMock.mockReturnValueOnce(exited('Ubuntu\n'))
+
+    try {
+      withPlatform('win32', () => {
+        expect(listWslDistros()).toEqual([])
+        expect(getCachedWslDistros()).toBeNull()
         vi.advanceTimersByTime(15_000)
         expect(listWslDistros()).toEqual(['Ubuntu'])
       })
@@ -112,13 +145,7 @@ describe('WSL distro discovery cache', () => {
   // and then permanently absent from the terminal picker.
   it('retries asynchronous discovery after wsl.exe reports no distros yet', async () => {
     vi.useFakeTimers()
-    execFileMock
-      .mockImplementationOnce((_command, _args, _options, callback) => {
-        callback(null, '')
-      })
-      .mockImplementationOnce((_command, _args, _options, callback) => {
-        callback(null, 'Ubuntu\n')
-      })
+    runProcessMock.mockResolvedValueOnce(exited('')).mockResolvedValueOnce(exited('Ubuntu\n'))
 
     try {
       await withPlatformAsync('win32', async () => {
@@ -133,8 +160,8 @@ describe('WSL distro discovery cache', () => {
 
   it('retries synchronous discovery after wsl.exe reports no distros yet', () => {
     vi.useFakeTimers()
-    execFileSyncMock.mockReturnValueOnce('')
-    execFileSyncMock.mockReturnValueOnce('Ubuntu\n')
+    runProcessSyncMock.mockReturnValueOnce(exited(''))
+    runProcessSyncMock.mockReturnValueOnce(exited('Ubuntu\n'))
 
     try {
       withPlatform('win32', () => {
@@ -150,34 +177,32 @@ describe('WSL distro discovery cache', () => {
   // Why: an empty result must still not let every caller re-spawn a blocking
   // wsl.exe; it reuses the same brief negative-cache window as a hard failure.
   it('bounds the wsl.exe spawn rate while no distros are installed', () => {
-    execFileSyncMock.mockReturnValue('')
+    runProcessSyncMock.mockReturnValue(exited(''))
 
     withPlatform('win32', () => {
       expect(listWslDistros()).toEqual([])
       expect(listWslDistros()).toEqual([])
-      expect(execFileSyncMock).toHaveBeenCalledTimes(1)
+      expect(runProcessSyncMock).toHaveBeenCalledTimes(1)
     })
   })
 
   it('bounds the asynchronous spawn rate while no distros are installed', async () => {
-    execFileMock.mockImplementation((_command, _args, _options, callback) => {
-      callback(null, '')
-    })
+    runProcessMock.mockResolvedValue(exited(''))
 
     await withPlatformAsync('win32', async () => {
       await expect(listWslDistrosAsync()).resolves.toEqual([])
       await expect(listWslDistrosAsync()).resolves.toEqual([])
-      expect(execFileMock).toHaveBeenCalledTimes(1)
+      expect(runProcessMock).toHaveBeenCalledTimes(1)
     })
   })
 
   it('still caches a non-empty distro list for the process lifetime', () => {
-    execFileSyncMock.mockReturnValueOnce('Ubuntu\n')
+    runProcessSyncMock.mockReturnValueOnce(exited('Ubuntu\n'))
 
     withPlatform('win32', () => {
       expect(listWslDistros()).toEqual(['Ubuntu'])
       expect(listWslDistros()).toEqual(['Ubuntu'])
-      expect(execFileSyncMock).toHaveBeenCalledTimes(1)
+      expect(runProcessSyncMock).toHaveBeenCalledTimes(1)
     })
   })
 
@@ -187,15 +212,15 @@ describe('WSL distro discovery cache', () => {
   // still visible to `isKnownMissingDistro`.
   it('re-probes a docker-desktop-only machine once a user distro can appear', () => {
     vi.useFakeTimers()
-    execFileSyncMock.mockReturnValueOnce('docker-desktop\ndocker-desktop-data\n')
-    execFileSyncMock.mockReturnValueOnce('docker-desktop\nUbuntu\n')
+    runProcessSyncMock.mockReturnValueOnce(exited('docker-desktop\ndocker-desktop-data\n'))
+    runProcessSyncMock.mockReturnValueOnce(exited('docker-desktop\nUbuntu\n'))
 
     try {
       withPlatform('win32', () => {
         expect(listWslDistros()).toEqual([])
         expect(getCachedWslDistros()).toEqual([])
         expect(listWslDistros()).toEqual([])
-        expect(execFileSyncMock).toHaveBeenCalledTimes(1)
+        expect(runProcessSyncMock).toHaveBeenCalledTimes(1)
         vi.advanceTimersByTime(15_000)
         expect(listWslDistros()).toEqual(['Ubuntu'])
       })
@@ -208,21 +233,21 @@ describe('WSL distro discovery cache', () => {
   // window would re-spawn wsl.exe every 15s for the whole session.
   it('backs off while the list keeps coming back empty', () => {
     vi.useFakeTimers()
-    execFileSyncMock.mockReturnValue('')
+    runProcessSyncMock.mockReturnValue(exited(''))
 
     try {
       withPlatform('win32', () => {
         expect(listWslDistros()).toEqual([])
         vi.advanceTimersByTime(15_000)
         expect(listWslDistros()).toEqual([])
-        expect(execFileSyncMock).toHaveBeenCalledTimes(2)
+        expect(runProcessSyncMock).toHaveBeenCalledTimes(2)
         // Second empty result doubles the window, so 15s more is not enough.
         vi.advanceTimersByTime(15_000)
         expect(listWslDistros()).toEqual([])
-        expect(execFileSyncMock).toHaveBeenCalledTimes(2)
+        expect(runProcessSyncMock).toHaveBeenCalledTimes(2)
         vi.advanceTimersByTime(15_000)
         expect(listWslDistros()).toEqual([])
-        expect(execFileSyncMock).toHaveBeenCalledTimes(3)
+        expect(runProcessSyncMock).toHaveBeenCalledTimes(3)
       })
     } finally {
       vi.useRealTimers()
@@ -231,7 +256,7 @@ describe('WSL distro discovery cache', () => {
 
   it('backs off after repeated distro-list failures', () => {
     vi.useFakeTimers()
-    execFileSyncMock.mockImplementation(() => {
+    runProcessSyncMock.mockImplementation(() => {
       throw new Error('transient failure')
     })
 
@@ -240,10 +265,10 @@ describe('WSL distro discovery cache', () => {
         expect(listWslDistros()).toEqual([])
         vi.advanceTimersByTime(15_000)
         expect(listWslDistros()).toEqual([])
-        expect(execFileSyncMock).toHaveBeenCalledTimes(2)
+        expect(runProcessSyncMock).toHaveBeenCalledTimes(2)
         vi.advanceTimersByTime(15_000)
         expect(listWslDistros()).toEqual([])
-        expect(execFileSyncMock).toHaveBeenCalledTimes(2)
+        expect(runProcessSyncMock).toHaveBeenCalledTimes(2)
       })
     } finally {
       vi.useRealTimers()
@@ -254,7 +279,7 @@ describe('WSL distro discovery cache', () => {
   // invisible, so pin it rather than letting the doubling run away.
   it('caps the empty-list backoff at five minutes', () => {
     vi.useFakeTimers()
-    execFileSyncMock.mockReturnValue('')
+    runProcessSyncMock.mockReturnValue(exited(''))
 
     try {
       withPlatform('win32', () => {
@@ -263,10 +288,10 @@ describe('WSL distro discovery cache', () => {
           vi.advanceTimersByTime(delayMs)
           listWslDistros()
         }
-        expect(execFileSyncMock).toHaveBeenCalledTimes(6)
+        expect(runProcessSyncMock).toHaveBeenCalledTimes(6)
         vi.advanceTimersByTime(300_000)
         listWslDistros()
-        expect(execFileSyncMock).toHaveBeenCalledTimes(7)
+        expect(runProcessSyncMock).toHaveBeenCalledTimes(7)
       })
     } finally {
       vi.useRealTimers()
@@ -278,7 +303,7 @@ describe('WSL distro discovery cache', () => {
   // open and silently spawns `wsl.exe -d <distro>` for a distro Orca saw was absent.
   it('keeps reporting an empty result after it goes stale', () => {
     vi.useFakeTimers()
-    execFileSyncMock.mockReturnValue('')
+    runProcessSyncMock.mockReturnValue(exited(''))
 
     try {
       withPlatform('win32', () => {
@@ -297,7 +322,7 @@ describe('WSL distro discovery cache', () => {
   // so repair-required still fires for the case that warrants it.
   it('keeps reporting a known distro list indefinitely', () => {
     vi.useFakeTimers()
-    execFileSyncMock.mockReturnValueOnce('Ubuntu\n')
+    runProcessSyncMock.mockReturnValueOnce(exited('Ubuntu\n'))
 
     try {
       withPlatform('win32', () => {
@@ -313,8 +338,8 @@ describe('WSL distro discovery cache', () => {
 
 describe('WSL availability cache', () => {
   afterEach(() => {
-    execFileMock.mockReset()
-    execFileSyncMock.mockReset()
+    runProcessMock.mockReset()
+    runProcessSyncMock.mockReset()
     _resetWslCachesForTests()
   })
 
@@ -323,15 +348,8 @@ describe('WSL availability cache', () => {
   // process lifetime is what makes WSL vanish from the picker after setup.
   it('retries availability after a probe timeout instead of latching false', () => {
     vi.useFakeTimers()
-    execFileSyncMock.mockImplementationOnce(() => {
-      // Real execFileSync timeout shape on Windows: status null, signal SIGTERM.
-      throw Object.assign(new Error('spawnSync ETIMEDOUT'), {
-        code: 'ETIMEDOUT',
-        status: null,
-        signal: 'SIGTERM'
-      })
-    })
-    execFileSyncMock.mockReturnValueOnce('')
+    runProcessSyncMock.mockReturnValueOnce(killedByTimeout())
+    runProcessSyncMock.mockReturnValueOnce(exited(''))
 
     try {
       withPlatform('win32', () => {
@@ -347,48 +365,40 @@ describe('WSL availability cache', () => {
   // Why: the probe blocks the main process for up to 5s, so a timeout must not
   // let every caller re-spawn it immediately.
   it('bounds the probe rate while the failure window is open', () => {
-    execFileSyncMock.mockImplementation(() => {
-      // Real execFileSync timeout shape on Windows: status null, signal SIGTERM.
-      throw Object.assign(new Error('spawnSync ETIMEDOUT'), {
-        code: 'ETIMEDOUT',
-        status: null,
-        signal: 'SIGTERM'
-      })
-    })
+    runProcessSyncMock.mockReturnValue(killedByTimeout())
 
     withPlatform('win32', () => {
       expect(isWslAvailable()).toBe(false)
       expect(isWslAvailable()).toBe(false)
-      expect(execFileSyncMock).toHaveBeenCalledTimes(1)
+      expect(runProcessSyncMock).toHaveBeenCalledTimes(1)
     })
   })
 
   it('caches a successful probe for the process lifetime', () => {
-    execFileSyncMock.mockReturnValueOnce('')
+    runProcessSyncMock.mockReturnValueOnce(exited(''))
 
     withPlatform('win32', () => {
       expect(isWslAvailable()).toBe(true)
       expect(isWslAvailable()).toBe(true)
-      expect(execFileSyncMock).toHaveBeenCalledTimes(1)
+      expect(runProcessSyncMock).toHaveBeenCalledTimes(1)
     })
   })
 
   // Why: the renderer's capability read reaches this over IPC; a blocking spawn there
   // stalls every PTY message and window IPC for as long as wsl.exe takes to answer.
   it('probes availability for IPC callers without blocking the main thread', async () => {
-    execFileMock.mockImplementation((_command, _args, _options, callback) => {
-      callback(null, '', '')
-    })
+    runProcessMock.mockResolvedValue(exited(''))
 
     await withPlatformAsync('win32', async () => {
       await expect(isWslAvailableAsync()).resolves.toBe(true)
-      expect(execFileMock).toHaveBeenCalledWith(
-        'wsl.exe',
-        ['--status'],
-        expect.objectContaining({ timeout: 5000, windowsHide: true }),
-        expect.any(Function)
+      expect(runProcessMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          program: 'wsl.exe',
+          args: ['--status'],
+          timeoutMs: 5000
+        })
       )
-      expect(execFileSyncMock).not.toHaveBeenCalled()
+      expect(runProcessSyncMock).not.toHaveBeenCalled()
     })
   })
 
@@ -399,18 +409,14 @@ describe('WSL availability cache', () => {
   // reported WSL unavailable -- a worse state than the bug being fixed. Naming
   // the directory is what keeps ENOENT meaning "wsl.exe is not on PATH".
   it('names an explicit spawn directory on both probes, so no deleted cwd can read as ENOENT', async () => {
-    execFileSyncMock.mockReturnValueOnce('')
-    execFileMock.mockImplementation((_command, _args, _options, callback) => {
-      callback(null, '', '')
-    })
+    runProcessSyncMock.mockReturnValueOnce(exited(''))
+    runProcessMock.mockResolvedValue(exited(''))
 
     withPlatform('win32', () => {
       expect(isWslAvailable()).toBe(true)
     })
-    expect(execFileSyncMock).toHaveBeenCalledWith(
-      'wsl.exe',
-      ['--status'],
-      expect.objectContaining({ cwd: expect.any(String) })
+    expect(runProcessSyncMock).toHaveBeenCalledWith(
+      expect.objectContaining({ args: ['--status'], cwd: expect.any(String) })
     )
 
     // The two probes share one cache, so a false ENOENT from either poisons both.
@@ -418,38 +424,36 @@ describe('WSL availability cache', () => {
     await withPlatformAsync('win32', async () => {
       await expect(isWslAvailableAsync()).resolves.toBe(true)
     })
-    expect(execFileMock).toHaveBeenCalledWith(
-      'wsl.exe',
-      ['--status'],
-      expect.objectContaining({ cwd: expect.any(String) }),
-      expect.any(Function)
+    expect(runProcessMock).toHaveBeenCalledWith(
+      expect.objectContaining({ args: ['--status'], cwd: expect.any(String) })
     )
   })
 
   it('shares one wsl.exe spawn between concurrent async probes', async () => {
-    execFileMock.mockImplementation((_command, _args, _options, callback) => {
-      setTimeout(() => callback(null, '', ''), 0)
-    })
+    runProcessMock.mockResolvedValue(exited(''))
 
     await withPlatformAsync('win32', async () => {
       const results = await Promise.all([isWslAvailableAsync(), isWslAvailableAsync()])
       expect(results).toEqual([true, true])
-      expect(execFileMock).toHaveBeenCalledTimes(1)
+      expect(runProcessMock).toHaveBeenCalledTimes(1)
     })
   })
 
   it('does not let an older async failure overwrite a newer sync success', async () => {
-    let finishAsyncProbe: ((error: Error | null) => void) | null = null
-    execFileMock.mockImplementation((_command, _args, _options, callback) => {
-      finishAsyncProbe = (error) => callback(error, '', '')
-    })
-    execFileSyncMock.mockReturnValue('')
+    let finishAsyncProbe: ((result: ProcessResult) => void) | null = null
+    runProcessMock.mockImplementation(
+      () =>
+        new Promise<ProcessResult>((resolve) => {
+          finishAsyncProbe = resolve
+        })
+    )
+    runProcessSyncMock.mockReturnValue(exited(''))
 
     await withPlatformAsync('win32', async () => {
       const staleProbe = isWslAvailableAsync()
       expect(isWslAvailable()).toBe(true)
 
-      finishAsyncProbe?.(Object.assign(new Error('older failure'), { code: 1 }))
+      finishAsyncProbe?.(exited('', 1))
 
       await expect(staleProbe).resolves.toBe(true)
       expect(getCachedWslAvailability()).toBe(true)
@@ -457,56 +461,54 @@ describe('WSL availability cache', () => {
   })
 
   it('does not restore a failure after distro discovery disproves it mid-probe', async () => {
-    const callbacks = new Map<string, (error: Error | null, stdout: string) => void>()
-    execFileMock.mockImplementation((_command, args, _options, callback) => {
-      callbacks.set(args.join(' '), callback)
-    })
+    const resolvers = new Map<string, (result: ProcessResult) => void>()
+    runProcessMock.mockImplementation(
+      (spec) =>
+        new Promise<ProcessResult>((resolve) => {
+          resolvers.set((spec.args ?? []).join(' '), resolve)
+        })
+    )
 
     await withPlatformAsync('win32', async () => {
       const staleAvailability = isWslAvailableAsync()
       const distroProbe = listWslDistrosAsync()
-      callbacks.get('--list --quiet')?.(null, 'Ubuntu\n')
+      resolvers.get('--list --quiet')?.(exited('Ubuntu\n'))
       await expect(distroProbe).resolves.toEqual(['Ubuntu'])
 
-      callbacks.get('--status')?.(Object.assign(new Error('older failure'), { code: 1 }), '')
+      resolvers.get('--status')?.(exited('', 1))
       await expect(staleAvailability).resolves.toBe(false)
       expect(getCachedWslAvailability()).toBeNull()
 
       const retry = isWslAvailableAsync()
-      callbacks.get('--status')?.(null, '')
+      resolvers.get('--status')?.(exited(''))
       await expect(retry).resolves.toBe(true)
     })
   })
 
   it('shares the failure backoff between the async and sync probes', async () => {
-    execFileMock.mockImplementation((_command, _args, _options, callback) => {
-      callback(Object.assign(new Error('not installed'), { code: 'ENOENT' }), '', '')
-    })
+    runProcessMock.mockRejectedValue(Object.assign(new Error('not installed'), { code: 'ENOENT' }))
 
     await withPlatformAsync('win32', async () => {
       await expect(isWslAvailableAsync()).resolves.toBe(false)
       expect(isWslAvailable()).toBe(false)
-      expect(execFileSyncMock).not.toHaveBeenCalled()
+      expect(runProcessSyncMock).not.toHaveBeenCalled()
     })
   })
 
   // Why: wsl.exe ships in System32 on every modern Windows, so a host without WSL answers
-  // with a non-zero exit, not ENOENT — and execFile reports that as a numeric `code`, not the
-  // `status` execFileSync uses. Misreading it as retryable would shrink the shared cache window
-  // to 45s and make the sync callers pay their blocking spawn ~13x more often.
+  // with a non-zero exit, not ENOENT. Misreading that as retryable would shrink the shared
+  // cache window to 45s and make the sync callers pay their blocking spawn ~13x more often.
   it('treats a non-zero async exit as definitive, so the sync probe keeps the long window', async () => {
     vi.useFakeTimers()
-    execFileMock.mockImplementation((_command, _args, _options, callback) => {
-      callback(Object.assign(new Error('wsl.exe exited 1'), { code: 1 }), '', '')
-    })
-    execFileSyncMock.mockReturnValue('')
+    runProcessMock.mockResolvedValue(exited('', 1))
+    runProcessSyncMock.mockReturnValue(exited(''))
 
     try {
       await withPlatformAsync('win32', async () => {
         await expect(isWslAvailableAsync()).resolves.toBe(false)
         vi.advanceTimersByTime(45_000)
         expect(isWslAvailable()).toBe(false)
-        expect(execFileSyncMock).not.toHaveBeenCalled()
+        expect(runProcessSyncMock).not.toHaveBeenCalled()
         vi.advanceTimersByTime(10 * 60_000)
         expect(isWslAvailable()).toBe(true)
       })
@@ -520,14 +522,7 @@ describe('WSL availability cache', () => {
   // on staleness would let git and PTY silently resolve to a WSL that just failed.
   it('keeps reporting the last observed answer after it goes stale', () => {
     vi.useFakeTimers()
-    execFileSyncMock.mockImplementation(() => {
-      // Real execFileSync timeout shape on Windows: status null, signal SIGTERM.
-      throw Object.assign(new Error('spawnSync ETIMEDOUT'), {
-        code: 'ETIMEDOUT',
-        status: null,
-        signal: 'SIGTERM'
-      })
-    })
+    runProcessSyncMock.mockReturnValue(killedByTimeout())
 
     try {
       withPlatform('win32', () => {
@@ -545,14 +540,20 @@ describe('WSL availability cache', () => {
   // wsl.exe also exits non-zero while the WSL package is servicing or LxssManager is
   // still starting, which is transient.
   it.each([
-    ['wsl.exe reports WSL unusable', { status: 1 }],
-    ['wsl.exe is not installed', { code: 'ENOENT' }]
-  ])('holds a definitive failure far longer than a timeout when %s', (_label, errorShape) => {
+    ['wsl.exe reports WSL unusable', () => runProcessSyncMock.mockReturnValueOnce(exited('', 1))],
+    [
+      'wsl.exe is not installed',
+      () =>
+        runProcessSyncMock.mockImplementationOnce(() => {
+          throw Object.assign(new Error('definitive failure'), {
+            code: 'ENOENT'
+          })
+        })
+    ]
+  ])('holds a definitive failure far longer than a timeout when %s', (_label, failFirstProbe) => {
     vi.useFakeTimers()
-    execFileSyncMock.mockImplementationOnce(() => {
-      throw Object.assign(new Error('definitive failure'), errorShape)
-    })
-    execFileSyncMock.mockReturnValueOnce('')
+    failFirstProbe()
+    runProcessSyncMock.mockReturnValueOnce(exited(''))
 
     try {
       withPlatform('win32', () => {
@@ -560,7 +561,7 @@ describe('WSL availability cache', () => {
         vi.advanceTimersByTime(45_000)
         expect(isWslAvailable()).toBe(false)
         expect(getCachedWslAvailability()).toBe(false)
-        expect(execFileSyncMock).toHaveBeenCalledTimes(1)
+        expect(runProcessSyncMock).toHaveBeenCalledTimes(1)
         vi.advanceTimersByTime(10 * 60_000)
         expect(isWslAvailable()).toBe(true)
       })
@@ -573,24 +574,18 @@ describe('WSL availability cache', () => {
   // be re-probed on every window boundary for the rest of the session.
   it('backs off after repeated probe failures', () => {
     vi.useFakeTimers()
-    execFileSyncMock.mockImplementation(() => {
-      throw Object.assign(new Error('spawnSync ETIMEDOUT'), {
-        code: 'ETIMEDOUT',
-        status: null,
-        signal: 'SIGTERM'
-      })
-    })
+    runProcessSyncMock.mockReturnValue(killedByTimeout())
 
     try {
       withPlatform('win32', () => {
         expect(isWslAvailable()).toBe(false)
         vi.advanceTimersByTime(45_000)
         expect(isWslAvailable()).toBe(false)
-        expect(execFileSyncMock).toHaveBeenCalledTimes(2)
+        expect(runProcessSyncMock).toHaveBeenCalledTimes(2)
         // Second failure doubles the window, so the next boundary is not enough.
         vi.advanceTimersByTime(45_000)
         expect(isWslAvailable()).toBe(false)
-        expect(execFileSyncMock).toHaveBeenCalledTimes(2)
+        expect(runProcessSyncMock).toHaveBeenCalledTimes(2)
       })
     } finally {
       vi.useRealTimers()
@@ -601,11 +596,14 @@ describe('WSL availability cache', () => {
   // as one observed live — otherwise test setup can hide the latch this fixes.
   it('re-probes a seeded retryable failure once its window lapses', () => {
     vi.useFakeTimers()
-    execFileSyncMock.mockReturnValueOnce('')
+    runProcessSyncMock.mockReturnValueOnce(exited(''))
 
     try {
       withPlatform('win32', () => {
-        _setWslCachesForTests({ available: false, availabilityRetryable: true })
+        _setWslCachesForTests({
+          available: false,
+          availabilityRetryable: true
+        })
         expect(isWslAvailable()).toBe(false)
         vi.advanceTimersByTime(45_000)
         expect(isWslAvailable()).toBe(true)
@@ -619,24 +617,22 @@ describe('WSL availability cache', () => {
   // first, so a definitive failure held for 10min would report `wsl-unavailable` over a
   // WSL that just listed a distro. Finding a distro must drop the stale failure.
   it.each([
-    ['a definitive failure', { status: 1 }],
-    ['a timeout', { code: 'ETIMEDOUT', status: null, signal: 'SIGTERM' }]
-  ])('re-probes availability once a distro list succeeds after %s', (_label, errorShape) => {
+    ['a definitive failure', () => exited('', 1)],
+    ['a timeout', () => killedByTimeout()]
+  ])('re-probes availability once a distro list succeeds after %s', (_label, failure) => {
     vi.useFakeTimers()
-    execFileSyncMock.mockImplementationOnce(() => {
-      throw Object.assign(new Error('probe failed'), errorShape)
-    })
+    runProcessSyncMock.mockReturnValueOnce(failure())
 
     try {
       withPlatform('win32', () => {
         expect(isWslAvailable()).toBe(false)
 
         // A distro turns up (WSL finished provisioning / was repaired mid-session).
-        execFileSyncMock.mockReturnValueOnce('Ubuntu\n')
+        runProcessSyncMock.mockReturnValueOnce(exited('Ubuntu\n'))
         expect(listWslDistros()).toEqual(['Ubuntu'])
 
         // Without dropping the stale failure this would stay false for 10min.
-        execFileSyncMock.mockReturnValueOnce('')
+        runProcessSyncMock.mockReturnValueOnce(exited(''))
         expect(isWslAvailable()).toBe(true)
       })
     } finally {
@@ -648,20 +644,18 @@ describe('WSL availability cache', () => {
   // failure on every empty probe would re-spawn the blocking 5s probe far too often.
   it('does not drop an availability failure for an empty distro list', () => {
     vi.useFakeTimers()
-    execFileSyncMock.mockImplementationOnce(() => {
-      throw Object.assign(new Error('probe failed'), { status: 1 })
-    })
+    runProcessSyncMock.mockReturnValueOnce(exited('', 1))
 
     try {
       withPlatform('win32', () => {
         expect(isWslAvailable()).toBe(false)
-        execFileSyncMock.mockReturnValueOnce('')
+        runProcessSyncMock.mockReturnValueOnce(exited(''))
         expect(listWslDistros()).toEqual([])
         expect(getCachedWslAvailability()).toBe(false)
         // Still inside the definitive window, so no re-probe was paid.
-        expect(execFileSyncMock).toHaveBeenCalledTimes(2)
+        expect(runProcessSyncMock).toHaveBeenCalledTimes(2)
         expect(isWslAvailable()).toBe(false)
-        expect(execFileSyncMock).toHaveBeenCalledTimes(2)
+        expect(runProcessSyncMock).toHaveBeenCalledTimes(2)
       })
     } finally {
       vi.useRealTimers()
@@ -672,7 +666,7 @@ describe('WSL availability cache', () => {
     withPlatform('darwin', () => {
       expect(isWslAvailable()).toBe(false)
       expect(getCachedWslAvailability()).toBe(false)
-      expect(execFileSyncMock).not.toHaveBeenCalled()
+      expect(runProcessSyncMock).not.toHaveBeenCalled()
     })
   })
 })
@@ -709,51 +703,63 @@ describe('wsl path helpers', () => {
   })
 })
 
+const DIRECTORY_PROBE_ARGS = [
+  '-d',
+  'Ubuntu',
+  '--exec',
+  'sh',
+  '-c',
+  expect.stringContaining('__ORCA_DIRECTORY_EXISTS__'),
+  'sh',
+  '/home/jin/repo'
+]
+
 describe('wslUncDirectoryExists', () => {
   afterEach(() => {
-    execFileSyncMock.mockReset()
+    runProcessSyncMock.mockReset()
   })
 
   it('returns true when the distro reports the directory exists', () => {
-    execFileSyncMock.mockReturnValue('__ORCA_DIRECTORY_EXISTS__')
+    runProcessSyncMock.mockReturnValue(exited('__ORCA_DIRECTORY_EXISTS__'))
     const result = withPlatform('win32', () =>
       wslUncDirectoryExists('\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo')
     )
     expect(result).toBe(true)
-    expect(execFileSyncMock).toHaveBeenCalledWith(
-      'wsl.exe',
-      [
-        '-d',
-        'Ubuntu',
-        '--exec',
-        'sh',
-        '-c',
-        expect.stringContaining('__ORCA_DIRECTORY_EXISTS__'),
-        'sh',
-        '/home/jin/repo'
-      ],
-      expect.objectContaining({ timeout: 5000 })
+    expect(runProcessSyncMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        program: 'wsl.exe',
+        args: DIRECTORY_PROBE_ARGS,
+        timeoutMs: 5000
+      })
     )
   })
 
   it('returns false when the guest reports the directory missing', () => {
-    execFileSyncMock.mockReturnValue('__ORCA_DIRECTORY_MISSING__')
+    runProcessSyncMock.mockReturnValue(exited('__ORCA_DIRECTORY_MISSING__'))
     const result = withPlatform('win32', () =>
       wslUncDirectoryExists('\\\\wsl.localhost\\Ubuntu\\home\\jin\\missing')
     )
     expect(result).toBe(false)
   })
 
+  // Why the exit code is not consulted: wsl.exe uses numeric exits for guest results and
+  // host failures alike, so only the marker distinguishes "missing" from "could not ask".
   it('returns null when wsl.exe or the distro is unavailable', () => {
-    execFileSyncMock.mockImplementation(() => {
-      const error = new Error('distro unavailable') as Error & { status: number }
-      error.status = 4294967295
-      throw error
+    runProcessSyncMock.mockReturnValue(exited('', 4294967295))
+    expect(
+      withPlatform('win32', () =>
+        wslUncDirectoryExists('\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo')
+      )
+    ).toBeNull()
+
+    runProcessSyncMock.mockImplementation(() => {
+      throw new Error('distro unavailable')
     })
-    const result = withPlatform('win32', () =>
-      wslUncDirectoryExists('\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo')
-    )
-    expect(result).toBeNull()
+    expect(
+      withPlatform('win32', () =>
+        wslUncDirectoryExists('\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo')
+      )
+    ).toBeNull()
   })
 
   it('returns null for non-WSL paths and off Windows', () => {
@@ -761,50 +767,36 @@ describe('wslUncDirectoryExists', () => {
     expect(
       withPlatform('linux', () => wslUncDirectoryExists('\\\\wsl.localhost\\Ubuntu\\home\\jin'))
     ).toBeNull()
-    expect(execFileSyncMock).not.toHaveBeenCalled()
+    expect(runProcessSyncMock).not.toHaveBeenCalled()
   })
 })
 
 describe('wslUncDirectoryExistsAsync', () => {
   afterEach(() => {
-    execFileMock.mockReset()
+    runProcessMock.mockReset()
   })
 
   it('returns true when the distro reports the directory exists', async () => {
-    execFileMock.mockImplementation((_command, _args, _options, callback) =>
-      callback(null, '__ORCA_DIRECTORY_EXISTS__')
-    )
+    runProcessMock.mockResolvedValue(exited('__ORCA_DIRECTORY_EXISTS__'))
 
     await expect(
       withPlatformAsync('win32', () =>
         wslUncDirectoryExistsAsync('\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo')
       )
     ).resolves.toBe(true)
-    expect(execFileMock).toHaveBeenCalledWith(
-      'wsl.exe',
-      [
-        '-d',
-        'Ubuntu',
-        '--exec',
-        'sh',
-        '-c',
-        expect.stringContaining('__ORCA_DIRECTORY_EXISTS__'),
-        'sh',
-        '/home/jin/repo'
-      ],
-      expect.objectContaining({ timeout: 5000 }),
-      expect.any(Function)
+    expect(runProcessMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        program: 'wsl.exe',
+        args: DIRECTORY_PROBE_ARGS,
+        timeoutMs: 5000
+      })
     )
   })
 
   it('distinguishes a missing directory from an inconclusive probe', async () => {
-    execFileMock
-      .mockImplementationOnce((_command, _args, _options, callback) =>
-        callback(null, '__ORCA_DIRECTORY_MISSING__')
-      )
-      .mockImplementationOnce((_command, _args, _options, callback) =>
-        callback(Object.assign(new Error('distro unavailable'), { code: 4294967295 }), '')
-      )
+    runProcessMock
+      .mockResolvedValueOnce(exited('__ORCA_DIRECTORY_MISSING__'))
+      .mockResolvedValueOnce(exited('', 4294967295))
 
     await withPlatformAsync('win32', async () => {
       await expect(
@@ -825,6 +817,6 @@ describe('wslUncDirectoryExistsAsync', () => {
         wslUncDirectoryExistsAsync('\\\\wsl.localhost\\Ubuntu\\home\\jin')
       )
     ).resolves.toBeNull()
-    expect(execFileMock).not.toHaveBeenCalled()
+    expect(runProcessMock).not.toHaveBeenCalled()
   })
 })

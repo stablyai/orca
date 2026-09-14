@@ -1,33 +1,74 @@
-import { execFileSync } from 'node:child_process'
+import { runProcess, runProcessSync } from '../../shared/child-process/run-process'
 import { readFileSync } from 'node:fs'
 import {
   getProcessOutputFields,
   iterateProcessOutputLines
 } from '../../shared/process-output-field-scanner'
-import { getPsProcessIdentity } from './daemon-process-identity-query'
+import { getPsProcessIdentity, getPsProcessIdentityAsync } from './daemon-process-identity-query'
 
 export const START_TIME_TOLERANCE_MS = 1_500
 
+const CLK_TCK_TIMEOUT_MS = 1_000
+const CLK_TCK_SPEC = {
+  program: 'getconf',
+  args: ['CLK_TCK'],
+  timeoutMs: CLK_TCK_TIMEOUT_MS
+} as const
+
+// CLK_TCK is fixed at kernel build time, so one spawn per process lifetime is
+// the whole budget — a liveness check must never re-fork `getconf`.
+let clockTicksPerSecond: number | null = null
+
+function cacheClockTicks(ticks: number): number | null {
+  clockTicksPerSecond = Number.isFinite(ticks) && ticks > 0 ? ticks : null
+  return clockTicksPerSecond
+}
+
+function readClockTicksPerSecond(): number | null {
+  if (clockTicksPerSecond !== null) {
+    return clockTicksPerSecond
+  }
+  const result = runProcessSync(CLK_TCK_SPEC)
+  return result.code === 0 && !result.timedOut ? cacheClockTicks(Number(result.stdout.trim())) : null
+}
+
+async function readClockTicksPerSecondAsync(): Promise<number | null> {
+  if (clockTicksPerSecond !== null) {
+    return clockTicksPerSecond
+  }
+  const result = await runProcess(CLK_TCK_SPEC)
+  return result.code === 0 && !result.timedOut ? cacheClockTicks(Number(result.stdout.trim())) : null
+}
+
+/** Test seam: the cache outlives a `vi.resetModules()`-free test file. */
+export function resetProcessStartTimeClockTickCache(): void {
+  clockTicksPerSecond = null
+}
+
+function linuxStartedAtMs(pid: number, ticksPerSecond: number | null): number | null {
+  if (ticksPerSecond === null) {
+    return null
+  }
+  const stat = readFileSync(`/proc/${pid}/stat`, 'utf8')
+  const startTicks = parseLinuxProcStartTicks(stat)
+  const bootTimeSeconds = parseLinuxBootTimeSeconds(readFileSync('/proc/stat', 'utf8'))
+  if (!Number.isFinite(startTicks) || !Number.isFinite(bootTimeSeconds)) {
+    return null
+  }
+  return bootTimeSeconds * 1000 + (startTicks / ticksPerSecond) * 1000
+}
+
 function getLinuxProcessStartedAtMs(pid: number): number | null {
   try {
-    const stat = readFileSync(`/proc/${pid}/stat`, 'utf8')
-    const startTicks = parseLinuxProcStartTicks(stat)
-    const bootTimeSeconds = parseLinuxBootTimeSeconds(readFileSync('/proc/stat', 'utf8'))
-    const ticksPerSecond = Number(
-      execFileSync('getconf', ['CLK_TCK'], {
-        encoding: 'utf8',
-        timeout: 1_000
-      }).trim()
-    )
-    if (
-      !Number.isFinite(startTicks) ||
-      !Number.isFinite(bootTimeSeconds) ||
-      !Number.isFinite(ticksPerSecond) ||
-      ticksPerSecond <= 0
-    ) {
-      return null
-    }
-    return bootTimeSeconds * 1000 + (startTicks / ticksPerSecond) * 1000
+    return linuxStartedAtMs(pid, readClockTicksPerSecond())
+  } catch {
+    return null
+  }
+}
+
+async function getLinuxProcessStartedAtMsAsync(pid: number): Promise<number | null> {
+  try {
+    return linuxStartedAtMs(pid, await readClockTicksPerSecondAsync())
   } catch {
     return null
   }
@@ -72,6 +113,33 @@ export function getProcessStartedAtMs(pid: number): number | null {
 export function startTimeMatches(pid: number, expectedStartedAtMs: number | null): boolean {
   return startTimesWithinTolerance(
     getProcessStartedAtMs(pid),
+    expectedStartedAtMs,
+    START_TIME_TOLERANCE_MS
+  )
+}
+
+/**
+ * Async twins, for the callers already on a promise — the daemon identity
+ * inspection an `ipcMain` reply waits on. A timeout still yields `null`, which
+ * `startTimesWithinTolerance` fails open on: loss of contact never becomes a
+ * start-time mismatch.
+ */
+export async function getProcessStartedAtMsAsync(pid: number): Promise<number | null> {
+  if (process.platform === 'linux') {
+    return getLinuxProcessStartedAtMsAsync(pid)
+  }
+  if (process.platform === 'win32') {
+    return null
+  }
+  return (await getPsProcessIdentityAsync(pid))?.startedAtMs ?? null
+}
+
+export async function startTimeMatchesAsync(
+  pid: number,
+  expectedStartedAtMs: number | null
+): Promise<boolean> {
+  return startTimesWithinTolerance(
+    await getProcessStartedAtMsAsync(pid),
     expectedStartedAtMs,
     START_TIME_TOLERANCE_MS
   )

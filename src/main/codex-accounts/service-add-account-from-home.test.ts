@@ -63,6 +63,7 @@ describe('CodexAccountService.addAccountFromHome', () => {
         createRateLimits() as never,
         runtimeHome as never
       )
+      await service.ready
 
       await service.addAccountFromHome(sourceHomes[0])
       const result = await service.addAccountFromHome(sourceHomes[1])
@@ -117,6 +118,7 @@ describe('CodexAccountService.addAccountFromHome', () => {
         rateLimits as never,
         runtimeHome as never
       )
+      await service.ready
 
       const result = await service.addAccountFromHome(sourceHome)
 
@@ -156,6 +158,7 @@ describe('CodexAccountService.addAccountFromHome', () => {
         rateLimits as never,
         runtimeHome as never
       )
+      await service.ready
 
       await expect(service.addAccountFromHome(sourceHome)).rejects.toThrow('activation failed')
 
@@ -185,6 +188,7 @@ describe('CodexAccountService.addAccountFromHome', () => {
         rateLimits as never,
         runtimeHome as never
       )
+      await service.ready
 
       await expect(service.addAccountFromHome(sourceHome)).rejects.toThrow(
         /No Codex credentials found/

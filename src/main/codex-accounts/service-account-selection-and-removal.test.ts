@@ -64,6 +64,7 @@ describe('CodexAccountService config sync', () => {
       runtimeHome as never,
       { onHostSystemDefaultSelected }
     )
+    await service.ready
 
     const result = await service.selectAccount(null)
 
@@ -129,6 +130,7 @@ describe('CodexAccountService config sync', () => {
       rateLimits as never,
       runtimeHome as never
     )
+    await service.ready
 
     await service.selectAccount('account-2')
 
@@ -197,6 +199,7 @@ describe('CodexAccountService config sync', () => {
       rateLimits as never,
       runtimeHome as never
     )
+    await service.ready
 
     const result = await service.selectAccountForTarget('wsl-account', {
       runtime: 'wsl',
@@ -248,6 +251,7 @@ describe('CodexAccountService config sync', () => {
       rateLimits as never,
       runtimeHome as never
     )
+    await service.ready
 
     const result = await service.removeAccount('account-1')
 
@@ -286,6 +290,7 @@ describe('CodexAccountService config sync', () => {
       createRateLimits() as never,
       createRuntimeHome() as never
     )
+    await service.ready
 
     await service.removeAccount('account-1')
 
@@ -330,6 +335,7 @@ describe('CodexAccountService config sync', () => {
       rateLimits as never,
       runtimeHome as never
     )
+    await service.ready
 
     const result = service.listAccounts()
 
@@ -349,6 +355,7 @@ describe('CodexAccountService config sync', () => {
       rateLimits as never,
       runtimeHome as never
     )
+    await service.ready
 
     await expect(service.removeAccount('nonexistent')).rejects.toThrow('no longer exists')
   })
@@ -391,6 +398,7 @@ describe('CodexAccountService config sync', () => {
       rateLimits as never,
       runtimeHome as never
     )
+    await service.ready
 
     const p1 = service.selectAccount('account-1')
     const p2 = service.selectAccount(null)

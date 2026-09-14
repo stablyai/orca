@@ -5,7 +5,11 @@ import { JsonStringifyByteLimitError } from './node-bounded-json-stringify'
 import { readNodeFileSyncWithinLimit } from './node-bounded-file-reader'
 import { parsePairingCode, type PairingOffer } from './pairing'
 import { classifyRemotePairingHostname } from './remote-pairing-address'
-import { writeSecureJsonFileWithinLimit } from './bounded-secure-json-file'
+import {
+  writeSecureJsonFileWithinLimit,
+  writeSecureJsonFileWithinLimitAsync
+} from './bounded-secure-json-file'
+import { serializePathWrite } from './path-write-serializer'
 import { hardenExistingSecureFile } from './secure-file'
 import {
   createEnvironmentFromPairingOffer,
@@ -173,36 +177,55 @@ export function resolveEnvironmentPairingOffer(
 // Windows. lastUsedAt only needs coarse freshness, so skip writes within this window.
 const LAST_USED_PERSIST_INTERVAL_MS = 60_000
 
-export function markEnvironmentUsed(
+export async function markEnvironmentUsed(
+  userDataPath: string,
+  selector: string,
+  args: { runtimeId?: string | null; pairedDeviceId?: string; now?: number } = {}
+): Promise<void> {
+  // Serialized: the read-modify-write now spans awaits, so two concurrent stamps deriving `next`
+  // from the same snapshot would lose one. The key is deliberately distinct from the store path —
+  // the file write nested inside this takes that lane, and re-entering it would deadlock.
+  await serializePathWrite(`${getEnvironmentStorePath(userDataPath)}#mark-used`, async () => {
+    const store = readEnvironmentStore(userDataPath)
+    const environment = resolveEnvironmentFromStore(store, selector)
+    const now = args.now ?? Date.now()
+    const runtimeIdChanged = args.runtimeId != null && args.runtimeId !== environment.runtimeId
+    const pairedDeviceIdChanged =
+      args.pairedDeviceId != null && args.pairedDeviceId !== environment.pairedDeviceId
+    const lastUsedIsFresh =
+      environment.lastUsedAt != null &&
+      now >= environment.lastUsedAt &&
+      now - environment.lastUsedAt < LAST_USED_PERSIST_INTERVAL_MS
+    if (!runtimeIdChanged && !pairedDeviceIdChanged && lastUsedIsFresh) {
+      return
+    }
+    const next = store.environments.map((entry) =>
+      entry.id === environment.id
+        ? {
+            ...entry,
+            runtimeId: args.runtimeId ?? entry.runtimeId,
+            ...(args.pairedDeviceId ? { pairedDeviceId: args.pairedDeviceId } : {}),
+            lastUsedAt: now,
+            updatedAt: now
+          }
+        : entry
+    )
+    await writeEnvironmentStoreAsync(userDataPath, { version: 1, environments: next })
+  })
+}
+
+/**
+ * Fire-and-forget `markEnvironmentUsed` for the transport callbacks, which are synchronous and must
+ * not fail an RPC because a coarse lastUsedAt stamp could not be persisted.
+ */
+export function markEnvironmentUsedDetached(
   userDataPath: string,
   selector: string,
   args: { runtimeId?: string | null; pairedDeviceId?: string; now?: number } = {}
 ): void {
-  const store = readEnvironmentStore(userDataPath)
-  const environment = resolveEnvironmentFromStore(store, selector)
-  const now = args.now ?? Date.now()
-  const runtimeIdChanged = args.runtimeId != null && args.runtimeId !== environment.runtimeId
-  const pairedDeviceIdChanged =
-    args.pairedDeviceId != null && args.pairedDeviceId !== environment.pairedDeviceId
-  const lastUsedIsFresh =
-    environment.lastUsedAt != null &&
-    now >= environment.lastUsedAt &&
-    now - environment.lastUsedAt < LAST_USED_PERSIST_INTERVAL_MS
-  if (!runtimeIdChanged && !pairedDeviceIdChanged && lastUsedIsFresh) {
-    return
-  }
-  const next = store.environments.map((entry) =>
-    entry.id === environment.id
-      ? {
-          ...entry,
-          runtimeId: args.runtimeId ?? entry.runtimeId,
-          ...(args.pairedDeviceId ? { pairedDeviceId: args.pairedDeviceId } : {}),
-          lastUsedAt: now,
-          updatedAt: now
-        }
-      : entry
-  )
-  writeEnvironmentStore(userDataPath, { version: 1, environments: next })
+  void markEnvironmentUsed(userDataPath, selector, args).catch((error: unknown) => {
+    console.warn('[runtime-environments] could not record environment use:', error)
+  })
 }
 
 function resolveEnvironmentFromStore(
@@ -258,6 +281,34 @@ function writeEnvironmentStore(userDataPath: string, store: RuntimeEnvironmentSt
   const path = getEnvironmentStorePath(userDataPath)
   try {
     writeSecureJsonFileWithinLimit(
+      path,
+      RuntimeEnvironmentStoreSchema.parse(store),
+      MAX_RUNTIME_ENVIRONMENT_STORE_FILE_BYTES
+    )
+  } catch (error) {
+    if (error instanceof JsonStringifyByteLimitError) {
+      throw new RuntimeEnvironmentStoreError(
+        'runtime_error',
+        `Could not write Orca environments at ${path}; the store exceeds its durable capacity.`
+      )
+    }
+    throw error
+  }
+}
+
+/**
+ * Async twin of `writeEnvironmentStore` for `markEnvironmentUsed`, the one hot writer here: it runs
+ * on every runtime round-trip, and its secure-file rewrite (ACL hardening on Windows) was blocking
+ * the thread that answers IPC. The user-driven mutations above stay synchronous — they are rare and
+ * their callers return the written environment.
+ */
+async function writeEnvironmentStoreAsync(
+  userDataPath: string,
+  store: RuntimeEnvironmentStore
+): Promise<void> {
+  const path = getEnvironmentStorePath(userDataPath)
+  try {
+    await writeSecureJsonFileWithinLimitAsync(
       path,
       RuntimeEnvironmentStoreSchema.parse(store),
       MAX_RUNTIME_ENVIRONMENT_STORE_FILE_BYTES

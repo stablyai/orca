@@ -48,10 +48,11 @@ describe('CodexAccountService config sync', () => {
         rateLimits as never,
         runtimeHome as never
       )
+      await service.ready
 
-      ;(
+      await (
         service as unknown as {
-          safeRemoveManagedHome(candidatePath: string, expectedAccountId: string): void
+          safeRemoveManagedHome(candidatePath: string, expectedAccountId: string): Promise<void>
         }
       ).safeRemoveManagedHome(managedHomePath, 'account-1')
 
@@ -95,14 +96,15 @@ describe('CodexAccountService config sync', () => {
         rateLimits as never,
         runtimeHome as never
       )
+      await service.ready
 
-      expect(() =>
+      await expect(
         (
           service as unknown as {
-            safeRemoveManagedHome(candidatePath: string, expectedAccountId: string): void
+            safeRemoveManagedHome(candidatePath: string, expectedAccountId: string): Promise<void>
           }
         ).safeRemoveManagedHome(managedHomePath, 'account-1')
-      ).not.toThrow()
+      ).resolves.toBeUndefined()
       expect(warnSpy).toHaveBeenCalledWith(
         '[codex-accounts] Failed to remove managed home:',
         lockedError

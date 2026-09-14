@@ -49,7 +49,7 @@ type CodexLoginSessionDependencies = {
   killProcessTree: (
     child: CodexLoginChild,
     interactiveLogin?: WindowsHostInteractiveLoginSpawn | null
-  ) => void
+  ) => Promise<void>
 }
 
 function readLoginAuthSnapshot(authJsonPath: string): string | null | undefined {
@@ -155,8 +155,11 @@ export async function runCodexLoginSession(
 
     const timeoutError = new Error('Codex sign-in took too long to finish. Please try again.')
     timeout = setTimeout(() => {
-      dependencies.killProcessTree(child, spawnConfig.interactiveLogin)
-      settle(() => rejectPromise(timeoutError))
+      // Why finally: the tree kill is async now, and the managed-home rollback
+      // that follows this rejection must not race taskkill's open handles.
+      void dependencies
+        .killProcessTree(child, spawnConfig.interactiveLogin)
+        .finally(() => settle(() => rejectPromise(timeoutError)))
     }, LOGIN_TIMEOUT_MS)
 
     // Why: on Windows the codex login CLI can linger after writing auth.json,
@@ -174,7 +177,7 @@ export async function runCodexLoginSession(
         }
         postAuthExitTimeout = setTimeout(() => {
           loginTreeKilledAfterAuth = true
-          dependencies.killProcessTree(child, spawnConfig.interactiveLogin)
+          void dependencies.killProcessTree(child, spawnConfig.interactiveLogin)
         }, WINDOWS_LOGIN_POST_AUTH_EXIT_GRACE_MS)
       }, WINDOWS_LOGIN_AUTH_POLL_INTERVAL_MS)
     }

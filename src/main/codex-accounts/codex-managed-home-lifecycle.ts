@@ -45,7 +45,7 @@ export class CodexManagedHomeLifecycle {
     // Why: marker lets future cleanup prove the path belongs to Orca before deleting anything.
     writeFileSync(join(managedHomePath, '.orca-managed-home'), `${accountId}\n`, 'utf-8')
     return {
-      managedHomePath: this.paths.assert(managedHomePath, accountId),
+      managedHomePath: await this.paths.assert(managedHomePath, accountId),
       managedHomeRuntime: 'host',
       wslDistro: null,
       wslLinuxHomePath: null
@@ -55,7 +55,11 @@ export class CodexManagedHomeLifecycle {
   // Why: copy the auth.json from an already-authenticated CODEX_HOME (e.g. a temp
   // dir the CLI ran `codex login` into) into the managed home. Mirrors the login
   // step of doAddAccount without spawning an interactive browser flow.
-  importAuthFromHome(sourceHome: string, managedHomePath: string, accountId: string): void {
+  async importAuthFromHome(
+    sourceHome: string,
+    managedHomePath: string,
+    accountId: string
+  ): Promise<void> {
     const trimmed = sourceHome.trim()
     if (!trimmed) {
       throw new Error('A Codex home directory path is required.')
@@ -75,7 +79,7 @@ export class CodexManagedHomeLifecycle {
         `No Codex credentials found in ${resolvedSourceHome}. Run \`codex login\` into this directory first.`
       )
     }
-    const trustedHome = this.paths.assert(managedHomePath, accountId)
+    const trustedHome = await this.paths.assert(managedHomePath, accountId)
     writeFileAtomically(join(trustedHome, 'auth.json'), sourceAuthContents, { mode: 0o600 })
   }
 
@@ -84,17 +88,21 @@ export class CodexManagedHomeLifecycle {
    * An unreadable credential file means the login may well have succeeded, and a
    * kept home is a recoverable leak where a deleted one is permanent data loss.
    */
-  removeUnlessUnproven(error: unknown, managedHomePath: string, accountId: string): void {
+  async removeUnlessUnproven(
+    error: unknown,
+    managedHomePath: string,
+    accountId: string
+  ): Promise<void> {
     if (error instanceof ManagedCodexHomeTemporarilyUnavailableError) {
       return
     }
-    this.safeRemove(managedHomePath, accountId)
+    await this.safeRemove(managedHomePath, accountId)
   }
 
-  safeRemove(candidatePath: string, expectedAccountId: string): void {
+  async safeRemove(candidatePath: string, expectedAccountId: string): Promise<void> {
     let managedHomePath: string
     try {
-      managedHomePath = this.paths.assert(candidatePath, expectedAccountId)
+      managedHomePath = await this.paths.assert(candidatePath, expectedAccountId)
     } catch (error) {
       console.warn('[codex-accounts] Refusing to remove untrusted managed home:', error)
       return
@@ -175,7 +183,7 @@ export class CodexManagedHomeLifecycle {
     const managedHomePath = toWindowsWslPath(linuxPath, distro)
     try {
       return {
-        managedHomePath: this.paths.assert(managedHomePath, accountId),
+        managedHomePath: await this.paths.assert(managedHomePath, accountId),
         managedHomeRuntime: 'wsl',
         wslDistro: distro,
         wslLinuxHomePath: linuxPath

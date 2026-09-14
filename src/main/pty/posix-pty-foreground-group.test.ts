@@ -1,12 +1,25 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { execFileSync } from 'node:child_process'
+import { runProcess, runProcessSync } from '../../shared/child-process/run-process'
 import {
   getPosixPtyForegroundGroup,
   resetPosixPtyForegroundGroupOwnRowCache,
-  signalPosixPtyForegroundGroup
+  signalPosixPtyForegroundGroup,
+  signalPosixPtyForegroundGroupAsync
 } from './posix-pty-foreground-group'
 
-vi.mock('node:child_process', () => ({ execFileSync: vi.fn(() => '') }))
+const psResult = (stdout: string) => ({
+  code: 0,
+  signal: null,
+  stdout,
+  stderr: '',
+  timedOut: false
+})
+
+vi.mock('../../shared/child-process/run-process', () => {
+  // Inlined rather than psResult(): the factory runs before this module's consts init.
+  const empty = { code: 0, signal: null, stdout: '', stderr: '', timedOut: false }
+  return { runProcess: vi.fn(async () => empty), runProcessSync: vi.fn(() => empty) }
+})
 
 // The concatenated output of two `ps -p <pid> -o pid=,tpgid=,tty=` calls.
 const macosTable = ['84644 84985 ttys318', '  4242     4242 ttys002'].join('\n')
@@ -147,9 +160,9 @@ describe('process table lookup', () => {
     // form walks the whole process table (~3.6s on a busy machine vs ~3ms), which
     // exceeds this module's timeout and silently reinstates root-pid delivery — the
     // exact bug it exists to fix. Regressing this looks like a working feature.
-    const execFileSyncMock = vi.mocked(execFileSync)
-    execFileSyncMock.mockClear()
-    execFileSyncMock.mockReturnValue('84644 84985 ttys318' as never)
+    const runSyncMock = vi.mocked(runProcessSync)
+    runSyncMock.mockClear()
+    runSyncMock.mockReturnValue(psResult('84644 84985 ttys318'))
     // Why stubbed: the resolver succeeds against the mocked table, so a live
     // process.kill would aim a real group signal at whatever owns pgid 84985 here.
     const kill = vi.spyOn(process, 'kill').mockImplementation(() => true)
@@ -160,15 +173,14 @@ describe('process table lookup', () => {
         currentPid: 4242
       })
 
-      expect(execFileSyncMock).toHaveBeenCalled()
+      expect(runSyncMock).toHaveBeenCalled()
       let timeoutBudget = 0
-      for (const call of execFileSyncMock.mock.calls) {
-        const args = call[1] as string[]
-        const options = call[2] as { timeout: number }
+      for (const [spec] of runSyncMock.mock.calls) {
+        const args = spec.args as string[]
         const pidArg = args[args.indexOf('-p') + 1]
         expect(pidArg).toMatch(/^\d+$/)
         expect(args.filter((arg) => arg === '-p')).toHaveLength(1)
-        timeoutBudget += options.timeout
+        timeoutBudget += spec.timeoutMs ?? 0
       }
       expect(timeoutBudget).toBeLessThanOrEqual(250)
     } finally {
@@ -177,11 +189,11 @@ describe('process table lookup', () => {
   })
 
   it('forks ps once per pane after the first SIGWINCH of the process', () => {
-    // Why: `runPs(currentPid)` reads Orca's own controlling tty, which cannot change
-    // for the process lifetime and feeds only the "do we share this PTY" guard. The
-    // renderer fires SIGWINCH twice per revealed pane, so re-forking it made a 4-pane
-    // tab switch eight synchronous ~3ms `ps` calls on the main event loop.
-    const execFileSyncMock = vi.mocked(execFileSync)
+    // Why: the own-row read gives Orca's controlling tty, which cannot change for the
+    // process lifetime and feeds only the "do we share this PTY" guard. The renderer
+    // fires SIGWINCH twice per revealed pane, so re-forking it made a 4-pane tab
+    // switch eight synchronous ~3ms `ps` calls on the main event loop.
+    const runSyncMock = vi.mocked(runProcessSync)
     const kill = vi.spyOn(process, 'kill').mockImplementation(() => true)
     const panes = [
       { rootPid: 900, tty: 'ttys301' },
@@ -191,15 +203,16 @@ describe('process table lookup', () => {
     ]
 
     try {
-      execFileSyncMock.mockClear()
-      execFileSyncMock.mockImplementation(((_file: string, args: string[]) => {
+      runSyncMock.mockClear()
+      runSyncMock.mockImplementation((spec) => {
+        const args = spec.args as string[]
         const pid = Number(args[args.indexOf('-p') + 1])
         if (pid === 4242) {
-          return '4242 4242 ttys002'
+          return psResult('4242 4242 ttys002')
         }
         const pane = panes.find((entry) => entry.rootPid === pid)
-        return pane ? `${pane.rootPid} ${pane.rootPid + 50} ${pane.tty}` : ''
-      }) as never)
+        return psResult(pane ? `${pane.rootPid} ${pane.rootPid + 50} ${pane.tty}` : '')
+      })
 
       for (const pane of panes) {
         // Two signals per revealed pane: hidden-restore snapshot + reattach repaint.
@@ -211,16 +224,52 @@ describe('process table lookup', () => {
         }
       }
 
-      const pidArgs = execFileSyncMock.mock.calls.map((call) =>
-        Number((call[1] as string[])[(call[1] as string[]).indexOf('-p') + 1])
-      )
+      const pidArgs = runSyncMock.mock.calls.map(([spec]) => {
+        const args = spec.args as string[]
+        return Number(args[args.indexOf('-p') + 1])
+      })
       // 8 root-pid reads (one per signal) + exactly ONE read of Orca's own row.
       expect(pidArgs.filter((pid) => pid === 4242)).toHaveLength(1)
       expect(pidArgs).toHaveLength(9)
       expect(kill).toHaveBeenCalledTimes(8)
     } finally {
-      execFileSyncMock.mockReset()
-      execFileSyncMock.mockReturnValue('' as never)
+      runSyncMock.mockReset()
+      runSyncMock.mockReturnValue(psResult(''))
+      kill.mockRestore()
+    }
+  })
+
+  it('reads the table through the async runner and caches the own row', async () => {
+    // The SIGWINCH path the renderer reaches over IPC must never touch runProcessSync.
+    const runMock = vi.mocked(runProcess)
+    const runSyncMock = vi.mocked(runProcessSync)
+    runMock.mockClear()
+    runSyncMock.mockClear()
+    runMock.mockImplementation(async (spec) => {
+      const args = spec.args as string[]
+      const pid = Number(args[args.indexOf('-p') + 1])
+      return psResult(pid === 4242 ? '4242 4242 ttys002' : '84644 84985 ttys318')
+    })
+    const kill = vi.spyOn(process, 'kill').mockImplementation(() => true)
+
+    try {
+      for (let signalIndex = 0; signalIndex < 2; signalIndex += 1) {
+        await signalPosixPtyForegroundGroupAsync(84644, '/dev/ttys318', 'SIGWINCH', vi.fn(), {
+          platform: 'darwin',
+          currentPid: 4242
+        })
+      }
+
+      expect(runSyncMock).not.toHaveBeenCalled()
+      const pidArgs = runMock.mock.calls.map(([spec]) => {
+        const args = spec.args as string[]
+        return Number(args[args.indexOf('-p') + 1])
+      })
+      expect(pidArgs.filter((pid) => pid === 4242)).toHaveLength(1)
+      expect(kill).toHaveBeenCalledTimes(2)
+    } finally {
+      runMock.mockReset()
+      runMock.mockImplementation(async () => psResult(''))
       kill.mockRestore()
     }
   })

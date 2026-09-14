@@ -2,7 +2,7 @@ import { existsSync } from 'node:fs'
 import { basename } from 'node:path'
 import type * as pty from 'node-pty'
 import { readPtsName } from '../pty/node-pty-pts-name'
-import { signalPosixPtyForegroundGroup } from '../pty/posix-pty-foreground-group'
+import { signalPosixPtyForegroundGroupAsync } from '../pty/posix-pty-foreground-group'
 import { isWslAvailableAsync } from '../wsl'
 import { resolveGitBashPath } from '../git-bash'
 import { resolveProcessCwd } from './process-cwd'
@@ -84,7 +84,7 @@ export async function sendLocalPtySignal(id: string, signal: string): Promise<vo
   // Why only SIGWINCH: see posix-pty-foreground-group — a real resize reaches the
   // tty's foreground group, which proc.pid is never a member of.
   if (signal === 'SIGWINCH') {
-    signalPosixPtyForegroundGroup(proc.pid, readPtsName(proc), signal, signalRootPid)
+    await signalPosixPtyForegroundGroupAsync(proc.pid, readPtsName(proc), signal, signalRootPid)
     return
   }
   signalRootPid()

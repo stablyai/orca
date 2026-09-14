@@ -1,10 +1,20 @@
-import { execFile, execFileSync } from 'node:child_process'
-import { promisify } from 'node:util'
+import { runProcess, runProcessSync } from '../../shared/child-process/run-process'
 import { isStartupDiagnosticsEnabled, logStartupDiagnostic } from '../startup/startup-diagnostics'
 
 const PS_IDENTITY_TIMEOUT_MS = 2_000
+const WINDOWS_IDENTITY_TIMEOUT_MS = 3_000
 
-const execFileAsync = promisify(execFile)
+function psIdentitySpec(pid: number): {
+  program: string
+  args: string[]
+  timeoutMs: number
+} {
+  return {
+    program: 'ps',
+    args: ['-p', String(pid), '-o', 'lstart=', '-o', 'command='],
+    timeoutMs: PS_IDENTITY_TIMEOUT_MS
+  }
+}
 
 export type WindowsProcessIdentity = {
   commandLine: string
@@ -25,13 +35,16 @@ function parsePsProcessIdentity(output: string): PsProcessIdentity {
   }
 }
 
+/**
+ * Narrow sync path, deliberately kept: the only caller is the synchronous
+ * `getProcessStartedAtMs`, which the orcad instance lock acquires under.
+ * Anything reachable from an `ipcMain` reply must use the async twin below.
+ */
 export function getPsProcessIdentity(pid: number): PsProcessIdentity | null {
   try {
-    const output = execFileSync('ps', ['-p', String(pid), '-o', 'lstart=', '-o', 'command='], {
-      encoding: 'utf8',
-      timeout: 2_000
-    })
-    return parsePsProcessIdentity(output)
+    const result = runProcessSync(psIdentitySpec(pid))
+    // Why null over a parse: a non-zero or timed-out `ps` is loss of contact, never a verdict.
+    return result.code === 0 && !result.timedOut ? parsePsProcessIdentity(result.stdout) : null
   } catch {
     return null
   }
@@ -39,24 +52,8 @@ export function getPsProcessIdentity(pid: number): PsProcessIdentity | null {
 
 export async function getPsProcessIdentityAsync(pid: number): Promise<PsProcessIdentity | null> {
   try {
-    const stdout = await new Promise<string>((resolve, reject) => {
-      execFile(
-        'ps',
-        ['-p', String(pid), '-o', 'lstart=', '-o', 'command='],
-        {
-          encoding: 'utf8',
-          timeout: PS_IDENTITY_TIMEOUT_MS
-        },
-        (error, output) => {
-          if (error) {
-            reject(error)
-            return
-          }
-          resolve(output)
-        }
-      )
-    })
-    return parsePsProcessIdentity(stdout)
+    const result = await runProcess(psIdentitySpec(pid))
+    return result.code === 0 && !result.timedOut ? parsePsProcessIdentity(result.stdout) : null
   } catch {
     return null
   }
@@ -94,9 +91,9 @@ export async function queryWindowsProcessIdentity(
 ): Promise<WindowsProcessIdentity | null> {
   const startedAt = performance.now()
   try {
-    const { stdout } = await execFileAsync(
-      'powershell.exe',
-      [
+    const result = await runProcess({
+      program: 'powershell.exe',
+      args: [
         '-NoProfile',
         '-NonInteractive',
         '-Command',
@@ -105,12 +102,14 @@ export async function queryWindowsProcessIdentity(
           `if ($p.CreationDate) { $start = [long]([DateTimeOffset]$p.CreationDate).ToUnixTimeMilliseconds() }; ` +
           `@{ cmd = $p.CommandLine; start = $start } | ConvertTo-Json -Compress }`
       ],
-      {
-        encoding: 'utf8',
-        timeout: 3_000
-      }
-    )
-    return parseWindowsProcessIdentityJson(stdout)
+      timeoutMs: WINDOWS_IDENTITY_TIMEOUT_MS
+    })
+    // Why the code guard: runProcess reports a failed query as an exit code, and a
+    // partial stdout must read as "no contact", never as a missing command line.
+    if (result.code !== 0 || result.timedOut) {
+      return null
+    }
+    return parseWindowsProcessIdentityJson(result.stdout)
   } catch {
     return null
   } finally {

@@ -1,7 +1,7 @@
 import { pbkdf2Sync } from 'node:crypto'
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import { runProcessSync } from '../../shared/child-process/run-process'
+import { runProcess } from '../../shared/child-process/run-process'
 import { windowsPowerShellPath } from '../../shared/child-process/windows-system-binary'
 import { diag } from './browser-cookie-import-diagnostics'
 import {
@@ -15,8 +15,12 @@ const PBKDF2_ITERATIONS = 1003
 const PBKDF2_KEY_LENGTH = 16
 const PBKDF2_SALT = 'saltysalt'
 
-function runKeychainCommand(program: string, args: readonly string[], timeoutMs: number): string {
-  const result = runProcessSync({ program, args, timeoutMs })
+async function runKeychainCommand(
+  program: string,
+  args: readonly string[],
+  timeoutMs: number
+): Promise<string> {
+  const result = await runProcess({ program, args, timeoutMs })
   if (result.code !== 0 || result.timedOut) {
     throw new Error(`${program} exited with code ${result.code ?? 'unknown'}`)
   }
@@ -27,7 +31,7 @@ export function getEncryptionKey(
   keychainService: string,
   keychainAccount: string,
   browser?: DetectedBrowser
-): EncryptionKeyResult | null {
+): Promise<EncryptionKeyResult | null> {
   if (process.platform === 'darwin') {
     return getMacEncryptionKey(keychainService, keychainAccount)
   }
@@ -37,15 +41,15 @@ export function getEncryptionKey(
   if (process.platform === 'win32' && browser) {
     return getWindowsEncryptionKey(browser)
   }
-  return null
+  return Promise.resolve(null)
 }
 
-export function getMacEncryptionKey(
+export async function getMacEncryptionKey(
   keychainService: string,
   keychainAccount: string
-): EncryptionKeyResult | null {
+): Promise<EncryptionKeyResult | null> {
   try {
-    const raw = runKeychainCommand(
+    const raw = await runKeychainCommand(
       'security',
       ['find-generic-password', '-s', keychainService, '-a', keychainAccount, '-w'],
       30_000
@@ -61,10 +65,10 @@ export function getMacEncryptionKey(
   }
 }
 
-export function getLinuxEncryptionKey(
+export async function getLinuxEncryptionKey(
   keychainService: string,
   keychainAccount: string
-): EncryptionKeyResult | null {
+): Promise<EncryptionKeyResult | null> {
   // Chromium uses v11 only with OS key storage; without it, Linux writes v10 with hardcoded
   // "peanuts". Keep eligibility explicit because CBC cannot authenticate a wrong-key result.
   const v10Key = pbkdf2Sync('peanuts', PBKDF2_SALT, 1, PBKDF2_KEY_LENGTH, 'sha1')
@@ -72,7 +76,7 @@ export function getLinuxEncryptionKey(
   let keyringPassword = ''
   try {
     // Why: GNOME keyring stores the Chrome Safe Storage password via secret-tool.
-    keyringPassword = runKeychainCommand(
+    keyringPassword = await runKeychainCommand(
       'secret-tool',
       ['lookup', 'service', keychainService, 'account', keychainAccount],
       5_000
@@ -81,7 +85,11 @@ export function getLinuxEncryptionKey(
     // Why: fall back to application-based lookup used by newer Chromium versions.
     try {
       const app = keychainAccount.toLowerCase().replaceAll(' ', '')
-      keyringPassword = runKeychainCommand('secret-tool', ['lookup', 'application', app], 5_000)
+      keyringPassword = await runKeychainCommand(
+        'secret-tool',
+        ['lookup', 'application', app],
+        5_000
+      )
     } catch {
       diag('  Linux keyring unavailable — v11 cookies cannot be decrypted')
     }
@@ -99,7 +107,9 @@ export function getLinuxEncryptionKey(
   return { mode: 'aes-128-cbc', keysByVersion: { v10: v10Key, v11: v11Key } }
 }
 
-export function getWindowsEncryptionKey(browser: DetectedBrowser): EncryptionKeyResult | null {
+export async function getWindowsEncryptionKey(
+  browser: DetectedBrowser
+): Promise<EncryptionKeyResult | null> {
   const browserDef = CHROMIUM_BROWSERS.find((b) => b.family === browser.family)
   if (!browserDef) {
     return null
@@ -139,11 +149,11 @@ export function getWindowsEncryptionKey(browser: DetectedBrowser): EncryptionKey
       '[Convert]::ToBase64String($out)'
     ].join('')
 
-    // Why runProcessSync and an absolute path: a bare `powershell` spawn from a
-    // GUI-subsystem process opens a visible conhost that takes foreground, so
-    // keystrokes typed into an Orca terminal during a cookie import land in the
-    // black box (#14543), and PATH under Electron is not the user's (#11771).
-    const result = runProcessSync({
+    // Why an absolute path: a bare `powershell` spawn from a GUI-subsystem
+    // process opens a visible conhost that takes foreground, so keystrokes typed
+    // into an Orca terminal during a cookie import land in the black box
+    // (#14543), and PATH under Electron is not the user's (#11771).
+    const result = await runProcess({
       program: windowsPowerShellPath(),
       args: ['-NoProfile', '-NonInteractive', '-Command', script],
       timeoutMs: 10_000,

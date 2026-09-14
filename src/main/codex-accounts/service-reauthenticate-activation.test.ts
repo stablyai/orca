@@ -101,6 +101,7 @@ describe('CodexAccountService reauthenticate activation intent', () => {
       rateLimits as never,
       runtimeHome as never
     )
+    await service.ready
 
     const result = await service.reauthenticateAccount('account-2', {
       activateIfSelectionWasEmpty: true
@@ -153,6 +154,7 @@ describe('CodexAccountService reauthenticate activation intent', () => {
       rateLimits as never,
       runtimeHome as never
     )
+    await service.ready
 
     const result = await service.reauthenticateAccount('account-2', {
       activateIfSelectionWasEmpty: true
@@ -191,6 +193,7 @@ describe('CodexAccountService reauthenticate activation intent', () => {
       rateLimits as never,
       runtimeHome as never
     )
+    await service.ready
 
     const result = await service.reauthenticateAccount('account-2')
 

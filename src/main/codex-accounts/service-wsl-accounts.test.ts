@@ -34,6 +34,23 @@ function decodeEncodedWslBashCommand(command: string): string {
   return encoded ? Buffer.from(encoded, 'base64').toString('utf8') : command
 }
 
+/** Bridge the sanctioned process layer to execFileSync/spawn-shaped stubs. */
+function mockProcessLayer(
+  execFileSync: (command: string, args: string[]) => string | undefined,
+  spawn: (command: string, args: string[]) => unknown
+): void {
+  vi.doMock('../../shared/child-process/run-process', () => ({
+    runProcess: async (spec: { program: string; args: string[] }) => ({
+      code: 0,
+      signal: null,
+      stdout: execFileSync(spec.program, spec.args) ?? '',
+      stderr: '',
+      timedOut: false
+    }),
+    spawnProcess: (spec: { program: string; args: string[] }) => spawn(spec.program, spec.args)
+  }))
+}
+
 function wslOk(stdout = ''): WslResult {
   return { environmentResolved: true, code: 0, stdout, stderr: '', timedOut: false }
 }
@@ -105,11 +122,11 @@ describe('CodexAccountService config sync', () => {
     })
 
     const { CodexAccountService } = await import('./service')
-    new CodexAccountService(
+    await new CodexAccountService(
       createStore(settings) as never,
       createRateLimits() as never,
       createRuntimeHome() as never
-    )
+    ).ready
 
     expect(readFileSync(join(wslManagedHomePath, 'config.toml'), 'utf-8')).toBe(
       'sandbox_mode = "danger-full-access"\n\n' +
@@ -132,10 +149,7 @@ describe('CodexAccountService config sync', () => {
     writeFileSync(join(wslManagedHomePath, '.orca-managed-home'), 'account-1\n', 'utf-8')
     writeFileSync(wslCanonicalConfigPath, 'model_instructions_file = "instructions.md"\n', 'utf-8')
 
-    vi.doMock('node:child_process', () => ({
-      execFileSync: vi.fn(() => `${wslLinuxHomePath}\n`),
-      spawn: vi.fn()
-    }))
+    mockProcessLayer(() => `${wslLinuxHomePath}\n`, vi.fn())
     vi.doMock('../../shared/wsl-paths', () => ({
       parseWslUncPath: (path: string) =>
         path === wslManagedHomePath ? { distro: 'Ubuntu', linuxPath: wslLinuxHomePath } : null
@@ -170,11 +184,11 @@ describe('CodexAccountService config sync', () => {
 
     try {
       const { CodexAccountService } = await import('./service')
-      new CodexAccountService(
+      await new CodexAccountService(
         createStore(settings) as never,
         createRateLimits() as never,
         createRuntimeHome() as never
-      )
+      ).ready
 
       expect(readFileSync(join(wslManagedHomePath, 'config.toml'), 'utf-8')).toContain(
         "model_instructions_file = '/mnt/c/Users/alice/.codex/instructions.md'"
@@ -267,10 +281,7 @@ describe('CodexAccountService config sync', () => {
     vi.doMock('node:crypto', () => ({
       randomUUID: () => 'account-id-for-test'
     }))
-    vi.doMock('node:child_process', () => ({
-      execFileSync: execFileSyncMock,
-      spawn: spawnMock
-    }))
+    mockProcessLayer(execFileSyncMock, spawnMock)
     vi.doMock('../wsl/wsl-runner', () => ({ runWslProcess: runWslProcessMock }))
     vi.doMock('../../shared/wsl-paths', () => ({
       parseWslUncPath: (path: string) =>
@@ -301,6 +312,7 @@ describe('CodexAccountService config sync', () => {
         rateLimits as never,
         runtimeHome as never
       )
+      await service.ready
 
       const result = await service.addAccount({ runtime: 'wsl', wslDistro: 'Debian' })
 
@@ -364,10 +376,7 @@ describe('CodexAccountService config sync', () => {
     vi.doMock('node:crypto', () => ({
       randomUUID: () => 'account-id-for-test'
     }))
-    vi.doMock('node:child_process', () => ({
-      execFileSync: execFileSyncMock,
-      spawn: spawnMock
-    }))
+    mockProcessLayer(execFileSyncMock, spawnMock)
     vi.doMock('../wsl/wsl-runner', () => ({ runWslProcess: runWslProcessMock }))
     vi.doMock('../../shared/wsl-paths', () => ({
       parseWslUncPath: (path: string) =>
@@ -389,6 +398,7 @@ describe('CodexAccountService config sync', () => {
         rateLimits as never,
         runtimeHome as never
       )
+      await service.ready
 
       await expect(service.addAccount({ runtime: 'wsl', wslDistro: 'Debian' })).rejects.toThrow(
         'Codex CLI is not available in WSL Debian'
@@ -442,10 +452,7 @@ describe('CodexAccountService config sync', () => {
     vi.doMock('node:crypto', () => ({
       randomUUID: () => 'account-id-for-test'
     }))
-    vi.doMock('node:child_process', () => ({
-      execFileSync: execFileSyncMock,
-      spawn: spawnMock
-    }))
+    mockProcessLayer(execFileSyncMock, spawnMock)
     vi.doMock('../wsl/wsl-runner', () => ({ runWslProcess: runWslProcessMock }))
     vi.doMock('../../shared/wsl-paths', () => ({
       parseWslUncPath: (path: string) =>
@@ -467,6 +474,7 @@ describe('CodexAccountService config sync', () => {
         rateLimits as never,
         runtimeHome as never
       )
+      await service.ready
 
       await expect(service.addAccount({ runtime: 'wsl', wslDistro: 'Debian' })).rejects.toThrow(
         'Could not check the Codex CLI in WSL. Try again.'
@@ -541,10 +549,7 @@ describe('CodexAccountService config sync', () => {
       return child
     })
 
-    vi.doMock('node:child_process', () => ({
-      execFileSync: execFileSyncMock,
-      spawn: spawnMock
-    }))
+    mockProcessLayer(execFileSyncMock, spawnMock)
     vi.doMock('../wsl/wsl-runner', () => ({ runWslProcess: runWslProcessMock }))
     vi.doMock('../../shared/wsl-paths', () => ({
       parseWslUncPath: (path: string) =>
@@ -597,6 +602,7 @@ describe('CodexAccountService config sync', () => {
         rateLimits as never,
         runtimeHome as never
       )
+      await service.ready
 
       const result = await service.reauthenticateAccount('account-1')
 
@@ -677,10 +683,7 @@ describe('CodexAccountService config sync', () => {
       return child
     })
 
-    vi.doMock('node:child_process', () => ({
-      execFileSync: execFileSyncMock,
-      spawn: spawnMock
-    }))
+    mockProcessLayer(execFileSyncMock, spawnMock)
     vi.doMock('../wsl/wsl-runner', () => ({ runWslProcess: runWslProcessMock }))
     vi.doMock('../../shared/wsl-paths', () => ({
       parseWslUncPath: (path: string) =>
@@ -721,6 +724,7 @@ describe('CodexAccountService config sync', () => {
         rateLimits as never,
         runtimeHome as never
       )
+      await service.ready
 
       const result = await service.reauthenticateAccount('account-1')
 
@@ -754,23 +758,20 @@ describe('CodexAccountService config sync', () => {
     mkdirSync(wslManagedHomePath, { recursive: true })
     writeFileSync(join(wslManagedHomePath, '.orca-managed-home'), 'account-1\n', 'utf-8')
 
-    vi.doMock('node:child_process', () => ({
-      execFileSync: vi.fn((_command: string, args: string[]) => {
-        const script = decodeEncodedWslBashCommand(String(args.at(-1)))
-        if (script.includes('readlink -f')) {
-          expect(script).toContain("expected_marker='account-1'")
-          expect(script).toContain(
-            'test "$candidate_real" = "$managed_root_real/$expected_marker/home"'
-          )
-          expect(script).toContain(
-            'test "$(cat "$candidate_real/.orca-managed-home")" = "$expected_marker"'
-          )
-          return `${wslLinuxHomePath}\n`
-        }
-        return ''
-      }),
-      spawn: vi.fn()
-    }))
+    mockProcessLayer((_command: string, args: string[]) => {
+      const script = decodeEncodedWslBashCommand(String(args.at(-1)))
+      if (script.includes('readlink -f')) {
+        expect(script).toContain("expected_marker='account-1'")
+        expect(script).toContain(
+          'test "$candidate_real" = "$managed_root_real/$expected_marker/home"'
+        )
+        expect(script).toContain(
+          'test "$(cat "$candidate_real/.orca-managed-home")" = "$expected_marker"'
+        )
+        return `${wslLinuxHomePath}\n`
+      }
+      return ''
+    }, vi.fn())
     vi.doMock('../wsl/wsl-runner', () => ({ runWslProcess: vi.fn(async () => wslOk()) }))
     vi.doMock('../../shared/wsl-paths', () => ({
       parseWslUncPath: (path: string) =>
@@ -810,6 +811,7 @@ describe('CodexAccountService config sync', () => {
         rateLimits as never,
         runtimeHome as never
       )
+      await service.ready
 
       const result = await service.removeAccount('account-1')
 

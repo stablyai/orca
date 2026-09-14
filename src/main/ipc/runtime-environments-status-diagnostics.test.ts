@@ -7,6 +7,7 @@ import {
   ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES,
   REMOTE_RUNTIME_SHARED_CONTROL_CAPABILITY
 } from '../../shared/protocol-version'
+import { settlePathWritesForTests } from '../../shared/path-write-serializer'
 
 const {
   handleMock,
@@ -169,6 +170,8 @@ describe('registerRuntimeEnvironmentHandlers', () => {
       expect.objectContaining({ endpoint: 'ws://127.0.0.1:6768' })
     )
 
+    // The status check stamps the runtime id through the fire-and-forget lane.
+    await settlePathWritesForTests()
     const resolve = handler<{ selector: string }, { id: string; runtimeId: string | null }>(
       'runtimeEnvironments:resolve'
     )

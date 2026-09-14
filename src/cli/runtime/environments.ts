@@ -51,12 +51,19 @@ export function resolveEnvironmentPairingOffer(
   return translateStoreError(() => resolveEnvironmentPairingOfferFromStore(userDataPath, selector))
 }
 
-export function markEnvironmentUsed(
+export async function markEnvironmentUsed(
   userDataPath: string,
   selector: string,
   args: { runtimeId?: string | null; now?: number } = {}
-): void {
-  translateStoreError(() => markEnvironmentUsedInStore(userDataPath, selector, args))
+): Promise<void> {
+  try {
+    await markEnvironmentUsedInStore(userDataPath, selector, args)
+  } catch (error) {
+    if (error instanceof RuntimeEnvironmentStoreError) {
+      throw new RuntimeClientError(toRuntimeClientErrorCode(error.code), error.message)
+    }
+    throw error
+  }
 }
 
 function translateStoreError<TResult>(fn: () => TResult): TResult {
