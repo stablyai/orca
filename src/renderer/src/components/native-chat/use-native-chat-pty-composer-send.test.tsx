@@ -111,6 +111,18 @@ describe('submit gesture wiring', () => {
     )
   })
 
+  it('carries the resolved submit gesture into a multi-attachment send with every path', () => {
+    vi.mocked(resolveComposerSubmitBytes).mockReturnValue('\x1b\r')
+    send('claude', 'chat', 'hello', ['/tmp/a.png', '/tmp/b.png'])
+    expect(vi.mocked(sendNativeChatMessageWithImageAttachments)).toHaveBeenCalledWith(
+      'claude',
+      'pty',
+      'hello',
+      ['/tmp/a.png', '/tmp/b.png'],
+      expect.objectContaining({ submitBytes: '\x1b\r' })
+    )
+  })
+
   it('carries the resolved submit gesture into a text send', () => {
     vi.mocked(resolveComposerSubmitBytes).mockReturnValue('\x1b\r')
     send('claude', 'chat', 'hello')

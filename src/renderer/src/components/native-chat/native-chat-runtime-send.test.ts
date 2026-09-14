@@ -83,6 +83,17 @@ describe('sendNativeChatMessage', () => {
     ])
   })
 
+  it('submits multi-line text with blank lines using the provided submitBytes', () => {
+    const body = 'first\n\n\nsecond'
+    sendNativeChatMessage(PTY, body, { submitBytes: '\x1b\r' })
+    vi.advanceTimersByTime(NATIVE_CHAT_SUBMIT_DELAY_MS)
+    expectWriteOrder(sendRuntimePtyInput.mock.calls, [
+      NATIVE_CHAT_CLEAR_UNSUBMITTED_INPUT,
+      buildNativeChatPasteBytes(body),
+      '\x1b\r'
+    ])
+  })
+
   it('cancels the delayed Enter and re-clears an unsubmitted body', () => {
     const handle = sendNativeChatMessage(PTY, 'hi')
     handle.cancel()
@@ -462,6 +473,46 @@ describe('sendNativeChatMessageWithImageAttachments', () => {
       submitBytes: altEnter
     })
     vi.advanceTimersByTime(NATIVE_CHAT_SUBMIT_DELAY_MS)
+    expect(sendRuntimePtyInput).toHaveBeenLastCalledWith(PTY, altEnter, 'driving')
+    expect(sendRuntimePtyInput.mock.calls.some((call) => call[1] === NATIVE_CHAT_SUBMIT)).toBe(
+      false
+    )
+  })
+
+  it('submits several attachments (no text) with the resolved gesture bytes', () => {
+    const altEnter = '\x1b\r'
+    sendNativeChatMessageWithImageAttachments('claude', PTY, '', ['/tmp/a.png', '/tmp/b.png'], {
+      submitBytes: altEnter
+    })
+    vi.advanceTimersByTime(NATIVE_CHAT_SUBMIT_DELAY_MS)
+    expect(sendRuntimePtyInput).toHaveBeenLastCalledWith(PTY, altEnter, 'driving')
+    expect(sendRuntimePtyInput.mock.calls.some((call) => call[1] === NATIVE_CHAT_SUBMIT)).toBe(
+      false
+    )
+  })
+
+  it('submits several attachments + text with the resolved gesture bytes', () => {
+    const altEnter = '\x1b\r'
+    sendNativeChatMessageWithImageAttachments(
+      'claude',
+      PTY,
+      'compare these',
+      ['/tmp/a.png', '/tmp/b.png'],
+      { submitBytes: altEnter }
+    )
+    vi.advanceTimersByTime(NATIVE_CHAT_IMAGE_ATTACHMENT_SETTLE_MS + NATIVE_CHAT_SUBMIT_DELAY_MS)
+    expect(sendRuntimePtyInput).toHaveBeenLastCalledWith(PTY, altEnter, 'driving')
+    expect(sendRuntimePtyInput.mock.calls.some((call) => call[1] === NATIVE_CHAT_SUBMIT)).toBe(
+      false
+    )
+  })
+
+  it('submits an attachment + multi-line text (blank lines) with the resolved gesture bytes', () => {
+    const altEnter = '\x1b\r'
+    sendNativeChatMessageWithImageAttachments('claude', PTY, 'first\n\n\nsecond', ['/tmp/a.png'], {
+      submitBytes: altEnter
+    })
+    vi.advanceTimersByTime(NATIVE_CHAT_IMAGE_ATTACHMENT_SETTLE_MS + NATIVE_CHAT_SUBMIT_DELAY_MS)
     expect(sendRuntimePtyInput).toHaveBeenLastCalledWith(PTY, altEnter, 'driving')
     expect(sendRuntimePtyInput.mock.calls.some((call) => call[1] === NATIVE_CHAT_SUBMIT)).toBe(
       false
