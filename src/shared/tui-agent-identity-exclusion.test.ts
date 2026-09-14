@@ -59,6 +59,21 @@ describe('excludeMisidentifiedAgents', () => {
     ).resolves.toEqual(['bob'])
   })
 
+  it('keeps an agent when any found candidate proves to be the real agent', async () => {
+    const commands = [...COMMANDS, { id: 'bob', cmd: '/opt/bob', identityExclusion: BOB_EXCLUSION }]
+    const probe = vi.fn(async (cmd: string) => ({
+      stdout: cmd === '/opt/bob' ? 'Bob in your terminal' : 'A version manager for Neovim',
+      stderr: ''
+    }))
+
+    await expect(
+      excludeMisidentifiedAgents(commands, ['bob'], new Set(['bob', '/opt/bob']), probe)
+    ).resolves.toEqual(['bob'])
+    await expect(
+      excludeMisidentifiedAgents(commands, ['bob'], new Set(['bob']), probe)
+    ).resolves.toEqual([])
+  })
+
   it('skips the probe when the exclusion-bearing command was not the one found', async () => {
     // Why: an alias entry without an exclusion may be the actual hit; probing a
     // command that was never found would only fail open anyway.

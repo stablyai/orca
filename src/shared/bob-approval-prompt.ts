@@ -34,19 +34,30 @@ const BOB_BANNER_RE = new RegExp(
   `(?:^|[\\r\\n])[^\\S\\r\\n]*❯[^\\S\\r\\n]*${BOB_COMPOSER_PLACEHOLDER}`
 )
 
-// Why: a modal (or the banner) can straddle two PTY writes, so each frame is judged with a short
-// carry-over of the previous one. It is deliberately small — a window long enough to still hold
-// the *previous* modal would keep the detector armed across a repaint that no longer shows one,
-// and every approval after the first would then be swallowed.
+// Why: a modal line (or the banner) can straddle several PTY writes, so each write is judged
+// with a rolling tail of what came before it.
 const CARRY_OVER_LIMIT = 512
 
 export type BobApprovalPromptDetector = {
-  /** True only on the chunk that first paints a modal, so a repainting TUI fires once. */
+  /** True only on the write that first paints a modal, so a repainting TUI fires once. */
   observe: (data: string) => boolean
 }
 
 export function textShowsBobApprovalPrompt(text: string): boolean {
   return BOB_APPROVAL_RES.some((pattern) => pattern.test(text))
+}
+
+function textShowsBobComposer(text: string): boolean {
+  return BOB_BANNER_RE.test(text)
+}
+
+// Why: the carried tail was judged on the previous write; a match living only there is not new.
+function matchIsOnlyCarriedOver(
+  previous: string,
+  data: string,
+  shows: (text: string) => boolean
+): boolean {
+  return shows(stripTerminalControl(previous)) && !shows(stripTerminalControl(data))
 }
 
 // Why: `bob` alone only opens the TUI on a real TTY; `bob chat` is Orca's launch command and the
@@ -58,25 +69,19 @@ function isBobLaunchCommand(command: string | null | undefined): boolean {
   return /(?:^|[\s;&|])bob(?:\.(?:js|cmd))?(?:\s+chat\b|\s*$)/.test(command)
 }
 
-function rawTextMayContainBobBanner(rawText: string): boolean {
-  // Why: the banner needs this exact placeholder; it is rare enough in other output that most
-  // chunks skip the strip+regex path below.
-  return rawText.includes('Anything')
-}
-
 /**
- * Edge-triggered: Bob repaints the whole modal region every frame, so the detector fires on the
- * rising edge and disarms as soon as a frame no longer carries it. That makes the next approval
- * in the same session fire again without any timer.
+ * Edge-triggered: fires when a modal first appears and stays armed until the composer is painted
+ * with no modal beside it. A write merely lacking the modal proves nothing — the transcripts show
+ * the execute modal repainted every frame with the composer hidden, and the spawn modal painted
+ * once while the composer below it keeps repainting.
  *
  * Self-arms on Bob's own launch command or composer banner first (never on the approval text
  * alone), so an unrelated CLI that happens to print "Approve Once" cannot misattribute its status
  * to Bob.
  */
-export function createBobApprovalPromptDetector(
-  args: { startupCommand?: string | null },
-  onApprovalPrompt: () => void
-): BobApprovalPromptDetector {
+export function createBobApprovalPromptDetector(args: {
+  startupCommand?: string | null
+}): BobApprovalPromptDetector {
   let hasSeenBobUi = isBobLaunchCommand(args.startupCommand)
   let carryOver = ''
   let armed = false
@@ -86,41 +91,36 @@ export function createBobApprovalPromptDetector(
       if (data.length === 0) {
         return false
       }
-      const frame = `${carryOver}${data}`
-
+      const previous = carryOver
+      const frame = `${previous}${data}`
+      carryOver = frame.slice(-CARRY_OVER_LIMIT)
+      // Why the cheap prefilters before stripping: every PTY write on a Bob pane reaches here.
+      const mayShowModal = frame.includes('Approve')
+      const mayShowComposer = frame.includes('Anything')
+      if (!mayShowModal && !mayShowComposer) {
+        return false
+      }
+      const text = stripTerminalControl(frame)
+      const showsComposer = mayShowComposer && textShowsBobComposer(text)
+      hasSeenBobUi ||= showsComposer
       if (!hasSeenBobUi) {
-        if (!rawTextMayContainBobBanner(frame)) {
-          carryOver = data.slice(-CARRY_OVER_LIMIT)
+        return false
+      }
+      if (
+        mayShowModal &&
+        textShowsBobApprovalPrompt(text) &&
+        !matchIsOnlyCarriedOver(previous, data, textShowsBobApprovalPrompt)
+      ) {
+        if (armed) {
           return false
         }
-        if (!BOB_BANNER_RE.test(stripTerminalControl(frame))) {
-          carryOver = data.slice(-CARRY_OVER_LIMIT)
-          return false
-        }
-        hasSeenBobUi = true
+        armed = true
+        return true
       }
-
-      // Why the cheap prefilter before stripping: every PTY chunk on an armed Bob pane still
-      // reaches here on every frame, and only the approval menu carries this word.
-      if (!frame.includes('Approve')) {
-        carryOver = data.slice(-CARRY_OVER_LIMIT)
+      if (showsComposer && !matchIsOnlyCarriedOver(previous, data, textShowsBobComposer)) {
         armed = false
-        return false
       }
-      if (!textShowsBobApprovalPrompt(stripTerminalControl(frame))) {
-        carryOver = data.slice(-CARRY_OVER_LIMIT)
-        armed = false
-        return false
-      }
-      // Why drop the carry-over on a match: it already holds a full modal, so keeping it would
-      // re-satisfy the match on the next repaint and hold `armed` past the frame that clears it.
-      carryOver = ''
-      if (armed) {
-        return false
-      }
-      armed = true
-      onApprovalPrompt()
-      return true
+      return false
     }
   }
 }

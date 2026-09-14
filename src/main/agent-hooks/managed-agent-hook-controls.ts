@@ -169,7 +169,8 @@ export async function installManagedAgentHooks(
   // exclusion spawn anything at all.
   const misidentified = await agentsFailingHookInstallIdentityProbe(
     targets.filter((target) => presenceByAgent[target.agent]?.state === 'found'),
-    buildManagedHookIdentityProbe()
+    buildManagedHookIdentityProbe(),
+    settings
   )
 
   const results: AgentHookInstallStatus[] = []
