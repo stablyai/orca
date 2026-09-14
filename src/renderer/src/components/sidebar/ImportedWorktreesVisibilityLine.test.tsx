@@ -73,6 +73,26 @@ describe('ImportedWorktreesVisibilityLine', () => {
     expect(markup).not.toContain('/worktrees/demo-project')
   })
 
+  it('names the host when the project is checked out on more than one', () => {
+    const markup = renderLine({ hostContextLabel: 'openclaw' })
+
+    expect(markup).toContain('openclaw')
+    expect(markup).toContain('Expand hidden worktrees for orca on openclaw')
+    expect(markup).toContain(
+      'Keep 4 discovered worktrees hidden for orca on openclaw; recover from the project menu'
+    )
+  })
+
+  it('folds the host into pinned fallback copy, which already names the repo', () => {
+    const markup = renderLine({
+      hostContextLabel: 'openclaw',
+      placement: 'pinned-fallback',
+      onKeepHidden: undefined
+    })
+
+    expect(markup).toContain('Hiding 4 discovered worktrees in orca on openclaw')
+  })
+
   it('scopes pinned fallback copy to the repo name without a dismiss action', () => {
     const markup = renderLine({ placement: 'pinned-fallback', onKeepHidden: undefined })
 

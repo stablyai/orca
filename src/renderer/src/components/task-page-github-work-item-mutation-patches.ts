@@ -1,4 +1,5 @@
-import type { GitHubAssignableUser, GitHubWorkItem } from '../../../shared/types'
+import type { GitHubAssignableUser } from '../../../shared/github/pull-request-types'
+import type { GitHubWorkItem } from '../../../shared/github/work-item-types'
 import type { TaskPageGitHubCloseAction } from './task-page-github-status-actions'
 import {
   taskPageGitHubListOpKey,

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { join } from 'node:path'
-import type { GitWorktreeInfo } from '../../shared/types'
+import type { GitWorktreeInfo } from '../../shared/worktree/types'
 import { listWorktreeGraph } from '../git/worktree'
 import {
   createNestedRepoImportTargetResolver,

@@ -65,3 +65,16 @@ export function toRelaySshPtyId(connectionId: string, ptyId: string): string {
   }
   return parsed.relayPtyId
 }
+
+/**
+ * Relay form for COMPARING an id against a stored SSH lease or binding, which are written in relay
+ * form. Unlike `toRelaySshPtyId` this never throws: an id naming a different target is simply not
+ * this target's pty, and a reader asking "is this the same pty?" wants `false`, not an exception.
+ */
+export function toComparableRelaySshPtyId(connectionId: string, ptyId: string): string {
+  try {
+    return toRelaySshPtyId(connectionId, ptyId)
+  } catch {
+    return ptyId
+  }
+}

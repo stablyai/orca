@@ -95,6 +95,66 @@ describe('benchmark artifact comparison', () => {
     })
   })
 
+  it('compares terminal split headline metrics in milliseconds', () => {
+    const dir = makeTempDir()
+    const baselinePath = writeArtifact(dir, 'split-baseline.json', {
+      label: 'split baseline',
+      headlineMs: {
+        shortcutToFocusP50: 284.2,
+        shortcutToFocusP95: 676.3
+      }
+    })
+    const candidatePath = writeArtifact(dir, 'split-candidate.json', {
+      label: 'split candidate',
+      headlineMs: {
+        shortcutToFocusP50: 12.7,
+        shortcutToFocusP95: 13.7
+      }
+    })
+
+    const comparison = comparePaths(baselinePath, candidatePath)
+
+    expect(comparison.baseline.kind).toBe('terminal-split-activation')
+    expect(comparison.metrics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          key: 'shortcutToFocusP50',
+          unit: 'ms',
+          baseline: 284.2,
+          candidate: 12.7,
+          status: 'improved'
+        }),
+        expect.objectContaining({
+          key: 'shortcutToFocusP95',
+          unit: 'ms',
+          baseline: 676.3,
+          candidate: 13.7,
+          status: 'improved'
+        })
+      ])
+    )
+  })
+
+  it('rejects invalid benchmark artifacts before comparing partial metrics', () => {
+    const dir = makeTempDir()
+    const baselinePath = writeArtifact(dir, 'split-invalid.json', {
+      label: 'invalid split',
+      status: 'failed',
+      valid: false,
+      headlineMs: { shortcutToFocusP50: 0 }
+    })
+    const candidatePath = writeArtifact(dir, 'split-valid.json', {
+      label: 'valid split',
+      status: 'passed',
+      valid: true,
+      headlineMs: { shortcutToFocusP50: 10 }
+    })
+
+    expect(() => comparePaths(baselinePath, candidatePath)).toThrow(
+      'split-invalid.json: benchmark artifact is marked invalid'
+    )
+  })
+
   it('compares numeric Playwright annotation metrics and omits metadata fields', () => {
     const dir = makeTempDir()
     const baselinePath = writeArtifact(dir, 'baseline-playwright.json', {

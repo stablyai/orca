@@ -1,10 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
-import type {
-  LinearIssue,
-  LinearWorkflowState,
-  WorkspaceStatusDefinition,
-  Worktree
-} from '../../../../shared/types'
+import type { LinearIssue } from '../../../../shared/linear/issue-types'
+import type { LinearWorkflowState } from '../../../../shared/linear/workspace-types'
+import type { WorkspaceStatusDefinition, Worktree } from '../../../../shared/worktree/types'
 import type { LinearMutationResult } from '@/runtime/runtime-linear-client'
 import {
   getWorkspaceBoardTaskStatusSyncRequest,

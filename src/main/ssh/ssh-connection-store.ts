@@ -41,7 +41,9 @@ export class SshConnectionStore {
       // Why: default to 'manual' so user-created targets are never overwritten
       // by a later ~/.ssh/config import (only 'ssh-config' targets are synced).
       source: target.source ?? 'manual',
-      id: `ssh-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+      id: `ssh-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      // Why: a fresh registration; automations fenced on an earlier one must not adopt it.
+      generation: this.store.allocateSshTargetGeneration()
     }
     // Why: re-adding a host the user previously deleted is an explicit intent to
     // keep it — lift any tombstone so config sync stops suppressing this alias.
@@ -69,6 +71,8 @@ export class SshConnectionStore {
       configHost: target.configHost ?? target.host,
       owner: { type: 'on-demand-runtime', runtimeId },
       source: 'manual',
+      // Why: an upsert onto a live registration is not a re-registration — only a fresh id allocates.
+      generation: existing?.generation ?? this.store.allocateSshTargetGeneration(),
       ...(existing?.lastRequiredPassphrase !== undefined
         ? { lastRequiredPassphrase: existing.lastRequiredPassphrase }
         : {})
@@ -216,7 +220,11 @@ export class SshConnectionStore {
           changed.push(updated)
         }
       } else {
-        const inserted: SshTarget = { ...candidate, source: 'ssh-config' }
+        const inserted: SshTarget = {
+          ...candidate,
+          source: 'ssh-config',
+          generation: this.store.allocateSshTargetGeneration()
+        }
         this.store.addSshTarget(inserted)
         // Why: a freshly-inserted config host may be one the user removed and is
         // now re-importing — re-adopt its orphaned workspaces. Updated-in-place

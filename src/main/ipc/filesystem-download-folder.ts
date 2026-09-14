@@ -6,7 +6,7 @@ import { getRuntimePathBasename } from '../../shared/cross-platform-path'
 import { sanitizeLocalDownloadFilename } from '../local-download-filename'
 import { promoteLocalDownloadedFolder } from '../local-downloaded-folder-promotion'
 import { requireSshFilesystemProvider } from '../providers/ssh-filesystem-dispatch'
-import { isENOENT } from './filesystem-auth'
+import { isENOENT } from './filesystem-path-containment'
 
 type DownloadFolderResult = { canceled: true } | { canceled: false; destinationPath: string }
 

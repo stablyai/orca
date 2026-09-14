@@ -6,7 +6,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TerminalHost } from './terminal-host'
-import type { SubprocessHandle } from './session'
+import type { SubprocessHandle } from './session-subprocess-handle'
 import {
   DAEMON_SESSION_SCROLLBACK_ROWS,
   resolveDaemonSessionScrollbackRows
@@ -47,6 +47,7 @@ describe('daemon session scrollback window', () => {
       kill: vi.fn(() => {
         setTimeout(() => onExitCb?.(0), 1)
       }),
+      terminateOwnedTree: () => 'unavailable' as const,
       forceKill: vi.fn(() => onExitCb?.(137)),
       signal: vi.fn(),
       onData(cb) {

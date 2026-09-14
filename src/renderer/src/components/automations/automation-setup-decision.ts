@@ -1,11 +1,8 @@
 import type { AutomationWorkspaceMode } from '../../../../shared/automations-types'
-import type {
-  OrcaHooks,
-  ProjectHostSetup,
-  Repo,
-  SetupDecision,
-  SetupRunPolicy
-} from '../../../../shared/types'
+import type { OrcaHooks, SetupRunPolicy } from '../../../../shared/orca-yaml-hook-types'
+import type { ProjectHostSetup } from '../../../../shared/project-types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { SetupDecision } from '../../../../shared/worktree/create-types'
 import { getSetupConfig } from '@/lib/new-workspace'
 
 type AutomationSetupSource = {

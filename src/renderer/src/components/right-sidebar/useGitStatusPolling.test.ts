@@ -1,7 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as React from 'react'
-import type { FsChangedPayload, GitPushTarget, GitStatusResult } from '../../../../shared/types'
+import type { FsChangedPayload } from '../../../../shared/filesystem-entry-types'
+import type { GitStatusResult } from '../../../../shared/git-status-types'
+import type { GitPushTarget } from '../../../../shared/worktree/types'
 import { DEFAULT_GIT_STATUS_LIMIT } from '../../../../shared/git-status-limit'
+import { slowTaskRequiredIdleMs } from './coalesced-poll-runner'
+import {
+  admissionTierForGitStatusRefreshReason,
+  SLOW_GIT_POLL_BACKOFF
+} from './useGitStatusPolling'
 
 const worktree = { id: 'repo-1::/repo', repoId: 'repo-1', path: '/repo' }
 const repo = { id: 'repo-1', path: '/repo', kind: 'git', connectionId: null as string | null }
@@ -149,6 +156,22 @@ async function usePollingOnce(
 }
 
 describe('useGitStatusPolling', () => {
+  it('paces the safety scheduler and stale-conflict fan-out by one run duration', () => {
+    expect(
+      slowTaskRequiredIdleMs(
+        6_000,
+        SLOW_GIT_POLL_BACKOFF.idleMultiplier,
+        3_000,
+        SLOW_GIT_POLL_BACKOFF.maxIntervalMs
+      )
+    ).toBe(6_000)
+  })
+
+  it('keeps activity admission in status and safety admission in background', () => {
+    expect(admissionTierForGitStatusRefreshReason('activity')).toBe('status')
+    expect(admissionTierForGitStatusRefreshReason('safety')).toBe('background')
+  })
+
   beforeEach(() => {
     vi.restoreAllMocks()
     vi.unstubAllGlobals()
@@ -156,7 +179,7 @@ describe('useGitStatusPolling', () => {
   })
 
   it('uses upstream data from git status instead of spawning a separate upstream refresh', async () => {
-    const { state } = await usePollingOnce({
+    const { state, gitStatus } = await usePollingOnce({
       entries: [],
       conflictOperation: 'unknown',
       head: 'abc123',
@@ -176,6 +199,7 @@ describe('useGitStatusPolling', () => {
       behind: 0
     })
     expect(state.fetchUpstreamStatus).not.toHaveBeenCalled()
+    expect(gitStatus).toHaveBeenCalledWith(expect.objectContaining({ admissionTier: 'status' }))
   })
 
   it('falls back to the upstream IPC for legacy status payloads', async () => {
@@ -256,6 +280,7 @@ describe('useGitStatusPolling', () => {
     )
 
     expect(gitStatus).toHaveBeenCalledTimes(1)
+    expect(gitStatus).toHaveBeenCalledWith(expect.objectContaining({ admissionTier: 'status' }))
     expect(globalThis.setInterval).not.toHaveBeenCalled()
   })
 

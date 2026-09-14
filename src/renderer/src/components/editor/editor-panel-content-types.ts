@@ -1,4 +1,4 @@
-import type { GitDiffResult } from '../../../../shared/types'
+import type { GitDiffResult } from '../../../../shared/git-diff-compare-types'
 
 /**
  * Thrown when a worktree's host owner is not yet known (the backing repo has
@@ -32,4 +32,9 @@ export type FileContent = {
 export type DiffContent = GitDiffResult & {
   /** Superseded by an external change; still rendered until the lazy reload lands. */
   isStale?: boolean
+}
+
+export type InFlightContentRead<T> = {
+  externalEventGeneration?: number
+  promise: Promise<T>
 }

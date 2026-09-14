@@ -1,6 +1,6 @@
 import type { TaskSourceContext } from '../../shared/task-source-context'
+import type { ClassifiedError } from '../../shared/classified-error'
 import type {
-  ClassifiedError,
   GetGitLabRateLimitResult,
   GitLabAssignableUser,
   GitLabAuthDiagnostic,
@@ -21,12 +21,14 @@ import type {
   ListMergeRequestsResult,
   MRInfo,
   MRListState
-} from '../../shared/types'
+} from '../../shared/gitlab-types'
 
 export type GitLabRepoSelectorArgs = {
   repoPath: string
   repoId?: string | null
   sourceContext?: TaskSourceContext | null
+  /** Desktop IPC-only owner guard; web adapters remove it before runtime RPC. */
+  repoOwnerExecutionHostId?: string
 }
 
 // ── GitLab — parallel to gh, MR/issue surface only in v1 ────────
@@ -67,8 +69,14 @@ export type GitLabApi = {
       state?: 'opened' | 'closed' | 'all'
       assignee?: string
       limit?: number
+      page?: number
     }
-  ) => Promise<{ items: GitLabWorkItem[]; error?: ClassifiedError }>
+  ) => Promise<{
+    items: GitLabWorkItem[]
+    /** Optional while paired with a host older than issue pagination. */
+    totalPages?: number
+    error?: ClassifiedError
+  }>
   createIssue: (
     args: GitLabRepoSelectorArgs & {
       title: string

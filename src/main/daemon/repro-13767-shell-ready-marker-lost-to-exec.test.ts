@@ -1,7 +1,7 @@
 import { spawnSync } from 'node:child_process'
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import { createPtySubprocess } from './pty-subprocess'
 import { Session } from './session'
@@ -10,6 +10,20 @@ const describePosix = process.platform === 'win32' ? describe.skip : describe
 const hasZsh = process.platform !== 'win32' && spawnSync('/bin/zsh', ['--version']).status === 0
 const hasBash = process.platform !== 'win32' && spawnSync('/bin/bash', ['--version']).status === 0
 const COMMAND_OUTPUT = 'ORCA_STARTUP_COMMAND_RAN'
+// A second Bash install with its own canonical path -- the shape a login profile
+// switches to (`exec /opt/homebrew/bin/bash`) and the one #18768 stalled on. A
+// symlink cannot stand in: both sides are realpath'd before they are compared.
+const alternateBashPath = ['/opt/homebrew/bin/bash', '/usr/local/bin/bash', '/usr/bin/bash'].find(
+  (candidate) =>
+    hasBash && existsSync(candidate) && realpathSync(candidate) !== realpathSync('/bin/bash')
+)
+if (process.platform !== 'win32' && !alternateBashPath) {
+  // Why announced: usrmerge hosts resolve /usr/bin/bash back to /bin/bash, so these
+  // two skip on most Linux CI. A silent skip reads as coverage that does not exist.
+  console.warn(
+    '[repro-13767] no second Bash install with a distinct realpath; skipping the alternate-install recovery tests'
+  )
+}
 const READ_STARTED_FILE = '.orca-read-started'
 
 type ShellFixture = {
@@ -112,23 +126,24 @@ function runCleanupActions(...actions: (() => void)[]): void {
 
 type RunningFixture = {
   session: Session
-  subprocess: ReturnType<typeof createPtySubprocess>
+  subprocess: Awaited<ReturnType<typeof createPtySubprocess>>
   output: () => string
   readStarted: () => boolean
   subscribe: (settle: () => void) => void
   cleanup: () => Promise<void>
 }
 
-function startFixture(
+async function startFixture(
   fixture: ShellFixture,
   startupContent: string,
-  extraFiles: Record<string, string> = {}
-): RunningFixture {
+  extraFiles: Record<string, string> = {},
+  pathEnv: string = process.env.PATH ?? '/usr/bin:/bin'
+): Promise<RunningFixture> {
   const tempHome = mkdtempSync(join(tmpdir(), 'orca-shell-ready-exec-'))
   const previousHome = process.env.HOME
   const previousZdotdir = process.env.ZDOTDIR
   const previousOrigZdotdir = process.env.ORCA_ORIG_ZDOTDIR
-  let subprocess: ReturnType<typeof createPtySubprocess> | undefined
+  let subprocess: Awaited<ReturnType<typeof createPtySubprocess>> | undefined
   let session: Session | undefined
   let consoleWarnSpy: { mockRestore: () => void } | undefined
   try {
@@ -141,7 +156,7 @@ function startFixture(
     delete process.env.ORCA_ORIG_ZDOTDIR
     consoleWarnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
 
-    subprocess = createPtySubprocess({
+    subprocess = await createPtySubprocess({
       sessionId: `repro-13767-${fixture.startupFile}`,
       cols: 80,
       rows: 24,
@@ -150,7 +165,7 @@ function startFixture(
       shellOverride: fixture.shellPath,
       env: {
         HOME: tempHome,
-        PATH: process.env.PATH ?? '/usr/bin:/bin',
+        PATH: pathEnv,
         SHELL: fixture.shellPath,
         TERM: 'xterm-256color'
       },
@@ -233,7 +248,7 @@ function setEnvironmentValue(key: string, value: string | undefined): void {
 }
 
 async function runExecOracle(fixture: ShellFixture): Promise<void> {
-  const running = startFixture(
+  const running = await startFixture(
     fixture,
     `if [[ -z "\${ORCA_EXEC_REPRO_DONE:-}" ]]; then
   export ORCA_EXEC_REPRO_DONE=1
@@ -253,7 +268,7 @@ fi
 }
 
 async function runReadOracle(fixture: ShellFixture, child: boolean): Promise<void> {
-  const running = startFixture(fixture, child ? fixture.childRead : fixture.secretRead)
+  const running = await startFixture(fixture, child ? fixture.childRead : fixture.secretRead)
   try {
     await waitForCondition(running.readStarted)
     await new Promise((resolve) => setTimeout(resolve, 300))
@@ -309,7 +324,7 @@ describePosix('#13767 shell-ready marker loss across exec', () => {
   zshTest(
     'keeps queued input out of a zle-line-init read after exec',
     async () => {
-      const running = startFixture(
+      const running = await startFixture(
         zshFixture,
         `if [[ -z "\${ORCA_EXEC_REPRO_DONE:-}" ]]; then
   export ORCA_EXEC_REPRO_DONE=1
@@ -357,7 +372,7 @@ zle -N zle-line-init
   sqliteTest(
     'does not treat an exec-replaced readline program as the shell prompt',
     async () => {
-      const running = startFixture(zshFixture, 'exec /usr/bin/sqlite3\n')
+      const running = await startFixture(zshFixture, 'exec /usr/bin/sqlite3\n')
       try {
         await waitForOutput(running.subscribe, () => running.output().includes('sqlite> '))
         await new Promise((resolve) => setTimeout(resolve, 300))
@@ -373,7 +388,7 @@ zle -N zle-line-init
   sqliteTest(
     'does not trust a non-shell executable renamed to the shell basename',
     async () => {
-      const running = startFixture(
+      const running = await startFixture(
         zshFixture,
         'ln -s /usr/bin/sqlite3 "$HOME/zsh" && exec "$HOME/zsh"\n'
       )
@@ -392,7 +407,7 @@ zle -N zle-line-init
   zshTest(
     'retains the timeout backstop when zsh disables bracketed paste',
     async () => {
-      const running = startFixture(
+      const running = await startFixture(
         zshFixture,
         `if [[ -z "\${ORCA_EXEC_REPRO_DONE:-}" ]]; then
   export ORCA_EXEC_REPRO_DONE=1
@@ -408,6 +423,51 @@ fi
           running.output().includes('NO_BRACKET_PROMPT> ')
         )
         await new Promise((resolve) => setTimeout(resolve, 300))
+        expect(running.session.shellState).toBe('pending')
+        expect(running.output()).not.toContain(COMMAND_OUTPUT)
+      } finally {
+        await running.cleanup()
+      }
+    },
+    10_000
+  )
+
+  const bashFixture = FIXTURES[2] as ShellFixture
+  const alternateBashTest = alternateBashPath ? it : it.skip
+  const alternateBashProfile = `if [[ -z "\${ORCA_EXEC_REPRO_DONE:-}" ]]; then
+  export ORCA_EXEC_REPRO_DONE=1
+  exec ${alternateBashPath ?? '/bin/bash'} --noprofile --norc -l -i
+fi
+`
+
+  alternateBashTest(
+    'releases at the prompt of a second Bash install the pane PATH resolves',
+    async () => {
+      const running = await startFixture(
+        bashFixture,
+        alternateBashProfile,
+        {},
+        `${dirname(alternateBashPath ?? '/bin/bash')}:/usr/bin:/bin`
+      )
+      try {
+        await waitForOutput(running.subscribe, () => running.output().includes(COMMAND_OUTPUT))
+        expect(running.session.shellState).toBe('ready')
+        expect(count(running.output(), COMMAND_OUTPUT)).toBe(1)
+        expect(running.output()).not.toContain('orca-shell-start')
+      } finally {
+        await running.cleanup()
+      }
+    },
+    10_000
+  )
+
+  alternateBashTest(
+    'does not trust a Bash install that the pane PATH cannot reach',
+    async () => {
+      const running = await startFixture(bashFixture, alternateBashProfile, {}, '/usr/bin:/bin')
+      try {
+        await waitForOutput(running.subscribe, () => running.output().includes('$'))
+        await new Promise((resolve) => setTimeout(resolve, 500))
         expect(running.session.shellState).toBe('pending')
         expect(running.output()).not.toContain(COMMAND_OUTPUT)
       } finally {

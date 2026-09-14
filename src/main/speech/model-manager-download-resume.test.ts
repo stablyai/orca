@@ -37,6 +37,7 @@ type ModelManagerInternals = {
     redirectCount?: number,
     resumeOffset?: number
   ) => Promise<void>
+  getPartialDownloadBytes: (filePath: string) => number
 }
 
 type ScriptedResponse = {
@@ -288,11 +289,13 @@ describe('ModelManager download resume', () => {
       const manager = new ModelManager(dir) as unknown as ModelManagerInternals
       const filePath = join(dir, 'model.bin')
       let bytesWritten = 0
+      // Why: the ceiling costs 4096 iterations, so read progress from memory —
+      // real per-iteration file I/O stalls this test under parallel load.
+      vi.spyOn(manager, 'getPartialDownloadBytes').mockImplementation(() => bytesWritten)
       // Advances one byte per request against a total larger than the request
       // ceiling, so it makes forward progress forever without ever completing.
       const downloadFileMock = vi.spyOn(manager, 'downloadFile').mockImplementation(() => {
         bytesWritten += 1
-        writeFileSync(filePath, Buffer.alloc(bytesWritten))
         return Promise.resolve()
       })
 

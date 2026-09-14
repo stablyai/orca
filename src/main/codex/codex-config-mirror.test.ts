@@ -768,6 +768,15 @@ describe('syncSystemConfigIntoLegacySharedCodexHome', () => {
 })
 
 describe('prepareSystemConfigForFreshRuntimeMirror', () => {
+  it('allows WSL callers to retain Linux semantics for mounted-drive homes', () => {
+    expect(
+      resolveCodexConfigMirrorSourceDirectory(
+        'C:\\Users\\alice\\.codex',
+        '/mnt/c/Users/alice/.codex'
+      )
+    ).toBe('/mnt/c/Users/alice/.codex')
+  })
+
   it('uses the Linux-side directory for WSL UNC source homes', () => {
     const sourceDir = resolveCodexConfigMirrorSourceDirectory(
       '\\\\wsl.localhost\\Ubuntu\\home\\alice\\.codex'

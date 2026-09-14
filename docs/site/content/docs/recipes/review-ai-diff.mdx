@@ -1,0 +1,15 @@
+---
+title: Review an AI diff line-by-line
+---
+
+Reviewing an AI diff well is the difference between shipping fast and shipping bugs. Here's the loop.
+
+## Steps
+
+1. Open the worktree's diff view.
+1. Go file-by-file with `j` / `k`. For each hunk, ask: is the change necessary? is it minimal? does it match the rest of the file?
+1. Drop comments with `c` on anything you want changed — full sentences work best.
+1. When you've been through the whole diff, click **Send to agent**. Orca batches all comments into one prompt.
+1. Watch the agent revise. The state dot will go yellow (waiting for more input) or green (working).
+1. When it's idle, re-open the diff. Your comments are pinned; resolve the ones that are fixed and leave follow-ups on the rest.
+1. Repeat until clean, then commit.

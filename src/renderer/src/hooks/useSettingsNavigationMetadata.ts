@@ -1,4 +1,3 @@
-/* oxlint-disable max-lines */
 import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useShallow } from 'zustand/react/shallow'
@@ -6,119 +5,33 @@ import { useShallow } from 'zustand/react/shallow'
 // Cmd+J and Settings visibility cannot drift. Keep it free of Settings pane UI
 // imports; the boundary is enforced by a focused architecture test.
 import {
-  BarChart3,
-  Bell,
-  Blocks,
-  Bot,
-  Bug,
-  Cable,
-  CalendarClock,
-  CircleUserRound,
-  FlaskConical,
-  GitBranch,
-  Globe,
-  Keyboard,
-  ListChecks,
-  Lock,
-  Mic,
-  MousePointerClick,
-  Network,
-  Palette,
-  PanelsTopLeft,
-  Play,
-  Server,
-  ShieldCheck,
-  SlidersHorizontal,
-  Smartphone,
-  TabletSmartphone,
-  SquareTerminal,
-  TextCursorInput,
-  Files,
-  UserCog,
-  Wrench
-} from 'lucide-react'
-import { OrcaLogoSettingsIcon } from '@/components/settings/orca-logo-settings-icon'
-import { LinearIcon } from '@/components/icons/LinearIcon'
-import type { Repo } from '../../../shared/types'
-import { getRepoKindLabel } from '../../../shared/repo-kind'
-import { useAppStore } from '@/store'
-import { isMacUserAgent, isWindowsUserAgent } from '@/components/terminal-pane/pane-helpers'
-import type { SettingsNavSection } from '@/lib/settings-navigation-types'
-import { getGeneralPaneSearchEntries } from '@/components/settings/general-search'
-import { getAgentsPaneSearchEntries } from '@/components/settings/agents-search'
-import { getAccountsPaneSearchEntries } from '@/components/settings/accounts-search'
-import { getIntegrationsPaneSearchEntries } from '@/components/settings/integrations-search'
-import { getGitPaneSearchEntries } from '@/components/settings/git-search'
-import { getGitProviderApiBudgetSearchEntries } from '@/components/settings/git-provider-api-budget-search'
-import { getCommitMessageAiPaneSearchEntries } from '@/components/settings/commit-message-ai-search'
-import { getTasksPaneSearchEntries } from '@/components/settings/tasks-search'
-import { getFloatingWorkspaceSearchEntries } from '@/components/settings/floating-workspace-search'
-import { getAppearancePaneSearchEntries } from '@/components/settings/appearance-search'
-import { getInputPaneSearchEntries } from '@/components/settings/input-search'
-import { getTerminalPaneSearchEntries } from '@/components/settings/terminal-search'
-import { getQuickCommandsPaneSearchEntries } from '@/components/settings/quick-commands-search'
-import { getBrowserPaneCombinedSearchEntries } from '@/components/settings/browser-pane-search'
-import { getNotificationsPaneSearchEntries } from '@/components/settings/notifications-search'
-import { getOrchestrationPaneSearchEntries } from '@/components/settings/orchestration-search'
-import { getArtifactsSettingsSearchEntries } from '@/components/settings/artifacts-settings-search'
-import { getAutomationsSettingsSearchEntries } from '@/components/settings/automations-settings-search'
-import { getOrcaAccountSettingsSearchEntries } from '@/components/settings/orca-account-settings-search'
-import { getLinearAgentSkillPaneSearchEntries } from '@/components/settings/linear-agent-skill-search'
-import {
   getRuntimeEnvironmentsSearchEntry,
   getWebRuntimeEnvironmentsSearchEntry
 } from '@/components/settings/runtime-environments-search'
-import { getSshPaneSearchEntries } from '@/components/settings/ssh-search'
-import { getMobileSettingsPaneSearchEntries } from '@/components/settings/mobile-settings-search'
-import { getMobileEmulatorSearchEntries } from '@/components/settings/mobile-emulator-search'
-import { getComputerUsePaneSearchEntries } from '@/components/settings/computer-use-search'
-import { getVoicePaneSearchEntries } from '@/components/settings/voice-pane-search'
-import { getDeveloperPermissionsPaneSearchEntries } from '@/components/settings/developer-permissions-search'
-import { getPrivacyPaneSearchEntries } from '@/components/settings/privacy-search'
-import { getAdvancedPaneSearchEntries } from '@/components/settings/advanced-search'
-import { getShortcutsPaneSearchEntries } from '@/components/settings/shortcuts-search'
-import { getStatsPaneSearchEntries } from '@/components/stats/stats-search'
-import { getExperimentalPaneSearchEntries } from '@/components/settings/experimental-search'
-import { getPluginsPaneSearchEntries } from '@/components/settings/plugins-search'
-import { getRepositoryPaneSearchEntries } from '@/components/settings/repository-search'
-import { buildSettingsProjectList } from '@/components/settings/settings-project-list'
+import { getTerminalPaneSearchEntries } from '@/components/settings/terminal-search'
+import { isMacUserAgent, isWindowsUserAgent } from '@/components/terminal-pane/pane-helpers'
+import { useLinearProviderConnected } from '@/hooks/useLinearProviderConnected'
+import { getClientCreationActionPolicy } from '@/lib/client-creation-action-policy'
+import type { SettingsNavSection } from '@/lib/settings-navigation-types'
 import { isWebClientLocation } from '@/lib/web-client-location'
 import {
   isWindowsTerminalCapabilityHost,
   useWindowsTerminalCapabilities
 } from '@/lib/windows-terminal-capabilities'
-import { useWindowsTerminalCapabilityOwnerKey } from './useWindowsTerminalCapabilityOwnerKey'
 import { getActiveRuntimeTarget } from '@/runtime/runtime-rpc-client'
-import { useLinearProviderConnected } from '@/hooks/useLinearProviderConnected'
-import { translate } from '@/i18n/i18n'
-import { getClientCreationActionPolicy } from '@/lib/client-creation-action-policy'
+import { useAppStore } from '@/store'
+import type { Repo } from '../../../shared/repo-types'
+import {
+  buildCapabilitySettingsSections,
+  buildSetupSettingsSections
+} from './settings-navigation-capability-sections'
+import type { SettingsNavigationBuildOptions } from './settings-navigation-build-options'
+import { buildInterfaceSettingsSections } from './settings-navigation-interface-sections'
+import { buildRemoteSettingsSections } from './settings-navigation-remote-sections'
+import { buildWorkflowSettingsSections } from './settings-navigation-workflow-sections'
+import { useWindowsTerminalCapabilityOwnerKey } from './useWindowsTerminalCapabilityOwnerKey'
 
 export { isWebClientLocation } from '@/lib/web-client-location'
-
-function getDevToolsPaneSearchEntries(): SettingsNavSection['searchEntries'] {
-  return [
-    {
-      title: translate(
-        'auto.hooks.useSettingsNavigationMetadata.devSearchNotificationPlayground',
-        'Notification playground'
-      ),
-      description: translate(
-        'auto.hooks.useSettingsNavigationMetadata.devSearchNotificationPlaygroundDescription',
-        'Trigger representative toast and notification UI states.'
-      ),
-      keywords: [
-        translate('auto.hooks.useSettingsNavigationMetadata.devSearchKeywordDev', 'dev'),
-        translate('auto.hooks.useSettingsNavigationMetadata.devSearchKeywordToast', 'toast'),
-        translate('auto.hooks.useSettingsNavigationMetadata.devSearchKeywordSonner', 'sonner'),
-        translate('auto.hooks.useSettingsNavigationMetadata.devSearchKeywordError', 'error'),
-        translate(
-          'auto.hooks.useSettingsNavigationMetadata.devSearchKeywordNotification',
-          'notification'
-        )
-      ]
-    }
-  ]
-}
 
 export function buildSettingsNavigationMetadata({
   isMac,
@@ -143,7 +56,6 @@ export function buildSettingsNavigationMetadata({
   isLinearConnected?: boolean
   repos: readonly Repo[]
 }): SettingsNavSection[] {
-  const showDesktopOnlySettings = !isWebClient
   const terminalPaneSearchEntries = getTerminalPaneSearchEntries({
     isWindows,
     isWindowsTerminalHost,
@@ -158,521 +70,28 @@ export function buildSettingsNavigationMetadata({
       reposById.set(repo.id, repo)
     }
   }
+  const options: SettingsNavigationBuildOptions = {
+    isMac,
+    isWindows,
+    isLocalWindowsHost,
+    isWindowsTerminalHost,
+    isWebClient,
+    managedBrowserCreationEnabled,
+    mobileEmulatorCreationEnabled,
+    isDev,
+    isLinearConnected,
+    repos
+  }
 
+  // Why: this array's order must mirror SETTINGS_NAV_GROUPS so the Settings
+  // sidebar and the Cmd+J palette both read top-to-bottom in the same grouped
+  // order — keep each new entry beside its group's siblings.
   return [
-    // Why: this array's order must mirror SETTINGS_NAV_GROUPS so the Settings
-    // sidebar and the Cmd+J palette both read top-to-bottom in the same grouped
-    // order — keep each new entry beside its group's siblings.
-    {
-      id: 'agents',
-      title: translate('auto.hooks.useSettingsNavigationMetadata.b49abbd2f7', 'Agents'),
-      description: translate(
-        'auto.hooks.useSettingsNavigationMetadata.4121f7a0a2',
-        'Manage AI agents, set a default, and customize commands.'
-      ),
-      icon: Bot,
-      searchEntries: getAgentsPaneSearchEntries({
-        includeAgentAwake: !isWebClient,
-        includeAgentRuntime: isLocalWindowsHost
-      }),
-      group: 'capabilities'
-    },
-    {
-      id: 'accounts',
-      title: translate(
-        'auto.hooks.useSettingsNavigationMetadata.f70ac54d38',
-        'AI Provider Accounts'
-      ),
-      description: translate(
-        'auto.hooks.useSettingsNavigationMetadata.b1c2f8b0ac',
-        'Optional account switching and usage setup for Claude, Codex, Gemini, OpenCode Go, MiniMax, and Grok.'
-      ),
-      icon: UserCog,
-      searchEntries: getAccountsPaneSearchEntries(),
-      group: 'capabilities',
-      badge: translate('auto.hooks.useSettingsNavigationMetadata.7c79d3b7bf', 'Optional')
-    },
-    {
-      id: 'orchestration',
-      title: translate('auto.hooks.useSettingsNavigationMetadata.58a868e8e4', 'Orchestration'),
-      description: translate(
-        'auto.hooks.useSettingsNavigationMetadata.cd50cec5d7',
-        'Coordinate multiple coding agents through Orca.'
-      ),
-      icon: Network,
-      searchEntries: getOrchestrationPaneSearchEntries(),
-      group: 'capabilities'
-    },
-    // Why: only surfaced once Linear is connected — a capability that needs a
-    // linked provider before the agent skill has anything to act on.
-    ...(isLinearConnected
-      ? [
-          {
-            id: 'linear',
-            title: translate('auto.hooks.useSettingsNavigationMetadata.linearTitle', 'Linear'),
-            description: translate(
-              'auto.hooks.useSettingsNavigationMetadata.linearDescription',
-              'How Linear works in Orca, setup checklist, agent skill, and example prompts.'
-            ),
-            icon: LinearIcon,
-            searchEntries: getLinearAgentSkillPaneSearchEntries(),
-            group: 'capabilities'
-          }
-        ]
-      : []),
-    ...(showDesktopOnlySettings
-      ? [
-          {
-            id: 'computer-use',
-            title: translate('auto.hooks.useSettingsNavigationMetadata.b35e92364b', 'Computer Use'),
-            description: translate(
-              'auto.hooks.useSettingsNavigationMetadata.0059bd17f3',
-              'Enable agents to control any app on your computer.'
-            ),
-            icon: MousePointerClick,
-            searchEntries: getComputerUsePaneSearchEntries(),
-            group: 'capabilities'
-          },
-          {
-            id: 'voice',
-            title: translate('auto.hooks.useSettingsNavigationMetadata.6a50cdcd7c', 'Voice'),
-            description: translate(
-              'auto.hooks.useSettingsNavigationMetadata.8ac3de82f5',
-              'Local speech-to-text dictation with on-device models.'
-            ),
-            icon: Mic,
-            searchEntries: getVoicePaneSearchEntries(),
-            group: 'capabilities'
-          }
-        ]
-      : []),
-    ...(showDesktopOnlySettings
-      ? [
-          {
-            id: 'orca-account',
-            title: translate('auto.components.settings.orcaAccount.title', 'Orca Account'),
-            description: translate(
-              'auto.components.settings.orcaAccount.description',
-              'Share work instantly and reach your desktop from Orca Mobile wherever you are.'
-            ),
-            icon: CircleUserRound,
-            searchEntries: getOrcaAccountSettingsSearchEntries(),
-            group: 'setup'
-          }
-        ]
-      : []),
-    {
-      id: 'setup-guide',
-      title: translate(
-        'auto.hooks.useSettingsNavigationMetadata.ded9e9032f',
-        'Onboarding checklist'
-      ),
-      description: translate(
-        'auto.hooks.useSettingsNavigationMetadata.5f32ac08f3',
-        'Finish the onboarding checklist for core Orca workflows.'
-      ),
-      icon: OrcaLogoSettingsIcon,
-      searchEntries: [
-        {
-          title: translate(
-            'auto.hooks.useSettingsNavigationMetadata.ded9e9032f',
-            'Onboarding checklist'
-          ),
-          description: translate(
-            'auto.hooks.useSettingsNavigationMetadata.17005c73d4',
-            'Open the onboarding checklist for setup and milestone steps.'
-          ),
-          keywords: [
-            translate('auto.hooks.useSettingsNavigationMetadata.ea0b1bc7b8', 'setup guide'),
-            translate(
-              'auto.hooks.useSettingsNavigationMetadata.0505d0df29',
-              'get started with Orca'
-            ),
-            translate('auto.hooks.useSettingsNavigationMetadata.724c440e72', 'getting started')
-          ]
-        }
-      ],
-      group: 'setup'
-    },
-    {
-      id: 'general',
-      title: translate('auto.hooks.useSettingsNavigationMetadata.13241992bd', 'General'),
-      description: translate(
-        'auto.hooks.useSettingsNavigationMetadata.2cd4ea75da',
-        'Workspace defaults, app setup, and maintenance.'
-      ),
-      icon: SlidersHorizontal,
-      searchEntries: getGeneralPaneSearchEntries({ includeProjectRuntime: isLocalWindowsHost }),
-      group: 'setup'
-    },
-    {
-      id: 'integrations',
-      title: translate('auto.hooks.useSettingsNavigationMetadata.2b043783ef', 'Integrations'),
-      description: translate(
-        'auto.hooks.useSettingsNavigationMetadata.33a5e1d597',
-        'Connect GitHub, GitLab, Linear, and source-hosting services.'
-      ),
-      icon: Blocks,
-      searchEntries: getIntegrationsPaneSearchEntries(),
-      group: 'setup'
-    },
-    ...(showDesktopOnlySettings
-      ? [
-          {
-            id: 'mobile',
-            title: translate('auto.hooks.useSettingsNavigationMetadata.1cd25673df', 'Mobile'),
-            description: translate(
-              'auto.hooks.useSettingsNavigationMetadata.95a1886d94',
-              'Control terminals and agents from your phone.'
-            ),
-            icon: Smartphone,
-            searchEntries: getMobileSettingsPaneSearchEntries(),
-            group: 'setup'
-          }
-        ]
-      : []),
-    {
-      id: 'automations',
-      title: translate('auto.hooks.useSettingsNavigationMetadata.automationsTitle', 'Automations'),
-      description: translate(
-        'auto.hooks.useSettingsNavigationMetadata.automationsDescription',
-        'Schedule agent work and choose whether Automations appears in the sidebar.'
-      ),
-      icon: CalendarClock,
-      searchEntries: getAutomationsSettingsSearchEntries(),
-      group: 'workflows'
-    },
-    {
-      id: 'artifacts',
-      title: translate('auto.hooks.useSettingsNavigationMetadata.artifactsTitle', 'Artifacts'),
-      description: translate(
-        'auto.hooks.useSettingsNavigationMetadata.artifactsDescription',
-        'Share HTML and Markdown files with your team and manage their public links.'
-      ),
-      icon: Files,
-      searchEntries: getArtifactsSettingsSearchEntries(),
-      group: 'workflows',
-      badge: translate('auto.hooks.useSettingsNavigationMetadata.40d80bad8a', 'Beta')
-    },
-    {
-      id: 'git',
-      title: translate(
-        'auto.hooks.useSettingsNavigationMetadata.09607cb0fe',
-        'Git & Source Control'
-      ),
-      description: translate(
-        'auto.hooks.useSettingsNavigationMetadata.ab4b21b58e',
-        'Branch naming, base refs, and Git AI Author.'
-      ),
-      icon: GitBranch,
-      // Why: Git AI Author is rendered inside Git, so shared
-      // metadata must search both surfaces wherever Git appears.
-      searchEntries: [
-        ...getGitPaneSearchEntries(),
-        ...getCommitMessageAiPaneSearchEntries(),
-        ...getGitProviderApiBudgetSearchEntries()
-      ],
-      group: 'workflows'
-    },
-    {
-      id: 'tasks',
-      title: translate('auto.hooks.useSettingsNavigationMetadata.85f4fd7710', 'Task Sources'),
-      description: translate(
-        'auto.hooks.useSettingsNavigationMetadata.tasksDescription',
-        'Connect providers, install the Linear skill, and choose what appears in Tasks.'
-      ),
-      icon: ListChecks,
-      searchEntries: getTasksPaneSearchEntries(),
-      group: 'workflows'
-    },
-    {
-      id: 'terminal',
-      title: translate('auto.hooks.useSettingsNavigationMetadata.a9fb10afca', 'Terminal'),
-      description: translate(
-        'auto.hooks.useSettingsNavigationMetadata.c33bfd664c',
-        'Shells, renderer, sessions, and terminal behavior.'
-      ),
-      icon: SquareTerminal,
-      searchEntries: terminalPaneSearchEntries,
-      group: 'workflows'
-    },
-    {
-      id: 'quick-commands',
-      title: translate('auto.hooks.useSettingsNavigationMetadata.3fc3db144f', 'Quick Commands'),
-      description: translate(
-        'auto.hooks.useSettingsNavigationMetadata.42ae40842f',
-        'Saved terminal commands, scoped globally or per project.'
-      ),
-      icon: Play,
-      searchEntries: getQuickCommandsPaneSearchEntries(),
-      group: 'workflows'
-    },
-    ...(showDesktopOnlySettings
-      ? [
-          {
-            id: 'browser',
-            title: translate('auto.hooks.useSettingsNavigationMetadata.8c197f74a1', 'Browser'),
-            description: translate(
-              'auto.hooks.useSettingsNavigationMetadata.e815fd01bd',
-              'Home page, link routing, and session cookies.'
-            ),
-            icon: Globe,
-            searchEntries: getBrowserPaneCombinedSearchEntries(),
-            group: 'workflows'
-          }
-        ]
-      : []),
-    ...(showDesktopOnlySettings
-      ? [
-          {
-            id: 'mobile-emulator',
-            title: translate(
-              'auto.hooks.useSettingsNavigationMetadata.1e761cff2b',
-              'Mobile Emulator'
-            ),
-            description: translate(
-              'auto.hooks.useSettingsNavigationMetadata.3d65d3f1b9',
-              'Configure mobile emulator support for Orca and coding agents.'
-            ),
-            icon: TabletSmartphone,
-            searchEntries: getMobileEmulatorSearchEntries(),
-            group: 'workflows'
-          }
-        ]
-      : []),
-    {
-      id: 'floating-workspace',
-      title: translate('auto.hooks.useSettingsNavigationMetadata.65b19f5bde', 'Floating Workspace'),
-      description: showDesktopOnlySettings
-        ? translate(
-            'auto.hooks.useSettingsNavigationMetadata.2d0659f6f0',
-            'Global terminal, browser, and markdown tabs.'
-          )
-        : translate(
-            'auto.hooks.useSettingsNavigationMetadata.floatingWorkspaceWebDescription',
-            'Global terminal and markdown tabs.'
-          ),
-      icon: PanelsTopLeft,
-      searchEntries: getFloatingWorkspaceSearchEntries({
-        includeBrowser: showDesktopOnlySettings
-      }),
-      group: 'workflows'
-    },
-    {
-      id: 'appearance',
-      title: translate('auto.hooks.useSettingsNavigationMetadata.93d88d20bf', 'Appearance'),
-      description: translate(
-        'auto.hooks.useSettingsNavigationMetadata.b11a5a48a2',
-        'Theme, zoom, app and terminal appearance, sidebars, and status bar.'
-      ),
-      icon: Palette,
-      searchEntries: getAppearancePaneSearchEntries({
-        showWarpImport: showDesktopOnlySettings,
-        showSystemTray: showDesktopOnlySettings && isWindows,
-        showMenuBarIcon: showDesktopOnlySettings && isMac
-      }),
-      group: 'interface'
-    },
-    {
-      id: 'input',
-      title: translate('auto.hooks.useSettingsNavigationMetadata.0c6ee88a5f', 'Input & Editing'),
-      description: translate(
-        'auto.hooks.useSettingsNavigationMetadata.1f452cbd4c',
-        'Selection and editing behavior.'
-      ),
-      icon: TextCursorInput,
-      searchEntries: getInputPaneSearchEntries(),
-      group: 'interface'
-    },
-    ...(showDesktopOnlySettings
-      ? [
-          {
-            id: 'notifications',
-            title: translate(
-              'auto.hooks.useSettingsNavigationMetadata.2eece16ad1',
-              'Notifications'
-            ),
-            description: translate(
-              'auto.hooks.useSettingsNavigationMetadata.7682607591',
-              'Native desktop notifications for agent and terminal events.'
-            ),
-            icon: Bell,
-            searchEntries: getNotificationsPaneSearchEntries(),
-            group: 'interface'
-          }
-        ]
-      : []),
-    {
-      id: 'shortcuts',
-      title: translate('auto.hooks.useSettingsNavigationMetadata.94295ebfb3', 'Shortcuts'),
-      description: translate(
-        'auto.hooks.useSettingsNavigationMetadata.dcd0d9b74f',
-        'Keyboard shortcuts for common actions.'
-      ),
-      icon: Keyboard,
-      searchEntries: getShortcutsPaneSearchEntries({
-        includeManagedBrowser: managedBrowserCreationEnabled,
-        includeMobileEmulator: mobileEmulatorCreationEnabled
-      }),
-      group: 'interface'
-    },
-    {
-      id: 'stats',
-      title: translate('auto.hooks.useSettingsNavigationMetadata.d72a58b5b9', 'Stats & Usage'),
-      description: translate(
-        'auto.hooks.useSettingsNavigationMetadata.b351014180',
-        'Orca stats plus Claude, Codex, OpenCode token analytics and Grok subscription usage.'
-      ),
-      icon: BarChart3,
-      searchEntries: getStatsPaneSearchEntries(),
-      group: 'interface'
-    },
-    ...(showDesktopOnlySettings
-      ? [
-          {
-            id: 'ssh',
-            title: translate('auto.hooks.useSettingsNavigationMetadata.94a5afe910', 'SSH Hosts'),
-            description: translate(
-              'auto.hooks.useSettingsNavigationMetadata.31e57d1c70',
-              'Use existing machines over SSH for files, terminals, Git, and workspaces.'
-            ),
-            icon: Cable,
-            searchEntries: getSshPaneSearchEntries(),
-            group: 'remote'
-          }
-        ]
-      : []),
-    {
-      id: 'servers',
-      title: translate(
-        'auto.hooks.useSettingsNavigationMetadata.de0c2907a1',
-        'Remote Orca Servers'
-      ),
-      description: isWebClient
-        ? 'Connect this browser to a saved Orca server.'
-        : 'Pair remote Orca runtimes for persistent sessions, richer remote state, and web or mobile handoff.',
-      icon: Server,
-      searchEntries: [runtimeEnvironmentsSearchEntry],
-      group: 'remote',
-      badge: translate('auto.hooks.useSettingsNavigationMetadata.40d80bad8a', 'Beta')
-    },
-    ...(showDesktopOnlySettings && isMac
-      ? [
-          {
-            id: 'developer-permissions',
-            title: translate(
-              'auto.hooks.useSettingsNavigationMetadata.d91ae31fbd',
-              'macOS Permissions'
-            ),
-            description: translate(
-              'auto.hooks.useSettingsNavigationMetadata.65ec7d1968',
-              'macOS privacy access for terminal-launched developer tools.'
-            ),
-            icon: ShieldCheck,
-            searchEntries: getDeveloperPermissionsPaneSearchEntries(),
-            group: 'security'
-          }
-        ]
-      : []),
-    {
-      id: 'privacy',
-      title: translate(
-        'auto.hooks.useSettingsNavigationMetadata.3618579df6',
-        'Privacy & Telemetry'
-      ),
-      description: translate(
-        'auto.hooks.useSettingsNavigationMetadata.8400cfe1c1',
-        'Anonymous usage data and telemetry controls.'
-      ),
-      icon: Lock,
-      searchEntries: getPrivacyPaneSearchEntries(),
-      group: 'security'
-    },
-    ...(showDesktopOnlySettings
-      ? [
-          {
-            id: 'advanced',
-            title: translate('auto.hooks.useSettingsNavigationMetadata.580a04cd81', 'Advanced'),
-            description: translate(
-              'auto.hooks.useSettingsNavigationMetadata.e338c507c1',
-              'Low-level compatibility settings for troubleshooting.'
-            ),
-            icon: Wrench,
-            searchEntries: getAdvancedPaneSearchEntries(),
-            group: 'advanced'
-          }
-        ]
-      : []),
-    // Why: dev tooling must not be reachable from packaged/web builds even if
-    // this pure metadata builder is called manually with isDev=true.
-    ...(showDesktopOnlySettings && import.meta.env.DEV && isDev
-      ? [
-          {
-            id: 'dev',
-            title: translate('auto.hooks.useSettingsNavigationMetadata.dev', 'Dev Tools'),
-            description: translate(
-              'auto.hooks.useSettingsNavigationMetadata.devDescription',
-              'Dev-only tools for exercising UI states.'
-            ),
-            // Why: distinct from the sibling Advanced section's Wrench so the two
-            // entries in the same 'advanced' group stay visually distinguishable.
-            icon: Bug,
-            searchEntries: getDevToolsPaneSearchEntries(),
-            group: 'advanced',
-            badge: translate('auto.hooks.useSettingsNavigationMetadata.devBadge', 'Dev')
-          }
-        ]
-      : []),
-    {
-      id: 'experimental',
-      title: translate('auto.hooks.useSettingsNavigationMetadata.225071c560', 'Experimental'),
-      description: translate(
-        'auto.hooks.useSettingsNavigationMetadata.4a728cd56b',
-        'New features that are still taking shape. Give them a try.'
-      ),
-      icon: FlaskConical,
-      searchEntries: getExperimentalPaneSearchEntries(),
-      group: 'experimental'
-    },
-    ...(showDesktopOnlySettings
-      ? [
-          {
-            id: 'plugins',
-            title: translate('auto.hooks.useSettingsNavigationMetadata.pluginsTitle', 'Plugins'),
-            description: translate(
-              'auto.hooks.useSettingsNavigationMetadata.pluginsDescription',
-              'Install and manage experimental Orca plugins.'
-            ),
-            icon: Blocks,
-            searchEntries: getPluginsPaneSearchEntries(),
-            group: 'experimental'
-          }
-        ]
-      : []),
-    // Why: one nav row per project, not per repo row — a project set up on
-    // multiple hosts (local + a Remote Orca Server, or two clones) collapses to
-    // a single entry. Derived from repos alone so this list matches the panes.
-    ...buildSettingsProjectList(repos).map(({ project, representativeRepoId, setups }) => {
-      const representativeRepo = reposById.get(representativeRepoId) ?? repos[0]
-      const hostSummary =
-        setups.length > 1
-          ? translate(
-              'auto.hooks.useSettingsNavigationMetadata.projectHostsSummary',
-              '{{value0}} hosts',
-              { value0: setups.length }
-            )
-          : (setups[0]?.path ?? representativeRepo.path)
-      return {
-        id: `repo-${representativeRepoId}`,
-        title: project.displayName,
-        description: `${getRepoKindLabel(project)} • ${hostSummary}`,
-        icon: SlidersHorizontal,
-        searchEntries: getRepositoryPaneSearchEntries(representativeRepo, {
-          windowsRuntimeSupported: isWindowsTerminalHost
-        }),
-        group: 'repositories'
-      }
-    })
+    ...buildCapabilitySettingsSections(options),
+    ...buildSetupSettingsSections(options),
+    ...buildWorkflowSettingsSections(options, terminalPaneSearchEntries),
+    ...buildInterfaceSettingsSections(options),
+    ...buildRemoteSettingsSections(options, runtimeEnvironmentsSearchEntry, reposById)
   ]
 }
 

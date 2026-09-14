@@ -67,6 +67,10 @@
   caret-color: transparent;
 }
 
+.xterm.orca-ime-composer-placeholder .xterm-composition-remainder {
+  visibility: hidden;
+}
+
 /* Divider: the element is a wide transparent hit area; the visible line is
    drawn by ::after so that setting `background` on the element never hides it. */
 .pane-divider.is-vertical,

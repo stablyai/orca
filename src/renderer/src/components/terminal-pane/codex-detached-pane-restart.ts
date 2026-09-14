@@ -10,7 +10,7 @@
  */
 import { isTerminalLeafId, makePaneKey } from '../../../../shared/stable-pane-id'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
-import type { TerminalPaneLayoutNode, TerminalTab } from '../../../../shared/types'
+import type { TerminalPaneLayoutNode, TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { AppState } from '@/store'
 import { useAppStore } from '@/store'
 import { getWorktreeMapFromState } from '@/store/selectors'
@@ -70,7 +70,7 @@ async function sweepUnclaimedCodexPaneRestart(ptyId: string): Promise<void> {
     // Why the registry check too: a revealed tab reads its layout into a ref at
     // mount, before its transports bind (and register a primary handler). A
     // takeover in that window would kill the PTY the pane is attaching to.
-    if (hasRegisteredRuntimeTerminalTab(located.tab.id)) {
+    if (hasRegisteredRuntimeTerminalTab(located.tab.id, located.worktreeId)) {
       return
     }
     if (!useAppStore.getState().consumePendingCodexPaneRestart(ptyId)) {
@@ -201,7 +201,7 @@ async function executeDetachedCodexPaneRestart(
     reopenCurrentCodexRestartPrompt(located, ptyId)
     return
   }
-  if (hasRegisteredRuntimeTerminalTab(tab.id) || ptyDataHandlers.has(ptyId)) {
+  if (hasRegisteredRuntimeTerminalTab(tab.id, worktreeId) || ptyDataHandlers.has(ptyId)) {
     currentState.queueCodexPaneRestarts([ptyId])
     return
   }
@@ -230,7 +230,7 @@ async function executeDetachedCodexPaneRestart(
     reapUnboundCodexPty(spawned.id, 'stale detached spawn')
     return
   }
-  if (hasRegisteredRuntimeTerminalTab(tab.id) || ptyDataHandlers.has(ptyId)) {
+  if (hasRegisteredRuntimeTerminalTab(tab.id, worktreeId) || ptyDataHandlers.has(ptyId)) {
     store.queueCodexPaneRestarts([ptyId])
     reapUnboundCodexPty(spawned.id, 'mounted-owner handoff spawn')
     return

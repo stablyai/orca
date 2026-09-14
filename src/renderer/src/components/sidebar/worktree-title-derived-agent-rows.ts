@@ -14,13 +14,19 @@ import type {
   TerminalLayoutSnapshot,
   TerminalPaneLayoutNode,
   TerminalTab
-} from '../../../../shared/types'
+} from '../../../../shared/terminal-tab-types'
 import {
   normalizeCompatibleAgentTitleForOwner,
-  resolveCompatibleAgentTypeForOwner
+  resolveCompatibleAgentTypeForOwner,
+  type CompatibleAgentOwnerOptions
 } from '../../../../shared/agent-title-owner'
 import { resolvePaneAgentOwner } from '../../../../shared/pane-agent-owner'
 import { isClaudeIdentityFrameTitle } from '../../../../shared/terminal-title-agent-type'
+
+/** Fixed, not per-process: title rows are a pure projection of the current title, so they are
+ *  comparable across restarts in a way a sequenced authority's rows are not. Ordering against
+ *  any other authority's rows is undefined — see agent-status-observation.ts. */
+export const TITLE_DERIVED_AGENT_ROW_AUTHORITY_ID = 'renderer-title-projection'
 
 const EMPTY_RUNTIME_TITLES: Record<string, Record<number, string>> = {}
 const EMPTY_LIVE_PTY_IDS: Record<string, string[]> = {}
@@ -136,7 +142,9 @@ function buildTitleDerivedAgentRow(args: {
   // Why launchAgent, not ownerAgentType: this only rewrites a title within its own identity
   // group (OMP wraps Pi and emits Pi frames), which stays correct in a split. Pane ownership
   // is a separate, stricter question — it decides identity, so it uses ownerAgentType below.
-  const title = normalizeCompatibleAgentTitleForOwner(args.title, args.tab.launchAgent)
+  const title = normalizeCompatibleAgentTitleForOwner(args.title, args.tab.launchAgent, {
+    ownerIsLaunch: Boolean(args.tab.launchAgent)
+  })
   const isClaudeAgentsTitle = isClaudeManagementTitle(title)
   // Why: `claude agents` is a live Claude Code Agent Teams surface, but the
   // shared detector keeps it neutral so runtime liveness probes do not treat
@@ -183,7 +191,22 @@ function buildTitleDerivedAgentRow(args: {
     agentType,
     terminalTitle: title,
     lastAssistantMessage: secondary,
-    ...(orchestration ? { orchestration } : {})
+    ...(orchestration ? { orchestration } : {}),
+    // Why not the renderer sequencer: this row is RE-DERIVED from the pane's title on every
+    // render, not observed once, so a counter would churn a new revision per frame and break
+    // memoization. Deriving revision from `now` keeps the stamp deterministic in the same clock
+    // the row already publishes as updatedAt, and monotonic for the pane.
+    // The origin tag is the point: `entryState` above collapses a title-derived IDLE row to
+    // 'working' while the row itself reports idle. That contradiction is out of scope here —
+    // this tag is what makes it findable instead of indistinguishable from a real hook row.
+    observation: {
+      origin: 'title',
+      authorityId: TITLE_DERIVED_AGENT_ROW_AUTHORITY_ID,
+      incarnation: 0,
+      revision: args.now,
+      observedAt: args.now,
+      kind: 'snapshot'
+    }
   }
   return {
     paneKey,
@@ -192,6 +215,12 @@ function buildTitleDerivedAgentRow(args: {
     agentType,
     rowSource: 'live',
     state: rowState,
+    // Load-bearing zero, not a placeholder: `dashboardRowBucketProjection` reads `startedAt === 0`
+    // as "title-derived" and short-circuits `unseen`. That is the ONLY reason the `args.now` stamps
+    // on `entry` above (updatedAt / stateStartedAt / observation) cannot move this row's bucket.
+    // Dashboard bucket caches key their invalidation on the freshness boundary in
+    // `isExplicitAgentStatusFresh` alone; give this a real timestamp and every one of them starts
+    // serving stale counts, with no test failing at the point of the change.
     startedAt: 0
   }
 }
@@ -239,17 +268,19 @@ function resolveTitleDerivedPaneOwner(
  */
 export function resolveAgentTypeFromTerminalTitle(
   title: string | null | undefined,
-  ownerAgentType?: AgentType | null
+  ownerAgentType?: AgentType | null,
+  options?: CompatibleAgentOwnerOptions
 ): AgentType | null {
   if (!title) {
     return null
   }
-  const normalizedTitle = normalizeCompatibleAgentTitleForOwner(title, ownerAgentType)
+  const normalizedTitle = normalizeCompatibleAgentTitleForOwner(title, ownerAgentType, options)
   const label = resolveTitleActivityLabel(normalizedTitle)
   return label
     ? (resolveCompatibleAgentTypeForOwner(
         resolveTitleDerivedAgentType(normalizedTitle, label, ownerAgentType),
-        ownerAgentType
+        ownerAgentType,
+        options
       ) ?? null)
     : null
 }

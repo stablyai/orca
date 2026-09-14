@@ -111,6 +111,11 @@ export function getProviderUsageStatusLabel(p: ProviderRateLimits): string {
         break
     }
   }
+  // Why: MiniMax reports credential expiry through the payload, not an HTTP status,
+  // so it needs its own copy rather than the generic refresh-failure label.
+  if (p.provider === 'minimax' && p.usageMetadata?.failureKind === 'stale-token') {
+    return translate('auto.components.status.bar.tooltip.minimax.expired.label', 'Sign-in expired')
+  }
   if (isUsageRateLimitError(p.error)) {
     return translate('auto.components.status.bar.tooltip.7ad719c4bf', 'Limited')
   }
@@ -181,6 +186,17 @@ export function getProviderUsageErrorMessage(p: ProviderRateLimits): string {
   }
   if (isUsageRateLimitError(p.error)) {
     return p.error
+  }
+  if (p.provider === 'minimax' && p.usageMetadata?.failureKind === 'stale-token') {
+    return p.usageMetadata.credentialSource === 'api-key'
+      ? translate(
+          'auto.components.status.bar.tooltip.minimax.expired.apiKey',
+          'MiniMax API key expired. Replace it in Settings.'
+        )
+      : translate(
+          'auto.components.status.bar.tooltip.minimax.expired.cookie',
+          'MiniMax session cookie expired. Replace it in Settings.'
+        )
   }
   if (isUsageAuthError(p.error)) {
     const name = getProviderDisplayName(p.provider)

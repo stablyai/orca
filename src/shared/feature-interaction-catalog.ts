@@ -9,6 +9,7 @@ export type FeatureInteractionId =
   | 'cmd-j-quick-action'
   | 'cmd-j-create-workspace'
   | 'browser'
+  | 'client-hosted-browser'
   | 'browser-tab-created'
   | 'tasks'
   | 'github-tasks'
@@ -78,6 +79,7 @@ export const FEATURE_INTERACTIONS = [
   { id: 'cmd-j-quick-action', interaction: 'quick action run from Cmd+J' },
   { id: 'cmd-j-create-workspace', interaction: 'workspace creation started from Cmd+J' },
   { id: 'browser', interaction: 'in-app browser opened' },
+  { id: 'client-hosted-browser', interaction: 'client-hosted remote browser page opened' },
   { id: 'browser-tab-created', interaction: 'browser tab explicitly created' },
   { id: 'tasks', interaction: 'Tasks page opened' },
   { id: 'github-tasks', interaction: 'GitHub task item workflow used' },

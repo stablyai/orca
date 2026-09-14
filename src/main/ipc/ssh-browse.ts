@@ -2,7 +2,7 @@ import { ipcMain } from 'electron'
 import type { SshConnectionManager } from '../ssh/ssh-connection-manager'
 import type { SshExecOptions } from '../ssh/ssh-connection-utils'
 import { powerShellCommand, powerShellLiteral } from '../ssh/ssh-remote-powershell'
-import type { FilesystemPathFlavor } from '../../shared/types'
+import type { FilesystemPathFlavor } from '../../shared/filesystem-entry-types'
 import { sortDirEntries } from '../../shared/file-name-sort'
 
 export type RemoteDirEntry = {

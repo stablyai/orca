@@ -7,7 +7,7 @@
  * picks which observer records mode-2031 subscriptions (byte scan vs fact),
  * so it must never flip per chunk.
  */
-import type { GlobalSettings } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 
 // Why: cached once per session — the blocking read should only ever run on
 // the pre-hydration startup path, never per pane bind.

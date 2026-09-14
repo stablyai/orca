@@ -1,0 +1,115 @@
+import { readFileSync } from 'node:fs'
+import { join } from 'node:path'
+import { describe, expect, it } from 'vitest'
+
+describe('headless PTY registry hydration ordering', () => {
+  it('uses exactly one deferred-or-immediate desktop hydration path', () => {
+    const source = readFileSync(
+      join(process.cwd(), 'src/main/window/attach-main-window-services.ts'),
+      'utf8'
+    )
+    const start = source.indexOf('const localPtyProviderStartupReady =')
+    const end = source.indexOf('registerSshHandlers(', start)
+    const hydration = source.slice(start, end)
+
+    expect(start).toBeGreaterThanOrEqual(0)
+    expect(end).toBeGreaterThan(start)
+    expect(hydration).toContain('if (localPtyProviderStartupReady)')
+    expect(hydration).toContain('.then(() => hydrateLocalPtyRegistryAtBoot(store))')
+    expect(hydration).toContain('} else {\n    void hydrateLocalPtyRegistryAtBoot(store)')
+    expect(hydration.match(/hydrateLocalPtyRegistryAtBoot\(store\)/g)).toHaveLength(2)
+  })
+
+  it('hydrates Electron serve after provider and handler readiness but before RPC', () => {
+    const source = readFileSync(
+      join(process.cwd(), 'src/main/startup/main-process-runtime-launch.ts'),
+      'utf8'
+    )
+    const serve = source.indexOf('async function launchServeMode(')
+    const provider = source.indexOf('await state.localPtyProviderStartupReady', serve)
+    const handlersAndHydration = source.indexOf('await registerHeadlessPtyRuntime(', provider)
+    const rpc = source.indexOf('await runtimeRpc.start()', handlersAndHydration)
+    const readiness = source.indexOf('await printServeReady(serveOptions)', rpc)
+
+    expect(serve).toBeGreaterThanOrEqual(0)
+    expect(provider).toBeGreaterThan(serve)
+    expect(handlersAndHydration).toBeGreaterThan(provider)
+    expect(rpc).toBeGreaterThan(handlersAndHydration)
+    expect(readiness).toBeGreaterThan(rpc)
+  })
+
+  it('hydrates orcad after Store and daemon readiness but before RPC and publication', () => {
+    const source = readFileSync(join(process.cwd(), 'src/main/orcad/orcad-entry.ts'), 'utf8')
+    const store = source.indexOf('const store = new Store(')
+    const daemon = source.indexOf('await startOrcadDaemon()', store)
+    const handlersAndHydration = source.indexOf('await registerHeadlessPtyRuntime(', daemon)
+    const rpc = source.indexOf('await rpc.start()', handlersAndHydration)
+    const readiness = source.indexOf('await new ServeReadinessPublisher().publish(', rpc)
+
+    expect(store).toBeGreaterThanOrEqual(0)
+    expect(daemon).toBeGreaterThan(store)
+    expect(handlersAndHydration).toBeGreaterThan(daemon)
+    expect(rpc).toBeGreaterThan(handlersAndHydration)
+    expect(readiness).toBeGreaterThan(rpc)
+  })
+
+  it('starts the orcad hook owner after Store hydration and before daemon PTY recovery', () => {
+    const source = readFileSync(join(process.cwd(), 'src/main/orcad/orcad-entry.ts'), 'utf8')
+    const cleanup = source.indexOf('registerCleanup(async () => {')
+    const hookStop = source.indexOf('agentHookServer.stop()', cleanup)
+    const store = source.indexOf('const store = new Store(')
+    const hookStart = source.indexOf('await agentHookServer.start(', store)
+    const daemon = source.indexOf('await startOrcadDaemon()', hookStart)
+    const hookEnv = source.indexOf('buildAgentHookPtyEnv:', daemon)
+    const handlersAndHydration = source.indexOf('await registerHeadlessPtyRuntime(', hookEnv)
+
+    expect(cleanup).toBeGreaterThanOrEqual(0)
+    expect(hookStop).toBeGreaterThan(cleanup)
+    expect(store).toBeGreaterThan(hookStop)
+    expect(hookStart).toBeGreaterThan(store)
+    expect(daemon).toBeGreaterThan(hookStart)
+    expect(hookEnv).toBeGreaterThan(daemon)
+    expect(source.slice(hookEnv, handlersAndHydration)).toContain('agentHookServer.buildPtyEnv()')
+    expect(handlersAndHydration).toBeGreaterThan(hookEnv)
+  })
+
+  it('captures orcad status identity at ingest for fleet stale-row fencing', () => {
+    const source = readFileSync(join(process.cwd(), 'src/main/orcad/orcad-entry.ts'), 'utf8')
+    const runtime = source.indexOf('const runtime = new OrcaRuntimeService(')
+    const identityReader = source.indexOf('readObservedAgentStatusPaneIdentity:', runtime)
+    const identitySubscription = source.indexOf('agentHookServer.subscribeEnrichedStatus(')
+    const hooksEnabled = source.indexOf('if (isAgentStatusHooksEnabled(', identitySubscription)
+    const identityFlush = source.indexOf('observedStatusCapture.attach(runtime)', runtime)
+
+    expect(runtime).toBeGreaterThanOrEqual(0)
+    expect(identityReader).toBeGreaterThan(runtime)
+    expect(identitySubscription).toBeGreaterThanOrEqual(0)
+    expect(identitySubscription).toBeLessThan(runtime)
+    expect(hooksEnabled).toBeGreaterThan(identitySubscription)
+    expect(identityFlush).toBeGreaterThan(runtime)
+    expect(source.slice(identitySubscription, runtime)).toContain(
+      'observedStatusCapture.observe(enriched)'
+    )
+  })
+
+  it('captures spool-replayed identity after the orcad runtime is ready', () => {
+    const source = readFileSync(join(process.cwd(), 'src/main/orcad/orcad-entry.ts'), 'utf8')
+    const subscription = source.indexOf('agentHookServer.subscribeEnrichedStatus(')
+    const hookStart = source.indexOf('await agentHookServer.start(', subscription)
+    const runtime = source.indexOf('const runtime = new OrcaRuntimeService(')
+    const handlers = source.indexOf('await registerHeadlessPtyRuntime(', runtime)
+    const identityRecovery = source.indexOf('await runtime.refreshRestoredOrchestrationAuthority()')
+    const workerRecovery = source.indexOf('await runtime.reconcileLegacyWorkerTerminals()')
+    const replay = source.indexOf('observedStatusCapture.attach(runtime)', runtime)
+
+    expect(subscription).toBeGreaterThanOrEqual(0)
+    expect(hookStart).toBeGreaterThan(subscription)
+    expect(runtime).toBeGreaterThan(hookStart)
+    expect(handlers).toBeGreaterThan(runtime)
+    expect(identityRecovery).toBeGreaterThan(handlers)
+    expect(workerRecovery).toBeGreaterThan(identityRecovery)
+    expect(replay).toBeGreaterThan(workerRecovery)
+    expect(source.slice(subscription, runtime)).toContain('observedStatusCapture.observe(enriched)')
+    expect(source.slice(replay)).toContain('observedStatusCapture.attach(runtime)')
+  })
+})

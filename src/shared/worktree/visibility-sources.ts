@@ -9,7 +9,8 @@ import type {
   ExternalWorktreeVisibility,
   Repo,
   WorktreeVisibilitySourcePreferences
-} from '../types'
+} from '../repo-types'
+import type { WorktreeVisibilityDefaults } from '../global-settings-types'
 
 export const MAX_CUSTOM_WORKTREE_VISIBILITY_SOURCES = 32
 const MAX_SOURCE_ID_LENGTH = 128
@@ -127,15 +128,33 @@ function createDescendantMatcher(rootPath: string): (normalizedCandidate: string
     normalizedCandidate !== normalizedRoot && matchesInsideOrEqual(normalizedCandidate)
 }
 
+/**
+ * Precondition: `configuredWorktreeBasePaths` are already resolved and free of
+ * `.`/`..` segments — pass them through `resolveConfiguredWorktreeBasePaths`,
+ * since a raw `.claude/worktrees/.` compares unequal and would not supersede.
+ */
 export function createWorktreeVisibilitySourceMatcher(
   checkoutPaths: readonly string[],
-  customSources: readonly CustomWorktreeVisibilitySource[] = []
+  customSources: readonly CustomWorktreeVisibilitySource[],
+  configuredWorktreeBasePaths: readonly string[]
 ): WorktreeVisibilitySourceMatcher {
   const checkoutPathKeys = new Set(checkoutPaths.map(normalizeRuntimePathForComparison))
   const customMatchers = customSources.map(({ id, rootPath }) => ({
     id,
     matches: createDescendantMatcher(rootPath)
   }))
+  const configuredBases = configuredWorktreeBasePaths.map((basePath) => ({
+    key: normalizeRuntimePathForComparison(basePath),
+    contains: createNormalizedPathInsideOrEqualMatcher(basePath)
+  }))
+  // Why: only a base pointing at or inside the matched root counts. A base of
+  // `.` or `..` merely contains the root and must not exempt it (#9388).
+  const isSupersededByConfiguredBase = (sourceRootKey: string, candidateKey: string): boolean =>
+    configuredBases.some(
+      (base) =>
+        base.contains(candidateKey) &&
+        (base.key === sourceRootKey || base.key.startsWith(`${sourceRootKey}/`))
+    )
   return (worktreePath) => {
     const normalizedCandidate = normalizeRuntimePathForComparison(worktreePath)
     const segments = normalizedCandidate.split('/')
@@ -149,7 +168,13 @@ export function createWorktreeVisibilitySourceMatcher(
         const checkoutPathKey = /^[a-z]:$/i.test(checkoutPath)
           ? `${checkoutPath}/`
           : checkoutPath || '/'
-        if (checkoutPathKeys.has(checkoutPathKey)) {
+        if (
+          checkoutPathKeys.has(checkoutPathKey) &&
+          !isSupersededByConfiguredBase(
+            segments.slice(0, index + prefix.length).join('/'),
+            normalizedCandidate
+          )
+        ) {
           return { kind: 'built-in', id: source.id }
         }
       }
@@ -165,7 +190,8 @@ export function createWorktreeVisibilitySourceMatcher(
 
 export function effectiveBuiltInWorktreeSourceVisibility(
   repo: Pick<Repo, 'agentWorktreeVisibility' | 'worktreeVisibilitySourcePreferences'>,
-  sourceId: BuiltInWorktreeVisibilitySourceId
+  sourceId: BuiltInWorktreeVisibilitySourceId,
+  defaults?: WorktreeVisibilityDefaults
 ): ExternalWorktreeVisibility {
   const explicit = normalizeWorktreeVisibilitySourcePreferences(
     repo.worktreeVisibilitySourcePreferences
@@ -173,68 +199,74 @@ export function effectiveBuiltInWorktreeSourceVisibility(
   if (explicit) {
     return explicit
   }
-  return repo.agentWorktreeVisibility === 'show' ? 'show' : 'hide'
+  if (repo.agentWorktreeVisibility) {
+    return repo.agentWorktreeVisibility
+  }
+  return effectiveDefaultBuiltInWorktreeSourceVisibility(defaults, sourceId)
 }
 
 export function effectiveCustomWorktreeSourceVisibility(
-  repo: Pick<Repo, 'worktreeVisibilitySourcePreferences'>,
-  sourceId: string
+  repo: Pick<Repo, 'customWorktreeVisibilitySources' | 'worktreeVisibilitySourcePreferences'>,
+  sourceId: string,
+  defaults?: WorktreeVisibilityDefaults
 ): ExternalWorktreeVisibility {
-  return normalizeWorktreeVisibilitySourcePreferences(repo.worktreeVisibilitySourcePreferences)
-    ?.custom?.[sourceId] === 'show'
+  const explicit = normalizeWorktreeVisibilitySourcePreferences(
+    repo.worktreeVisibilitySourcePreferences
+  )?.custom?.[sourceId]
+  if (explicit) {
+    return explicit
+  }
+  const isRepoSource = normalizeCustomWorktreeVisibilitySources(
+    repo.customWorktreeVisibilitySources
+  )?.some((source) => source.id === sourceId)
+  return isRepoSource ? 'hide' : effectiveDefaultCustomWorktreeSourceVisibility(defaults, sourceId)
+}
+
+export function effectiveWorktreeSourceVisibility(
+  repo: Pick<
+    Repo,
+    | 'agentWorktreeVisibility'
+    | 'customWorktreeVisibilitySources'
+    | 'worktreeVisibilitySourcePreferences'
+  >,
+  source: WorktreeVisibilitySourceMatch,
+  defaults?: WorktreeVisibilityDefaults
+): ExternalWorktreeVisibility {
+  return source.kind === 'built-in'
+    ? effectiveBuiltInWorktreeSourceVisibility(repo, source.id, defaults)
+    : effectiveCustomWorktreeSourceVisibility(repo, source.id, defaults)
+}
+
+export function effectiveDefaultBuiltInWorktreeSourceVisibility(
+  defaults: WorktreeVisibilityDefaults | undefined,
+  sourceId: BuiltInWorktreeVisibilitySourceId
+): ExternalWorktreeVisibility {
+  return normalizeWorktreeVisibilitySourcePreferences(defaults?.sourcePreferences)?.builtIn?.[
+    sourceId
+  ] === 'show'
     ? 'show'
     : 'hide'
 }
 
-export function effectiveWorktreeSourceVisibility(
-  repo: Pick<Repo, 'agentWorktreeVisibility' | 'worktreeVisibilitySourcePreferences'>,
-  source: WorktreeVisibilitySourceMatch
-): ExternalWorktreeVisibility {
-  return source.kind === 'built-in'
-    ? effectiveBuiltInWorktreeSourceVisibility(repo, source.id)
-    : effectiveCustomWorktreeSourceVisibility(repo, source.id)
-}
-
-export function buildWorktreeSourcePreferenceUpdate(
-  repo: Pick<Repo, 'agentWorktreeVisibility' | 'worktreeVisibilitySourcePreferences'>,
-  source: WorktreeVisibilitySourceMatch,
-  visibility: ExternalWorktreeVisibility
-): WorktreeVisibilitySourcePreferences {
-  const current = normalizeWorktreeVisibilitySourcePreferences(
-    repo.worktreeVisibilitySourcePreferences
-  )
-  const builtIn = {
-    claude: effectiveBuiltInWorktreeSourceVisibility(repo, 'claude'),
-    gsd: effectiveBuiltInWorktreeSourceVisibility(repo, 'gsd'),
-    ...current?.builtIn
-  }
-  const custom = { ...current?.custom }
-  if (source.kind === 'built-in') {
-    builtIn[source.id] = visibility
-  } else {
-    custom[source.id] = visibility
-  }
-  return {
-    builtIn,
-    ...(Object.keys(custom).length > 0 ? { custom } : {})
-  }
-}
-
-export function removeCustomWorktreeSourcePreference(
-  repo: Pick<Repo, 'agentWorktreeVisibility' | 'worktreeVisibilitySourcePreferences'>,
+export function effectiveDefaultCustomWorktreeSourceVisibility(
+  defaults: WorktreeVisibilityDefaults | undefined,
   sourceId: string
-): WorktreeVisibilitySourcePreferences {
-  const current = normalizeWorktreeVisibilitySourcePreferences(
-    repo.worktreeVisibilitySourcePreferences
+): ExternalWorktreeVisibility {
+  return normalizeWorktreeVisibilitySourcePreferences(defaults?.sourcePreferences)?.custom?.[
+    sourceId
+  ] === 'show'
+    ? 'show'
+    : 'hide'
+}
+
+export function resolveCustomWorktreeVisibilitySources(
+  repo: Pick<Repo, 'customWorktreeVisibilitySources'>,
+  defaults?: WorktreeVisibilityDefaults
+): CustomWorktreeVisibilitySource[] {
+  return (
+    normalizeCustomWorktreeVisibilitySources([
+      ...(normalizeCustomWorktreeVisibilitySources(repo.customWorktreeVisibilitySources) ?? []),
+      ...(normalizeCustomWorktreeVisibilitySources(defaults?.customSources) ?? [])
+    ]) ?? []
   )
-  const custom = { ...current?.custom }
-  delete custom[sourceId]
-  return {
-    builtIn: {
-      claude: effectiveBuiltInWorktreeSourceVisibility(repo, 'claude'),
-      gsd: effectiveBuiltInWorktreeSourceVisibility(repo, 'gsd'),
-      ...current?.builtIn
-    },
-    ...(Object.keys(custom).length > 0 ? { custom } : {})
-  }
 }

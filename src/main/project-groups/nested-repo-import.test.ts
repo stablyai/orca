@@ -4,7 +4,7 @@ import {
   resolveNestedRepoImportPaths,
   resolveNestedRepoSelection
 } from './nested-repo-import'
-import type { ProjectGroup } from '../../shared/types'
+import type { ProjectGroup } from '../../shared/project-group-types'
 
 function createGroupRecorder(): {
   groups: ProjectGroup[]
@@ -138,7 +138,9 @@ describe('createNestedProjectGroupResolver', () => {
       parentPath: '/workspace',
       groupName: 'workspace',
       mode: 'separate',
-      repoPaths: ['/workspace/services/api', '/workspace/services/worker'],
+      get repoPaths(): readonly string[] {
+        throw new Error('separate imports must not build unused folder scopes')
+      },
       createGroup: () => {
         throw new Error('should not create a group')
       }
@@ -146,6 +148,30 @@ describe('createNestedProjectGroupResolver', () => {
 
     expect(resolver.getGroupForRepo('/workspace/services/api')).toBeUndefined()
     expect(resolver.getCreatedGroups()).toEqual([])
+  })
+
+  it('leaves every separate-import repo ungrouped even when repo paths are supplied', () => {
+    const { groups, createGroup } = createGroupRecorder()
+    const repoPaths = [
+      '/workspace/services/api',
+      '/workspace/services/worker',
+      '/workspace/platform/packages/shared'
+    ]
+    const resolver = createNestedProjectGroupResolver({
+      parentPath: '/workspace',
+      groupName: 'workspace',
+      mode: 'separate',
+      repoPaths,
+      createGroup
+    })
+
+    expect(repoPaths.map((repoPath) => resolver.getGroupForRepo(repoPath))).toEqual([
+      undefined,
+      undefined,
+      undefined
+    ])
+    expect(resolver.getRootGroup()).toBeUndefined()
+    expect(groups).toEqual([])
   })
 
   it('preserves filesystem root parent paths when creating the root group', () => {

@@ -1,4 +1,4 @@
-import type { JiraIssue, JiraSiteSelection } from '../../../shared/types'
+import type { JiraIssue, JiraSiteSelection } from '../../../shared/jira-types'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 
 type LocalJiraSearchArgs = { jql: string; limit?: number; siteId?: JiraSiteSelection }

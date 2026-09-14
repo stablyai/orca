@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { AlertCircle, Loader2 } from 'lucide-react'
 import { ORCA_BROWSER_GUEST_WEB_PREFERENCES_ATTRIBUTE } from '../../../../shared/browser-guest-web-preferences'
-import { moveFocusToRendererBeforeWebviewDetach } from '@/components/browser-pane/webview-registry'
+import { moveFocusToRendererBeforeWebviewDetach } from '@/components/browser-pane/host-guest/webview-registry'
 import { translate } from '@/i18n/i18n'
 
 type PreviewState = 'loading' | 'ready' | 'unavailable'

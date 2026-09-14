@@ -1,0 +1,195 @@
+# Orca daemon zsh shell-ready wrapper
+__orca_usable_zdotdir() {
+  [[ -n "${1:-}" ]] || return 1
+  # Orca's own dir, by marker file or by the shape older builds wrote.
+  [[ "$1" != */shell-ready/zsh ]] || return 1
+  [[ ! -f "$1/.orca-shell-wrapper" ]] || return 1
+  # A directory holding no zsh startup file at all is not a config root,
+  # whoever wrote it — and a stale value pointing at one would stop zsh from
+  # ever reading the user's real .zshenv.
+  local _orca_startup_file
+  for _orca_startup_file in .zshenv .zshrc .zprofile .zlogin; do
+    [[ -r "$1/$_orca_startup_file" ]] && return 0
+  done
+  return 1
+}
+if __orca_usable_zdotdir "${ORCA_ORIG_ZDOTDIR:-}"; then
+  builtin export ZDOTDIR="$ORCA_ORIG_ZDOTDIR"
+else
+  builtin unset ZDOTDIR
+fi
+builtin unset ORCA_ORIG_ZDOTDIR ORCA_ZSHENV_SOURCE_DIR
+builtin unfunction __orca_usable_zdotdir
+builtin typeset -ga _orca_shell_features
+_orca_shell_features=(${(s:,:)${ORCA_SHELL_FEATURES:-}})
+builtin unset ORCA_SHELL_FEATURES
+# Why ORCA_HISTFILE is consumed HERE and not in the deferred hook: a user config
+# that replaces precmd_functions wholesale drops the hook, and an exported value
+# nothing will ever consume is then inherited by every child of this pane,
+# including a nested Orca (#11146). Captured non-exported, it cannot escape.
+builtin typeset -g _orca_histfile="${ORCA_HISTFILE:-}"
+builtin unset ORCA_HISTFILE
+__orca_has_feature() { (( ${_orca_shell_features[(Ie)$1]} )) }
+__orca_has_feature identity && printf "\033]777;orca-shell-start:%s\007" "$$"
+__orca_osc133_precmd() {
+  local exit_code=$?
+  if [[ -n "${__orca_in_command:-}" ]]; then
+    builtin printf "\033]133;D;%s\007" "$exit_code"
+    builtin unset __orca_in_command
+  fi
+  builtin printf "\033]133;A\007"
+}
+__orca_osc133_preexec() {
+  builtin printf "\033]133;C\007"
+  # Why typeset -g: a plain assignment here creates a global inside a function,
+  # which prints a warning above every command under warn_create_global.
+  builtin typeset -g __orca_in_command=1
+}
+__orca_deferred_init() {
+  # Why first: this body runs after the user's own config, so it would otherwise
+  # inherit whatever options that config left set. Under NO_UNSET an unset
+  # precmd_functions is fatal, and KSH_ARRAYS makes the 1-based feature lookup
+  # drop whichever feature is listed first.
+  builtin emulate -L zsh
+  (( $+_orca_deferred_init_done )) && return 0
+  builtin typeset -g _orca_deferred_init_done=1
+  builtin typeset -g precmd_functions
+  if __orca_has_feature markers; then
+    precmd_functions=(${precmd_functions:/__orca_deferred_init/__orca_osc133_precmd})
+    preexec_functions=(__orca_osc133_preexec ${preexec_functions[@]})
+  else
+    precmd_functions=(${precmd_functions:#__orca_deferred_init})
+  fi
+  if __orca_has_feature overlay; then
+    # Why: ~/.zshrc can export the user's default OpenCode config after spawn.
+    __orca_restore_agent_teams_path() {
+      [[ -n "${ORCA_AGENT_TEAMS_SHIM_DIR:-}" ]] || return 0
+      case "$PATH" in
+        "${ORCA_AGENT_TEAMS_SHIM_DIR}"|"${ORCA_AGENT_TEAMS_SHIM_DIR}:"*) return 0 ;;
+      esac
+      export PATH="${ORCA_AGENT_TEAMS_SHIM_DIR}:$PATH"
+    }
+    __orca_restore_agent_teams_path
+    [[ -n "${ORCA_OPENCODE_CONFIG_DIR:-}" ]] && export OPENCODE_CONFIG_DIR="${ORCA_OPENCODE_CONFIG_DIR}"
+    [[ -n "${ORCA_MIMOCODE_HOME:-}" ]] && export MIMOCODE_HOME="${ORCA_MIMOCODE_HOME}"
+    # Why: OMP does not auto-load Orca's managed status extension; wrap only
+    # interactive launch invocations so subcommands such as `omp config` keep
+    # their normal argv shape.
+    __orca_omp_should_skip_extension() {
+      case "${1:-}" in
+        help|--help|-h|--version|-v) return 0 ;;
+        __complete|acp|agents|auth-broker|auth-gateway|bench|commit|completions|config|dry-balance|gallery|grep|grievances|install|join|models|plugin|read|say|search|setup|shell|ssh|stats|tiny-models|token|ttsr|update|usage|worktree|q|wt) return 0 ;;
+      esac
+      return 1
+    }
+    __orca_omp_cwd_is_usable() {
+      local __orca_physical_cwd
+      [[ -x . ]] || return 1
+      if [[ -n "${PWD:-}" && -d "${PWD:-}" ]]; then
+        [[ "${PWD}" -ef . ]]
+      else
+        # Why compare the path: shell builtins can print a cached path for a deleted cwd.
+        __orca_physical_cwd="$(builtin pwd -P 2>/dev/null)" || return 1
+        [[ -d "$__orca_physical_cwd" && "$__orca_physical_cwd" -ef . ]]
+      fi
+    }
+    __orca_omp_invoke() {
+      local __orca_use_extension="$1"
+      shift
+      if [[ $__orca_use_extension -eq 1 && -n "${ORCA_OMP_STATUS_EXTENSION:-}" && -f "${ORCA_OMP_STATUS_EXTENSION}" ]]; then
+        if [[ "${1:-}" == "launch" ]]; then
+          shift
+          command omp launch --extension "${ORCA_OMP_STATUS_EXTENSION}" "$@"
+        else
+          command omp --extension "${ORCA_OMP_STATUS_EXTENSION}" "$@"
+        fi
+      else
+        command omp "$@"
+      fi
+    }
+    __orca_omp() {
+      local __orca_use_extension=1
+      __orca_omp_should_skip_extension "${1:-}" && __orca_use_extension=0
+      if ! __orca_omp_cwd_is_usable; then
+        local __orca_logical_cwd="${PWD:-${ORCA_WORKTREE_PATH:-${ORCA_ROOT_PATH:-}}}"
+        # Why: a restored shell can retain the deleted directory inode after its path is recreated.
+        (
+          if [[ -z "$__orca_logical_cwd" ]]; then
+            printf 'Orca: OMP cannot start because no terminal working directory is available. Open a new terminal in an existing directory.\n' >&2
+            return 1
+          fi
+          if ! builtin cd -P -- "$__orca_logical_cwd" 2>/dev/null; then
+            printf 'Orca: OMP cannot access the terminal working directory "%s". Open a new terminal in an existing directory.\n' "$__orca_logical_cwd" >&2
+            return 1
+          fi
+          __orca_omp_invoke "$__orca_use_extension" "$@"
+        )
+      else
+        __orca_omp_invoke "$__orca_use_extension" "$@"
+      fi
+    }
+    if [[ -n "${ORCA_OMP_STATUS_EXTENSION:-}" ]]; then
+      # Why the function reserved word: it suppresses alias expansion of the name, which
+      # an `alias omp` otherwise rewrites at parse time, aborting the rest of the file.
+      function omp { __orca_omp "$@"; }
+    fi
+
+    # Why: Codex must keep using Orca's runtime CODEX_HOME after rc files.
+    [[ -n "${ORCA_CODEX_HOME:-}" ]] && export CODEX_HOME="${ORCA_CODEX_HOME}"
+    # Why: a typed alias expands inside the shell, after pane launch prep.
+    # Why unalias inside the substitution: an alias named codex makes command -v
+    # report the alias text, and the subshell leaves the user's own alias intact.
+    # Why || : twice — zsh alone aborts inside the substitution, but every shell's
+    # assignment adopts its exit status, so an absent codex trips set -e in bash too.
+    __orca_codex_binary="$(unalias codex 2>/dev/null || :; command -v codex 2>/dev/null || :)"
+    if [[ -n "${ORCA_CODEX_LAUNCH_PREFLIGHT:-}" && -x "${ORCA_CODEX_LAUNCH_PREFLIGHT}" && -n "${__orca_codex_binary:-}" && -x "${__orca_codex_binary}" ]]; then
+      # Why the function reserved word: it suppresses alias expansion of the name,
+      # which otherwise rewrites this header at parse time and aborts the whole file.
+      function codex {
+        "${ORCA_CODEX_LAUNCH_PREFLIGHT}" agent hooks prepare-codex >/dev/null 2>&1 || :
+        command codex "$@"
+      }
+    fi
+    unset __orca_codex_binary
+  fi
+  if [[ -n "${_orca_histfile:-}" ]]; then
+    HISTFILE="$_orca_histfile"
+  fi
+  if __orca_has_feature ready; then
+    # Why: capture the prior zle-line-init so the marker chains to it. On a
+    # re-source we are already the bound widget, so keep the function captured
+    # the first time instead of clobbering it to empty (which would silently
+    # drop the user's widget on every prompt after the second source). Only
+    # user-defined widgets are chainable as plain functions; builtin/completion
+    # forms (rare for zle-line-init) are left unchained.
+    if [[ "${widgets[zle-line-init]:-}" == "user:__orca_prompt_mark" ]]; then
+      :
+    elif (( ${+widgets[zle-line-init]} )) && [[ "${widgets[zle-line-init]}" == user:* ]]; then
+      __orca_prev_line_init_fn="${widgets[zle-line-init]#user:}"
+    else
+      __orca_prev_line_init_fn=""
+    fi
+    __orca_prompt_mark() {
+      printf "\033]777;orca-shell-ready\007"
+      # Why: call the prior hook as a plain function, not an aliased widget, so
+      # $WIDGET stays zle-line-init for add-zle-hook-widget dispatchers.
+      if [[ -n "${__orca_prev_line_init_fn:-}" ]]; then
+        "${__orca_prev_line_init_fn}" "$@"
+      fi
+    }
+    zle -N zle-line-init __orca_prompt_mark
+  fi
+  # Why called here: we were appended during this prompt's own precmd sweep, so
+  # the permanent hook has not run yet and the first prompt would lose its mark.
+  __orca_has_feature markers && __orca_osc133_precmd
+  builtin unset _orca_shell_features _orca_histfile
+  builtin unfunction __orca_deferred_init __orca_has_feature
+}
+{
+  builtin typeset _orca_user_zshenv="${ZDOTDIR-$HOME}/.zshenv"
+  [[ ! -r "$_orca_user_zshenv" ]] || builtin source -- "$_orca_user_zshenv"
+} always {
+  builtin unset _orca_user_zshenv
+  builtin typeset -ag precmd_functions
+  (( ${precmd_functions[(Ie)__orca_deferred_init]} )) || precmd_functions+=(__orca_deferred_init)
+}

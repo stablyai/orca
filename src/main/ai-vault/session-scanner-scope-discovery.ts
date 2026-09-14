@@ -6,10 +6,8 @@ import {
   wslGatedStat
 } from '../native-chat/wsl-transcript-fs-access'
 import { WslTranscriptFsError } from '../native-chat/wsl-transcript-fs-gate'
-import {
-  isPathInsideOrEqual,
-  normalizeRuntimePathSeparators
-} from '../../shared/cross-platform-path'
+import { isPathInsideOrEqual } from '../../shared/cross-platform-path'
+import { encodeClaudeProjectPaths, isClaudeProjectDirInScope } from './claude-project-dir-encoding'
 import type { AiVaultScanIssue } from '../../shared/ai-vault-types'
 import { parseWslUncPath } from '../../shared/wsl-paths'
 import { recordSessionScanIssue } from './session-scan-issues'
@@ -118,33 +116,6 @@ function claudeProjectScopePrefixes(scopePaths: readonly string[]): Set<string> 
 function scopePathCandidates(scopePath: string): string[] {
   const wslScopePath = parseWslUncPath(scopePath)
   return wslScopePath ? [scopePath, wslScopePath.linuxPath] : [scopePath]
-}
-
-/**
- * Why: Claude derives the directory name from the raw cwd, so encoding from the
- * comparison key would lowercase Windows paths and never match on disk. Encode
- * the raw path, plus its NFC spelling, since macOS hands us NFD (#10832).
- */
-function encodeClaudeProjectPaths(pathValue: string): string[] {
-  const raw = encodeClaudeProjectPath(pathValue)
-  const composed = encodeClaudeProjectPath(pathValue.normalize('NFC'))
-  return raw === composed ? [raw] : [raw, composed]
-}
-
-function encodeClaudeProjectPath(pathValue: string): string {
-  const separated = normalizeRuntimePathSeparators(pathValue)
-  const trimmed =
-    separated === '/' || /^[A-Za-z]:\/$/.test(separated) ? separated : separated.replace(/\/+$/, '')
-  return trimmed.replace(/[^a-zA-Z0-9]/g, '-')
-}
-
-function isClaudeProjectDirInScope(projectDirName: string, scopePrefixes: ReadonlySet<string>) {
-  for (const prefix of scopePrefixes) {
-    if (projectDirName === prefix || projectDirName.startsWith(`${prefix}-`)) {
-      return true
-    }
-  }
-  return false
 }
 
 function isCwdInsideScopePath(scopePath: string, cwd: string): boolean {

@@ -19,12 +19,10 @@ import {
 import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
 import { shouldAllowComposerEnterSubmitTarget } from '@/lib/new-workspace-enter-guard'
 import { isScreenSubmitShortcut } from '@/lib/screen-submit-shortcut'
-import type {
-  GitHubWorkItem,
-  TuiAgent,
-  WorkspaceCreateTelemetrySource,
-  WorkspaceStatus
-} from '../../../shared/types'
+import type { GitHubWorkItem } from '../../../shared/github/work-item-types'
+import type { TuiAgent } from '../../../shared/tui-agent'
+import type { WorkspaceSource as WorkspaceCreateTelemetrySource } from '../../../shared/workspace-source'
+import type { WorkspaceStatus } from '../../../shared/worktree/types'
 import type { TaskSourceContext } from '../../../shared/task-source-context'
 import { translate } from '@/i18n/i18n'
 import { getWorkspaceComposerInitialFocusTarget } from '@/lib/workspace-composer-initial-focus'
@@ -99,7 +97,6 @@ function ComposerModalBody({
         <QuickTabBody
           modalData={modalData}
           onClose={onClose}
-          onDismiss={handleDismiss}
           isSubmissionCancelled={isSubmissionCancelled}
           active
         />
@@ -111,13 +108,11 @@ function ComposerModalBody({
 function QuickTabBody({
   modalData,
   onClose,
-  onDismiss,
   isSubmissionCancelled,
   active
 }: {
   modalData: ComposerModalData
   onClose: () => void
-  onDismiss: () => void
   isSubmissionCancelled: () => boolean
   active: boolean
 }): React.JSX.Element {
@@ -199,6 +194,7 @@ function QuickTabBody({
   // outcomes still navigate away and tear the whole modal down.)
   const [addProjectOpen, setAddProjectOpen] = useState(false)
   const [addProjectMounted, setAddProjectMounted] = useState(false)
+  const [setLocationOpen, setSetLocationOpen] = useState(false)
   const handleOpenAddProject = useCallback((): void => {
     setAddProjectMounted(true)
     setAddProjectOpen(true)
@@ -239,43 +235,27 @@ function QuickTabBody({
       ? translate('auto.components.NewWorkspaceComposerModal.createWorktree', 'Create worktree')
       : translate('auto.components.NewWorkspaceComposerModal.createWorkspace', 'Create workspace')
 
-  // Cmd/Ctrl+Enter submits, Esc first blurs the focused input (like the full page).
-  const nestedDialogOpen = agentSettingsOpen || addProjectOpen
+  // Cmd/Ctrl+Enter submits. Escape belongs to the dialog's dismissable layer:
+  // the page-style "blur the focused field first" rule assumes the user chose
+  // that field, but this dialog auto-focuses the name input on open, so handling
+  // Escape here swallowed every first press and left the composer stuck open.
+  // Radix also closes only the topmost layer, so nested popovers/selects/dialogs
+  // keep their own Escape without needing a guard here.
+  const nestedDialogOpen = agentSettingsOpen || addProjectOpen || setLocationOpen
   useEffect(() => {
     if (!active || nestedDialogOpen) {
-      // Why: while a nested dialog (Add Project / Agents) is layered on top,
-      // this capture-phase handler must not steal its Escape (which should
-      // close only the nested dialog) or fire composer submit underneath it.
+      // Why: while a nested dialog (Add Project / Agents / Set location) is layered
+      // on top, this capture-phase handler must not fire composer submit underneath it.
       return
     }
     const onKeyDown = (event: KeyboardEvent): void => {
-      if (event.key !== 'Enter' && event.key !== 'Escape') {
+      // Why: workspace creation is screen-local submit behavior, not a
+      // user-configurable app command.
+      if (!isScreenSubmitShortcut(event)) {
         return
       }
       const target = event.target
       if (!(target instanceof HTMLElement)) {
-        return
-      }
-
-      if (event.key === 'Escape') {
-        if (
-          target instanceof HTMLInputElement ||
-          target instanceof HTMLTextAreaElement ||
-          target instanceof HTMLSelectElement ||
-          target.isContentEditable
-        ) {
-          event.preventDefault()
-          target.blur()
-          return
-        }
-        event.preventDefault()
-        onDismiss()
-        return
-      }
-
-      // Why: workspace creation is screen-local submit behavior, not a
-      // user-configurable app command.
-      if (!isScreenSubmitShortcut(event)) {
         return
       }
       if (!shouldAllowComposerEnterSubmitTarget(target, composerRef.current)) {
@@ -289,7 +269,7 @@ function QuickTabBody({
     }
     window.addEventListener('keydown', onKeyDown, { capture: true })
     return () => window.removeEventListener('keydown', onKeyDown, { capture: true })
-  }, [active, composerRef, createDisabled, handleCreate, nestedDialogOpen, onDismiss])
+  }, [active, composerRef, createDisabled, handleCreate, nestedDialogOpen])
 
   return (
     <>
@@ -326,6 +306,7 @@ function QuickTabBody({
         onOpenAgentSettings={() => setAgentSettingsOpen(true)}
         onCreate={() => void handleCreate()}
         onAddProjectOverride={handleOpenAddProject}
+        onNestedDialogOpenChange={setSetLocationOpen}
       />
       <AgentSettingsDialog open={agentSettingsOpen} onOpenChange={setAgentSettingsOpen} />
       {addProjectMounted ? (

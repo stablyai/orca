@@ -885,7 +885,7 @@ describe('resumeSleepingAgentSessionsForWorktree', () => {
     const resumedTab = state.tabsByWorktree['wt-1']?.[0]
     expect(resumedTab?.launchAgent).toBe('claude')
     expect(state.pendingStartupByTabId[resumedTab!.id]?.command).toContain(
-      "'--resume' 'sess-1'\\''s'"
+      `'--resume' 'sess-1'"'"'s'`
     )
   })
 })

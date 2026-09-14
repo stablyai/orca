@@ -1,20 +1,23 @@
-import { useCallback, useEffect, useState, useSyncExternalStore } from 'react'
-import { View, Text, StyleSheet, Pressable, Platform } from 'react-native'
-import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { useRouter } from 'expo-router'
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react'
+import { View, Text, Pressable } from 'react-native'
+import { useLocalSearchParams, useRouter } from 'expo-router'
 import * as Clipboard from 'expo-clipboard'
-import Constants from 'expo-constants'
-import { ChevronLeft, Copy, Check } from 'lucide-react-native'
-import { colors, spacing, typography } from '../src/theme/mobile-theme'
-import { ConnectionLog } from '../src/components/ConnectionLog'
 import { loadHosts } from '../src/transport/host-store'
-import { connectionLogStore } from '../src/transport/connection-log-buffer'
-import { useHostClient } from '../src/transport/client-context'
+import { connectionLogStore } from '../src/transport/persisted-connection-log-store'
+import { useHostClient, useRpcClientContext } from '../src/transport/client-context'
 import {
-  useLastConnectedAt,
+  useConnectionPathStatus,
   useReconnectAttempt
 } from '../src/transport/client-context-connection-metrics'
-import { buildConnectionDiagnosticsReport } from '../src/diagnostics/connection-diagnostics-report'
+import { useHostStatusGates } from '../src/transport/host-status-gates'
+import { ConnectionDiagnosticsScreen } from '../src/diagnostics/connection-diagnostics-screen'
+import { createNativeDiagnosticsOperations } from '../src/diagnostics/native-diagnostics-operations'
+import {
+  readHydratedConnectionLog,
+  resolveDiagnosticsHostId,
+  type DiagnosticsHostSelection
+} from '../src/diagnostics/connection-diagnostics-screen-data'
+import { connectionDiagnosticsScreenStyles as styles } from '../src/diagnostics/connection-diagnostics-screen-styles'
 import type { ConnectionLogEntry, HostProfile } from '../src/transport/types'
 
 // Why: getSnapshot must be referentially stable when there's no data —
@@ -22,33 +25,44 @@ import type { ConnectionLogEntry, HostProfile } from '../src/transport/types'
 const EMPTY_ENTRIES: readonly ConnectionLogEntry[] = []
 
 // Why: reading the log is most needed while a host is failing, so this
-// screen also *acquires* the host client — opening it kicks a dial and the
+// route also *acquires* the host client — opening it kicks a dial and the
 // log fills live instead of showing a stale tail.
-export default function ConnectionLogScreen() {
+export default function NativeConnectionLogRoute() {
+  const clientContext = useRpcClientContext()
   const router = useRouter()
-  const insets = useSafeAreaInsets()
+  const params = useLocalSearchParams<{ hostId?: string }>()
+  const routeKey = useMemo(() => ({}), [params.hostId])
   const [hosts, setHosts] = useState<HostProfile[]>([])
-  const [selectedId, setSelectedId] = useState<string | null>(null)
-  const [copied, setCopied] = useState(false)
+  const [manualSelection, setManualSelection] = useState<DiagnosticsHostSelection | null>(null)
 
   useEffect(() => {
     let stale = false
     void loadHosts().then((loaded) => {
-      if (stale) {
-        return
+      if (!stale) {
+        setHosts(loaded)
       }
-      setHosts(loaded)
-      setSelectedId((prev) => prev ?? loaded[0]?.id ?? null)
     })
     return () => {
       stale = true
     }
   }, [])
 
-  const selected = hosts.find((h) => h.id === selectedId) ?? null
-  const { state } = useHostClient(selected?.id)
+  const selectedId = resolveDiagnosticsHostId(hosts, params.hostId, manualSelection, routeKey)
+  const selected = hosts.find((host) => host.id === selectedId) ?? null
+  const { client, state } = useHostClient(selected?.id)
+  const { desktopAppVersion } = useHostStatusGates({
+    hostId: selected?.id,
+    client,
+    connState: state
+  })
   const reconnectAttempts = useReconnectAttempt(selected?.id)
-  const lastConnectedAt = useLastConnectedAt(selected?.id)
+  const { activePath, pendingPath } = useConnectionPathStatus(selected?.id)
+
+  useEffect(() => {
+    if (selectedId) {
+      void readHydratedConnectionLog(connectionLogStore, selectedId)
+    }
+  }, [selectedId])
 
   const subscribe = useCallback(
     (listener: () => void) =>
@@ -60,162 +74,47 @@ export default function ConnectionLogScreen() {
     [selectedId]
   )
   const entries = useSyncExternalStore(subscribe, getSnapshot)
-
-  const copyDiagnostics = useCallback(async () => {
-    if (!selected) {
-      return
-    }
-    const report = buildConnectionDiagnosticsReport({
-      hostName: selected.name,
-      endpoint: selected.endpoint,
-      state,
-      reconnectAttempts,
-      lastConnectedAt,
-      platform: `${Platform.OS} ${Platform.Version ?? ''}`.trim(),
-      appVersion: Constants.expoConfig?.version ?? 'unknown',
-      entries
-    })
-    await Clipboard.setStringAsync(report)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
-  }, [selected, state, reconnectAttempts, lastConnectedAt, entries])
+  const device = useMemo(
+    () =>
+      selected
+        ? createNativeDiagnosticsOperations(selected, clientContext, desktopAppVersion)
+        : null,
+    [selected, clientContext, desktopAppVersion]
+  )
 
   return (
-    <View style={[styles.container, { paddingTop: insets.top + spacing.sm }]}>
-      <View style={styles.topRow}>
-        <Pressable style={styles.backButton} onPress={() => router.back()}>
-          <ChevronLeft size={22} color={colors.textSecondary} />
-        </Pressable>
-        <Text style={styles.heading}>Connection log</Text>
-      </View>
-
-      {hosts.length > 1 && (
-        <View style={styles.hostPicker}>
-          {hosts.map((host) => (
-            <Pressable
-              key={host.id}
-              style={[styles.hostChip, host.id === selectedId && styles.hostChipActive]}
-              onPress={() => setSelectedId(host.id)}
-            >
-              <Text
-                style={[styles.hostChipText, host.id === selectedId && styles.hostChipTextActive]}
-                numberOfLines={1}
+    <ConnectionDiagnosticsScreen
+      device={device}
+      host={selected}
+      state={state}
+      reconnectAttempts={reconnectAttempts}
+      activePath={activePath}
+      pendingPath={pendingPath}
+      entries={entries}
+      writeClipboard={(report) => Clipboard.setStringAsync(report)}
+      onBack={() => router.back()}
+      hostPicker={
+        hosts.length > 1 ? (
+          <View style={styles.hostPicker}>
+            {hosts.map((host) => (
+              <Pressable
+                key={host.id}
+                style={[styles.hostChip, host.id === selectedId && styles.hostChipActive]}
+                onPress={() =>
+                  setManualSelection({ hostId: host.id, requestedHostId: params.hostId, routeKey })
+                }
               >
-                {host.name}
-              </Text>
-            </Pressable>
-          ))}
-        </View>
-      )}
-
-      {selected ? (
-        <>
-          <View style={styles.statusRow}>
-            <Text style={styles.statusText}>
-              {state}
-              {reconnectAttempts > 0 ? ` · attempt ${reconnectAttempts}` : ''}
-            </Text>
-            <Pressable style={styles.copyButton} onPress={() => void copyDiagnostics()}>
-              {copied ? (
-                <Check size={14} color={colors.statusGreen} />
-              ) : (
-                <Copy size={14} color={colors.textSecondary} />
-              )}
-              <Text style={styles.copyButtonText}>{copied ? 'Copied' : 'Copy diagnostics'}</Text>
-            </Pressable>
+                <Text
+                  style={[styles.hostChipText, host.id === selectedId && styles.hostChipTextActive]}
+                  numberOfLines={1}
+                >
+                  {host.name}
+                </Text>
+              </Pressable>
+            ))}
           </View>
-          {entries.length > 0 ? (
-            <ConnectionLog entries={[...entries]} title={selected.name} />
-          ) : (
-            <Text style={styles.emptyText}>
-              No connection events yet this session. Events appear as the app dials this host.
-            </Text>
-          )}
-        </>
-      ) : (
-        <Text style={styles.emptyText}>No paired hosts.</Text>
-      )}
-    </View>
+        ) : null
+      }
+    />
   )
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.bgBase,
-    padding: spacing.lg
-  },
-  topRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: spacing.lg
-  },
-  backButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: spacing.sm
-  },
-  heading: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: colors.textPrimary
-  },
-  hostPicker: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
-    marginBottom: spacing.md
-  },
-  hostChip: {
-    paddingVertical: spacing.xs + 2,
-    paddingHorizontal: spacing.md,
-    borderRadius: 16,
-    backgroundColor: colors.bgRaised
-  },
-  hostChipActive: {
-    backgroundColor: colors.bgPanel,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle
-  },
-  hostChipText: {
-    fontSize: typography.metaSize,
-    color: colors.textSecondary,
-    maxWidth: 160
-  },
-  hostChipTextActive: {
-    color: colors.textPrimary,
-    fontWeight: '600'
-  },
-  statusRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: spacing.sm
-  },
-  statusText: {
-    fontSize: typography.metaSize,
-    color: colors.textSecondary
-  },
-  copyButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs + 2,
-    paddingVertical: spacing.xs + 2,
-    paddingHorizontal: spacing.md,
-    borderRadius: 8,
-    backgroundColor: colors.bgRaised
-  },
-  copyButtonText: {
-    fontSize: typography.metaSize,
-    fontWeight: '600',
-    color: colors.textPrimary
-  },
-  emptyText: {
-    fontSize: typography.metaSize,
-    color: colors.textMuted,
-    lineHeight: 18
-  }
-})

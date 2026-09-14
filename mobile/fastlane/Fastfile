@@ -261,6 +261,12 @@ platform :ios do
       distribute_only: true,
       skip_waiting_for_build_processing: false,
       wait_processing_timeout_duration: TESTFLIGHT_PROCESSING_TIMEOUT_SECONDS,
+      # submit_beta_review is on by default, so a superseded build of this same
+      # version train still sitting in beta review blocks the new submission
+      # ("Another build is in review" killed the 2026-08-05/08-06 runs).
+      # Fastlane filters by this build's preReleaseVersion, so it can only
+      # expire a build of the train this run is already replacing.
+      reject_build_waiting_for_review: true,
       distribute_external: true,
       groups: TESTFLIGHT_GROUPS,
       notify_external_testers: true,

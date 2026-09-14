@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { SleepingAgentSessionRecord } from '../../../../shared/agent-session-resume'
-import type { TerminalTab } from '../../../../shared/types'
+import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { brandEphemeralSetupTerminalWorktreeId } from '../../../../shared/ephemeral-setup-terminal-worktree-id'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
@@ -114,6 +114,17 @@ describe('terminal tab retirement planning', () => {
       unroutablePtyIds: []
     })
     expect(isTerminalTabPresent(state, 'tab-1')).toBe(true)
+  })
+
+  it('recognizes a tab after it is rehomed into a new worktree bucket', () => {
+    const state = makeState({
+      tabsByWorktree: {
+        'wt-old': [],
+        'wt-new': [makeTab('tab-rehomed', 'wt-new', null)]
+      }
+    })
+
+    expect(isTerminalTabPresent(state, 'tab-rehomed')).toBe(true)
   })
 
   it('does not retire a PTY still referenced by another live surface', () => {

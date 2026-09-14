@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SkillDiscoveryResult } from '../../shared/skills'
-import type { Repo } from '../../shared/types'
+import type { Repo } from '../../shared/repo-types'
 
 const { nativeScans, wslScans } = vi.hoisted(() => ({
   nativeScans: [] as unknown[],
@@ -18,15 +18,15 @@ vi.mock('./discovery', () => ({
 }))
 
 vi.mock('./skill-discovery-wsl', () => ({
-  discoverSkillsInWsl: vi.fn(async (args: unknown) => {
+  discoverSkillObservationInWsl: vi.fn(async (args: unknown) => {
     wslScans.push(args)
-    return emptyResult()
+    return { rows: [], sources: [], scannedAt: 1 }
   })
 }))
 
 const { clearSkillDiscoveryCaches, discoverSkillsOnTarget } =
   await import('./skill-discovery-target')
-const { clearSkillRootScanCache } = await import('./discovery')
+const { clearSkillRootScanCache, discoverSkills } = await import('./discovery')
 
 function makeRepo(path: string): Repo {
   return {
@@ -135,6 +135,22 @@ describe('discoverSkillsOnTarget', () => {
     expect(wslScans).toHaveLength(3)
   })
 
+  it('distinguishes an absent WSL cwd from the literal undefined path', async () => {
+    await discoverSkillsOnTarget(
+      { kind: 'wsl', distro: 'Ubuntu', homeDir: '/home/dev', cwd: undefined },
+      []
+    )
+    await discoverSkillsOnTarget(
+      { kind: 'wsl', distro: 'Ubuntu', homeDir: '/home/dev', cwd: 'undefined' },
+      []
+    )
+
+    expect(wslScans).toEqual([
+      { distro: 'Ubuntu', homeDir: '/home/dev' },
+      { distro: 'Ubuntu', homeDir: '/home/dev', cwd: 'undefined' }
+    ])
+  })
+
   it('re-reads a WSL target when the caller refreshes', async () => {
     const target = {
       kind: 'wsl',
@@ -154,5 +170,19 @@ describe('discoverSkillsOnTarget', () => {
   it('drops the root cache too when the host clears its scans', () => {
     clearSkillDiscoveryCaches()
     expect(clearSkillRootScanCache).toHaveBeenCalled()
+  })
+
+  // This layer scans whole targets, so it has no partial answer to degrade to. It
+  // must not leak the internal error class to IPC/RPC, and must not answer with an
+  // empty result — zero skills reads as "nothing installed" and re-offers installs.
+  it('reports a stalled target as a retryable error rather than as no skills', async () => {
+    vi.mocked(discoverSkills).mockRejectedValueOnce(
+      Object.assign(new Error('This operation was aborted'), { name: 'AbortError' })
+    )
+
+    const call = discoverSkillsOnTarget({ kind: 'native-host', cwd: '/workspace' }, [])
+
+    await expect(call).rejects.toThrow(/try again/i)
+    await expect(call).rejects.not.toThrow(/workspace/)
   })
 })

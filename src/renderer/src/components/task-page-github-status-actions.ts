@@ -1,8 +1,8 @@
+import type { GitHubWorkItem } from '../../../shared/github/work-item-types'
 import type {
   GitHubIssueCloseReason,
-  GitHubIssueUpdate,
-  GitHubWorkItem
-} from '../../../shared/types'
+  GitHubIssueUpdate
+} from '../../../shared/issue-mutation-types'
 
 export type TaskPageGitHubCloseAction =
   | { stateReason: Exclude<GitHubIssueCloseReason, 'duplicate'> }
@@ -82,7 +82,7 @@ export function getTaskPageGitHubDuplicateTargetErrorMessage(
 }
 
 export function getTaskPageGitHubDuplicateCandidates(
-  items: GitHubWorkItem[],
+  items: readonly GitHubWorkItem[],
   currentIssueNumber: number,
   query: string
 ): GitHubWorkItem[] {

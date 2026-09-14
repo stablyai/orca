@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { resolveMobileRelayEndpoint } from './mobile-relay-resume-director'
+import { RelayDirectorHttpError, resolveMobileRelayEndpoint } from './mobile-relay-resume-director'
 
 const relay = {
   v: 1 as const,
@@ -62,5 +62,41 @@ describe('mobile relay resume director', () => {
     await expect(
       resolveMobileRelayEndpoint({ relay, resumeToken: 'A'.repeat(43), fetchImpl: oversized })
     ).rejects.toThrow(/too large/)
+  })
+
+  it('carries the bounded-overload Retry-After off a rejected resolve', async () => {
+    const resolveWith = (headers: Record<string, string>) =>
+      resolveMobileRelayEndpoint({
+        relay,
+        resumeToken: 'A'.repeat(43),
+        fetchImpl: vi.fn(async () => new Response(null, { status: 503, headers }))
+      })
+
+    await expect(resolveWith({ 'retry-after': '30' })).rejects.toMatchObject({
+      status: 503,
+      retryAfterMs: 30_000,
+      message: 'relay director resolve failed (503)'
+    })
+    // An HTTP-date form resolves against the clock, and both forms clamp.
+    const httpDate = new Date(Date.now() + 10 * 60_000).toUTCString()
+    await expect(resolveWith({ 'retry-after': httpDate })).rejects.toMatchObject({
+      retryAfterMs: 120_000
+    })
+    await expect(resolveWith({ 'retry-after': '999999' })).rejects.toMatchObject({
+      retryAfterMs: 120_000
+    })
+    // A past date or unparseable header leaves the local backoff in charge.
+    const pastDate = new Date(Date.now() - 10 * 60_000).toUTCString()
+    await expect(resolveWith({ 'retry-after': pastDate })).rejects.toMatchObject({
+      retryAfterMs: null
+    })
+    await expect(resolveWith({ 'retry-after': 'soon-ish' })).rejects.toMatchObject({
+      retryAfterMs: null
+    })
+    await expect(resolveWith({})).rejects.toMatchObject({
+      status: 503,
+      retryAfterMs: null
+    })
+    await expect(resolveWith({})).rejects.toBeInstanceOf(RelayDirectorHttpError)
   })
 })

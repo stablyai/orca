@@ -1,5 +1,5 @@
 import type { AgentStatusEntry, AgentType } from '../../../../shared/agent-status-types'
-import type { TuiAgent } from '../../../../shared/types'
+import type { TuiAgent } from '../../../../shared/tui-agent'
 import { isNativeChatSupportedAgent } from './native-chat-availability'
 
 /** Inputs that resolve the active pane to the agent/session/pty triple the

@@ -5,6 +5,7 @@ import type {
   GitStatusResult,
   GitUpstreamStatus
 } from '../../../src/shared/git-status-types'
+import type { RpcResponse } from '../transport/types'
 
 export type MobileGitFileStatus = GitFileStatus
 export type MobileGitStagingArea = GitStagingArea
@@ -36,13 +37,6 @@ export const MOBILE_GIT_STATUS_LABELS: Record<MobileGitFileStatus, string> = {
   copied: 'C'
 }
 
-function compareGitStatusEntries(a: MobileGitStatusEntry, b: MobileGitStatusEntry): number {
-  return (
-    getConflictSortRank(a) - getConflictSortRank(b) ||
-    a.path.localeCompare(b.path, undefined, { numeric: true })
-  )
-}
-
 function getConflictSortRank(entry: MobileGitStatusEntry): number {
   if (entry.conflictStatus === 'unresolved') {
     return 0
@@ -56,11 +50,21 @@ function getConflictSortRank(entry: MobileGitStatusEntry): number {
 export function buildMobileSourceControlSections<TEntry extends MobileGitStatusEntry>(
   entries: readonly TEntry[]
 ): MobileSourceControlSection<TEntry>[] {
-  return AREA_ORDER.map((area) => ({
+  const sections = AREA_ORDER.map((area) => ({
     area,
     title: AREA_TITLES[area],
-    data: entries.filter((entry) => entry.area === area).sort(compareGitStatusEntries)
+    data: entries.filter((entry) => entry.area === area)
   })).filter((section) => section.data.length > 0)
+  if (sections.some((section) => section.data.length > 1)) {
+    const collator = new Intl.Collator(undefined, { numeric: true })
+    for (const section of sections) {
+      section.data.sort(
+        (a, b) =>
+          getConflictSortRank(a) - getConflictSortRank(b) || collator.compare(a.path, b.path)
+      )
+    }
+  }
+  return sections
 }
 
 export function countStagedEntries(entries: readonly MobileGitStatusEntry[]): number {
@@ -94,6 +98,25 @@ export function isMobileGitDiscardableEntry(entry: MobileGitStatusEntry): boolea
 // git.diff still returns the pre-delete side (text or image via modifiedDeleted).
 export function canOpenMobileGitStatusEntry(entry: MobileGitStatusEntry): boolean {
   return entry.conflictStatus !== 'unresolved'
+}
+
+/**
+ * The refusal behind a reply, or null when the host accepted it.
+ *
+ * Four source-control loads route on the refusal itself rather than on acceptance: two degrade to
+ * a capability-missing screen, one retries a not-yet-visible selector, and one falls back to a
+ * different method. No acceptance policy carries `code` and `message` through, so those call sites
+ * read the refusal here — in one place, before they hand the reply to the operation's policy.
+ */
+export function readMobileGitRefusal(
+  response: RpcResponse
+): { code: string | undefined; message: string | undefined } | null {
+  return response.ok ? null : { code: response.error?.code, message: response.error?.message }
+}
+
+export function isMobileGitUnavailableReply(response: RpcResponse): boolean {
+  const refusal = readMobileGitRefusal(response)
+  return refusal !== null && isMobileGitUnavailable(refusal.code, refusal.message)
 }
 
 export function isMobileGitUnavailable(code: string | undefined, message: string | undefined) {

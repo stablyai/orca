@@ -2,7 +2,7 @@ import type {
   GitBranchChangeEntry,
   GitBranchCompareResult,
   GitBranchCompareSummary
-} from '../../../src/shared/types'
+} from '../../../src/shared/git-diff-compare-types'
 
 export type MobileGitBranchChangeEntry = GitBranchChangeEntry
 export type MobileGitBranchCompareSummary = GitBranchCompareSummary
@@ -15,22 +15,20 @@ export type MobileBranchCompareSection<
   data: TEntry[]
 }
 
-function compareBranchEntries(
-  a: MobileGitBranchChangeEntry,
-  b: MobileGitBranchChangeEntry
-): number {
-  return a.path.localeCompare(b.path, undefined, { numeric: true })
-}
-
 export function buildMobileBranchCompareSection<TEntry extends MobileGitBranchChangeEntry>(
   entries: readonly TEntry[]
 ): MobileBranchCompareSection<TEntry> | null {
   if (entries.length === 0) {
     return null
   }
+  const data = [...entries]
+  if (data.length > 1) {
+    const collator = new Intl.Collator(undefined, { numeric: true })
+    data.sort((a, b) => collator.compare(a.path, b.path))
+  }
   return {
     title: 'Committed on Branch',
-    data: [...entries].sort(compareBranchEntries)
+    data
   }
 }
 

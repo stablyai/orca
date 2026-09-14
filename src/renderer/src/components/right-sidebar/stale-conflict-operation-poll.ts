@@ -1,5 +1,6 @@
 import { useEffect, useMemo } from 'react'
-import type { GitConflictOperation, Repo } from '../../../../shared/types'
+import type { GitConflictOperation } from '../../../../shared/git-status-types'
+import type { Repo } from '../../../../shared/repo-types'
 import { isGitRepoKind } from '../../../../shared/repo-kind'
 import { getConnectionId } from '@/lib/connection-context'
 import { getRuntimeGitConflictOperation } from '@/runtime/runtime-git-client'

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { TerminalTab } from '../../../../shared/types'
+import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import { getOrphanTerminalIds } from './terminal-orphan-helpers'
 import { buildTerminalTabRetirementPlan } from './terminal-tab-retirement'
 
@@ -14,7 +14,8 @@ import { buildTerminalTabRetirementPlan } from './terminal-tab-retirement'
 // Why: superset state that satisfies both getOrphanTerminalIds (orphan sweep)
 // and buildTerminalTabRetirementPlan (retirement authority) so one fixture can
 // prove the two agree on liveness.
-type TestState = Parameters<typeof buildTerminalTabRetirementPlan>[0]
+type TestState = Parameters<typeof buildTerminalTabRetirementPlan>[0] &
+  Parameters<typeof getOrphanTerminalIds>[0]
 
 function makeTab(overrides: Partial<TerminalTab> & { id: string }): TerminalTab {
   return {
@@ -39,6 +40,7 @@ function makeState(overrides: Partial<TestState> = {}): TestState {
     lastKnownRelayPtyIdByTabId: {},
     deferredSshSessionIdsByTabId: {},
     pendingReconnectPtyIdByTabId: {},
+    unverifiedPtyLossTabIds: {},
     ...overrides
   } as TestState
 }
@@ -89,6 +91,17 @@ describe('getOrphanTerminalIds reconnect-map liveness', () => {
     })
 
     expect(getOrphanTerminalIds(state, 'wt-1')).toContain('dead')
+  })
+
+  it('does not orphan a tab whose PTY loss is unverified', () => {
+    const state = makeState({
+      tabsByWorktree: { 'wt-1': [makeTab({ id: 'host-lost', ptyId: null })] },
+      ptyIdsByTabId: { 'host-lost': [] },
+      unifiedTabsByWorktree: { 'wt-1': [] },
+      unverifiedPtyLossTabIds: { 'host-lost': true }
+    })
+
+    expect(getOrphanTerminalIds(state, 'wt-1')).not.toContain('host-lost')
   })
 
   // A persisted layout leaf binding is NOT a liveness signal: SSH-target removal

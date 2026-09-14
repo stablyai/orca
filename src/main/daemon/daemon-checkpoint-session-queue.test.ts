@@ -4,12 +4,18 @@ import {
   CheckpointSessionQueue
 } from './daemon-checkpoint-session-queue'
 
-function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
+function deferred<T>(): {
+  promise: Promise<T>
+  resolve: (value: T) => void
+  reject: (error: unknown) => void
+} {
   let resolve!: (value: T) => void
-  const promise = new Promise<T>((res) => {
+  let reject!: (error: unknown) => void
+  const promise = new Promise<T>((res, rej) => {
     resolve = res
+    reject = rej
   })
-  return { promise, resolve }
+  return { promise, reject, resolve }
 }
 
 describe('CheckpointSessionQueue', () => {
@@ -57,6 +63,7 @@ describe('CheckpointSessionQueue', () => {
     const queue = new CheckpointSessionQueue()
     const stalled = deferred<void>()
     let completed = false
+    const onDeadlineFired = vi.fn()
 
     const outcome = await queue.runWithDeadline(
       'stalled',
@@ -66,15 +73,58 @@ describe('CheckpointSessionQueue', () => {
         return 'durable'
       },
       5,
-      'live'
+      'live',
+      { onDeadline: onDeadlineFired }
     )
 
     expect(outcome).toBe('live')
+    expect(onDeadlineFired).toHaveBeenCalledOnce()
     // Why: abandoning the wait must not abandon the write, or a reattach deadline
     // would drop durable history instead of merely delaying it.
     expect(completed).toBe(false)
     stalled.resolve()
     await vi.waitFor(() => expect(completed).toBe(true))
+  })
+
+  it('propagates operation failures instead of reporting a deadline', async () => {
+    const queue = new CheckpointSessionQueue()
+    const onDeadlineFired = vi.fn()
+
+    await expect(
+      queue.runWithDeadline(
+        'failed',
+        async () => {
+          throw new Error('daemon unavailable')
+        },
+        50,
+        'timed-out',
+        { onDeadline: onDeadlineFired }
+      )
+    ).rejects.toThrow('daemon unavailable')
+    expect(onDeadlineFired).not.toHaveBeenCalled()
+  })
+
+  it('reports an operation rejection that arrives after the deadline', async () => {
+    const queue = new CheckpointSessionQueue()
+    const stalled = deferred<void>()
+    const onAbandonedRejection = vi.fn()
+
+    await expect(
+      queue.runWithDeadline<void | 'timed-out'>(
+        'failed-late',
+        async () => await stalled.promise,
+        5,
+        'timed-out',
+        { onAbandonedRejection }
+      )
+    ).resolves.toBe('timed-out')
+
+    stalled.reject(new Error('late failure'))
+    await vi.waitFor(() =>
+      expect(onAbandonedRejection).toHaveBeenCalledWith(
+        expect.objectContaining({ message: 'late failure' })
+      )
+    )
   })
 
   it('keeps a later waiter behind an abandoned operation', async () => {

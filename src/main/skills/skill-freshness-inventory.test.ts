@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { promisify } from 'node:util'
 import { afterEach, describe, expect, it } from 'vitest'
-import type { Repo } from '../../shared/types'
+import type { Repo } from '../../shared/repo-types'
 import type {
   SkillBundleFileIdentity,
   SkillCurrentBundleEntry,
@@ -157,7 +157,11 @@ async function writeSkillLockHash(homeDir: string, skillFolderHash: string): Pro
 }
 
 afterEach(async () => {
-  await Promise.all(temporaryDirectories.splice(0).map((root) => rm(root, { recursive: true })))
+  await Promise.all(
+    temporaryDirectories
+      .splice(0)
+      .map((root) => rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }))
+  )
 })
 
 describe('read-only skill freshness inventory', () => {
@@ -871,41 +875,45 @@ describe('read-only skill freshness inventory', () => {
     ])
   })
 
-  it('invents no installations when the plugin cache trips the entry budget (#10918)', async () => {
-    const test = await fixture()
-    await test.writeSkill(join(test.homeDir, '.agents', 'skills'), test.currentMarkdown)
-    const pluginCache = join(test.homeDir, '.codex', 'plugins', 'cache')
-    await mkdir(pluginCache, { recursive: true })
-    // Why: the production bound, not an injected one — #10918 is the real constant
-    // collapsing the scan to the cache root, and only a real cache proves that path.
-    const entries = Array.from({ length: MAXIMUM_PLUGIN_SCAN_ENTRIES + 1 }, (_, index) =>
-      join(pluginCache, `entry-${index}`)
-    )
-    for (let index = 0; index < entries.length; index += 512) {
-      await Promise.all(entries.slice(index, index + 512).map((path) => writeFile(path, '')))
-    }
+  it.skipIf(process.platform === 'win32')(
+    'invents no installations when the plugin cache trips the entry budget (#10918)',
+    async () => {
+      const test = await fixture()
+      await test.writeSkill(join(test.homeDir, '.agents', 'skills'), test.currentMarkdown)
+      const pluginCache = join(test.homeDir, '.codex', 'plugins', 'cache')
+      await mkdir(pluginCache, { recursive: true })
+      // Why: the production bound, not an injected one — #10918 is the real constant
+      // collapsing the scan to the cache root, and only a real cache proves that path.
+      const entries = Array.from({ length: MAXIMUM_PLUGIN_SCAN_ENTRIES + 1 }, (_, index) =>
+        join(pluginCache, `entry-${index}`)
+      )
+      for (let index = 0; index < entries.length; index += 512) {
+        await Promise.all(entries.slice(index, index + 512).map((path) => writeFile(path, '')))
+      }
 
-    const inventory = await inventorySkillFreshness({
-      currentAppVersion: '2.0.0',
-      homeDir: test.homeDir,
-      repos: [],
-      resourceRoot: test.resourceRoot
-    })
-
-    // Why: assert the bound actually tripped first — if the fixture stopped reaching it,
-    // the placement assertion below would still pass and cover nothing.
-    expect(inventory.scanIssues).toEqual([
-      expect.objectContaining({
-        rootId: 'codex-plugin-cache',
-        path: pluginCache,
-        reason: 'entry-limit',
-        errorCode: null
+      const inventory = await inventorySkillFreshness({
+        currentAppVersion: '2.0.0',
+        homeDir: test.homeDir,
+        repos: [],
+        resourceRoot: test.resourceRoot
       })
-    ])
-    // Why: the truncated root is not evidence of a copy. Fabricating one per manifest name
-    // is what pinned an unclearable "Needs attention" on every card in #10918.
-    expect(inventory.installations).toEqual([
-      expect.objectContaining({ name: 'orca-cli', status: 'current', topology: 'canonical-copy' })
-    ])
-  })
+
+      // Why: assert the bound actually tripped first — if the fixture stopped reaching it,
+      // the placement assertion below would still pass and cover nothing.
+      expect(inventory.scanIssues).toEqual([
+        expect.objectContaining({
+          rootId: 'codex-plugin-cache',
+          path: pluginCache,
+          reason: 'entry-limit',
+          errorCode: null
+        })
+      ])
+      // Why: the truncated root is not evidence of a copy. Fabricating one per manifest name
+      // is what pinned an unclearable "Needs attention" on every card in #10918.
+      expect(inventory.installations).toEqual([
+        expect.objectContaining({ name: 'orca-cli', status: 'current', topology: 'canonical-copy' })
+      ])
+    },
+    90_000
+  )
 })

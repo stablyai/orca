@@ -8,7 +8,7 @@ import { DaemonServer } from './daemon-server'
 import { STABLE_PANE_ATTACH_ONLY_DAEMON_PROTOCOL_VERSION } from './daemon-protocol-version'
 import { getDaemonSocketPath } from './daemon-spawner'
 import type { DaemonFileLog } from './daemon-file-log'
-import type { SubprocessHandle } from './session'
+import type { SubprocessHandle } from './session-subprocess-handle'
 
 type FixtureSubprocess = SubprocessHandle & { emitData: (data: string) => void }
 
@@ -23,6 +23,7 @@ function createFixtureSubprocess(pid: number): FixtureSubprocess {
     pause: vi.fn(),
     resume: vi.fn(),
     kill: vi.fn(() => onExit?.(0)),
+    terminateOwnedTree: () => 'unavailable' as const,
     forceKill: vi.fn(() => onExit?.(137)),
     signal: vi.fn(),
     onData: vi.fn((callback) => {

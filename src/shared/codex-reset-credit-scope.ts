@@ -3,7 +3,7 @@ import type {
   RateLimitRuntimeTarget,
   RateLimitWindow
 } from './rate-limit-types'
-import type { CodexManagedAccountSummary } from './types'
+import type { CodexManagedAccountSummary } from './managed-account-types'
 
 export type CodexResetCreditExpectedScope = {
   target: RateLimitRuntimeTarget

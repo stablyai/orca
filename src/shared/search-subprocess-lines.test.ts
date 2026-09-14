@@ -1,7 +1,32 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { SearchSubprocessLineAccumulator } from './search-subprocess-lines'
 
 describe('SearchSubprocessLineAccumulator', () => {
+  it('keeps complete decoded batches as strings without allocating byte copies', () => {
+    const parser = new SearchSubprocessLineAccumulator()
+    const lines: string[] = []
+    const from = vi.spyOn(Buffer, 'from')
+    let copies: number
+    try {
+      parser.push('first🐋\n\nlast\n', (line) => lines.push(line))
+      copies = from.mock.calls.length
+    } finally {
+      from.mockRestore()
+    }
+    expect(copies).toBe(0)
+    expect(lines).toEqual(['first🐋', '', 'last'])
+    expect(parser.finish()).toBeNull()
+  })
+
+  it('still enforces per-line UTF-8 byte limits for decoded batches', () => {
+    const parser = new SearchSubprocessLineAccumulator(4)
+    const lines: string[] = []
+    expect(parser.push('éé\n漢\n', (line) => lines.push(line))).toBe(true)
+    expect(parser.push('漢é\n', (line) => lines.push(line))).toBe(false)
+    expect(lines).toEqual(['éé', '漢'])
+    expect(parser.finish()).toBeNull()
+  })
+
   it('preserves UTF-8 records split across raw byte chunks', () => {
     const parser = new SearchSubprocessLineAccumulator(32)
     const bytes = Buffer.from('first🐋\nsecond')

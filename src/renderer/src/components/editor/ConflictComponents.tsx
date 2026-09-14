@@ -13,7 +13,7 @@ import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 import type { ConflictReviewEntry, OpenFile } from '@/store/slices/editor'
-import type { GitConflictKind, GitStatusEntry } from '../../../../shared/types'
+import type { GitConflictKind, GitStatusEntry } from '../../../../shared/git-status-types'
 import { ConflictReviewFileTree } from './ConflictReviewFileTree'
 import { translate } from '@/i18n/i18n'
 
@@ -245,8 +245,9 @@ export function ConflictReviewPanel({
     (entry) => entry.liveEntry?.conflictStatus === 'unresolved'
   )
   const unresolvedCount = unresolvedSnapshotEntries.length
+  const [renderStartTime] = React.useState(() => Date.now())
   const snapshotTime = new Date(
-    file.conflictReview?.snapshotTimestamp ?? Date.now()
+    file.conflictReview?.snapshotTimestamp ?? renderStartTime
   ).toLocaleTimeString()
   const setFileTreeCollapsed = React.useCallback((collapsed: boolean) => {
     conflictReviewFileTreeCollapsedPreference = collapsed

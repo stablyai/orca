@@ -6,12 +6,9 @@ import {
   invalidateAutomaticPushTargetUpstreamStatusCache,
   storeCachedAutomaticPushTargetUpstreamStatus
 } from './push-target-upstream-refresh-cache'
-import type {
-  GitPushTarget,
-  GitStatusResult,
-  GitUpstreamStatus,
-  GlobalSettings
-} from '../../../../shared/types'
+import type { GitStatusResult, GitUpstreamStatus } from '../../../../shared/git-status-types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { GitPushTarget } from '../../../../shared/worktree/types'
 import {
   beginAutomaticUpstreamRefresh,
   beginStrictUpstreamRefresh,
@@ -115,6 +112,7 @@ export async function refreshGitStatusForWorktree({
   pushTarget?: GitPushTarget
   deps: GitStatusRefreshDeps
   request?: {
+    admissionTier?: 'interactive' | 'status' | 'background'
     reuseLineStats?: boolean
     signal?: AbortSignal
     shouldApply?: () => boolean
@@ -134,6 +132,7 @@ export async function refreshGitStatusForWorktree({
         connectionId
       },
       {
+        admissionTier: request?.admissionTier ?? 'status',
         ...(request?.reuseLineStats === true ? { reuseLineStats: true } : {}),
         ...(request?.signal ? { signal: request.signal } : {}),
         ...(branchLineTotalMergeBase ? { branchLineTotalMergeBase } : {})
@@ -259,6 +258,7 @@ export async function refreshGitStatusForWorktreeStrict({
       connectionId
     },
     {
+      admissionTier: 'interactive',
       // Why: strict refreshes are user-triggered reconciliation and must not reuse
       // automatic polling's no-upstream backoff window.
       bypassEffectiveUpstreamNegativeCache: true,

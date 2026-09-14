@@ -79,13 +79,29 @@ export function createHostClientSelectors(
   return {
     getKnownState,
     getState: (hostId: string): ConnectionState => getKnownState(hostId) ?? 'disconnected',
+    getClientId: (hostId: string): string | null => entries.get(hostId)?.clientId ?? null,
     getReconnectAttempt: (hostId: string): number =>
       entries.get(hostId)?.client.getReconnectAttempt() ?? 0,
     getLastConnectedAt: (hostId: string): number | null =>
       entries.get(hostId)?.client.getLastConnectedAt() ?? null,
     getActivePath: (hostId: string): MobileConnectionPath =>
-      clientActivePath(entries.get(hostId)?.client)
+      clientActivePath(entries.get(hostId)?.client),
+    getPendingPath: (hostId: string): MobileConnectionPath | null =>
+      clientPendingPath(entries.get(hostId)?.client),
+    isPairingRejected: (hostId: string): boolean =>
+      clientPairingRejected(entries.get(hostId)?.client),
+    isHostSignedOut: (hostId: string): boolean => clientHostSignedOut(entries.get(hostId)?.client)
   }
+}
+
+export function clientHostSignedOut(client: RpcClient | undefined): boolean {
+  const logical = client as Partial<StableLogicalRpcClient> | undefined
+  return logical?.isHostSignedOut?.() ?? false
+}
+
+export function clientPairingRejected(client: RpcClient | undefined): boolean {
+  const logical = client as Partial<StableLogicalRpcClient> | undefined
+  return logical?.isPairingRejected?.() ?? false
 }
 
 export function clientActivePath(client: RpcClient | undefined): MobileConnectionPath {
@@ -95,4 +111,9 @@ export function clientActivePath(client: RpcClient | undefined): MobileConnectio
   }
   // Why: during migration the pending path is what the user is waiting on.
   return logical.getPendingPath?.() ?? logical.getActivePath()
+}
+
+export function clientPendingPath(client: RpcClient | undefined): MobileConnectionPath | null {
+  const logical = client as Partial<StableLogicalRpcClient> | undefined
+  return logical?.getPendingPath?.() ?? null
 }

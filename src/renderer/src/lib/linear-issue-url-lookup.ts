@@ -4,7 +4,8 @@ import {
   isLinearIssueUrlResolutionMatch,
   type LinearIssueUrlIntent
 } from '../../../shared/linear/links'
-import type { LinearConnectionStatus, LinearIssue } from '../../../shared/types'
+import type { LinearIssue } from '../../../shared/linear/issue-types'
+import type { LinearConnectionStatus } from '../../../shared/linear/workspace-types'
 import type { TaskSourceContext } from '../../../shared/task-source-context'
 
 type FetchLinearIssue = (

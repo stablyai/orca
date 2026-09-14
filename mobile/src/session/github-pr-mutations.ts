@@ -1,4 +1,4 @@
-import type { GitHubPRMergeMethod } from '../../../src/shared/types'
+import type { GitHubPRMergeMethod } from '../../../src/shared/github/pull-request-types'
 import type { RpcClient } from '../transport/rpc-client'
 import { buildGithubPrParams, githubPrRepoSlugParam, type GitHubPrRepoSlug } from './github-pr-rpc'
 

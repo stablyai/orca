@@ -1,4 +1,4 @@
-import type { GitHubPRMergeMethod, GitHubPRMergeMethodSettings } from '../types'
+import type { GitHubPRMergeMethod, GitHubPRMergeMethodSettings } from './pull-request-types'
 
 export const GITHUB_PR_MERGE_METHODS = ['squash', 'merge', 'rebase'] as const
 

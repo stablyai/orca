@@ -1,4 +1,4 @@
-import type { GitHubPRMergeMethod } from '../../../src/shared/types'
+import type { GitHubPRMergeMethod } from '../../../src/shared/github/pull-request-types'
 import type { GitHubPrMutationOutcome } from './github-pr-mutations'
 import type { GitHubPrRepoSlug } from './github-pr-rpc'
 

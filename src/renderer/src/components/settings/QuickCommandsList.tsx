@@ -1,9 +1,9 @@
 import { Check, Copy, Pencil, TerminalSquare, Trash2 } from 'lucide-react'
+import type { Repo } from '../../../../shared/repo-types'
 import type {
-  Repo,
   TerminalQuickCommand,
   TerminalQuickCommandScope
-} from '../../../../shared/types'
+} from '../../../../shared/terminal-quick-command-types'
 import {
   getTerminalQuickCommandBody,
   getTerminalQuickCommandScope,

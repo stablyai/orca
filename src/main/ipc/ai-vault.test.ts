@@ -74,8 +74,9 @@ vi.mock('../ai-vault/session-scanner-parse-cache', async (importOriginal) => {
 })
 
 vi.mock('../wsl', () => ({
-  getWslHomeAsync: mocks.getAiVaultWslHomeDirs,
-  listWslDistrosAsync: vi.fn().mockResolvedValue([])
+  listRunningWslDistrosAsync: vi.fn().mockResolvedValue([]),
+  listRunningWslHomeDirsAsync: vi.fn().mockResolvedValue([]),
+  hasCachedWslDistros: vi.fn(() => false)
 }))
 
 vi.mock('../providers/ssh-filesystem-dispatch', () => ({

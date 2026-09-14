@@ -39,6 +39,25 @@ export type RpcResponse = RpcSuccess | RpcFailure
 
 export type ConnectionLogLevel = 'info' | 'success' | 'warn' | 'error'
 
+export type MobileConnectionDiagnosticPath = 'lan' | 'tailscale' | 'relay'
+
+export type ConnectionDiagnosticCode =
+  | 'client-session-started'
+  | 'app-resumed'
+  | 'network-changed'
+  | 'connect-timeout'
+  | 'handshake-timeout'
+  | 'authentication-rejected'
+  | 'socket-closed'
+  | 'liveness-timeout'
+  | 'retry-scheduled'
+  | 'relay-dial-failed'
+  | 'relay-session-failed'
+  | 'relay-connected'
+  | 'direct-connected'
+  | 'relay-credential-unavailable'
+  | 'host-open-failed'
+
 export type ConnectionLogEntry = {
   id: string
   ts: number
@@ -47,9 +66,18 @@ export type ConnectionLogEntry = {
   message: string
   // Optional second line for endpoint/error/elapsed detail.
   detail?: string
+  code?: ConnectionDiagnosticCode
+  path?: MobileConnectionDiagnosticPath
 }
 
 export type ConnectionLogSink = (entry: ConnectionLogEntry) => void
+
+export type ConnectionLogEmitter = (
+  level: ConnectionLogLevel,
+  message: string,
+  detail?: string,
+  evidence?: Pick<ConnectionLogEntry, 'code' | 'path'>
+) => void
 
 export type ConnectionState =
   | 'connecting'

@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AppState } from '@/store'
 import type * as TuiAgentSelectionModule from '../../../shared/tui-agent-selection'
 import type * as TuiAgentStartupModule from '@/lib/tui-agent-startup'
+import type * as DirectAgentRoutingModule from '@/lib/launch-work-item-direct-agent-routing'
 
 const mocks = vi.hoisted(() => ({
   toastError: vi.fn(),
@@ -116,8 +117,19 @@ vi.mock('../../../shared/tui-agent-selection', async () => {
   }
 })
 
+vi.mock('@/lib/launch-work-item-direct-agent-routing', async () => {
+  const actual = await vi.importActual<typeof DirectAgentRoutingModule>(
+    '@/lib/launch-work-item-direct-agent-routing'
+  )
+  return {
+    ...actual,
+    settleDirectWorkItemStructuredLaunch: vi.fn(actual.settleDirectWorkItemStructuredLaunch)
+  }
+})
+
 import { launchWorkItemDirect } from './launch-work-item-direct'
 import { pasteDraftWhenAgentReady } from '@/lib/agent-paste-draft'
+import { settleDirectWorkItemStructuredLaunch } from '@/lib/launch-work-item-direct-agent-routing'
 import { buildAgentDraftLaunchPlan, buildAgentStartupPlan } from '@/lib/tui-agent-startup'
 import { pickTuiAgent } from '../../../shared/tui-agent-selection'
 
@@ -544,6 +556,45 @@ describe('launchWorkItemDirect', () => {
     expect(mocks.seedNativeChatLaunchDraft).not.toHaveBeenCalled()
   })
 
+  it('reports a failed structured settlement instead of pasting into the pre-launch tab', async () => {
+    mocks.ensureDetectedAgents.mockResolvedValue(['claude'])
+    // Why: activation seeded a plain shell (`tab-1`); a failed structured launch hands back no tab,
+    // so the PR body must not reach that shell where the Claude readiness heuristic would submit it
+    // — and callers hang irreversible follow-up work off a `true`, so this must not report success.
+    vi.mocked(settleDirectWorkItemStructuredLaunch).mockResolvedValueOnce({
+      completed: false,
+      structuredLaunch: true,
+      visibilityUnknown: false,
+      failed: true,
+      primaryTabId: null
+    })
+    const { launchWorkItemDirect } = await import('./launch-work-item-direct')
+
+    await expect(
+      launchWorkItemDirect({
+        repoId: 'repo-1',
+        launchSource: 'task_page',
+        openModalFallback: vi.fn(),
+        agentOverride: 'claude',
+        promptDelivery: 'submit-after-ready',
+        item: {
+          type: 'pr',
+          number: 7,
+          title: 'Review this PR',
+          url: 'https://github.com/acme/repo/pull/7',
+          pasteContent: 'rm -rf ./build\nReview the PR body.'
+        }
+      })
+    ).resolves.toBe(false)
+
+    expect(settleDirectWorkItemStructuredLaunch).toHaveBeenCalledWith(
+      expect.objectContaining({ primaryTabId: 'tab-1' })
+    )
+    expect(pasteDraftWhenAgentReady).not.toHaveBeenCalled()
+    expect(mocks.seedNativeChatLaunchPrompt).not.toHaveBeenCalled()
+    expect(mocks.seedNativeChatLaunchDraft).not.toHaveBeenCalled()
+  })
+
   it('uses remote cursor-agent detection, trust preflight, and paste launch for SSH repos', async () => {
     mocks.store.repos = [
       {
@@ -688,7 +739,9 @@ describe('launchWorkItemDirect', () => {
 
     expect(mocks.activateAndRevealWorktree).toHaveBeenCalled()
     const activationOptions = mocks.activateAndRevealWorktree.mock.calls.at(-1)?.[1]
-    expect(activationOptions.startup.command).toContain('unset ORCA_PI_PREFILL')
+    expect(activationOptions.startup.command).toContain(
+      `command test -n "$fish_pid" && set --erase -g ORCA_PI_PREFILL; command test -z "$fish_pid" && unset ORCA_PI_PREFILL; true`
+    )
     expect(activationOptions.startup.command).not.toContain('Remove-Item Env:ORCA_PI_PREFILL')
   })
 
@@ -729,7 +782,9 @@ describe('launchWorkItemDirect', () => {
     expect(mocks.ensureRemoteDetectedAgents).toHaveBeenCalledWith('ssh-1')
     expect(mocks.ensureDetectedAgents).not.toHaveBeenCalled()
     const activationOptions = mocks.activateAndRevealWorktree.mock.calls.at(-1)?.[1]
-    expect(activationOptions.startup.command).toContain('unset ORCA_PI_PREFILL')
+    expect(activationOptions.startup.command).toContain(
+      `command test -n "$fish_pid" && set --erase -g ORCA_PI_PREFILL; command test -z "$fish_pid" && unset ORCA_PI_PREFILL; true`
+    )
   })
 
   it('plans direct local Windows-path launches with POSIX startup for WSL project runtime', async () => {

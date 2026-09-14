@@ -50,6 +50,10 @@ type UseVirtualizedScrollAnchorOptions<
   // anchor recorded under the old key follows its own row instead of pinning a
   // neighbour. Omitted by callers whose row keys are stable.
   rekeyedRowKeys?: ReadonlyMap<string, string>
+  // Why: callers that already maintain an identity-stable key -> index map (large diff reviews
+  // rebuild `rows` once per loaded file) pass it in so this hook does not rebuild a second Map
+  // on every one of those renders. Must agree with `getRowKey` over `rows`.
+  rowIndexByKey?: ReadonlyMap<string, number>
   // Why: when provided, anchor restore runs only when this value changes
   // (structural row changes) or while a prior restore is still converging —
   // not on every totalSize/isScrolling tick. Measurement-driven shifts are the
@@ -86,6 +90,7 @@ export function useVirtualizedScrollAnchor<
   recordAnchorOnScroll = true,
   rekeyedRowKeys,
   restoreSignal,
+  rowIndexByKey: providedRowIndexByKey,
   rows,
   scrollElementRef,
   scrollOffsetRef,
@@ -93,13 +98,16 @@ export function useVirtualizedScrollAnchor<
   totalSize,
   virtualizer
 }: UseVirtualizedScrollAnchorOptions<TRow, TScrollElement, TItemElement>): void {
-  const rowIndexByKey = useMemo(() => {
+  const rowIndexByKey = useMemo<ReadonlyMap<string, number>>(() => {
+    if (providedRowIndexByKey) {
+      return providedRowIndexByKey
+    }
     const indexByKey = new Map<string, number>()
     rows.forEach((row, index) => {
       indexByKey.set(getRowKey(row), index)
     })
     return indexByKey
-  }, [getRowKey, rows])
+  }, [getRowKey, providedRowIndexByKey, rows])
 
   const recordVirtualScrollAnchor = useCallback(
     (scrollTop: number) => {

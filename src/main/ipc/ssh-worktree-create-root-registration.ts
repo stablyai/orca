@@ -1,4 +1,4 @@
-import { getActiveMultiplexer } from './ssh'
+import { getActiveMultiplexer } from '../ssh/ssh-target-registry'
 
 const SSH_CONNECTION_UNAVAILABLE_MESSAGE =
   'SSH connection is not available. Please reconnect and try again.'

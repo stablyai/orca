@@ -3,7 +3,7 @@ import { EventEmitter } from 'node:events'
 import type * as Fs from 'node:fs'
 import type * as FsPromises from 'node:fs/promises'
 import type * as FilesystemAuth from '../ipc/filesystem-auth'
-import type { FsChangeEvent } from '../../shared/types'
+import type { FsChangeEvent } from '../../shared/filesystem-entry-types'
 import { WatcherProcessFailure } from '../ipc/parcel-watcher-process-failure'
 import { acquireWatcherRemovalGate } from '../ipc/watcher-removal-gate'
 
@@ -87,7 +87,8 @@ function createRuntimeFileCommands(rootPath: string) {
         id: 'wt-1',
         repoId: 'repo-1',
         path: rootPath
-      }
+      },
+      executionHostId: 'local'
     })),
     resolveRuntimeGitTarget: vi.fn(),
     openFile: vi.fn()
@@ -560,7 +561,7 @@ describe('RuntimeFileCommands file watching', () => {
           repoId: 'repo-1',
           path: '/remote/repo'
         },
-        connectionId: 'ssh-1'
+        executionHostId: 'ssh:ssh-1'
       })),
       resolveRuntimeGitTarget: vi.fn(),
       openFile: vi.fn()

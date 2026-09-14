@@ -1,37 +1,25 @@
-import {
-  isRuntimePathAbsolute,
-  isWindowsAbsolutePathLike,
-  normalizeRuntimePathForComparison,
-  normalizeRuntimePathSeparators,
-  relativePathInsideRoot,
-  resolveRuntimePath
-} from '../cross-platform-path'
+import { normalizeRuntimePathForComparison, relativePathInsideRoot } from '../cross-platform-path'
 import { parseWslUncPath } from '../wsl-paths'
+import {
+  isRuntimePathAbsoluteForRepo,
+  resolveConfiguredWorktreeBasePaths,
+  resolveWorkspaceLayoutPath
+} from './configured-worktree-base-path'
 import {
   isAgentScratchWorktreePath,
   type AgentScratchWorktreePathMatcher
 } from '../agent-scratch-worktrees'
 import {
   createWorktreeVisibilitySourceMatcher,
-  effectiveWorktreeSourceVisibility,
-  normalizeCustomWorktreeVisibilitySources,
+  resolveCustomWorktreeVisibilitySources,
   type WorktreeVisibilitySourceMatcher
 } from './visibility-sources'
-import { isExplicitlyImportedExternalWorktreePath } from '../external-worktree-inbox'
-import {
-  effectiveAgentWorktreeVisibility,
-  effectiveExternalWorktreeVisibility,
-  isLegacyRepoForExternalWorktreeVisibility
-} from '../external-worktree-visibility'
-import type {
-  DetectedWorktree,
-  GlobalSettings,
-  OrcaWorkspaceLayout,
-  Repo,
-  Worktree,
-  WorktreeMeta,
-  WorktreeOwnership
-} from '../types'
+import { isLegacyRepoForExternalWorktreeVisibility } from '../external-worktree-visibility'
+import { shouldShowWorktree } from '../worktree-visibility-resolution'
+import type { GlobalSettings, OrcaWorkspaceLayout } from '../global-settings-types'
+import type { Repo } from '../repo-types'
+import type { WorktreeMeta } from './meta-types'
+import type { DetectedWorktree, Worktree, WorktreeOwnership } from './types'
 
 export {
   effectiveAgentWorktreeVisibility,
@@ -39,18 +27,15 @@ export {
   EXTERNAL_WORKTREE_VISIBILITY_ROLLOUT_AT,
   isLegacyRepoForExternalWorktreeVisibility
 } from '../external-worktree-visibility'
+export { shouldShowWorktree } from '../worktree-visibility-resolution'
 
 export function buildKnownOrcaWorkspaceLayouts(
   settings: Pick<GlobalSettings, 'workspaceDir' | 'nestWorkspaces' | 'workspaceDirHistory'>,
   repo?: Pick<Repo, 'path' | 'connectionId' | 'worktreeBasePath'>
 ): OrcaWorkspaceLayout[] {
   const layouts: OrcaWorkspaceLayout[] = []
-  const repoBasePath = getRepoWorktreeBasePath(repo)
-  if (repo && repoBasePath) {
-    layouts.push({
-      path: resolveWorkspaceLayoutPath(repo.path, repoBasePath),
-      nestWorkspaces: settings.nestWorkspaces
-    })
+  for (const basePath of resolveConfiguredWorktreeBasePaths(repo)) {
+    layouts.push({ path: basePath, nestWorkspaces: settings.nestWorkspaces })
   }
   if (settings.workspaceDir && shouldIncludeWorkspaceLayout(repo, settings.workspaceDir)) {
     layouts.push({
@@ -95,27 +80,6 @@ function appendWorkspaceLayouts(
   }
 }
 
-function getRepoWorktreeBasePath(
-  repo: Pick<Repo, 'worktreeBasePath'> | undefined
-): string | undefined {
-  const trimmed = repo?.worktreeBasePath?.trim()
-  return trimmed || undefined
-}
-
-function resolveWorkspaceLayoutPath(repoPath: string, layoutPath: string): string {
-  return isRuntimePathAbsoluteForRepo(repoPath, layoutPath)
-    ? normalizeRuntimePathSeparators(layoutPath)
-    : resolveRuntimePath(repoPath, layoutPath)
-}
-
-function isRuntimePathAbsoluteForRepo(repoPath: string, layoutPath: string): boolean {
-  const pathFlavor =
-    isWindowsAbsolutePathLike(repoPath) || isWindowsAbsolutePathLike(layoutPath)
-      ? 'windows'
-      : 'posix'
-  return isRuntimePathAbsolute(layoutPath, pathFlavor)
-}
-
 function shouldIncludeWorkspaceLayout(
   repo: Pick<Repo, 'path' | 'connectionId'> | undefined,
   layoutPath: string
@@ -158,13 +122,27 @@ export function classifyWorktreeOwnership(args: {
   }
 
   // Why: sub-agent scratch worktrees (e.g. .claude/worktrees) are tool
-  // plumbing, not workspaces; classify before layout heuristics (#9388).
+  // plumbing, not workspaces; classify before layout heuristics (#9388). Both
+  // matchers exempt a base this project explicitly configured (#15232).
   if (
     args.worktreeVisibilitySourceMatcher?.(args.worktree.path)?.kind === 'built-in' ||
     (args.agentScratchWorktreePathMatcher?.(args.worktree.path) ??
-      isAgentScratchWorktreePath(args.repo.path, args.worktree.path))
+      isAgentScratchWorktreePath(
+        args.repo.path,
+        args.worktree.path,
+        resolveConfiguredWorktreeBasePaths(args.repo)
+      ))
   ) {
     return 'agent-scratch'
+  }
+
+  if (
+    resolveConfiguredWorktreeBasePaths(args.repo).some(
+      (basePath) => relativePathInsideRoot(basePath, args.worktree.path) !== null
+    )
+  ) {
+    // Why: an explicit project base is trusted even when global workspace nesting is flat.
+    return 'external'
   }
 
   if (isUnderFlatOrUntrustedOrcaRoot(args.worktree.path, args.knownOrcaLayouts)) {
@@ -184,7 +162,10 @@ export function toDetectedWorktree(args: {
   repo: Repo
   worktree: Worktree
   meta?: WorktreeMeta
-  settings: Pick<GlobalSettings, 'workspaceDir' | 'nestWorkspaces' | 'workspaceDirHistory'>
+  settings: Pick<
+    GlobalSettings,
+    'workspaceDir' | 'nestWorkspaces' | 'workspaceDirHistory' | 'worktreeVisibilityDefaults'
+  >
   knownOrcaLayouts: OrcaWorkspaceLayout[]
   isLegacyRepoForVisibility?: boolean
   agentScratchWorktreePathMatcher?: AgentScratchWorktreePathMatcher
@@ -194,7 +175,8 @@ export function toDetectedWorktree(args: {
     args.worktreeVisibilitySourceMatcher ??
     createWorktreeVisibilitySourceMatcher(
       [args.repo.path],
-      normalizeCustomWorktreeVisibilitySources(args.repo.customWorktreeVisibilitySources) ?? []
+      resolveCustomWorktreeVisibilitySources(args.repo, args.settings.worktreeVisibilityDefaults),
+      resolveConfiguredWorktreeBasePaths(args.repo)
     )
   const visibilitySource = sourceMatcher(args.worktree.path)
   const ownership = classifyWorktreeOwnership({
@@ -211,6 +193,7 @@ export function toDetectedWorktree(args: {
     isLegacyRepoForVisibility,
     isSelectedCheckout: selectedCheckout,
     importedExternalWorktreePaths: args.repo.importedExternalWorktreePaths,
+    visibilityDefaults: args.settings.worktreeVisibilityDefaults,
     visibilitySource
   })
 
@@ -221,40 +204,6 @@ export function toDetectedWorktree(args: {
     visible,
     ...(visibilitySource ? { visibilitySource } : {})
   }
-}
-
-export function shouldShowWorktree(args: {
-  worktree: Pick<Worktree, 'path'>
-  ownership: WorktreeOwnership
-  repo: Repo
-  isLegacyRepoForVisibility: boolean
-  isSelectedCheckout: boolean
-  importedExternalWorktreePaths?: readonly string[] | undefined
-  visibilitySource?: ReturnType<WorktreeVisibilitySourceMatcher>
-}): boolean {
-  if (args.isSelectedCheckout) {
-    return true
-  }
-  if (args.ownership === 'orca-managed') {
-    return true
-  }
-  if (
-    isExplicitlyImportedExternalWorktreePath(args.worktree.path, {
-      importedExternalWorktreePaths: args.importedExternalWorktreePaths
-    })
-  ) {
-    return true
-  }
-  if (args.visibilitySource) {
-    return effectiveWorktreeSourceVisibility(args.repo, args.visibilitySource) === 'show'
-  }
-  if (args.ownership === 'agent-scratch') {
-    return effectiveAgentWorktreeVisibility(args.repo) === 'show'
-  }
-  if (args.ownership === 'unknown-legacy' && args.isLegacyRepoForVisibility) {
-    return true
-  }
-  return effectiveExternalWorktreeVisibility(args.repo, args.isLegacyRepoForVisibility) === 'show'
 }
 
 export function applyMetadataFallbackVisibility(detected: DetectedWorktree): DetectedWorktree {

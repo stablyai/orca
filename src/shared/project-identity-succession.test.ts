@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { carryProjectStateThroughIdentityChange } from './project-identity-succession'
-import type { Project } from './types'
+import type { Project } from './project-types'
 
 const makeProject = (overrides: Partial<Project> = {}): Project => ({
   id: 'project-1',
@@ -134,5 +134,44 @@ describe('carryProjectStateThroughIdentityChange', () => {
     })
     expect(result.projects[1]?.localWindowsRuntimePreference).toBeUndefined()
     expect([...result.remappedProjectIds]).toEqual([['repo:r1', 'git:host/acme/left']])
+  })
+  it('visits prior repo memberships once for a bulk identity promotion', () => {
+    let reads = 0
+    const previous = Array.from({ length: 1000 }, (_, i) => ({
+      ...makeProject({ id: `old-${i}`, localWindowsRuntimePreference: { kind: 'windows-host' } }),
+      get sourceRepoIds() {
+        reads++
+        return [`repo-${i}`]
+      }
+    }))
+    const projected = Array.from({ length: 1000 }, (_, i) =>
+      makeProject({ id: `new-${i}`, sourceRepoIds: [`repo-${i}`] })
+    )
+    const result = carryProjectStateThroughIdentityChange(projected, previous)
+    expect(reads).toBe(1000)
+    expect([...result.remappedProjectIds]).toEqual(
+      previous.map((row, i) => [row.id, projected[i].id])
+    )
+    expect(
+      result.projects.every((row) => row.localWindowsRuntimePreference?.kind === 'windows-host')
+    ).toBe(true)
+  })
+
+  it('retains duplicate membership weight and stable prior-row ties', () => {
+    const projected = makeProject({ id: 'new', sourceRepoIds: ['b', 'a', 'b'] })
+    const first = makeProject({
+      id: 'old',
+      sourceRepoIds: ['a', 'a'],
+      localWindowsRuntimePreference: { kind: 'windows-host' }
+    })
+    const second = makeProject({
+      id: 'old',
+      sourceRepoIds: ['b', 'b'],
+      localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' }
+    })
+    const result = carryProjectStateThroughIdentityChange([projected], [first, second])
+    expect(result.projects[0].localWindowsRuntimePreference).toEqual(
+      first.localWindowsRuntimePreference
+    )
   })
 })

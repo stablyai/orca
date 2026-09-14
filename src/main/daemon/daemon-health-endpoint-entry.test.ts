@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { lstatSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { killStaleDaemon } from './daemon-health'
+import { killStaleDaemon } from './daemon-stale-kill'
 
 describe.skipIf(process.platform === 'win32')('killStaleDaemon endpoint entries', () => {
   let dir: string

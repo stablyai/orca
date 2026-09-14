@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Plus } from 'lucide-react'
 import type { PluginHostInstallSource, PluginHostListEntry } from '../../../../preload/api-types'
-import type { GlobalSettings } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { translate } from '@/i18n/i18n'
 import { Button } from '../ui/button'
 import { PluginConsentDialog } from './PluginConsentDialog'

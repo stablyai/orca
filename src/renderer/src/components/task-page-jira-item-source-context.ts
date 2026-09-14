@@ -1,4 +1,4 @@
-import type { JiraIssue, JiraSite } from '../../../shared/types'
+import type { JiraIssue, JiraSite } from '../../../shared/jira-types'
 import {
   normalizeTaskSourceContext,
   type TaskSourceContext

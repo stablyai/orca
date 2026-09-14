@@ -1,10 +1,10 @@
-import {
-  workItemsCacheKey,
-  type CacheEntry,
-  type WorkItemsCacheError,
-  type WorkItemsCacheSources
-} from '@/store/slices/github'
-import type { GitHubWorkItem } from '../../../shared/types'
+import { workItemsCacheKey } from '@/store/github/cache-identity'
+import type {
+  CacheEntry,
+  WorkItemsCacheError,
+  WorkItemsCacheSources
+} from '@/store/github/cache-model'
+import type { GitHubWorkItem } from '../../../shared/github/work-item-types'
 import {
   taskPageWorkItemKey,
   taskPageWorkItemStatusSignature,

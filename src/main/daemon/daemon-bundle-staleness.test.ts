@@ -4,7 +4,8 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { getDaemonPidPath, serializeDaemonPidFile } from './daemon-spawner'
-import { getProcessStartedAtMs, isDaemonStaleForCurrentBundle } from './daemon-health'
+import { getProcessStartedAtMs } from './daemon-process-start-time'
+import { isDaemonStaleForCurrentBundle } from './daemon-bundle-staleness'
 
 function spawnDaemonLikeProcess(socketPath: string, tokenPath: string) {
   return spawn(

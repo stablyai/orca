@@ -1,8 +1,8 @@
-import { readFileSync } from 'node:fs'
-import { resolve } from 'node:path'
+import { readdirSync, readFileSync } from 'node:fs'
+import { basename, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { buildSettingsNavigationMetadata } from './useSettingsNavigationMetadata'
-import type { Repo } from '../../../shared/types'
+import type { Repo } from '../../../shared/repo-types'
 
 const repo = {
   id: 'repo-1',
@@ -47,6 +47,22 @@ describe('settings navigation metadata', () => {
     ])
   })
 
+  it('owns nested worker depth under Orchestration on desktop', () => {
+    const sections = buildSettingsNavigationMetadata({
+      isMac: false,
+      isWindows: false,
+      isWebClient: false,
+      repos: [repo]
+    })
+    const agents = sections.find((section) => section.id === 'agents')
+    const orchestration = sections.find((section) => section.id === 'orchestration')
+
+    expect(agents?.searchEntries.map((entry) => entry.title)).not.toContain('Nested worker depth')
+    expect(orchestration?.searchEntries.map((entry) => entry.title)).toContain(
+      'Nested worker depth'
+    )
+  })
+
   it('adds the Linear capability section right after Orchestration only when connected', () => {
     expect(ids()).not.toContain('linear')
 
@@ -79,7 +95,7 @@ describe('settings navigation metadata', () => {
     expect(sections.find((section) => section.id === 'mobile')?.group).toBe('setup')
   })
 
-  it('places Automations and Artifacts first under Workflows', () => {
+  it('places Automations, Artifacts, and Share Skills first under Workflows', () => {
     const sections = buildSettingsNavigationMetadata({
       isMac: false,
       isWindows: false,
@@ -88,6 +104,7 @@ describe('settings navigation metadata', () => {
     })
     const automations = sections.find((section) => section.id === 'automations')
     const artifacts = sections.find((section) => section.id === 'artifacts')
+    const shareSkills = sections.find((section) => section.id === 'share-skills')
     const workflowIds = sections
       .filter((section) => section.group === 'workflows')
       .map((section) => section.id)
@@ -99,7 +116,9 @@ describe('settings navigation metadata', () => {
     expect(artifacts?.description).toBe(
       'Share HTML and Markdown files with your team and manage their public links.'
     )
-    expect(workflowIds.slice(0, 2)).toEqual(['automations', 'artifacts'])
+    expect(shareSkills).toMatchObject({ group: 'workflows', badge: 'Beta' })
+    expect(shareSkills?.searchEntries[0]?.title).toBe('Unlisted skill links')
+    expect(workflowIds.slice(0, 3)).toEqual(['automations', 'artifacts', 'share-skills'])
   })
 
   it('places the Orca account in Set Up on desktop only', () => {
@@ -153,6 +172,12 @@ describe('settings navigation metadata', () => {
     expect(shortcuts?.searchEntries.map((entry) => entry.title)).not.toContain('New browser tab')
     expect(shortcuts?.searchEntries.map((entry) => entry.title)).not.toContain(
       'New mobile emulator tab'
+    )
+    const agents = webSections.find((section) => section.id === 'agents')
+    expect(agents?.searchEntries.map((entry) => entry.title)).not.toContain('Nested worker depth')
+    const orchestration = webSections.find((section) => section.id === 'orchestration')
+    expect(orchestration?.searchEntries.map((entry) => entry.title)).not.toContain(
+      'Nested worker depth'
     )
   })
 
@@ -383,9 +408,18 @@ describe('settings navigation metadata', () => {
 
   it('does not import Settings page or pane UI modules from the metadata hook', () => {
     const testDir = import.meta.dirname
-    const hookSource = readFileSync(resolve(testDir, 'useSettingsNavigationMetadata.ts'), 'utf8')
-    const importLines = hookSource
-      .split('\n')
+    // Why: the section tables live in sibling settings-navigation-* modules, so reading only the
+    // hook would scan a file that no longer holds the imports this guard exists to police.
+    // Walk recursively so a later split that nests the modules cannot shrink this guard.
+    const sourceFiles = [
+      'useSettingsNavigationMetadata.ts',
+      ...readdirSync(testDir, { recursive: true, encoding: 'utf8' }).filter(
+        (name) => basename(name).startsWith('settings-navigation-') && name.endsWith('.ts')
+      )
+    ]
+    expect(sourceFiles.length).toBeGreaterThan(1)
+    const importLines = sourceFiles
+      .flatMap((name) => readFileSync(resolve(testDir, name), 'utf8').split('\n'))
       .filter((line) => line.trim().startsWith('import '))
       .join('\n')
 

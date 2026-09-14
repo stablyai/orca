@@ -2,7 +2,10 @@ import { useAppStore } from '@/store'
 import { getRepoMapFromState, getWorktreeMapFromState } from '@/store/selectors'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { isRuntimeOwnedSshTargetId, parseExecutionHostId } from '../../../../shared/execution-host'
-import type { Repo, Worktree } from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { Worktree } from '../../../../shared/worktree/types'
+import { getWorktreeVisitTimestamp } from '@/lib/worktree-visit-recency'
+import { getDeleteStateForWorktreeHost } from './worktree-delete-state-host-match'
 
 type AppStoreState = ReturnType<typeof useAppStore.getState>
 
@@ -46,7 +49,7 @@ function pickNextWorktreeIdAfterDelete(
   const siblings = (state.worktreesByRepo[repoId] ?? []).filter(
     (worktree) =>
       worktree.id !== deletedWorktreeId &&
-      !deleteState[worktree.id]?.isDeleting &&
+      !getDeleteStateForWorktreeHost(worktree, deleteState)?.isDeleting &&
       // Skip siblings hosted on the now-destroyed runtime-owned SSH target (see helper).
       !isHostedOnRuntimeOwnedSshTarget(worktree, repoById)
   )
@@ -54,7 +57,9 @@ function pickNextWorktreeIdAfterDelete(
   if (others.length > 0) {
     const lastVisited = state.lastVisitedAtByWorktreeId
     const [mostRecent] = [...others].sort(
-      (a, b) => (lastVisited[b.id] ?? 0) - (lastVisited[a.id] ?? 0)
+      (a, b) =>
+        (getWorktreeVisitTimestamp(lastVisited, b) ?? 0) -
+        (getWorktreeVisitTimestamp(lastVisited, a) ?? 0)
     )
     return mostRecent.id
   }
@@ -81,7 +86,8 @@ function focusNextWorktreeAfterActiveDelete(
   }
   const nextWorktreeId = pickNextWorktreeIdAfterDelete(state, repoId, deletedWorktreeId)
   if (nextWorktreeId) {
-    activateAndRevealWorktree(nextWorktreeId)
+    // Keep successor focus from replacing the deleted row's spatial context.
+    activateAndRevealWorktree(nextWorktreeId, { revealInSidebar: false })
   }
 }
 

@@ -1,4 +1,5 @@
 import type { Dirent } from 'node:fs'
+import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { MarkdownDocumentListingCapacityError } from './markdown-document-listing-limits'
 import { discoverMarkdownRelativePaths } from './node-markdown-document-discovery'
@@ -22,6 +23,8 @@ function reader(entriesByPath: Record<string, Dirent[]>) {
 
 describe('bounded Markdown document discovery', () => {
   it('preserves depth-first discovery and skips excluded and symlinked directories', async () => {
+    // Why join() for the child key: the subject descends with path.join, so a '/repo/docs'
+    // literal never matches on Windows and the walk silently stops at the root.
     const result = await discoverMarkdownRelativePaths('/repo', {
       readDirectory: reader({
         '/repo': [
@@ -30,7 +33,7 @@ describe('bounded Markdown document discovery', () => {
           entry('docs', 'directory'),
           entry('linked', 'symlink')
         ],
-        '/repo/docs': [entry('guide.mdx'), entry('app.ts')]
+        [join('/repo', 'docs')]: [entry('guide.mdx'), entry('app.ts')]
       }),
       shouldDescend: (_relativePath, name) => name !== '.git'
     })
@@ -65,7 +68,7 @@ describe('bounded Markdown document discovery', () => {
         limits: { maxDepth: 1 },
         readDirectory: reader({
           '/repo': [entry('one', 'directory')],
-          '/repo/one': [entry('two', 'directory')]
+          [join('/repo', 'one')]: [entry('two', 'directory')]
         }),
         shouldDescend: () => true
       })

@@ -3,7 +3,8 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { CommitArea } from './SourceControl'
 import { resolvePrimaryAction, type PrimaryActionInputs } from './source-control-primary-action'
-import { resolveDropdownItems, type DropdownActionKind } from './source-control-dropdown-items'
+import { resolveDropdownItems } from './source-control-dropdown-items'
+import type { DropdownActionKind } from './source-control-dropdown-item-types'
 
 // Why: split out from CommitArea.test.tsx so each file stays under the
 // project's max-lines budget. These tests cover the directional-icon

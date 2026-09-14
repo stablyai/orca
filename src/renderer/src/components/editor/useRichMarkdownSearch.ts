@@ -1,5 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { RefObject } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type RefObject } from 'react'
 import type { Editor } from '@tiptap/react'
 import { TextSelection } from '@tiptap/pm/state'
 import { getShortcutPlatform } from '@/lib/shortcut-platform'
@@ -14,6 +13,7 @@ import {
   findRichMarkdownSearchMatches,
   richMarkdownSearchPluginKey
 } from './rich-markdown-search'
+import { createRichMarkdownSearchMatchesCache } from './rich-markdown-search-matches-cache'
 
 export function useRichMarkdownSearch({
   editor,
@@ -27,6 +27,13 @@ export function useRichMarkdownSearch({
   const searchInputRef = useRef<HTMLInputElement | null>(null)
   const keybindings = useAppStore((state) => state.keybindings)
   const [isSearchOpen, setIsSearchOpen] = useState(false)
+  const findMatches = useMemo(
+    () =>
+      editor && isSearchOpen
+        ? createRichMarkdownSearchMatchesCache()
+        : findRichMarkdownSearchMatches,
+    [editor, isSearchOpen]
+  )
   const [isReplaceMode, setIsReplaceMode] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
   const [replaceQuery, setReplaceQuery] = useState('')
@@ -57,13 +64,13 @@ export function useRichMarkdownSearch({
     if (!editor || !isSearchOpen || !searchRequestQuery) {
       return []
     }
-    return findRichMarkdownSearchMatches(editor.state.doc, searchRequestQuery, {
+    return findMatches(editor.state.doc, searchRequestQuery, {
       matchCase,
       wholeWord
     })
     // searchRevision is bumped on ProseMirror doc edits to trigger recomputation
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editor, isSearchOpen, searchRequestQuery, searchRevision, matchCase, wholeWord])
+  }, [editor, findMatches, isSearchOpen, searchRequestQuery, searchRevision, matchCase, wholeWord])
 
   const matchCount = matches.length
 
@@ -78,11 +85,11 @@ export function useRichMarkdownSearch({
     }
     // Why: replace mutates document ranges immediately, so it must use the
     // current input value instead of the debounced highlight match set.
-    return findRichMarkdownSearchMatches(editor.state.doc, searchQuery, {
+    return findMatches(editor.state.doc, searchQuery, {
       matchCase,
       wholeWord
     })
-  }, [editor, isSearchOpen, matchCase, searchQuery, wholeWord])
+  }, [editor, findMatches, isSearchOpen, matchCase, searchQuery, wholeWord])
 
   // Why: mirror the guard used by replaceCurrentMatch/replaceAllMatches so the
   // disabled state never disagrees with what a click will actually do during the
@@ -234,7 +241,7 @@ export function useRichMarkdownSearch({
   }, [editor])
 
   useEffect(() => {
-    if (!editor) {
+    if (!editor || !isSearchOpen) {
       return
     }
 
@@ -242,7 +249,7 @@ export function useRichMarkdownSearch({
     return () => {
       editor.off('update', handleEditorUpdate)
     }
-  }, [editor, handleEditorUpdate])
+  }, [editor, handleEditorUpdate, isSearchOpen])
 
   useEffect(() => {
     if (!isSearchOpen) {

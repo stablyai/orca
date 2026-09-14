@@ -1,5 +1,6 @@
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
-import type { BrowserTab, TabGroup } from '../../../shared/types'
+import type { BrowserTab } from '../../../shared/browser-workspace-types'
+import type { TabGroup } from '../../../shared/tab-types'
 import { getGroupVisibleTabOrder } from '@/components/tab-bar/group-tab-order'
 import {
   getNextTabAcrossAllTypes,
@@ -8,6 +9,7 @@ import {
   type TypeCyclableTab
 } from '@/components/terminal/tab-type-cycle'
 import type { AppState } from '@/store/types'
+import { resolveBrowserWorkspaceOwner } from './browser-workspace-source-resolution'
 import { TOGGLE_FLOATING_TERMINAL_EVENT } from './floating-terminal'
 import { focusTerminalTabSurface } from './focus-terminal-tab-surface'
 import { keybindingMatchesAction, type KeybindingOverrides } from '../../../shared/keybindings'
@@ -142,17 +144,10 @@ export function resolveFloatingWorkspaceBrowserWorkspaceId(
   store: Pick<AppState, 'browserTabsByWorktree' | 'browserPagesByWorkspace'>,
   sourceId: string
 ): string | null {
-  const workspaces = store.browserTabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID] ?? []
-  const pagesByWorkspace = store.browserPagesByWorkspace ?? {}
-  for (const workspace of workspaces) {
-    if (workspace.id === sourceId) {
-      return workspace.id
-    }
-    if ((pagesByWorkspace[workspace.id] ?? []).some((page) => page.id === sourceId)) {
-      return workspace.id
-    }
-  }
-  return null
+  return (
+    resolveBrowserWorkspaceOwner(store, sourceId, FLOATING_TERMINAL_WORKTREE_ID)?.workspaceId ??
+    null
+  )
 }
 
 function activateFloatingWorkspaceCyclableTab(

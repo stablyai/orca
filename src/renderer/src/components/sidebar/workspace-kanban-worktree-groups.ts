@@ -1,7 +1,12 @@
-import type { WorkspaceStatus, WorkspaceStatusDefinition, Worktree } from '../../../../shared/types'
+import type {
+  WorkspaceStatus,
+  WorkspaceStatusDefinition,
+  Worktree
+} from '../../../../shared/worktree/types'
 import type { SortBy } from './smart-sort'
 import { getWorkspaceStatus } from './workspace-status'
 import { compareWorktreeDisplayName } from '@/lib/worktree-display-name-order'
+import { getWorktreeHostIdentity } from '../../../../shared/worktree/host-qualified-identity'
 
 function sortBoardWorktrees(a: Worktree, b: Worktree): number {
   return b.lastActivityAt - a.lastActivityAt || compareWorktreeDisplayName(a, b)
@@ -26,7 +31,7 @@ export function groupWorkspaceKanbanWorktrees(params: {
   )
 
   for (const worktree of worktrees) {
-    if (!visibleWorktreeIds.has(worktree.id)) {
+    if (!visibleWorktreeIds.has(getWorktreeHostIdentity(worktree))) {
       continue
     }
     grouped.get(getWorkspaceStatus(worktree, workspaceStatuses))!.push(worktree)

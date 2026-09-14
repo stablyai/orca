@@ -1,6 +1,6 @@
 import { app } from 'electron'
 import { join } from 'node:path'
-import type { StatsSummary } from '../../shared/types'
+import type { StatsSummary } from '../../shared/process-stats-types'
 import type { StatsEvent, StatsAggregates } from './types'
 import { loadStatsFile, STATS_SCHEMA_VERSION } from './stats-file-loader'
 import { StatsSnapshotWriter } from './stats-snapshot-writer'
@@ -35,7 +35,7 @@ function getStatsFile(): string {
 export class StatsCollector {
   private events: StatsEvent[]
   private aggregates: StatsAggregates
-  private liveAgents = new Map<string, number>() // ptyId → startTimestamp
+  private liveAgents = new Map<string, number>() // sessionKey → startTimestamp
   private writeTimer: ReturnType<typeof setTimeout> | null = null
   private readonly snapshotWriter = new StatsSnapshotWriter(getStatsFile)
   /** Set by flushAsync so the quit flush is the final write; see scheduleSave. */
@@ -71,31 +71,35 @@ export class StatsCollector {
     this.scheduleSave()
   }
 
-  // ── Agent lifecycle (called by AgentDetector) ─────────────────────
+  // ── Agent lifecycle (called by AgentSessionTransitionRecorder) ────
+  //
+  // The key is whatever the caller uses to identify one agent session — a
+  // stable pane key from the hook stream. Start/stop must be balanced per key;
+  // an unmatched stop is dropped rather than counted.
 
-  onAgentStart(ptyId: string, at: number, repoId?: string, worktreeId?: string): void {
-    this.liveAgents.set(ptyId, at)
+  onAgentStart(sessionKey: string, at: number, repoId?: string, worktreeId?: string): void {
+    this.liveAgents.set(sessionKey, at)
     this.record({
       type: 'agent_start',
       at,
       repoId,
       worktreeId,
-      meta: { ptyId }
+      meta: { sessionKey }
     })
   }
 
-  onAgentStop(ptyId: string, at: number): void {
-    const startAt = this.liveAgents.get(ptyId)
+  onAgentStop(sessionKey: string, at: number): void {
+    const startAt = this.liveAgents.get(sessionKey)
     if (startAt === undefined) {
       return
     }
-    this.liveAgents.delete(ptyId)
+    this.liveAgents.delete(sessionKey)
     const durationMs = Math.max(0, at - startAt)
     this.aggregates.totalAgentTimeMs += durationMs
     this.record({
       type: 'agent_stop',
       at,
-      meta: { ptyId, durationMs }
+      meta: { sessionKey, durationMs }
     })
   }
 
@@ -165,9 +169,9 @@ export class StatsCollector {
     const now = Date.now()
     // Why snapshot keys: onAgentStop mutates liveAgents, so we snapshot
     // the keys first to avoid iterator invalidation.
-    const livePtyIds = Array.from(this.liveAgents.keys())
-    for (const ptyId of livePtyIds) {
-      this.onAgentStop(ptyId, now)
+    const liveSessionKeys = Array.from(this.liveAgents.keys())
+    for (const sessionKey of liveSessionKeys) {
+      this.onAgentStop(sessionKey, now)
     }
   }
 

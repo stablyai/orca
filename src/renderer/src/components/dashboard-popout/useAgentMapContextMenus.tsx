@@ -3,7 +3,7 @@ import type {
   DashboardSleepWorkspaceArgs,
   DashboardSpawnAgentArgs
 } from '../../../../shared/dashboard-snapshot'
-import type { TuiAgent } from '../../../../shared/types'
+import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { AgentMapProjectRing, AgentMapWorktreeRing } from './agent-map-layout'
 import {
   AgentMapSnapshotWorkspaceMenu,

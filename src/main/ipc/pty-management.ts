@@ -7,7 +7,7 @@ import {
   getDaemonProvider,
   restartDaemon
 } from '../daemon/daemon-init'
-import type { MacDaemonTccAttributionHealth } from '../daemon/daemon-health'
+import type { MacDaemonTccAttributionHealth } from '../daemon/daemon-tcc-attribution'
 import type { DaemonSessionInfo } from '../daemon/types'
 
 // Why: poll past the daemon's 5s SIGTERM→SIGKILL ladder (KILL_TIMEOUT_MS in session.ts), else slow-exiting shells falsely look "refused".

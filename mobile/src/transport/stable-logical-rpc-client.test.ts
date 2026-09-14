@@ -1,10 +1,12 @@
 import { describe, expect, it, vi } from 'vitest'
+import { RelayDialStageTracker, type RelayDialStage } from './relay-dial-stage'
 import type { ConnectionState, RpcResponse } from './types'
 import type { RpcClient } from './rpc-client'
 import { isRpcDeliveryUnknown, markRpcDeliveryUnknown } from './rpc-delivery-ambiguity'
 import {
   createStableLogicalRpcClient,
-  LogicalClientCutoverError
+  LogicalClientCutoverError,
+  type MobileConnectionPath
 } from './stable-logical-rpc-client'
 
 class FakeSession implements RpcClient {
@@ -66,11 +68,29 @@ function deferred<T>() {
 }
 
 describe('stable logical RPC client', () => {
+  it('advertises source-default support on worktree catalog requests', async () => {
+    const session = new FakeSession('connected')
+    session.sendRequest.mockResolvedValue(success([]))
+    const client = createStableLogicalRpcClient(session, 'lan')
+
+    await client.sendRequest('worktree.ps', { limit: 10_000 })
+    await client.sendRequest('status.get')
+
+    expect(session.sendRequest).toHaveBeenNthCalledWith(
+      1,
+      'worktree.ps',
+      { limit: 10_000, supportsWorktreeVisibilitySourceDefaults: true },
+      undefined
+    )
+    expect(session.sendRequest).toHaveBeenNthCalledWith(2, 'status.get', undefined, undefined)
+  })
+
   it('makes before break, rejects in-flight work, and replays subscriptions', async () => {
     const oldSession = new FakeSession('connected')
     const nextSession = new FakeSession('connecting')
     const pending = deferred<RpcResponse>()
     oldSession.sendRequest.mockReturnValue(pending.promise)
+    oldSession.close.mockImplementation(() => pending.reject(new Error('Client closed')))
     nextSession.sendRequest.mockResolvedValue(success('next'))
     const client = createStableLogicalRpcClient(oldSession, 'lan')
     const stream = vi.fn()
@@ -187,6 +207,19 @@ describe('stable logical RPC client', () => {
     )
   })
 
+  it('preserves a committed response when logical close wins the callback race', async () => {
+    const session = new FakeSession('connected')
+    const inFlight = deferred<RpcResponse>()
+    session.sendRequest.mockReturnValue(inFlight.promise)
+    const client = createStableLogicalRpcClient(session, 'lan')
+    const request = client.sendRequest('terminal.send', { terminal: 'term', text: 'hi' })
+
+    inFlight.resolve(success('accepted'))
+    client.close()
+
+    await expect(request).resolves.toEqual(success('accepted'))
+  })
+
   it('publishes the replacement dial phases while the client is suspended', async () => {
     const oldSession = new FakeSession('connected')
     const replacement = new FakeSession('connecting')
@@ -242,10 +275,13 @@ describe('stable logical RPC client', () => {
     const client = createStableLogicalRpcClient(direct, 'lan')
     direct.setState('reconnecting')
     const states: ConnectionState[] = []
+    const paths: (MobileConnectionPath | null)[] = []
     client.onStateChange((next) => states.push(next))
+    client.onConnectionPathChange(() => paths.push(client.getPendingPath()))
 
     const migrating = client.migrateTo(replacement, 'relay')
     expect(client.getPendingPath()).toBe('relay')
+    expect(paths).toEqual(['relay'])
     replacement.setState('connecting')
     replacement.setState('handshaking')
 
@@ -259,6 +295,69 @@ describe('stable logical RPC client', () => {
     expect(states).toEqual(['connected'])
     expect(client.getPendingPath()).toBeNull()
     expect(client.getActivePath()).toBe('relay')
+  })
+
+  it('publishes recovery-path changes and keeps Relay pending between failed dials', async () => {
+    const direct = new FakeSession('reconnecting')
+    const replacement = new FakeSession('connecting')
+    const client = createStableLogicalRpcClient(direct, 'tailscale')
+    const paths: (MobileConnectionPath | null)[] = []
+    client.onConnectionPathChange(() => paths.push(client.getPendingPath()))
+
+    client.setRecoveryPath('relay')
+    const migrating = client.migrateTo(replacement, 'relay')
+    replacement.setState('disconnected')
+    await expect(migrating).rejects.toThrow(/disconnected/)
+
+    expect(client.getPendingPath()).toBe('relay')
+    expect(paths).toEqual(['relay'])
+
+    client.setRecoveryPath(null)
+    expect(client.getPendingPath()).toBeNull()
+    expect(paths).toEqual(['relay', null])
+  })
+
+  it('publishes supervisor Relay attempts without replacing the physical retry count', () => {
+    const direct = new FakeSession('reconnecting')
+    direct.getReconnectAttempt = () => 5
+    const client = createStableLogicalRpcClient(direct, 'tailscale')
+    const attempts: number[] = []
+    client.onConnectionPathChange(() => attempts.push(client.getReconnectAttempt()))
+
+    client.setRecoveryPath('relay', 3)
+    expect(client.getReconnectAttempt()).toBe(5)
+
+    client.setRecoveryAttempt(7)
+    expect(client.getReconnectAttempt()).toBe(7)
+    expect(attempts).toEqual([5, 7])
+
+    client.setRecoveryPath(null)
+    expect(client.getReconnectAttempt()).toBe(5)
+    expect(attempts).toEqual([5, 7, 5])
+  })
+
+  it('notifies connection-path subscribers when the pairing-rejected latch flips', () => {
+    const direct = new FakeSession('reconnecting')
+    const client = createStableLogicalRpcClient(direct, 'tailscale')
+    const rejected: boolean[] = []
+    client.onConnectionPathChange(() => rejected.push(client.isPairingRejected()))
+
+    client.setPairingRejected(true)
+    client.setPairingRejected(true)
+    client.setPairingRejected(false)
+
+    expect(rejected).toEqual([true, false])
+  })
+
+  it('does not revive a stale recovery path after a connection later drops', () => {
+    const direct = new FakeSession('reconnecting')
+    const client = createStableLogicalRpcClient(direct, 'tailscale')
+
+    client.setRecoveryPath('relay')
+    direct.setState('connected')
+    direct.setState('reconnecting')
+
+    expect(client.getPendingPath()).toBeNull()
   })
 
   it('drops the pending path when the previous session recovers mid-dial', async () => {
@@ -313,6 +412,34 @@ describe('stable logical RPC client', () => {
     expect(states).toEqual(['handshaking', 'disconnected'])
     expect(client.getState()).toBe('disconnected')
     expect(client.getPendingPath()).toBeNull()
+  })
+
+  // Pins the shipping wiring: migrateTo's bound honors the replacement's dial stages.
+  it('outlives the flat bound when the relay cell holds the dial', async () => {
+    vi.useFakeTimers()
+    try {
+      const oldSession = new FakeSession('connected')
+      const replacement = Object.assign(new FakeSession('connecting'), {
+        dialStage: new RelayDialStageTracker(),
+        getDialStage(): RelayDialStage {
+          return this.dialStage.getDialStage()
+        },
+        onDialStageChange(listener: (stage: RelayDialStage) => void) {
+          return this.dialStage.onDialStageChange(listener)
+        }
+      })
+      const client = createStableLogicalRpcClient(oldSession, 'lan')
+      const migrating = client.migrateTo(replacement, 'relay', 12_000)
+      await vi.advanceTimersByTimeAsync(1_000)
+      replacement.dialStage.advance('awaiting-hello')
+      await vi.advanceTimersByTimeAsync(20_000)
+      expect(replacement.close).not.toHaveBeenCalled()
+      replacement.setState('connected')
+      await migrating
+      expect(client.getActivePath()).toBe('relay')
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('closes a replacement that fails authentication and preserves the active session', async () => {

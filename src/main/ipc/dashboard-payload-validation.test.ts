@@ -99,6 +99,19 @@ function imageIconSrc(bodyBytes: number, withWhitespace = false): string {
 describe('dashboard payload validation', () => {
   it('accepts a complete dashboard snapshot', () => {
     expect(isDashboardSnapshot(SNAPSHOT)).toBe(true)
+    expect(
+      isDashboardSnapshot({
+        ...SNAPSHOT,
+        cards: [
+          {
+            ...SNAPSHOT.cards[0],
+            bucket: 'working',
+            dotState: 'working',
+            workingMode: 'monitoring'
+          }
+        ]
+      })
+    ).toBe(true)
   })
 
   it('rejects malformed or unbounded snapshot fields', () => {
@@ -107,6 +120,18 @@ describe('dashboard payload validation', () => {
       isDashboardSnapshot({
         ...SNAPSHOT,
         cards: [{ ...SNAPSHOT.cards[0], bucket: 'unexpected' }]
+      })
+    ).toBe(false)
+    expect(
+      isDashboardSnapshot({
+        ...SNAPSHOT,
+        cards: [{ ...SNAPSHOT.cards[0], dotState: 'monitoring' }]
+      })
+    ).toBe(false)
+    expect(
+      isDashboardSnapshot({
+        ...SNAPSHOT,
+        cards: [{ ...SNAPSHOT.cards[0], dotState: 'done', workingMode: 'monitoring' }]
       })
     ).toBe(false)
     expect(
@@ -293,6 +318,7 @@ describe('dashboard payload validation', () => {
       localWindowsConpty: true,
       osRelease: '10.0.22631',
       windowsShiftEnterEncoding: 'alt-enter',
+      windowsInputRecordPasteNewline: 'alt-enter',
       ctrlEnterCsiU: false,
       kittyKeyboardAdvertised: false
     }
@@ -307,6 +333,8 @@ describe('dashboard payload validation', () => {
       { ...terminalInput, localWindowsConpty: 'true' },
       { ...terminalInput, osRelease: 'x'.repeat(1_025) },
       { ...terminalInput, windowsShiftEnterEncoding: 'enter' },
+      { ...terminalInput, forceBracketedMultilineTextPaste: false },
+      { ...terminalInput, windowsInputRecordPasteNewline: 'enter' },
       { ...terminalInput, ctrlEnterCsiU: 'true' },
       { ...terminalInput, kittyKeyboardAdvertised: 1 }
     ]) {

@@ -1,6 +1,8 @@
 import { spawn as spawnProcess, type SpawnOptions } from 'node:child_process'
-import { resolve } from 'node:path'
+import { existsSync } from 'node:fs'
+import { dirname, join, resolve } from 'node:path'
 import { StringDecoder } from 'node:string_decoder'
+import { runProcessSync } from '../../shared/child-process/run-process'
 import {
   SERVE_UPDATE_HANDOFF_PATH_ENV,
   getServeUpdateHandoffPath
@@ -19,6 +21,7 @@ import {
 import { RuntimeClientError } from './types'
 
 const IGNORED_NON_RECIPE_STDOUT = '[serve] ignored non-recipe stdout'
+const USER_NAMESPACE_PROBE_TIMEOUT_MS = 2_000
 
 export function launchOrcaApp(): void {
   const overrideCommand = process.env.ORCA_OPEN_COMMAND
@@ -29,7 +32,7 @@ export function launchOrcaApp(): void {
 
   const overrideExecutable = process.env.ORCA_APP_EXECUTABLE
   if (typeof overrideExecutable === 'string' && overrideExecutable.trim().length > 0) {
-    spawnDetached(overrideExecutable, getExecutableAppArgs(), {
+    spawnDetached(overrideExecutable, getExecutableAppArgs(overrideExecutable), {
       ...getExecutableSpawnOptions(overrideExecutable),
       env: stripElectronRunAsNode(process.env)
     })
@@ -50,7 +53,7 @@ export function launchOrcaApp(): void {
       }
     }
 
-    spawnDetached(process.execPath, [], {
+    spawnDetached(process.execPath, getExecutableAppArgs(process.execPath), {
       env: stripElectronRunAsNode(process.env)
     })
     return
@@ -86,10 +89,7 @@ export function serveOrcaApp(
   } = {}
 ): Promise<number> {
   const executable = resolveForegroundOrcaExecutable()
-  const childArgs = [...getExecutableAppArgs()]
-  if (process.env.ORCA_APPIMAGE_NO_SANDBOX === '1') {
-    childArgs.push('--no-sandbox')
-  }
+  const childArgs = [...getExecutableAppArgs(executable)]
   childArgs.push('--serve')
   if (args.json) {
     childArgs.push('--serve-json')
@@ -121,7 +121,6 @@ export function serveOrcaApp(
       ? getServeUpdateHandoffPath(getDefaultUserDataPath())
       : null
   const childEnv = stripElectronRunAsNode(process.env)
-  delete childEnv.ORCA_APPIMAGE_NO_SANDBOX
   if (handoffPath) {
     childEnv[SERVE_UPDATE_HANDOFF_PATH_ENV] = handoffPath
   }
@@ -256,8 +255,34 @@ function waitForRecipeJson(child: ReturnType<typeof spawnProcess>): Promise<numb
   })
 }
 
-function getExecutableAppArgs(): string[] {
-  return process.env.ORCA_APP_EXECUTABLE_NEEDS_APP_ROOT === '1' ? [resolveAppRoot()] : []
+function getExecutableAppArgs(executable: string): string[] {
+  const args = process.env.ORCA_APP_EXECUTABLE_NEEDS_APP_ROOT === '1' ? [resolveAppRoot()] : []
+  if (shouldDisableExtractedAppImageSandbox(executable)) {
+    args.push('--no-sandbox')
+  }
+  return args
+}
+
+function shouldDisableExtractedAppImageSandbox(executable: string): boolean {
+  if (process.platform !== 'linux' || !existsSync(join(dirname(executable), 'AppRun'))) {
+    return false
+  }
+  // An extracted AppImage has no root-owned setuid sandbox; mirror AppRun's userns fallback.
+  if (process.getuid?.() === 0) {
+    return true
+  }
+  try {
+    return (
+      runProcessSync({
+        program: 'unshare',
+        args: ['-Ur', 'true'],
+        stdio: 'ignore',
+        timeoutMs: USER_NAMESPACE_PROBE_TIMEOUT_MS
+      }).code !== 0
+    )
+  } catch {
+    return true
+  }
 }
 
 function getExecutableSpawnOptions(executable: string): Pick<SpawnOptions, 'shell'> {

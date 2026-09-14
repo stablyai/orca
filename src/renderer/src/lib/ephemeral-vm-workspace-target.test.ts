@@ -3,7 +3,7 @@ import {
   prepareEphemeralVmWorkspaceTarget,
   type PrepareEphemeralVmWorkspaceTargetArgs
 } from './ephemeral-vm-workspace-target'
-import type { ProjectHostSetupResult } from '../../../shared/types'
+import type { ProjectHostSetupResult } from '../../../shared/project-types'
 
 vi.mock('@/runtime/runtime-rpc-client', () => ({
   assertRuntimeEnvironmentCapability: vi.fn()
@@ -101,13 +101,14 @@ describe('prepareEphemeralVmWorkspaceTarget', () => {
     expect(window.api.ephemeralVm.cleanup).not.toHaveBeenCalled()
   })
 
-  it('imports an ssh recipe result through the runtime-owned ssh host', async () => {
+  it('carries a provisioned-root source commit through runtime-owned SSH import', async () => {
     vi.mocked(window.api.ephemeralVm.provision).mockResolvedValue({
       ok: true,
       connectionType: 'ssh',
       stderr: 'creating sandbox',
       warnings: [],
       sshTargetId: 'runtime-ssh-runtime-1',
+      expectedRefHead: 'abc123',
       runtime: {
         id: 'runtime-1',
         repoId: 'repo-1',
@@ -119,7 +120,8 @@ describe('prepareEphemeralVmWorkspaceTarget', () => {
         createdAt: 1,
         updatedAt: 1,
         recipeResult: {
-          schemaVersion: 1,
+          schemaVersion: 2,
+          checkoutMode: 'provisioned-root',
           connection: {
             type: 'ssh',
             projectRoot: '/workspace/repo',
@@ -164,7 +166,8 @@ describe('prepareEphemeralVmWorkspaceTarget', () => {
         setup: { ...setupResult.setup, hostId: 'ssh:runtime-ssh-runtime-1' }
       },
       runtimeId: 'runtime-1',
-      checkoutMode: 'orca-worktree',
+      checkoutMode: 'provisioned-root',
+      expectedRefHead: 'abc123',
       stderr: 'creating sandbox',
       warnings: []
     })

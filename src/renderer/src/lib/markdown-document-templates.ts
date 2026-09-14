@@ -1,4 +1,5 @@
-import type { DirEntry, GlobalSettings } from '../../../shared/types'
+import type { DirEntry } from '../../../shared/filesystem-entry-types'
+import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client'
 import {
   readRuntimeDirectory,

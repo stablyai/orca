@@ -2,7 +2,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import type { ComponentProps } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
-import type { TerminalTab } from '../../../../shared/types'
+import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import { TooltipProvider } from '../ui/tooltip'
 import DashboardAgentRow from './DashboardAgentRow'
 import type { DashboardAgentRow as DashboardAgentRowData } from './useDashboardData'
@@ -320,6 +320,7 @@ describe('DashboardAgentRow', () => {
     // on the response line so it does not compete with the user's prompt.
     expect(markup).toContain('data-slot="tooltip-trigger"')
     expect(markup).toContain('aria-label="Interrupted by user"')
+    expect(markup).not.toContain('title="Interrupted"')
     expect(markup).toContain('bg-red-500')
     expect(markup).not.toContain('data-slot="badge"')
     expect(interruptedIndex).toBeGreaterThan(promptIndex)
@@ -346,6 +347,65 @@ describe('DashboardAgentRow', () => {
     expect(emptyToolMarkup).not.toContain('lucide-wrench')
     expect(activeToolMarkup).toContain('lucide-wrench')
     expect(activeToolMarkup).toContain('ListDir')
+  })
+
+  it('renders monitoring without a spinner or active tool line', () => {
+    const markup = renderRow(
+      makeAgent(
+        {},
+        {
+          workingMode: 'monitoring',
+          prompt: '',
+          toolName: 'Bash',
+          toolInput: 'pnpm dev'
+        }
+      )
+    )
+
+    expect(markup).toContain('Monitoring background tasks')
+    expect(markup).toContain('lucide-activity')
+    expect(classTokens(markup)).toContain('text-yellow-500')
+    expect(markup).not.toContain('data-agent-spinner')
+    expect(markup).not.toContain('data-agent-row-tool-slot')
+  })
+
+  it('names what a blocked approval is waiting on', () => {
+    const markup = renderRow(
+      makeAgent(
+        { state: 'waiting' },
+        { state: 'waiting', toolName: 'bash', toolInput: 'rm -rf build/' }
+      )
+    )
+
+    // Why: a permission request parks the row on 'waiting'; without the tool line the row
+    // is a bare amber dot that cannot say what the user is being asked to approve.
+    expect(markup).toContain('lucide-wrench')
+    expect(markup).toContain('bash')
+    expect(markup).toContain('rm -rf build/')
+  })
+
+  it('leaves a wait without tool metadata unchanged', () => {
+    const markup = renderRow(makeAgent({ state: 'waiting' }, { state: 'waiting' }))
+
+    // Why: the height placeholder exists because a working row's tool line is imminent.
+    // A question-style wait has nothing coming, so reserving the row would just add a gap.
+    expect(markup).not.toContain('data-agent-row-tool-slot=""')
+    expect(markup).not.toContain('lucide-wrench')
+  })
+
+  it('keeps a resolved tool off a finished row', () => {
+    for (const state of ['done', 'blocked', 'idle'] as const) {
+      const markup = renderRow(
+        makeAgent(
+          { state },
+          // Why: 'idle' is a row-only state; the entry it is derived from still reports 'done'.
+          { state: state === 'idle' ? 'done' : state, toolName: 'bash', toolInput: 'rm -rf build/' }
+        )
+      )
+
+      expect(markup).not.toContain('lucide-wrench')
+      expect(markup).not.toContain('rm -rf build/')
+    }
   })
 
   it('renders orchestration child rows with a connector and tree level', () => {

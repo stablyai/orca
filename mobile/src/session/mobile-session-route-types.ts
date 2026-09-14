@@ -1,4 +1,6 @@
-import type { DiffComment, TuiAgent } from '../../../src/shared/types'
+import type { AgentSessionHandleProvider } from '../../../src/shared/agent-session-provider-handle'
+import type { DiffComment } from '../../../src/shared/diff-comment-types'
+import type { TuiAgent } from '../../../src/shared/tui-agent'
 import type { AgentStatusEntry } from '../../../src/shared/agent-status-types'
 import type { MobileBrowserTab } from '../browser/MobileBrowserPane'
 import type { MobileTerminalTheme } from '../terminal/terminal-webview-contract'
@@ -8,7 +10,7 @@ import type { TerminalRecord } from './mobile-terminal-records'
 
 export type Terminal = TerminalRecord
 
-export type MobileSessionTabType = 'terminal' | 'markdown' | 'file' | 'browser'
+export type MobileSessionTabType = 'terminal' | 'markdown' | 'file' | 'browser' | 'agent-session'
 
 export type MobileSessionTab =
   | {
@@ -27,6 +29,14 @@ export type MobileSessionTab =
       launchDraft?: string
       launchDraftCreatedAt?: number
       terminalTheme?: MobileTerminalTheme
+      isActive: boolean
+    }
+  | {
+      type: 'agent-session'
+      id: string
+      title: string
+      sessionId: string
+      agent: AgentSessionHandleProvider
       isActive: boolean
     }
   | {
@@ -60,6 +70,8 @@ export type SessionTabsResult = {
   tabs: MobileSessionTab[]
   activeTabId: string | null
   activeTabType: MobileSessionTabType | null
+  /** Host explicitly navigated this device (desktop/CLI `navigation: clients|all`), not a plain republication. */
+  navigationIntent?: 'follow'
 }
 
 export type RuntimeStatusResult = {

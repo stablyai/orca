@@ -1,4 +1,5 @@
 import { translate } from '@/i18n/i18n'
+import { parse as parseDomain } from 'tldts'
 import { classifySchemeLessLocalDevAddress } from '../../../../shared/browser-url'
 
 const HOST_FILE_EXTENSIONS = new Set([
@@ -53,13 +54,25 @@ function parseHttpUrl(query: string): ExplicitUrlClassification {
   }
 }
 
+// Why: a bare public suffix (`api.br`) is not a navigable host, so the typed string stays a search.
+// tldts' PRIVATE section is included so `foo.github.io` still reads as a domain.
+function isListedDomain(host: string): boolean {
+  const parsed = parseDomain(host, { allowPrivateDomains: true })
+  return parsed.domain !== null && (parsed.isIcann === true || parsed.isPrivate === true)
+}
+
 function splitHostCandidate(query: string): { host: string; port: string | null } | null {
-  if (/[\\/\s?#]/.test(query)) {
+  if (/[\\\s]/.test(query)) {
     return null
   }
-  const colonIndex = query.indexOf(':')
-  const host = colonIndex === -1 ? query : query.slice(0, colonIndex)
-  const port = colonIndex === -1 ? null : query.slice(colonIndex + 1)
+
+  // Keep the authority separate from the path/query/hash so domain URLs remain
+  // navigations; known source extensions are excluded and exact files win later.
+  const authorityEnd = query.search(/[/?#]/)
+  const authority = authorityEnd === -1 ? query : query.slice(0, authorityEnd)
+  const colonIndex = authority.indexOf(':')
+  const host = colonIndex === -1 ? authority : authority.slice(0, colonIndex)
+  const port = colonIndex === -1 ? null : authority.slice(colonIndex + 1)
   const extension = host.split('.').pop()?.toLowerCase() ?? ''
   if (HOST_FILE_EXTENSIONS.has(extension)) {
     return null
@@ -67,7 +80,7 @@ function splitHostCandidate(query: string): { host: string; port: string | null 
   if (
     host.toLowerCase() !== 'localhost' &&
     !IPV4_PATTERN.test(host) &&
-    !DOMAIN_PATTERN.test(host)
+    (!DOMAIN_PATTERN.test(host) || (authorityEnd !== -1 && !isListedDomain(host)))
   ) {
     return null
   }

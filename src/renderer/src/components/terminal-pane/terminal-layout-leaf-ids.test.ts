@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import type { TerminalLayoutSnapshot, TerminalPaneLayoutNode } from '../../../../shared/types'
+import type {
+  TerminalLayoutSnapshot,
+  TerminalPaneLayoutNode
+} from '../../../../shared/terminal-tab-types'
 import {
   normalizeTerminalLayoutSnapshot,
   resolvePtyBoundActiveLeafId,

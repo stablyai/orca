@@ -6,7 +6,10 @@ import {
   DropdownMenuSubTrigger
 } from '@/components/ui/dropdown-menu'
 import { ALL_EXECUTION_HOSTS_SCOPE, type ExecutionHostId } from '../../../../shared/execution-host'
-import type { VisibleWorkspaceHostIds, WorkspaceHostScope } from '../../../../shared/types'
+import type {
+  VisibleWorkspaceHostIds,
+  WorkspaceHostScope
+} from '../../../../shared/ui-chrome-types'
 import { getSidebarHostHealthLabel, type SidebarHostOption } from './sidebar-host-options'
 import { translate } from '@/i18n/i18n'
 

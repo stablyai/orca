@@ -25,6 +25,19 @@ describe('serve-mode-argv', () => {
     expect(findServeSubcommandIndex(['app', '--user-data-dir', '/tmp/x', 'serve'])).toBe(3)
   })
 
+  it('skips a space-separated Chromium switch value while locating serve', () => {
+    const argv = ['/AppRun', '--disable-features', 'Vulkan', 'serve', '--port', '6768']
+    expect(findServeSubcommandIndex(argv)).toBe(3)
+    expect(normalizeServeModeArgv(argv)).toEqual([
+      '/AppRun',
+      '--disable-features',
+      'Vulkan',
+      '--serve',
+      '--serve-port',
+      '6768'
+    ])
+  })
+
   it('refuses a help launch instead of binding a server', () => {
     // Why: `--help` is not a serve flag, so it used to be swallowed and the launch bound a
     // network-exposed runtime server with pairing on. The AppImage redirect routes help to the CLI.
@@ -107,6 +120,24 @@ describe('serve-mode-argv', () => {
     ])
   })
 
+  it('keeps Electron-injected Chromium switches while normalizing direct serve', () => {
+    expect(
+      normalizeServeModeArgv([
+        '/opt/orca/orca-ide',
+        '--disable-features=FedCm,DirectSockets',
+        'serve',
+        '--port',
+        '6768'
+      ])
+    ).toEqual([
+      '/opt/orca/orca-ide',
+      '--disable-features=FedCm,DirectSockets',
+      '--serve',
+      '--serve-port',
+      '6768'
+    ])
+  })
+
   it('leaves already-normalized argv unchanged', () => {
     // Why every value flag: the CLI's own `orca serve` spawns the app with exactly this shape
     // (serveOrcaApp), and the rewrite now runs over it too — a bad mapping would drop the port here.
@@ -131,6 +162,14 @@ describe('serve-mode-argv', () => {
     expect(
       normalizeServeModeArgv(['/AppRun', 'serve', '--port=9090', '--pairing-address=0.0.0.0'])
     ).toEqual(['/AppRun', '--serve', '--serve-port', '9090', '--serve-pairing-address', '0.0.0.0'])
+  })
+
+  it('keeps equals-form values that start with a flag marker intact', () => {
+    expect(normalizeServeModeArgv(['/AppRun', 'serve', '--pairing-address=--no-pairng'])).toEqual([
+      '/AppRun',
+      '--serve',
+      '--serve-pairing-address=--no-pairng'
+    ])
   })
 
   it('translates serve flags in the mixed `--serve --port` form', () => {

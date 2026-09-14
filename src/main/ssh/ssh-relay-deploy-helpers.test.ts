@@ -8,6 +8,10 @@ import {
   RelayVersionMismatchError,
   RELAY_EXIT_CODE_VERSION_MISMATCH
 } from './ssh-relay-version-mismatch-error'
+import {
+  RelayCredentialMismatchError,
+  RELAY_EXIT_CODE_CREDENTIAL_MISMATCH
+} from './ssh-relay-credential-mismatch-error'
 
 type MockChannel = ClientChannel & {
   stdin: EventEmitter & { write: ReturnType<typeof vi.fn> }
@@ -149,6 +153,23 @@ describe('waitForSentinel', () => {
     channel.emit('close')
 
     await expect(transportPromise).rejects.toBeInstanceOf(RelayVersionMismatchError)
+  })
+
+  it('translates a pre-sentinel exit-43 + close into RelayCredentialMismatchError', async () => {
+    const channel = createMockChannel()
+    const transportPromise = waitForSentinel(channel)
+
+    channel.stderr.emit(
+      'data',
+      Buffer.from('[relay-connect] Endpoint credential refused by daemon; exiting 43\n')
+    )
+    channel.emit('exit', RELAY_EXIT_CODE_CREDENTIAL_MISMATCH)
+    channel.emit('close')
+
+    await expect(transportPromise).rejects.toBeInstanceOf(RelayCredentialMismatchError)
+    await transportPromise.catch((err: unknown) => {
+      expect(err).not.toBeInstanceOf(RelayVersionMismatchError)
+    })
   })
 
   it('rejects with a generic error (not RelayVersionMismatchError) on a non-42 exit code', async () => {
@@ -548,6 +569,27 @@ describe('execCommand', () => {
     expect(channel.listenerCount('close')).toBe(0)
     expect(channel.stderr.listenerCount('error')).toBe(0)
     expect(channel.stderr.listenerCount('data')).toBe(0)
+  })
+
+  it('hands a zero-exit command stderr to onStderr instead of dropping it', async () => {
+    // Why: probes fenced with `|| echo MISSING` always exit 0, so the resolve path used to be the
+    // one place the failure reason was discarded.
+    const channel = createMockChannel()
+    const conn = { exec: vi.fn().mockResolvedValue(channel) }
+    const captured: string[] = []
+    const commandPromise = execCommand(conn as never, "(node -e 'x' || echo MISSING)", {
+      onStderr: (stderr) => captured.push(stderr)
+    })
+
+    await Promise.resolve()
+    channel.stderr.emit('data', Buffer.from('node: --bogus is not allowed in NODE_OPTIONS\n'))
+    channel.emit('data', Buffer.from('MISSING\n'))
+    channel.emit('close', 0)
+
+    await expect(commandPromise).resolves.toBe('MISSING\n')
+    expect(captured).toEqual(['node: --bogus is not allowed in NODE_OPTIONS\n'])
+    // onStderr must not leak into the SSH exec options.
+    expect(conn.exec).toHaveBeenCalledWith("(node -e 'x' || echo MISSING)", {})
   })
 
   it('uses custom command timeouts without forwarding them to SSH exec', async () => {

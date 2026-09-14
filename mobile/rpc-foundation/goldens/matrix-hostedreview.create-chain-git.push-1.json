@@ -1,0 +1,1003 @@
+{
+  "operation": "source-control.hosted-review-create",
+  "family": "hostedReview.create-chain",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "16d1ab81d3fd08e342b2f0ac0cc6f9e4aea4aaee",
+  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
+  "recorderSha256": "6a12160a87ceab04e74198f6dd35b8cf9125794222ee95cf6ca1872f29849960",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 3,
+  "values": {
+    "06a94a810e5f": {
+      "name": "hostedReview.create#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"hostedReview.create\",\"params\":{\"repo\":\"id:repo42\",\"worktree\":\"id:repo42::/p\",\"provider\":\"github\",\"base\":\"main\",\"head\":\"feature\",\"title\":\"Recorded title\",\"body\":\"Recorded body\",\"draft\":false}}"
+    },
+    "06e930bb7dd8": {
+      "name": "worktree.set#1",
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.set\",\"params\":{\"worktree\":\"id:repo42::/p\",\"baseRef\":\"main\",\"linkedPR\":5}}"
+    },
+    "0e00dbc486b4": {
+      "name": "git.push#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "git.push"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "refused"
+          }
+        }
+      }
+    },
+    "1d6ecb1accd3": {
+      "outcome": {
+        "error": "Push failed. Resolve the push error, then try again.",
+        "ok": false
+      }
+    },
+    "33b2843692a3": {
+      "name": "git.push#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "git.push"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "transport failure",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "3718951f62b7": {
+      "name": "git.push#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "git.push"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "inner refused",
+            "ok": false
+          }
+        }
+      }
+    },
+    "3f946ad0279c": {
+      "outcome": "uncreated"
+    },
+    "403ae2f01ce3": {
+      "name": "git.push#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "git.push"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "6c0349218dd0": {
+      "name": "git.push#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "git.push"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": ""
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "7037e9e29078": {
+      "name": "hostedReview.create#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "hostedReview.create"
+        },
+        {
+          "name": "params",
+          "value": {
+            "base": "main",
+            "body": "Recorded body",
+            "draft": false,
+            "head": "feature",
+            "provider": "github",
+            "repo": "id:repo42",
+            "title": "Recorded title",
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "number": 5,
+            "ok": true,
+            "url": "https://review.test/5"
+          }
+        }
+      }
+    },
+    "7b027798abe5": {
+      "name": "git.push#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "git.push"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true
+        }
+      }
+    },
+    "7c0cf8d696d8": {
+      "name": "worktree.set#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.set"
+        },
+        {
+          "name": "params",
+          "value": {
+            "baseRef": "main",
+            "linkedPR": 5,
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-3",
+          "ok": true,
+          "result": {
+            "ok": true
+          }
+        }
+      }
+    },
+    "9270aeb7d9c6": {
+      "status": "pending",
+      "startedAt": 0
+    },
+    "95b1f2f379aa": {
+      "name": "git.push#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"git.push\",\"params\":{\"worktree\":\"id:repo42::/p\"}}"
+    },
+    "9fca4a23f963": {
+      "outcome": {
+        "number": 5,
+        "ok": true,
+        "url": "https://review.test/5"
+      }
+    },
+    "a1f0c8bb5bcd": {
+      "name": "hostedReview.create#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "hostedReview.create"
+        },
+        {
+          "name": "params",
+          "value": {
+            "base": "main",
+            "body": "Recorded body",
+            "draft": false,
+            "head": "feature",
+            "provider": "github",
+            "repo": "id:repo42",
+            "title": "Recorded title",
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "a28defbf7f69": {
+      "name": "git.push#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "git.push"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": {
+              "message": "inner refused"
+            },
+            "ok": false
+          }
+        }
+      }
+    },
+    "a942a97a5d17": {
+      "name": "worktree.set#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.set"
+        },
+        {
+          "name": "params",
+          "value": {
+            "baseRef": "main",
+            "linkedPR": 5,
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "a95ae8a9ee57": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "number": 5,
+        "ok": true,
+        "url": "https://review.test/5"
+      }
+    },
+    "ae61c1e930df": {
+      "name": "git.push#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "git.push"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "method_not_found",
+            "message": "Unknown method"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "b7a56d89f615": {
+      "name": "git.push#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "git.push"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "d493a7059b00": {
+      "name": "git.push#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "git.push"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": "outer refused"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "d9fba50c2d0c": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "error": "Push failed. Resolve the push error, then try again.",
+        "ok": false
+      }
+    },
+    "e58ae363032b": {
+      "name": "git.push#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "git.push"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "$rpc": "null"
+          }
+        }
+      }
+    },
+    "f9869252c305": {
+      "name": "git.push#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "git.push"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:repo42::/p"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "ok": true
+          }
+        }
+      }
+    }
+  },
+  "recording": {
+    "scenario": "matrix-hostedreview.create-chain-git.push-1",
+    "checkpoints": [
+      {
+        "id": "sc-create-pushes-then-creates.prelude:push-pending",
+        "observation": {
+          "sender": ["b7a56d89f615"],
+          "payloads": ["95b1f2f379aa"],
+          "settlements": {
+            "create": "9270aeb7d9c6"
+          },
+          "state": "3f946ad0279c",
+          "effects": []
+        }
+      },
+      {
+        "id": "sc-create-pushes-then-creates.normal:create-pending",
+        "observation": {
+          "sender": ["f9869252c305", "a1f0c8bb5bcd"],
+          "payloads": ["95b1f2f379aa", "06a94a810e5f"],
+          "settlements": {
+            "create": "9270aeb7d9c6"
+          },
+          "state": "3f946ad0279c",
+          "effects": []
+        }
+      },
+      {
+        "id": "sc-create-pushes-then-creates.normal:link-pending",
+        "observation": {
+          "sender": ["f9869252c305", "7037e9e29078", "a942a97a5d17"],
+          "payloads": ["95b1f2f379aa", "06a94a810e5f", "06e930bb7dd8"],
+          "settlements": {
+            "create": "9270aeb7d9c6"
+          },
+          "state": "3f946ad0279c",
+          "effects": []
+        }
+      },
+      {
+        "id": "sc-create-pushes-then-creates.normal:settled",
+        "observation": {
+          "sender": ["f9869252c305", "7037e9e29078", "7c0cf8d696d8"],
+          "payloads": ["95b1f2f379aa", "06a94a810e5f", "06e930bb7dd8"],
+          "settlements": {
+            "create": "a95ae8a9ee57"
+          },
+          "state": "9fca4a23f963",
+          "effects": []
+        }
+      },
+      {
+        "id": "sc-create-pushes-then-creates.result-absent:create-pending",
+        "observation": {
+          "sender": ["7b027798abe5", "a1f0c8bb5bcd"],
+          "payloads": ["95b1f2f379aa", "06a94a810e5f"],
+          "settlements": {
+            "create": "9270aeb7d9c6"
+          },
+          "state": "3f946ad0279c",
+          "effects": []
+        }
+      },
+      {
+        "id": "sc-create-pushes-then-creates.result-absent:link-pending",
+        "observation": {
+          "sender": ["7b027798abe5", "7037e9e29078", "a942a97a5d17"],
+          "payloads": ["95b1f2f379aa", "06a94a810e5f", "06e930bb7dd8"],
+          "settlements": {
+            "create": "9270aeb7d9c6"
+          },
+          "state": "3f946ad0279c",
+          "effects": []
+        }
+      },
+      {
+        "id": "sc-create-pushes-then-creates.result-absent:settled",
+        "observation": {
+          "sender": ["7b027798abe5", "7037e9e29078", "7c0cf8d696d8"],
+          "payloads": ["95b1f2f379aa", "06a94a810e5f", "06e930bb7dd8"],
+          "settlements": {
+            "create": "a95ae8a9ee57"
+          },
+          "state": "9fca4a23f963",
+          "effects": []
+        }
+      },
+      {
+        "id": "sc-create-pushes-then-creates.result-null:create-pending",
+        "observation": {
+          "sender": ["e58ae363032b", "a1f0c8bb5bcd"],
+          "payloads": ["95b1f2f379aa", "06a94a810e5f"],
+          "settlements": {
+            "create": "9270aeb7d9c6"
+          },
+          "state": "3f946ad0279c",
+          "effects": []
+        }
+      },
+      {
+        "id": "sc-create-pushes-then-creates.result-null:link-pending",
+        "observation": {
+          "sender": ["e58ae363032b", "7037e9e29078", "a942a97a5d17"],
+          "payloads": ["95b1f2f379aa", "06a94a810e5f", "06e930bb7dd8"],
+          "settlements": {
+            "create": "9270aeb7d9c6"
+          },
+          "state": "3f946ad0279c",
+          "effects": []
+        }
+      },
+      {
+        "id": "sc-create-pushes-then-creates.result-null:settled",
+        "observation": {
+          "sender": ["e58ae363032b", "7037e9e29078", "7c0cf8d696d8"],
+          "payloads": ["95b1f2f379aa", "06a94a810e5f", "06e930bb7dd8"],
+          "settlements": {
+            "create": "a95ae8a9ee57"
+          },
+          "state": "9fca4a23f963",
+          "effects": []
+        }
+      },
+      {
+        "id": "sc-create-pushes-then-creates.inner-ok-missing:create-pending",
+        "observation": {
+          "sender": ["0e00dbc486b4", "a1f0c8bb5bcd"],
+          "payloads": ["95b1f2f379aa", "06a94a810e5f"],
+          "settlements": {
+            "create": "9270aeb7d9c6"
+          },
+          "state": "3f946ad0279c",
+          "effects": []
+        }
+      },
+      {
+        "id": "sc-create-pushes-then-creates.inner-ok-missing:link-pending",
+        "observation": {
+          "sender": ["0e00dbc486b4", "7037e9e29078", "a942a97a5d17"],
+          "payloads": ["95b1f2f379aa", "06a94a810e5f", "06e930bb7dd8"],
+          "settlements": {
+            "create": "9270aeb7d9c6"
+          },
+          "state": "3f946ad0279c",
+          "effects": []
+        }
+      },
+      {
+        "id": "sc-create-pushes-then-creates.inner-ok-missing:settled",
+        "observation": {
+          "sender": ["0e00dbc486b4", "7037e9e29078", "7c0cf8d696d8"],
+          "payloads": ["95b1f2f379aa", "06a94a810e5f", "06e930bb7dd8"],
+          "settlements": {
+            "create": "a95ae8a9ee57"
+          },
+          "state": "9fca4a23f963",
+          "effects": []
+        }
+      },
+      {
+        "id": "sc-create-pushes-then-creates.inner-false-string-error:create-pending",
+        "observation": {
+          "sender": ["3718951f62b7", "a1f0c8bb5bcd"],
+          "payloads": ["95b1f2f379aa", "06a94a810e5f"],
+          "settlements": {
+            "create": "9270aeb7d9c6"
+          },
+          "state": "3f946ad0279c",
+          "effects": []
+        }
+      },
+      {
+        "id": "sc-create-pushes-then-creates.inner-false-string-error:link-pending",
+        "observation": {
+          "sender": ["3718951f62b7", "7037e9e29078", "a942a97a5d17"],
+          "payloads": ["95b1f2f379aa", "06a94a810e5f", "06e930bb7dd8"],
+          "settlements": {
+            "create": "9270aeb7d9c6"
+          },
+          "state": "3f946ad0279c",
+          "effects": []
+        }
+      },
+      {
+        "id": "sc-create-pushes-then-creates.inner-false-string-error:settled",
+        "observation": {
+          "sender": ["3718951f62b7", "7037e9e29078", "7c0cf8d696d8"],
+          "payloads": ["95b1f2f379aa", "06a94a810e5f", "06e930bb7dd8"],
+          "settlements": {
+            "create": "a95ae8a9ee57"
+          },
+          "state": "9fca4a23f963",
+          "effects": []
+        }
+      },
+      {
+        "id": "sc-create-pushes-then-creates.inner-false-object-error:create-pending",
+        "observation": {
+          "sender": ["a28defbf7f69", "a1f0c8bb5bcd"],
+          "payloads": ["95b1f2f379aa", "06a94a810e5f"],
+          "settlements": {
+            "create": "9270aeb7d9c6"
+          },
+          "state": "3f946ad0279c",
+          "effects": []
+        }
+      },
+      {
+        "id": "sc-create-pushes-then-creates.inner-false-object-error:link-pending",
+        "observation": {
+          "sender": ["a28defbf7f69", "7037e9e29078", "a942a97a5d17"],
+          "payloads": ["95b1f2f379aa", "06a94a810e5f", "06e930bb7dd8"],
+          "settlements": {
+            "create": "9270aeb7d9c6"
+          },
+          "state": "3f946ad0279c",
+          "effects": []
+        }
+      },
+      {
+        "id": "sc-create-pushes-then-creates.inner-false-object-error:settled",
+        "observation": {
+          "sender": ["a28defbf7f69", "7037e9e29078", "7c0cf8d696d8"],
+          "payloads": ["95b1f2f379aa", "06a94a810e5f", "06e930bb7dd8"],
+          "settlements": {
+            "create": "a95ae8a9ee57"
+          },
+          "state": "9fca4a23f963",
+          "effects": []
+        }
+      },
+      {
+        "id": "sc-create-pushes-then-creates.outer-refused:create-pending",
+        "observation": {
+          "sender": ["d493a7059b00"],
+          "payloads": ["95b1f2f379aa"],
+          "settlements": {
+            "create": "d9fba50c2d0c"
+          },
+          "state": "1d6ecb1accd3",
+          "effects": []
+        }
+      },
+      {
+        "id": "sc-create-pushes-then-creates.outer-refused:link-pending",
+        "observation": {
+          "sender": ["d493a7059b00"],
+          "payloads": ["95b1f2f379aa"],
+          "settlements": {
+            "create": "d9fba50c2d0c"
+          },
+          "state": "1d6ecb1accd3",
+          "effects": []
+        }
+      },
+      {
+        "id": "sc-create-pushes-then-creates.outer-refused:settled",
+        "observation": {
+          "sender": ["d493a7059b00"],
+          "payloads": ["95b1f2f379aa"],
+          "settlements": {
+            "create": "d9fba50c2d0c"
+          },
+          "state": "1d6ecb1accd3",
+          "effects": []
+        }
+      },
+      {
+        "id": "sc-create-pushes-then-creates.outer-refused-no-message:create-pending",
+        "observation": {
+          "sender": ["6c0349218dd0"],
+          "payloads": ["95b1f2f379aa"],
+          "settlements": {
+            "create": "d9fba50c2d0c"
+          },
+          "state": "1d6ecb1accd3",
+          "effects": []
+        }
+      },
+      {
+        "id": "sc-create-pushes-then-creates.outer-refused-no-message:link-pending",
+        "observation": {
+          "sender": ["6c0349218dd0"],
+          "payloads": ["95b1f2f379aa"],
+          "settlements": {
+            "create": "d9fba50c2d0c"
+          },
+          "state": "1d6ecb1accd3",
+          "effects": []
+        }
+      },
+      {
+        "id": "sc-create-pushes-then-creates.outer-refused-no-message:settled",
+        "observation": {
+          "sender": ["6c0349218dd0"],
+          "payloads": ["95b1f2f379aa"],
+          "settlements": {
+            "create": "d9fba50c2d0c"
+          },
+          "state": "1d6ecb1accd3",
+          "effects": []
+        }
+      },
+      {
+        "id": "sc-create-pushes-then-creates.method-not-found:create-pending",
+        "observation": {
+          "sender": ["ae61c1e930df"],
+          "payloads": ["95b1f2f379aa"],
+          "settlements": {
+            "create": "d9fba50c2d0c"
+          },
+          "state": "1d6ecb1accd3",
+          "effects": []
+        }
+      },
+      {
+        "id": "sc-create-pushes-then-creates.method-not-found:link-pending",
+        "observation": {
+          "sender": ["ae61c1e930df"],
+          "payloads": ["95b1f2f379aa"],
+          "settlements": {
+            "create": "d9fba50c2d0c"
+          },
+          "state": "1d6ecb1accd3",
+          "effects": []
+        }
+      },
+      {
+        "id": "sc-create-pushes-then-creates.method-not-found:settled",
+        "observation": {
+          "sender": ["ae61c1e930df"],
+          "payloads": ["95b1f2f379aa"],
+          "settlements": {
+            "create": "d9fba50c2d0c"
+          },
+          "state": "1d6ecb1accd3",
+          "effects": []
+        }
+      },
+      {
+        "id": "sc-create-pushes-then-creates.transport-rejection:create-pending",
+        "observation": {
+          "sender": ["33b2843692a3"],
+          "payloads": ["95b1f2f379aa"],
+          "settlements": {
+            "create": "d9fba50c2d0c"
+          },
+          "state": "1d6ecb1accd3",
+          "effects": []
+        }
+      },
+      {
+        "id": "sc-create-pushes-then-creates.transport-rejection:link-pending",
+        "observation": {
+          "sender": ["33b2843692a3"],
+          "payloads": ["95b1f2f379aa"],
+          "settlements": {
+            "create": "d9fba50c2d0c"
+          },
+          "state": "1d6ecb1accd3",
+          "effects": []
+        }
+      },
+      {
+        "id": "sc-create-pushes-then-creates.transport-rejection:settled",
+        "observation": {
+          "sender": ["33b2843692a3"],
+          "payloads": ["95b1f2f379aa"],
+          "settlements": {
+            "create": "d9fba50c2d0c"
+          },
+          "state": "1d6ecb1accd3",
+          "effects": []
+        }
+      },
+      {
+        "id": "sc-create-pushes-then-creates.transport-rejection-no-message:create-pending",
+        "observation": {
+          "sender": ["403ae2f01ce3"],
+          "payloads": ["95b1f2f379aa"],
+          "settlements": {
+            "create": "d9fba50c2d0c"
+          },
+          "state": "1d6ecb1accd3",
+          "effects": []
+        }
+      },
+      {
+        "id": "sc-create-pushes-then-creates.transport-rejection-no-message:link-pending",
+        "observation": {
+          "sender": ["403ae2f01ce3"],
+          "payloads": ["95b1f2f379aa"],
+          "settlements": {
+            "create": "d9fba50c2d0c"
+          },
+          "state": "1d6ecb1accd3",
+          "effects": []
+        }
+      },
+      {
+        "id": "sc-create-pushes-then-creates.transport-rejection-no-message:settled",
+        "observation": {
+          "sender": ["403ae2f01ce3"],
+          "payloads": ["95b1f2f379aa"],
+          "settlements": {
+            "create": "d9fba50c2d0c"
+          },
+          "state": "1d6ecb1accd3",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

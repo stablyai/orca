@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react'
+import React, { useCallback, useLayoutEffect, useState } from 'react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 
@@ -23,6 +23,7 @@ export function TruncatedSidebarLabel({
   tooltipSide = 'right',
   tooltipSideOffset = 8
 }: TruncatedSidebarLabelProps): React.JSX.Element {
+  const nodeRef = React.useRef<HTMLSpanElement | null>(null)
   const resizeObserverRef = React.useRef<ResizeObserver | null>(null)
   const removeResizeListenerRef = React.useRef<(() => void) | null>(null)
   const [truncated, setTruncated] = useState(false)
@@ -39,6 +40,7 @@ export function TruncatedSidebarLabel({
       removeResizeListenerRef.current?.()
       removeResizeListenerRef.current = null
 
+      nodeRef.current = node
       if (!node) {
         measureTruncated(null)
         return
@@ -60,14 +62,15 @@ export function TruncatedSidebarLabel({
     [measureTruncated]
   )
 
+  // Why: ResizeObserver does not fire when only the rendered text changes, but
+  // scrollWidth can. Remeasure in place rather than remounting the span, which
+  // would tear down and rebuild the observer on every title update.
+  useLayoutEffect(() => {
+    measureTruncated(nodeRef.current)
+  }, [measureTruncated, text])
+
   const label = (
-    <span
-      // Why: ResizeObserver does not fire when only the rendered text changes,
-      // but scrollWidth can; remount so branch reuse remeasures immediately.
-      key={text}
-      ref={handleRef}
-      className={cn('block min-w-0 truncate', className)}
-    >
+    <span ref={handleRef} className={cn('block min-w-0 truncate', className)}>
       {text}
     </span>
   )

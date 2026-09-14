@@ -1,4 +1,5 @@
 import { spawn, type ChildProcess } from 'node:child_process'
+import { spawnProcess } from '../../shared/child-process/run-process'
 import { Duplex } from 'node:stream'
 import type { Socket as NetSocket } from 'node:net'
 import type { SshTarget } from '../../shared/ssh-types'
@@ -102,8 +103,9 @@ export function spawnProxyCommand(
     proxy.kind === 'jump-host'
       ? // Why: ProxyJump is structured input, not a shell snippet. Spawn ssh
         // directly so jump-host values cannot escape through shell parsing.
-        spawn('ssh', jumpHostSpawnArgs(proxy.jumpHost, host, port), {
-          stdio: ['pipe', 'pipe', 'pipe']
+        spawnProcess({
+          program: 'ssh',
+          args: jumpHostSpawnArgs(proxy.jumpHost, host, port)
         })
       : (() => {
           const escape = process.platform === 'win32' ? cmdEscape : shellEscape
@@ -112,8 +114,13 @@ export function spawnProxyCommand(
             .replace(/%p/g, escape(String(port)))
             .replace(/%r/g, escape(user))
           const shell = getShellSpawnConfig(expanded)
+          // Why not spawnProcess here: a ProxyCommand is a user-authored shell
+          // snippet, so it keeps its own verbatim command line. The console
+          // still has to be hidden -- a cmd.exe spawn from a GUI process always
+          // flashes and steals foreground otherwise (#10488).
           return spawn(shell.file, shell.args, {
             stdio: ['pipe', 'pipe', 'pipe'],
+            windowsHide: true,
             windowsVerbatimArguments: shell.windowsVerbatimArguments
           })
         })()

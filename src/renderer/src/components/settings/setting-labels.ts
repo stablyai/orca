@@ -1,4 +1,4 @@
-import type { GlobalSettings } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 
 export const SETTING_LABELS: Partial<Record<keyof GlobalSettings, string>> = {
   terminalFontSize: 'Font Size',
@@ -10,6 +10,7 @@ export const SETTING_LABELS: Partial<Record<keyof GlobalSettings, string>> = {
   terminalFastScrollSensitivity: 'Fast Scroll Speed',
   terminalTuiScrollSensitivity: 'TUI Scroll Speed',
   terminalBackgroundOpacity: 'Background Opacity',
+  terminalMinimumContrastRatio: 'Color Contrast',
   terminalCursorStyle: 'Cursor Style',
   terminalCursorBlink: 'Cursor Blink',
   terminalCursorOpacity: 'Cursor Opacity',

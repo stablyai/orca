@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   COMMIT_MESSAGE_ROW_SCAN_CODE_UNITS,
   getCommitMessageTextareaRows
-} from './source-control-commit-message-rows'
+} from './source-control/commit/commit-message-rows'
 
 afterEach(() => {
   vi.restoreAllMocks()

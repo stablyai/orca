@@ -5,12 +5,13 @@ import type {
   WriteTerminalRenderDesyncEvidenceArgs,
   WriteTerminalRenderDesyncEvidenceResult
 } from '../../shared/terminal-render-desync-evidence'
-import type {
-  FloatingTerminalCwdRequest,
-  MarkdownDocument,
-  PersistedUIState,
-  WorkspaceSessionState
-} from '../../shared/types'
+import type { MacCapturedDigitRowChord } from '../../shared/macos-symbolic-hotkeys'
+import type { MarkdownDocument } from '../../shared/filesystem-entry-types'
+import type { PersistedUIState } from '../../shared/persisted-ui-state-types'
+import type { FloatingTerminalCwdRequest } from '../../shared/ui-chrome-types'
+import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
+import type { KeyboardLayoutSnapshot } from '../../shared/keyboard-layout-snapshot'
+import type { KeyboardLayoutChangeEvent } from '../../shared/keyboard-layout-events'
 
 export type AppApi = {
   /** Returns the app identity currently exposed to native chrome and the titlebar. */
@@ -37,6 +38,11 @@ export type AppApi = {
   /** Resolves when the daemon PTY provider and hook receiver have either
    *  started or failed open for the first BrowserWindow. */
   awaitFirstWindowStartupServices: () => Promise<void>
+  /** Resolves when host Git can run: shell-PATH generation is published and the
+   *  managed WSL CLI registration has reconciled. Does not wait on PTY services. */
+  awaitGitEnvironmentStartupBarrier: () => Promise<void>
+  /** Inventories retained PTYs and restores durable structured ownership before renderer adoption. */
+  prepareTerminalStartupRestoration: () => Promise<void>
   /** Reconciles legacy worker authority around persisted terminal reconnect. */
   recoverLegacyWorkerTerminalsForRendererStartup: () => Promise<void>
   /** Emits a startup benchmark marker when ORCA_STARTUP_DIAGNOSTICS is enabled. */
@@ -45,6 +51,12 @@ export type AppApi = {
    *  Distinguishes CJK IMEs and Option-layer-composing layouts that look like US QWERTY (issue #1205).
    *  Returns null on non-Darwin or when the defaults read fails. */
   getKeyboardInputSourceId: () => Promise<string | null>
+  /** Physical Mission Control chords before layout resolution. */
+  getMacCapturedDigitRowChords: () => Promise<MacCapturedDigitRowChord[]>
+  /** Active macOS layout characters without Option, or null off macOS or when the native probe fails. */
+  getKeyboardLayoutSnapshot: () => Promise<KeyboardLayoutSnapshot | null>
+  /** Subscribes to active macOS input-source changes. No-op in the browser fallback. */
+  onKeyboardLayoutChanged: (callback: (event: KeyboardLayoutChangeEvent) => void) => () => void
   /** Updates the macOS Dock unread badge. No-op on Windows/Linux. */
   setUnreadDockBadgeCount: (count: number) => Promise<void>
   /** Resolves the launch directory for global Floating Terminal tabs. */

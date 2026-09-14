@@ -1,13 +1,14 @@
 import type { spawn } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { statSync } from 'node:fs'
-import type { OrcaVmRecipe } from './types'
+import type { OrcaVmRecipe } from './orca-yaml-hook-types'
 import { parseEphemeralVmRecipeResult, type EphemeralVmRecipeResult } from './ephemeral-vm-recipes'
 import {
   getEphemeralVmRecipeCheckoutModeError,
   getEphemeralVmRecipeResultSchemaVersion
 } from './ephemeral-vm-recipe-checkout-mode'
 import { runRecipeCommand } from './ephemeral-vm-recipe-process'
+import { getEphemeralVmRecipeDestroyFailure } from './ephemeral-vm-recipe-destroy-result'
 import {
   buildEphemeralVmRecipeCleanupPayload,
   buildEphemeralVmRecipeLifecyclePayload
@@ -29,6 +30,7 @@ export type EphemeralVmRecipeContext = {
   repoUrl?: string
   branch?: string
   ref?: string
+  expectedRefHead?: string
   orcaVersion?: string
 }
 
@@ -184,13 +186,9 @@ export async function runEphemeralVmRecipeCleanup(
     spawnCommand: args.spawnCommand
   })
 
-  if (processResult.exitCode !== 0) {
-    return {
-      ok: false,
-      skipped: false,
-      error: `Destroy exited with code ${processResult.exitCode ?? 'unknown'}.`,
-      ...processResult
-    }
+  const failure = getEphemeralVmRecipeDestroyFailure(processResult)
+  if (failure) {
+    return failure
   }
 
   return { ok: true, skipped: false, ...processResult }

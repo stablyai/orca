@@ -1,4 +1,4 @@
-import type { TuiAgent } from '../../../src/shared/types'
+import type { TuiAgent } from '../../../src/shared/tui-agent'
 import {
   filterEnabledMobileTuiAgents,
   isMobileTuiAgent,

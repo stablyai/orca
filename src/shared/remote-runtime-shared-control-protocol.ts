@@ -157,7 +157,11 @@ export function toRemoteRuntimeClientError(error: unknown): RemoteRuntimeClientE
     return error
   }
   if (error instanceof Error) {
-    return new RemoteRuntimeClientError('runtime_error', error.message)
+    const data =
+      typeof error === 'object' && error !== null && 'data' in error
+        ? (error as { data?: unknown }).data
+        : undefined
+    return new RemoteRuntimeClientError('runtime_error', error.message, { data })
   }
   return new RemoteRuntimeClientError('runtime_error', String(error))
 }

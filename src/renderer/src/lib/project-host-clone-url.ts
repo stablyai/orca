@@ -1,4 +1,4 @@
-import type { Project } from '../../../shared/types'
+import type { Project } from '../../../shared/project-types'
 
 export function getProjectHostCloneUrl(project: Project | null | undefined): string | null {
   const identity = project?.providerIdentity

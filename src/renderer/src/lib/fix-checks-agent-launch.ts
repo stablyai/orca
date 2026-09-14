@@ -20,11 +20,9 @@ import {
   renderSourceControlActionCommandTemplate
 } from '../../../shared/source-control-ai-actions'
 import { isTuiAgentEnabled } from '../../../shared/tui-agent-selection'
-import type {
-  GitHubWorkItem,
-  TuiAgent,
-  WorkspaceCreateTelemetrySource
-} from '../../../shared/types'
+import type { GitHubWorkItem } from '../../../shared/github/work-item-types'
+import type { TuiAgent } from '../../../shared/tui-agent'
+import type { WorkspaceSource as WorkspaceCreateTelemetrySource } from '../../../shared/workspace-source'
 import type { LaunchSource } from '../../../shared/telemetry-events'
 import { translate } from '@/i18n/i18n'
 
@@ -188,7 +186,8 @@ export async function startFixChecksAgent(args: StartFixChecksAgentArgs): Promis
       toast.error(agentArgsPlan.error)
       return false
     }
-    if (!activateAndRevealWorktree(targetWorktreeId)) {
+    // launchAgentInNewTab below creates the surface; seeding here would add a stray shell.
+    if (!activateAndRevealWorktree(targetWorktreeId, { providesInitialSurface: true })) {
       toast.error(
         translate(
           'auto.lib.fix.checks.agent.launch.03c1d61f83',

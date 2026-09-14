@@ -4,10 +4,11 @@ import { CommitArea } from './SourceControl'
 import {
   hasConfiguredCommitMessageGenerationDefaults,
   hasConfiguredSourceControlTextGenerationDefaults
-} from './source-control-text-generation-defaults'
+} from './source-control/ai/text-generation-defaults'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { resolvePrimaryAction, type PrimaryActionInputs } from './source-control-primary-action'
-import { resolveDropdownItems, type DropdownActionKind } from './source-control-dropdown-items'
+import { resolveDropdownItems } from './source-control-dropdown-items'
+import type { DropdownActionKind } from './source-control-dropdown-item-types'
 import { getDefaultSettings } from '../../../../shared/constants'
 import { CUSTOM_AGENT_ID } from '../../../../shared/commit-message-agent-spec'
 import { resolveSourceControlAiForOperation } from '../../../../shared/source-control-ai'

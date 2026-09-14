@@ -10,6 +10,15 @@ import type {
   ExternalAutomationManager,
   ExternalAutomationRun
 } from '../../../../shared/automations-types'
+import type {
+  ExternalAutomationScope,
+  ScopedExternalAutomationManager
+} from './external-automation-scope-client'
+import {
+  externalAutomationActionKey,
+  externalAutomationJobKey,
+  externalAutomationManagerKey
+} from './external-automation-scope-keys'
 import {
   formatExternalDate,
   getExternalProviderLabel,
@@ -24,13 +33,15 @@ import { getExternalAutomationActionDisabledMessage } from './external-automatio
 import { translate } from '@/i18n/i18n'
 
 type ExternalAutomationManagersProps = {
-  managers: ExternalAutomationManager[]
+  /** Each manager carries the host it was discovered on; its ID cannot name one. */
+  managers: readonly ScopedExternalAutomationManager[]
   now: number
   runningActionKey: string | null
   onAction: (
     manager: ExternalAutomationManager,
     job: ExternalAutomationJob,
-    action: ExternalAutomationAction
+    action: ExternalAutomationAction,
+    scope: ExternalAutomationScope
   ) => void
   onFetchRuns?: FetchExternalAutomationRuns
   onOpenRun?: (
@@ -38,15 +49,11 @@ type ExternalAutomationManagersProps = {
     job: ExternalAutomationJob,
     run: ExternalAutomationRun
   ) => void
-  onEdit?: (manager: ExternalAutomationManager, job: ExternalAutomationJob) => void
-}
-
-function actionKey(
-  manager: ExternalAutomationManager,
-  job: ExternalAutomationJob,
-  action: ExternalAutomationAction
-): string {
-  return `${manager.id}:${job.id}:${action}`
+  onEdit?: (
+    manager: ExternalAutomationManager,
+    job: ExternalAutomationJob,
+    scope: ExternalAutomationScope
+  ) => void
 }
 
 function ExternalActionButton({
@@ -92,7 +99,7 @@ export function ExternalAutomationManagers({
   onOpenRun,
   onEdit
 }: ExternalAutomationManagersProps): React.JSX.Element {
-  const automationCount = managers.reduce((sum, manager) => sum + manager.jobs.length, 0)
+  const automationCount = managers.reduce((sum, { manager }) => sum + manager.jobs.length, 0)
 
   return (
     <div className="rounded-md border border-border/50 bg-muted/20 shadow-sm">
@@ -119,8 +126,8 @@ export function ExternalAutomationManagers({
         </Badge>
       </div>
       <div className="divide-y divide-border/50">
-        {managers.map((manager) => (
-          <div key={manager.id} className="px-3 py-3">
+        {managers.map(({ scope, manager }) => (
+          <div key={externalAutomationManagerKey(scope, manager.id)} className="px-3 py-3">
             <div className="mb-2 flex items-center justify-between gap-3">
               <div className="min-w-0">
                 <div className="truncate text-sm font-medium">{manager.targetLabel}</div>
@@ -154,17 +161,20 @@ export function ExternalAutomationManagers({
                   manager,
                   actionInProgress: runningActionKey !== null
                 })
+                // Scope-qualified so two hosts running the same provider cannot
+                // label each other's rows or spin each other's buttons.
+                const jobKey = externalAutomationJobKey(scope, job.id)
+                const nameId = `automation-name-${jobKey}`
+                const actionKey = (action: ExternalAutomationAction): string =>
+                  externalAutomationActionKey(scope, job.id, action)
                 return (
                   <div
-                    key={job.id}
+                    key={jobKey}
                     className="relative grid grid-cols-[minmax(0,1fr)_minmax(8rem,auto)_auto] items-center gap-3 px-3 py-2 text-sm"
                   >
                     <div className="min-w-0">
                       <div className="flex min-w-0 items-center gap-2">
-                        <span
-                          id={`automation-name-${manager.id}-${job.id}`}
-                          className="truncate font-medium"
-                        >
+                        <span id={nameId} className="truncate font-medium">
                           {job.name}
                         </span>
                         <Badge variant={job.enabled ? 'secondary' : 'outline'}>
@@ -185,17 +195,17 @@ export function ExternalAutomationManagers({
                             <span className="absolute right-3 top-2 inline-flex shrink-0 items-center gap-1.5">
                               {/* Match either key: job.enabled flips mid-flight, so a single-action
                                   match would drop the spinner a render early. */}
-                              {runningActionKey === actionKey(manager, job, 'pause') ||
-                              runningActionKey === actionKey(manager, job, 'resume') ? (
+                              {runningActionKey === actionKey('pause') ||
+                              runningActionKey === actionKey('resume') ? (
                                 <RefreshCw className="size-3.5 animate-spin" />
                               ) : null}
                               <SettingsSwitch
                                 checked={job.enabled}
                                 onChange={() =>
-                                  onAction(manager, job, job.enabled ? 'pause' : 'resume')
+                                  onAction(manager, job, job.enabled ? 'pause' : 'resume', scope)
                                 }
                                 disabled={disabledMessage !== null}
-                                ariaLabelledBy={`automation-name-${manager.id}-${job.id}`}
+                                ariaLabelledBy={nameId}
                               />
                             </span>
                           </TooltipTrigger>
@@ -266,9 +276,9 @@ export function ExternalAutomationManagers({
                           )
                         }
                         disabled={disabledMessage !== null}
-                        onClick={() => onAction(manager, job, 'run')}
+                        onClick={() => onAction(manager, job, 'run', scope)}
                       >
-                        {runningActionKey === actionKey(manager, job, 'run') ? (
+                        {runningActionKey === actionKey('run') ? (
                           <RefreshCw className="size-3.5 animate-spin" />
                         ) : (
                           <Play className="size-3.5" />
@@ -284,7 +294,7 @@ export function ExternalAutomationManagers({
                             )
                           }
                           disabled={disabledMessage !== null}
-                          onClick={() => onEdit?.(manager, job)}
+                          onClick={() => onEdit?.(manager, job, scope)}
                         >
                           <Pencil className="size-3.5" />
                         </ExternalActionButton>
@@ -299,9 +309,9 @@ export function ExternalAutomationManagers({
                         }
                         className="text-destructive hover:text-destructive"
                         disabled={disabledMessage !== null}
-                        onClick={() => onAction(manager, job, 'delete')}
+                        onClick={() => onAction(manager, job, 'delete', scope)}
                       >
-                        {runningActionKey === actionKey(manager, job, 'delete') ? (
+                        {runningActionKey === actionKey('delete') ? (
                           <RefreshCw className="size-3.5 animate-spin" />
                         ) : (
                           <Trash2 className="size-3.5" />
@@ -311,6 +321,7 @@ export function ExternalAutomationManagers({
                     {manager.provider === 'hermes' ? (
                       <div className="col-span-3">
                         <ExternalAutomationRunTable
+                          scope={scope}
                           manager={manager}
                           job={job}
                           now={now}

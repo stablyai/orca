@@ -1,7 +1,9 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import type { ReactNode } from 'react'
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Repo, Worktree, WorktreeCardProperty } from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { WorktreeCardProperty } from '../../../../shared/ui-chrome-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import type WorktreeCardComponent from './WorktreeCard'
 
 const fetchHostedReviewForBranch = vi.fn()
@@ -216,18 +218,35 @@ describe('WorktreeCard SSH reconnect prompt', () => {
     expect(markup).not.toContain('Retry SSH connection')
   })
 
-  it('marks a runtime-host worktree disconnected when its environment has no status', () => {
+  it('marks a runtime-host worktree disconnected once a probe finds it unreachable', () => {
+    runtimeEnvironments = [{ id: 'env-1', name: 'Remote Mac' }]
+    runtimeStatusByEnvironmentId.set('env-1', { status: null })
+    const runtimeRepo: Repo = {
+      ...makeRepo(),
+      connectionId: undefined,
+      executionHostId: 'runtime:env-1'
+    }
+    const markup = renderToStaticMarkup(
+      <WorktreeCard worktree={makeWorktree()} repo={runtimeRepo} isActive={false} />
+    )
+    expect(markup).toContain('Remote Mac disconnected')
+  })
+
+  // Why: "not probed yet" is not "probed and unreachable" — collapsing them painted every
+  // remote card destructive and dimmed between launch and the first probe answering.
+  it('leaves a runtime-host worktree undimmed before its first probe answers', () => {
     runtimeEnvironments = [{ id: 'env-1', name: 'Remote Mac' }]
     const runtimeRepo: Repo = {
       ...makeRepo(),
       connectionId: undefined,
       executionHostId: 'runtime:env-1'
     }
-    // No status entry for env-1 → host is disconnected.
     const markup = renderToStaticMarkup(
       <WorktreeCard worktree={makeWorktree()} repo={runtimeRepo} isActive={false} />
     )
-    expect(markup).toContain('Remote Mac disconnected')
+    expect(markup).not.toContain('Remote Mac disconnected')
+    expect(markup).toContain('Project on Remote Mac')
+    expect(markup).not.toContain('opacity-60')
   })
 
   it('distinguishes connected worktrees on different Orca servers', () => {

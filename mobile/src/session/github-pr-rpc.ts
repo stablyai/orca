@@ -1,10 +1,6 @@
-import type {
-  GitHubAssignableUser,
-  GitHubWorkItemDetails,
-  PRCheckDetail,
-  PRCheckRunDetails,
-  PRInfo
-} from '../../../src/shared/types'
+import type { PRCheckDetail, PRCheckRunDetails } from '../../../src/shared/github/check-types'
+import type { GitHubAssignableUser, PRInfo } from '../../../src/shared/github/pull-request-types'
+import type { GitHubWorkItemDetails } from '../../../src/shared/github/work-item-types'
 import type { HostedReviewInfo } from '../../../src/shared/hosted-review'
 import {
   normalizeGitHubPRForBranchOutcome,

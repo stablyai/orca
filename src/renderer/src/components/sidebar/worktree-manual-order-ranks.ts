@@ -15,6 +15,30 @@ function buildFallbackManualOrderUpdates(
   return updates
 }
 
+function mergeVisibleOrderIntoKnownOrder(
+  knownIds: readonly string[],
+  visibleOrder: readonly string[]
+): string[] {
+  const uniqueKnownIds = [...new Set(knownIds)]
+  const knownSet = new Set(uniqueKnownIds)
+  const uniqueVisibleOrder = [...new Set(visibleOrder)]
+  const knownVisibleOrder = uniqueVisibleOrder.filter((id) => knownSet.has(id))
+  const visibleSet = new Set(knownVisibleOrder)
+
+  const merged: string[] = []
+  let visibleIndex = 0
+  for (const id of uniqueKnownIds) {
+    if (visibleSet.has(id)) {
+      merged.push(knownVisibleOrder[visibleIndex] ?? id)
+      visibleIndex++
+      continue
+    }
+    merged.push(id)
+  }
+  merged.push(...uniqueVisibleOrder.filter((id) => !knownSet.has(id)))
+  return merged
+}
+
 function getManualOrderRank(
   rankByWorktreeId: ReadonlyMap<string, number>,
   worktreeId: string | undefined
@@ -30,6 +54,8 @@ export function buildSparseManualOrderUpdates(args: {
   orderedIds: readonly string[]
   movedIds: readonly string[]
   rankByWorktreeId?: ReadonlyMap<string, number>
+  /** Current order of every known row, including filtered/collapsed rows. */
+  allWorktreeIds: readonly string[]
   now: number
 }): Map<string, WorktreeManualOrderUpdate> {
   const movedSet = new Set(args.movedIds)
@@ -38,7 +64,20 @@ export function buildSparseManualOrderUpdates(args: {
     return new Map()
   }
   if (!args.rankByWorktreeId) {
-    return buildFallbackManualOrderUpdates(args.orderedIds, args.now)
+    return buildFallbackManualOrderUpdates(
+      mergeVisibleOrderIntoKnownOrder(args.allWorktreeIds, args.orderedIds),
+      args.now
+    )
+  }
+
+  // Why: Manual is a durable sequence, not a rank for only the rendered slice.
+  // Materialize every known row once when any row is still on the mutable
+  // sortOrder fallback; subsequent drags can use sparse ranks again.
+  if (args.allWorktreeIds.some((id) => getManualOrderRank(args.rankByWorktreeId!, id) === null)) {
+    return buildFallbackManualOrderUpdates(
+      mergeVisibleOrderIntoKnownOrder(args.allWorktreeIds, args.orderedIds),
+      args.now
+    )
   }
 
   const firstMovedIndex = args.orderedIds.findIndex((id) => movedSet.has(id))
@@ -50,10 +89,16 @@ export function buildSparseManualOrderUpdates(args: {
   const nextRanks: number[] = []
 
   if (beforeId !== undefined && beforeRank === null) {
-    return buildFallbackManualOrderUpdates(args.orderedIds, args.now)
+    return buildFallbackManualOrderUpdates(
+      mergeVisibleOrderIntoKnownOrder(args.allWorktreeIds, args.orderedIds),
+      args.now
+    )
   }
   if (afterId !== undefined && afterRank === null) {
-    return buildFallbackManualOrderUpdates(args.orderedIds, args.now)
+    return buildFallbackManualOrderUpdates(
+      mergeVisibleOrderIntoKnownOrder(args.allWorktreeIds, args.orderedIds),
+      args.now
+    )
   }
 
   if (beforeRank === null && afterRank === null) {
@@ -74,7 +119,10 @@ export function buildSparseManualOrderUpdates(args: {
     // Why: repeated sparse inserts can eventually exhaust the numeric gap.
     // Re-index only in that rare dense case; ordinary drags persist moved rows.
     if (gap <= orderedMovedIds.length) {
-      return buildFallbackManualOrderUpdates(args.orderedIds, args.now)
+      return buildFallbackManualOrderUpdates(
+        mergeVisibleOrderIntoKnownOrder(args.allWorktreeIds, args.orderedIds),
+        args.now
+      )
     }
     const step = gap / (orderedMovedIds.length + 1)
     for (let index = 0; index < orderedMovedIds.length; index++) {

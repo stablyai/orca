@@ -1,10 +1,10 @@
 import type {
   CheckStatus,
-  ProviderCheckSummary,
   PRMergeableState,
   PRReviewDecision,
-  PRState
-} from '../../../shared/types'
+  PRState,
+  ProviderCheckSummary
+} from '../../../shared/github/pull-request-types'
 import { canEnableGitHubPRAutoMerge } from '../../../shared/github/pull-request-auto-merge-availability'
 import { translate } from '@/i18n/i18n'
 

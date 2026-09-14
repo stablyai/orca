@@ -31,6 +31,9 @@ async function readOneTitle(
     if (!stats.isFile() || signal?.aborted) {
       return null
     }
+    // Why: this key is a raw lstat with no content dependency, so it only
+    // matches the scanner's for providers that declare none — today claude and
+    // codex, which is all this request type carries.
     const session = await parseAgentSessionFileCached(
       {
         agent: request.agent,

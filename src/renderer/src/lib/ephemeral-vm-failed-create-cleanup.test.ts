@@ -32,6 +32,7 @@ describe('cleanupFailedEphemeralVmWorkspace', () => {
     await cleanupFailedEphemeralVmWorkspace(request(), {
       deleteProjectHostSetup: vi.fn(async () => {
         order.push('setup')
+        return { id: 'setup-1' }
       }),
       cleanupRuntime: vi.fn(async () => {
         order.push('runtime')
@@ -43,7 +44,7 @@ describe('cleanupFailedEphemeralVmWorkspace', () => {
     expect(order).toEqual(['setup', 'runtime'])
   })
 
-  it('still destroys the VM when setup deletion fails', async () => {
+  it('retains the VM when setup deletion throws', async () => {
     const cleanupRuntime = vi.fn().mockResolvedValue(undefined)
     const reportSetupError = vi.fn()
     await cleanupFailedEphemeralVmWorkspace(request(), {
@@ -54,6 +55,20 @@ describe('cleanupFailedEphemeralVmWorkspace', () => {
     })
 
     expect(reportSetupError).toHaveBeenCalledOnce()
-    expect(cleanupRuntime).toHaveBeenCalledWith('runtime-1')
+    expect(cleanupRuntime).not.toHaveBeenCalled()
+  })
+
+  it('retains the VM when setup deletion reports no result', async () => {
+    const cleanupRuntime = vi.fn().mockResolvedValue(undefined)
+    const reportSetupError = vi.fn()
+    await cleanupFailedEphemeralVmWorkspace(request(), {
+      deleteProjectHostSetup: vi.fn().mockResolvedValue(null),
+      cleanupRuntime,
+      reportSetupError,
+      reportRuntimeError: vi.fn()
+    })
+
+    expect(reportSetupError).toHaveBeenCalledOnce()
+    expect(cleanupRuntime).not.toHaveBeenCalled()
   })
 })

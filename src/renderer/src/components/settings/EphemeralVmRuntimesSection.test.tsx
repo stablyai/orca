@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 
-import { act } from 'react'
+import { act, type ReactNode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { EphemeralVmRuntimeRecord } from '../../../../shared/ephemeral-vm-runtimes'
@@ -20,6 +20,18 @@ vi.mock('sonner', () => ({
     success: toastMocks.success,
     error: toastMocks.error
   }
+}))
+
+vi.mock('../ui/dialog', () => ({
+  Dialog: ({ open, children }: { open: boolean; children: ReactNode }) =>
+    open ? <div>{children}</div> : null,
+  DialogContent: ({ children }: { children: ReactNode }) => (
+    <div data-slot="dialog-content">{children}</div>
+  ),
+  DialogDescription: ({ children }: { children: ReactNode }) => <p>{children}</p>,
+  DialogFooter: ({ children }: { children: ReactNode }) => <div>{children}</div>,
+  DialogHeader: ({ children }: { children: ReactNode }) => <div>{children}</div>,
+  DialogTitle: ({ children }: { children: ReactNode }) => <div>{children}</div>
 }))
 
 const roots: Root[] = []
@@ -81,6 +93,14 @@ describe('EphemeralVmRuntimesSection helpers', () => {
     expect(getEphemeralVmRuntimeStatusLabel(makeRuntime({ cleanupStatus: 'failed' }))).toBe(
       'Cleanup failed'
     )
+    expect(
+      getEphemeralVmRuntimeStatusLabel(
+        makeRuntime({
+          cleanupStatus: 'failed',
+          cleanupLastError: 'Cleanup stopped by user.'
+        })
+      )
+    ).toBe('Cleanup stopped')
     expect(getEphemeralVmRuntimeStatusLabel(makeRuntime({ cleanupStatus: 'disabled' }))).toBe(
       'Cleanup disabled'
     )
@@ -108,6 +128,13 @@ describe('EphemeralVmRuntimesSection', () => {
               status: 'cleaned',
               cleanupStatus: 'succeeded'
             })
+          ),
+          stopCleanup: vi.fn().mockResolvedValue(
+            makeRuntime({
+              status: 'cleanup_failed',
+              cleanupStatus: 'failed',
+              cleanupLastError: 'Cleanup stopped by user.'
+            })
           )
         },
         ui: {
@@ -122,6 +149,7 @@ describe('EphemeralVmRuntimesSection', () => {
       act(() => root.unmount())
     })
     document.body.replaceChildren()
+    vi.useRealTimers()
   })
 
   it('renders active Cloud VM runtimes and cleans one up', async () => {
@@ -176,6 +204,65 @@ describe('EphemeralVmRuntimesSection', () => {
 
     await vi.waitFor(() => expect(toastMocks.error).toHaveBeenCalledWith('provider delete failed'))
     expect(toastMocks.success).not.toHaveBeenCalled()
+  })
+
+  it('stops running cleanup from a persistent runtime row', async () => {
+    const running = makeRuntime({ status: 'cleanup_pending', cleanupStatus: 'running' })
+    const stopped = makeRuntime({
+      status: 'cleanup_failed',
+      cleanupStatus: 'failed',
+      cleanupLastError: 'Cleanup stopped by user.'
+    })
+    window.api.ephemeralVm.listRuntimes = vi
+      .fn()
+      .mockResolvedValueOnce([running])
+      .mockResolvedValue([stopped])
+    window.api.ephemeralVm.stopCleanup = vi.fn().mockResolvedValue(stopped)
+    const container = await renderSection()
+
+    await vi.waitFor(() => expect(container.textContent).toContain('Stop cleanup'))
+    const stopButton = [...container.querySelectorAll('button')].find(
+      (button) => button.textContent === 'Stop cleanup'
+    )
+    await act(async () => {
+      stopButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    await vi.waitFor(() => expect(document.body.textContent).toContain('The VM may remain running'))
+    const dialog = document.body.querySelector('[data-slot="dialog-content"]')
+    const confirmButton = [...(dialog?.querySelectorAll('button') ?? [])].find(
+      (button) => button.textContent === 'Stop cleanup'
+    )
+    await act(async () => {
+      confirmButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+
+    await vi.waitFor(() =>
+      expect(window.api.ephemeralVm.stopCleanup).toHaveBeenCalledWith({ runtimeId: 'runtime-1' })
+    )
+    await vi.waitFor(() => expect(container.textContent).toContain('Retry cleanup'))
+    expect(container.textContent).toContain('Cleanup stopped by user.')
+  })
+
+  it('does not repeat load-error toasts while polling a running cleanup', async () => {
+    vi.useFakeTimers()
+    window.api.ephemeralVm.listRuntimes = vi
+      .fn()
+      .mockResolvedValueOnce([makeRuntime({ status: 'cleanup_pending', cleanupStatus: 'running' })])
+      .mockRejectedValue(new Error('IPC unavailable'))
+
+    const container = await renderSection()
+    await act(async () => {
+      await Promise.resolve()
+      await Promise.resolve()
+    })
+    expect(container.textContent).toContain('Stop cleanup')
+    toastMocks.error.mockClear()
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2_000)
+    })
+
+    expect(toastMocks.error).not.toHaveBeenCalled()
   })
 
   it('copies a manual cleanup command for failed runtimes', async () => {

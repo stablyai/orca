@@ -1,5 +1,5 @@
 import type { ExecutionHostId } from './execution-host'
-import type { GlobalSettings } from './types'
+import type { GlobalSettings } from './global-settings-types'
 
 /** Per-host overrides for client preferences that genuinely vary by execution
  *  host. NARROW by design: only settings whose value is meaningless to share

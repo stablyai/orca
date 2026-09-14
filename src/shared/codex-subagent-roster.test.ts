@@ -7,6 +7,7 @@ import {
 import {
   codexRosterToSnapshots,
   finishCodexSubagent,
+  setCodexSubagentModel,
   upsertCodexSubagent,
   type CodexSubagentRoster
 } from './codex-subagent-roster'
@@ -60,5 +61,55 @@ describe('Codex subagent roster', () => {
 
     expect(roster.size).toBe(AGENT_STATUS_MAX_SUBAGENTS)
     expect(roster.has('replacement')).toBe(true)
+  })
+
+  describe('setCodexSubagentModel', () => {
+    it('records the model without disturbing the child lifecycle or label', () => {
+      const roster: CodexSubagentRoster = new Map()
+      upsertCodexSubagent(roster, 'child-1', { description: '/root/audit', state: 'waiting' }, 10)
+
+      setCodexSubagentModel(roster, 'child-1', ' gpt-5.6-terra ')
+
+      expect(codexRosterToSnapshots(roster)).toEqual([
+        {
+          id: 'child-1',
+          agentType: undefined,
+          description: '/root/audit',
+          model: 'gpt-5.6-terra',
+          state: 'waiting',
+          startedAt: 10
+        }
+      ])
+    })
+
+    it('never creates a row for a child that is no longer tracked', () => {
+      const roster: CodexSubagentRoster = new Map()
+      upsertCodexSubagent(roster, 'child-1', { state: 'working' }, 10)
+      finishCodexSubagent(roster, 'child-1')
+
+      // A model read racing a completed child must not resurrect its row.
+      setCodexSubagentModel(roster, 'child-1', 'gpt-5.6-terra')
+
+      expect(roster.size).toBe(0)
+    })
+
+    it('keeps a known model when the new value is empty', () => {
+      const roster: CodexSubagentRoster = new Map()
+      upsertCodexSubagent(roster, 'child-1', { model: 'gpt-5.6-sol', state: 'working' }, 10)
+
+      setCodexSubagentModel(roster, 'child-1', '   ')
+      setCodexSubagentModel(roster, 'child-1', undefined)
+
+      expect(roster.get('child-1')?.model).toBe('gpt-5.6-sol')
+    })
+
+    it('bounds an oversized model to the shared cap', () => {
+      const roster: CodexSubagentRoster = new Map()
+      upsertCodexSubagent(roster, 'child-1', { state: 'working' }, 10)
+
+      setCodexSubagentModel(roster, 'child-1', 'x'.repeat(AGENT_MODEL_MAX_LENGTH + 50))
+
+      expect(roster.get('child-1')?.model).toHaveLength(AGENT_MODEL_MAX_LENGTH)
+    })
   })
 })

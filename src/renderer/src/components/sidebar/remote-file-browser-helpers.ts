@@ -1,7 +1,7 @@
 import { translate } from '@/i18n/i18n'
 import { shouldHandleTextControlPaste } from '@/lib/text-control-paste'
 import { isClipboardTextByteLengthOverLimit } from '../../../../shared/clipboard-text'
-import type { FilesystemPathFlavor } from '../../../../shared/types'
+import type { FilesystemPathFlavor } from '../../../../shared/filesystem-entry-types'
 import {
   driveRootOf,
   isDrivePath,

@@ -1,5 +1,8 @@
 import type { ProjectExecutionRuntimeResolution } from '../../shared/project-execution-runtime'
-import type { PathSource, ShellHydrationFailureReason } from '../../shared/types'
+import type {
+  PathSource,
+  ShellHydrationFailureReason
+} from '../../shared/shell-path-hydration-types'
 
 export type PreflightStatus = {
   git: { installed: boolean }

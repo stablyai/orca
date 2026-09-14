@@ -1,12 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import type {
-  CheckStatus,
-  PRInfo,
-  Repo,
-  Worktree,
-  WorktreeLineage,
-  WorkspaceLineage
-} from '../../../../shared/types'
+import type { CheckStatus, PRInfo } from '../../../../shared/github/pull-request-types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { WorkspaceLineage, WorktreeLineage } from '../../../../shared/worktree/lineage-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import { folderWorkspaceKey, worktreeWorkspaceKey } from '../../../../shared/workspace-scope'
 import { getFolderWorkspaceCardPrDisplay } from './folder-workspace-card-pr-display'
 
@@ -147,6 +143,26 @@ describe('getFolderWorkspaceCardPrDisplay', () => {
     })
 
     expect(display).toMatchObject({ number: 2, status: 'pending' })
+  })
+
+  it('omits a matching suppressed branch PR from attached worktrees', () => {
+    const worktree = makeWorktree({
+      id: 'suppressed',
+      linkedPR: null,
+      suppressedGitHubPR: 4
+    })
+
+    const display = getFolderWorkspaceCardPrDisplay({
+      folderWorkspaceId: 'folder-1',
+      workspaceLineageByChildKey: { [worktree.id]: makeWorkspaceLineage(worktree) },
+      worktreeLineageById: {},
+      worktreeMap: new Map([[worktree.id, worktree]]),
+      repoMap: new Map([[repo.id, repo]]),
+      hostedReviewCache: null,
+      prCache: { 'repo-1::suppressed': makePrEntry(4, 'failure') }
+    })
+
+    expect(display).toBeNull()
   })
 
   it('includes nested attached worktree PRs', () => {

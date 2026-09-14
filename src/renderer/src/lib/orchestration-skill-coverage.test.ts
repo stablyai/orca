@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { DiscoveredSkill, SkillDiscoverySource } from '../../../shared/skills'
-import type { TuiAgent } from '../../../shared/types'
+import type { TuiAgent } from '../../../shared/tui-agent'
 import {
   agentHasOrchestrationSkill,
   getOrchestrationSkillAgentStatuses

@@ -5,7 +5,10 @@ import {
   titleHasAgentName,
   titleHasAnyLegacyAgentName
 } from './agent-name-token-match'
+import { stripLeadingAgentTitleDecorationOrEmpty } from './agent-title-decoration'
 import { isLegacyPiCompatibleTitle } from './pi-compatible-synthetic-title'
+import { memoizeTitleClassification } from './terminal-title-classification-memo'
+import { getWrapperTitleSegments } from './terminal-title-wrapper-segments'
 
 export { AGY_AGENT_NAME_RE, DROID_AGENT_NAME_RE, HERMES_AGENT_NAME_RE, titleHasAgentName }
 
@@ -52,7 +55,7 @@ export const BRAILLE_SPINNER_RE = /[\u2800-\u28ff]/g
 // Reserve the whole quarter-circle block so a later frame addition cannot regress this.
 export const QUARTER_CIRCLE_SPINNER_RE = /[\u25d0-\u25d3]/g
 
-export function isGeminiTerminalTitle(title: string): boolean {
+function computeIsGeminiTerminalTitle(title: string): boolean {
   // Why: Gemini OSC glyphs are stronger evidence than any cwd/session text.
   if (
     title.includes(GEMINI_PERMISSION) ||
@@ -67,8 +70,21 @@ export function isGeminiTerminalTitle(title: string): boolean {
   if (isPiAgentTitle(title)) {
     return false
   }
+  // Why: Antigravity's models are named "Gemini <n.n> <Name>", so an agy pane's own
+  // title carries a whole `gemini` token. Gemini CLI is checked before Antigravity in
+  // getAgentLabel, so without this the model name wins and an agy pane reads as Gemini
+  // CLI. Only the token path defers — the four Gemini OSC glyphs stay decisive, and agy
+  // emits none of them.
+  if (titleHasAgentName(title, 'antigravity') || AGY_AGENT_NAME_RE.test(title)) {
+    return false
+  }
   return titleHasAgentName(title, 'gemini')
 }
+
+/** Pure in `title` — memoized so repeated selector reads skip the regex ladder. */
+export const isGeminiTerminalTitle: (title: string) => boolean = memoizeTitleClassification(
+  computeIsGeminiTerminalTitle
+)
 
 export function isPiTerminalTitle(title: string): boolean {
   return isLegacyPiCompatibleTitle(title) && !containsBrailleSpinner(title)
@@ -131,6 +147,19 @@ export function isClaudeManagementTitle(title: string): boolean {
 
 export function isCursorNativeAgentTitle(title: string): boolean {
   return title.trim().toLowerCase() === CURSOR_NATIVE_TITLE_LOWER
+}
+
+const CLAUDE_IDENTITY_FRAME_RE =
+  /^claude(?: code)?(?:\s+(?:ready|idle|done|working|thinking|running))?(?:\s*-\s*action required)?$/
+
+export function isClaudeIdentityFrameSegment(title: string): boolean {
+  return CLAUDE_IDENTITY_FRAME_RE.test(
+    stripLeadingAgentTitleDecorationOrEmpty(title).trim().toLowerCase()
+  )
+}
+
+export function isClaudeIdentityFrameTitle(title: string): boolean {
+  return getWrapperTitleSegments(title).some(isClaudeIdentityFrameSegment)
 }
 
 // Why: `cursor` is also an ordinary editor noun that other agents type into their own

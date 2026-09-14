@@ -1,12 +1,12 @@
 import { randomUUID } from 'node:crypto'
 import type { Store } from './persistence'
+import type { Repo } from '../shared/repo-types'
 import type {
   AdoptProvisionedRootArgs,
-  AutomationWorkspaceProvenance,
-  CreateWorktreeResult,
-  Repo,
-  WorktreeMeta
-} from '../shared/types'
+  CreateWorktreeResult
+} from '../shared/worktree/create-types'
+import type { WorktreeMeta } from '../shared/worktree/meta-types'
+import type { AutomationWorkspaceProvenance } from '../shared/worktree/types'
 import { isRuntimeOwnedSshTargetId, toSshExecutionHostId } from '../shared/execution-host'
 import { normalizeRuntimePathForComparison } from '../shared/cross-platform-path'
 import {
@@ -15,7 +15,7 @@ import {
 } from '../shared/ephemeral-vm-recipes'
 import { listEphemeralVmRuntimes } from '../shared/ephemeral-vm-runtime-store'
 import type { EphemeralVmRuntimeRecord } from '../shared/ephemeral-vm-runtimes'
-import { getProjectHostSetupWorktreeMeta } from '../shared/project-host-setup-projection'
+import { getProjectHostSetupWorktreeMeta } from '../shared/project-host-setup-lookup'
 import { isTuiAgent } from '../shared/tui-agent-config'
 import { getSshGitProvider } from './providers/ssh-git-dispatch'
 import {
@@ -23,7 +23,12 @@ import {
   isCurrentSshProviderAuthority
 } from './ssh/ssh-provider-authority'
 import { attachEphemeralVmRuntimeToWorkspace } from './ephemeral-vm-runtime-attachment'
-import { getWorktreeCreationLayout, mergeWorktree } from './ipc/worktree-logic'
+import {
+  getWorktreeCreationLayout,
+  mergeWorktree,
+  resolveWorktreeCreateDisplayNameMeta,
+  resolveWorktreeCreateDisplayNameRequest
+} from './ipc/worktree-logic'
 
 type AdoptionArgs = AdoptProvisionedRootArgs & {
   automationProvenance?: AutomationWorkspaceProvenance
@@ -90,6 +95,16 @@ export async function adoptProvisionedRootSshCheckout(args: {
   if (gitWorktree.isSparse || sparseCheckoutEnabled) {
     throw new Error('Provisioned-root recipes cannot adopt a sparse checkout.')
   }
+  const requestedBranch = request.branchNameOverride ?? request.name
+  if (gitWorktree.branch !== `refs/heads/${requestedBranch}`) {
+    throw new Error("The recipe projectRoot is not checked out on Orca's requested branch.")
+  }
+  if (request.baseBranch && !request.expectedRefHead) {
+    throw new Error('The requested provisioned-root ref identity is missing.')
+  }
+  if (request.expectedRefHead && gitWorktree.head !== request.expectedRefHead) {
+    throw new Error("The recipe projectRoot was not created from Orca's requested ref.")
+  }
 
   const worktreeId = `${repo.id}::${gitWorktree.path}`
   attachEphemeralVmRuntimeToWorkspace({
@@ -100,7 +115,13 @@ export async function adoptProvisionedRootSshCheckout(args: {
   const now = Date.now()
   const meta = store.setWorktreeMeta(
     worktreeId,
-    buildProvisionedRootMeta(store, repo, request, now)
+    buildProvisionedRootMeta(
+      store,
+      repo,
+      request,
+      gitWorktree.branch.replace(/^refs\/heads\//, ''),
+      now
+    )
   )
   return { worktree: mergeWorktree(repo.id, gitWorktree, meta) }
 }
@@ -145,8 +166,22 @@ function buildProvisionedRootMeta(
   store: Store,
   repo: Repo,
   args: AdoptionArgs,
+  branchName: string,
   now: number
 ): Partial<WorktreeMeta> {
+  const displayNameRequest = resolveWorktreeCreateDisplayNameRequest(
+    args.displayName,
+    args.displayNameKind,
+    args.name,
+    false,
+    args.nameWasGenerated === true
+  )
+  const displayNameMeta = resolveWorktreeCreateDisplayNameMeta(
+    displayNameRequest.value,
+    branchName,
+    displayNameRequest.kind,
+    { requestedName: args.name, sanitizedName: args.name }
+  )
   return {
     instanceId: randomUUID(),
     ...(store.getProjectHostSetups
@@ -154,7 +189,8 @@ function buildProvisionedRootMeta(
       : {}),
     hostId: args.executionHostId,
     ephemeralVmCheckoutMode: 'provisioned-root',
-    displayName: args.displayName || args.name,
+    displayName: displayNameMeta.displayName ?? args.name,
+    ...displayNameMeta,
     lastActivityAt: now,
     createdAt: now,
     orcaCreatedAt: now,

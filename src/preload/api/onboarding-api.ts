@@ -1,4 +1,4 @@
-import type { OnboardingState } from '../../shared/types'
+import type { OnboardingState } from '../../shared/onboarding-state-types'
 
 export type OnboardingApi = {
   get: () => Promise<OnboardingState>

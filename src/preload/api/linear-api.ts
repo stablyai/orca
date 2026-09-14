@@ -1,21 +1,22 @@
 import type { LinearIssueAttributeFilter } from '../../shared/linear/issue-attribute-filter'
+import type { LinearIssueUpdate } from '../../shared/issue-mutation-types'
+import type { LinearComment, LinearIssue } from '../../shared/linear/issue-types'
 import type {
-  LinearCollectionResult,
-  LinearComment,
-  LinearConnectionStatus,
   LinearCustomViewModel,
   LinearCustomViewSummary,
-  LinearIssue,
-  LinearIssueUpdate,
+  LinearProjectDetail,
+  LinearProjectSummary
+} from '../../shared/linear/project-types'
+import type {
+  LinearCollectionResult,
+  LinearConnectionStatus,
   LinearLabel,
   LinearMember,
-  LinearProjectDetail,
-  LinearProjectSummary,
   LinearTeam,
   LinearViewer,
   LinearWorkflowState,
   LinearWorkspaceSelection
-} from '../../shared/types'
+} from '../../shared/linear/workspace-types'
 
 export type LinearApi = {
   connect: (args: {

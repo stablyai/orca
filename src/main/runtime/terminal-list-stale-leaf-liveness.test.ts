@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
-import type { WorkspaceSessionState } from '../../shared/types'
+import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 
 // run6-review-pr-11959 repro: leaf.connected mirrors the graph (`ptyId !== null`),
 // so a restored leaf whose PTY no provider owns must be demoted from the

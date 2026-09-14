@@ -1,8 +1,12 @@
 import React from 'react'
-import { CircleCheck } from 'lucide-react'
+import { Activity, CircleCheck, CircleDashed } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { AgentQuestionIcon } from '@/components/AgentQuestionIcon'
 import { AgentWorkingSpinner } from '@/components/AgentWorkingSpinner'
+import {
+  StateIndicatorTooltip,
+  type StateIndicatorTooltipSide
+} from '@/components/StateIndicatorTooltip'
 
 // Why: shared state-indicator primitive so the dashboard and the sidebar's
 // agent hover share a single state vocabulary. Most states render as a dot;
@@ -17,6 +21,7 @@ import { AgentWorkingSpinner } from '@/components/AgentWorkingSpinner'
 
 export type AgentDotState =
   | 'working'
+  | 'monitoring'
   | 'blocked'
   | 'waiting'
   | 'interrupted'
@@ -25,6 +30,11 @@ export type AgentDotState =
   | 'failed'
   | 'done'
   | 'idle'
+  // Why: the pane still has a live PTY but its reporting stream has gone quiet past
+  // the staleness window. Distinct from 'idle' because Orca has evidence something is
+  // held there, and never rendered as 'done' or 'working' — it asserts nothing about
+  // the agent, only about what Orca last heard.
+  | 'unverifiable'
   // Why: the sidebar's title-based status flow (StatusIndicator/WorktreeCard)
   // collapses blocked + waiting into a single "needs attention" state. Keep
   // this as a distinct member so that flow can render without inventing a new
@@ -37,6 +47,8 @@ export function agentStateLabel(state: AgentDotState): string {
   switch (state) {
     case 'working':
       return 'Working'
+    case 'monitoring':
+      return 'Monitoring background tasks'
     case 'blocked':
       return 'Blocked'
     case 'waiting':
@@ -49,6 +61,8 @@ export function agentStateLabel(state: AgentDotState): string {
       return 'Done'
     case 'idle':
       return 'Idle'
+    case 'unverifiable':
+      return 'No recent update'
     case 'permission':
       return 'Needs attention'
   }
@@ -58,20 +72,28 @@ type Props = {
   state: AgentDotState
   size?: 'sm' | 'md'
   className?: string
+  /** Overrides the hover tooltip; null suppresses it for an existing tooltip. */
+  title?: string | null
+  tooltipSide?: StateIndicatorTooltipSide
 }
 
 /** Render the compact state glyph used by agent rows and terminal tabs. */
 export const AgentStateDot = React.memo(function AgentStateDot({
   state,
   size = 'sm',
-  className
+  className,
+  title,
+  tooltipSide
 }: Props): React.JSX.Element {
   const box = size === 'md' ? 'h-3 w-3' : 'h-2.5 w-2.5'
   const inner = size === 'md' ? 'size-2' : 'size-1.5'
   const icon = size === 'md' ? 'size-3' : 'size-2.5'
+  const tooltipLabel = title === null ? null : (title ?? agentStateLabel(state))
+
+  let indicator: React.JSX.Element
 
   if (state === 'working') {
-    return (
+    indicator = (
       <span
         className={cn('inline-flex shrink-0 items-center justify-center', box, className)}
         aria-label={agentStateLabel(state)}
@@ -79,14 +101,21 @@ export const AgentStateDot = React.memo(function AgentStateDot({
         <AgentWorkingSpinner className={inner} />
       </span>
     )
-  }
-
-  if (state === 'done') {
+  } else if (state === 'monitoring') {
+    indicator = (
+      <span
+        className={cn('inline-flex shrink-0 items-center justify-center', box, className)}
+        aria-label={agentStateLabel(state)}
+      >
+        <Activity className={cn('text-yellow-500', icon)} aria-hidden="true" />
+      </span>
+    )
+  } else if (state === 'done') {
     // Why: the dashboard lists many agents, so a check glyph scans well for
     // agent-reported completion and keeps 'done' visually distinct from
     // 'idle' and other dot states at a glance. The sidebar's StatusIndicator
     // intentionally diverges (emerald dot + tooltip) — see file header.
-    return (
+    indicator = (
       <span
         className={cn('inline-flex shrink-0 items-center justify-center', box, className)}
         aria-label={agentStateLabel(state)}
@@ -94,10 +123,19 @@ export const AgentStateDot = React.memo(function AgentStateDot({
         <CircleCheck className={cn('text-emerald-500', icon)} aria-hidden="true" />
       </span>
     )
-  }
-
-  if (state === 'permission' || state === 'waiting') {
-    return (
+  } else if (state === 'unverifiable') {
+    // Why: a dashed ring reads as "incomplete information" rather than a state claim,
+    // and amber carries warning weight without borrowing 'done' green or 'working' yellow.
+    indicator = (
+      <span
+        className={cn('inline-flex shrink-0 items-center justify-center', box, className)}
+        aria-label={agentStateLabel(state)}
+      >
+        <CircleDashed className={cn('text-amber-500', icon)} aria-hidden="true" />
+      </span>
+    )
+  } else if (state === 'permission' || state === 'waiting') {
+    indicator = (
       <span
         className={cn('inline-flex shrink-0 items-center justify-center', box, className)}
         aria-label={agentStateLabel(state)}
@@ -105,22 +143,28 @@ export const AgentStateDot = React.memo(function AgentStateDot({
         <AgentQuestionIcon className={icon} />
       </span>
     )
+  } else {
+    indicator = (
+      <span
+        className={cn('inline-flex shrink-0 items-center justify-center', box, className)}
+        aria-label={agentStateLabel(state)}
+      >
+        <span
+          className={cn(
+            'block rounded-full',
+            inner,
+            state === 'blocked' || state === 'interrupted' || state === 'failed'
+              ? 'bg-red-500'
+              : 'bg-neutral-500/40'
+          )}
+        />
+      </span>
+    )
   }
 
   return (
-    <span
-      className={cn('inline-flex shrink-0 items-center justify-center', box, className)}
-      aria-label={agentStateLabel(state)}
-    >
-      <span
-        className={cn(
-          'block rounded-full',
-          inner,
-          state === 'blocked' || state === 'interrupted' || state === 'failed'
-            ? 'bg-red-500'
-            : 'bg-neutral-500/40'
-        )}
-      />
-    </span>
+    <StateIndicatorTooltip label={tooltipLabel} side={tooltipSide}>
+      {indicator}
+    </StateIndicatorTooltip>
   )
 })

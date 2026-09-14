@@ -284,7 +284,7 @@ export function ArtifactPublishButton({
                 ? translate('auto.components.artifacts.ArtifactPublishButton.sharing', 'Sharing…')
                 : translate(
                     'auto.components.artifacts.ArtifactPublishButton.sharePublicLink',
-                    'Share public link'
+                    'Generate link'
                   )}
             </Button>
           )}

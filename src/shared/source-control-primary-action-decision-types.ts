@@ -1,6 +1,6 @@
 import type { HostedReviewCreationEligibility } from './hosted-review'
 import type { GitUpstreamStatus } from './git-status-types'
-import type { PRState } from './types'
+import type { PRState } from './github/pull-request-types'
 
 export type SourceControlPrimaryActionKind =
   | 'commit'

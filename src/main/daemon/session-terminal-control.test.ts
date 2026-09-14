@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { PRODUCER_PAUSE_FAILSAFE_MS, Session } from './session'
+import { Session } from './session'
+import { PRODUCER_PAUSE_FAILSAFE_MS } from './session-producer-pause'
 
 function createRecordingSubprocess() {
   const written: string[] = []
@@ -45,6 +46,7 @@ function createRecordingSubprocess() {
     kill() {
       killed = true
     },
+    terminateOwnedTree: () => 'unavailable' as const,
     forceKill() {
       killed = true
     },

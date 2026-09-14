@@ -21,6 +21,11 @@ pnpm install
 pnpm dev
 ```
 
+Ordinary installs include native optional dependencies for the current OS and CPU only.
+Before a cross-architecture build (including `pnpm build:mac`, which produces both x64 and
+arm64 artifacts by default), run `pnpm install:release` to add the other CPU's variants.
+See [the install policy](../docs/reference/pnpm-install-policy.md).
+
 ## Branch Naming
 
 Use a clear, descriptive branch name that reflects the change.
@@ -111,7 +116,6 @@ All stable kinds (`patch`, `minor`, `major`) are computed off the latest _stable
 - **Minor or major bump:** `kind=minor` or `kind=major`.
 
 The scheduled 2x/day RC cron in [`release-rc.yml`](../../actions/workflows/release-rc.yml) is independent and continues to run automatically from `main`.
-
 
 ## Release Channels
 

@@ -1,12 +1,15 @@
+import { EventEmitter } from 'node:events'
 import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { PassThrough } from 'node:stream'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { runRecipeCommand } from './ephemeral-vm-recipe-process'
 
 const tmpRoots: string[] = []
 
 afterEach(() => {
+  vi.useRealTimers()
   for (const root of tmpRoots.splice(0)) {
     rmSync(root, { recursive: true, force: true })
   }
@@ -23,6 +26,91 @@ function nodeCommand(scriptPath: string): string {
 }
 
 describe('runRecipeCommand', () => {
+  it('does not impose an implicit wall-clock deadline', async () => {
+    vi.useFakeTimers()
+    const child = Object.assign(new EventEmitter(), {
+      pid: undefined,
+      stdin: new PassThrough(),
+      stdout: new PassThrough(),
+      stderr: new PassThrough(),
+      kill: vi.fn(),
+      unref: vi.fn()
+    })
+    const resultPromise = runRecipeCommand({
+      command: 'destroy',
+      repoPath: makeRepo(),
+      mode: 'destroy',
+      resultSchemaVersion: 1,
+      context: { recipeId: 'cloud-sandbox', repoPath: makeRepo() },
+      spawnCommand: vi.fn(() => child) as never
+    })
+
+    expect(vi.getTimerCount()).toBe(0)
+    child.emit('close', 0, null)
+    await expect(resultPromise).resolves.toMatchObject({ exitCode: 0 })
+  })
+
+  it('force-kills an aborted recipe if graceful termination never closes it', async () => {
+    vi.useFakeTimers()
+    const child = Object.assign(new EventEmitter(), {
+      pid: undefined,
+      stdin: new PassThrough(),
+      stdout: new PassThrough(),
+      stderr: new PassThrough(),
+      kill: vi.fn(),
+      unref: vi.fn()
+    })
+    const controller = new AbortController()
+    const resultPromise = runRecipeCommand({
+      command: 'destroy',
+      repoPath: makeRepo(),
+      mode: 'destroy',
+      resultSchemaVersion: 1,
+      context: { recipeId: 'cloud-sandbox', repoPath: makeRepo() },
+      signal: controller.signal,
+      spawnCommand: vi.fn(() => child) as never
+    })
+
+    controller.abort()
+    expect(child.kill).toHaveBeenCalledWith('SIGTERM')
+    await vi.advanceTimersByTimeAsync(5_000)
+
+    await expect(resultPromise).resolves.toMatchObject({ aborted: true, exitCode: null })
+    expect(child.kill).toHaveBeenCalledWith('SIGKILL')
+    expect(child.unref).toHaveBeenCalledOnce()
+  })
+
+  it('clears the force-kill timer when graceful termination closes synchronously', async () => {
+    vi.useFakeTimers()
+    const child = Object.assign(new EventEmitter(), {
+      pid: undefined,
+      stdin: new PassThrough(),
+      stdout: new PassThrough(),
+      stderr: new PassThrough(),
+      kill: vi.fn(),
+      unref: vi.fn()
+    })
+    child.kill.mockImplementation(() => {
+      child.emit('close', null, 'SIGTERM')
+      return true
+    })
+    const controller = new AbortController()
+    const resultPromise = runRecipeCommand({
+      command: 'destroy',
+      repoPath: makeRepo(),
+      mode: 'destroy',
+      resultSchemaVersion: 1,
+      context: { recipeId: 'cloud-sandbox', repoPath: makeRepo() },
+      signal: controller.signal,
+      spawnCommand: vi.fn(() => child) as never
+    })
+
+    controller.abort()
+
+    await expect(resultPromise).resolves.toMatchObject({ aborted: true, signal: 'SIGTERM' })
+    expect(vi.getTimerCount()).toBe(0)
+  })
+
   it.each([
     { output: 'abcdef', maxCaptureBytes: 4, expected: 'cdef' },
     { output: 'A😀B', maxCaptureBytes: 5, expected: '😀B' },
@@ -89,7 +177,7 @@ describe('runRecipeCommand', () => {
         })
       ])
 
-      expect(result.signal).toBe('SIGTERM')
+      expect(result).toMatchObject({ signal: 'SIGTERM', aborted: true })
     }
   )
 })

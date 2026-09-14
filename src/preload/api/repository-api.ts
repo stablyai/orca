@@ -4,13 +4,13 @@ import type {
   ListReposForExecutionHostArgs
 } from '../../shared/host-repo-catalog-contract'
 import type {
-  BaseRefDefaultResult,
-  BaseRefSearchResult,
   NestedRepoScanResult,
-  Project,
   ProjectGroup,
   ProjectGroupImportMode,
-  ProjectGroupImportResult,
+  ProjectGroupImportResult
+} from '../../shared/project-group-types'
+import type {
+  Project,
   ProjectHostSetup,
   ProjectHostSetupCreateArgs,
   ProjectHostSetupCreateResult,
@@ -20,9 +20,9 @@ import type {
   ProjectHostSetupResult,
   ProjectHostSetupUpdateArgs,
   ProjectHostSetupUpdateResult,
-  ProjectUpdateArgs,
-  Repo
-} from '../../shared/types'
+  ProjectUpdateArgs
+} from '../../shared/project-types'
+import type { BaseRefDefaultResult, BaseRefSearchResult, Repo } from '../../shared/repo-types'
 
 export type RepositoryApi = {
   list: () => Promise<Repo[]>
@@ -31,6 +31,7 @@ export type RepositoryApi = {
   add: (args: {
     path: string
     kind?: 'git' | 'folder'
+    displayName?: string
   }) => Promise<{ repo: Repo } | { error: string }>
   remove: (args: { repoId: string }) => Promise<void>
   // Forget a project on one execution host only, leaving the same repo id on other hosts intact.
@@ -55,11 +56,9 @@ export type RepositoryApi = {
         | 'worktreeBasePath'
         | 'kind'
         | 'issueSourcePreference'
-        | 'externalWorktreeVisibility'
         | 'externalWorktreeVisibilityPromptDismissedAt'
         | 'externalWorktreeInboxBaselinePaths'
         | 'importedExternalWorktreePaths'
-        | 'agentWorktreeVisibility'
         | 'customWorktreeVisibilitySources'
         | 'worktreeVisibilitySourcePreferences'
         | 'projectGroupId'
@@ -67,6 +66,8 @@ export type RepositoryApi = {
         | 'forkSyncMode'
       >
     > & {
+      externalWorktreeVisibility?: Repo['externalWorktreeVisibility'] | null
+      agentWorktreeVisibility?: Repo['agentWorktreeVisibility'] | null
       sourceControlAi?: Repo['sourceControlAi'] | null
       externalWorktreeDiscoverySuppressedAt?: Repo['externalWorktreeDiscoverySuppressedAt'] | null
     }

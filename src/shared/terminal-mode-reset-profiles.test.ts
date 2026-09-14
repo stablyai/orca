@@ -7,6 +7,7 @@ import {
   POST_REPLAY_MODE_RESET,
   POST_REPLAY_REATTACH_RESET,
   POST_REPLAY_REATTACH_RESET_KEEP_MOUSE,
+  RESET_GRAPHIC_RENDITION,
   RESET_MOUSE_REPORTING,
   buildPostReplayLiveAgentReattachReset,
   replayPayloadEndsWithCursorHidden
@@ -23,14 +24,15 @@ describe('terminal mode reset profiles', () => {
 
   it('pins the fresh-shell profile', () => {
     expect(POST_REPLAY_MODE_RESET).toBe(
-      '\x1b[0 q\x1b[<99u\x1b[=0u\x1b[?25h\x1b[?9l\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l\x1b[?1016l\x1b[?1004l\x1b[?2004l'
+      '\x1b[0m\x1b[0 q\x1b[<99u\x1b[=0u\x1b[?25h\x1b[?9l\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l\x1b[?1016l\x1b[?1004l\x1b[?2004l\x1b7'
     )
   })
 
   it('pins the daemon-reattach profile, which keeps bracketed paste', () => {
     expect(POST_REPLAY_REATTACH_RESET).toBe(
-      '\x1b[0 q\x1b[<99u\x1b[=0u\x1b[?25h\x1b[?9l\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l\x1b[?1016l\x1b[?1004l'
+      '\x1b[0m\x1b[0 q\x1b[<99u\x1b[=0u\x1b[?25h\x1b[?9l\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l\x1b[?1016l\x1b[?1004l\x1b7'
     )
+    expect(POST_REPLAY_REATTACH_RESET).toContain(RESET_GRAPHIC_RENDITION)
     expect(POST_REPLAY_REATTACH_RESET).not.toContain('\x1b[?2004l')
   })
 
@@ -46,8 +48,8 @@ describe('terminal mode reset profiles', () => {
   })
 
   // Why: #12101 — a cold-restored seed re-arms mouse reporting for a dead TUI.
-  it('disarms mouse reporting on the cold-restore seed', () => {
-    expect(COLD_RESTORE_SEED_MODE_RESET).toBe(RESET_MOUSE_REPORTING)
+  it('clears the pen and disarms mouse reporting on the cold-restore seed', () => {
+    expect(COLD_RESTORE_SEED_MODE_RESET).toBe(`${RESET_GRAPHIC_RENDITION}${RESET_MOUSE_REPORTING}`)
   })
 
   // Why: the seed also feeds the daemon emulator and is re-serialized from it, so
@@ -73,6 +75,7 @@ describe('terminal mode reset profiles', () => {
       POST_REPLAY_LIVE_AGENT_SNAPSHOT_RESET,
       POST_REPLAY_LIVE_SNAPSHOT_RESET
     ]) {
+      expect(profile).not.toContain(RESET_GRAPHIC_RENDITION)
       expect(profile).not.toContain('\x1b[?1000l')
       expect(profile).not.toContain('\x1b[?2004l')
     }

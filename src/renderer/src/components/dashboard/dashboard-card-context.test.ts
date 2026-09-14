@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import type { HostedReviewInfo } from '../../../../shared/hosted-review'
-import type { PRInfo, Repo, Worktree } from '../../../../shared/types'
+import type { PRInfo } from '../../../../shared/github/pull-request-types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import { getGitHubPRCacheKey } from '@/store/slices/github-cache-key'
 import { getHostedReviewCacheKey } from '@/store/slices/hosted-review-cache-identity'
 import {
@@ -106,6 +108,56 @@ describe('resolveDashboardCardContext', () => {
         worktree({ linkedPR: 42 })
       ).review
     ).toEqual({ number: 42, state: 'draft' })
+  })
+
+  it('omits a matching suppressed GitHub PR and its review-presence signal', () => {
+    const pr: PRInfo = {
+      number: 42,
+      title: 'GitHub review',
+      state: 'open',
+      url: 'https://example.test/pull/42',
+      checksStatus: 'success',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+      mergeable: 'MERGEABLE'
+    }
+    const cacheKey = getGitHubPRCacheKey(repo.path, repo.id, 'feature', null, null, null, true)
+
+    expect(
+      resolveDashboardCardContext(
+        {
+          settings: null,
+          hostedReviewCache: {},
+          prCache: { [cacheKey]: { data: pr, fetchedAt: 1 } }
+        },
+        repo,
+        worktree({ linkedPR: null, suppressedGitHubPR: 42 })
+      )
+    ).toMatchObject({ review: undefined, hasReview: false })
+  })
+
+  it('reports a different discovered PR as review context', () => {
+    const pr: PRInfo = {
+      number: 43,
+      title: 'Next GitHub review',
+      state: 'open',
+      url: 'https://example.test/pull/43',
+      checksStatus: 'success',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+      mergeable: 'MERGEABLE'
+    }
+    const cacheKey = getGitHubPRCacheKey(repo.path, repo.id, 'feature', null, null, null, true)
+
+    expect(
+      resolveDashboardCardContext(
+        {
+          settings: null,
+          hostedReviewCache: {},
+          prCache: { [cacheKey]: { data: pr, fetchedAt: 1 } }
+        },
+        repo,
+        worktree({ linkedPR: null, suppressedGitHubPR: 42 })
+      )
+    ).toMatchObject({ review: { number: 43 }, hasReview: true })
   })
 
   it('rejects cached review metadata from the previous linked review', () => {

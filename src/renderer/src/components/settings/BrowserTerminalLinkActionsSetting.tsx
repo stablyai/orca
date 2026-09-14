@@ -1,4 +1,4 @@
-import type { GlobalSettings } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { translate } from '@/i18n/i18n'
 import { BROWSER_TERMINAL_LINK_ACTIONS_SETTINGS_TARGET_ID } from '@/lib/settings-navigation-types'
 import { SearchableSetting } from './SearchableSetting'
@@ -19,7 +19,7 @@ export function BrowserTerminalLinkActionsSetting({
 }: BrowserTerminalLinkActionsSettingProps): React.JSX.Element {
   const title = translate(
     'auto.components.settings.BrowserTerminalLinkActionsSetting.title',
-    'Show terminal link actions'
+    'Show link actions'
   )
   const description = getTerminalLinkActionsDescription({ isMac })
 

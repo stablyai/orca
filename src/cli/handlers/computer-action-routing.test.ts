@@ -80,6 +80,32 @@ describe('orca computer action CLI routing', () => {
     })
   })
 
+  it('forwards a middle click to the runtime instead of silently downgrading it', async () => {
+    queueFixtures(callMock, okFixture('req_click', sampleSnapshot()))
+
+    await main(
+      [
+        'computer',
+        'click',
+        '--session',
+        'manual',
+        '--app',
+        'Finder',
+        '--element-index',
+        '3',
+        '--mouse-button',
+        'middle',
+        '--json'
+      ],
+      '/tmp/repo/src'
+    )
+
+    expect(callMock).toHaveBeenCalledWith(
+      'computer.click',
+      expect.objectContaining({ mouseButton: 'middle' })
+    )
+  })
+
   it('prints session and window context in action follow-up commands', async () => {
     queueFixtures(callMock, okFixture('req_click', sampleSnapshot()))
 

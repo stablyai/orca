@@ -1,4 +1,4 @@
-import type { GitFileStatus, GitStatusEntry } from '../../../../shared/types'
+import type { GitFileStatus, GitStatusEntry } from '../../../../shared/git-status-types'
 import { joinPath, normalizeRelativePath } from '@/lib/path'
 import { splitPathSegments } from './path-tree'
 

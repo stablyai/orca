@@ -3,7 +3,7 @@ import {
   getEphemeralVmRecipeCheckoutModeError,
   getEphemeralVmRecipeResultSchemaVersion
 } from './ephemeral-vm-recipe-checkout-mode'
-import type { OrcaVmRecipe } from './types'
+import type { OrcaVmRecipe } from './orca-yaml-hook-types'
 
 const defaultRecipe: OrcaVmRecipe = {
   id: 'cloud-sandbox',

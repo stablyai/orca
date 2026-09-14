@@ -1,4 +1,5 @@
-import type { PRInfo, PRRefreshOutcome } from '../types'
+import type { PRRefreshOutcome } from './pull-request-refresh-types'
+import type { PRInfo } from './pull-request-types'
 
 export type GitHubPRForBranchResponse = PRRefreshOutcome | PRInfo | null
 

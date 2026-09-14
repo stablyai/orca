@@ -1,10 +1,10 @@
+import type { PathExistenceResult } from '../../shared/path-existence-batch'
+import type { SearchOptions, SearchResult } from '../../shared/code-search-types'
 import type {
   DirEntry,
   FsChangedPayload,
-  MarkdownDocument,
-  SearchOptions,
-  SearchResult
-} from '../../shared/types'
+  MarkdownDocument
+} from '../../shared/filesystem-entry-types'
 import type {
   LocalLogTailChangedPayload,
   LocalLogTailReadArgs,
@@ -112,12 +112,18 @@ export type FilesystemApi = {
       filePath: string
       connectionId?: string
     }) => Promise<{ size: number; isDirectory: boolean; mtime: number }>
+    pathsExist?: (args: {
+      filePaths: string[]
+      connectionId?: string
+    }) => Promise<PathExistenceResult[]>
     pathExists: (args: { filePath: string; connectionId?: string }) => Promise<boolean>
     listFiles: (args: {
       rootPath: string
       connectionId?: string
       excludePaths?: string[]
       requestToken?: string
+      maxResults?: number
+      searchQuery?: string
     }) => Promise<string[]>
     cancelListFiles: (args: { requestToken: string }) => Promise<void>
     search: (args: SearchOptions & { connectionId?: string }) => Promise<SearchResult>

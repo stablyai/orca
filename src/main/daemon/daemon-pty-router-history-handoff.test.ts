@@ -9,7 +9,7 @@ import { getDaemonSocketPath } from './daemon-spawner'
 import { TERMINAL_HISTORY_INLINE_SEED_CODE_UNITS } from './terminal-history-seed-chunks'
 import { DAEMON_SESSION_SCROLLBACK_ROWS } from './daemon-session-scrollback-window'
 import type { DaemonFileLog } from './daemon-file-log'
-import type { SubprocessHandle } from './session'
+import type { SubprocessHandle } from './session-subprocess-handle'
 
 function createMockSubprocess(): SubprocessHandle & {
   emitData: (data: string) => void
@@ -24,6 +24,7 @@ function createMockSubprocess(): SubprocessHandle & {
     pause: vi.fn(),
     resume: vi.fn(),
     kill: vi.fn(() => setTimeout(() => onExit?.(0), 0)),
+    terminateOwnedTree: () => 'unavailable' as const,
     forceKill: vi.fn(() => setTimeout(() => onExit?.(137), 0)),
     signal: vi.fn(),
     onData(callback) {

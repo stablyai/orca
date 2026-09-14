@@ -27,6 +27,7 @@ export type ShellApi = {
     request: ShellOpenPathWithApplicationRequest
   ) => Promise<ShellOpenLocalPathResult>
   openFileUri: (uri: string) => Promise<void>
+  pathsExist?: (paths: string[]) => Promise<boolean[]>
   pathExists: (path: string) => Promise<boolean>
   pickAttachment: () => Promise<string | null>
   pickImage: () => Promise<string | null>

@@ -14,7 +14,8 @@ import {
   type TaskProviderIdentity
 } from './task-provider-identity'
 import type { TaskProvider } from './task-providers'
-import type { GlobalSettings, Repo } from './types'
+import type { GlobalSettings } from './global-settings-types'
+import type { Repo } from './repo-types'
 
 export type {
   GitHubTaskProviderIdentity,

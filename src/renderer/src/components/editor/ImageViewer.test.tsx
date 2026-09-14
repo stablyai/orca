@@ -239,3 +239,26 @@ describe('ImageViewer preview source retry', () => {
     expect(findElementsByType(rendered, 'img')).toHaveLength(0)
   })
 })
+
+describe('ImageViewer pre-load layout box', () => {
+  beforeEach(() => {
+    reactHookRuntime.states = []
+    reactHookRuntime.index = 0
+    vi.clearAllMocks()
+  })
+
+  // Why: the scroll surface's inner box is w-max/h-max, so percentage maxes resolve
+  // to none and a 6000x4000 image lays out at natural resolution before onLoad.
+  it('bounds both scroll surfaces with viewport units before the image loads', async () => {
+    const images = findElementsByType(await renderExpandedImageViewer(pngBase64(1)), 'img')
+
+    expect(images).toHaveLength(2)
+    for (const image of images) {
+      const className = String(image.props.className)
+      expect(className).toContain('max-h-[100vh]')
+      expect(className).toContain('max-w-[100vw]')
+      expect(className).not.toContain('max-h-full')
+      expect(className).not.toContain('max-w-full')
+    }
+  })
+})

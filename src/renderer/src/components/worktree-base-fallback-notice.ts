@@ -1,4 +1,4 @@
-import type { WorktreeCreateBaseFallback } from '../../../shared/types'
+import type { WorktreeCreateBaseFallback } from '../../../shared/worktree/create-types'
 
 const notices: WorktreeCreateBaseFallback[] = []
 const listeners = new Set<() => void>()

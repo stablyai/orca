@@ -1,9 +1,5 @@
-/* eslint-disable max-lines -- Why: marquee selection coordinates pointer capture, lane-scroll refresh, auto-scroll, preview cleanup, and final commit against one drag state. Splitting those phases would make the interaction easier to desynchronize. */
 import React, { useCallback, useEffect, useRef } from 'react'
-import {
-  getAreaSelectionCardRects,
-  type AreaSelectionCardRect
-} from './workspace-kanban-area-selection-card-rects'
+import { getAreaSelectionCardRects } from './workspace-kanban-area-selection-card-rects'
 import {
   clearPreviewSelection,
   getAreaSelectionAutoScrollDelta,
@@ -16,54 +12,12 @@ import {
   shouldIgnoreAreaSelectionStart,
   updatePreviewSelection
 } from './workspace-kanban-area-selection-dom'
-
-type AreaSelectionDragState = {
-  startX: number
-  startY: number
-  currentX: number
-  currentY: number
-  additive: boolean
-  baseSelectedIds: Set<string>
-  baseAnchorId: string | null
-  boardRect: DOMRect
-  cardRects: readonly AreaSelectionCardRect[]
-  scrollStartContentYByElement: ReadonlyMap<HTMLElement, number>
-  previewIds: Set<string>
-  finalAreaIds: string[]
-  started: boolean
-  frameId: number | null
-  scrollFrameId: number | null
-}
-
-type UpdateSelectionForArea = (
-  areaIds: readonly string[],
-  additive: boolean,
-  baseSelectedIds?: ReadonlySet<string>,
-  baseAnchorId?: string | null
-) => void
-
-type UseWorkspaceKanbanAreaSelectionParams = {
-  open: boolean
-  boardRef: React.RefObject<HTMLDivElement | null>
-  overlayRef: React.RefObject<HTMLDivElement | null>
-  selectedWorktreeIds: ReadonlySet<string>
-  selectionAnchorId: string | null
-  updateSelectionForArea: UpdateSelectionForArea
-}
-
-const AREA_SELECTION_DRAG_THRESHOLD = 4
-
-export function shouldCommitWorkspaceKanbanAreaSelection({
-  additive,
-  started
-}: {
-  additive: boolean
-  started: boolean
-}): boolean {
-  // Why: a plain click on empty board space is the user's "click off" gesture;
-  // modifier-clicking empty space should not accidentally drop a selected batch.
-  return started || !additive
-}
+import {
+  AREA_SELECTION_DRAG_THRESHOLD,
+  shouldCommitWorkspaceKanbanAreaSelection,
+  type AreaSelectionDragState,
+  type UseWorkspaceKanbanAreaSelectionParams
+} from './workspace-kanban-area-selection-state'
 
 export function useWorkspaceKanbanAreaSelection({
   open,

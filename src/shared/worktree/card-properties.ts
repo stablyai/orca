@@ -1,9 +1,6 @@
-import type {
-  GlobalSettings,
-  PersistedUIState,
-  WorktreeCardMode,
-  WorktreeCardProperty
-} from '../types'
+import type { GlobalSettings } from '../global-settings-types'
+import type { PersistedUIState } from '../persisted-ui-state-types'
+import type { WorktreeCardMode, WorktreeCardProperty } from '../ui-chrome-types'
 
 const FIXED_WORKTREE_CARD_PROPERTIES: WorktreeCardProperty[] = ['status', 'unread']
 

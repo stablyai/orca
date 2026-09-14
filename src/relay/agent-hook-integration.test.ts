@@ -253,6 +253,48 @@ describe('Integration: relay hook server → mux → AgentHookServer.ingestRemot
     ])
   })
 
+  it('clears remote Claude permission when its teammate idles', async () => {
+    const { port, token } = hookServer.getCoordinates()
+    const postClaude = (payload: Record<string, unknown>): Promise<Response> =>
+      fetch(`http://127.0.0.1:${port}/hook/claude`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Orca-Agent-Hook-Token': token
+        },
+        body: JSON.stringify({
+          paneKey: `tab-9:${LEAF_9}`,
+          tabId: 'tab-9',
+          worktreeId: 'wt-9',
+          env: 'remote',
+          version: '1',
+          payload
+        })
+      })
+
+    await postClaude({
+      hook_event_name: 'PermissionRequest',
+      agent_id: 'areviewer-6d3cb5b5',
+      agent_type: 'reviewer',
+      tool_name: 'Bash',
+      tool_input: { command: 'false' }
+    })
+    await postClaude({ hook_event_name: 'TeammateIdle', teammate_name: 'reviewer' })
+
+    const start = Date.now()
+    while (orcaServer.getStatusSnapshot()[0]?.state !== 'working' && Date.now() - start < 1500) {
+      await new Promise((resolve) => setImmediate(resolve))
+    }
+    expect(orcaServer.getStatusSnapshot()[0]).toMatchObject({
+      paneKey: `tab-9:${LEAF_9}`,
+      connectionId: 'conn-test',
+      state: 'working',
+      agentType: 'claude',
+      subagents: [expect.objectContaining({ id: 'areviewer-6d3cb5b5', state: 'idle' })]
+    })
+    expect(orcaServer.getStatusSnapshot()[0]?.toolName).toBeUndefined()
+  })
+
   it('clears remote Claude permission when approved PostToolUse matches the preceding tool use id', async () => {
     const { port, token } = hookServer.getCoordinates()
     const postClaude = async (payload: Record<string, unknown>): Promise<Response> =>

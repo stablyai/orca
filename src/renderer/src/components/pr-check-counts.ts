@@ -1,6 +1,6 @@
 import { translate } from '../i18n/i18n'
 import { summarizeProviderChecks } from '../../../shared/provider-check-summary'
-import type { PRCheckDetail } from '../../../shared/types'
+import type { PRCheckDetail } from '../../../shared/github/check-types'
 
 export type PRCheckCounts = {
   passing: number

@@ -1,10 +1,11 @@
+import type { MarkdownDocument } from '../../shared/filesystem-entry-types'
+import type { PersistedUIState } from '../../shared/persisted-ui-state-types'
+import type { TuiAgent } from '../../shared/tui-agent'
 import type {
-  PersistedUIState,
-  TuiAgent,
   WorktreeDefaultTabsLaunch,
   WorktreeSetupLaunch,
   WorktreeStartupLaunch
-} from '../../shared/types'
+} from '../../shared/worktree/launch-types'
 import type { FeatureInteractionId } from '../../shared/feature-interactions'
 import type { KeybindingActionId } from '../../shared/keybindings'
 import type { BrowserFindSource } from '../../shared/browser-find-source'
@@ -27,15 +28,31 @@ import type {
   TerminalTabCloseRequest,
   TerminalTabCloseResponse
 } from '../../shared/terminal-tab-close'
+import type {
+  SessionTabCloseRequest,
+  SessionTabCloseResponse
+} from '../../shared/session-tab-close'
+
+export type CloseActiveTabPayload = { sourceId: string }
 
 export type UiCommandEventApi = {
   get: () => Promise<PersistedUIState>
   set: (args: Partial<PersistedUIState>) => Promise<void>
+  /** Like set, but REJECTS when the update did not reach the host (the web preload's set
+   *  swallows transport failures for offline use). The diff writer needs the distinction:
+   *  folding an unacked patch into its baseline would silently stop retrying it (STA-5781). */
+  setWithAck?: (args: Partial<PersistedUIState>) => Promise<void>
   recordFeatureInteraction: (id: FeatureInteractionId) => Promise<PersistedUIState>
   onStateChanged: (callback: (ui: PersistedUIState) => void) => () => void
   onOpenSettings: (callback: () => void) => () => void
   /** Consumes a one-shot tray/menu-bar "open settings" intent queued before mount. */
   consumePendingOpenSettings: () => Promise<boolean>
+  onOpenSkillShare: (callback: (shareId: string) => void) => () => void
+  consumePendingSkillShare: () => Promise<string | null>
+  /** OS "Open With" markdown paths pushed while a renderer is already listening. */
+  onOpenMarkdownFiles: (callback: (documents: MarkdownDocument[]) => void) => () => void
+  /** Drains the "Open With" paths queued before this renderer's listener attached. */
+  consumePendingMarkdownFileOpens: () => Promise<MarkdownDocument[]>
   onOpenSetupGuide: (callback: () => void) => () => void
   onOpenFeatureTour: (callback: () => void) => () => void
   onOpenCrashReport: (callback: () => void) => () => void
@@ -52,6 +69,7 @@ export type UiCommandEventApi = {
   onDeleteCurrentWorkspace: (callback: () => void) => () => void
   onOpenWorkspaceBoard: (callback: () => void) => () => void
   onOpenTasks: (callback: () => void) => () => void
+  onToggleAgentDashboard: (callback: () => void) => () => void
   onJumpToWorktreeIndex: (callback: (index: number) => void) => () => void
   onJumpToTabIndex: (callback: (index: number) => void) => () => void
   onWorktreeHistoryNavigate: (callback: (direction: 'back' | 'forward') => void) => () => void
@@ -63,6 +81,7 @@ export type UiCommandEventApi = {
       requestId: string
       url: string
       worktreeId?: string
+      browserPageId?: string
       sessionProfileId?: string | null
       sessionPartition?: string
       activate?: boolean
@@ -81,15 +100,22 @@ export type UiCommandEventApi = {
   onRequestTabClose: (
     callback: (data: { requestId: string; tabId: string | null; worktreeId?: string }) => void
   ) => () => void
-  replyTabClose: (reply: { requestId: string; error?: string }) => void
+  replyTabClose: (reply: {
+    requestId: string
+    error?: string
+    code?: 'browser_tab_not_found'
+  }) => void
   onNewTerminalTab: (callback: () => void) => () => void
   onFocusBrowserAddressBar: (callback: () => void) => () => void
   onFindInBrowserPage: (source: BrowserFindSource, callback: () => void) => () => void
   onReloadBrowserPage: (callback: () => void) => () => void
   onBrowserHistoryNavigate: (callback: (direction: 'back' | 'forward') => void) => () => void
   onZoomBrowserPage: (callback: (direction: 'in' | 'out' | 'reset') => void) => () => void
+  onScrollBrowserPage?: (
+    callback: (event: { browserPageId: string; deltaX: number; deltaY: number }) => void
+  ) => () => void
   onHardReloadBrowserPage: (callback: () => void) => () => void
-  onCloseActiveTab: (callback: () => void) => () => void
+  onCloseActiveTab: (callback: (payload?: CloseActiveTabPayload) => void) => () => void
   onCloseFloatingItem: (callback: (payload: { sourceId: string }) => void) => () => void
   onSelectFloatingIndex: (callback: (payload: { index: number }) => void) => () => void
   onSwitchTab: (callback: (direction: 1 | -1) => void) => () => void
@@ -151,7 +177,10 @@ export type UiCommandEventApi = {
       paneRuntimeId: number
       direction: 'horizontal' | 'vertical'
       command?: string
+      worktreeId?: string
+      sourceLeafId?: string
       telemetrySource?: TerminalPaneSplitSource
+      newLeafId?: string
     }) => void
   ) => () => void
   onRenameTerminal: (
@@ -169,6 +198,8 @@ export type UiCommandEventApi = {
   ) => () => void
   onFocusEditorTab: (callback: (data: { tabId: string; worktreeId: string }) => void) => () => void
   onCloseSessionTab: (callback: (data: { tabId: string; worktreeId: string }) => void) => () => void
+  onSessionTabCloseRequest: (callback: (request: SessionTabCloseRequest) => void) => () => void
+  respondSessionTabClose: (response: SessionTabCloseResponse) => void
   onMoveSessionTab: (
     callback: (data: { worktreeId: string } & RuntimeMobileSessionTabMove) => void
   ) => () => void

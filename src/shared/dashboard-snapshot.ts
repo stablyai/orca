@@ -1,7 +1,7 @@
-import type { AgentType } from './agent-status-types'
+import type { AgentType, AgentWorkingMode } from './agent-status-types'
 import type { ExecutionHostId } from './execution-host'
 import type { RepoIcon } from './repo-icon'
-import type { TuiAgent } from './types'
+import type { TuiAgent } from './tui-agent'
 
 /**
  * Serializable contract for the pop-out agent dashboard. The main renderer owns
@@ -35,11 +35,15 @@ export const DASHBOARD_MAX_MAP_WORKSPACES = 2_000
 
 /** Kept distinct from `bucket` so attention cards retain their precise dot state. */
 export type DashboardCardDotState = 'working' | 'blocked' | 'waiting' | 'done' | 'idle'
+export type DashboardCardDisplayState = DashboardCardDotState | 'monitoring'
 
 /** Completed agents stay green until acknowledged, then settle into gray idle. */
 export function dashboardCardDisplayState(
-  card: Pick<DashboardCard, 'dotState' | 'unseen'>
-): DashboardCardDotState {
+  card: Pick<DashboardCard, 'dotState' | 'workingMode' | 'unseen'>
+): DashboardCardDisplayState {
+  if (card.dotState === 'working' && card.workingMode === 'monitoring') {
+    return 'monitoring'
+  }
   return card.dotState === 'done' && !card.unseen ? 'idle' : card.dotState
 }
 
@@ -84,6 +88,8 @@ export type DashboardCard = {
   agentType: AgentType
   bucket: DashboardBucket
   dotState: DashboardCardDotState
+  /** Additive discriminator; older pop-outs render this as ordinary working. */
+  workingMode?: AgentWorkingMode
   /** One-line task/prompt text shown on the card. */
   task: string
   /** The most recent message the user sent this agent (its current prompt). */
@@ -158,6 +164,10 @@ export type DashboardCardTerminalInput = {
   osRelease?: string
   /** Shift+Enter encoding resolved from this pane's agent evidence. */
   windowsShiftEnterEncoding: 'alt-enter' | 'csi-u'
+  /** Force protected multiline paste when the live agent requires paste frames. */
+  forceBracketedMultilineTextPaste?: true
+  /** Newline encoding for Windows TUIs that consume console input records. */
+  windowsInputRecordPasteNewline?: 'alt-enter' | 'csi-u'
   /** Trusted query-only consumer accepts Ctrl+Enter CSI-u without active flags. */
   ctrlEnterCsiU: boolean
   /** False withholds the kitty (CSI-u) advertisement, as ConPTY panes do. */

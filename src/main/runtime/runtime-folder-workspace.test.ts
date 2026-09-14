@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import type { Repo, WorktreeMeta } from '../../shared/types'
+import type { Repo } from '../../shared/repo-types'
+import type { WorktreeMeta } from '../../shared/worktree/meta-types'
 import { FOLDER_WORKSPACE_INSTANCE_SEPARATOR } from '../../shared/worktree/id'
 import {
   getRuntimeFolderWorkspaceInstanceId,

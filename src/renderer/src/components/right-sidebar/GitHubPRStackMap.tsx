@@ -1,6 +1,9 @@
 import { useMemo, useState } from 'react'
 import { ChevronDown, GitBranch, GitPullRequest } from 'lucide-react'
-import type { GitHubPRStack, GitHubPRStackEntry } from '../../../../shared/types'
+import type {
+  GitHubPRStack,
+  GitHubPRStackEntry
+} from '../../../../shared/github/pull-request-types'
 import { cn } from '@/lib/utils'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { translate } from '@/i18n/i18n'

@@ -5,9 +5,15 @@
  * Extracted from git-handler-ops.ts to keep both files under the limit.
  */
 
+import {
+  isSafeGitRemoteName,
+  isSafePushTargetRemoteUrl
+} from '../shared/git-push-target-validation'
+
 // Why: only read-only git subcommands are allowed via exec, except for the
 // exact init/empty-commit shapes used by SSH Create Project after the parent
-// directory has already been validated by main.
+// directory has already been validated by main, and the exact fork-remote
+// add/remove shapes used by SSH fork-PR worktrees.
 const ALLOWED_GIT_SUBCOMMANDS = new Set([
   'rev-parse',
   'branch',
@@ -84,6 +90,21 @@ const DIFF_ALLOWED_FLAGS = new Set([
   '--no-color',
   '--no-ext-diff'
 ])
+
+// Why: fork-PR worktrees on an SSH host must add the contributor's fork as a
+// remote (and drop it again when the last worktree using it is removed). Allow
+// only those two exact shapes, held to the same remote-name and URL rules the
+// relay already enforces on every pushTarget-carrying RPC. Everything else --
+// set-url, rename, prune, flags before the action -- stays blocked.
+function isAllowedRemoteWriteShape(args: string[]): boolean {
+  if (args[1] === 'add') {
+    return args.length === 4 && isSafeGitRemoteName(args[2]) && isSafePushTargetRemoteUrl(args[3])
+  }
+  if (args[1] === 'remove') {
+    return args.length === 3 && isSafeGitRemoteName(args[2])
+  }
+  return false
+}
 
 function validateCloneArgs(args: string[]): void {
   // Why: project-host setup needs remote clone, but git.exec must not become a
@@ -173,7 +194,11 @@ export function validateGitExecArgs(args: string[]): void {
   }
   if (subcommand === 'remote') {
     const remoteSubcmd = restArgs.find((a) => !a.startsWith('-'))
-    if (remoteSubcmd && REMOTE_WRITE_SUBCOMMANDS.has(remoteSubcmd)) {
+    if (
+      remoteSubcmd &&
+      REMOTE_WRITE_SUBCOMMANDS.has(remoteSubcmd) &&
+      !isAllowedRemoteWriteShape(args)
+    ) {
       throw new Error('Destructive git remote operations are not allowed via exec')
     }
   }

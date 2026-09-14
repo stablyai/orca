@@ -132,7 +132,9 @@ describe.skipIf(process.platform === 'win32')('runtime transport', () => {
     // pre-fix behavior would hang the full duration and trip vitest's own limit.
     const start = Date.now()
     await expect(sendRequest(metadata, 'status.get', undefined, 60000)).rejects.toMatchObject({
-      code: 'runtime_unavailable'
+      code: 'runtime_unavailable',
+      message:
+        'The Orca runtime closed the connection before responding. Restart Orca and try again.'
     })
     expect(Date.now() - start).toBeLessThan(5000)
   })

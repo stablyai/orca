@@ -1,5 +1,5 @@
 import type { Dispatch, SetStateAction } from 'react'
-import type { FsChangedPayload } from '../../../../shared/types'
+import type { FsChangedPayload } from '../../../../shared/filesystem-entry-types'
 import type { DirCache } from './file-explorer-types'
 import {
   isPathInsideOrEqual,
@@ -68,7 +68,9 @@ export function processFileExplorerFsPayload(args: ProcessFileExplorerFsPayloadA
 
   const dirsToRefresh = new Set<string>()
   const childPathIndexes = new Map<string, Set<string>>()
-  const cachePathIndex = createCachedDirPathIndex(cache)
+  let cachedDirPathIndex: ReadonlyMap<string, string> | undefined
+  const cachePathIndex = (): ReadonlyMap<string, string> =>
+    (cachedDirPathIndex ??= createCachedDirPathIndex(cache))
   const cachedDirsToPurge = new Set<string>()
   const reconciledRenameSources = new Set<string>()
   let needsFullRefresh = false

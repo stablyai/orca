@@ -54,6 +54,7 @@ describe('text control paste ownership', () => {
     expect(findOwnedPasteEventTextControlTarget(textarea, textarea)).toBe(textarea)
     expect(findOwnedPasteEventTextControlTarget(other, textarea)).toBeNull()
     expect(findOwnedPasteEventTextControlTarget(terminalTextarea, terminalTextarea)).toBeNull()
+    expect(findOwnedTextControlPasteTarget(terminalTextarea)).toBeNull()
   })
 
   it('allows native paste for empty and small payloads', () => {

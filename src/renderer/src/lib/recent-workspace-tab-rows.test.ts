@@ -1,13 +1,15 @@
 import { describe, expect, it } from 'vitest'
 import {
-  buildFocusedGroupTabRecency,
   orderRecentWorkspaceTabs,
   resolveRecentWorkspaceTabStatus,
   type RecentWorkspaceTabRow
 } from './recent-workspace-tab-rows'
 import type { TabPaneInputSources } from '@/components/sidebar/smart-attention'
-import type { AgentStatusEntry, AgentStatusState } from '../../../shared/agent-status-types'
-import type { TabGroup } from '../../../shared/types'
+import {
+  AGENT_STATUS_STALE_AFTER_MS,
+  type AgentStatusEntry,
+  type AgentStatusState
+} from '../../../shared/agent-status-types'
 
 const NOW = 1_700_000_000_000
 const LEAF_ID = '11111111-2222-4333-8444-555555555555'
@@ -58,172 +60,125 @@ function sources(
   }
 }
 
-function order(
-  rows: RecentWorkspaceTabRow[],
-  paneSources: TabPaneInputSources,
-  overrides: {
-    lastVisitedAtByWorktreeId?: Record<string, number>
-    focusedGroupTabRecency?: Map<string, number>
-  } = {}
-): string[] {
-  return orderRecentWorkspaceTabs({
-    rows,
-    paneSources,
-    now: NOW,
-    lastVisitedAtByWorktreeId: overrides.lastVisitedAtByWorktreeId ?? {},
-    focusedGroupTabRecency: overrides.focusedGroupTabRecency ?? new Map()
-  })
-}
-
 describe('orderRecentWorkspaceTabs', () => {
-  it('puts blocked agents above freshly finished ones, whatever their timestamps', () => {
-    const rows = [row('done'), row('blocked')]
-    const paneSources = sources([
-      entry('done', 'done', NOW - 1_000),
-      entry('blocked', 'blocked', NOW - 600_000)
-    ])
-
-    expect(order(rows, paneSources)).toEqual(['blocked', 'done'])
-  })
-
-  it('orders within a tier by attention timestamp, newest first', () => {
-    const rows = [row('older'), row('newer')]
-    const paneSources = sources([
-      entry('older', 'waiting', NOW - 500_000),
-      entry('newer', 'waiting', NOW - 1_000)
-    ])
-
-    expect(order(rows, paneSources)).toEqual(['newer', 'older'])
-  })
-
-  it('demotes an interrupted done below a live blocked row', () => {
-    const rows = [row('interrupted'), row('blocked')]
-    const paneSources = sources([
-      entry('interrupted', 'done', NOW - 1_000, { interrupted: true }),
-      entry('blocked', 'blocked', NOW - 900_000)
-    ])
-
-    expect(order(rows, paneSources)).toEqual(['blocked', 'interrupted'])
-  })
-
-  it('drops a stale done out of the attention tier after the freshness window', () => {
-    const rows = [row('stale'), row('visited')]
-    const paneSources = sources([entry('stale', 'done', NOW - 40 * 60_000)])
-
-    expect(
-      order(rows, paneSources, {
-        lastVisitedAtByWorktreeId: { 'wt-visited': NOW - 1_000 }
-      })
-    ).toEqual(['visited', 'stale'])
-  })
-
-  it('ranks non-attention rows by worktree focus recency', () => {
-    const rows = [row('cold'), row('warm')]
-
-    expect(
-      order(rows, sources([]), {
-        lastVisitedAtByWorktreeId: {
-          'wt-cold': NOW - 900_000,
-          'wt-warm': NOW - 1_000
-        }
-      })
-    ).toEqual(['warm', 'cold'])
-  })
-
-  it('prefers any visited worktree over a never-visited one', () => {
-    const rows = [row('never'), row('ancient')]
-
-    expect(
-      order(rows, sources([]), {
-        lastVisitedAtByWorktreeId: { 'wt-ancient': 1 }
-      })
-    ).toEqual(['ancient', 'never'])
-  })
-
-  it('breaks a same-worktree tie with the focused group MRU tail', () => {
+  it('orders individual tab visits across worktrees and hosts', () => {
     const rows = [
-      row('first', { worktreeId: 'wt-1' }),
-      row('second', { worktreeId: 'wt-1' }),
-      row('third', { worktreeId: 'wt-1' })
+      row('old', { lastFocusedAt: NOW - 3 * 86400_000 }),
+      row('recent', { lastFocusedAt: NOW - 60_000, worktreeHostId: 'ssh:builder' }),
+      row('newest', { lastFocusedAt: NOW, worktreeId: 'folder:/project' })
     ]
-
-    expect(
-      order(rows, sources([]), {
-        lastVisitedAtByWorktreeId: { 'wt-1': NOW },
-        focusedGroupTabRecency: new Map([
-          ['unified-first', 0],
-          ['unified-third', 1],
-          ['unified-second', 2]
-        ])
-      })
-    ).toEqual(['second', 'third', 'first'])
+    expect(orderRecentWorkspaceTabs({ rows })).toEqual(['newest', 'recent', 'old'])
   })
 
-  it('keeps input order across worktrees instead of comparing their unrelated MRU ordinals', () => {
-    // Callers pass worktree-grouped positional order; both worktrees are never-visited, so only
-    // the per-worktree focus ordinals differ — beta's larger ordinal must not hoist it over alpha.
+  it('keeps unknown and invalid visit times below visited tabs with stable ties', () => {
     const rows = [
-      row('alpha-1', { worktreeId: 'wt-alpha', unifiedTabId: 'unified-alpha-1' }),
-      row('alpha-2', { worktreeId: 'wt-alpha', unifiedTabId: 'unified-alpha-2' }),
-      row('beta-1', { worktreeId: 'wt-beta', unifiedTabId: 'unified-beta-1' })
+      row('unknown'),
+      row('nan', { lastFocusedAt: Number.NaN }),
+      row('first', { lastFocusedAt: NOW }),
+      row('infinite', { lastFocusedAt: Infinity }),
+      row('second', { lastFocusedAt: NOW })
     ]
-
-    expect(
-      order(rows, sources([]), {
-        focusedGroupTabRecency: new Map([
-          ['unified-alpha-1', 0],
-          ['unified-alpha-2', 1],
-          ['unified-beta-1', 5]
-        ])
-      })
-    ).toEqual(['alpha-2', 'alpha-1', 'beta-1'])
-  })
-
-  it('keeps input (positional) order when nothing else separates two rows', () => {
-    const rows = [row('a', { worktreeId: 'wt-1' }), row('b', { worktreeId: 'wt-1' })]
-
-    expect(order(rows, sources([]), { lastVisitedAtByWorktreeId: { 'wt-1': NOW } })).toEqual([
-      'a',
-      'b'
+    expect(orderRecentWorkspaceTabs({ rows })).toEqual([
+      'first',
+      'second',
+      'unknown',
+      'nan',
+      'infinite'
     ])
+    expect(rows[0].id).toBe('unknown')
   })
 
-  it('treats rows without a terminal tab as idle', () => {
-    const rows = [row('browser', { terminalTab: null, unifiedTabId: null }), row('blocked')]
-
-    expect(order(rows, sources([entry('blocked', 'blocked', NOW)]))).toEqual(['blocked', 'browser'])
-  })
-
-  it('promotes a hookless pane whose live title reads as a permission prompt', () => {
+  it('keeps duplicate ids on different hosts as separate occurrences', () => {
     const rows = [
-      row('titled', {
-        terminalTab: { id: 'titled', title: 'OMP - action required' }
-      })
+      row('same', { occurrenceId: 'local', lastFocusedAt: NOW - 1 }),
+      row('same', { occurrenceId: 'ssh', worktreeHostId: 'ssh:builder', lastFocusedAt: NOW })
     ]
-    const paneSources = sources([], {
-      ptyIdsByTabId: { titled: ['pty-1'] },
-      runtimePaneTitlesByTabId: { titled: { 1: 'OMP - action required' } }
+    expect(orderRecentWorkspaceTabs({ rows })).toEqual(['ssh', 'local'])
+  })
+
+  it('retains permission badges without promoting an old permission title', () => {
+    const old = row('old', {
+      lastFocusedAt: NOW - 3 * 86400_000,
+      terminalTab: { id: 'old', title: 'OMP - action required' }
     })
-
-    expect(order(rows, paneSources)).toEqual(['titled'])
-    expect(resolveRecentWorkspaceTabStatus(rows[0], paneSources, NOW)).toBe('permission')
-  })
-
-  it('does not let a slept tab leak its stale title into the ranking', () => {
-    const rows = [
-      row('slept', {
-        terminalTab: { id: 'slept', title: 'OMP - action required' }
-      })
-    ]
-    const paneSources = sources([], {
-      runtimePaneTitlesByTabId: { slept: { 1: 'OMP - action required' } }
-    })
-
-    expect(resolveRecentWorkspaceTabStatus(rows[0], paneSources, NOW)).toBe('inactive')
+    const paneSources = sources([], { ptyIdsByTabId: { old: ['pty-1'] } })
+    expect(resolveRecentWorkspaceTabStatus(old, paneSources, NOW)).toBe('permission')
+    expect(
+      orderRecentWorkspaceTabs({ rows: [old, row('recent', { lastFocusedAt: NOW })] })
+    ).toEqual(['recent', 'old'])
   })
 })
 
 describe('resolveRecentWorkspaceTabStatus', () => {
+  it.each(['tab', 'pane'] as const)(
+    'suppresses a stale done pane permission %s title',
+    (surface) => {
+      const title = 'Codex - action required'
+      const stale = entry('stale', 'done', NOW - AGENT_STATUS_STALE_AFTER_MS - 1)
+      const paneSources = sources([stale], {
+        ptyIdsByTabId: { stale: ['pty-1'] },
+        runtimePaneTitlesByTabId: surface === 'pane' ? { stale: { 1: title } } : {}
+      })
+      expect(
+        resolveRecentWorkspaceTabStatus(
+          row('stale', { terminalTab: { id: 'stale', title } }),
+          paneSources,
+          NOW
+        )
+      ).toBe('active')
+
+      stale.updatedAt = NOW
+      stale.state = 'blocked'
+      expect(resolveRecentWorkspaceTabStatus(row('stale'), paneSources, NOW)).toBe('permission')
+    }
+  )
+
+  it('keeps stale-pane spinner fallback and permission on an uncovered split sibling', () => {
+    const stale = entry('split', 'done', NOW - AGENT_STATUS_STALE_AFTER_MS - 1)
+    const paneSources = sources([stale], {
+      ptyIdsByTabId: { split: ['pty-1', 'pty-2'] },
+      terminalLayoutsByTabId: {
+        split: {
+          root: {
+            type: 'split',
+            direction: 'horizontal',
+            first: { type: 'leaf', leafId: LEAF_ID },
+            second: { type: 'leaf', leafId: '22222222-2222-4222-8222-222222222222' }
+          },
+          activeLeafId: LEAF_ID,
+          expandedLeafId: null
+        }
+      },
+      runtimePaneTitlesByTabId: { split: { 1: 'Codex - action required', 2: 'zsh' } }
+    })
+    expect(resolveRecentWorkspaceTabStatus(row('split'), paneSources, NOW)).toBe('active')
+    paneSources.runtimePaneTitlesByTabId.split = { 1: '⠹ codex working', 2: 'zsh' }
+    expect(resolveRecentWorkspaceTabStatus(row('split'), paneSources, NOW)).toBe('working')
+    paneSources.runtimePaneTitlesByTabId.split = { 2: 'Codex - action required' }
+    expect(resolveRecentWorkspaceTabStatus(row('split'), paneSources, NOW)).toBe('permission')
+  })
+
+  it('surfaces an interrupted outcome without promoting its sort class', () => {
+    const interrupted = entry('interrupted', 'done', NOW - 1_000, { interrupted: true })
+
+    expect(resolveRecentWorkspaceTabStatus(row('interrupted'), sources([interrupted]), NOW)).toBe(
+      'interrupted'
+    )
+  })
+
+  it('does not let a cleanly finished sibling mask an interruption', () => {
+    const interrupted = entry('mixed', 'done', NOW - 1_000, {
+      paneKey: `mixed:${LEAF_ID}`,
+      interrupted: true
+    })
+    const finished = entry('mixed', 'done', NOW - 2_000, {
+      paneKey: 'mixed:22222222-2222-4222-8222-222222222222'
+    })
+
+    expect(
+      resolveRecentWorkspaceTabStatus(row('mixed'), sources([interrupted, finished]), NOW)
+    ).toBe('interrupted')
+  })
   it('maps attention classes onto the sidebar dot vocabulary', () => {
     const blocked = row('blocked')
     const done = row('done')
@@ -240,6 +195,29 @@ describe('resolveRecentWorkspaceTabStatus', () => {
     ).toBe('working')
   })
 
+  it('preserves monitoring unless another pane is actively working', () => {
+    const monitoring = row('monitoring')
+    const monitoringEntry = entry('monitoring', 'working', NOW, {
+      workingMode: 'monitoring'
+    })
+
+    expect(resolveRecentWorkspaceTabStatus(monitoring, sources([monitoringEntry]), NOW)).toBe(
+      'monitoring'
+    )
+    expect(
+      resolveRecentWorkspaceTabStatus(
+        monitoring,
+        sources([
+          monitoringEntry,
+          entry('monitoring', 'working', NOW, {
+            paneKey: 'monitoring:22222222-3333-4444-8555-666666666666'
+          })
+        ]),
+        NOW
+      )
+    ).toBe('working')
+  })
+
   it('falls back to live-pty presence for idle rows', () => {
     const live = row('live')
 
@@ -251,33 +229,5 @@ describe('resolveRecentWorkspaceTabStatus', () => {
       )
     ).toBe('active')
     expect(resolveRecentWorkspaceTabStatus(live, sources([]), NOW)).toBe('inactive')
-  })
-})
-
-describe('buildFocusedGroupTabRecency', () => {
-  function group(id: string, recentTabIds: string[]): TabGroup {
-    return {
-      id,
-      worktreeId: 'wt-1',
-      activeTabId: recentTabIds.at(-1) ?? null,
-      tabOrder: recentTabIds,
-      recentTabIds
-    }
-  }
-
-  it('indexes only the focused group of each worktree', () => {
-    const recency = buildFocusedGroupTabRecency(
-      { 'wt-1': 'group-a' },
-      { 'wt-1': [group('group-a', ['t1', 't2']), group('group-b', ['t3'])] }
-    )
-
-    expect([...recency]).toEqual([
-      ['t1', 0],
-      ['t2', 1]
-    ])
-  })
-
-  it('skips worktrees with no focused group', () => {
-    expect(buildFocusedGroupTabRecency({}, { 'wt-1': [group('group-a', ['t1'])] }).size).toBe(0)
   })
 })

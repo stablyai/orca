@@ -1,4 +1,6 @@
+import { reportWorkerTerminalUserInput } from './worker-terminal-takeover-report'
 import { getTerminalLiveAccessoryRawSendTarget } from './terminal-live-accessory-raw-send-target'
+import { isTerminalSendRpcAccepted } from './terminal-send-rpc-response'
 import { buildTerminalSendParams, TERMINAL_INPUT_SEND_OPTIONS } from './terminal-send-request'
 import type { RpcClient } from '../transport/rpc-client'
 import type { ConnectionState } from '../transport/types'
@@ -15,7 +17,7 @@ type TerminalLiveAccessoryRawSendArgs = {
 
 export async function sendTerminalLiveAccessoryRawBytes(
   args: TerminalLiveAccessoryRawSendArgs
-): Promise<void> {
+): Promise<boolean> {
   // Why: async IME flushing can outlive the original terminal selection.
   const rawSendTarget = getTerminalLiveAccessoryRawSendTarget({
     targetHandle: args.targetHandle,
@@ -23,9 +25,9 @@ export async function sendTerminalLiveAccessoryRawBytes(
     activeSessionTabType: args.activeSessionTabType
   })
   if (!args.client || !rawSendTarget || args.connState !== 'connected') {
-    return
+    return false
   }
-  await args.client
+  return args.client
     .sendRequest(
       'terminal.send',
       buildTerminalSendParams({
@@ -37,7 +39,13 @@ export async function sendTerminalLiveAccessoryRawBytes(
       TERMINAL_INPUT_SEND_OPTIONS
     )
     .then(
-      () => undefined,
-      () => undefined
+      (response) => {
+        const accepted = isTerminalSendRpcAccepted(response)
+        if (accepted) {
+          reportWorkerTerminalUserInput(args.client!, rawSendTarget)
+        }
+        return accepted
+      },
+      () => false
     )
 }

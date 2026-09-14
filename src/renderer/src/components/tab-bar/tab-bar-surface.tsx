@@ -22,7 +22,11 @@ import type { TabBarCreateMenuController } from './use-tab-bar-create-menu-contr
 import type { TabBarItemProjection } from './use-tab-bar-item-projection'
 import type { TabBarItem } from './tab-bar-item-model'
 import { renderTabBarItems } from './tab-bar-item-surface'
-import { renderTabBarStaticCreateMenu } from './tab-bar-static-create-menu'
+import { TabBarStaticCreateMenu } from './tab-bar-static-create-menu'
+import ClientHostedBrowserTabRows from './ClientHostedBrowserTabRows'
+import type { ClientHostedBrowserRow } from '../../../../shared/client-hosted-browser-rows'
+
+const EMPTY_CLIENT_HOSTED_ROWS: readonly ClientHostedBrowserRow[] = []
 
 export function renderTabBarSurface({
   props,
@@ -31,6 +35,7 @@ export function renderTabBarSurface({
   itemProjection,
   tabStripNavigation,
   tabStripDragScroll,
+  activeClientHostedBrowserRowId,
   togglePinned
 }: {
   props: TabBarProps
@@ -39,6 +44,7 @@ export function renderTabBarSurface({
   itemProjection: TabBarItemProjection
   tabStripNavigation: ReturnType<typeof useTabStripOverflowNavigation>
   tabStripDragScroll: ReturnType<typeof useTabStripDragScrollHandlers>
+  activeClientHostedBrowserRowId: string | null
   togglePinned: (item: TabBarItem) => void
 }): React.JSX.Element {
   const {
@@ -81,6 +87,7 @@ export function renderTabBarSurface({
     showStaticCreateMenuItems
   } = createMenu
   const { orderedItems, sortableIds, dropIndicatorByVisibleId } = itemProjection
+  const clientHostedBrowserRows = props.clientHostedBrowserRows ?? EMPTY_CLIENT_HOSTED_ROWS
   const { tabStripRef, tabStripOverflowState, scrollTabStrip } = tabStripNavigation
   const includeTopTabBorder = tabStripChrome !== 'floating-panel'
   const renderedItems = renderTabBarItems({
@@ -89,25 +96,8 @@ export function renderTabBarSurface({
     runtime,
     dropIndicatorByVisibleId,
     includeTopTabBorder,
+    activeClientHostedBrowserRowId,
     togglePinned
-  })
-  const standardCreateMenuItems = renderTabBarStaticCreateMenu({
-    props,
-    terminalOnly,
-    mobileEmulatorEnabled,
-    managedBrowserCreationEnabled,
-    mobileEmulatorCreationEnabled,
-    workspaceHasSimulatorTab,
-    showMobileEmulatorIntroCallout,
-    windowsShellEntries,
-    defaultWindowsPowerShellImplementation,
-    pwshAvailable: windowsTerminalCapabilities.pwshAvailable,
-    newTerminalShortcut,
-    newBrowserShortcut,
-    newSimulatorShortcut,
-    newFileShortcut,
-    openMarkdownShortcut,
-    queueNewActiveTerminalFocusAfterNewTabMenuClose
   })
 
   return (
@@ -149,7 +139,7 @@ export function renderTabBarSurface({
       <SortableContext items={sortableIds}>
         {/* Why: no-drag lets tab interactions work inside the titlebar's drag region (outer container stays window-draggable). */}
         <div
-          className="relative flex min-h-0 min-w-0 max-w-full flex-[0_1_auto]"
+          className="group/tab-strip relative flex min-h-0 min-w-0 max-w-full flex-[0_1_auto]"
           style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
         >
           <div
@@ -163,10 +153,21 @@ export function renderTabBarSurface({
               .join(' ')}
           >
             {renderedItems}
-            {/* Why: a short end inset keeps a last tab's close control off the chevron and fade. */}
-            <div data-tab-strip-end-pad="" aria-hidden className="pointer-events-none shrink-0" />
+            {clientHostedBrowserRows.length > 0 ? (
+              <ClientHostedBrowserTabRows
+                rows={clientHostedBrowserRows}
+                worktreeId={worktreeId}
+                groupId={resolvedGroupId}
+                groupActiveTabId={props.groupActiveTabId ?? null}
+                includeTopTabBorder={includeTopTabBorder}
+              />
+            ) : null}
           </div>
-          <TabStripScrollIndicator metrics={tabStripOverflowState} />
+          <TabStripScrollIndicator
+            metrics={tabStripOverflowState}
+            scrollContainerRef={tabStripRef}
+            disabled={tabStripDragScroll.isTabDragActive}
+          />
         </div>
       </SortableContext>
       {tabStripOverflowState.hasOverflow ? (
@@ -244,7 +245,28 @@ export function renderTabBarSurface({
               {showStaticCreateMenuItems ? <DropdownMenuSeparator /> : null}
             </>
           ) : null}
-          {showStaticCreateMenuItems ? standardCreateMenuItems : null}
+          {showStaticCreateMenuItems ? (
+            <TabBarStaticCreateMenu
+              props={props}
+              terminalOnly={terminalOnly}
+              mobileEmulatorEnabled={mobileEmulatorEnabled}
+              managedBrowserCreationEnabled={managedBrowserCreationEnabled}
+              mobileEmulatorCreationEnabled={mobileEmulatorCreationEnabled}
+              workspaceHasSimulatorTab={workspaceHasSimulatorTab}
+              showMobileEmulatorIntroCallout={showMobileEmulatorIntroCallout}
+              windowsShellEntries={windowsShellEntries}
+              defaultWindowsPowerShellImplementation={defaultWindowsPowerShellImplementation}
+              pwshAvailable={windowsTerminalCapabilities.pwshAvailable}
+              newTerminalShortcut={newTerminalShortcut}
+              newBrowserShortcut={newBrowserShortcut}
+              newSimulatorShortcut={newSimulatorShortcut}
+              newFileShortcut={newFileShortcut}
+              openMarkdownShortcut={openMarkdownShortcut}
+              queueNewActiveTerminalFocusAfterNewTabMenuClose={
+                queueNewActiveTerminalFocusAfterNewTabMenuClose
+              }
+            />
+          ) : null}
           {showStaticCreateMenuItems && showAgentLaunchItems ? (
             <>
               <DropdownMenuSeparator />

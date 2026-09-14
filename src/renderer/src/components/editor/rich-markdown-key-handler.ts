@@ -21,6 +21,14 @@ import { deleteAdjacentEmptyParagraph } from './rich-markdown-empty-paragraph-de
 import { handleRichMarkdownTableBackspace } from './rich-markdown-table-row-delete'
 import { handleRichMarkdownTableEnter } from './rich-markdown-table-enter'
 import { handleRichMarkdownTableTab } from './rich-markdown-table-tab'
+import {
+  indentRichMarkdownListItem,
+  outdentRichMarkdownListItem
+} from './rich-markdown-list-indent'
+import {
+  outdentRichMarkdownCodeBlock,
+  RICH_MARKDOWN_CODE_BLOCK_INDENT
+} from './rich-markdown-code-block-indent'
 import { handleRichMarkdownCitationKey } from './rich-markdown-citation-keyboard'
 import type { RichMarkdownHtmlSuperscriptLinkContext } from './rich-markdown-html-superscript-link-context'
 import { handleRichMarkdownLinkShortcut } from './rich-markdown-link-shortcut'
@@ -202,22 +210,20 @@ export function createRichMarkdownKeyHandler(
       }
 
       if (event.shiftKey) {
-        if (!ed.commands.liftListItem('listItem')) {
-          ed.commands.liftListItem('taskItem')
+        if (!outdentRichMarkdownCodeBlock(ed)) {
+          outdentRichMarkdownListItem(ed)
         }
         return true
       }
 
       if (ed.isActive('codeBlock')) {
-        ed.commands.insertContent('  ')
+        ed.commands.insertContent(RICH_MARKDOWN_CODE_BLOCK_INDENT)
         return true
       }
 
       // Why: sinkListItem succeeds when the item has a previous sibling;
       // otherwise it no-ops. Either way we consume Tab to prevent focus escape.
-      if (!ed.commands.sinkListItem('listItem')) {
-        ed.commands.sinkListItem('taskItem')
-      }
+      indentRichMarkdownListItem(ed)
       return true
     }
 

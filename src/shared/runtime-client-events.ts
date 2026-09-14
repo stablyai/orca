@@ -1,9 +1,9 @@
+import type { CreateWorktreeResult } from './worktree/create-types'
 import type {
-  CreateWorktreeResult,
   WorktreeDefaultTabsLaunch,
   WorktreeSetupLaunch,
   WorktreeStartupLaunch
-} from './types'
+} from './worktree/launch-types'
 import type { SshConnectionState } from './ssh-types'
 import type { TerminalSideEffectBatch } from './terminal-side-effect-facts'
 import type { RuntimeNativeChatLaunchDraftResolution } from './runtime-types'
@@ -24,6 +24,13 @@ export type RuntimeClientEvent =
       phase: 'started' | 'committed' | 'cancelled' | 'woken'
       ptyIds: string[]
       terminalHandles: string[]
+    }
+  // Why: automation stores are authority-owned, so clients cannot learn about a
+  // run/usage/definition write without the owning authority announcing it.
+  | {
+      type: 'automationsChanged'
+      selector?: { kind: 'self' } | { kind: 'ssh'; targetId: string } | { kind: 'orphan' }
+      reason?: 'definition' | 'run' | 'usage'
     }
   | {
       type: 'linearLinkedIssueUpdated'
@@ -51,6 +58,13 @@ export type RuntimeClientEventStreamMessage =
   | { type: 'end' }
 
 export type RuntimeActivateWorktreeEvent = Extract<RuntimeClientEvent, { type: 'activateWorktree' }>
+
+export type AutomationsChangedEvent = Extract<RuntimeClientEvent, { type: 'automationsChanged' }>
+
+/** Publisher payload; `selector` scoping is added by a later host-scope step. */
+export type AutomationsChangedPayload = Omit<AutomationsChangedEvent, 'type'>
+
+export type PublishAutomationsChanged = (payload: AutomationsChangedPayload) => void
 
 export function toRuntimeActivateWorktreeEvent(
   repoId: string,

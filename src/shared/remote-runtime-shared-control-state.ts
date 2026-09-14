@@ -19,18 +19,17 @@ export function buildSharedControlDiagnostics(args: {
   pendingRequestCount: number
   subscriptionCount: number
   reconnectAttempt: number
-  lastConnectedAt: number | null
-  lastClose: { code: number; reason: string } | null
-  lastError: string | null
+  diag: Pick<
+    RemoteRuntimeSharedConnectionDiagnostics,
+    'lastConnectedAt' | 'lastClose' | 'lastError'
+  >
 }): RemoteRuntimeSharedConnectionDiagnostics {
   return {
     state: args.reconnecting ? 'reconnecting' : args.state,
     pendingRequestCount: args.pendingRequestCount,
     subscriptionCount: args.subscriptionCount,
     reconnectAttempt: args.reconnectAttempt,
-    lastConnectedAt: args.lastConnectedAt,
-    lastClose: args.lastClose,
-    lastError: args.lastError
+    ...args.diag
   }
 }
 

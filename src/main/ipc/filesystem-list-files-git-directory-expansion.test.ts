@@ -60,7 +60,7 @@ describe('main Quick Open git directory expansion', () => {
       .mockResolvedValueOnce(primary)
       .mockResolvedValueOnce(ignored)
 
-    const promise = listFilesWithGit(root, [], {})
+    const promise = listFilesWithGit(root, [], { wslDistro: 'Ubuntu' })
     await vi.waitFor(() => expect(gitSpawnMock).toHaveBeenCalledTimes(1))
     await vi.waitFor(() => expect(revParse.listenerCount('close')).toBeGreaterThan(0))
     revParse.emit('close', 0, null)
@@ -78,6 +78,12 @@ describe('main Quick Open git directory expansion', () => {
       'scratch/notes.txt',
       'src/index.ts'
     ])
+    expect(gitSpawnMock.mock.calls[1][1]).toEqual(
+      expect.objectContaining({ admissionTier: 'interactive', wslDistro: 'Ubuntu' })
+    )
+    expect(gitSpawnMock.mock.calls[2][1]).toEqual(
+      expect.objectContaining({ admissionTier: 'interactive', wslDistro: 'Ubuntu' })
+    )
     expect(gitSpawnMock.mock.calls[2][0]).toContain('--directory')
   })
 

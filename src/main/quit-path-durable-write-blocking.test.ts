@@ -4,6 +4,7 @@ import type * as NodeFs from 'node:fs'
 import type * as NodeFsPromises from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
+import { installFakeAppEnvironment } from '../../config/scripts/vitest-host-ports-setup'
 
 // Why these tests exist: will-quit used to run stats.flush() and store.flush() synchronously,
 // before preventDefault(). On a stalled network profile mount those fsync/rename syscalls park
@@ -61,7 +62,18 @@ vi.mock('node:fs', async (importOriginal) => {
 vi.mock('node:fs/promises', async (importOriginal) => {
   const actual = await importOriginal<typeof NodeFsPromises>()
   const patched: Record<string, unknown> = { ...actual }
-  for (const name of ['stat', 'access', 'rename', 'copyFile', 'rm', 'mkdir', 'open', 'writeFile']) {
+  for (const name of [
+    'stat',
+    'access',
+    'rename',
+    'copyFile',
+    'rm',
+    'mkdir',
+    'open',
+    'readFile',
+    'writeFile',
+    'link'
+  ]) {
     const fn = (actual as unknown as Record<string, (...args: unknown[]) => unknown>)[name]
     patched[name] = async (...args: unknown[]): Promise<unknown> => {
       if (fsCalls.inScope(args[0]) && fsCalls.holdAsync) {
@@ -115,6 +127,8 @@ async function createStore(dir: string): Promise<TestStore> {
   testState.dir = dir
   vi.resetModules()
   const { Store, initDataPath } = await import('./persistence')
+  // Why: userData resolves through AppEnvironment; point it at this file's temp dir.
+  installFakeAppEnvironment({ getPath: () => testState.dir })
   initDataPath()
   return new Store() as unknown as TestStore
 }
@@ -250,6 +264,45 @@ describe('quit-path durable writes never park the main thread', () => {
 
     expect(fsCalls.syncCalls).toEqual([])
     expect(JSON.parse(readFileSync(statsFile(dir), 'utf-8')).aggregates.totalAgentsSpawned).toBe(1)
+  })
+
+  it('Grok session cleanup issues no synchronous fs syscalls', async () => {
+    const dir = makeDir()
+    const previousGrokHome = process.env.GROK_HOME
+    process.env.GROK_HOME = dir
+    vi.resetModules()
+    const { GrokHookService } = await import('./grok/hook-service')
+    const service = new GrokHookService()
+    try {
+      const configPath = join(dir, 'hooks', 'orca-status.json')
+      const configDir = join(dir, 'hooks')
+      const { mkdirSync } = await import('node:fs')
+      mkdirSync(configDir, { recursive: true })
+      writeFileSync(
+        configPath,
+        `${JSON.stringify({
+          hooks: {
+            SessionStart: [
+              { hooks: [{ type: 'command', command: '/home/test/.orca/agent-hooks/grok-hook.sh' }] }
+            ]
+          }
+        })}\n`
+      )
+      fsCalls.dirPrefix = dir
+      fsCalls.recording = true
+      await service.removeAsync()
+      fsCalls.recording = false
+
+      expect(fsCalls.syncCalls).toEqual([])
+      expect(existsSync(configPath)).toBe(false)
+    } finally {
+      fsCalls.recording = false
+      if (previousGrokHome === undefined) {
+        delete process.env.GROK_HOME
+      } else {
+        process.env.GROK_HOME = previousGrokHome
+      }
+    }
   })
 
   it('stats.flushAsync() closes out live agents before it returns, not when its write lands', async () => {

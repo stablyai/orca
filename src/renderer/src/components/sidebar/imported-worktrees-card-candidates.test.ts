@@ -4,12 +4,12 @@ import {
   buildImportedWorktreesCardCandidates,
   getHiddenImportedWorktrees
 } from './imported-worktrees-card-candidates'
+import type { Repo } from '../../../../shared/repo-types'
 import type {
   DetectedWorktree,
   DetectedWorktreeListResult,
-  Repo,
   Worktree
-} from '../../../../shared/types'
+} from '../../../../shared/worktree/types'
 
 const repo: Repo = {
   id: 'repo-1',

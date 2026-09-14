@@ -65,7 +65,7 @@ vi.mock('@/components/ui/dropdown-menu', () => {
     DropdownMenuTrigger: ({ children }: { children: ReactNode }) => <>{children}</>
   }
 })
-import type { PRComment } from '../../../../shared/types'
+import type { PRComment } from '../../../../shared/github/comment-types'
 import type { PRCommentGroup } from '../../../../shared/pr-comment-groups'
 import {
   MAX_PERSISTED_PR_COMMENTS_LIST_SELECTIONS,
@@ -74,7 +74,7 @@ import {
   seedPRCommentsListSelectionForTests,
   type PRCommentsListSelectionClearRequest
 } from './pr-comments-list-selection'
-import { PRCommentsList } from './checks-panel-content'
+import { PRCommentsList } from './checks-panel/comments-list'
 
 let container: HTMLDivElement
 let root: Root

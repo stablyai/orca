@@ -5,7 +5,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { useAppStore } from '@/store'
-import type { ProjectGroup, Repo, Worktree } from '../../../../shared/types'
+import type { ProjectGroup } from '../../../../shared/project-group-types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import type { DashboardCard } from '../../../../shared/dashboard-snapshot'
 import { AgentMap } from './AgentMap'
 import * as StoreSelectors from '@/store/selectors'
@@ -312,7 +314,19 @@ describe('Agent Map workspace context menu', () => {
       clientX: 100,
       clientY: 110
     })
-    fireEvent.click(await screen.findByText('Create new worktree for Orca', {}, { timeout: 5_000 }))
+    const createWorktree = await screen.findByText(
+      'Create new worktree for Orca',
+      {},
+      { timeout: 5_000 }
+    )
+    // Radix restores focus after unmount; drain it before the next test opens a menu.
+    const focusRestored = new Promise<void>((resolve) => {
+      screen
+        .getByRole('menu')
+        .addEventListener('focusScope.autoFocusOnUnmount', () => resolve(), { once: true })
+    })
+    fireEvent.click(createWorktree)
+    await act(async () => focusRestored)
 
     expect(useAppStore.getState().activeModal).toBe('new-workspace-composer')
     expect(useAppStore.getState().modalData).toEqual({

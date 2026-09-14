@@ -17,6 +17,7 @@ import {
   listProjects,
   listTransitions,
   searchIssues,
+  searchUsers,
   updateIssue
 } from '../jira/issues'
 import type {
@@ -25,7 +26,7 @@ import type {
   JiraIssueFilter,
   JiraIssueUpdate,
   JiraSiteSelection
-} from '../../shared/types'
+} from '../../shared/jira-types'
 
 const VALID_FILTERS = new Set<JiraIssueFilter>(['assigned', 'reported', 'all', 'done'])
 const issueSummaryRequests = new JiraCancellableRequests()
@@ -52,6 +53,7 @@ function normalizeStringArray(value: unknown): string[] | undefined {
   return Array.isArray(value) && value.every((item) => typeof item === 'string') ? value : undefined
 }
 
+/** Narrows an untrusted IPC payload to the issue-update fields the host accepts. */
 function normalizeIssueUpdate(value: unknown): JiraIssueUpdate | null {
   if (!value || typeof value !== 'object') {
     return null
@@ -83,6 +85,7 @@ function normalizeIssueUpdate(value: unknown): JiraIssueUpdate | null {
   return input
 }
 
+/** Registers every `jira:*` IPC handler on the main process. */
 export function registerJiraHandlers(): void {
   ipcMain.handle('jira:connect', async (_event, args: JiraConnectArgs) => {
     if (
@@ -206,7 +209,10 @@ export function registerJiraHandlers(): void {
       title: args.title.trim(),
       description: args.description?.trim() || undefined,
       customFields:
-        args.customFields && typeof args.customFields === 'object' ? args.customFields : undefined
+        args.customFields && typeof args.customFields === 'object' ? args.customFields : undefined,
+      userFieldKeys: Array.isArray(args.userFieldKeys)
+        ? args.userFieldKeys.filter((key): key is string => typeof key === 'string')
+        : undefined
     })
   })
 
@@ -292,6 +298,13 @@ export function registerJiraHandlers(): void {
       )
     }
   )
+
+  ipcMain.handle('jira:searchUsers', async (_event, args?: { query?: string; siteId?: string }) => {
+    return searchUsers(
+      typeof args?.query === 'string' ? args.query : undefined,
+      normalizeSiteId(args?.siteId)
+    )
+  })
 
   ipcMain.handle('jira:listTransitions', async (_event, args: { key: string; siteId?: string }) => {
     if (typeof args?.key !== 'string' || !args.key.trim()) {

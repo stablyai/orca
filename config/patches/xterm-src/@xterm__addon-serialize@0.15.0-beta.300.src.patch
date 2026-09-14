@@ -1,0 +1,212 @@
+diff --git a/src/SerializeAddon.ts b/src/SerializeAddon.ts
+index e1728feb219c362dfa2ecb602ff99f830d520757..957da98c8b30835cc2d114b4b66b228b01fdff0a 100644
+--- a/src/SerializeAddon.ts
++++ b/src/SerializeAddon.ts
+@@ -12,6 +12,36 @@ import { IAttributeData } from 'common/buffer/Types';
+ import { DEFAULT_ANSI_COLORS } from 'browser/Types';
+ import { UnderlineStyle } from 'common/buffer/Constants';
+ 
++type OscLinkData = { id?: string; uri: string };
++type OscLinkedCell = { extended?: { urlId?: number } };
++type TerminalWithOscLinks = Terminal & {
++  _core?: {
++    _inputHandler?: { _curAttrData?: IAttributeData & OscLinkedCell };
++    _oscLinkService?: { getLinkData: (linkId: number) => OscLinkData | undefined };
++  };
++};
++
++function getOscLinkId(cell: IBufferCell | IAttributeData): number {
++  return (cell as typeof cell & OscLinkedCell).extended?.urlId ?? 0;
++}
++
++function getOscLinkOpenSequence(terminal: Terminal, linkId: number): string {
++  if (!linkId) {
++    return '';
++  }
++  const data = (terminal as TerminalWithOscLinks)._core?._oscLinkService?.getLinkData(linkId);
++  if (!data) {
++    return '';
++  }
++  const params = data.id === undefined ? '' : `id=${data.id}`;
++  return `\u001b]8;${params};${data.uri}\u001b\\`;
++}
++
++function getActiveOscLinkSequence(terminal: Terminal): string {
++  const attrs = (terminal as TerminalWithOscLinks)._core?._inputHandler?._curAttrData;
++  return attrs ? getOscLinkOpenSequence(terminal, getOscLinkId(attrs)) : '';
++}
++
+ function constrain(value: number, low: number, high: number): number {
+   return Math.max(low, Math.min(value, high));
+ }
+@@ -148,12 +178,14 @@ class StringSerializeHandler extends BaseSerializeHandler {
+ 
+   // this is a null cell for reference for checking whether background is empty or not
+   private _backgroundCell: IBufferCell = this._buffer.getNullCell();
++  private _defaultCell: IBufferCell = this._buffer.getNullCell();
+ 
+   private _firstRow: number = 0;
+   private _lastCursorRow: number = 0;
+   private _lastCursorCol: number = 0;
+   private _lastContentCursorRow: number = 0;
+   private _lastContentCursorCol: number = 0;
++  private _activeOscLinkId: number = 0;
+ 
+   constructor(
+     buffer: IBuffer,
+@@ -214,7 +246,7 @@ class StringSerializeHandler extends BaseSerializeHandler {
+         if (
+           // you must output character to cause overflow, control sequence can't do this
+           nextRowFirstChar.getChars() &&
+-            isNextRowFirstCharDoubleWidth ? this._nullCellCount <= 1 : this._nullCellCount <= 0
++          (isNextRowFirstCharDoubleWidth ? this._nullCellCount <= 1 : this._nullCellCount <= 0)
+         ) {
+           if (
+             // the last character can't be null,
+@@ -251,9 +283,14 @@ class StringSerializeHandler extends BaseSerializeHandler {
+           if (this._nullCellCount > 0) {
+             // do these because we filled the last several null slot, which we shouldn't
+             rowSeparator += '\u001b[A';
+-            rowSeparator += `\u001b[${currentLine.length - this._nullCellCount}C`;
++            const contentCellCount = currentLine.length - this._nullCellCount;
++            if (contentCellCount > 0) {
++              rowSeparator += `\u001b[${contentCellCount}C`;
++            }
+             rowSeparator += `\u001b[${this._nullCellCount}X`;
+-            rowSeparator += `\u001b[${currentLine.length - this._nullCellCount}D`;
++            if (contentCellCount > 0) {
++              rowSeparator += `\u001b[${contentCellCount}D`;
++            }
+             rowSeparator += '\u001b[B';
+           }
+ 
+@@ -310,7 +347,20 @@ class StringSerializeHandler extends BaseSerializeHandler {
+         }
+         if (flagsChanged) {
+           if (cell.isInverse() !== oldCell.isInverse()) { sgrSeq.push(cell.isInverse() ? 7 : 27); }
+-          if (cell.isBold() !== oldCell.isBold()) { sgrSeq.push(cell.isBold() ? 1 : 22); }
++          // PATCH(orca): bold (1) and dim (2) share the single reset param 22, so
++          // they must be diffed as one intensity group with the clearing 22 emitted
++          // BEFORE any re-set. Upstream's independent per-flag diff could emit
++          // "1;22" (bold set, then wiped by dim's clear — \x1b[2mA\x1b[22m\x1b[1mB
++          // loses B's bold on round-trip) or a bare "22" that drops a still-set
++          // bold/dim, garbling Orca's hidden-terminal snapshot restores.
++          const boldChanged = cell.isBold() !== oldCell.isBold();
++          const dimChanged = cell.isDim() !== oldCell.isDim();
++          if (boldChanged || dimChanged) {
++            const clearsIntensity = (boldChanged && !cell.isBold()) || (dimChanged && !cell.isDim());
++            if (clearsIntensity) { sgrSeq.push(22); }
++            if (cell.isBold() && (boldChanged || clearsIntensity)) { sgrSeq.push(1); }
++            if (cell.isDim() && (dimChanged || clearsIntensity)) { sgrSeq.push(2); }
++          }
+           if (!equalUnderline(cell, oldCell)) {
+             const style = cell.getUnderlineStyle();
+             if (style === UnderlineStyle.NONE) {
+@@ -337,7 +387,7 @@ class StringSerializeHandler extends BaseSerializeHandler {
+           if (cell.isBlink() !== oldCell.isBlink()) { sgrSeq.push(cell.isBlink() ? 5 : 25); }
+           if (cell.isInvisible() !== oldCell.isInvisible()) { sgrSeq.push(cell.isInvisible() ? 8 : 28); }
+           if (cell.isItalic() !== oldCell.isItalic()) { sgrSeq.push(cell.isItalic() ? 3 : 23); }
+-          if (cell.isDim() !== oldCell.isDim()) { sgrSeq.push(cell.isDim() ? 2 : 22); }
++          // PATCH(orca): dim handled in the intensity group above.
+           if (cell.isStrikethrough() !== oldCell.isStrikethrough()) { sgrSeq.push(cell.isStrikethrough() ? 9 : 29); }
+         }
+       }
+@@ -346,6 +396,20 @@ class StringSerializeHandler extends BaseSerializeHandler {
+     return sgrSeq;
+   }
+ 
++  private _setOscLink(linkId: number): string {
++    if (linkId === this._activeOscLinkId) {
++      return '';
++    }
++    let sequence = this._activeOscLinkId ? '\u001b]8;;\u001b\\' : '';
++    this._activeOscLinkId = 0;
++    const openSequence = getOscLinkOpenSequence(this._terminal, linkId);
++    if (openSequence) {
++      this._activeOscLinkId = linkId;
++      sequence += openSequence;
++    }
++    return sequence;
++  }
++
+   protected _nextCell(cell: IBufferCell, oldCell: IBufferCell, row: number, col: number): void {
+     // a width 0 cell don't need to be count because it is just a placeholder after a CJK character;
+     const isPlaceHolderCell = cell.getWidth() === 0;
+@@ -356,12 +420,21 @@ class StringSerializeHandler extends BaseSerializeHandler {
+ 
+     // this cell don't have content
+     const isEmptyCell = cell.getChars() === '';
++    const nextLine = isEmptyCell && cell.isInverse() ? this._buffer.getLine(row + 1) : undefined;
++    const nextRowFirstCell = nextLine?.getCell(0, this._nextRowFirstChar);
++    // A pending wide glyph recreates its own final-column padding during replay.
++    const isWideWrapPadding = col === this._terminal.cols - 1 &&
++      nextLine?.isWrapped &&
++      (nextRowFirstCell?.getWidth() ?? 0) > 1 &&
++      !!nextRowFirstCell && attributesEquals(cell, nextRowFirstCell);
++    // Cursor movement cannot reproduce an inverse cell's visible background.
++    const materializeEmptyCell = isEmptyCell && !!cell.isInverse() && !isWideWrapPadding;
+ 
+     const sgrSeq = this._diffStyle(cell, this._cursorStyle);
+ 
+-    // the empty cell style is only assumed to be changed when background changed, because
+-    // foreground is always 0.
+-    const styleChanged = isEmptyCell ? !equalBg(this._cursorStyle, cell) : sgrSeq.length > 0;
++    const styleChanged = isEmptyCell
++      ? materializeEmptyCell ? sgrSeq.length > 0 : !equalBg(this._cursorStyle, cell)
++      : sgrSeq.length > 0;
+ 
+     /**
+      *  handles style change
+@@ -395,7 +468,7 @@ class StringSerializeHandler extends BaseSerializeHandler {
+     /**
+      *  handles actual content
+      */
+-    if (isEmptyCell) {
++    if (isEmptyCell && !materializeEmptyCell) {
+       this._nullCellCount += cell.getWidth();
+     } else {
+       if (this._nullCellCount > 0) {
+@@ -411,7 +484,22 @@ class StringSerializeHandler extends BaseSerializeHandler {
+         this._nullCellCount = 0;
+       }
+ 
+-      this._currentRow += cell.getChars();
++      // PATCH(orca): styling alone leaves restored OSC 8 links looking live but unclickable.
++      this._currentRow += this._setOscLink(getOscLinkId(cell));
++
++      if (materializeEmptyCell) {
++        const hasDecoration = !!cell.isUnderline() || !!cell.isStrikethrough() || !!cell.isOverline();
++        if (hasDecoration) {
++          this._currentRow += '\u001b[24;29;55m';
++        }
++        this._currentRow += ' '.repeat(cell.getWidth());
++        if (hasDecoration) {
++          const restoreSgrSeq = this._diffStyle(cell, this._defaultCell);
++          this._currentRow += `\u001b[0m\u001b[${restoreSgrSeq.join(';')}m`;
++        }
++      } else {
++        this._currentRow += cell.getChars();
++      }
+ 
+       // update cursor
+       this._lastContentCursorRow = this._lastCursorRow = row;
+@@ -439,6 +527,9 @@ class StringSerializeHandler extends BaseSerializeHandler {
+       }
+     }
+ 
++    // Each buffer is self-contained so links cannot leak into a following buffer.
++    content += this._setOscLink(0);
++
+     // restore the cursor
+     if (!excludeFinalCursorPosition) {
+       const realCursorRow = this._buffer.baseY + this._buffer.cursorY;
+@@ -616,6 +707,9 @@ export class SerializeAddon implements ITerminalAddon, ISerializeApi {
+       content += this._serializeScrollRegion(this._terminal);
+     }
+ 
++    // Restore the source terminal's live OSC pen only after all buffers are complete.
++    content += getActiveOscLinkSequence(this._terminal);
++
+     return content;
+   }
+ 

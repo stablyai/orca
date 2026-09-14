@@ -1,9 +1,6 @@
-import type {
-  GitForkSyncExpectedUpstream,
-  GitForkSyncResult,
-  GitPushTarget,
-  TuiAgent
-} from '../../shared/types'
+import type { GitForkSyncExpectedUpstream, GitForkSyncResult } from '../../shared/git-fork-sync'
+import type { TuiAgent } from '../../shared/tui-agent'
+import type { GitPushTarget } from '../../shared/worktree/types'
 import type { HostedReviewProvider } from '../../shared/hosted-review'
 import type { ResolvedSourceControlAiGenerationParams } from '../../shared/source-control-ai'
 import type { SourceControlAiSettings } from '../../shared/source-control-ai-types'

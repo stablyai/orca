@@ -11,14 +11,15 @@ import {
   resolveAttention,
   type PaneInput
 } from './smart-attention'
-import type { TerminalLayoutSnapshot, TerminalTab, Worktree } from '../../../../shared/types'
+import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 
-function hookPane(entry: AgentStatusEntry): PaneInput {
-  return { kind: 'hook', entry }
+function hookPane(entry: AgentStatusEntry, hasLivePty = false): PaneInput {
+  return { kind: 'hook', entry, hasLivePty }
 }
 
 function hookPanes(entries: AgentStatusEntry[]): PaneInput[] {
-  return entries.map((entry) => ({ kind: 'hook', entry }))
+  return entries.map((entry) => hookPane(entry))
 }
 
 const NOW = new Date('2026-03-27T12:00:00.000Z').getTime()

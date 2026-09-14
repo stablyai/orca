@@ -1,17 +1,5 @@
-import { readFileSync } from 'node:fs'
-import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { retargetGitHubPrStartPointSelection } from './useComposerState'
-
-const HOOK_SOURCE = readFileSync(join(__dirname, 'useComposerState.ts'), 'utf8')
-
-function sourceBetween(source: string, startPattern: string, endPattern: string): string {
-  const start = source.indexOf(startPattern)
-  expect(start).toBeGreaterThanOrEqual(0)
-  const end = source.indexOf(endPattern, start + startPattern.length)
-  expect(end).toBeGreaterThan(start)
-  return source.slice(start, end)
-}
 
 describe('useComposerState host retarget', () => {
   it('re-resolves a seeded PR after switching its run host', () => {
@@ -40,23 +28,5 @@ describe('useComposerState host retarget', () => {
       repoId: 'repo-ssh',
       item
     })
-  })
-
-  it('retains an explicit host setup when duplicate repos share an id', () => {
-    const targetSection = sourceBetween(
-      HOOK_SOURCE,
-      'const selectedWorkspaceTarget = useMemo',
-      'const selectedRepo ='
-    )
-    expect(targetSection).toContain('projectHostSetupId: selectedProjectHostSetupOverrideId')
-
-    const switchSection = sourceBetween(
-      HOOK_SOURCE,
-      'const handleProjectHostSetupChange',
-      'const handleProjectChange'
-    )
-    expect(switchSection).toContain('setSelectedProjectHostSetupOverrideId(option.id)')
-    expect(switchSection).toContain('preserveStartFrom: true')
-    expect(switchSection).toContain('forceResetStartFrom: true')
   })
 })

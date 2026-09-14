@@ -211,3 +211,11 @@ export function normalizeOptionalMultilineField(
   const normalized = normalizeMultilineField(value, maxLength)
   return normalized.length > 0 ? normalized : undefined
 }
+
+/** Keep a lead turn's end time only on the gated `working` row and that turn's later all-clear `done`. */
+export function normalizeTurnCompletedAtField(value: unknown, state: string): number | undefined {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return undefined
+  }
+  return state === 'working' || state === 'done' ? value : undefined
+}

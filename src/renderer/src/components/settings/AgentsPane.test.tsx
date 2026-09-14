@@ -2,7 +2,8 @@ import React from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
-import type { GlobalSettings, TuiAgent } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { TuiAgent } from '../../../../shared/tui-agent'
 import { AGENT_CATALOG } from '@/lib/agent-catalog'
 import { useAppStore } from '../../store'
 import { getAgentGeneratedTabTitlesTitle } from './agent-generated-tab-title-copy'
@@ -627,5 +628,52 @@ describe('AgentsPane', () => {
 
     writes[1].resolve()
     await secondWrite
+  })
+})
+
+describe('empty agent detection must not cost the saved default (#15256)', () => {
+  const withEmptyDetection = <T,>(run: () => T): T => {
+    const previous = detectedAgentsMock.detectedIds
+    detectedAgentsMock.detectedIds = []
+    try {
+      return run()
+    } finally {
+      detectedAgentsMock.detectedIds = previous
+    }
+  }
+
+  /** The rendered `<button>` whose label contains `label`. */
+  const pillMarkup = (markup: string, label: string): string => {
+    const chunk = markup.split('<button').find((part) => part.includes(label))
+    expect(chunk, `no pill labelled ${label}`).toBeDefined()
+    return String(chunk)
+  }
+
+  it('does not present Auto as the active choice while an agent is stored', () => {
+    // The Auto pill's handler writes null. Rendering it pressed while
+    // `defaultTuiAgent: "claude"` is stored made the already-selected pill
+    // destructive: one click erased the setting, and later successful
+    // detection did not bring it back.
+    const markup = withEmptyDetection(() =>
+      renderPane({ ...getDefaultSettings('/tmp'), defaultTuiAgent: 'claude' })
+    )
+    expect(pillMarkup(markup, 'Auto')).toContain('aria-pressed="false"')
+  })
+
+  it('still offers the stored agent so the choice can be kept', () => {
+    // With zero detected there were no agent pills at all, so the stored value
+    // was invisible and unrecoverable through the UI.
+    const markup = withEmptyDetection(() =>
+      renderPane({ ...getDefaultSettings('/tmp'), defaultTuiAgent: 'claude' })
+    )
+    expect(markup).toContain('Saved as your default, but not detected right now')
+  })
+
+  it('keeps a Refresh control reachable when nothing is detected', () => {
+    // Refresh lived inside the Installed section, which only renders when at
+    // least one agent was found -- gone in exactly the state needing a retry.
+    const markup = withEmptyDetection(() => renderPane(getDefaultSettings('/tmp')))
+    expect(markup).toContain('No agents detected')
+    expect(markup).toContain('Refresh')
   })
 })

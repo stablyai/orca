@@ -6,7 +6,7 @@ import {
   isTerminalAgentQuickCommand,
   supportsTerminalAgentQuickCommand
 } from '../../../shared/terminal-quick-commands'
-import type { TerminalQuickCommand } from '../../../shared/types'
+import type { TerminalQuickCommand } from '../../../shared/terminal-quick-command-types'
 
 export type RunQuickCommandInNewTabArgs = {
   command: TerminalQuickCommand
@@ -31,6 +31,13 @@ function resolveQuickCommandGroupId(
     state.activeGroupIdByWorktree[worktreeId] ??
     null
   )
+}
+
+function resolveQuickCommandLaunchGroupId(
+  worktreeId: string,
+  requestedGroupId: string | null | undefined
+): string | null {
+  return requestedGroupId ?? useAppStore.getState().activeGroupIdByWorktree[worktreeId] ?? null
 }
 
 /**
@@ -70,6 +77,15 @@ export function runQuickCommandInNewTab({
         useAppStore.getState().setRecentQuickCommandForGroup(launchedGroupId, historyId)
       }
       return { tabId: result.tabId }
+    }
+    // Structured launches publish their tab asynchronously and therefore do not
+    // return a local tab id; preserve quick-command recency immediately using
+    // the caller's group (or its active group fallback).
+    if (result?.focusAfterMenuClose === 'structured-session') {
+      const launchedGroupId = resolveQuickCommandLaunchGroupId(worktreeId, groupId)
+      if (launchedGroupId) {
+        useAppStore.getState().setRecentQuickCommandForGroup(launchedGroupId, historyId)
+      }
     }
     if (result) {
       return null

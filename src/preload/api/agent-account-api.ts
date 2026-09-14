@@ -1,4 +1,7 @@
-import type { ClaudeRateLimitAccountsState, CodexRateLimitAccountsState } from '../../shared/types'
+import type {
+  ClaudeRateLimitAccountsState,
+  CodexRateLimitAccountsState
+} from '../../shared/managed-account-types'
 import type { CodexConfigSyncStatus } from '../../shared/codex-config-sync-types'
 import type { GrokAccountStatus } from '../../shared/rate-limit-types'
 
@@ -8,7 +11,11 @@ export type CodexAccountsApi = {
     runtime?: 'host' | 'wsl'
     wslDistro?: string | null
   }) => Promise<CodexRateLimitAccountsState>
-  reauthenticate: (args: { accountId: string }) => Promise<CodexRateLimitAccountsState>
+  reauthenticate: (args: {
+    accountId: string
+    /** Local-only: activate the re-authed account when its runtime lane had no selection. */
+    activateIfSelectionWasEmpty?: boolean
+  }) => Promise<CodexRateLimitAccountsState>
   remove: (args: { accountId: string }) => Promise<CodexRateLimitAccountsState>
   select: (args: {
     accountId: string | null
@@ -52,9 +59,18 @@ export type GrokAccountsApi = {
 }
 
 export type MinimaxCredentialsApi = {
-  getStatus: () => Promise<{ configured: boolean }>
-  saveCookie: (cookie: string) => Promise<{ configured: boolean }>
-  clearCookie: () => Promise<{ configured: boolean }>
+  // Why: cookie + API key each live in their own safeStorage file, so the
+  // status separates them. 'configured' stays as the OR so existing callers
+  // that only care about "anything saved" keep working unchanged.
+  getStatus: () => Promise<{
+    configured: boolean
+    cookieConfigured: boolean
+    apiKeyConfigured: boolean
+  }>
+  saveCookie: (cookie: string) => Promise<{ cookieConfigured: boolean }>
+  clearCookie: () => Promise<{ cookieConfigured: boolean }>
+  saveApiKey: (key: string) => Promise<{ apiKeyConfigured: boolean }>
+  clearApiKey: () => Promise<{ apiKeyConfigured: boolean }>
 }
 
 export type CodexConfigSyncApi = {

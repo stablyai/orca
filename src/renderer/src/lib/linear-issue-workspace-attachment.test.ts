@@ -3,10 +3,9 @@ import { describe, expect, it } from 'vitest'
 import {
   buildLinearIssueWorkspaceAttachmentIndex,
   findLinearIssueWorkspaceAttachment,
-  findLinearIssueWorkspaceAttachmentInIndex,
-  getLinearIssueWorkspaceAttachmentLabel
+  findLinearIssueWorkspaceAttachmentInIndex
 } from './linear-issue-workspace-attachment'
-import type { Worktree } from '../../../shared/types'
+import type { Worktree } from '../../../shared/worktree/types'
 
 function worktree(overrides: Partial<Worktree> = {}): Worktree {
   return {
@@ -180,21 +179,5 @@ describe('Linear issue workspace attachment', () => {
     )
     expect(findLinearIssueWorkspaceAttachmentInIndex(index, issue)?.id).toBe('match')
     expect(findLinearIssueWorkspaceAttachmentInIndex(index, { identifier: 'STA-9999' })).toBeNull()
-  })
-
-  it('labels attachments without exposing a full path when display or branch is available', () => {
-    expect(
-      getLinearIssueWorkspaceAttachmentLabel(worktree({ displayName: '  Named Linear  ' }))
-    ).toBe('Named Linear')
-    expect(
-      getLinearIssueWorkspaceAttachmentLabel(
-        worktree({ displayName: '', branch: 'refs/heads/fix-ci' })
-      )
-    ).toBe('fix-ci')
-    expect(
-      getLinearIssueWorkspaceAttachmentLabel(
-        worktree({ displayName: '', branch: '', path: 'C:\\repo\\workspace-tail' })
-      )
-    ).toBe('workspace-tail')
   })
 })

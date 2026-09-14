@@ -1,10 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { Repo } from '../shared/types'
+import type * as WslModule from './wsl'
+import type { Repo } from '../shared/repo-types'
 
-const { mkdirMock, authorizeExternalPathMock } = vi.hoisted(() => ({
-  mkdirMock: vi.fn(),
-  authorizeExternalPathMock: vi.fn()
-}))
+const { mkdirMock, authorizeExternalPathMock, getWslHomeMock, getWslHomeAsyncMock } = vi.hoisted(
+  () => ({
+    mkdirMock: vi.fn(),
+    authorizeExternalPathMock: vi.fn(),
+    getWslHomeMock: vi.fn(),
+    getWslHomeAsyncMock: vi.fn()
+  })
+)
 
 vi.mock('fs/promises', () => ({
   mkdir: mkdirMock
@@ -12,6 +17,12 @@ vi.mock('fs/promises', () => ({
 
 vi.mock('./ipc/filesystem-auth', () => ({
   authorizeExternalPath: authorizeExternalPathMock
+}))
+
+vi.mock('./wsl', async (importOriginal) => ({
+  ...(await importOriginal<typeof WslModule>()),
+  getWslHome: getWslHomeMock,
+  getWslHomeAsync: getWslHomeAsyncMock
 }))
 
 import { prepareLocalWorktreeRootForRepo } from './worktree-root-preparation'
@@ -33,6 +44,10 @@ describe('prepareLocalWorktreeRootForRepo', () => {
   beforeEach(() => {
     mkdirMock.mockReset().mockResolvedValue(undefined)
     authorizeExternalPathMock.mockReset()
+    getWslHomeMock.mockReset().mockImplementation(() => {
+      throw new Error('synchronous wsl.exe home probe must not run on the main thread')
+    })
+    getWslHomeAsyncMock.mockReset().mockResolvedValue(null)
     store.getSettings.mockReset().mockReturnValue({
       workspaceDir: '/Users/alice/orca/workspaces',
       nestWorkspaces: false
@@ -43,6 +58,38 @@ describe('prepareLocalWorktreeRootForRepo', () => {
     await prepareLocalWorktreeRootForRepo(store as never, repo)
 
     expect(mkdirMock).toHaveBeenCalledWith('/Users/alice/orca/workspaces', { recursive: true })
+  })
+
+  it('resolves a WSL repo root through the async probe instead of blocking on wsl.exe', async () => {
+    const originalPlatform = process.platform
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    let resolveHome!: (home: string) => void
+    getWslHomeAsyncMock.mockReturnValue(
+      new Promise<string>((resolve) => {
+        resolveHome = resolve
+      })
+    )
+    store.getSettings.mockReturnValue({ workspaceDir: 'C:\\workspaces', nestWorkspaces: false })
+
+    try {
+      const preparation = prepareLocalWorktreeRootForRepo(store as never, {
+        ...repo,
+        path: '\\\\wsl.localhost\\Ubuntu\\home\\jin\\src\\repo'
+      })
+      await Promise.resolve()
+      expect(mkdirMock).not.toHaveBeenCalled()
+
+      resolveHome('\\\\wsl.localhost\\Ubuntu\\home\\jin')
+      await preparation
+
+      expect(getWslHomeMock).not.toHaveBeenCalled()
+      expect(mkdirMock).toHaveBeenCalledWith(
+        '\\\\wsl.localhost\\Ubuntu\\home\\jin\\orca\\workspaces',
+        { recursive: true }
+      )
+    } finally {
+      Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
+    }
   })
 
   it('uses repo-specific worktree base paths', async () => {

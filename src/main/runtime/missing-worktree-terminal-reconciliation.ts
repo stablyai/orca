@@ -1,5 +1,5 @@
 import type { IPtyProvider } from '../providers/types'
-import type { Repo } from '../../shared/types'
+import type { Repo } from '../../shared/repo-types'
 import { splitWorktreeId } from '../../shared/worktree/id'
 import { mapWithConcurrency } from '../../shared/map-with-concurrency'
 import type { OrcaRuntimeService } from './orca-runtime'

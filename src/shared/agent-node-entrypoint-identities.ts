@@ -1,4 +1,4 @@
-import type { TuiAgent } from './types'
+import type { TuiAgent } from './tui-agent'
 
 // Node CLIs whose shims launch a generic script (cli.js, versioned index.js), so
 // only the exact install path is an authoritative identity signal.

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../shared/execution-host'
-import type { OrcaVmRecipe } from '../../../shared/types'
+import type { OrcaVmRecipe } from '../../../shared/orca-yaml-hook-types'
 
 type EphemeralVmRecipeOptionsArgs = {
   enabled: boolean

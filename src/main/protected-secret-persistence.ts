@@ -1,4 +1,4 @@
-import { safeStorage } from 'electron'
+import { getSecretStore } from '../shared/secret-store'
 
 export const PROTECTED_SECRET_SLOT = {
   opencodeSessionCookie: 'settings.opencodeSessionCookie',
@@ -77,7 +77,7 @@ export class ProtectedSecretPersistence {
       }
     }
     try {
-      const blob = safeStorage.encryptString(plaintext).toString('base64')
+      const blob = getSecretStore().encryptString(plaintext).toString('base64')
       return {
         blob,
         degraded: false,
@@ -109,7 +109,7 @@ export class ProtectedSecretPersistence {
     }
     try {
       const decrypted = {
-        plaintext: safeStorage.decryptString(Buffer.from(ciphertext, 'base64')),
+        plaintext: getSecretStore().decryptString(Buffer.from(ciphertext, 'base64')),
         status: 'decrypted' as const
       }
       this.sealedSlots.delete(slot)
@@ -117,22 +117,27 @@ export class ProtectedSecretPersistence {
     } catch {
       if (isLegacyPlaintext?.(ciphertext)) {
         this.sealedSlots.delete(slot)
-        console.warn('[persistence] safeStorage decryption failed; accepting legacy plaintext.')
+        console.warn('[persistence] secret decryption failed; accepting legacy plaintext.')
         return { plaintext: ciphertext, status: 'failed' }
       }
       this.sealedSlots.add(slot)
       console.warn(
-        '[persistence] safeStorage decryption failed; retaining the protected value without exposing it.'
+        '[persistence] secret decryption failed; retaining the protected value without exposing it.'
       )
       return { plaintext: '', status: 'failed' }
     }
   }
 
   private encryptionAvailable(): boolean {
+    // Why getSecretStore() sits outside the try: an uninstalled store is a startup bug,
+    // not a keyring failure. Swallowing it would degrade to an empty blob and report
+    // 'unavailable' — the silent-wrong-state outcome the port throws to prevent. Only
+    // the backend probe itself may fail softly.
+    const store = getSecretStore()
     try {
-      return safeStorage.isEncryptionAvailable()
+      return store.isEncryptionAvailable()
     } catch (err) {
-      console.warn('[persistence] safeStorage availability check failed:', err)
+      console.warn('[persistence] secret store availability check failed:', err)
       return false
     }
   }

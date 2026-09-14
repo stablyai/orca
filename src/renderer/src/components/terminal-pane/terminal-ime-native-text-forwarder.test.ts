@@ -414,6 +414,145 @@ describe('installTerminalImeNativeTextForwarder', () => {
       expect(forwarder.claimKeyEvent(keyEvent({ key: ',' }))).toBe(true)
     })
 
+    it('reports the authoritative multi-codepoint committed text', () => {
+      const { forwarder, sendInput } = installWithFlags(() => 24)
+      expect(forwarder.claimKeyEvent(keyEvent({ key: 'a', code: 'KeyA' }))).toBe(true)
+
+      dispatchInsertText(textarea, 'á')
+
+      expect(sendInput).toHaveBeenCalledExactlyOnceWith('\x1b[97;;97:769u')
+    })
+
+    it('falls back to the native key identity before a non-US layout resolves', () => {
+      const { forwarder, sendInput } = installWithFlags(() => 8)
+      expect(forwarder.claimKeyEvent(keyEvent({ key: 'a', code: 'KeyQ' }))).toBe(true)
+
+      dispatchInsertText(textarea, 'a')
+
+      expect(sendInput).toHaveBeenCalledExactlyOnceWith('\x1b[97u')
+    })
+
+    it('derives shifted non-US identity while the layout is unresolved', () => {
+      const { forwarder, sendInput } = installWithFlags(() => 12)
+      expect(forwarder.claimKeyEvent(keyEvent({ key: 'A', code: 'KeyQ', shiftKey: true }))).toBe(
+        true
+      )
+
+      dispatchInsertText(textarea, 'A')
+
+      expect(sendInput).toHaveBeenCalledExactlyOnceWith('\x1b[97:65:113;2u')
+    })
+
+    it('keeps CapsLock casing out of the unmodified key identity', () => {
+      const { forwarder, sendInput } = installWithFlags(() => 8)
+      expect(
+        forwarder.claimKeyEvent(
+          keyEvent({
+            key: 'A',
+            code: 'KeyQ',
+            getModifierState: (modifier) => modifier === 'CapsLock'
+          })
+        )
+      ).toBe(true)
+
+      dispatchInsertText(textarea, 'A')
+
+      expect(sendInput).toHaveBeenCalledExactlyOnceWith('\x1b[97;65u')
+    })
+
+    it('falls back to the native key identity for an unresolved ISO key', () => {
+      const { forwarder, sendInput } = installWithFlags(() => 8)
+      expect(forwarder.claimKeyEvent(keyEvent({ key: '<', code: 'IntlBackslash' }))).toBe(true)
+
+      dispatchInsertText(textarea, '<')
+
+      expect(sendInput).toHaveBeenCalledExactlyOnceWith('\x1b[60u')
+    })
+
+    it('preserves Kitty numpad identities for press and release', () => {
+      const { forwarder, sendInput } = installWithFlags(() => 2)
+      expect(forwarder.claimKeyEvent(keyEvent({ key: '1', code: 'Numpad1' }))).toBe(true)
+      dispatchInsertText(textarea, '1')
+      expect(forwarder.claimKeyEvent(keyEvent({ type: 'keyup', key: '1', code: 'Numpad1' }))).toBe(
+        true
+      )
+
+      expect(sendInput.mock.calls.map((call) => call[0])).toEqual([
+        '\x1b[57400u',
+        '\x1b[57400;1:3u'
+      ])
+    })
+
+    it('preserves NumpadSeparator functional identity for press and release', () => {
+      const { forwarder, sendInput } = installWithFlags(() => 2)
+      expect(forwarder.claimKeyEvent(keyEvent({ key: ',', code: 'NumpadSeparator' }))).toBe(true)
+      dispatchInsertText(textarea, ',')
+      expect(
+        forwarder.claimKeyEvent(keyEvent({ type: 'keyup', key: ',', code: 'NumpadSeparator' }))
+      ).toBe(true)
+
+      expect(sendInput.mock.calls.map((call) => call[0])).toEqual([
+        '\x1b[57416u',
+        '\x1b[57416;1:3u'
+      ])
+    })
+
+    it.each([
+      [',', 'NumpadComma', 44],
+      ['(', 'NumpadParenLeft', 40]
+    ])('keeps printable %s (%s) raw while reporting its release', (key, code, codePoint) => {
+      const { forwarder, sendInput } = installWithFlags(() => 2)
+      expect(forwarder.claimKeyEvent(keyEvent({ key, code }))).toBe(true)
+      dispatchInsertText(textarea, key)
+      expect(forwarder.claimKeyEvent(keyEvent({ type: 'keyup', key, code }))).toBe(true)
+
+      expect(sendInput.mock.calls.map((call) => call[0])).toEqual([key, `\x1b[${codePoint};1:3u`])
+    })
+
+    it('pins a keypad release to the NumLock-on press identity', () => {
+      const { forwarder, sendInput } = installWithFlags(() => 2)
+      expect(
+        forwarder.claimKeyEvent(
+          keyEvent({
+            key: '4',
+            code: 'Numpad4',
+            getModifierState: (modifier) => modifier === 'NumLock'
+          })
+        )
+      ).toBe(true)
+      dispatchInsertText(textarea, '4')
+      expect(
+        forwarder.claimKeyEvent(
+          keyEvent({
+            type: 'keyup',
+            key: 'ArrowLeft',
+            code: 'Numpad4',
+            getModifierState: () => false
+          })
+        )
+      ).toBe(true)
+
+      expect(sendInput.mock.calls.map((call) => call[0])).toEqual([
+        '\x1b[57403;129u',
+        '\x1b[57403;1:3u'
+      ])
+    })
+
+    it('pins an unresolved shifted key to the committed press identity', () => {
+      const { forwarder, sendInput } = installWithFlags(() => 2)
+      expect(
+        forwarder.claimKeyEvent(keyEvent({ key: '>', code: 'IntlBackslash', shiftKey: true }))
+      ).toBe(true)
+      dispatchInsertText(textarea, '>')
+      expect(
+        forwarder.claimKeyEvent(
+          keyEvent({ type: 'keyup', key: '<', code: 'IntlBackslash', shiftKey: false })
+        )
+      ).toBe(true)
+
+      expect(sendInput.mock.calls.map((call) => call[0])).toEqual(['>', '\x1b[62;1:3u'])
+    })
+
     it('leaves a composing keystroke to the composition path even under bit 3', () => {
       // Scope boundary: a composing IME (Hangul, kana) is never claimed here, so
       // its commit is not this path's to re-encode. Bit 3 fidelity for

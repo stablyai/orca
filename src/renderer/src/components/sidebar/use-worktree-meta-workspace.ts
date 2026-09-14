@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import { useAppStore } from '@/store'
 import { findIndexedWorktreeOwner } from '@/lib/worktree-runtime-owner-index'
-import type { Worktree } from '../../../../shared/types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { folderWorkspaceToWorktree } from '../../../../shared/folder-workspace-worktree'
 import type { IssueLinkProvider } from '../../../../shared/issue-link-input'
@@ -15,6 +15,7 @@ export function useWorktreeMetaWorkspace(args: {
   worktreeId: string
   /** The repo bucket the opening row belongs to, when it knows. */
   ownerRepoId: string | null
+  executionHostId?: string
 }): {
   worktree: Worktree | undefined
   linkedIssue: number | null
@@ -26,14 +27,16 @@ export function useWorktreeMetaWorkspace(args: {
   /** Link state as it stands now, for save-time displacement decisions. */
   liveLinks: WorktreeMetaLiveLinks
 } {
-  const { worktreeId, ownerRepoId } = args
+  const { worktreeId, ownerRepoId, executionHostId } = args
   const workspaceScope = useMemo(() => parseWorkspaceKey(worktreeId), [worktreeId])
   const indexedWorktree = useAppStore((s) => {
     // Why: the same workspace ID can exist under two hosts, which the owner index
     // reports as ambiguous rather than guessing. The row that opened the dialog
     // knows which one it is; the index stays the fallback for callers that cannot.
     const scoped = ownerRepoId
-      ? s.worktreesByRepo[ownerRepoId]?.find((item) => item.id === worktreeId)
+      ? s.worktreesByRepo[ownerRepoId]?.find(
+          (item) => item.id === worktreeId && (!executionHostId || item.hostId === executionHostId)
+        )
       : undefined
     if (scoped) {
       return scoped
@@ -74,6 +77,7 @@ export function useWorktreeMetaWorkspace(args: {
   // the dialog was open cannot outlive a save that promised to displace it.
   const liveLinks = useMemo<WorktreeMetaLiveLinks>(
     () => ({
+      linkedPR: worktree?.linkedPR ?? null,
       linkedIssue,
       linkedLinearIssue,
       linkedLinearIssueOrganizationUrlKey: worktree?.linkedLinearIssueOrganizationUrlKey ?? null,
@@ -83,6 +87,7 @@ export function useWorktreeMetaWorkspace(args: {
     [
       linkedIssue,
       linkedLinearIssue,
+      worktree?.linkedPR,
       worktree?.linkedLinearIssueOrganizationUrlKey,
       worktree?.linkedWorkItem
     ]

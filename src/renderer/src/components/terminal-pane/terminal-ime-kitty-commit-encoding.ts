@@ -1,28 +1,13 @@
-// Reuses xterm's own kitty encoder rather than hand-rolling CSI-u. It lives in
-// the package's `src/` tree and is absent from the public typings, so this is a
-// deep import into a pinned dependency — acceptable here because the version is
-// already pinned by a patch that would fail to apply across a bump.
-import { KittyKeyboard } from '@xterm/xterm/src/common/input/KittyKeyboard'
-
-/**
- * `report_all_keys_as_escape_codes`. Bit 3 is the only flag that changes what a
- * plain printable key should put on the wire; 1/2/4/16 leave it as text.
- */
-const KITTY_REPORT_ALL_KEYS_AS_ESCAPE_CODES = 0b1000
-
-/** `report_event_types`. The only flag that makes a printable press owe a release. */
-const KITTY_REPORT_EVENT_TYPES = 0b0010
-
-/**
- * `KittyKeyboardEventType.PRESS` / `.REPEAT` / `.RELEASE`. Inlined because the
- * upstream enum is a `const enum`, which does not survive an import across
- * module boundaries.
- */
-const KITTY_EVENT_TYPE_PRESS = 1
-const KITTY_EVENT_TYPE_REPEAT = 2
-const KITTY_EVENT_TYPE_RELEASE = 3
-
-const kittyKeyboardEncoder = new KittyKeyboard()
+import {
+  KITTY_DISAMBIGUATE_ESCAPE_CODES,
+  KITTY_REPORT_EVENT_TYPES,
+  kittyReportsAllKeysAsEscapeCodes
+} from '../../../../shared/terminal-kitty-keyboard-flags'
+import {
+  encodeTerminalOptionKittyEvent,
+  kittyFunctionalNumpadCodePointForEvent,
+  resolveTerminalKittyPrimaryCodePoint
+} from './terminal-kitty-csi-u-encoding'
 
 /** The physical keydown that produced a commit, captured before the input event. */
 export type ImeCommitKeyPress = {
@@ -31,6 +16,8 @@ export type ImeCommitKeyPress = {
   shiftKey: boolean
   /** An auto-repeat keydown; the protocol distinguishes it from a fresh press. */
   repeat?: boolean
+  capsLock?: boolean
+  numLock?: boolean
 }
 
 /**
@@ -48,6 +35,8 @@ export type ImeReleaseKeyEvent = {
   ctrlKey?: boolean
   altKey?: boolean
   metaKey?: boolean
+  capsLock?: boolean
+  numLock?: boolean
 }
 
 /**
@@ -55,7 +44,10 @@ export type ImeReleaseKeyEvent = {
  * the flags read at commit time. Only `encodeImeReleaseForKitty` interprets it:
  * the forwarder must never re-test event-type bits or rebuild CSI-u itself.
  */
-export type ImeCommitReleaseObligation = { readonly flags: number }
+export type ImeCommitReleaseObligation = {
+  readonly flags: number
+  readonly primaryCodePoint: number
+}
 
 export type ImeCommitKittyEncoding = {
   /** CSI-u press/repeat report, or null when the commit goes out as raw text. */
@@ -64,71 +56,59 @@ export type ImeCommitKittyEncoding = {
   release: ImeCommitReleaseObligation | null
 }
 
-function evaluateKittyReport(
-  press: { key: string; code?: string; shiftKey: boolean },
-  modifiers: { ctrlKey?: boolean; altKey?: boolean; metaKey?: boolean },
-  kittyKeyboardFlags: number,
-  eventType: number
-): string | null {
-  const encoded = kittyKeyboardEncoder.evaluate(
-    {
-      type: eventType === KITTY_EVENT_TYPE_RELEASE ? 'keyup' : 'keydown',
-      key: press.key,
-      code: press.code ?? '',
-      keyCode: 0,
-      shiftKey: press.shiftKey,
-      altKey: modifiers.altKey === true,
-      ctrlKey: modifiers.ctrlKey === true,
-      metaKey: modifiers.metaKey === true
-    },
-    kittyKeyboardFlags,
-    eventType
-  )
-  return encoded.key ?? null
-}
-
 /**
  * A pane that negotiated bit 3 asked for every printable key as a CSI-u report,
  * so writing IME-committed text raw hands it the legacy byte stream it declined.
  * Re-encode the press that produced the commit instead.
  *
- * The gate is bit 3 ALONE for the press. "Kitty is active" and `flags !== 0` are
- * both wrong: a pane negotiating only disambiguation or event types still
- * expects printable keys as text, and encoding there would drop every
- * substituted character. Bit 1 (`report_event_types`) is independent — it makes
- * even a raw-text commit owe exactly one release report.
+ * Standard text keys require bit 3. Functional numpad keys also use CSI-u under
+ * disambiguation/event reporting; other printable commits remain raw text.
+ * Bit 1 (`report_event_types`) independently makes a raw-text commit owe one release.
  *
- * Known limit: the report carries the *physical* key's codepoint, not the
- * committed glyph — bit 3 is the app declaring it does not want text, and bit 4
- * (`report_associated_text`) is how it asks for text back. xterm's encoder
- * derives that text field from the same `key` it derives the keycode from, so
- * carrying the committed glyph under bit 4 needs an encoder change, not a flag.
+ * The physical key remains the report identity; bit 4 carries the committed
+ * text independently, including multi-codepoint commits.
  */
 export function encodeImeCommitForKitty(
   press: ImeCommitKeyPress | null,
-  kittyKeyboardFlags: number
+  kittyKeyboardFlags: number,
+  context: {
+    committedText: string
+    layoutCharacterForCode?: (code: string, shifted: boolean) => string | undefined
+  }
 ): ImeCommitKittyEncoding {
   if (!press) {
     return { report: null, release: null }
   }
+  const keyboardEvent = {
+    ...press,
+    altKey: false,
+    ctrlKey: false,
+    metaKey: false
+  }
+  const primaryCodePoint = resolveTerminalKittyPrimaryCodePoint(keyboardEvent, {
+    layoutCharacterForCode: context.layoutCharacterForCode,
+    primaryCharacterFallback: press.key
+  })
+  const reportsNumpadPress =
+    kittyFunctionalNumpadCodePointForEvent(press) !== undefined &&
+    (kittyKeyboardFlags & (KITTY_DISAMBIGUATE_ESCAPE_CODES | KITTY_REPORT_EVENT_TYPES)) !== 0
   const report =
-    (kittyKeyboardFlags & KITTY_REPORT_ALL_KEYS_AS_ESCAPE_CODES) === 0
+    !kittyReportsAllKeysAsEscapeCodes(kittyKeyboardFlags) && !reportsNumpadPress
       ? null
-      : evaluateKittyReport(
-          press,
-          // Why: the forwarder only claims presses with no control chord, so the
-          // modifier fields are known-false rather than read from a live event.
-          {},
-          kittyKeyboardFlags,
-          // Why: a held key emits repeated keydowns, and the protocol reports those as REPEAT.
-          // Defaulting them all to PRESS would make one held key look like N separate strikes to
-          // an app that counts presses or filters repeats.
-          press.repeat === true ? KITTY_EVENT_TYPE_REPEAT : KITTY_EVENT_TYPE_PRESS
-        )
+      : encodeTerminalOptionKittyEvent(keyboardEvent, {
+          flags: kittyKeyboardFlags,
+          type: press.repeat === true ? 'repeat' : 'press',
+          layoutCharacterForCode: context.layoutCharacterForCode,
+          associatedText: context.committedText,
+          primaryCharacterFallback: press.key,
+          primaryCodePoint
+        })
   return {
     report,
     release:
-      (kittyKeyboardFlags & KITTY_REPORT_EVENT_TYPES) === 0 ? null : { flags: kittyKeyboardFlags }
+      (kittyKeyboardFlags & KITTY_REPORT_EVENT_TYPES) === 0 || primaryCodePoint === undefined
+        ? null
+        : { flags: kittyKeyboardFlags, primaryCodePoint }
   }
 }
 
@@ -144,6 +124,7 @@ export function encodeImeReleaseForKitty(
     press?: { key: string; code?: string }
     /** The pane's flags at RELEASE time, deciding whether a release is still wanted. */
     currentKittyKeyboardFlags: number
+    layoutCharacterForCode?: (code: string, shifted: boolean) => string | undefined
   }
 ): string | null {
   // Why the current-flags gate: the app can pop kitty mode between commit and
@@ -164,5 +145,19 @@ export function encodeImeReleaseForKitty(
     release.key.length === 1 || context.press === undefined
       ? release
       : { ...release, key: context.press.key, code: context.press.code ?? release.code }
-  return evaluateKittyReport(releaseKey, release, obligation.flags, KITTY_EVENT_TYPE_RELEASE)
+  return encodeTerminalOptionKittyEvent(
+    {
+      ...releaseKey,
+      altKey: release.altKey === true,
+      ctrlKey: release.ctrlKey === true,
+      metaKey: release.metaKey === true
+    },
+    {
+      flags: obligation.flags,
+      type: 'release',
+      layoutCharacterForCode: context.layoutCharacterForCode,
+      primaryCharacterFallback: releaseKey.key,
+      primaryCodePoint: obligation.primaryCodePoint
+    }
+  )
 }

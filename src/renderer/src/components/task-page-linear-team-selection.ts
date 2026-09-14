@@ -1,4 +1,4 @@
-import type { LinearTeam } from '../../../shared/types'
+import type { LinearTeam } from '../../../shared/linear/workspace-types'
 
 export function reconcileLinearTeamSelection(
   availableTeams: LinearTeam[],

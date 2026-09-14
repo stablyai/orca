@@ -4,7 +4,7 @@ import {
   prepareRendererForAppRestart,
   type UpdaterQuitAbortRelay
 } from '../shared/renderer-restart-preparation'
-import type { UpdateStatus } from '../shared/types'
+import type { UpdateStatus } from '../shared/update-status-types'
 import {
   ORCA_APP_RESTART_ABORTED_EVENT,
   ORCA_APP_RESTART_STARTED_EVENT,

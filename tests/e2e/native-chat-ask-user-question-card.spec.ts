@@ -6,7 +6,7 @@ import type { Page } from '@stablyai/playwright-test'
 import { test, expect } from './helpers/orca-app'
 import { ensureTerminalVisible, waitForActiveWorktree, waitForSessionReady } from './helpers/store'
 import { waitForActivePaneHookDescriptor, waitForActiveTerminalManager } from './helpers/terminal'
-import type { GlobalSettings } from '../../src/shared/types'
+import type { GlobalSettings } from '../../src/shared/global-settings-types'
 
 const QUESTION = 'Tabs or spaces?'
 

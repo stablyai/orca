@@ -34,7 +34,7 @@ export function exceedsTerminalStreamChunkBytes(data: string): boolean {
     return false
   }
   let byteLength = 0
-  for (let start = 0; start < data.length; ) {
+  for (let start = 0; start < data.length;) {
     let end = Math.min(start + TERMINAL_STREAM_BYTE_PROBE_CODE_UNITS, data.length)
     const high = data.charCodeAt(end - 1)
     const low = data.charCodeAt(end)

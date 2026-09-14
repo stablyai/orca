@@ -4,12 +4,18 @@ import type { LinearClientForWorkspace } from './client'
 const rawRequest = vi.fn()
 const getClients = vi.fn()
 
-vi.mock('./client', () => ({
+vi.mock('./linear-request-concurrency', () => ({
   acquire: vi.fn().mockResolvedValue(undefined),
-  release: vi.fn(),
-  getClients: (...args: unknown[]) => getClients(...args),
-  isAuthError: vi.fn().mockReturnValue(false),
+  release: vi.fn()
+}))
+
+vi.mock('./linear-token-store', () => ({
   clearToken: vi.fn()
+}))
+
+vi.mock('./client', () => ({
+  getClients: (...args: unknown[]) => getClients(...args),
+  isAuthError: vi.fn().mockReturnValue(false)
 }))
 
 function entry(): LinearClientForWorkspace {

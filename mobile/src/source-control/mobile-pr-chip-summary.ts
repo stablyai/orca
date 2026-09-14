@@ -1,4 +1,4 @@
-import type { PRComment } from '../../../src/shared/types'
+import type { PRComment } from '../../../src/shared/github/comment-types'
 import type { PrSidebarState } from '../session/mobile-pr-sidebar-state'
 import { summarizeProviderChecks } from '../../../src/shared/provider-check-summary'
 import {

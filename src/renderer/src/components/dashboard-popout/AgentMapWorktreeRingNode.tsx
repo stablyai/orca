@@ -7,7 +7,7 @@ import { translate } from '@/i18n/i18n'
 import { AgentIcon, getAgentLabel } from '@/lib/agent-catalog'
 import { agentTypeToIconAgent } from '@/lib/agent-status'
 import type { DashboardCard, DashboardSpawnAgentArgs } from '../../../../shared/dashboard-snapshot'
-import type { TuiAgent } from '../../../../shared/types'
+import type { TuiAgent } from '../../../../shared/tui-agent'
 import type {
   AgentMapAgentNode,
   AgentMapProjectRing,
@@ -63,7 +63,10 @@ function WorktreeDetails({
   onDone: () => void
 }): React.JSX.Element {
   const activeCount =
-    worktree.statusCounts.working + worktree.statusCounts.blocked + worktree.statusCounts.waiting
+    worktree.statusCounts.working +
+    worktree.statusCounts.monitoring +
+    worktree.statusCounts.blocked +
+    worktree.statusCounts.waiting
   const doneCount = worktree.statusCounts.done + worktree.statusCounts['done-seen']
   return (
     <PopoverContent align="center" sideOffset={10} className="w-80 p-0">

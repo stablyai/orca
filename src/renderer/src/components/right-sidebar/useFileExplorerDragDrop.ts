@@ -1,28 +1,15 @@
-/* eslint-disable max-lines -- Why: explorer drag/drop keeps move, native-file
-drop, auto-expand, and undo/redo coordination in one hook because splitting the
-DnD state machine across files makes those interactions harder to reason about. */
 import type { RefObject } from 'react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
-import { useAppStore } from '@/store'
-import { basename, dirname, joinPath } from '@/lib/path'
 import {
   getWorkspaceFileDragRejectionMessage,
   readWorkspaceFileDragPaths,
   WORKSPACE_FILE_PATH_MIME
 } from '@/lib/workspace-file-drag'
-import { executeOpenEditorPathMove } from '@/lib/execute-open-editor-path-move'
-import { commitFileExplorerOp } from './fileExplorerUndoRedo'
 import type { FileExplorerOperationOwner } from './file-explorer-types'
-import { captureFileExplorerOperationGuard } from './file-explorer-operation-owner'
-
-function extractIpcErrorMessage(err: unknown, fallback: string): string {
-  if (!(err instanceof Error)) {
-    return fallback
-  }
-  const match = err.message.match(/Error invoking remote method '[^']*': (?:Error: )?(.+)/)
-  return match ? match[1] : err.message
-}
+import { useFileExplorerDragEdgeScroll } from './useFileExplorerDragEdgeScroll'
+import { useFileExplorerMoveDrop } from './useFileExplorerMoveDrop'
+import { useFileExplorerDragExpand } from './useFileExplorerDragExpand'
 
 type UseFileExplorerDragDropParams = {
   worktreePath: string | null
@@ -61,41 +48,6 @@ type UseFileExplorerDragDropResult = {
   clearNativeDragState: () => void
 }
 
-// Native drag auto-scroll uses a very thin band; a wider zone matches IDE-style
-// tree dragging so users need not hug the scrollbar.
-const DRAG_EDGE_ZONE_PX = 48
-
-export function getDragEdgeScrollTarget({
-  scrollTop,
-  scrollHeight,
-  clientHeight,
-  localY,
-  edgeZonePx = DRAG_EDGE_ZONE_PX
-}: {
-  scrollTop: number
-  scrollHeight: number
-  clientHeight: number
-  localY: number
-  edgeZonePx?: number
-}): number | null {
-  let delta = 0
-  if (localY < edgeZonePx) {
-    const strength = (edgeZonePx - localY) / edgeZonePx
-    delta = -(1.25 + strength * 9)
-  } else if (localY > clientHeight - edgeZonePx) {
-    const strength = (localY - (clientHeight - edgeZonePx)) / edgeZonePx
-    delta = 1.25 + strength * 9
-  }
-
-  if (delta === 0) {
-    return null
-  }
-
-  const maxScroll = Math.max(0, scrollHeight - clientHeight)
-  const nextScrollTop = Math.max(0, Math.min(maxScroll, scrollTop + delta))
-  return nextScrollTop === scrollTop ? null : nextScrollTop
-}
-
 export function useFileExplorerDragDrop({
   worktreePath,
   activeWorktreeId,
@@ -115,16 +67,7 @@ export function useFileExplorerDragDrop({
   const nativeRootDragCounterRef = useRef(0)
   const [nativeDropTargetDir, setNativeDropTargetDir] = useState<string | null>(null)
 
-  const lastDragClientYRef = useRef<number | null>(null)
-  const edgeScrollRafRef = useRef<number | null>(null)
-
-  const stopDragEdgeScroll = useCallback(() => {
-    lastDragClientYRef.current = null
-    if (edgeScrollRafRef.current !== null) {
-      cancelAnimationFrame(edgeScrollRafRef.current)
-      edgeScrollRafRef.current = null
-    }
-  }, [])
+  const { startDragEdgeScroll, stopDragEdgeScroll } = useFileExplorerDragEdgeScroll(scrollRef)
 
   const clearDragState = useCallback(() => {
     rootDragCounterRef.current = 0
@@ -161,111 +104,13 @@ export function useFileExplorerDragDrop({
     }
   }, [stopAndClearDragState, stopDragEdgeScroll])
 
-  // requestAnimationFrame + small per-frame deltas avoids choppy jumps from irregular dragover events
-  const tickDragEdgeScroll = useCallback(() => {
-    edgeScrollRafRef.current = null
-    const viewport = scrollRef.current
-    const clientY = lastDragClientYRef.current
-    if (!viewport || clientY == null) {
-      return
-    }
-    const rect = viewport.getBoundingClientRect()
-    const y = clientY - rect.top
-    const zone = DRAG_EDGE_ZONE_PX
-
-    const nextScrollTop = getDragEdgeScrollTarget({
-      scrollTop: viewport.scrollTop,
-      scrollHeight: viewport.scrollHeight,
-      clientHeight: viewport.clientHeight,
-      localY: y,
-      edgeZonePx: zone
-    })
-
-    if (nextScrollTop !== null) {
-      viewport.scrollTop = nextScrollTop
-      edgeScrollRafRef.current = requestAnimationFrame(tickDragEdgeScroll)
-    }
-  }, [scrollRef])
-
-  const handleMoveDrop = useCallback(
-    (sourcePath: string, destDir: string) => {
-      if (!worktreePath || !activeWorktreeId) {
-        return
-      }
-      const fileName = basename(sourcePath),
-        sourceDir = dirname(sourcePath)
-
-      setDropTargetDir(null)
-
-      if (sourceDir === destDir) {
-        return
-      }
-      if (
-        destDir === sourcePath ||
-        destDir.startsWith(`${sourcePath}/`) ||
-        destDir.startsWith(`${sourcePath}\\`)
-      ) {
-        return
-      }
-
-      const newPath = joinPath(destDir, fileName)
-      const operationOwner = getOperationOwnerForPath(sourcePath)
-
-      const run = async (): Promise<void> => {
-        try {
-          const operationGuard = captureFileExplorerOperationGuard(activeWorktreeId, operationOwner)
-          const operationRoute = operationGuard.route
-          const fileContext = {
-            settings: operationRoute.settings,
-            worktreeId: activeWorktreeId,
-            worktreePath,
-            connectionId: operationRoute.connectionId,
-            expectedExecutionHostId: operationRoute.expectedExecutionHostId,
-            expectedSshTargetId: operationRoute.expectedSshTargetId,
-            expectedSshConnectionGeneration: operationRoute.expectedSshConnectionGeneration
-          }
-          operationGuard.assertCurrent()
-          await executeOpenEditorPathMove({
-            context: fileContext,
-            fromPath: sourcePath,
-            toPath: newPath,
-            worktreeId: activeWorktreeId,
-            worktreePath
-          })
-          commitFileExplorerOp({
-            undo: async () => {
-              operationGuard.assertCurrent()
-              await executeOpenEditorPathMove({
-                context: fileContext,
-                fromPath: newPath,
-                toPath: sourcePath,
-                worktreeId: activeWorktreeId,
-                worktreePath
-              })
-              await Promise.all([refreshDir(destDir), refreshDir(sourceDir)])
-            },
-            redo: async () => {
-              operationGuard.assertCurrent()
-              await executeOpenEditorPathMove({
-                context: fileContext,
-                fromPath: sourcePath,
-                toPath: newPath,
-                worktreeId: activeWorktreeId,
-                worktreePath
-              })
-              await Promise.all([refreshDir(sourceDir), refreshDir(destDir)])
-            }
-          })
-        } catch (err) {
-          toast.error(extractIpcErrorMessage(err, `Failed to move '${fileName}'.`))
-          return
-        }
-        await Promise.all([refreshDir(sourceDir), refreshDir(destDir)])
-      }
-      void run()
-    },
-    [worktreePath, activeWorktreeId, refreshDir, getOperationOwnerForPath]
-  )
+  const handleMoveDrop = useFileExplorerMoveDrop({
+    worktreePath,
+    activeWorktreeId,
+    refreshDir,
+    getOperationOwnerForPath,
+    setDropTargetDir
+  })
 
   const clearNativeDragState = useCallback(() => {
     // Why: for native OS file drops the preload intercepts the drop event and
@@ -285,12 +130,9 @@ export function useFileExplorerDragDrop({
         }
         e.preventDefault()
         e.dataTransfer.dropEffect = isInternal ? 'move' : 'copy'
-        lastDragClientYRef.current = e.clientY
-        if (edgeScrollRafRef.current === null) {
-          edgeScrollRafRef.current = requestAnimationFrame(tickDragEdgeScroll)
-        }
+        startDragEdgeScroll(e.clientY)
       },
-      [tickDragEdgeScroll]
+      [startDragEdgeScroll]
     ),
     onDragEnter: useCallback((e: React.DragEvent) => {
       const isInternal = e.dataTransfer.types.includes(WORKSPACE_FILE_PATH_MIME)
@@ -357,39 +199,11 @@ export function useFileExplorerDragDrop({
     )
   }
 
-  const handleDragExpandDir = useCallback(
-    (dirPath: string) => {
-      if (!activeWorktreeId || expanded.has(dirPath)) {
-        return
-      }
-      toggleDir(activeWorktreeId, dirPath)
-    },
-    [activeWorktreeId, expanded, toggleDir]
-  )
-
-  // Why: native drag expand must be expand-only (never collapse). The preload
-  // captures native drop events in the capture phase and stops propagation,
-  // so React's handleDrop never fires and the expand timer is never cleared.
-  // If revealInExplorer already expanded the folder before the timer fires,
-  // a toggleDir call would collapse it. Reading current state at call time
-  // also avoids stale-closure issues with the 500ms timer callback.
-  const handleNativeDragExpandDir = useCallback(
-    (dirPath: string) => {
-      if (!activeWorktreeId) {
-        return
-      }
-      useAppStore.setState((state) => {
-        const current = state.expandedDirs[activeWorktreeId] ?? new Set<string>()
-        if (current.has(dirPath)) {
-          return state
-        }
-        const next = new Set(current)
-        next.add(dirPath)
-        return { expandedDirs: { ...state.expandedDirs, [activeWorktreeId]: next } }
-      })
-    },
-    [activeWorktreeId]
-  )
+  const { handleDragExpandDir, handleNativeDragExpandDir } = useFileExplorerDragExpand({
+    activeWorktreeId,
+    expanded,
+    toggleDir
+  })
   return {
     handleMoveDrop,
     handleDragExpandDir,

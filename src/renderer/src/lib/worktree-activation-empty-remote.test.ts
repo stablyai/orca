@@ -1,11 +1,14 @@
 import path from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../shared/constants'
-import type { Worktree } from '../../../shared/types'
+import type { Worktree } from '../../../shared/worktree/types'
 import { resetWebRuntimeWakeTerminalRespawnForTests } from '@/runtime/web-runtime-wake-terminal-respawn'
 import { resetWebSessionTabsSnapshotFreshnessForTests } from '@/runtime/web-session-tabs-sync'
 import { useAppStore } from '@/store'
-import { ensureWebRuntimeWorktreeTerminalAfterWake } from './worktree-activation'
+import { ensureWebRuntimeWorktreeTerminalAfterWake } from './web-runtime-worktree-terminal-after-wake'
+import { toast } from 'sonner'
+
+vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))
 
 const initialAppStoreState = useAppStore.getState()
 const WORKTREE_PATH = path.join('workspace', 'feature')
@@ -13,6 +16,7 @@ const REPO_PATH = path.join('workspace', 'repo')
 const ORCA_WORKSPACES_PATH = path.join('workspace', '.orca-workspaces')
 
 afterEach(() => {
+  vi.clearAllMocks()
   delete (globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__
   vi.unstubAllGlobals()
   resetWebSessionTabsSnapshotFreshnessForTests()
@@ -115,5 +119,55 @@ describe('empty remote worktree activation', () => {
         })
       })
     )
+    expect(toast.error).not.toHaveBeenCalled()
+  })
+
+  it('surfaces a failed host terminal request without retrying ambiguously', async () => {
+    const worktree = makeWorktree()
+    const callRuntimeEnvironment = vi.fn().mockResolvedValueOnce({
+      ok: false,
+      error: { code: 'terminal_create_failed', message: 'Host refused the terminal' }
+    })
+    ;(globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__ = true
+    vi.stubGlobal('window', {
+      api: {
+        runtimeEnvironments: {
+          call: callRuntimeEnvironment,
+          subscribe: vi.fn()
+        }
+      }
+    })
+
+    useAppStore.setState({
+      repos: [
+        {
+          id: 'repo-1',
+          path: REPO_PATH,
+          displayName: 'repo',
+          badgeColor: '#000000',
+          addedAt: 0
+        }
+      ],
+      worktreesByRepo: { 'repo-1': [worktree] },
+      tabsByWorktree: {},
+      ptyIdsByTabId: {},
+      settings: {
+        ...getDefaultSettings(ORCA_WORKSPACES_PATH),
+        activeRuntimeEnvironmentId: 'web-runtime-1'
+      },
+      reconcileWorktreeTabModel: vi.fn(() => ({
+        renderableTabCount: 0,
+        activeRenderableTabId: null
+      }))
+    })
+
+    ensureWebRuntimeWorktreeTerminalAfterWake(worktree.id)
+
+    await vi.waitFor(() =>
+      expect(toast.error).toHaveBeenCalledWith('Host refused the terminal', {
+        id: `web-runtime-worktree-terminal:web-runtime-1:${worktree.id}`
+      })
+    )
+    expect(callRuntimeEnvironment).toHaveBeenCalledTimes(1)
   })
 })

@@ -1,4 +1,4 @@
-import type { WorkspaceCreatorProvenance } from '../../../shared/types'
+import type { WorkspaceCreatorProvenance } from '../../../shared/worktree/types'
 import type { RpcContext } from './core'
 
 export function resolveRpcWorkspaceCreatorProvenance(

@@ -1,116 +1,40 @@
-import { z } from 'zod'
-import { defineMethod, type RpcMethod } from '../core'
-import { OptionalFiniteNumber, OptionalString, requiredString } from '../schemas'
+import { defineMethod } from '../core'
 import { PROJECT_RUNTIME_METHODS } from './project-runtime-rpc-methods'
 import { FOLDER_WORKSPACE_METHODS } from './folder-workspace'
-import { createRepoUpdateSchema } from './repo-update-schema'
+import { RepoSelector } from './github-repo-target-schemas'
+import {
+  projectRepoResultVisibilityForClient,
+  projectRepoVisibilityForClient
+} from '../repo-visibility-projection'
+import {
+  ProjectGroupCreate,
+  ProjectGroupImportNested,
+  ProjectGroupMoveProject,
+  ProjectGroupScanNested,
+  ProjectGroupSelector,
+  ProjectGroupUpdate,
+  RepoClone,
+  RepoCreate,
+  RepoIssueCommandWrite,
+  RepoPath,
+  RepoReorder,
+  RepoSearchRefs,
+  RepoSetBaseRef,
+  RepoSparsePresetSave,
+  RepoUpdate
+} from '../../../../shared/rpc-contract/repo-params'
 
-const RepoSelector = z.object({
-  repo: requiredString('Missing repo selector')
-})
-
-const RepoPath = z.object({
-  path: requiredString('Missing repo path'),
-  kind: z.enum(['git', 'folder']).optional()
-})
-
-const RepoCreate = z.object({
-  parentPath: requiredString('Missing parent path'),
-  name: requiredString('Missing repo name'),
-  kind: z.enum(['git', 'folder']).optional()
-})
-
-const RepoClone = z.object({
-  url: requiredString('Missing clone URL'),
-  destination: requiredString('Missing clone destination')
-})
-
-const RepoSetBaseRef = z.object({
-  repo: requiredString('Missing repo selector'),
-  ref: requiredString('Missing base ref')
-})
-
-const RepoUpdate = createRepoUpdateSchema(RepoSelector.shape)
-
-const RepoSearchRefs = z.object({
-  repo: requiredString('Missing repo selector'),
-  query: z
-    .unknown()
-    .transform((v) => (typeof v === 'string' ? v : undefined))
-    .pipe(z.string({ message: 'Missing query' })),
-  limit: OptionalFiniteNumber
-})
-
-const RepoReorder = z.object({
-  orderedIds: z.array(z.string())
-})
-
-const ProjectGroupCreate = z.object({
-  name: requiredString('Missing group name'),
-  parentPath: OptionalString,
-  connectionId: OptionalString.nullable().optional(),
-  parentGroupId: OptionalString.nullable().optional(),
-  createdFrom: z.enum(['manual', 'folder-scan', 'migration']).optional()
-})
-
-const ProjectGroupUpdate = z.object({
-  groupId: requiredString('Missing group id'),
-  updates: z.object({
-    name: OptionalString,
-    isCollapsed: z.boolean().optional(),
-    tabOrder: OptionalFiniteNumber,
-    color: OptionalString.nullable().optional()
-  })
-})
-
-const ProjectGroupSelector = z.object({
-  groupId: requiredString('Missing group id')
-})
-
-const ProjectGroupMoveProject = z.object({
-  repo: requiredString('Missing repo selector'),
-  groupId: OptionalString.nullable(),
-  order: OptionalFiniteNumber
-})
-
-const ProjectGroupScanNested = z.object({
-  path: requiredString('Missing folder path')
-})
-
-const ProjectGroupImportNested = z.discriminatedUnion('mode', [
-  z.object({
-    parentPath: requiredString('Missing parent path'),
-    groupName: z.string().optional().default(''),
-    projectPaths: z.array(z.string()),
-    mode: z.literal('group')
-  }),
-  z.object({
-    parentPath: requiredString('Missing parent path'),
-    // Why: blank group names fall back to the scanned folder basename; separate
-    // imports do not create a group but share the same renderer payload shape.
-    groupName: z.string().optional().default(''),
-    projectPaths: z.array(z.string()),
-    mode: z.literal('separate')
-  })
-])
-
-const RepoIssueCommandWrite = RepoSelector.extend({
-  content: z.string()
-})
-
-const RepoSparsePresetSave = RepoSelector.extend({
-  id: OptionalString,
-  name: requiredString('Missing preset name'),
-  directories: z.array(z.string())
-})
-
-export const REPO_METHODS: RpcMethod[] = [
+export const REPO_METHODS = [
   defineMethod({
     name: 'repo.list',
     params: null,
-    handler: (_params, { runtime }) => {
-      runtime.enrichMissingRepoGitRemoteIdentities?.()
-      return { repos: runtime.listRepos() }
+    handler: (_params, context) => {
+      context.runtime.enrichMissingRepoGitRemoteIdentities?.()
+      return {
+        repos: context.runtime
+          .listRepos()
+          .map((repo) => projectRepoVisibilityForClient(repo, context))
+      }
     }
   }),
   ...PROJECT_RUNTIME_METHODS,
@@ -141,8 +65,11 @@ export const REPO_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'projectGroup.moveProject',
     params: ProjectGroupMoveProject,
-    handler: async (params, { runtime }) => ({
-      repo: await runtime.moveProjectToGroup(params.repo, params.groupId ?? null, params.order)
+    handler: async (params, context) => ({
+      repo: projectRepoVisibilityForClient(
+        await context.runtime.moveProjectToGroup(params.repo, params.groupId ?? null, params.order),
+        context
+      )
     })
   }),
   ...FOLDER_WORKSPACE_METHODS,
@@ -177,15 +104,21 @@ export const REPO_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'repo.add',
     params: RepoPath,
-    handler: async (params, { runtime }) => ({
-      repo: await runtime.addRepo(params.path, params.kind)
+    handler: async (params, context) => ({
+      repo: projectRepoVisibilityForClient(
+        await context.runtime.addRepo(params.path, params.kind, undefined, params.displayName),
+        context
+      )
     })
   }),
   defineMethod({
     name: 'repo.create',
     params: RepoCreate,
-    handler: async (params, { runtime }) =>
-      runtime.createRepo(params.parentPath, params.name, params.kind)
+    handler: async (params, context) =>
+      projectRepoResultVisibilityForClient(
+        await context.runtime.createRepo(params.parentPath, params.name, params.kind),
+        context
+      )
   }),
   defineMethod({
     name: 'repo.gitAvailable',
@@ -195,22 +128,30 @@ export const REPO_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'repo.clone',
     params: RepoClone,
-    handler: async (params, { runtime }) => ({
-      repo: await runtime.cloneRepo(params.url, params.destination)
+    handler: async (params, context) => ({
+      repo: projectRepoVisibilityForClient(
+        await context.runtime.cloneRepo(params.url, params.destination),
+        context
+      )
     })
   }),
   defineMethod({
     name: 'repo.show',
     params: RepoSelector,
-    handler: async (params, { runtime }) => ({ repo: await runtime.showRepo(params.repo) })
+    handler: async (params, context) => ({
+      repo: projectRepoVisibilityForClient(await context.runtime.showRepo(params.repo), context)
+    })
   }),
   defineMethod({
     name: 'repo.update',
     params: RepoUpdate,
-    handler: async (params, { runtime }) => ({
-      repo: await runtime.updateRepo(
-        params.repo,
-        params.updates as Parameters<typeof runtime.updateRepo>[1]
+    handler: async (params, context) => ({
+      repo: projectRepoVisibilityForClient(
+        await context.runtime.updateRepo(
+          params.repo,
+          params.updates as Parameters<typeof context.runtime.updateRepo>[1]
+        ),
+        context
       )
     })
   }),
@@ -227,8 +168,11 @@ export const REPO_METHODS: RpcMethod[] = [
   defineMethod({
     name: 'repo.setBaseRef',
     params: RepoSetBaseRef,
-    handler: async (params, { runtime }) => ({
-      repo: await runtime.setRepoBaseRef(params.repo, params.ref)
+    handler: async (params, context) => ({
+      repo: projectRepoVisibilityForClient(
+        await context.runtime.setRepoBaseRef(params.repo, params.ref),
+        context
+      )
     })
   }),
   defineMethod({

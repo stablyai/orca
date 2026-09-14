@@ -5,12 +5,8 @@ import { Badge } from '../ui/badge'
 import { Button } from '../ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '../ui/tooltip'
 import { StatCard } from './StatCard'
-import {
-  buildUsageOverview,
-  formatUsageCost,
-  formatUsageTokens,
-  getRecentUsageDays
-} from './usage-overview-model'
+import { getRecentUsageDays } from './usage-overview-daily-series'
+import { buildUsageOverview, formatUsageCost, formatUsageTokens } from './usage-overview-model'
 import { DailyIntensityGrid, ProviderUsageRow, TokenMixBar } from './usage-overview-sections'
 import { translate } from '@/i18n/i18n'
 

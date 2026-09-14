@@ -15,6 +15,7 @@ import {
   WORKER_HANDLE,
   WORKER_PANE
 } from './orchestration-legacy-compatibility-dispatcher-test-fixture'
+import { createRootDispatch } from '../orchestration/db/root-dispatch-test-fixture'
 
 afterEach(() => {
   cleanupLegacyCompatibilityDispatcherHarnesses()
@@ -192,9 +193,41 @@ describe('current orchestration authority precedence', () => {
       result: {
         runId,
         dispatchId,
+        deliveryId: expect.any(String),
         messages: [{ id: message.id }],
         count: 1
       }
+    })
+    expect(harness.db.getMessageById(message.id)?.read).toBe(0)
+
+    const deliveryId = (response as { result: { deliveryId: string } }).result.deliveryId
+    const replayed = await harness.dispatcher.dispatch(
+      request(
+        'orchestration.check',
+        { terminal: CURRENT_WORKER_HANDLE },
+        currentEvidence('worker'),
+        'current-worker-check-replay'
+      )
+    )
+
+    expect(replayed).toMatchObject({
+      ok: true,
+      result: { deliveryId, replayed: true, messages: [{ id: message.id }], count: 1 }
+    })
+    expect(harness.db.getMessageById(message.id)?.read).toBe(0)
+
+    const acknowledged = await harness.dispatcher.dispatch(
+      request(
+        'orchestration.check',
+        { terminal: CURRENT_WORKER_HANDLE, ack: deliveryId },
+        currentEvidence('worker'),
+        'current-worker-check-ack'
+      )
+    )
+
+    expect(acknowledged).toMatchObject({
+      ok: true,
+      result: { acknowledged: deliveryId, count: 0 }
     })
     expect(harness.db.getMessageById(message.id)?.read).toBe(1)
   })
@@ -287,7 +320,8 @@ function createCurrentDispatch(harness: ReturnType<typeof createHarness>): {
     coordinatorPaneKey: CURRENT_COORDINATOR_PANE
   })
   const task = harness.db.createTask({ spec: 'current assignment', runId: run.id })
-  const dispatch = harness.db.createDispatchContext(
+  const dispatch = createRootDispatch(
+    harness.db,
     task.id,
     CURRENT_WORKER_HANDLE,
     CURRENT_WORKER_PANE
@@ -326,7 +360,7 @@ async function createReusedCurrentDispatch(
     coordinatorPaneKey: CURRENT_COORDINATOR_PANE
   })
   const task = harness.db.createTask({ spec: 'reused terminal assignment', runId: run.id })
-  const dispatch = harness.db.createDispatchContext(task.id, WORKER_HANDLE, WORKER_PANE)
+  const dispatch = createRootDispatch(harness.db, task.id, WORKER_HANDLE, WORKER_PANE)
   const capability = harness.db.mintDispatchCapability({
     dispatchId: dispatch.id,
     paneKey: WORKER_PANE,

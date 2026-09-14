@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { Worktree } from '../../../../shared/types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import { findWorktreeById } from '@/store/slices/worktree-helpers'
 import { selectMarkdownDocumentWorktreePath } from './markdown-document-worktree-path-selector'
 

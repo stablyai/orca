@@ -2,11 +2,11 @@ import { z } from 'zod'
 import type { Automation, AutomationRun } from '../../shared/automations-types'
 import { getAutomationRunRepoId } from '../../shared/automation-run-identity'
 import { buildAutomationWorkspaceProvenance } from '../../shared/automation-workspace-provenance'
+import type { Repo } from '../../shared/repo-types'
 import type {
   AutomationWorkspaceProvenance,
-  AutomationWorkspaceProvenanceRequest,
-  Repo
-} from '../../shared/types'
+  AutomationWorkspaceProvenanceRequest
+} from '../../shared/worktree/types'
 import {
   beginAutomationDispatchTokenUse,
   finishAutomationDispatchTokenUse,

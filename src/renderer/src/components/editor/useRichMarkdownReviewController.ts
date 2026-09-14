@@ -15,7 +15,7 @@ import { flushPendingProseMirrorSelection } from './rich-markdown-selection-flus
 import { useRichMarkdownReviewData } from './useRichMarkdownReviewData'
 import { useRichMarkdownReviewCopyFeedback } from './useRichMarkdownReviewCopyFeedback'
 import { useRichMarkdownReviewRailController } from './useRichMarkdownReviewRailController'
-import type { DiffComment } from '../../../../shared/types'
+import type { DiffComment } from '../../../../shared/diff-comment-types'
 
 type UseRichMarkdownReviewControllerOptions = {
   addDiffComment: AppState['addDiffComment']

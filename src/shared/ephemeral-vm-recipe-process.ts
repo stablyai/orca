@@ -1,13 +1,16 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
 import type { EphemeralVmRecipeContext } from './ephemeral-vm-recipe-runner'
+import { admitProcessTreeKill } from './child-process/process-tree-kill-gate'
 
 const DEFAULT_MAX_CAPTURE_BYTES = 1024 * 1024
+const CANCEL_FORCE_KILL_DELAY_MS = 5_000
 
 export type ProcessRunResult = {
   stdout: string
   stderr: string
   exitCode: number | null
   signal: NodeJS.Signals | null
+  aborted?: true
 }
 
 export function quoteShellToken(value: string): string {
@@ -55,14 +58,49 @@ export async function runRecipeCommand(args: {
     let stdout = ''
     let stderr = ''
     let settled = false
+    let aborted = false
+    let forceKillTimer: ReturnType<typeof setTimeout> | undefined
+    const finish = (result: ProcessRunResult): void => {
+      if (settled) {
+        return
+      }
+      settled = true
+      if (forceKillTimer) {
+        clearTimeout(forceKillTimer)
+      }
+      args.signal?.removeEventListener('abort', abort)
+      resolve(result)
+    }
+    const fail = (error: Error): void => {
+      if (settled) {
+        return
+      }
+      settled = true
+      if (forceKillTimer) {
+        clearTimeout(forceKillTimer)
+      }
+      args.signal?.removeEventListener('abort', abort)
+      reject(error)
+    }
     const abort = (): void => {
       if (settled) {
         return
       }
+      aborted = true
+      forceKillTimer = setTimeout(() => {
+        if (settled) {
+          return
+        }
+        killRecipeProcess(child, true)
+        finish({ stdout, stderr, exitCode: null, signal: null, aborted: true })
+        child.stdin.destroy()
+        child.stdout.destroy()
+        child.stderr.destroy()
+        child.unref()
+      }, CANCEL_FORCE_KILL_DELAY_MS)
+      forceKillTimer.unref()
       killRecipeProcess(child)
     }
-
-    args.signal?.addEventListener('abort', abort, { once: true })
 
     child.stdout.setEncoding('utf8')
     child.stderr.setEncoding('utf8')
@@ -75,15 +113,17 @@ export async function runRecipeCommand(args: {
       args.onStderr?.(chunk)
     })
     child.on('error', (error) => {
-      settled = true
-      args.signal?.removeEventListener('abort', abort)
-      reject(error)
+      fail(error)
     })
     child.on('close', (exitCode, signal) => {
-      settled = true
-      args.signal?.removeEventListener('abort', abort)
-      resolve({ stdout, stderr, exitCode, signal })
+      finish({ stdout, stderr, exitCode, signal, ...(aborted ? { aborted: true } : {}) })
     })
+
+    if (args.signal?.aborted) {
+      abort()
+    } else {
+      args.signal?.addEventListener('abort', abort, { once: true })
+    }
 
     if (args.stdin) {
       child.stdin.end(args.stdin)
@@ -93,32 +133,46 @@ export async function runRecipeCommand(args: {
   })
 }
 
-function killRecipeProcess(child: ChildProcessWithoutNullStreams): void {
+/** Exported for the refusal-fallback test; the abort path is otherwise unreachable. */
+export function killRecipeProcess(child: ChildProcessWithoutNullStreams, force = false): void {
+  const signal = force ? 'SIGKILL' : 'SIGTERM'
   if (process.platform === 'win32') {
     // Recipes run through `cmd.exe /c` (shell: true), so child.kill() would only
     // terminate the wrapper and orphan the actual recipe subprocess (e.g. a cloud
     // CLI mid-provision). taskkill /T walks and kills the whole tree.
     if (child.pid) {
+      if (
+        !admitProcessTreeKill({
+          pid: child.pid,
+          site: 'ephemeral-vm-recipe',
+          scope: 'win-taskkill-tree'
+        })
+      ) {
+        // Refusal blocks the tree walk, not the termination: the root kill is
+        // handle-addressed, so it cannot reach the recycled pid we refused.
+        child.kill(signal)
+        return
+      }
       const killer = spawn('taskkill', ['/pid', String(child.pid), '/t', '/f'], {
         windowsHide: true,
         stdio: 'ignore'
       })
-      killer.on('error', () => child.kill())
+      killer.on('error', () => child.kill(signal))
       return
     }
-    child.kill()
+    child.kill(signal)
     return
   }
   if (child.pid) {
     try {
       // Recipes run through a shell; kill the process group so shell children do not linger.
-      process.kill(-child.pid, 'SIGTERM')
+      process.kill(-child.pid, signal)
       return
     } catch {
       // Fall back to killing the direct child if the process group is already gone.
     }
   }
-  child.kill()
+  child.kill(signal)
 }
 
 function buildRecipeEnv(
@@ -140,6 +194,7 @@ function buildRecipeEnv(
     ORCA_REPO_URL: context.repoUrl ?? '',
     ORCA_REPO_BRANCH: context.branch ?? '',
     ORCA_REPO_REF: context.ref ?? '',
+    ORCA_REPO_REF_HEAD: context.expectedRefHead ?? '',
     ORCA_RECIPE_RESULT_SCHEMA_VERSION: String(resultSchemaVersion),
     ORCA_VERSION: context.orcaVersion ?? ''
   }

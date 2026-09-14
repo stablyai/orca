@@ -35,4 +35,9 @@ describe('agentMapWorktreeActiveStatus', () => {
     expect(agentMapWorktreeActiveStatus(counts({ done: 2, idle: 1 }))).toBe('done')
     expect(agentMapWorktreeActiveStatus(counts({ 'done-seen': 2, idle: 1 }))).toBeNull()
   })
+
+  it('keeps passive monitoring out of the active-worktree glow', () => {
+    expect(agentMapWorktreeActiveStatus(counts({ monitoring: 1 }))).toBeNull()
+    expect(agentMapWorktreeActiveStatus(counts({ working: 1, monitoring: 1 }))).toBe('working')
+  })
 })

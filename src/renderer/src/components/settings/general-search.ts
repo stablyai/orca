@@ -24,6 +24,25 @@ export const getGeneralWorkspaceSearchEntries = createLocalizedCatalog(() => [
     ]
   },
   {
+    title: translate(
+      'auto.components.settings.general.search.externalWorktrees',
+      'External worktrees'
+    ),
+    description: translate(
+      'auto.components.settings.general.search.externalWorktreesDescription',
+      'Choose whether worktrees created outside Orca appear by default.'
+    ),
+    keywords: [
+      ...translateSearchKeyword(
+        'auto.components.settings.general.search.externalKeyword',
+        'external'
+      ),
+      ...translateSearchKeyword('auto.components.settings.general.search.visibility', 'visibility'),
+      ...translateSearchKeyword('auto.components.settings.general.search.sidebar', 'sidebar'),
+      ...translateSearchKeyword('auto.components.settings.general.search.df10666259', 'worktree')
+    ]
+  },
+  {
     title: translate('auto.components.settings.general.search.141f71c69f', 'Nest Workspaces'),
     description: translate(
       'auto.components.settings.general.search.b9cffd374d',

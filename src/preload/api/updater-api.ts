@@ -3,7 +3,7 @@ import type {
   ReleaseBuildListResult,
   UpdateCheckOptions,
   UpdateStatus
-} from '../../shared/types'
+} from '../../shared/update-status-types'
 import type { ReleaseChannel } from '../../shared/release-channel'
 
 export type UpdaterApi = {

@@ -1,6 +1,7 @@
-import type { TuiAgent } from '../../../src/shared/types'
+import type { TuiAgent } from '../../../src/shared/tui-agent'
 import type { RpcClient } from '../transport/rpc-client'
 import { createWorktreeWithNameRetry, type WorktreeCreateResult } from './worktree-create-retry'
+import type { WorktreeCreateIdempotencyProbe } from './worktree-create-idempotency-policy'
 import {
   agentLaunchCreateFields,
   type WorkspaceCreateSetupDecision
@@ -16,17 +17,25 @@ export async function createBlankWorkspace(args: {
   createdWithAgentId: TuiAgent | undefined
   comment: string | undefined
   setupDecision: WorkspaceCreateSetupDecision
-  supportsIdempotentCutoverRetry: boolean | Promise<boolean>
+  /** True when `baseName` is a generated creature name rather than one the user typed; only then
+   *  may the host retire it. */
+  nameWasGenerated: boolean
+  worktreeCreateIdempotency: WorktreeCreateIdempotencyProbe
 }): Promise<WorktreeCreateResult> {
   return createWorktreeWithNameRetry({
     client: args.client,
     baseName: args.baseName,
-    supportsIdempotentCutoverRetry: args.supportsIdempotentCutoverRetry,
+    nameWasGenerated: args.nameWasGenerated,
+    worktreeCreateIdempotency: args.worktreeCreateIdempotency,
     buildParams: (name) => {
       const params: Record<string, unknown> = {
         repo: `id:${args.repoId}`,
         setupDecision: args.setupDecision,
         name,
+        ...(args.nameWasGenerated
+          ? { displayNameKind: 'generated' as const }
+          : { displayName: args.baseName, displayNameKind: 'user' as const }),
+        ...(args.nameWasGenerated ? { nameWasGenerated: true } : {}),
         ...agentLaunchCreateFields(args.createdWithAgentId)
       }
       if (args.comment) {

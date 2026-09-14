@@ -1,4 +1,4 @@
-import type { CustomPet } from '../../shared/types'
+import type { CustomPet } from '../../shared/pet-types'
 
 export type PetApi = {
   import: () => Promise<CustomPet | null>

@@ -1,10 +1,11 @@
-import type { GlobalSettings } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import {
   SettingsRow,
   SettingsSegmentedControl,
   SettingsSubsectionHeader
 } from './SettingsFormControls'
 import { SearchableSetting } from './SearchableSetting'
+import { TerminalContrastSetting } from './TerminalContrastSetting'
 import { translate } from '@/i18n/i18n'
 
 type TerminalRenderingSectionProps = {
@@ -91,6 +92,8 @@ export function TerminalRenderingSection({
             }
           />
         </SearchableSetting>
+
+        <TerminalContrastSetting settings={settings} updateSettings={updateSettings} />
       </div>
     </section>
   )

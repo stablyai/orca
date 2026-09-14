@@ -12,7 +12,7 @@ import {
 } from './rich-markdown-review-annotations'
 import type { RichMarkdownReviewNotePosition } from './rich-markdown-review-note-layout'
 import { measureRichMarkdownReviewNotePositions } from './rich-markdown-review-note-positioning'
-import type { DiffComment } from '../../../../shared/types'
+import type { DiffComment } from '../../../../shared/diff-comment-types'
 
 type UseRichMarkdownReviewRailControllerOptions = {
   canAnnotateRichMarkdown: boolean

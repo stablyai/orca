@@ -7,6 +7,7 @@ import type { CommandHandler, HandlerContext } from '../dispatch'
 import { printResult } from '../format'
 import { RuntimeClientError } from '../runtime-client'
 import { stripElectronRunAsNode } from '../runtime/launch'
+import { rejectRemoteSelectionFlags } from '../remote-selection-flag-rejection'
 import {
   deleteActiveClaudeKeychainCredentialsStrict,
   readActiveClaudeKeychainCredentialsStrict,
@@ -14,16 +15,21 @@ import {
 } from '../../main/claude-accounts/keychain'
 import {
   getVersionManagerBinPaths,
-  resolveCliCommand
+  resolveCliCommand,
+  withCliRuntimeOnPath
 } from '../../shared/node-cli-command-resolution'
 import {
   getSpawnArgsForWindows,
   UnsafeWindowsBatchArgumentsError,
   WINDOWS_BATCH_UNSAFE_CHARACTERS_LABEL
 } from '../../shared/windows-batch-spawn'
+import { stdioForWindowsInteractiveChild } from '../../shared/windows-console-input'
 import { ACCOUNT_IMPORT_RUNTIME_CAPABILITY } from '../../shared/protocol-version'
 import type { RuntimeStatus } from '../../shared/runtime-types'
-import type { ClaudeRateLimitAccountsState, CodexRateLimitAccountsState } from '../../shared/types'
+import type {
+  ClaudeRateLimitAccountsState,
+  CodexRateLimitAccountsState
+} from '../../shared/managed-account-types'
 import {
   type InteractiveLoginSession,
   withInteractiveLoginCleanup
@@ -109,13 +115,25 @@ async function runAgentLoginInTerminal(
       )
       return
     }
-    const env = addAgentNodePaths({ ...stripElectronRunAsNode(process.env), ...extraEnv })
-    const child = spawn(spawnCmd, spawnArgs, {
-      // Why: JSON mode reserves stdout for the response envelope while keeping
-      // the interactive login attached to the user's terminal via stderr.
-      stdio: ['inherit', json ? process.stderr : 'inherit', 'inherit'],
-      env
-    })
+    // Why paired after the seed: addAgentNodePaths prepends the *newest* version
+    // manager bin, which is not necessarily where this CLI lives. Pairing last puts
+    // the CLI's own node in front of that seed (stablyai/orca#10932).
+    const env = withCliRuntimeOnPath(
+      resolvedCommand,
+      addAgentNodePaths({ ...stripElectronRunAsNode(process.env), ...extraEnv })
+    )
+    const consoleStdio = stdioForWindowsInteractiveChild(json)
+    let child: ReturnType<typeof spawn>
+    try {
+      child = spawn(spawnCmd, spawnArgs, {
+        // Why: JSON mode reserves stdout for the response envelope while keeping
+        // the interactive login attached to the user's terminal via stderr.
+        stdio: consoleStdio.stdio,
+        env
+      })
+    } finally {
+      consoleStdio.dispose()
+    }
     session.child = child
     child.once('error', (error) =>
       rejectPromise(
@@ -259,15 +277,11 @@ async function addCodexAccount({ client, json }: HandlerContext): Promise<void> 
  * mistake this feature exists to avoid. A `--help` note does not reach someone who
  * already typed the flag.
  */
-function rejectRemoteSelectionFlags(ctx: HandlerContext, command: string): void {
-  for (const flag of ['environment', 'pairing-code']) {
-    if (ctx.flags.has(flag)) {
-      throw new RuntimeClientError(
-        'invalid_argument',
-        `\`--${flag}\` does not retarget \`${command}\`. Run it on the host whose accounts you want to manage.`
-      )
-    }
-  }
+function rejectAccountRemoteSelectionFlags(ctx: HandlerContext, command: string): void {
+  rejectRemoteSelectionFlags(
+    ctx.flags,
+    `\`${command}\`. Run it on the host whose accounts you want to manage.`
+  )
 }
 
 async function assertAccountImportSupported({ client }: HandlerContext): Promise<void> {
@@ -299,14 +313,14 @@ export const ACCOUNT_HANDLERS: Record<string, CommandHandler> = {
         `Unsupported --agent "${agent}". Use "claude" or "codex".`
       )
     }
-    rejectRemoteSelectionFlags(ctx, 'orca account add')
+    rejectAccountRemoteSelectionFlags(ctx, 'orca account add')
     // Why: fail on runtime version skew before burning a full OAuth round trip.
     await assertAccountImportSupported(ctx)
     await ctx.client.call('accounts.list', { refreshUsage: false })
     await (agent === 'claude' ? addClaudeAccount(ctx) : addCodexAccount(ctx))
   },
   'account list': async (ctx) => {
-    rejectRemoteSelectionFlags(ctx, 'orca account list')
+    rejectAccountRemoteSelectionFlags(ctx, 'orca account list')
     const { client, json } = ctx
     // Why: this command renders no usage numbers, so skip the forced provider
     // refresh — it is one serial network round-trip per managed account.

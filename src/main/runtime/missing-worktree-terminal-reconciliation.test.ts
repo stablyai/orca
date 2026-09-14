@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { IPtyProvider } from '../providers/types'
-import type { Repo } from '../../shared/types'
+import type { Repo } from '../../shared/repo-types'
 import type { OrcaRuntimeService } from './orca-runtime'
 import { stopMissingWorktreeTerminals } from './missing-worktree-terminal-reconciliation'
 

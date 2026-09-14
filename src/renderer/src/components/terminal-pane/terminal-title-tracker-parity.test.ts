@@ -119,6 +119,32 @@ describe('main title tracker parity with the renderer transport processor', () =
     expect(kinds.indexOf('became-working')).toBeLessThan(kinds.indexOf('became-idle'))
   })
 
+  // Why: OMP 17.2.12+ cannot animate under WSL/ConPTY, so it emits static state markers
+  // instead of braille frames (#13890). Both paths must see the same working→idle turn.
+  it('derives identical facts from static OMP WSL state titles', () => {
+    const chunk = `${ESC}]0;zsh | π : cwd${BEL}response text\r\n` + `${ESC}]0;zsh | π > cwd${BEL}`
+    feedBoth(paths, chunk)
+
+    expect(paths.main.events).toEqual(paths.renderer.events)
+    const kinds = paths.main.events.map((event) => event.kind)
+    expect(kinds).toContain('became-working')
+    expect(kinds.indexOf('became-working')).toBeLessThan(kinds.indexOf('became-idle'))
+  })
+
+  // Why: an OMP pane that stops emitting titles mid-turn must still leave working, or the
+  // stale native marker keeps the pane — and its synthetic spinner — pinned to working.
+  it('clears a stale static OMP working title in both paths', () => {
+    feedBoth(paths, `${ESC}]0;zsh | π : cwd${BEL}`)
+    feedBoth(paths, 'title-free output')
+    vi.advanceTimersByTime(3_000)
+
+    expect(paths.main.events).toEqual(paths.renderer.events)
+    expect(paths.main.events).toContainEqual({
+      kind: 'became-idle',
+      title: 'zsh | π > cwd'
+    })
+  })
+
   it('derives identical facts from BEL- and ST-terminated titles', () => {
     feedBoth(paths, `${ESC}]2;Codex working${ST}body bytes`)
     feedBoth(paths, `${ESC}]0;Codex done${BEL}`)

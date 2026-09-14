@@ -60,7 +60,8 @@ function claudeLine(uuid: string, role: 'user' | 'assistant', text: string): str
   })}\n`
 }
 
-async function waitFor(predicate: () => boolean, timeoutMs = 2_000): Promise<void> {
+// fs.watch and filesystem mutations use the platform clock; poll observable callbacks to a deadline.
+async function waitFor(predicate: () => boolean, timeoutMs = 5_000): Promise<void> {
   const start = Date.now()
   while (!predicate()) {
     if (Date.now() - start > timeoutMs) {
@@ -166,13 +167,14 @@ describe('native chat transcript watcher liveness', () => {
       onReplace: replacements,
       onAppend: () => {},
       debounceMs: 0,
-      reconciliationIntervalMs: 20
+      reconciliationIntervalMs: 10_000
     })
     await waitFor(() => snapshots.mock.calls.length === 1)
 
     await writeFile(filePath, prefixAfter + stableTail)
     const future = new Date(Date.now() + 10_000)
     await utimes(filePath, future, future)
+    watchCallbacks[0]!('change', 'transcript.jsonl')
     await waitFor(() =>
       replacements.mock.calls.flat(2).some((message) => message.id === 'prefix-new')
     )

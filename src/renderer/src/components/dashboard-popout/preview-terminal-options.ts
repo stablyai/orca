@@ -1,5 +1,5 @@
 import type { ITerminalInitOnlyOptions, ITerminalOptions, ITheme } from '@xterm/xterm'
-import type { GlobalSettings } from '../../../../shared/types'
+import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { DashboardCardTerminalInput } from '../../../../shared/dashboard-snapshot'
 import { resolveTerminalFontWeights } from '../../../../shared/terminal-fonts'
 import { normalizeTerminalLineHeight } from '../../../../shared/terminal-line-height-settings'
@@ -80,7 +80,8 @@ export function buildPreviewTerminalOptions(args: {
     theme: args.theme ?? undefined,
     minimumContrastRatio: resolveTerminalMinimumContrastRatio(
       args.theme?.background,
-      args.themeMode
+      args.themeMode,
+      args.settings?.terminalMinimumContrastRatio
     )
   }
 }

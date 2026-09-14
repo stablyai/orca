@@ -2,6 +2,11 @@ import type { MarkdownViewMode } from '@/store/slices/editor'
 
 export type MarkdownRenderMode = 'source' | 'rich-editor' | 'preview'
 
+export type MarkdownRenderState = {
+  renderMode: MarkdownRenderMode
+  richModeUnsupportedMessage: string | null
+}
+
 export function getMarkdownRenderMode({
   exceedsRichModeSizeLimit,
   hasRichModeUnsupportedContent,

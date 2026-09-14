@@ -1,7 +1,7 @@
 import React from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { SourceControlEntryContextMenu } from './source-control-entry-context-menu'
+import { SourceControlEntryContextMenu } from './source-control/listing/entry-context-menu'
 
 type ItemProps = { onSelect?: () => void; children?: React.ReactNode }
 

@@ -50,8 +50,8 @@ async function main(): Promise<void> {
     socketPath,
     tokenPath,
     log: createDaemonFileLog(logPath),
-    spawnSubprocess: (options) => {
-      const subprocess = createPtySubprocess(options)
+    spawnSubprocess: async (options) => {
+      const subprocess = await createPtySubprocess(options)
       if (refuseDispose) {
         // Why: models an access-denied/unreapable Windows PTY while keeping the
         // real child and ConPTY handle inside this disposable fixture tree.

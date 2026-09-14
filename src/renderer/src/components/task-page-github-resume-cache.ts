@@ -1,4 +1,4 @@
-import type { GitHubWorkItem } from '../../../shared/types'
+import type { GitHubWorkItem } from '../../../shared/github/work-item-types'
 
 export const TASK_PAGE_GITHUB_RESUME_CACHE_LIMIT = 5
 export const TASK_PAGE_GITHUB_RESUME_CACHE_TTL_MS = 10 * 60_000

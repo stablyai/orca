@@ -1,6 +1,6 @@
 import { useId, useMemo, useState } from 'react'
 import { ExternalLink, LoaderCircle, Lock } from 'lucide-react'
-import type { LinearWorkspace } from '../../../shared/types'
+import type { LinearWorkspace } from '../../../shared/linear/workspace-types'
 import {
   buildLinearPersonalApiKeySettingsUrl,
   buildLinearWorkspaceApiSettingsUrl

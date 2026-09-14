@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import type { Repo, Worktree } from '../../../../shared/types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import type { AiVaultSessionWorktreeInfo } from './ai-vault-session-worktree'
 import { folderWorkspaceKey } from '../../../../shared/workspace-scope'
-import { resolveAiVaultSessionLaunchTarget } from './ai-vault-session-launch-actions'
+import { resolveAiVaultSessionLaunchTarget } from './ai-vault-session-launch-target'
 import {
   aiVaultSessionResumeLabel,
   aiVaultSessionRowResumeGating,

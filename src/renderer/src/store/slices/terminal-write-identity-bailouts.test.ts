@@ -13,7 +13,7 @@
  * 1_000 (one per call), the post-fix numbers are 0.
  */
 import { describe, expect, it } from 'vitest'
-import type { TerminalLayoutSnapshot } from '../../../../shared/types'
+import type { TerminalLayoutSnapshot } from '../../../../shared/terminal-tab-types'
 import { createTestStore } from './store-test-helpers'
 
 const REPEATS = 1_000
@@ -198,7 +198,7 @@ describe('setTabLayout identity bailout', () => {
     const normalized = store.getState().terminalLayoutsByTabId['tab-1']
     expect(normalized.ptyIdsByLeafId).not.toEqual(duplicate.ptyIdsByLeafId)
 
-    store.getState().markTerminalPaneUnread('tab-1:leaf-a')
+    store.getState().markTerminalPaneUnread('tab-1:leaf-a', 'terminal-bell')
     const beforeUnread = { ...store.getState().unreadTerminalPanes }
 
     for (let i = 0; i < REPEATS; i += 1) {

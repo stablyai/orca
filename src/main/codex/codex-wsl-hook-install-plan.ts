@@ -85,7 +85,7 @@ function scheduleWslLinuxPathCanonicalization(
     ? [
         '-d',
         distro,
-        '--',
+        '--exec',
         'sh',
         '-c',
         `resolved=$(wslpath -a -u "$1") || exit; if [ ! -d "$resolved" ]; then printf '%s\\n' '${WSL_PATH_MISSING_OUTPUT}'; exit 0; fi; readlink -f -- "$resolved"`,
@@ -95,7 +95,7 @@ function scheduleWslLinuxPathCanonicalization(
     : [
         '-d',
         distro,
-        '--',
+        '--exec',
         'sh',
         '-c',
         `if [ ! -d "$1" ]; then printf '%s\\n' '${WSL_PATH_MISSING_OUTPUT}'; exit 0; fi; readlink -f -- "$1"`,

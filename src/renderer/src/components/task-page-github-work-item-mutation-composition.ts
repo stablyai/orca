@@ -1,5 +1,6 @@
 import type { ParsedTaskQuery } from '../../../shared/task-query'
-import type { GitHubAssignableUser, GitHubWorkItem } from '../../../shared/types'
+import type { GitHubAssignableUser } from '../../../shared/github/pull-request-types'
+import type { GitHubWorkItem } from '../../../shared/github/work-item-types'
 import {
   recomputeTaskPageGitHubItemSoftHide,
   shouldSoftHideTaskPageGitHubWorkItem

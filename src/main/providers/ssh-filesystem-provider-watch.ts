@@ -1,5 +1,5 @@
 import type { SshChannelMultiplexer } from '../ssh/ssh-channel-multiplexer'
-import type { FsChangeEvent } from '../../shared/types'
+import type { FsChangeEvent } from '../../shared/filesystem-entry-types'
 import { isMethodNotFoundError } from '../ssh/ssh-filesystem-stream-reader'
 import { normalizeRuntimePathForComparison } from '../../shared/cross-platform-path'
 import { PromiseSettlementWaiters } from '../../shared/promise-settlement-waiters'

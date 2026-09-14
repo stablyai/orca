@@ -1,4 +1,4 @@
-import type { GitConflictKind, GitConflictOperation, GitStatusEntry } from './types'
+import type { GitConflictKind, GitConflictOperation, GitStatusEntry } from './git-status-types'
 
 export const CONFLICT_KIND_LABELS: Record<GitConflictKind, string> = {
   both_modified: 'Both modified',

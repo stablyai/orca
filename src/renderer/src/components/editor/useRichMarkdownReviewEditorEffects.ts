@@ -2,7 +2,7 @@ import { useEffect, type RefObject } from 'react'
 import type { Editor } from '@tiptap/react'
 import { richMarkdownAnnotationHighlightPluginKey } from './rich-markdown-annotation-highlight'
 import { getRichMarkdownAnnotationHighlightRanges } from './rich-markdown-review-annotations'
-import type { DiffComment } from '../../../../shared/types'
+import type { DiffComment } from '../../../../shared/diff-comment-types'
 
 type UseRichMarkdownReviewEditorEffectsOptions = {
   canAnnotateRichMarkdown: boolean

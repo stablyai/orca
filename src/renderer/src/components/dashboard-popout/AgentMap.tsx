@@ -8,7 +8,7 @@ import type {
   DashboardWorkspace
 } from '../../../../shared/dashboard-snapshot'
 import type { RepoIcon } from '../../../../shared/repo-icon'
-import type { TuiAgent } from '../../../../shared/types'
+import type { TuiAgent } from '../../../../shared/tui-agent'
 import { AgentMapCanvas, type AgentMapCanvasHandle } from './AgentMapCanvas'
 import { ALL_AGENT_MAP_HOSTS, filterAgentMapCards, type AgentMapState } from './agent-map-filter'
 import { updateAgentMapLayout, type AgentMapLayoutCache } from './agent-map-layout'

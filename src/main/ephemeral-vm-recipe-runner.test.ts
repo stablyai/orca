@@ -12,7 +12,7 @@ import {
   runEphemeralVmRecipeStart,
   runEphemeralVmRecipeSuspend
 } from './ephemeral-vm-recipe-runner'
-import type { OrcaVmRecipe } from '../shared/types'
+import type { OrcaVmRecipe } from '../shared/orca-yaml-hook-types'
 
 const tmpRoots: string[] = []
 

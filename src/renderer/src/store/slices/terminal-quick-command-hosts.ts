@@ -1,7 +1,7 @@
 import type { StateCreator } from 'zustand'
 import { toast } from 'sonner'
 import type { AppState } from '../types'
-import type { TerminalQuickCommand } from '../../../../shared/types'
+import type { TerminalQuickCommand } from '../../../../shared/terminal-quick-command-types'
 import {
   applyTerminalQuickCommandMutation,
   parseNormalizedTerminalQuickCommands,

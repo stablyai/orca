@@ -3,7 +3,7 @@ import type {
   WarpThemeImportPreview,
   WarpThemeImportSource
 } from '../../shared/terminal-custom-themes'
-import type { GhosttyImportPreview, GlobalSettings } from '../../shared/types'
+import type { GhosttyImportPreview, GlobalSettings } from '../../shared/global-settings-types'
 
 export type SettingsApi = {
   get: () => Promise<GlobalSettings>

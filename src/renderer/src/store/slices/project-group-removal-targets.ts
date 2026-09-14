@@ -1,5 +1,8 @@
-import type { ProjectGroup, Repo } from '../../../../shared/types'
+import type { ProjectGroup } from '../../../../shared/project-group-types'
+import type { Repo } from '../../../../shared/repo-types'
 import { getProjectGroupSubtreeIds } from '../../../../shared/project-groups'
+import { getRepoExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
+import { catalogOwnsHost, getProjectGroupHostId } from './project-group-owner-routing'
 
 export type ProjectGroupRemovalTargets = {
   groupExists: boolean
@@ -10,9 +13,16 @@ export type ProjectGroupRemovalTargets = {
 export function selectProjectGroupRemovalTargets(
   projectGroups: readonly ProjectGroup[],
   repos: readonly Repo[],
-  groupId: string
+  groupId: string,
+  // Why: ids repeat across hosts; without an owner host the caller would target another host's rows.
+  hostId?: ExecutionHostId | null
 ): ProjectGroupRemovalTargets {
-  const groupExists = projectGroups.some((group) => group.id === groupId)
+  const ownsRowHost = (rowHostId: string): boolean =>
+    hostId ? catalogOwnsHost(hostId, rowHostId) : true
+  const ownerGroups = hostId
+    ? projectGroups.filter((group) => ownsRowHost(getProjectGroupHostId(group)))
+    : projectGroups
+  const groupExists = ownerGroups.some((group) => group.id === groupId)
   if (!groupExists) {
     return {
       groupExists: false,
@@ -21,10 +31,14 @@ export function selectProjectGroupRemovalTargets(
     }
   }
 
-  const deletedGroupIds = getProjectGroupSubtreeIds(projectGroups, groupId)
+  const deletedGroupIds = getProjectGroupSubtreeIds(ownerGroups, groupId)
   const projectIds: string[] = []
   for (const repo of repos) {
-    if (repo.projectGroupId && deletedGroupIds.has(repo.projectGroupId)) {
+    if (
+      repo.projectGroupId &&
+      deletedGroupIds.has(repo.projectGroupId) &&
+      ownsRowHost(getRepoExecutionHostId(repo))
+    ) {
       projectIds.push(repo.id)
     }
   }

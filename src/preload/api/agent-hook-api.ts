@@ -1,7 +1,7 @@
-import type { OrcaHooks, WorktreeSetupLaunch } from '../../shared/types'
+import type { OrcaHooks } from '../../shared/orca-yaml-hook-types'
+import type { WorktreeSetupLaunch } from '../../shared/worktree/launch-types'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import type { SetupScriptImportCandidate } from '../../shared/setup-script-imports'
-import type { AgentHookInstallStatus } from '../../shared/agent-hook-types'
 
 export type HooksApi = {
   check: (args: { repoId: string; hostId?: ExecutionHostId }) => Promise<{
@@ -32,20 +32,4 @@ export type HooksApi = {
     content: string
     hostId?: ExecutionHostId
   }) => Promise<void>
-}
-
-export type AgentHooksApi = {
-  claudeStatus: () => Promise<AgentHookInstallStatus>
-  openClaudeStatus: () => Promise<AgentHookInstallStatus>
-  codexStatus: () => Promise<AgentHookInstallStatus>
-  geminiStatus: () => Promise<AgentHookInstallStatus>
-  antigravityStatus: () => Promise<AgentHookInstallStatus>
-  ampStatus: () => Promise<AgentHookInstallStatus>
-  cursorStatus: () => Promise<AgentHookInstallStatus>
-  droidStatus: () => Promise<AgentHookInstallStatus>
-  commandCodeStatus: () => Promise<AgentHookInstallStatus>
-  grokStatus: () => Promise<AgentHookInstallStatus>
-  copilotStatus: () => Promise<AgentHookInstallStatus>
-  hermesStatus: () => Promise<AgentHookInstallStatus>
-  devinStatus: () => Promise<AgentHookInstallStatus>
 }

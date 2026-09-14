@@ -25,11 +25,6 @@ export function MobileHostCard(props: {
   const credentialUnavailable = props.credentialStatus === 'temporarily-unavailable'
   const credentialMissing = props.credentialStatus === 'missing'
   const connected = props.state === 'connected' && !credentialUnavailable && !credentialMissing
-  // Why: a relay dial can run for seconds behind "Connecting…"/"Reconnecting…"; naming the
-  // path mid-wait tells the user the phone is off-LAN rather than hung (F5). Only 'relay' is
-  // named — 'lan' doubles as the unknown-path default, so it would be a guess before connect.
-  const dialingPath =
-    ['connecting', 'handshaking', 'reconnecting'].includes(props.state) && props.path === 'relay'
   const isError =
     credentialMissing || ['warning', 'unreachable', 'auth-failed'].includes(props.verdict.kind)
   const statusLabel = credentialMissing
@@ -44,7 +39,7 @@ export function MobileHostCard(props: {
       : props.verdict
   const worktreeSummary = homeHostWorktreeSummary(props.worktreeInfo)
   const connectionPathLabel =
-    !credentialMissing && !credentialUnavailable && (connected || dialingPath)
+    !credentialMissing && !credentialUnavailable && connected
       ? mobileConnectionPathLabel(props.path)
       : null
   const discoveryHint =

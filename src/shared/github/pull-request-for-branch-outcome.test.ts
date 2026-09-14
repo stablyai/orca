@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import type { PRInfo, PRRefreshOutcome } from '../types'
+import type { PRRefreshOutcome } from './pull-request-refresh-types'
+import type { PRInfo } from './pull-request-types'
 import { normalizeGitHubPRForBranchOutcome } from './pull-request-for-branch-outcome'
 
 const PR = {

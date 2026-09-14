@@ -9,11 +9,11 @@ import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { useAppStore } from '@/store'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { TUI_AGENT_CONFIG } from '../../../../shared/tui-agent-config'
+import { getForkAgentLaunchPlatform } from './terminal-agent-session-fork-launch-platform'
+import { preflightAgentTrust } from '@/lib/agent-trust-preflight'
 import { slugifyForWorkspaceName } from '../../../../shared/workspace-name'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
-import type { TuiAgent } from '../../../../shared/types'
-import { isWslUncPath } from '../../../../shared/wsl-paths'
-import type { ProjectExecutionRuntimeResolution } from '../../../../shared/project-execution-runtime'
+import type { TuiAgent } from '../../../../shared/tui-agent'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import { translate } from '@/i18n/i18n'
 
@@ -83,44 +83,6 @@ async function copyForkContext(prompt: string, pane: ManagedPane): Promise<boole
     )
     pane.terminal.focus()
     return false
-  }
-}
-
-function getForkAgentLaunchPlatform(args: {
-  repo: { connectionId?: string | null } | null | undefined
-  worktreePath?: string | null
-  projectRuntime?: ProjectExecutionRuntimeResolution
-}): NodeJS.Platform | undefined {
-  if (args.projectRuntime?.status === 'repair-required') {
-    return args.projectRuntime.repair.preferredRuntime.kind === 'wsl' ? 'linux' : undefined
-  }
-  if (args.projectRuntime?.status === 'resolved' && args.projectRuntime.runtime.kind === 'wsl') {
-    return 'linux'
-  }
-  if (args.repo?.connectionId || (args.worktreePath && isWslUncPath(args.worktreePath))) {
-    return 'linux'
-  }
-  return undefined
-}
-
-async function preflightForkAgentTrust(args: {
-  agent: TuiAgent
-  workspacePath?: string | null
-  connectionId?: string | null
-}): Promise<void> {
-  const { agent, workspacePath, connectionId } = args
-  const preflight = TUI_AGENT_CONFIG[agent].preflightTrust
-  if (!preflight || !workspacePath || !window.api.agentTrust?.markTrusted) {
-    return
-  }
-  try {
-    await window.api.agentTrust.markTrusted({
-      preset: preflight,
-      workspacePath,
-      ...(connectionId ? { connectionId } : {})
-    })
-  } catch {
-    // Best-effort: if the trust artifact cannot be written, keep the existing launch path.
   }
 }
 
@@ -267,7 +229,7 @@ export async function startAgentSessionFork(fork: PreparedAgentSessionFork): Pro
     activateAndRevealWorktree(forkWorktreeId, { sidebarRevealBehavior: 'auto' })
     return copyAgentSessionForkContext(fork)
   }
-  await preflightForkAgentTrust({
+  await preflightAgentTrust({
     agent: fork.agent,
     workspacePath: created.worktree.path,
     connectionId: sourceRepo?.connectionId
@@ -285,19 +247,45 @@ export async function startAgentSessionFork(fork: PreparedAgentSessionFork): Pro
     launchSource: 'terminal_context_menu',
     ...(launchPlatform ? { launchPlatform } : {})
   })
-  activateAndRevealWorktree(forkWorktreeId, { sidebarRevealBehavior: 'auto' })
-
-  if (!result) {
+  if (!result?.structuredSettlement) {
+    activateAndRevealWorktree(forkWorktreeId, { sidebarRevealBehavior: 'auto' })
+    if (!result) {
+      return copyAgentSessionForkContext(fork)
+    }
+    notifyForkOpened()
+    return true
+  }
+  // Why: the fresh worktree has no tabs yet; without the opt-out activation seeds a shell beside
+  // the structured tab that is still on its way.
+  activateAndRevealWorktree(forkWorktreeId, {
+    sidebarRevealBehavior: 'auto',
+    providesInitialSurface: true
+  })
+  const settlement = await result.structuredSettlement
+  // Why: a refusal whose terminal fallback opened nothing is the structured twin of a null launch.
+  if (settlement.kind === 'refused-then-legacy' && settlement.primaryTabId === null) {
     return copyAgentSessionForkContext(fork)
   }
+  // Why: the worktree already exists, so a false return would keep the dialog open and a second
+  // click would create another one. Unknown already shows the launch badge; failed hands the
+  // user the context the way a null launch does.
+  if (settlement.kind === 'visibility-unknown') {
+    return true
+  }
+  if (settlement.kind === 'failed' || settlement.kind === 'cancelled') {
+    return copyAgentSessionForkContext(fork)
+  }
+  notifyForkOpened()
+  return true
+}
 
+function notifyForkOpened(): void {
   toast.success(
     translate(
       'auto.components.terminal.pane.terminal.agent.session.fork.88e34d00eb',
       'Top-level session fork opened in a new workspace'
     )
   )
-  return true
 }
 
 export async function forkAgentSessionFromPane(args: ForkAgentSessionFromPaneArgs): Promise<void> {

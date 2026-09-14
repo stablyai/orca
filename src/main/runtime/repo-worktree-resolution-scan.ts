@@ -1,4 +1,4 @@
-import type { GitWorktreeInfo } from '../../shared/types'
+import type { GitWorktreeInfo } from '../../shared/worktree/types'
 import { listWorktreesStrict } from '../git/worktree'
 import type { LocalProjectWorktreeGitOptions } from '../project-runtime-git-options'
 

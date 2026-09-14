@@ -1,4 +1,4 @@
-import type { DiffReviewScope } from '../../../src/shared/types'
+import type { DiffReviewScope } from '../../../src/shared/diff-comment-types'
 import type { MobileGitStagingArea } from '../source-control/mobile-git-status'
 import {
   createMobileDiffReviewFileKey,

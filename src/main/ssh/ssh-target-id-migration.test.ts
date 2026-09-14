@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'vitest'
-import type { PersistedUIState, TerminalTab, WorkspaceSessionState } from '../../shared/types'
+import type { PersistedUIState } from '../../shared/persisted-ui-state-types'
+import type { TerminalTab } from '../../shared/terminal-tab-types'
+import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 import {
   migrateUiHostScopeSshTargetId,
   migrateWorkspaceSessionSshTargetId

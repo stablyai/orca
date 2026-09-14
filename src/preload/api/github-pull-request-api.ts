@@ -1,25 +1,28 @@
 import type { AppStarSource } from '../../shared/gh-star-source'
 import type { GhAuthDiagnostic } from '../../shared/github/auth-types'
 import type { TaskSourceContext } from '../../shared/task-source-context'
+import type { PRCheckDetail, PRCheckRunDetails } from '../../shared/github/check-types'
 import type {
-  GetRateLimitResult,
   GitHubCommentResult,
-  GitHubOwnerRepo,
-  GitHubPRFile,
-  GitHubPRFileContents,
+  GitHubPRReviewCommentInput,
+  GitHubReactionContent,
+  PRComment
+} from '../../shared/github/comment-types'
+import type {
   GitHubPRRefreshCandidate,
   GitHubPRRefreshEnqueueResult,
   GitHubPRRefreshEvent,
   GitHubPRRefreshReason,
-  GitHubPRReviewCommentInput,
-  GitHubReactionContent,
-  GitHubViewer,
-  PRCheckDetail,
-  PRCheckRunDetails,
-  PRComment,
-  PRInfo,
   PRRefreshOutcome
-} from '../../shared/types'
+} from '../../shared/github/pull-request-refresh-types'
+import type {
+  GitHubOwnerRepo,
+  GitHubPRFile,
+  GitHubPRFileContents,
+  GitHubViewer,
+  PRInfo
+} from '../../shared/github/pull-request-types'
+import type { GetRateLimitResult } from '../../shared/github/rate-limit-types'
 import type { GitHubRepoSelectorArgs } from './github-work-item-api'
 
 export type GithubPullRequestApi = {
@@ -41,7 +44,10 @@ export type GithubPullRequestApi = {
     acceptMergedFallbackPR?: boolean
     currentHeadOid?: string | null
   }) => Promise<PRInfo | null>
-  refreshPRNow: (args: { candidate: GitHubPRRefreshCandidate }) => Promise<PRRefreshOutcome>
+  refreshPRNow: (args: {
+    candidate: GitHubPRRefreshCandidate
+    reason?: GitHubPRRefreshReason
+  }) => Promise<PRRefreshOutcome>
   enqueuePRRefresh: (args: {
     candidate: GitHubPRRefreshCandidate
     reason: GitHubPRRefreshReason
@@ -149,6 +155,12 @@ export type GithubPullRequestApi = {
     args: GitHubRepoSelectorArgs & {
       prNumber: number
       updates: { state: 'open' | 'closed' }
+      prRepo?: GitHubOwnerRepo | null
+    }
+  ) => Promise<{ ok: true } | { ok: false; error: string }>
+  markPRReadyForReview: (
+    args: GitHubRepoSelectorArgs & {
+      prNumber: number
       prRepo?: GitHubOwnerRepo | null
     }
   ) => Promise<{ ok: true } | { ok: false; error: string }>

@@ -38,7 +38,8 @@ export function updateTerminalSubscriptionViewport(
  *  the per-method echo logic out of the rpc-client teardown closure. */
 export function buildStreamUnsubscribe(
   method: string | undefined,
-  params: unknown
+  params: unknown,
+  requestId?: string
 ): { method: string; params: Record<string, unknown> } | null {
   if (!params || typeof params !== 'object') {
     return null
@@ -46,7 +47,10 @@ export function buildStreamUnsubscribe(
   if (method === 'session.tabs.subscribe') {
     const worktree = (params as { worktree?: unknown }).worktree
     return typeof worktree === 'string'
-      ? { method: 'session.tabs.unsubscribe', params: { worktree } }
+      ? {
+          method: 'session.tabs.unsubscribe',
+          params: { worktree, ...(requestId ? { subscriptionId: requestId } : {}) }
+        }
       : null
   }
   if (method === 'nativeChat.subscribe') {

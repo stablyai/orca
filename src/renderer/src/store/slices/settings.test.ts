@@ -1,7 +1,7 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { createTestStore, makeWorktree } from './store-test-helpers'
 import type { AppState } from '../types'
-import type { WorktreeLineage } from '../../../../shared/types'
+import type { WorktreeLineage } from '../../../../shared/worktree/lineage-types'
 import type { PublicKnownRuntimeEnvironment } from '../../../../shared/runtime-environments'
 import { toast } from 'sonner'
 import {
@@ -144,7 +144,9 @@ beforeEach(() => {
                     ? { groups: [] }
                     : method === 'worktree.lineageList'
                       ? { lineage: { [env2Lineage.worktreeId]: env2Lineage } }
-                      : {}
+                      : method === 'settings.get'
+                        ? { settings: {} }
+                        : {}
       return Promise.resolve({ id: 'rpc-1', ok: true, result, _meta: { runtimeId: 'runtime-2' } })
     }
   )
@@ -399,6 +401,7 @@ describe('createSettingsSlice runtime switching', () => {
     expect(store.getState().repos.find((repo) => repo.id === 'repo-env-2')?.executionHostId).toBe(
       'runtime:env-2'
     )
+    expect(store.getState().worktreeVisibilityDefaultsByHost['runtime:env-2']).toBeNull()
     expect(store.getState().projectGroups.map((group) => group.id)).toEqual(['group-env-1'])
     expect(store.getState().worktreesByRepo['repo-env-1']?.map((worktree) => worktree.id)).toEqual([
       'repo-env-1::/env-1/repo'
@@ -565,7 +568,6 @@ describe('createSettingsSlice runtime switching', () => {
       true
     )
 
-    // No teardown RPC was issued against the previous host's live resources.
     expect(runtimeEnvironmentCall).not.toHaveBeenCalledWith(
       expect.objectContaining({ selector: 'env-1', method: 'terminal.close' })
     )
@@ -573,7 +575,6 @@ describe('createSettingsSlice runtime switching', () => {
       expect.objectContaining({ selector: 'env-1', method: 'browser.tabClose' })
     )
 
-    // Every previous-host map is byte-for-byte unchanged after the switch.
     expect(store.getState().tabsByWorktree).toEqual({
       'repo-env-1::/env-1/repo': [
         {

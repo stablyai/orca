@@ -79,17 +79,21 @@ export function advancedNativeChatUserContentCounts(
   return advanced
 }
 
-/** User texts that already have a later non-user turn (ready to prune echoes). */
-export function advancedNativeChatUserTexts(
+/** A transcript user turn, kept identifiable so a caller can decide which
+ *  pending sends it is allowed to represent. */
+export type NativeChatUserRow = { id: string; text: string }
+
+/** User rows that already have a later non-user turn (ready to prune echoes). */
+export function advancedNativeChatUserRows(
   messages: readonly NativeChatMessage[]
-): readonly string[] {
-  const advanced: string[] = []
-  const waiting: string[] = []
+): readonly NativeChatUserRow[] {
+  const advanced: NativeChatUserRow[] = []
+  const waiting: NativeChatUserRow[] = []
   for (const message of messages) {
     if (message.role === 'user') {
       const text = normalizedNativeChatUserMessageText(message)
       if (text) {
-        waiting.push(text)
+        waiting.push({ id: message.id, text })
       }
       continue
     }
@@ -99,24 +103,28 @@ export function advancedNativeChatUserTexts(
   return advanced
 }
 
-/** All user texts (for hiding optimistic echoes once the turn exists). */
-export function matchingNativeChatUserTexts(
+/** All user rows (for hiding optimistic echoes once the turn exists). */
+export function matchingNativeChatUserRows(
   messages: readonly NativeChatMessage[]
-): readonly string[] {
-  const texts: string[] = []
+): readonly NativeChatUserRow[] {
+  const rows: NativeChatUserRow[] = []
   for (const message of messages) {
     const text = normalizedNativeChatUserMessageText(message)
     if (text) {
-      texts.push(text)
+      rows.push({ id: message.id, text })
     }
   }
-  return texts
+  return rows
 }
 
 /**
- * How many leading pending texts concatenate exactly to `userText`.
- * Covers rapid-send glue ("joke"+"continue" → "jokecontinue") without matching
- * unrelated prefixes ("hi" ↛ "history").
+ * How many leading pending texts concatenate to exactly `userText`, allowing at
+ * most one collapsed space at each send boundary. Covers rapid-send glue
+ * ("joke"+"continue" → "joke continue") while still requiring the whole row to
+ * be consumed, so unrelated prefixes never match ("hi" ↛ "history").
+ *
+ * Greedy is exact here: both sides are whitespace-normalized, so a piece never
+ * starts with a space and at most one of the two boundary forms can apply.
  */
 export function countLeadingPendingTextsGluedToUserText(
   pendingTexts: readonly string[],
@@ -125,21 +133,33 @@ export function countLeadingPendingTextsGluedToUserText(
   if (pendingTexts.length === 0 || userText.length === 0) {
     return 0
   }
-  let combined = ''
+  let cursor = 0
   for (let index = 0; index < pendingTexts.length; index += 1) {
     const piece = pendingTexts[index]
     if (!piece) {
       return 0
     }
-    combined += piece
-    if (combined === userText) {
-      return index + 1
-    }
-    if (!userText.startsWith(combined)) {
+    if (userText.startsWith(piece, cursor)) {
+      cursor += piece.length
+    } else if (index > 0 && userText.startsWith(` ${piece}`, cursor)) {
+      cursor += piece.length + 1
+    } else {
       return 0
+    }
+    if (cursor === userText.length) {
+      return index + 1
     }
   }
   return 0
+}
+
+/** A transcript row a glue match may consume, carrying the send boundaries it
+ *  satisfies — this matcher has no clock of its own. */
+export type NativeChatGluedUserRow = {
+  text: string
+  /** Indices into `pending` this row landed after. A row that already existed
+   *  when a send was issued can never be that send's echo. */
+  representablePendingIndices: ReadonlySet<number>
 }
 
 /**
@@ -148,23 +168,34 @@ export function countLeadingPendingTextsGluedToUserText(
  * matches stay in the content-key/occurrence path so repeated prompts and
  * send boundaries keep their existing semantics.
  */
-export function selectPendingIndicesRepresentedByUserTexts(
+export function selectPendingIndicesRepresentedByUserRows(
   pending: readonly NativeChatPendingOccurrence[],
-  userTexts: readonly string[]
+  rows: readonly NativeChatGluedUserRow[]
 ): Set<number> {
   const represented = new Set<number>()
-  if (pending.length < 2 || userTexts.length === 0) {
+  if (pending.length < 2 || rows.length === 0) {
     return represented
   }
   const remaining = pending.map((entry, index) => ({
     index,
     text: normalizeNativeChatPendingText(entry.text)
   }))
-  for (const userText of userTexts) {
-    const open = remaining.filter((entry) => !represented.has(entry.index) && entry.text.length > 0)
+  for (const row of rows) {
+    const open: typeof remaining = []
+    for (const entry of remaining) {
+      if (represented.has(entry.index) || entry.text.length === 0) {
+        continue
+      }
+      // Glue consumes a leading run, so a send this row predates ends the run
+      // rather than being skipped over — adjacency is what makes it glue.
+      if (!row.representablePendingIndices.has(entry.index)) {
+        break
+      }
+      open.push(entry)
+    }
     const gluedCount = countLeadingPendingTextsGluedToUserText(
       open.map((entry) => entry.text),
-      userText
+      row.text
     )
     // Why: gluedCount === 1 is an exact match — leave it to occurrence counting.
     if (gluedCount < 2) {

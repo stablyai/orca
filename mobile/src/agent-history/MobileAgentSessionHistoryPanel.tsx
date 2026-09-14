@@ -1,3 +1,4 @@
+import { optionalSettingsRead } from '../transport/settings-read-operations'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ActivityIndicator, Pressable, Text, TextInput, View } from 'react-native'
 import { SafeAreaView } from 'react-native-safe-area-context'
@@ -7,11 +8,11 @@ import { colors } from '../theme/mobile-theme'
 import { useHostClient } from '../transport/client-context'
 import type { RpcSuccess } from '../transport/types'
 import type { RpcClient } from '../transport/rpc-client'
+import { readMobileRuntimeHostPlatform } from '../transport/mobile-runtime-host-platform'
 import { getWorktreeLabel } from '../session/worktree-label'
 import {
   buildMobileAiVaultResumeLaunch,
   createMobileAiVaultResumeMutationRegistry,
-  readMobileRuntimeHostPlatform,
   readMobileRuntimeTerminalWindowsShell,
   resolveMobileAiVaultResumePlatform,
   resumeAiVaultSessionInTerminal,
@@ -36,6 +37,7 @@ import {
 } from './agent-history-resume-target'
 import { buildMobileAgentHistoryResumeActionState } from './agent-history-session-card'
 import { styles } from './agent-history-styles'
+import { useNow } from '../hooks/use-now'
 
 export type MobileAgentSessionHistoryPanelProps = {
   hostId: string
@@ -61,6 +63,7 @@ export function MobileAgentSessionHistoryPanel({
   const [query, setQuery] = useState('')
   const [resumingSessionId, setResumingSessionId] = useState<string | null>(null)
   const [resumeMessage, setResumeMessage] = useState<string | null>(null)
+  const now = useNow(30_000)
   const resumeLaunchInFlightRef = useRef(false)
   const resumeMutationRegistryRef = useRef(
     createMobileAiVaultResumeMutationRegistry(createMobileAiVaultResumeMutationId)
@@ -125,9 +128,9 @@ export function MobileAgentSessionHistoryPanel({
         scope,
         scopeFilterPaths,
         activeWorktreePath,
-        now: Date.now()
+        now
       }),
-    [sessions, query, scope, scopeFilterPaths, activeWorktreePath]
+    [sessions, query, scope, scopeFilterPaths, activeWorktreePath, now]
   )
 
   const hostPlatform = useMemo(
@@ -382,8 +385,8 @@ async function loadMobileResumeMetadata(client: Pick<RpcClient, 'sendRequest'>):
     client
       .sendRequest('projectGroup.list', undefined, { timeoutMs: RESUME_RPC_TIMEOUT_MS })
       .catch(() => null),
-    client
-      .sendRequest('settings.get', undefined, { timeoutMs: RESUME_RPC_TIMEOUT_MS })
+    optionalSettingsRead
+      .request(client, undefined, { timeoutMs: RESUME_RPC_TIMEOUT_MS })
       .catch(() => null),
     client
       .sendRequest('worktree.ps', { limit: 10000 }, { timeoutMs: RESUME_RPC_TIMEOUT_MS })
@@ -403,17 +406,18 @@ async function loadMobileResumeMetadata(client: Pick<RpcClient, 'sendRequest'>):
     projectGroupResponse?.ok === true
       ? (projectGroupResponse.result as { groups?: MobileAiVaultResumeProjectGroup[] })
       : null
-  const settingsResult =
-    settingsResponse?.ok === true
-      ? (settingsResponse.result as { settings?: MobileAiVaultResumeSettings })
-      : null
+  const settingsResult = settingsResponse ? optionalSettingsRead.interpret(settingsResponse) : null
+  const settings = settingsResult?.accepted
+    ? // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
+      (settingsResult.value as MobileAiVaultResumeSettings | null | undefined)
+    : null
   const worktreeResult =
     worktreeResponse?.ok === true ? (worktreeResponse.result as { worktrees?: Worktree[] }) : null
   return {
     repos: repoResult.repos ?? [],
     folderWorkspaces: folderWorkspaceResult?.folderWorkspaces ?? [],
     projectGroups: projectGroupResult?.groups ?? [],
-    settings: settingsResult?.settings ?? null,
+    settings: settings ?? null,
     worktrees: worktreeResult?.worktrees ?? null
   }
 }

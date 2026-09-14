@@ -39,22 +39,24 @@ export function guardPinnedTabClose(params: {
   tabLabel: string
   onClose: () => void
   onCancel?: () => void
-}): void {
+}): (() => void) | undefined {
   const { isPinned, tabLabel, onClose, onCancel } = params
   if (!isPinned) {
     onClose()
-    return
+    return undefined
   }
 
   const state = useAppStore.getState()
   if (!shouldConfirmPinnedTabClose(state)) {
     onClose()
-    return
+    return undefined
   }
 
-  state.requestPinnedTabCloseConfirm({
+  const request = {
     tabLabel,
     onConfirm: onClose,
     ...(onCancel ? { onCancel } : {})
-  })
+  }
+  state.requestPinnedTabCloseConfirm(request)
+  return () => state.cancelPinnedTabCloseRequest(request)
 }

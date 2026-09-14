@@ -1,4 +1,5 @@
 import type { TerminalModes } from './types'
+import { RESET_GRAPHIC_RENDITION } from '../../shared/terminal-mode-reset-profiles'
 
 // Why no kitty flags here: rehydrateSequences feeds renderer xterms, and
 // POST_REPLAY_REATTACH_RESET's deliberate kitty reset (stale CSI-u Ctrl+C
@@ -10,7 +11,7 @@ export function buildRehydrateSequences(modes: TerminalModes): string {
   if (modes.alternateScreen) {
     // Why: normal-buffer serialization can leave its pen active, while the
     // separately serialized alt body assumes it starts from default SGR.
-    seqs.push('\x1b[0m\x1b[?1049h')
+    seqs.push(`${RESET_GRAPHIC_RENDITION}\x1b[?1049h`)
   }
   if (modes.bracketedPaste) {
     seqs.push('\x1b[?2004h')

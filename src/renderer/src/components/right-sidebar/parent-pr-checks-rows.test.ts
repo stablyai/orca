@@ -1,18 +1,21 @@
 import { describe, expect, it } from 'vitest'
-import type { PRCheckDetail, PRInfo, Repo, Worktree } from '../../../../shared/types'
+import type { PRCheckDetail } from '../../../../shared/github/check-types'
+import type { PRInfo } from '../../../../shared/github/pull-request-types'
+import type { Repo } from '../../../../shared/repo-types'
+import type { Worktree } from '../../../../shared/worktree/types'
 import type { HostedReviewInfo } from '../../../../shared/hosted-review'
-import { getHostedReviewCacheKey } from '@/store/slices/hosted-review'
+import { getHostedReviewCacheKey } from '@/store/slices/hosted-review-cache-identity'
 import {
   getGitHubPRCacheKey,
   getGitHubRepoCacheKey,
   getLegacyGitHubPRCacheKey
 } from '@/store/slices/github-cache-key'
-import { prChecksCacheSuffix } from '@/store/slices/github'
+import { prChecksCacheSuffix } from '@/store/github/cache-identity'
 import {
   buildParentPrChecksProjection,
-  getParentPrChecksRefreshIdentity,
-  type ParentPrChecksRefreshOutcome
+  getParentPrChecksRefreshIdentity
 } from './parent-pr-checks-rows'
+import type { ParentPrChecksRefreshOutcome } from './parent-pr-checks-row-types'
 
 const settings = null as never
 
@@ -220,6 +223,103 @@ describe('buildParentPrChecksProjection', () => {
       reviewNumber: 99,
       reviewLabel: '#99'
     })
+  })
+
+  it('rejects matching suppressed GitHub cache entries', () => {
+    const repo = makeRepo()
+    const worktree = makeWorktree({
+      id: 'repo-1::/feature',
+      linkedPR: null,
+      suppressedGitHubPR: 99
+    })
+    const cacheKey = getGitHubPRCacheKey(repo.path, repo.id, 'feature', settings)
+    const hostedKey = getHostedReviewCacheKey(repo.path, 'feature', settings, repo.id)
+
+    expect(
+      makeProjection({
+        worktree,
+        repo,
+        hostedReviewCache: {
+          [hostedKey]: {
+            data: makeReview({ number: 99 }),
+            fetchedAt: 2,
+            linkedReviewHintKey: ''
+          }
+        },
+        prCache: {
+          [cacheKey]: { data: makePRInfo({ number: 99 }), fetchedAt: 2 }
+        }
+      }).rows[0]
+    ).toMatchObject({ reviewNumber: null, reviewLabel: null })
+  })
+
+  it('lets explicit GitHub metadata override stale suppression', () => {
+    const repo = makeRepo()
+    const worktree = makeWorktree({
+      id: 'repo-1::/feature',
+      linkedPR: 99,
+      suppressedGitHubPR: 99
+    })
+    const cacheKey = getGitHubPRCacheKey(repo.path, repo.id, 'feature', settings)
+
+    expect(
+      makeProjection({
+        worktree,
+        repo,
+        prCache: {
+          [cacheKey]: { data: makePRInfo({ number: 99 }), fetchedAt: 2 }
+        }
+      }).rows[0]
+    ).toMatchObject({ reviewNumber: 99, reviewLabel: '#99' })
+  })
+
+  it('falls through a suppressed live outcome to a different cached PR', () => {
+    const repo = makeRepo()
+    const worktree = makeWorktree({
+      id: 'repo-1::/feature',
+      linkedPR: null,
+      suppressedGitHubPR: 99
+    })
+    const identity = getParentPrChecksRefreshIdentity(worktree, repo, 'feature')
+    const cacheKey = getGitHubPRCacheKey(repo.path, repo.id, 'feature', settings)
+
+    expect(
+      makeProjection({
+        worktree,
+        repo,
+        prCache: {
+          [cacheKey]: { data: makePRInfo({ number: 100 }), fetchedAt: 2 }
+        },
+        refreshOutcomes: new Map([
+          [identity, { kind: 'found', review: makeReview({ number: 99 }) }]
+        ])
+      }).rows[0]
+    ).toMatchObject({ reviewNumber: 100, reviewLabel: '#100' })
+  })
+
+  it('preserves a non-GitHub hosted review with the suppressed number', () => {
+    const repo = makeRepo()
+    const worktree = makeWorktree({
+      id: 'repo-1::/feature',
+      linkedPR: null,
+      suppressedGitHubPR: 99,
+      linkedGitLabMR: 99
+    })
+    const cacheKey = getHostedReviewCacheKey(repo.path, 'feature', settings, repo.id)
+
+    expect(
+      makeProjection({
+        worktree,
+        repo,
+        hostedReviewCache: {
+          [cacheKey]: {
+            data: makeReview({ provider: 'gitlab', number: 99 }),
+            fetchedAt: 2,
+            linkedReviewHintKey: 'gitlab:99'
+          }
+        }
+      }).rows[0]
+    ).toMatchObject({ provider: 'gitlab', reviewNumber: 99 })
   })
 
   it('uses legacy path-scoped PR cache for local persisted entries', () => {

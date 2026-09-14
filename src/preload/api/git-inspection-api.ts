@@ -1,13 +1,15 @@
 import type {
   GitBranchCompareResult,
   GitCommitCompareResult,
+  GitDiffResult
+} from '../../shared/git-diff-compare-types'
+import type {
   GitConflictOperation,
-  GitDiffResult,
-  GitPushTarget,
   GitStagingArea,
   GitStatusResult,
   GitUpstreamStatus
-} from '../../shared/types'
+} from '../../shared/git-status-types'
+import type { GitPushTarget } from '../../shared/worktree/types'
 import type { GitHistoryOptions, GitHistoryResult } from '../../shared/git-history'
 import type {
   CommitMessageAgentCapability,
@@ -18,7 +20,9 @@ export type GitInspectionApi = {
   status: (args: {
     worktreePath: string
     connectionId?: string
+    admissionTier?: 'interactive' | 'status' | 'background'
     includeIgnored?: boolean
+    includeLineStats?: boolean
     bypassEffectiveUpstreamNegativeCache?: boolean
     reuseLineStats?: boolean
     /** Merge-base OID to measure the branch line total against; omit to skip the work. */
@@ -64,6 +68,7 @@ export type GitInspectionApi = {
     worktreePath: string
     baseRef: string
     connectionId?: string
+    admissionTier?: 'interactive' | 'status' | 'background'
   }) => Promise<GitBranchCompareResult>
   commitCompare: (args: {
     worktreePath: string

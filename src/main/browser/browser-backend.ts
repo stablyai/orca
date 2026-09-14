@@ -10,6 +10,7 @@ export type BrowserBackendCreateTab = {
   url: string
   worktreeId?: string
   profileId?: string
+  browserPageId?: string
 }
 
 export type BrowserBackend = {
@@ -19,5 +20,5 @@ export type BrowserBackend = {
   closeTab(browserPageId: string): Promise<void>
   /** Tear down every page this backend owns (process shutdown). Optional —
    *  renderer-hosted backends are torn down with their window. */
-  destroyAll?(): void
+  destroyAll?(): void | Promise<void>
 }

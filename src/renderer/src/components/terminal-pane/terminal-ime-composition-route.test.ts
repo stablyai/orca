@@ -149,6 +149,76 @@ describe('installTerminalImeCompositionRoute', () => {
     expect(harness.input).not.toHaveBeenCalled()
   })
 
+  // A route that never saw the start cannot deliver the commit, so cancelling the event would
+  // suppress xterm's own triggerDataEvent with nothing standing in for it.
+  it('leaves an uncaptured session to xterm when installed mid-composition', () => {
+    const harness = createHarness()
+
+    expect(harness.end(1, '한')).toBe(true)
+    expect(harness.input).not.toHaveBeenCalled()
+  })
+
+  it('does not swallow a commit when the connection re-installs the route mid-composition', () => {
+    const element = document.createElement('div')
+    const transport = createTransport('pty-original')
+    const input = vi.fn()
+    const install = () =>
+      installTerminalImeCompositionRoute({
+        terminalElement: element,
+        terminal: { input },
+        capturedTransport: transport,
+        getCurrentTransport: () => transport
+      })
+    const firstRoute = install()
+
+    element.dispatchEvent(sessionEvent(XTERM_COMPOSITION_SESSION_START_EVENT, 1))
+    // Reconnect/effect re-run swaps the route while the preedit is still open.
+    firstRoute.dispose()
+    const secondRoute = install()
+
+    expect(element.dispatchEvent(sessionEvent(XTERM_COMPOSITION_SESSION_END_EVENT, 1, '한'))).toBe(
+      true
+    )
+    expect(input).not.toHaveBeenCalled()
+
+    secondRoute.dispose()
+  })
+
+  it('still suppresses xterm insertion for a captured session it deliberately drops', () => {
+    const harness = createHarness()
+    harness.start(1)
+    harness.state.currentTransport = createTransport('pty-replacement')
+
+    // Owned, so xterm must stand down — dropping the commit is this route's decision.
+    expect(harness.end(1, '한')).toBe(false)
+    expect(harness.input).not.toHaveBeenCalled()
+  })
+
+  it('keeps a shared session pending until every overlapping route releases it', () => {
+    const element = document.createElement('div')
+    const firstTransport = createTransport('pty-first')
+    const secondTransport = createTransport('pty-second')
+    const firstRoute = installTerminalImeCompositionRoute({
+      terminalElement: element,
+      terminal: { input: vi.fn() },
+      capturedTransport: firstTransport,
+      getCurrentTransport: () => firstTransport
+    })
+    const secondRoute = installTerminalImeCompositionRoute({
+      terminalElement: element,
+      terminal: { input: vi.fn() },
+      capturedTransport: secondTransport,
+      getCurrentTransport: () => secondTransport
+    })
+
+    element.dispatchEvent(sessionEvent(XTERM_COMPOSITION_SESSION_START_EVENT, 1))
+    firstRoute.dispose()
+    expect(hasPendingTerminalImeComposition(element)).toBe(true)
+
+    secondRoute.dispose()
+    expect(hasPendingTerminalImeComposition(element)).toBe(false)
+  })
+
   it.each(['terminal close', 'tab unmount'])(
     'releases the captured session and listeners on %s',
     () => {

@@ -1,4 +1,4 @@
-import type { GlobalSettings } from '../../../shared/types'
+import type { GlobalSettings } from '../../../shared/global-settings-types'
 import { isVsCodeRemoteSshCommand } from '../../../shared/vscode-remote-ssh-launcher'
 
 export type ExternalEditorOpenCapability =

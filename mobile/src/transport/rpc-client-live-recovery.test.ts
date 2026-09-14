@@ -59,7 +59,8 @@ function e2eeDecrypt(encrypted: string, sharedKey: Uint8Array): string | null {
 // fail with EADDRINUSE; the full scenario restarts on the captured port
 // because the client keeps reconnecting to its original URL.
 function startServer(port = 0): Promise<WebSocketServer> {
-  const wss = new WebSocketServer({ port })
+  // host must match the 127.0.0.1 clients dial: a wildcard bind lets a foreign loopback listener claim the port and answer here.
+  const wss = new WebSocketServer({ host: '127.0.0.1', port })
   wss.on('connection', (ws: ServerSocket) => {
     let sharedKey: Uint8Array | null = null
     let authenticated = false

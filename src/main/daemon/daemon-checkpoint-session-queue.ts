@@ -14,6 +14,11 @@
 /** Running plus queued operations one session may hold before callers are turned away. */
 export const CHECKPOINT_SESSION_QUEUE_MAX_PENDING = 3
 
+type DeadlineCallbacks = {
+  onDeadline?: () => void
+  onAbandonedRejection?: (error: unknown) => void
+}
+
 export class CheckpointSessionQueue {
   private tails = new Map<string, Promise<unknown>>()
   private pending = new Map<string, number>()
@@ -36,20 +41,33 @@ export class CheckpointSessionQueue {
     sessionId: string,
     operation: () => Promise<T>,
     deadlineMs: number,
-    onDeadline: T
+    onDeadline: T,
+    callbacks: DeadlineCallbacks = {}
   ): Promise<T> {
     const work = this.enqueue(sessionId, operation)
-    return new Promise<T>((resolve) => {
-      const timer = setTimeout(() => resolve(onDeadline), deadlineMs)
+    return new Promise<T>((resolve, reject) => {
+      let deadlineFired = false
+      const timer = setTimeout(() => {
+        deadlineFired = true
+        try {
+          callbacks.onDeadline?.()
+        } finally {
+          resolve(onDeadline)
+        }
+      }, deadlineMs)
       timer.unref?.()
       work.then(
         (value) => {
           clearTimeout(timer)
           resolve(value)
         },
-        () => {
+        (error: unknown) => {
           clearTimeout(timer)
-          resolve(onDeadline)
+          if (deadlineFired) {
+            callbacks.onAbandonedRejection?.(error)
+            return
+          }
+          reject(error)
         }
       )
     })

@@ -2,15 +2,14 @@ import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { SleepingAgentSessionRecord } from '../../src/shared/agent-session-resume'
 import { makePaneKey } from '../../src/shared/stable-pane-id'
-import { tokenizeStartupCommand } from '../../src/shared/tui-agent-startup-shell'
 import { parseWorkspaceSession } from '../../src/shared/workspace-session-schema'
-import type { TerminalTab, Worktree } from '../../src/shared/types'
+import type { TerminalTab } from '../../src/shared/terminal-tab-types'
+import type { Worktree } from '../../src/shared/worktree/types'
 import { OrchestrationDb } from '../../src/main/runtime/orchestration/db'
 import { OrcaRuntimeService } from '../../src/main/runtime/orca-runtime'
 import type { RpcContext } from '../../src/main/runtime/rpc/core'
 import { ORCHESTRATION_METHODS } from '../../src/main/runtime/rpc/methods/orchestration'
 import { closeTerminalTab } from '@/components/terminal/terminal-tab-actions'
-import { seedStartupSessionRestoredBanner } from '@/components/terminal-pane/session-restored-banner-pane-state'
 import {
   resolveLegacyWorkerTerminalRecoveryAction,
   rollbackLegacyWorkerTerminalSurfaceInStore
@@ -207,7 +206,7 @@ function completeRecordedWorker(
     worktreeId: WORKTREE_ID,
     agent: 'codex',
     providerSession,
-    state: 'working',
+    state: 'done',
     origin: 'live'
   })
   return record!
@@ -425,7 +424,7 @@ describe('completed background-worker retirement resume matrix', () => {
     expect(useAppStore.getState().ptyIdsByTabId[ORIGINAL_TAB_ID]).toBeUndefined()
     expect(useAppStore.getState().sleepingAgentSessionsByPaneKey[ORIGINAL_PANE_KEY]).toMatchObject({
       origin: 'live',
-      state: 'working',
+      state: 'done',
       providerSession: { key: 'session_id', id: PROVIDER_SESSION_ID }
     })
     await releaseCompletedWorker('exited')
@@ -435,17 +434,11 @@ describe('completed background-worker retirement resume matrix', () => {
     expect(retiredRestart.tabsByWorktree[WORKTREE_ID]).toEqual([])
     expect(retiredRestart.sleepingAgentSessionsByPaneKey?.[ORIGINAL_PANE_KEY]).toBeUndefined()
 
-    // Case 4: legacy rollback preserves a fenced record; exited resolution clears it.
+    // Case 4: legacy rollback preserves the settled worker's record as an ordinary sleeping
+    // record; with its tab gone it is passive completed evidence that wake clears, and an exited
+    // resolution clears it too. No fence: a finished worker follows the same rule as any agent pane.
     seedWorkspace()
-    const legacyRecord = recordCompletedWorker()
-    useAppStore.setState({
-      sleepingAgentSessionsByPaneKey: {
-        [ORIGINAL_PANE_KEY]: {
-          ...legacyRecord,
-          automaticResumeBlockedBy: 'legacy-orchestration-worker'
-        }
-      }
-    })
+    recordCompletedWorker()
     const legacyAction = resolveLegacyWorkerTerminalRecoveryAction({
       paneKey: ORIGINAL_PANE_KEY,
       resolution: 'rolled_back',
@@ -457,17 +450,19 @@ describe('completed background-worker retirement resume matrix', () => {
         rollbackLegacyWorkerTerminalSurfaceInStore(useAppStore.getState(), legacyAction.detail)
       ).toBe('removed')
     }
-    expect(resumeSleepingAgentSessionsForWorktree(WORKTREE_ID)).toBe(0)
+    expect(useAppStore.getState().sleepingAgentSessionsByPaneKey[ORIGINAL_PANE_KEY]).toMatchObject({
+      state: 'done'
+    })
     expect(
       useAppStore.getState().sleepingAgentSessionsByPaneKey[ORIGINAL_PANE_KEY]
-        ?.automaticResumeBlockedBy
-    ).toBe('legacy-orchestration-worker')
+    ).not.toHaveProperty('automaticResumeBlockedBy')
+    expect(resumeSleepingAgentSessionsForWorktree(WORKTREE_ID)).toBe(0)
+    expect(useAppStore.getState().sleepingAgentSessionsByPaneKey[ORIGINAL_PANE_KEY]).toBeUndefined()
     const exitedAction = resolveLegacyWorkerTerminalRecoveryAction({
       paneKey: ORIGINAL_PANE_KEY,
       resolution: 'exited'
     })
     expect(exitedAction).toEqual({ kind: 'clear-sleeping', paneKey: ORIGINAL_PANE_KEY })
-    useAppStore.getState().clearSleepingAgentSession(ORIGINAL_PANE_KEY)
 
     // Case 5: coordinator manual close is the same safe exact-tab retirement boundary.
     seedWorkspace()
@@ -560,51 +555,27 @@ describe('completed background-worker retirement resume matrix', () => {
     const restartAfterRetirement = persistAndParseCurrentSession()
     await hydrateSession(restartAfterRetirement)
 
-    // Case 8: first activation of the never-visited target cannot resurrect retired authority.
+    // Case 8: first activation hands back a bare terminal and cannot resurrect authority.
     const beforeActivation = useAppStore.getState()
     expect(beforeActivation.everActivatedWorktreeIds.has(WORKTREE_ID)).toBe(false)
     expect(beforeActivation.agentStatusByPaneKey[ORIGINAL_PANE_KEY]).toBeUndefined()
     expect(beforeActivation.sleepingAgentSessionsByPaneKey[ORIGINAL_PANE_KEY]).toBeUndefined()
     expect(Object.keys(beforeActivation.pendingStartupByTabId)).toEqual([])
-    const tabCountBeforeActivation = beforeActivation.tabsByWorktree[WORKTREE_ID]?.length ?? 0
-    activateAndRevealWorktree(WORKTREE_ID, { notifyHostRuntime: false })
-    const activated = useAppStore.getState()
-    const replacementTabs = (activated.tabsByWorktree[WORKTREE_ID] ?? []).filter(
-      (tab) => tab.id !== ORIGINAL_TAB_ID
-    )
-    // The provider-ownership gate separately proves this request becomes one transport spawn.
-    const coldSpawnRequests = replacementTabs.flatMap((tab) => {
-      const startup = activated.pendingStartupByTabId[tab.id]
-      if (!startup?.resumeProviderSession) {
-        return []
-      }
-      const tokens = tokenizeStartupCommand(startup.command, 'posix')
-      expect(tokens.ok).toBe(true)
-      const showSessionRestoredBanner = vi.fn()
-      seedStartupSessionRestoredBanner(startup, 1, showSessionRestoredBanner)
-      return [
-        {
-          providerSession: startup.resumeProviderSession,
-          command: startup.command,
-          argv: tokens.ok ? tokens.tokens : [],
-          restoredBannerCount: showSessionRestoredBanner.mock.calls.length
-        }
-      ]
+    expect(beforeActivation.tabsByWorktree[WORKTREE_ID]).toEqual([])
+    const activationResult = activateAndRevealWorktree(WORKTREE_ID, {
+      notifyHostRuntime: false
     })
+    expect(activationResult).not.toBe(false)
+    const activated = useAppStore.getState()
 
-    expect(tabCountBeforeActivation).toBe(0)
+    const replacementTabs = activated.tabsByWorktree[WORKTREE_ID] ?? []
     expect(replacementTabs).toHaveLength(1)
-    expect(activated.tabsByWorktree[WORKTREE_ID]?.some((tab) => tab.id === ORIGINAL_TAB_ID)).toBe(
-      false
-    )
+    expect(replacementTabs[0]?.id).not.toBe(ORIGINAL_TAB_ID)
     expect(activated.terminalLayoutsByTabId[ORIGINAL_TAB_ID]).toBeUndefined()
     expect(activated.ptyIdsByTabId[ORIGINAL_TAB_ID]).toBeUndefined()
-    expect(coldSpawnRequests).toEqual([])
     expectCanaryUnchanged()
+    // Required invariant: explicit completion plus retirement must revoke provider-resume authority.
     expect(Object.keys(activated.pendingStartupByTabId)).toHaveLength(0)
     expect(Object.keys(activated.automaticAgentResumeClaimsByTabId)).toHaveLength(0)
-
-    // Required invariant: explicit completion plus retirement must revoke provider-resume authority.
-    expect(coldSpawnRequests).toEqual([])
   })
 })
