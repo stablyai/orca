@@ -31,8 +31,8 @@ describe('ref-mirroring vet steps', () => {
   })
 
   // Why matching-refs rather than `gh release list` on the main repo: a tagged
-  // stable with no GitHub release (failed or in-flight cut) still owns its
-  // number, and a vanished release must not drag the channel backwards.
+  // stable still owns its number after its GitHub release is unpublished for a
+  // bug, and that unpublish must not drag the channel backwards.
   it.each(['daily', 'hourly', 'adhoc'])(
     '%s versions from git tags, not main GitHub releases',
     (channel) => {

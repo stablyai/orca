@@ -26,9 +26,9 @@ function compareTriples(a, b) {
  * 1.4.167 all shipped — so hourlies built from that main claimed 1.4.165 while
  * carrying code newer than 1.4.167, and sorted *below* the stable their user was
  * already running. Git tags (not GitHub releases) are the honest answer to "what
- * number is taken": a cut tags before it publishes, and a failed cut can delete
- * the GitHub release while leaving the tag. Channel tags (`1.4.203-hourly.*`)
- * are a second floor so a vanished main release cannot drag the series backwards.
+ * number is taken": unpublishing a buggy cut deletes the GitHub release and
+ * leaves the tag, which still owns that number. Channel tags (`1.4.203-hourly.*`)
+ * are a second floor so that unpublish cannot drag the series backwards.
  * package.json is a floor, not a source of truth.
  */
 export function resolveDevChannelBaseVersion(packageVersion, publishedVersions = []) {

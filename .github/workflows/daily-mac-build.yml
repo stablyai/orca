@@ -209,18 +209,17 @@ jobs:
           # number free", where a stranded draft still holds one.
           names="$(gh release list --repo "$DAILY_REPO" --limit 200 --json name \
             --jq '.[].name // empty')"
-          # Why git tags, not GitHub releases: a cut tags before it publishes, and
-          # a failed cut can delete the GitHub release while leaving the tag. That
-          # dragged hourlies (and would drag dailies) backwards so electron-updater
-          # stopped offering them. A separate token because GH_TOKEN above is the
-          # App's, scoped to the daily repo. Empty on failure — the script then
-          # falls back to package.json, which is stale but never wrong enough to
-          # fail a build.
+          # Why git tags, not GitHub releases: unpublishing a buggy cut deletes the
+          # GitHub release and leaves the tag. That dragged hourlies backwards so
+          # electron-updater stopped offering them; dailies would do the same. A
+          # separate token because GH_TOKEN above is the App's, scoped to the
+          # daily repo. Empty on failure — the script then falls back to
+          # package.json, which is stale but never wrong enough to fail a build.
           main_tags="$(GH_TOKEN="$MAIN_REPO_TOKEN" gh api \
             "repos/$GITHUB_REPOSITORY/git/matching-refs/tags/v" \
             --jq '.[].ref | sub("^refs/tags/"; "")' || true)"
-          # Already-shipped channel tags are a second floor so a vanished main
-          # release cannot drag this series below a daily already out.
+          # Already-shipped channel tags are a second floor so unpublishing a
+          # buggy main release cannot drag this series below a daily already out.
           channel_tags="$(gh release list --repo "$DAILY_REPO" --limit 200 --json tagName \
             --jq '.[].tagName' || true)"
           published="$main_tags"$'\n'"$channel_tags"

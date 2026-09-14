@@ -213,15 +213,15 @@ jobs:
           # number free", where a stranded draft still holds one.
           names="$(gh release list --repo "$HOURLY_REPO" --limit 200 --json name \
             --jq '.[].name // empty')"
-          # Why git tags, not GitHub releases: a cut tags before it publishes, and
-          # a failed cut can delete the GitHub release while leaving the tag. On
-          # 2026-09-14, v1.4.202 was tagged and hourlies climbed to 1.4.203; then
-          # the GitHub release vanished, so `gh release list` fell back to
-          # v1.4.201 and the next hourlies shipped as 1.4.202-hourly — which
-          # electron-updater will not install over 1.4.203-hourly or over stable
-          # 1.4.202. A separate token because GH_TOKEN above is the App's, scoped
-          # to the hourly repo. Empty on failure — the script then falls back to
-          # package.json, which is stale but never wrong enough to fail a build.
+          # Why git tags, not GitHub releases: unpublishing a buggy cut deletes the
+          # GitHub release and leaves the tag. On 2026-09-14 we deleted v1.4.202's
+          # release for a bug; hourlies had already climbed to 1.4.203, then
+          # `gh release list` fell back to v1.4.201 and the next hourlies shipped
+          # as 1.4.202-hourly — which electron-updater will not install over
+          # 1.4.203-hourly or over the still-tagged 1.4.202. A separate token
+          # because GH_TOKEN above is the App's, scoped to the hourly repo. Empty
+          # on failure — the script then falls back to package.json, which is
+          # stale but never wrong enough to fail a build.
           main_tags="$(GH_TOKEN="$MAIN_REPO_TOKEN" gh api \
             "repos/$GITHUB_REPOSITORY/git/matching-refs/tags/v" \
             --jq '.[].ref | sub("^refs/tags/"; "")' || true)"

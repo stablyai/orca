@@ -235,11 +235,11 @@ jobs:
             fi
           done
           echo "head_sha=$(git rev-parse HEAD)" >>"$GITHUB_OUTPUT"
-          # Why git tags, not GitHub releases: a cut tags before it publishes, and
-          # a failed cut can delete the GitHub release while leaving the tag.
-          # Releases-only let adhoc sit on a number already taken by a tagged
-          # stable, so the updater would not install it. Empty on failure — the
-          # script then falls back to package.json.
+          # Why git tags, not GitHub releases: unpublishing a buggy cut deletes the
+          # GitHub release and leaves the tag, which still owns that number.
+          # Releases-only let adhoc sit on a number already taken, so the updater
+          # would not install it. Empty on failure — the script then falls back
+          # to package.json.
           published="$(GH_TOKEN="$MAIN_REPO_TOKEN" gh api \
             "repos/$GITHUB_REPOSITORY/git/matching-refs/tags/v" \
             --jq '.[].ref | sub("^refs/tags/"; "")' || true)"
