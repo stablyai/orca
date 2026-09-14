@@ -11,7 +11,7 @@ import {
   readGolden,
   writeGolden
 } from './golden-recording'
-import type { Recording } from './recording-scenario'
+import type { Recording, RecordingScenario } from './recording-scenario'
 import type { RecordedValue } from './recording-values'
 import type { Mutation } from './operation-mutations'
 import { determinismRuns } from './determinism-runs'
@@ -65,76 +65,107 @@ function visibleState(recording: Recording): RecordedValue {
   return recording.checkpoints.at(-1)!.observation.state
 }
 
-describe('RPC main recordings', () => {
+async function certifyParity(scenario: RecordingScenario): Promise<void> {
+  let first = ''
+  for (let run = 0; run < determinismRuns(); run++) {
+    const { adapters } = pilotMountAdapters(root)
+    const recording = await runRecording(
+      scenario,
+      adapters[scenario.operation],
+      vitestRecordingScheduler()
+    )
+    if (scenario.id === 'b1') {
+      expect(visibleState(recording)).toEqual({ files: ['third.ts'] })
+    }
+    if (scenario.id === 'b2') {
+      expect(visibleState(recording)).toMatchObject({
+        error: "Cannot read properties of null (reading 'ok')"
+      })
+    }
+    if (scenario.id === 'b3') {
+      expect(visibleState(recording)).toMatchObject({
+        error: 'comments transport error',
+        loading: false
+      })
+    }
+    const golden = goldenRecording(root, input.baseline, scenario, recording)
+    const bytes = goldenBytes(golden)
+    if (run) {
+      expect(bytes).toBe(first)
+    }
+    first = bytes
+    if (process.env.RPC_FOUNDATION_MODE === '--record') {
+      await writeGolden(goldens, golden, '--record')
+    } else {
+      compareGolden(readGolden(goldens, scenario.id), golden)
+    }
+  }
+}
+
+async function certifyMutantKill(scenario: RecordingScenario, mutation: Mutation): Promise<void> {
+  const { adapters, assertMutationApplied } = pilotMountAdapters(root, { mutation })
+  const result = await runRecordingMutant(
+    scenario,
+    adapters[scenario.operation],
+    vitestRecordingScheduler(),
+    readGolden(goldens, scenario.id).recording,
+    visibleState
+  )
+  assertMutationApplied()
+  expect(result.verdict).toBe('killed')
+}
+
+async function certifyReferenceRejection(
+  scenario: RecordingScenario,
+  reference: RecordedValue
+): Promise<void> {
+  const { adapters } = pilotMountAdapters(process.env.RPC_FOUNDATION_REFERENCE_ROOT!, {
+    reference: true
+  })
+  const result = await runRecording(
+    scenario,
+    adapters[scenario.operation],
+    vitestRecordingScheduler()
+  )
+  expect(visibleState(result)).toEqual(reference)
+  expect(reference).not.toEqual(visibleState(readGolden(goldens, scenario.id).recording))
+}
+
+type PilotCase = { name: string; skip: boolean; run: () => Promise<void> }
+
+// Registration order and skip decisions are resolved here so the describe body stays branch-free.
+function pilotCases(): PilotCase[] {
+  const cases: PilotCase[] = []
   for (const scenario of input.scenarios) {
-    it(`${scenario.id}: frozen main parity and determinism`, async () => {
-      let first = ''
-      for (let run = 0; run < determinismRuns(); run++) {
-        const { adapters } = pilotMountAdapters(root)
-        const recording = await runRecording(
-          scenario,
-          adapters[scenario.operation],
-          vitestRecordingScheduler()
-        )
-        if (scenario.id === 'b1') {
-          expect(visibleState(recording)).toEqual({ files: ['third.ts'] })
-        }
-        if (scenario.id === 'b2') {
-          expect(visibleState(recording)).toMatchObject({
-            error: "Cannot read properties of null (reading 'ok')"
-          })
-        }
-        if (scenario.id === 'b3') {
-          expect(visibleState(recording)).toMatchObject({
-            error: 'comments transport error',
-            loading: false
-          })
-        }
-        const golden = goldenRecording(root, input.baseline, scenario, recording)
-        const bytes = goldenBytes(golden)
-        if (run) {
-          expect(bytes).toBe(first)
-        }
-        first = bytes
-        if (process.env.RPC_FOUNDATION_MODE === '--record') {
-          await writeGolden(goldens, golden, '--record')
-        } else {
-          compareGolden(readGolden(goldens, scenario.id), golden)
-        }
-      }
+    cases.push({
+      name: `${scenario.id}: frozen main parity and determinism`,
+      skip: false,
+      run: () => certifyParity(scenario)
     })
     const mutation = mutants[scenario.id]
-    if (mutation) {
-      it(`${scenario.id}: kills ${mutation}`, async () => {
-        const { adapters, assertMutationApplied } = pilotMountAdapters(root, { mutation })
-        const result = await runRecordingMutant(
-          scenario,
-          adapters[scenario.operation],
-          vitestRecordingScheduler(),
-          readGolden(goldens, scenario.id).recording,
-          visibleState
-        )
-        assertMutationApplied()
-        expect(result.verdict).toBe('killed')
-      })
-      const reference = referenceStates[scenario.id]
-      if (reference) {
-        it.skipIf(!process.env.RPC_FOUNDATION_REFERENCE_ROOT)(
-          `${scenario.id}: rejects bcba08b3e4`,
-          async () => {
-            const { adapters } = pilotMountAdapters(process.env.RPC_FOUNDATION_REFERENCE_ROOT!, {
-              reference: true
-            })
-            const result = await runRecording(
-              scenario,
-              adapters[scenario.operation],
-              vitestRecordingScheduler()
-            )
-            expect(visibleState(result)).toEqual(reference)
-            expect(reference).not.toEqual(visibleState(readGolden(goldens, scenario.id).recording))
-          }
-        )
-      }
+    if (!mutation) {
+      continue
     }
+    cases.push({
+      name: `${scenario.id}: kills ${mutation}`,
+      skip: false,
+      run: () => certifyMutantKill(scenario, mutation)
+    })
+    const reference = referenceStates[scenario.id]
+    if (!reference) {
+      continue
+    }
+    cases.push({
+      name: `${scenario.id}: rejects bcba08b3e4`,
+      skip: !process.env.RPC_FOUNDATION_REFERENCE_ROOT,
+      run: () => certifyReferenceRejection(scenario, reference)
+    })
+  }
+  return cases
+}
+
+describe('RPC main recordings', () => {
+  for (const pilotCase of pilotCases()) {
+    it.skipIf(pilotCase.skip)(pilotCase.name, pilotCase.run)
   }
 })

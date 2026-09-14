@@ -107,7 +107,9 @@ describe('family reply partitions and owned schedules', () => {
       await certify(`matrix-${family}`, driveReplyMatrix(base, completion.complete, normal))
     }, 30_000)
   }
-  for (const id of [
+  // Scenarios without a second reply have no sibling barrier to permute, so they are filtered out
+  // here rather than branched around the registration below.
+  const siblingCases = [
     'b3',
     'settings-new-tab-ssh',
     'settings-home-providers-fulfilled',
@@ -115,7 +117,7 @@ describe('family reply partitions and owned schedules', () => {
     'settings-resume-metadata-fulfilled',
     'settings-task-hydration-fulfilled',
     'settings-repo-metadata-fulfilled'
-  ]) {
+  ].flatMap((id) => {
     const base = input.scenarios.find((scenario) => scenario.id === id)!
     const replies = base.steps.filter((step) => 'complete' in step)
     // Complete prerequisites before permuting the sibling barrier.
@@ -123,11 +125,12 @@ describe('family reply partitions and owned schedules', () => {
       step.complete.startsWith(id === 'b3' ? 'linear.getIssue' : 'settings.get')
     )!
     const second = replies[replies.indexOf(first) + 1]
-    if (second) {
-      it(`${id}: completion orders and correlated faults`, async () => {
-        await certify(`schedules-${id}`, siblingSchedules(base, first, second))
-      })
-    }
+    return second ? [{ base, first, id, second }] : []
+  })
+  for (const { base, first, id, second } of siblingCases) {
+    it(`${id}: completion orders and correlated faults`, async () => {
+      await certify(`schedules-${id}`, siblingSchedules(base, first, second))
+    })
   }
   for (const id of ['inventory-lifecycle', 'settings-bot-overrides-fulfilled']) {
     const base = input.scenarios.find((scenario) => scenario.id === id)!
