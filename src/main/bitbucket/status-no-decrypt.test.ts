@@ -83,7 +83,13 @@ describe('Bitbucket status reads never decrypt the stored secret', () => {
     const auth = await client.getBitbucketAuthStatus()
     const status = connection.getBitbucketConnectionStatus()
 
-    expect(auth).toEqual({ configured: true, authenticated: true, account: 'ada' })
+    expect(auth).toEqual({
+      configured: true,
+      authenticated: true,
+      account: 'ada',
+      baseUrl: null,
+      tokenConfigured: true
+    })
     expect(status).toMatchObject({ source: 'stored', account: 'ada', authMode: 'basic' })
     expect(decryptSpy).not.toHaveBeenCalled()
     // A stored credential is trusted from metadata rather than revalidated.
@@ -119,7 +125,9 @@ describe('Bitbucket status reads never decrypt the stored secret', () => {
     await expect(client.getBitbucketAuthStatus()).resolves.toEqual({
       configured: true,
       authenticated: false,
-      account: 'ada'
+      account: 'ada',
+      baseUrl: null,
+      tokenConfigured: true
     })
     expect(fetchSpy).toHaveBeenCalledTimes(1)
     expect(decryptSpy).not.toHaveBeenCalled()

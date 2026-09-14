@@ -10,7 +10,13 @@ const connectedPreflight: PreflightStatus = {
   git: { installed: true },
   gh: { installed: true, authenticated: true },
   glab: { installed: true, authenticated: true },
-  bitbucket: { configured: true, authenticated: true, account: 'bb-user' },
+  bitbucket: {
+    configured: true,
+    authenticated: true,
+    account: 'bb-user',
+    baseUrl: null,
+    tokenConfigured: true
+  },
   azureDevOps: {
     configured: true,
     authenticated: true,
