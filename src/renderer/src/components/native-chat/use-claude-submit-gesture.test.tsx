@@ -2,7 +2,11 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, renderHook, waitFor } from '@testing-library/react'
-import { useClaudeSubmitGestureMatch, useComposerSubmitKeyMatch } from './use-claude-submit-gesture'
+import {
+  useClaudeSubmitGestureMatch,
+  useClaudeSubmitGesturePending,
+  useComposerSubmitKeyMatch
+} from './use-claude-submit-gesture'
 import { resetClaudeSubmitBytesCacheForTests } from './native-chat-claude-submit-cache'
 
 const readClaudeKeybindings = vi.fn()
@@ -78,5 +82,43 @@ describe('useComposerSubmitKeyMatch', () => {
     await waitFor(() => expect(readClaudeKeybindings).toHaveBeenCalled())
     expect(result.current(enterEvent)).toBe(true)
     expect(result.current({ ...enterEvent, shiftKey: true })).toBe(false)
+  })
+})
+
+describe('useClaudeSubmitGesturePending', () => {
+  beforeEach(() => {
+    readClaudeKeybindings.mockReset()
+    resetClaudeSubmitBytesCacheForTests()
+    ;(window as unknown as { api: unknown }).api = { nativeChat: { readClaudeKeybindings } }
+  })
+  afterEach(() => {
+    cleanup()
+    delete (window as unknown as { api?: unknown }).api
+    resetClaudeSubmitBytesCacheForTests()
+  })
+
+  it('is pending for a local Claude pane while the read is in flight', () => {
+    readClaudeKeybindings.mockReturnValue(new Promise(() => {}))
+    const { result } = renderHook(() => useClaudeSubmitGesturePending('claude', false))
+    expect(result.current).toBe(true)
+  })
+
+  it('clears once the read resolves for a local Claude pane', async () => {
+    readClaudeKeybindings.mockResolvedValue(chat({ enter: 'chat:submit' }))
+    const { result } = renderHook(() => useClaudeSubmitGesturePending('claude', false))
+    await waitFor(() => expect(result.current).toBe(false))
+  })
+
+  it('never gates a non-Claude pane (and never reads for it)', () => {
+    readClaudeKeybindings.mockReturnValue(new Promise(() => {}))
+    const { result } = renderHook(() => useClaudeSubmitGesturePending('codex', false))
+    expect(result.current).toBe(false)
+    expect(readClaudeKeybindings).not.toHaveBeenCalled()
+  })
+
+  it('never gates a remote Claude pane', () => {
+    readClaudeKeybindings.mockReturnValue(new Promise(() => {}))
+    const { result } = renderHook(() => useClaudeSubmitGesturePending('claude', true))
+    expect(result.current).toBe(false)
   })
 })

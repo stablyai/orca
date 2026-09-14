@@ -10,6 +10,14 @@ import {
 // the read failed) falls back to Enter — Claude's default and the safe choice.
 let cachedGesture: ClaudeSubmitGesture | null = null
 let priming = false
+const resolveListeners = new Set<() => void>()
+
+function markResolved(gesture: ClaudeSubmitGesture): void {
+  cachedGesture = gesture
+  for (const listener of resolveListeners) {
+    listener()
+  }
+}
 
 /** Kick off the one-time keybindings read. Idempotent; safe to call on every
  *  composer or comment-editor mount. */
@@ -19,19 +27,37 @@ export function primeClaudeSubmit(): void {
   }
   const readKeybindings = window.api?.nativeChat?.readClaudeKeybindings
   if (!readKeybindings) {
+    // No source to read: resolve to the default so a send is never gated waiting
+    // for a read that will never happen.
+    markResolved('enter')
     return
   }
   priming = true
   void readKeybindings()
     .then((content) => {
-      cachedGesture = resolveClaudeSubmitGesture(content)
+      markResolved(resolveClaudeSubmitGesture(content))
     })
     .catch(() => {
-      cachedGesture = 'enter'
+      markResolved('enter')
     })
     .finally(() => {
       priming = false
     })
+}
+
+/** Whether the one-time keybindings read has settled. Until it has, a local
+ *  keybinding-agent composer holds its send so a pre-resolve CR can't submit a
+ *  remapped-Enter user's message as a newline. */
+export function isClaudeSubmitResolved(): boolean {
+  return cachedGesture !== null
+}
+
+/** Subscribe to the one-time resolution (for `useSyncExternalStore`). */
+export function subscribeClaudeSubmitResolved(listener: () => void): () => void {
+  resolveListeners.add(listener)
+  return () => {
+    resolveListeners.delete(listener)
+  }
 }
 
 /** Synchronous read; Enter until the keybindings load. */

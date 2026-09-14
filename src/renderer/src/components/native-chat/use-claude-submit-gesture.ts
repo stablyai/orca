@@ -1,10 +1,12 @@
-import { useCallback, useEffect } from 'react'
+import { useCallback, useEffect, useSyncExternalStore } from 'react'
 import type { AgentType } from '../../../../shared/agent-status-types'
 import {
   agentResolvesSubmitKeybinding,
   getClaudeSubmitGesture,
+  isClaudeSubmitResolved,
   primeClaudeSubmit,
-  primeComposerSubmitBytes
+  primeComposerSubmitBytes,
+  subscribeClaudeSubmitResolved
 } from './native-chat-claude-submit-cache'
 import { claudeSubmitGestureMatchesKeyboardEvent } from './native-chat-claude-submit-keybinding'
 
@@ -51,4 +53,28 @@ export function useComposerSubmitKeyMatch(
     },
     [agent, isRemotePane]
   )
+}
+
+/** True while a local Claude-family pane is still reading its submit keybinding.
+ *  The composer holds its send during this window so a pre-resolve default CR
+ *  can't submit a remapped-Enter user's message as a newline. Resolves within a
+ *  few ms of mount (or immediately when there is no keybindings source). */
+export function useClaudeSubmitGesturePending(agent: AgentType, isRemotePane: boolean): boolean {
+  useEffect(() => {
+    primeComposerSubmitBytes(agent)
+  }, [agent])
+  const resolved = useSyncExternalStore(subscribeClaudeSubmitResolved, isClaudeSubmitResolved)
+  return agentResolvesSubmitKeybinding(agent) && !isRemotePane && !resolved
+}
+
+/** The chat composer's submit-gesture wiring: the keydown matcher plus whether the
+ *  send must hold until the keybinding resolves. */
+export function useComposerSubmitGesture(
+  agent: AgentType,
+  isRemotePane: boolean
+): { matchesSubmitKey: (event: SubmitKeyEvent) => boolean; submitGesturePending: boolean } {
+  return {
+    matchesSubmitKey: useComposerSubmitKeyMatch(agent, isRemotePane),
+    submitGesturePending: useClaudeSubmitGesturePending(agent, isRemotePane)
+  }
 }

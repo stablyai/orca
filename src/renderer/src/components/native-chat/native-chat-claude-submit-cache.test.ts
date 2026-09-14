@@ -2,10 +2,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   agentResolvesSubmitKeybinding,
   getClaudeSubmitBytes,
+  isClaudeSubmitResolved,
   primeClaudeSubmit,
   primeComposerSubmitBytes,
   resetClaudeSubmitBytesCacheForTests,
-  resolveComposerSubmitBytes
+  resolveComposerSubmitBytes,
+  subscribeClaudeSubmitResolved
 } from './native-chat-claude-submit-cache'
 import {
   CLAUDE_SUBMIT_ALT_ENTER,
@@ -115,5 +117,42 @@ describe('per-agent gating (single source of truth)', () => {
   it('never reads keybindings for a non-Claude composer', () => {
     primeComposerSubmitBytes('codex')
     expect(readClaudeKeybindings).not.toHaveBeenCalled()
+  })
+})
+
+describe('claude submit resolution signal', () => {
+  beforeEach(() => {
+    readClaudeKeybindings.mockReset()
+    resetClaudeSubmitBytesCacheForTests()
+    vi.stubGlobal('window', { api: { nativeChat: { readClaudeKeybindings } } })
+  })
+  afterEach(() => {
+    vi.unstubAllGlobals()
+    resetClaudeSubmitBytesCacheForTests()
+  })
+
+  it('is unresolved until the read settles, then resolved', async () => {
+    readClaudeKeybindings.mockResolvedValue(remappedConfig)
+    expect(isClaudeSubmitResolved()).toBe(false)
+    primeClaudeSubmit()
+    await vi.waitFor(() => expect(isClaudeSubmitResolved()).toBe(true))
+    expect(getClaudeSubmitBytes()).toBe(CLAUDE_SUBMIT_ALT_ENTER)
+  })
+
+  it('notifies subscribers once the read settles', async () => {
+    readClaudeKeybindings.mockResolvedValue(remappedConfig)
+    const listener = vi.fn()
+    const unsubscribe = subscribeClaudeSubmitResolved(listener)
+    primeClaudeSubmit()
+    await vi.waitFor(() => expect(listener).toHaveBeenCalled())
+    unsubscribe()
+  })
+
+  it('resolves immediately to the default when no keybindings source exists', () => {
+    vi.stubGlobal('window', {})
+    resetClaudeSubmitBytesCacheForTests()
+    primeClaudeSubmit()
+    expect(isClaudeSubmitResolved()).toBe(true)
+    expect(getClaudeSubmitBytes()).toBe(CLAUDE_SUBMIT_ENTER)
   })
 })
