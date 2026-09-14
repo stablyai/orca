@@ -5,6 +5,7 @@ import type {
   InteractiveQuestionParser
 } from './native-chat-ask-types'
 import { isInterruptedStatusMessage, type NativeChatMessage } from './native-chat-types'
+import { isNativeChatMultiSelectQuestion } from './native-chat-question-shape'
 
 export type { AskOption, AskPrompt, AskQuestion, InteractiveQuestionParser }
 
@@ -20,10 +21,8 @@ export function registerQuestionTool(toolName: string, parser: InteractiveQuesti
 }
 
 function parseQuestionsShape(input: unknown): AskPrompt | null {
-  if (!input || typeof input !== 'object') {
-    return null
-  }
-  const rawQuestions = (input as { questions?: unknown }).questions
+  const rawQuestions =
+    input && typeof input === 'object' ? (input as { questions?: unknown }).questions : undefined
   if (!Array.isArray(rawQuestions) || rawQuestions.length === 0) {
     return null
   }
@@ -39,7 +38,7 @@ function parseQuestionsShape(input: unknown): AskPrompt | null {
       questions.push({
         question: text,
         header: typeof question.header === 'string' ? question.header : undefined,
-        multiSelect: question.multiSelect === true,
+        multiSelect: isNativeChatMultiSelectQuestion(question),
         options
       })
     }

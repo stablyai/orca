@@ -2,9 +2,12 @@ import { describe, expect, it } from 'vitest'
 import {
   isNativeChatSupportedAgent,
   nativeChatRequiresLocalTranscript,
+  resolveNativeChatAskAnswerBuilder,
   resolveNativeChatTranscriptAgent,
   shouldStepNativeChatAskAnswer
 } from './native-chat-agent-support'
+import { buildAskAnswerKeys, buildCodexAskAnswerKeys } from './native-chat-ask'
+import { buildGrokAskAnswerKeys } from './native-chat-grok-ask-answer'
 
 describe('resolveNativeChatTranscriptAgent', () => {
   it('maps OpenClaude onto the Claude transcript format', () => {
@@ -49,16 +52,25 @@ describe('nativeChatRequiresLocalTranscript', () => {
 })
 
 describe('shouldStepNativeChatAskAnswer', () => {
-  it('steps the digit-commit selector agents (Claude, OpenClaude, Codex)', () => {
+  it('resolves selector builders from the shared agent policy', () => {
+    expect(resolveNativeChatAskAnswerBuilder('claude')).toBe(buildAskAnswerKeys)
+    expect(resolveNativeChatAskAnswerBuilder('openclaude')).toBe(buildAskAnswerKeys)
+    expect(resolveNativeChatAskAnswerBuilder('codex')).toBe(buildCodexAskAnswerKeys)
+    expect(resolveNativeChatAskAnswerBuilder('grok')).toBe(buildGrokAskAnswerKeys)
+    expect(resolveNativeChatAskAnswerBuilder('omp')).toBeNull()
+  })
+
+  it('steps the digit-commit selector agents (Claude, OpenClaude, Codex, Grok)', () => {
     expect(shouldStepNativeChatAskAnswer('claude')).toBe(true)
     expect(shouldStepNativeChatAskAnswer('openclaude')).toBe(true)
     // Codex 0.145's request_user_input card ignores typed labels and commits on
     // the highlighted row, so pasted answers misdeliver like STA-1860.
     expect(shouldStepNativeChatAskAnswer('codex')).toBe(true)
+    // Grok's ask_user_question card also commits option digits directly.
+    expect(shouldStepNativeChatAskAnswer('grok')).toBe(true)
   })
 
   it('does not step other or unknown agents', () => {
-    expect(shouldStepNativeChatAskAnswer('grok')).toBe(false)
     expect(shouldStepNativeChatAskAnswer('omp')).toBe(false)
     expect(shouldStepNativeChatAskAnswer('cursor')).toBe(false)
     expect(shouldStepNativeChatAskAnswer(null)).toBe(false)
