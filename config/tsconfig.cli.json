@@ -17,6 +17,7 @@
     "../src/main/agent-hooks/managed-toml-ownership.ts",
     "../src/main/agent-hooks/managed-agent-hook-controls.ts",
     "../src/main/agent-hooks/managed-agent-hook-registry.ts",
+    "../src/main/agent-hooks/managed-hook-detection-commands.ts",
     "../src/main/agent-hooks/managed-hook-identity-gate.ts",
     "../src/main/agent-hooks/managed-hook-script-refresh.ts",
     "../src/main/ipc/command-path-resolver.ts",

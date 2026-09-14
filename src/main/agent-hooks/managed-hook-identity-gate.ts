@@ -1,13 +1,15 @@
 import { runProcess } from '../../shared/child-process/run-process'
-import { TUI_AGENT_CONFIG } from '../../shared/tui-agent-config'
 import type { AgentHookTarget } from '../../shared/agent-hook-types'
 import type { ManagedAgentHookTarget } from '../../shared/managed-agent-hook-targets'
 import {
-  identityProbeKeepsAgent,
-  serializeIdentityExclusion,
+  excludeMisidentifiedAgents,
   type IdentityProbe
 } from '../../shared/tui-agent-identity-exclusion'
 import { resolveCommandOnLocalPath } from '../ipc/command-path-resolver'
+import {
+  buildManagedHookDetectionCommands,
+  type ManagedHookDetectionSettings
+} from './managed-hook-detection-commands'
 
 const IDENTITY_PROBE_TIMEOUT_MS = 5000
 
@@ -37,36 +39,32 @@ export function buildManagedHookIdentityProbe(): IdentityProbe {
  * presence separately and never did, so an opted-in user holding the other `bob` had
  * `~/.bob/settings/settings.json` created for a product they do not have.
  *
- * Only targets declaring `detectIdentityExclusion` are probed, so cost is unchanged for every
- * other agent. Fails OPEN, matching detection: a probe that cannot run says nothing about
- * identity, and hiding a real install is worse than the collision this guards against.
+ * Candidates are the same list SSH/WSL detection sends (including the Settings command override).
+ * Only targets declaring `detectIdentityExclusion` are probed. Fails OPEN, matching detection.
  */
 export async function agentsFailingHookInstallIdentityProbe(
   targets: readonly ManagedAgentHookTarget[],
-  probe: IdentityProbe
+  probe: IdentityProbe,
+  settings: ManagedHookDetectionSettings = null
 ): Promise<Set<AgentHookTarget>> {
-  const excluded = new Set<AgentHookTarget>()
-  await Promise.all(
-    targets.map(async (target) => {
-      const exclusion = TUI_AGENT_CONFIG[target.tuiAgent]?.detectIdentityExclusion
-      if (!exclusion) {
-        return
-      }
-      const serialized = serializeIdentityExclusion(exclusion)
-      // Why every candidate: detection matched one of them and we do not know which; a single
-      // candidate that proves to be the real agent is enough to keep the install.
-      for (const command of target.executableCandidates) {
-        try {
-          if (identityProbeKeepsAgent(serialized, await probe(command, serialized.args))) {
-            return
-          }
-          excluded.add(target.agent)
-        } catch {
-          // Fail open for this candidate; another may resolve, and an unrunnable probe proves nothing.
-          return
-        }
-      }
-    })
+  const ids = new Set<string>(targets.map((target) => target.tuiAgent))
+  const commands = buildManagedHookDetectionCommands(settings, process.platform).filter(
+    (command) => ids.has(command.id) && command.identityExclusion
   )
-  return excluded
+  const probed = [...new Set(commands.map((command) => command.id))]
+  // Why every command counts as found: presence already passed, and a candidate that is not on
+  // PATH throws from the probe, which fails open exactly as detection does.
+  const kept = new Set(
+    await excludeMisidentifiedAgents(
+      commands,
+      probed,
+      new Set(commands.map((command) => command.cmd)),
+      probe
+    )
+  )
+  return new Set(
+    targets
+      .filter((target) => probed.includes(target.tuiAgent) && !kept.has(target.tuiAgent))
+      .map((target) => target.agent)
+  )
 }

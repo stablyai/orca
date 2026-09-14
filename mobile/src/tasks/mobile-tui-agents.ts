@@ -53,14 +53,10 @@ export const MOBILE_TUI_AGENT_FAVICON_DOMAINS: Partial<Record<TuiAgent, string>>
 
 export const isMobileTuiAgent: (value: unknown) => value is TuiAgent = isTuiAgent
 
-// Why: mobile passes raw persisted settings through; the shared helpers already discard non-arrays.
-// An absent field means the host never sent the setting, so keep the desktop opt-out
-// defaults; an explicit `[]` is a user choice to enable all.
-function asDisabledList(disabled: unknown): Iterable<unknown> | null {
-  if (disabled === undefined) {
-    return DEFAULT_DISABLED_TUI_AGENTS
-  }
-  return Array.isArray(disabled) ? disabled : null
+// Why: mobile passes raw host settings through. Anything but an array means the host sent no
+// usable setting, so keep the desktop opt-out defaults; an explicit `[]` enables all.
+function asDisabledList(disabled: unknown): Iterable<unknown> {
+  return Array.isArray(disabled) ? disabled : DEFAULT_DISABLED_TUI_AGENTS
 }
 
 export function isMobileTuiAgentEnabled(agent: TuiAgent, disabled?: unknown): boolean {

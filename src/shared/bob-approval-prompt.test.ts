@@ -10,20 +10,21 @@ function readFixture(name: string): string {
   return readFileSync(join(FIXTURE_DIR, `${name}.txt`), 'utf-8')
 }
 
-function armedDetector(onApprovalPrompt: () => void) {
-  return createBobApprovalPromptDetector({ startupCommand: 'bob chat --trust' }, onApprovalPrompt)
+function armedDetector() {
+  return createBobApprovalPromptDetector({ startupCommand: 'bob chat --trust' })
+}
+
+function countFirings(detector: ReturnType<typeof armedDetector>, writes: string[]): number {
+  return writes.filter((write) => detector.observe(write)).length
 }
 
 /** Replays a transcript the way a PTY delivers it, so the rolling window is exercised. */
 function countFiringsOverChunks(transcript: string, chunkSize: number): number {
-  let firings = 0
-  const detector = armedDetector(() => {
-    firings += 1
-  })
+  const chunks: string[] = []
   for (let index = 0; index < transcript.length; index += chunkSize) {
-    detector.observe(transcript.slice(index, index + chunkSize))
+    chunks.push(transcript.slice(index, index + chunkSize))
   }
-  return firings
+  return countFirings(armedDetector(), chunks)
 }
 
 describe('Bob approval prompt detection', () => {
@@ -35,14 +36,14 @@ describe('Bob approval prompt detection', () => {
     '  Approve commands:',
     '  → Approve Once',
     '    Always Allow Command for task',
-    '    Reject'
+    '    Reject\n'
   ].join('\n')
 
   const SUBAGENT_SPAWN_APPROVAL = [
     '  Subagent (general)',
     '  → Approve Once',
     '    Approve subagent tools for task',
-    '    Reject'
+    '    Reject\n'
   ].join('\n')
 
   const IDLE_COMPOSER = '  ❯   Build Anything, @ for context, / for commands, $ for skills\n'
@@ -63,83 +64,66 @@ describe('Bob approval prompt detection', () => {
     expect(textShowsBobApprovalPrompt('I will approve once you confirm.')).toBe(false)
   })
 
-  it('fires once per modal and re-arms for the next one', () => {
-    let firings = 0
-    const detector = armedDetector(() => {
-      firings += 1
-    })
-
-    detector.observe(COMMAND_APPROVAL)
-    expect(firings).toBe(1)
+  it('fires once per modal and re-arms after the composer returns', () => {
+    const detector = armedDetector()
     // Bob repaints the modal every frame; the row must not re-fire.
-    detector.observe(COMMAND_APPROVAL)
-    detector.observe(COMMAND_APPROVAL)
-    expect(firings).toBe(1)
+    expect(countFirings(detector, [COMMAND_APPROVAL, COMMAND_APPROVAL, COMMAND_APPROVAL])).toBe(1)
+    // Answering it repaints the composer with no menu, which disarms.
+    expect(countFirings(detector, [IDLE_COMPOSER, SUBAGENT_SPAWN_APPROVAL])).toBe(1)
+  })
 
-    // Answering it repaints a screen with no menu, which disarms.
-    detector.observe(IDLE_COMPOSER)
-    expect(firings).toBe(1)
-
-    detector.observe(SUBAGENT_SPAWN_APPROVAL)
-    expect(firings).toBe(2)
+  // Why: output between repaints (spinner, subagent rows) says nothing about the modal leaving.
+  it('stays armed across writes that lack both the modal and the composer', () => {
+    const detector = armedDetector()
+    const spinner = `\n ⠋ Processing… (Enter to steer, Tab to queue)\n${' '.repeat(600)}`
+    expect(countFirings(detector, [COMMAND_APPROVAL, spinner, COMMAND_APPROVAL, spinner])).toBe(1)
   })
 
   it('detects a modal split across PTY writes', () => {
-    let firings = 0
-    const detector = armedDetector(() => {
-      firings += 1
-    })
-    detector.observe('  Execute Command\n  Approve comm')
-    expect(firings).toBe(0)
-    detector.observe('ands:\n  → Approve Once\n')
-    expect(firings).toBe(1)
+    const detector = armedDetector()
+    expect(detector.observe('  Execute Command\n  Approve comm')).toBe(false)
+    expect(detector.observe('ands:\n  → Approve Once\n')).toBe(true)
+  })
+
+  it('detects a menu line split across three PTY writes', () => {
+    const detector = armedDetector()
+    expect(countFirings(detector, ['  Subagent (general)\n  → Ap', 'pro', 've Once\n'])).toBe(1)
   })
 
   // Why: the safety property that matters most — an unrelated CLI printing this exact menu text
   // must never light up a Bob status row on a pane that never ran Bob.
   it('never fires without first proving the pane is really Bob', () => {
-    let firings = 0
-    const detector = createBobApprovalPromptDetector({ startupCommand: 'node ./cli.js' }, () => {
-      firings += 1
-    })
-    detector.observe(COMMAND_APPROVAL)
-    detector.observe(SUBAGENT_SPAWN_APPROVAL)
-    expect(firings).toBe(0)
+    const detector = createBobApprovalPromptDetector({ startupCommand: 'node ./cli.js' })
+    expect(countFirings(detector, [COMMAND_APPROVAL, SUBAGENT_SPAWN_APPROVAL])).toBe(0)
   })
 
   it('arms on the composer banner alone, with no startup command evidence', () => {
-    let firings = 0
-    const detector = createBobApprovalPromptDetector({ startupCommand: null }, () => {
-      firings += 1
-    })
-    detector.observe(IDLE_COMPOSER)
-    detector.observe(COMMAND_APPROVAL)
-    expect(firings).toBe(1)
+    const detector = createBobApprovalPromptDetector({ startupCommand: null })
+    expect(countFirings(detector, [IDLE_COMPOSER, COMMAND_APPROVAL])).toBe(1)
   })
 
   it('arms fast on a bob chat startup command, before any banner is seen', () => {
-    let firings = 0
-    const detector = createBobApprovalPromptDetector({ startupCommand: 'bob chat --trust' }, () => {
-      firings += 1
-    })
-    // No banner observed yet — the startup command alone must be enough.
-    detector.observe(COMMAND_APPROVAL)
-    expect(firings).toBe(1)
+    expect(countFirings(armedDetector(), [COMMAND_APPROVAL])).toBe(1)
   })
 
-  // Why the real transcripts: the rule is only as good as the screen it was written against.
-  it('finds the approval in the captured main-agent transcript', () => {
-    const transcript = readFixture('bob-approval-command')
-    expect(textShowsBobApprovalPrompt(stripTerminalControl(transcript))).toBe(true)
-    expect(countFiringsOverChunks(transcript, 512)).toBeGreaterThan(0)
-  })
+  // Why the real transcripts and several chunk sizes: the rule is only as good as the screen it
+  // was written against, and one fire per modal must not depend on where PTY writes split.
+  it.each([64, 512, 4096])(
+    'fires once for the captured main-agent approval (%i-byte writes)',
+    (size) => {
+      const transcript = readFixture('bob-approval-command')
+      expect(textShowsBobApprovalPrompt(stripTerminalControl(transcript))).toBe(true)
+      expect(countFiringsOverChunks(transcript, size)).toBe(1)
+    }
+  )
 
-  it('finds the approval in the captured subagent transcript', () => {
-    const transcript = readFixture('bob-approval-subagent')
-    const stripped = stripTerminalControl(transcript)
-    expect(textShowsBobApprovalPrompt(stripped)).toBe(true)
-    // Why: proves the spawn modal is present and distinct, not just the command one.
-    expect(stripped).toContain('Approve subagent tools for task')
-    expect(countFiringsOverChunks(transcript, 512)).toBeGreaterThan(0)
-  })
+  // Spawn approval, then the subagent's execute approval repainted ~140 times.
+  it.each([64, 512, 4096])(
+    'fires once per modal in the captured subagent transcript (%i-byte writes)',
+    (size) => {
+      const transcript = readFixture('bob-approval-subagent')
+      expect(stripTerminalControl(transcript)).toContain('Approve subagent tools for task')
+      expect(countFiringsOverChunks(transcript, size)).toBe(2)
+    }
+  )
 })

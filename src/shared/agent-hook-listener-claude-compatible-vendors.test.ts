@@ -209,7 +209,7 @@ describe('shared agent-hook-listener', () => {
       },
       'production'
     )
-    expect(payload?.payload).toBeUndefined()
+    expect(payload).toBeNull()
   })
 
   // Why: Kimi shares Claude-compatible compact/harness hooks; cover the same sticky-working
