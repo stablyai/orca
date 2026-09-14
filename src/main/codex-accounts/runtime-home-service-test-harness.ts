@@ -45,6 +45,10 @@ export function getSharedRuntimeAuthProvenancePath(): string {
   return join(testState.userDataDir, 'codex-runtime-home', 'shared-runtime-auth-provenance.json')
 }
 
+export function getRuntimeLogoutMarkerPath(): string {
+  return join(testState.userDataDir, 'codex-runtime-home', 'system-default-runtime-logout.json')
+}
+
 export function writePaneRegistry(
   panes: Record<string, { selectionKey: string; accountId: string | null; homeRoute?: string }>
 ): void {
