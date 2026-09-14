@@ -1,7 +1,10 @@
 import type { BrowserTab as BrowserTabState } from '../../../../shared/browser-workspace-types'
 import type { Tab, WorkspaceVisibleTabType } from '../../../../shared/tab-types'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
-import { resolveTerminalTabTitle } from '../../../../shared/tab-title-resolution'
+import {
+  resolveTerminalTabTitle,
+  resolveUnifiedTabLabel
+} from '../../../../shared/tab-title-resolution'
 import type { OpenFile } from '../../store/slices/editor'
 import { getEditorDisplayLabel } from '@/components/editor/editor-labels'
 import { normalizeRelativePath } from '@/lib/path'
@@ -55,7 +58,10 @@ export function getTabDragLabel(item: TabBarItem, generatedTitlesEnabled: boolea
   if (item.type === 'browser') {
     return getBrowserTabLabel(item.data)
   }
-  if (item.type === 'simulator' || item.type === 'agent-session') {
+  if (item.type === 'agent-session') {
+    return resolveUnifiedTabLabel(item.data, generatedTitlesEnabled, item.data.label)
+  }
+  if (item.type === 'simulator') {
     return item.data.label || 'Mobile Emulator'
   }
   return getEditorDisplayLabel(item.data)

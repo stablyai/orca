@@ -15,7 +15,7 @@ describe('ClaudeStructuredSessionAdapter turns and controls', () => {
   it("admits a dispatch on the write and names it from Claude's replay", async () => {
     const claude = fakeClaude({ replayUuid: 'user-provider-uuid' })
     const settled = vi.fn()
-    const adapter = await acquired(claude, {}, [], settled)
+    const adapter = await acquired(claude, {}, [], { onDispatchSettledLate: settled })
 
     const result = await adapter.dispatch({
       sessionId: 'session-1',
@@ -43,7 +43,7 @@ describe('ClaudeStructuredSessionAdapter turns and controls', () => {
 
   it('does not put delivery in doubt while no replay uuid has arrived', async () => {
     const settled = vi.fn()
-    const adapter = await acquired(fakeClaude({ replayUuid: null }), {}, [], settled)
+    const adapter = await acquired(fakeClaude({ replayUuid: null }), {}, [], { onDispatchSettledLate: settled })
     await expect(
       adapter.dispatch({
         sessionId: 'session-1',
@@ -142,7 +142,7 @@ describe('ClaudeStructuredSessionAdapter turns and controls', () => {
   it('does not cancel an acknowledged turn after a later dispatch is still unacknowledged', async () => {
     const claude = fakeClaude({ replayUuids: ['turn-T', null] })
     const settled = vi.fn()
-    const adapter = await acquired(claude, {}, [], settled)
+    const adapter = await acquired(claude, {}, [], { onDispatchSettledLate: settled })
 
     await expect(
       adapter.dispatch({

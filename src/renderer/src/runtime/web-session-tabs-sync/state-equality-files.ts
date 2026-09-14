@@ -96,6 +96,7 @@ export function tabEqual(a: Tab, b: Tab): boolean {
     a.executionHostId === b.executionHostId &&
     a.contentType === b.contentType &&
     a.agentSessionAgent === b.agentSessionAgent &&
+    a.agentSessionProviderSessionId === b.agentSessionProviderSessionId &&
     a.label === b.label &&
     // Why: the generated label is the visible tab title; ignoring it let the
     // equality bail keep a unified tab that disagreed with its terminal tab.

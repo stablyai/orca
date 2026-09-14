@@ -41,6 +41,32 @@ export function claudeQueryAsyncCanceller(
   return typeof cancel === 'function' ? cancel.bind(query) : null
 }
 
+/**
+ * generateSessionTitle is a runtime Query method the shipped 0.3.251 declaration omits. Given
+ * `persist: true` the CLI appends the title to its own transcript as an `ai-title` record — the
+ * name's home — and returns it. The typeof guard is its degradation path.
+ */
+type ClaudeQueryTitleGenerator = {
+  generateSessionTitle?: (
+    description: string,
+    options?: { persist?: boolean }
+  ) => Promise<string | null | undefined>
+}
+
+export function claudeQueryTitleGenerator(
+  query: Query
+): NonNullable<ClaudeQueryTitleGenerator['generateSessionTitle']> | null {
+  const generate = (query as unknown as ClaudeQueryTitleGenerator).generateSessionTitle
+  return typeof generate === 'function' ? generate.bind(query) : null
+}
+
+/** Three states a caller must tell apart: only `declined` is worth asking again on a later
+ *  connection, and a CLI without the request must never be asked twice. */
+export type ClaudeSessionTitle =
+  | { outcome: 'named'; title: string }
+  | { outcome: 'declined' }
+  | { outcome: 'unsupported' }
+
 export type ClaudeControlOptions = { timeoutMs?: number }
 
 /**
@@ -95,6 +121,10 @@ export type ClaudeControlSurface = {
   supportedModels: (options?: ClaudeControlOptions) => Promise<unknown[]>
   initializationResult: (options?: ClaudeControlOptions) => Promise<unknown>
   getSettings: (options?: ClaudeControlOptions) => Promise<unknown>
+  generateSessionTitle: (
+    description: string,
+    options?: ClaudeControlOptions & { persist?: boolean }
+  ) => Promise<ClaudeSessionTitle>
 }
 
 type InterruptingQuery = {
@@ -154,6 +184,20 @@ export function createClaudeControlSurface(query: Query): ClaudeControlSurface {
               'this SDK exposes no get_settings request'
             )
           )
+    },
+    generateSessionTitle: (description, options) => {
+      const generate = claudeQueryTitleGenerator(query)
+      if (!generate) {
+        return Promise.resolve<ClaudeSessionTitle>({ outcome: 'unsupported' })
+      }
+      return runClaudeControl(
+        'generate_session_title',
+        () => generate(description, options?.persist ? { persist: true } : undefined),
+        options?.timeoutMs
+      ).then((title): ClaudeSessionTitle => {
+        const named = typeof title === 'string' ? title.trim() : ''
+        return named ? { outcome: 'named', title: named } : { outcome: 'declined' }
+      })
     }
   }
 }

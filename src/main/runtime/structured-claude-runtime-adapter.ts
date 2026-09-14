@@ -53,6 +53,12 @@ export function createStructuredClaudeRuntimeAdapter(
         ? { readManagedAccountGate: deps.readClaudeManagedAccountGate }
         : {})
     }),
+    readConversationName: (sessionId) => store.getRecord(sessionId)?.conversationName ?? null,
+    // Records that Orca already named this session so it never asks — or charges — twice. The
+    // name a user sees comes from the CLI's own transcript, not from this write.
+    storeConversationName: async (sessionId, name) => {
+      await store.setConversationName(sessionId, name)
+    },
     persistHandle: async ({ sessionId, providerSessionId, leafUuid, fence }) => {
       const currentFence = store.getRecord(sessionId)?.lease.runtimeFence ?? fence
       const observedAt = Date.now()

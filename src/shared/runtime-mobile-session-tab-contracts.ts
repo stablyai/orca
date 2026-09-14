@@ -98,6 +98,9 @@ export type RuntimeMobileSessionAgentTab = {
   sessionId: string
   replacesSessionId?: string
   agent: 'claude' | 'codex'
+  /** Provider conversation this session writes to (Claude session id / Codex thread id). Absent
+   *  until the provider proves one — absence is unknown identity, never an empty name. */
+  providerSessionId?: string
   color?: string | null
   isPinned?: boolean
   isActive: boolean

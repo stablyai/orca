@@ -79,6 +79,7 @@ function fakeClaude() {
       sent: [],
       pid: 4321 + connections.length,
       closed: false,
+      generateSessionTitle: async () => ({ outcome: 'unsupported' }) as const,
       initializationResult: async () => {
         connection.calls.push({ subtype: 'initialize' })
         if (selfExit) {
