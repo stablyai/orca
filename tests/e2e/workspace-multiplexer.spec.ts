@@ -1,5 +1,7 @@
 import { expect, test } from './helpers/orca-app'
 import { waitForActiveWorktree, waitForSessionReady } from './helpers/store'
+import { RuntimeClient } from '../../src/cli/runtime-client'
+import { MULTIPLEXER_HANDLERS } from '../../src/cli/handlers/multiplexer'
 
 test('shows selected workspace terminals in Workspace Multiplexer', async ({
   orcaPage,
@@ -207,6 +209,14 @@ test('shows selected workspace terminals in Workspace Multiplexer', async ({
     )
   }, otherWorktreeId)
   await expect(tiles).toHaveCount(2)
+  const treeToggle = header.getByRole('button', { name: 'Toggle right sidebar', exact: true })
+  if ((await treeToggle.getAttribute('aria-expanded')) === 'true') {
+    await treeToggle.click()
+  }
+  await treeToggle.click()
+  const explorer = orcaPage.locator('[data-orca-explorer-shell]')
+  await expect(explorer).toBeVisible()
+  const sidebarWidth = await orcaPage.evaluate(() => window.__store!.getState().rightSidebarWidth)
   for (const [index, worktreeId] of [
     [0, activeWorktreeId],
     [1, otherWorktreeId]
@@ -215,7 +225,16 @@ test('shows selected workspace terminals in Workspace Multiplexer', async ({
     await expect
       .poll(() => orcaPage.evaluate(() => window.__store?.getState().activeWorktreeId))
       .toBe(worktreeId)
+    await expect(explorer).toHaveAttribute('data-worktree-id', worktreeId!)
   }
+  await treeToggle.click()
+  await expect(explorer).toHaveCount(0)
+  await treeToggle.click()
+  await expect(explorer).toHaveAttribute('data-worktree-id', otherWorktreeId!)
+  expect(await orcaPage.evaluate(() => window.__store!.getState().rightSidebarWidth)).toBe(
+    sidebarWidth
+  )
+  await treeToggle.click()
   const addedWorkspaceTab = tiles.nth(1).locator('[data-workspace-multiplexer-tab-id]')
   await tiles.first().locator('[data-workspace-multiplexer-tab-id]').click({ button: 'right' })
   await expect(
@@ -385,15 +404,19 @@ test('shows selected workspace terminals in Workspace Multiplexer', async ({
   await expect(workspaceTabs).toHaveCount(2)
   await expect(tiles.locator('.xterm:visible')).toHaveCount(2)
 
-  await tiles.first().getByRole('button', { name: 'Split workspace down' }).click()
+  await tiles.first().getByRole('button', { name: 'Workspace actions' }).click()
+  await orcaPage.getByRole('menuitem', { name: 'Split workspace down', exact: true }).click()
   await expect(tiles).toHaveCount(3)
   await expect(tiles.locator('.xterm:visible')).toHaveCount(3)
-  await tiles.first().getByRole('button', { name: 'Maximize workspace' }).click()
+  await tiles.first().getByRole('button', { name: 'Workspace actions' }).click()
+  await orcaPage.getByRole('menuitem', { name: 'Maximize workspace', exact: true }).click()
   await expect(tiles).toHaveCount(1)
   await orcaPage.keyboard.press('Escape')
   await expect(tiles).toHaveCount(3)
-  await tiles.first().getByRole('button', { name: 'Maximize workspace' }).click()
-  await tiles.first().getByRole('button', { name: 'Split workspace right' }).click()
+  await tiles.first().getByRole('button', { name: 'Workspace actions' }).click()
+  await orcaPage.getByRole('menuitem', { name: 'Maximize workspace', exact: true }).click()
+  await tiles.first().getByRole('button', { name: 'Workspace actions' }).click()
+  await orcaPage.getByRole('menuitem', { name: 'Split workspace right', exact: true }).click()
   await expect(tiles).toHaveCount(4)
   await expect(tiles.locator('.xterm:visible')).toHaveCount(4)
   await orcaPage.screenshot({ path: 'output/playwright/multiplexer-regression.png' })
@@ -474,7 +497,8 @@ test('shows selected workspace terminals in Workspace Multiplexer', async ({
       leafId: state.terminalLayoutsByTabId[tabId].activeLeafId!
     }
   })
-  await tiles.first().getByRole('button', { name: 'Maximize workspace' }).click()
+  await tiles.first().getByRole('button', { name: 'Workspace actions' }).click()
+  await orcaPage.getByRole('menuitem', { name: 'Maximize workspace', exact: true }).click()
   await electronApp.evaluate(({ BrowserWindow }, target) => {
     const contents = BrowserWindow.getAllWindows()[0].webContents
     contents.send('ui:activateWorktree', { worktreeId: target.worktreeId, repoId: target.repoId })
@@ -515,5 +539,23 @@ test('shows selected workspace terminals in Workspace Multiplexer', async ({
     .getByRole('button', { name: 'Delete Workspace', exact: true })
     .click()
   await expect(deleteTab).toHaveCount(0, { timeout: 30_000 })
+  const userDataDir = await electronApp.evaluate(({ app }) => app.getPath('userData'))
+  const client = new RuntimeClient(userDataDir, 30_000, null, null)
+  const beforeRemoval = await orcaPage.evaluate(() => {
+    const state = window.__store!.getState()
+    return { slot: state.workspaceMultiplexer.slots[0]!, ptys: state.ptyIdsByTabId }
+  })
+  await MULTIPLEXER_HANDLERS['multiplexer remove']!({
+    client,
+    cwd: process.cwd(),
+    json: true,
+    flags: new Map([['slot', beforeRemoval.slot.id]])
+  })
+  await expect(
+    orcaPage.locator(`[data-workspace-multiplexer-tab-id="${beforeRemoval.slot.id}"]`)
+  ).toHaveCount(0)
+  expect(await orcaPage.evaluate(() => window.__store!.getState().ptyIdsByTabId)).toEqual(
+    beforeRemoval.ptys
+  )
   await expect(orcaPage.locator('[data-workspace-multiplexer-page]')).toBeVisible()
 })

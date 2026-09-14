@@ -1,15 +1,8 @@
 import { Suspense, useCallback, useMemo } from 'react'
 import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
 import { useDroppable } from '@dnd-kit/core'
-import { Ellipsis, X } from 'lucide-react'
 import { useAppStore } from '../../store'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger
-} from '@/components/ui/dropdown-menu'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { TabGroupActionsMenu } from './TabGroupActionsMenu'
 import TabBar from '../tab-bar/TabBar'
 
 import { TabBarQuickCommandsButton } from '../tab-bar/TabBarQuickCommandsButton'
@@ -122,6 +115,7 @@ export default function TabGroupPanel({
 
   const tabBar = (
     <TabBar
+      terminalOverflowMenu={Boolean(tabBarSlots?.leading)}
       tabs={terminalTabs}
       activeTabId={
         activeTerminalTabId !== undefined
@@ -277,12 +271,14 @@ export default function TabGroupPanel({
     >
       {/* Why: each split needs a draggable tab row because the hidden-inset titlebar has only one shared center slot. */}
       <div
-        className="h-[32px] shrink-0 border-b border-border bg-card"
+        className={`@container/tab-group-header shrink-0 border-b border-border bg-card ${tabBarSlots?.leading ? 'h-auto' : 'h-[32px]'}`}
         data-tab-group-strip-id={groupId}
         data-terminal-focus-release-surface="true"
         data-worktree-id={worktreeId}
       >
-        <div className="flex h-full items-stretch pr-1.5">
+        <div
+          className={`flex items-stretch pr-1.5 ${tabBarSlots?.leading ? 'h-[31px] @max-xl/tab-group-header:h-auto @max-xl/tab-group-header:grid @max-xl/tab-group-header:grid-cols-[minmax(0,1fr)_auto]' : 'h-full'}`}
+        >
           {/* Why: Electron drag hit-test respects no-drag only on DOM descendants, not z-index siblings, so this no-drag spacer keeps the collapsed left-sidebar's floating toggle clickable. */}
           {reserveCollapsedSidebarHeaderSpace && !sidebarOpen ? (
             <div
@@ -295,8 +291,16 @@ export default function TabGroupPanel({
               }
             />
           ) : null}
-          {tabBarSlots?.leading}
-          <div className="min-w-0 flex-1 h-full">{tabBar}</div>
+          {tabBarSlots?.leading ? (
+            <div className="contents @max-xl/tab-group-header:flex @max-xl/tab-group-header:h-8 @max-xl/tab-group-header:min-w-0">
+              {tabBarSlots.leading}
+            </div>
+          ) : null}
+          <div
+            className={`min-w-0 flex-1 h-full ${tabBarSlots?.leading ? '@max-xl/tab-group-header:order-3 @max-xl/tab-group-header:col-span-2 @max-xl/tab-group-header:h-8 @max-xl/tab-group-header:border-t @max-xl/tab-group-header:border-border' : ''}`}
+          >
+            {tabBar}
+          </div>
           <div
             className="ml-1.5 flex shrink-0 items-center gap-0.5"
             style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
@@ -306,47 +310,10 @@ export default function TabGroupPanel({
                 <TabBarQuickCommandsButton worktreeId={worktreeId} groupId={groupId} />
               ) : null}
               {isFocused && hasSplitGroups ? (
-                <Tooltip>
-                  <DropdownMenu modal={false}>
-                    <TooltipTrigger asChild>
-                      <DropdownMenuTrigger asChild>
-                        <button
-                          type="button"
-                          aria-label={translate(
-                            'auto.components.tab.group.TabGroupPanel.9acaf92093',
-                            'Pane Actions'
-                          )}
-                          onClick={(event) => {
-                            event.stopPropagation()
-                          }}
-                          className={menuButtonClassName}
-                        >
-                          <Ellipsis className="size-4" />
-                        </button>
-                      </DropdownMenuTrigger>
-                    </TooltipTrigger>
-                    <DropdownMenuContent align="end" side="bottom" sideOffset={4}>
-                      <DropdownMenuItem
-                        variant="destructive"
-                        onSelect={() => {
-                          commands.closeGroup()
-                        }}
-                      >
-                        <X className="size-4" />
-                        {translate(
-                          'auto.components.tab.group.TabGroupPanel.closePaneColumn',
-                          'Close split pane'
-                        )}
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                  <TooltipContent side="bottom" sideOffset={6}>
-                    {translate(
-                      'auto.components.tab.group.TabGroupPanel.9acaf92093',
-                      'Pane Actions'
-                    )}
-                  </TooltipContent>
-                </Tooltip>
+                <TabGroupActionsMenu
+                  className={menuButtonClassName}
+                  onClose={() => commands.closeGroup()}
+                />
               ) : null}
             </div>
             {tabBarSlots?.trailing}

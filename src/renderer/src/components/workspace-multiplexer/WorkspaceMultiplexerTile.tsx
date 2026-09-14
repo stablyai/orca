@@ -3,6 +3,7 @@ import { useDroppable } from '@dnd-kit/core'
 import { SortableContext } from '@dnd-kit/sortable'
 import {
   ChevronRight,
+  Ellipsis,
   Maximize2,
   Minimize2,
   PanelBottomOpen,
@@ -10,6 +11,12 @@ import {
   Plus
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem
+} from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { SYNC_FIT_PANES_EVENT } from '@/constants/terminal'
 import { translate } from '@/i18n/i18n'
@@ -41,26 +48,10 @@ function TileAction({
   children: React.ReactNode
 }): React.JSX.Element {
   return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-xs"
-          className="text-muted-foreground hover:text-foreground"
-          aria-label={label}
-          onClick={(event) => {
-            event.stopPropagation()
-            onClick()
-          }}
-        >
-          {children}
-        </Button>
-      </TooltipTrigger>
-      <TooltipContent side="bottom" sideOffset={6}>
-        {label}
-      </TooltipContent>
-    </Tooltip>
+    <DropdownMenuItem onSelect={onClick}>
+      {children}
+      {label}
+    </DropdownMenuItem>
   )
 }
 
@@ -216,7 +207,9 @@ export function WorkspaceMultiplexerTile({
       <SortableContext items={tabs.map((tab) => `workspace-multiplexer-slot:${tab.slot.id}`)}>
         <div
           className={`flex h-full min-w-0 items-stretch overflow-x-auto overflow-y-hidden ${
-            hasTabGroup ? 'max-w-[50%] flex-[0_1_auto]' : 'flex-1 border-r border-border/70'
+            hasTabGroup
+              ? 'max-w-[50%] flex-[0_1_auto] @max-xl/tab-group-header:max-w-full @max-xl/tab-group-header:flex-1'
+              : 'flex-1 border-r border-border/70'
           }`}
           data-workspace-multiplexer-tab-strip=""
           style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
@@ -247,7 +240,7 @@ export function WorkspaceMultiplexerTile({
       </SortableContext>
       {hasTabGroup ? (
         <span
-          className="flex h-full w-5 shrink-0 items-center justify-center text-muted-foreground/70"
+          className="flex h-full w-5 shrink-0 items-center justify-center text-muted-foreground/70 @max-xl/tab-group-header:hidden"
           data-workspace-multiplexer-hierarchy-marker=""
           aria-hidden
         >
@@ -257,46 +250,65 @@ export function WorkspaceMultiplexerTile({
     </>
   )
   const tileActions = (
-    <>
-      {slot.groupId && !unavailable ? (
-        <>
-          <TileAction
-            label={translate(
-              'auto.components.workspace.multiplexer.WorkspaceMultiplexerTile.splitRight',
-              'Split workspace right'
-            )}
-            onClick={() => onSplit('right')}
-          >
-            <PanelRightOpen className="size-3.5" />
-          </TileAction>
-          <TileAction
-            label={translate(
-              'auto.components.workspace.multiplexer.WorkspaceMultiplexerTile.splitDown',
-              'Split workspace down'
-            )}
-            onClick={() => onSplit('down')}
-          >
-            <PanelBottomOpen className="size-3.5" />
-          </TileAction>
-        </>
-      ) : null}
-      <TileAction
-        label={
-          isExpanded
-            ? translate(
-                'auto.components.workspace.multiplexer.WorkspaceMultiplexerTile.restore',
-                'Restore Workspace Multiplexer layout'
-              )
-            : translate(
-                'auto.components.workspace.multiplexer.WorkspaceMultiplexerTile.maximize',
-                'Maximize workspace'
-              )
-        }
-        onClick={onToggleExpanded}
-      >
-        {isExpanded ? <Minimize2 className="size-3.5" /> : <Maximize2 className="size-3.5" />}
-      </TileAction>
-    </>
+    <DropdownMenu modal={false}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              aria-label={translate('multiplexer.workspaceActions', 'Workspace actions')}
+              onClick={(event) => event.stopPropagation()}
+            >
+              <Ellipsis className="size-3.5" />
+            </Button>
+          </DropdownMenuTrigger>
+        </TooltipTrigger>
+        <TooltipContent>
+          {translate('multiplexer.workspaceActions', 'Workspace actions')}
+        </TooltipContent>
+      </Tooltip>
+      <DropdownMenuContent align="end">
+        {slot.groupId && !unavailable ? (
+          <>
+            <TileAction
+              label={translate(
+                'auto.components.workspace.multiplexer.WorkspaceMultiplexerTile.splitRight',
+                'Split workspace right'
+              )}
+              onClick={() => onSplit('right')}
+            >
+              <PanelRightOpen className="size-3.5" />
+            </TileAction>
+            <TileAction
+              label={translate(
+                'auto.components.workspace.multiplexer.WorkspaceMultiplexerTile.splitDown',
+                'Split workspace down'
+              )}
+              onClick={() => onSplit('down')}
+            >
+              <PanelBottomOpen className="size-3.5" />
+            </TileAction>
+          </>
+        ) : null}
+        <TileAction
+          label={
+            isExpanded
+              ? translate(
+                  'auto.components.workspace.multiplexer.WorkspaceMultiplexerTile.restore',
+                  'Restore Workspace Multiplexer layout'
+                )
+              : translate(
+                  'auto.components.workspace.multiplexer.WorkspaceMultiplexerTile.maximize',
+                  'Maximize workspace'
+                )
+          }
+          onClick={onToggleExpanded}
+        >
+          {isExpanded ? <Minimize2 className="size-3.5" /> : <Maximize2 className="size-3.5" />}
+        </TileAction>
+      </DropdownMenuContent>
+    </DropdownMenu>
   )
 
   return (

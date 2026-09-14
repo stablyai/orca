@@ -1,4 +1,5 @@
 import React from 'react'
+import { TerminalTabListMenu } from './TerminalTabListMenu'
 import { SortableContext } from '@dnd-kit/sortable'
 import { ChevronLeft, ChevronRight, Plus } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
@@ -125,7 +126,7 @@ export function renderTabBarSurface({
       // Why: preload routes native OS drops by this marker — only the tab strip opens files in the editor, not terminal panes.
       data-native-file-drop-target="editor"
     >
-      {tabStripOverflowState.hasOverflow ? (
+      {tabStripOverflowState.hasOverflow && !props.terminalOverflowMenu ? (
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
@@ -184,7 +185,15 @@ export function renderTabBarSurface({
           <TabStripScrollIndicator metrics={tabStripOverflowState} />
         </div>
       </SortableContext>
-      {tabStripOverflowState.hasOverflow ? (
+      {props.terminalOverflowMenu && orderedItems.length > 1 ? (
+        <TerminalTabListMenu
+          items={orderedItems}
+          activeId={itemProjection.activeVisibleTabId}
+          generatedTitlesEnabled={runtime.generatedTabTitlesEnabled}
+          onActivate={props.onActivate}
+        />
+      ) : null}
+      {tabStripOverflowState.hasOverflow && !props.terminalOverflowMenu ? (
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
