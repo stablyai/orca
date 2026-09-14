@@ -4,6 +4,26 @@ import { readStreamedSessionDocument } from './session-document-stream'
 import { limitRemoteScanFilesystemConcurrency } from './remote-session-scan-concurrency'
 
 describe('stream lifetime and retained document work', () => {
+  it('aborts a newline-free record at the byte ceiling and closes the source', async () => {
+    let closed = false
+    let reads = 0
+    async function* bytes() {
+      const chunk = Buffer.alloc(1024 * 1024, 'x')
+      try {
+        for (; reads < 100;) {
+          reads++
+          yield chunk
+        }
+      } finally {
+        closed = true
+      }
+    }
+    const lines = streamedSessionContentLines(bytes())
+    await expect(lines.next()).rejects.toThrow('record exceeds 10485760 byte limit')
+    expect(reads).toBe(11)
+    expect(closed).toBe(true)
+  })
+
   it('releases the source when a line consumer finishes early', async () => {
     let closed = false
     async function* bytes() {
