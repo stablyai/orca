@@ -56,7 +56,7 @@ type PromptContractHarness = {
 }
 
 async function createPromptContractHarness(
-  outcome: 'accepted' | 'swallowed'
+  outcome: 'accepted' | 'swallowed' | 'permission-after-paste'
 ): Promise<PromptContractHarness> {
   let composerReady = false
   let submittedTurns = 0
@@ -64,6 +64,9 @@ async function createPromptContractHarness(
   let prematureSubmits = 0
   const fixture = await createAgentPromptSubmissionRuntime((runtime, data) => {
     if (data.includes(AGENT_PROMPT_BRACKETED_PASTE_END)) {
+      if (outcome === 'permission-after-paste') {
+        runtime.onPtyData('pty-prompt', '\x1b]0;Codex waiting for permission\x07', Date.now())
+      }
       setTimeout(() => runtime.onPtyData('pty-prompt', 'partial composer frame', Date.now()), 650)
       setTimeout(() => runtime.onPtyData('pty-prompt', '\x1b[?25h', Date.now()), 750)
       setTimeout(() => {
@@ -181,6 +184,48 @@ describe('orchestration worker-start prompt contract', () => {
       rmSync(root, { recursive: true, force: true })
     }
     vi.useRealTimers()
+  })
+
+  it('keeps pasted dispatch authority when startup approval interrupts submission', async () => {
+    vi.useFakeTimers()
+    const harness = await createPromptContractHarness('permission-after-paste')
+    const pending = harness.dispatcher.dispatch(harness.request)
+    await vi.runAllTimersAsync()
+    const response = await pending
+    expect(response).toMatchObject({
+      ok: true,
+      result: {
+        state: 'outcome_unknown',
+        failedStage: 'dispatch_input',
+        lastError: 'agent_prompt_blocked'
+      }
+    })
+    if (!response.ok) {
+      throw new Error(response.error.message)
+    }
+    const result = response.result as { dispatchId: string; recovery?: string }
+    expect(result.recovery).toBeUndefined()
+    expect(harness.submittedTurns()).toBe(0)
+    expect(harness.writes).toHaveLength(1)
+    const replay = await harness.dispatcher.dispatch(harness.request)
+    expect(replay).toMatchObject({
+      ok: true,
+      result: { state: 'outcome_unknown', mutation: { replayed: true } }
+    })
+    expect(harness.writes).toHaveLength(1)
+    reopenPromptContractDb(harness)
+    const dispatch = harness.db.getDispatchContextById(result.dispatchId)!
+    expect(dispatch.capability_revoked_at).toBeNull()
+    expect(harness.db.getWorkerDispatch(result.dispatchId)?.state).toBe('start_unknown')
+    expect(
+      harness.db.settleWorkerReport({
+        taskId: harness.taskId,
+        dispatchId: result.dispatchId,
+        outcome: 'succeeded',
+        result: 'Human resolved startup approval; the original pasted task completed'
+      })
+    ).toMatchObject({ action: 'settled', outcome: 'succeeded' })
+    expect(harness.db.getTask(harness.taskId)?.status).toBe('completed')
   })
 
   it('durably accepts exactly one submitted and started turn', async () => {

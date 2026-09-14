@@ -106,7 +106,7 @@ describe('agent prompt submission runtime', () => {
     expect(writes.filter((data) => data === '\r')).toHaveLength(1)
   })
 
-  it('does not send Enter after a permission state appears', async () => {
+  it('preserves partial delivery and does not send Enter after a permission state appears', async () => {
     vi.useFakeTimers()
     const { runtime, handle, writes } = await createPromptRuntime((runtime, data) => {
       if (data.includes(AGENT_PROMPT_BRACKETED_PASTE_END)) {
@@ -114,7 +114,10 @@ describe('agent prompt submission runtime', () => {
       }
     })
     const submission = runtime.sendTerminalAgentPrompt(handle, 'review this')
-    const rejected = expect(submission).rejects.toThrow('agent_prompt_blocked')
+    const rejected = expect(submission).rejects.toMatchObject({
+      message: 'agent_prompt_blocked',
+      code: 'operation_unknown'
+    })
 
     await vi.runAllTimersAsync()
 
