@@ -31,7 +31,7 @@
     "anti-slop/no-known-value-widening": "off",
     "anti-slop/no-module-mocking": "off",
     "anti-slop/no-object-parameters": "off",
-    "anti-slop/no-reduce-accumulator-copy": "off",
+    "anti-slop/no-reduce-accumulator-copy": "error",
     "anti-slop/no-reflect-apply": "off",
     "anti-slop/no-reflect-get": "off",
     "anti-slop/no-runtime-typeof": "off",
@@ -40,7 +40,7 @@
     "anti-slop/no-unknown-returns": "off",
     "anti-slop/no-unknown-type-aliases": "off",
     "anti-slop/no-unsafe-dictionary-type": "off",
-    "anti-slop/no-widen-then-assert": "off",
+    "anti-slop/no-widen-then-assert": "error",
     "anti-slop/require-readable-spacing": "off",
     "anti-slop/require-safety-comment-for-type-assertion": "off"
   },
