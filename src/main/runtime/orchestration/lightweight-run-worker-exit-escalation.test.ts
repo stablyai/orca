@@ -506,9 +506,12 @@ describe('STA-4604 worker PTY exit escalation reaches the coordinator', () => {
     // Why: onPtyExit walks leaves synchronously — a throwing mailbox would abandon the
     // rest of the exit, so the worker death must stay durable and the exit must complete.
     expect(() => runtime.onPtyExit(WORKER_PTY_ID, 137)).not.toThrow()
+    // Why: residual N attributes the observed exit code to the dispatch id, so the same PTY
+    // exit that names terminationReason now also carries the exitCode it was reported with.
     expect(failDispatch).toHaveBeenCalledWith('ctx-1', 'Agent process exited with code 137', {
       workerProcessExited: true,
-      terminationReason: 'exited'
+      terminationReason: 'exited',
+      exitCode: 137
     })
     expect(warn).toHaveBeenCalledWith(
       '[orchestration] failed to escalate worker exit',

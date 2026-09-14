@@ -114,7 +114,9 @@ const PROJECTION_COLUMNS = new Set([
   'residual_resources',
   'last_error',
   'updated_at',
-  'runtime_epoch'
+  'runtime_epoch',
+  'dispatched_at',
+  'exit_code'
 ])
 
 export function transitionLifecycle(

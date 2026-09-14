@@ -3,6 +3,7 @@ import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { OrchestrationDb } from '../../../../orchestration/db'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
 import { parseWorkerTerminalHostScope } from '../../../../orchestration/worker-terminal-process-liveness'
+import { exposeUtcTimestamp } from '../../../../orchestration/db/utc-timestamp'
 import type { OrchestrationFleetWorker } from '../../../../../../shared/orchestration-fleet-projection'
 import { projectWorkerFleet } from './worker-list-projection'
 import {
@@ -167,6 +168,19 @@ export function exposeDispatchContext(dispatch: DispatchContextRow) {
     depth: dispatch.depth,
     dispatchedAt: dispatch.dispatched_at,
     completedAt: dispatch.completed_at,
+    // Why null rather than computed from created_at: an attempt not yet dispatched (or one whose
+    // dispatched_at predates this field) has no observed start, so a duration would be a guess.
+    // Why exposeUtcTimestamp on both: a row can still hold SQLite's zone-less space-format
+    // dispatched_at (pre-N1-fix writes, or any other datetime('now') stamp on this column) next
+    // to an ISO-with-'Z' completed_at. Date.parse reads the zone-less form as local time, so a
+    // non-UTC process TZ silently skews the diff by the TZ offset unless both are normalized to
+    // the same explicit-UTC shape first (N1).
+    wallclockMs:
+      dispatch.dispatched_at && dispatch.completed_at
+        ? Date.parse(exposeUtcTimestamp(dispatch.completed_at) ?? dispatch.completed_at) -
+          Date.parse(exposeUtcTimestamp(dispatch.dispatched_at) ?? dispatch.dispatched_at)
+        : null,
+    exitCode: dispatch.exit_code,
     createdAt: dispatch.created_at,
     lastHeartbeatAt: dispatch.last_heartbeat_at
   }
