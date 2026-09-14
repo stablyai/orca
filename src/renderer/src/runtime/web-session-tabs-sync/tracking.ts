@@ -104,8 +104,9 @@ export function recordReceivedWebSessionTabsSnapshot(
   const publicationEpoch = snapshot.publicationEpoch
   const isRetraction = (snapshot as { removed?: unknown }).removed === true
   const history = sessionTabsPublicationEpochHistoryByWorktree.get(key)
-  const isRetired = history?.retired.includes(publicationEpoch) ?? false
-  if (isRetired) {
+  // Same answer as the recovery gate: an exact match here let a merged-lineage frame from a
+  // retired generation walk past, note itself current, and retire the live successor.
+  if (isRetiredSessionTabsPublicationEpoch(key, publicationEpoch)) {
     return frame
   }
   // A retraction withdraws the worktree; it does not take over publishing it. Noting it as current
