@@ -1,5 +1,5 @@
 import React from 'react'
-import CommentMermaidBlock from './CommentMermaidBlock'
+import CommentMermaidBlock, { type CommentMermaidScheme } from './CommentMermaidBlock'
 
 // Why: react-markdown sets className="language-mermaid" on the <code> inside a
 // fenced ```mermaid block. Detecting it lets us render a real diagram instead of
@@ -10,9 +10,16 @@ export function isMermaidFence(className: string | undefined): boolean {
 
 export function renderMermaidFence(
   children: React.ReactNode,
-  className?: string
+  className?: string,
+  scheme?: CommentMermaidScheme
 ): React.JSX.Element {
-  return <CommentMermaidBlock content={String(children).trimEnd()} className={className} />
+  return (
+    <CommentMermaidBlock
+      content={String(children).trimEnd()}
+      className={className}
+      scheme={scheme}
+    />
+  )
 }
 
 // Why: MermaidBlock renders a <div> via innerHTML, which is invalid inside a

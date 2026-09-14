@@ -1,6 +1,7 @@
 import React from 'react'
 import type { Components } from 'react-markdown'
 import { NATIVE_CHAT_FILE_HREF_PREFIX } from '../../../../shared/native-chat-href-routing'
+import type { CommentMermaidScheme } from './CommentMermaidBlock'
 import { isMermaidFence, isMermaidPre, renderMermaidFence } from './comment-mermaid-fence'
 import {
   GitHubUserAttachmentImage,
@@ -223,7 +224,8 @@ export function createCompactCommentMarkdownComponents(
 }
 
 export function createDocumentCommentMarkdownComponents(
-  onLinkClick?: CommentMarkdownLinkClickHandler
+  onLinkClick?: CommentMarkdownLinkClickHandler,
+  mermaidScheme: CommentMermaidScheme = 'app'
 ): Components {
   return {
     p: ({ children }) => <p className="my-2 first:mt-0 last:mb-0">{children}</p>,
@@ -248,7 +250,8 @@ export function createDocumentCommentMarkdownComponents(
       isMermaidFence(className) ? (
         renderMermaidFence(
           children,
-          'my-3 min-w-0 max-w-full overflow-x-auto rounded-md border border-border/60 p-3 [&_.mermaid-block]:min-w-0 [&_.mermaid-block_pre]:my-0 [&_.mermaid-block_pre]:max-h-80 [&_.mermaid-block_pre]:max-w-full [&_.mermaid-block_pre]:overflow-x-auto [&_.mermaid-block_pre]:rounded-md [&_.mermaid-block_pre]:bg-accent [&_.mermaid-block_pre]:p-3 [&_.mermaid-block_pre]:font-mono [&_.mermaid-block_pre]:text-[12px]'
+          'my-3 min-w-0 max-w-full overflow-x-auto rounded-md border border-border/60 p-3 [&_.mermaid-block]:min-w-0 [&_.mermaid-block_pre]:my-0 [&_.mermaid-block_pre]:max-h-80 [&_.mermaid-block_pre]:max-w-full [&_.mermaid-block_pre]:overflow-x-auto [&_.mermaid-block_pre]:rounded-md [&_.mermaid-block_pre]:bg-accent [&_.mermaid-block_pre]:p-3 [&_.mermaid-block_pre]:font-mono [&_.mermaid-block_pre]:text-[12px]',
+          mermaidScheme
         )
       ) : (
         <code className="rounded bg-accent px-1.5 py-0.5 font-mono text-[0.92em] [overflow-wrap:anywhere]">

@@ -121,4 +121,10 @@ describe('EditorPanelShell path header', () => {
     expect(renderShell(openFile('check-details'))).toContain('data-editor-content')
     expect(renderShell(openFile('edit'))).toContain('data-editor-content')
   })
+
+  it('keeps the themed editor scope as a constrained flex container', () => {
+    expect(renderShell(openFile('edit'))).toContain(
+      'class="editor-content-pane flex min-h-0 flex-1 flex-col"'
+    )
+  })
 })

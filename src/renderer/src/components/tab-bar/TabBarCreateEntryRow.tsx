@@ -66,14 +66,15 @@ export function EntryActionRow({
       id={id}
       role="option"
       aria-selected={selected}
+      data-selected={selected}
       disabled={disabled}
       className={cn(
-        'flex h-6 w-full items-center gap-1.5 rounded-[7px] px-1 text-left text-[11px] leading-5 outline-none disabled:cursor-not-allowed disabled:opacity-50',
+        'jump-palette-item flex h-6 w-full items-center gap-1.5 rounded-[7px] px-1 text-left text-[11px] leading-5 outline-none disabled:cursor-not-allowed disabled:opacity-50',
         selected
-          ? 'bg-black/8 text-accent-foreground dark:bg-white/14'
+          ? 'bg-accent text-accent-foreground'
           : // Why: CSS :hover still matches a disabled button, so a pending row would
             // light up under the pointer despite being unactivatable.
-            'text-muted-foreground hover:bg-black/8 hover:text-accent-foreground disabled:hover:bg-transparent disabled:hover:text-muted-foreground dark:hover:bg-white/14 dark:disabled:hover:bg-transparent'
+            'text-muted-foreground hover:bg-accent hover:text-accent-foreground disabled:hover:bg-transparent disabled:hover:text-muted-foreground'
       )}
       onClick={onClick}
     >

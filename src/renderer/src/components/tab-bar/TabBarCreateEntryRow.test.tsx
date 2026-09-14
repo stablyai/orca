@@ -28,7 +28,7 @@ function makeFileOption(path: string): ActiveOption {
 
 // The tooltip itself is asserted in tests/e2e/tab-create-entry-file-paths.spec.ts,
 // where it actually opens; here we only need the row's own text layout.
-function renderRow(option: ActiveOption): HTMLButtonElement {
+function renderRow(option: ActiveOption, selected = false): HTMLButtonElement {
   act(() => {
     root.render(
       createElement(
@@ -38,7 +38,7 @@ function renderRow(option: ActiveOption): HTMLButtonElement {
           id: 'file-result',
           onClick: vi.fn(),
           option,
-          selected: false
+          selected
         })
       )
     )
@@ -66,6 +66,13 @@ afterEach(() => {
 })
 
 describe('EntryActionRow', () => {
+  it('uses the visible keyboard-selection recipe', () => {
+    const row = renderRow(makeFileOption(filePath), true)
+
+    expect(row.dataset.selected).toBe('true')
+    expect(row.classList.contains('jump-palette-item')).toBe(true)
+  })
+
   it('puts the filename before the truncated parent path', () => {
     const text = renderRow(makeFileOption(filePath)).textContent ?? ''
 

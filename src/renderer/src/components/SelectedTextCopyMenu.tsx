@@ -108,7 +108,7 @@ export function SelectedTextCopyMenu({
       {menu &&
         createPortal(
           <div
-            className="fixed z-[100] min-w-36 rounded-[11px] border border-black/14 bg-popover p-1 text-popover-foreground shadow-[0_16px_36px_rgba(0,0,0,0.24),inset_0_1px_0_rgba(255,255,255,0.14)] dark:border-white/14 dark:shadow-[0_20px_44px_rgba(0,0,0,0.42),inset_0_1px_0_rgba(255,255,255,0.04)]"
+            className="fixed z-[100] min-w-36 rounded-[11px] border border-border bg-popover p-1 text-popover-foreground shadow-floating"
             style={{ left: menu.x, top: menu.y }}
             onPointerDown={(event) => event.stopPropagation()}
           >

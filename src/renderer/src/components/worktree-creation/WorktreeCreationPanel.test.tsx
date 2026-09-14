@@ -102,6 +102,9 @@ describe('WorktreeCreationPanel', () => {
       (node) => node.textContent === 'New workspace'
     )
     expect(title?.closest('div')?.className).toContain('border-r')
+    expect(title?.closest('div')?.parentElement?.className).toContain(
+      'bg-[var(--bg-titlebar,var(--card))]'
+    )
   })
 
   it('reserves collapsed left-titlebar space before the faux tab', async () => {

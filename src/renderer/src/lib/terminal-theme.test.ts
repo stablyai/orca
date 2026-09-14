@@ -6,6 +6,7 @@ import {
   getBuiltinTheme,
   getTerminalThemePreview,
   isTerminalBackgroundLight,
+  resolveReadableTerminalForeground,
   resolveOpaqueTerminalBackground,
   resolveEffectiveTerminalAppearance
 } from './terminal-theme'
@@ -336,5 +337,23 @@ describe('resolveOpaqueTerminalBackground', () => {
   it('returns null for unknown color values', () => {
     expect(resolveOpaqueTerminalBackground(undefined)).toBe(null)
     expect(resolveOpaqueTerminalBackground('var(--background)')).toBe(null)
+  })
+})
+
+describe('resolveReadableTerminalForeground', () => {
+  it('preserves readable theme colors and rescues transparent low-contrast surfaces', () => {
+    expect(resolveReadableTerminalForeground('#f0f4f8', '#101820')).toBe('#f0f4f8')
+    expect(
+      resolveReadableTerminalForeground('#ffffff', '#000000', {
+        backgroundOpacity: 0,
+        appSurface: 'light'
+      })
+    ).toBe('#0a0a0a')
+    expect(
+      resolveReadableTerminalForeground('#000000', '#ffffff', {
+        backgroundOpacity: 0,
+        appSurface: 'dark'
+      })
+    ).toBe('#fafafa')
   })
 })

@@ -65,7 +65,9 @@ export function DiffSectionHeader({
         {dirty && <span className="font-medium ml-1">M</span>}
         {(added > 0 || removed > 0) && (
           <span className="tabular-nums ml-2">
-            {added > 0 && <span className="text-green-600 dark:text-green-500">+{added}</span>}
+            {added > 0 && (
+              <span className="text-green-600 editor-dark:text-green-500">+{added}</span>
+            )}
             {added > 0 && removed > 0 && <span> </span>}
             {removed > 0 && <span className="text-red-500">-{removed}</span>}
           </span>

@@ -40,12 +40,14 @@ export function BrowserPageGrabToast({
           clipPath: grabToast.below
             ? 'polygon(50% 0%, 0% 100%, 100% 100%)'
             : 'polygon(0% 0%, 100% 0%, 50% 100%)',
-          background: 'white'
+          background: 'var(--popover)'
         }}
       />
       <div
         className={`flex items-center gap-1.5 rounded-full py-1.5 pl-3 pr-1.5 shadow-lg ${
-          grabToast.type === 'success' ? 'bg-white text-gray-900' : 'bg-white text-red-600'
+          grabToast.type === 'success'
+            ? 'bg-popover text-popover-foreground'
+            : 'bg-popover text-destructive'
         }`}
       >
         {grabToast.type === 'success' ? (
@@ -65,7 +67,7 @@ export function BrowserPageGrabToast({
             }}
           >
             <DropdownMenuTrigger asChild>
-              <button className="flex size-6 items-center justify-center rounded-full text-gray-500 transition-colors hover:bg-black/10 hover:text-gray-700">
+              <button className="flex size-6 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground">
                 <span className="text-sm font-bold leading-none">···</span>
               </button>
             </DropdownMenuTrigger>

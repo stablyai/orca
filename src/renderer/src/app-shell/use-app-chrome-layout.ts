@@ -1,13 +1,11 @@
-import { useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import { useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { SYNC_FIT_PANES_EVENT } from '@/constants/terminal'
 import { canShowRightSidebarForView } from '@/lib/right-sidebar-visibility'
-import { resolveLeftSidebarStyleVariables } from '@/lib/left-sidebar-appearance'
 import { resolveLeftTitlebarChromeLayout } from '@/lib/titlebar-left-chrome'
 import { shouldShowWorktreeCreationSurface } from '@/lib/worktree-creation-surface'
 import { useAppStore } from '../store'
 import { selectActiveTerminalChromeState } from '../store/active-terminal-chrome-selector'
-import { useSystemPrefersDark } from '../components/terminal-pane/use-system-prefers-dark'
 import {
   hasRequestedBackgroundTerminalWorktreeMount,
   subscribeBackgroundTerminalWorktreeMountRequests
@@ -46,12 +44,6 @@ export function useAppChromeLayout() {
     hasRequestedBackgroundTerminalWorktreeMount,
     hasRequestedBackgroundTerminalWorktreeMount
   )
-
-  const systemPrefersDark = useSystemPrefersDark()
-  const leftSidebarStyle = useMemo(
-    () => resolveLeftSidebarStyleVariables(settings, systemPrefersDark),
-    [settings, systemPrefersDark]
-  ) as React.CSSProperties | undefined
 
   const canMountTerminalWorkbenchNow = activeWorktreeId !== null || backgroundTerminalMountRequested
   // Why a latch in state, not a ref: the write has to be visible to the next render, and a
@@ -126,7 +118,6 @@ export function useAppChromeLayout() {
     collapsedSidebarHeaderWidth,
     creationLayoutActive,
     isFullScreen,
-    leftSidebarStyle,
     leftTitlebarChromeLayout,
     rightSidebarExplorerView,
     rightSidebarOpen,

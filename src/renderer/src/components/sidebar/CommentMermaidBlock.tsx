@@ -1,7 +1,29 @@
 import React from 'react'
 import MermaidBlock from '@/components/editor/MermaidBlock'
+import { useSystemPrefersDark } from '@/components/terminal-pane/use-system-prefers-dark'
+import { resolveDocumentTheme } from '@/lib/document-theme'
+import {
+  resolveAppAppearanceDarkMode,
+  type AppAppearanceSettings
+} from '@/lib/left-sidebar-appearance'
 import { cn } from '@/lib/utils'
 import { useAppStore } from '@/store'
+
+export type CommentMermaidScheme = 'app' | 'editor'
+
+export function resolveCommentMermaidDarkMode(
+  settings: AppAppearanceSettings | null | undefined,
+  systemPrefersDark: boolean,
+  scheme: CommentMermaidScheme = 'app'
+): boolean {
+  const baseDark = resolveDocumentTheme(settings?.theme ?? 'system', () => ({
+    matches: systemPrefersDark
+  }))
+  if (scheme === 'editor') {
+    return baseDark
+  }
+  return resolveAppAppearanceDarkMode(settings, systemPrefersDark) ?? baseDark
+}
 
 // Why: comment markdown components are module-level constants without access to
 // the live theme, so this wrapper resolves dark mode from the app store (same
@@ -10,15 +32,16 @@ import { useAppStore } from '@/store'
 // foreignObject labels disappear on some platforms.
 export default function CommentMermaidBlock({
   content,
-  className
+  className,
+  scheme = 'app'
 }: {
   content: string
   className?: string
+  scheme?: CommentMermaidScheme
 }): React.JSX.Element {
   const settings = useAppStore((s) => s.settings)
-  const isDark =
-    settings?.theme === 'dark' ||
-    (settings?.theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
+  const systemPrefersDark = useSystemPrefersDark()
+  const isDark = resolveCommentMermaidDarkMode(settings, systemPrefersDark, scheme)
 
   return (
     <div className={cn(className)}>

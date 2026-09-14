@@ -143,7 +143,7 @@ export function ExternalFileChangeBanner({
     <div role="alert" className="border-b border-amber-500/20 bg-amber-500/10 px-4 py-2 text-xs">
       <div className="flex items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-2">
-          <TriangleAlert className="size-3.5 shrink-0 text-amber-600 dark:text-amber-400" />
+          <TriangleAlert className="size-3.5 shrink-0 text-amber-600 editor-dark:text-amber-400" />
           {/* Why: wraps instead of truncating — the overwrite warning at the
               end of the sentence is the part the user must not lose. */}
           <span className="min-w-0 font-medium text-foreground">
