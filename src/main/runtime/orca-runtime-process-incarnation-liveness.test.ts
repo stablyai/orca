@@ -79,15 +79,18 @@ describe('terminal process incarnation liveness', () => {
   it.each([
     [{ kind: 'local', hostId: 'local' }, null],
     [{ kind: 'wsl', hostId: 'local', distro: 'Ubuntu' }, null]
-  ] as const)('uses the local provider inventory for %s scope', async (scope, connectionId) => {
-    const listProcesses = vi.fn().mockResolvedValue([])
-    const runtime = runtimeWithInventory(listProcesses)
+  ] as const)(
+    'uses the local provider inventory for %s scope, and an empty listing stays unverifiable',
+    async (scope, connectionId) => {
+      const listProcesses = vi.fn().mockResolvedValue([])
+      const runtime = runtimeWithInventory(listProcesses)
 
-    await expect(
-      runtime.inspectTerminalProcessIncarnationLiveness('local-pty:inc-1', JSON.stringify(scope))
-    ).resolves.toBe('exited')
-    expect(listProcesses).toHaveBeenCalledWith(connectionId)
-  })
+      await expect(
+        runtime.inspectTerminalProcessIncarnationLiveness('local-pty:inc-1', JSON.stringify(scope))
+      ).resolves.toBe('unverifiable')
+      expect(listProcesses).toHaveBeenCalledWith(connectionId)
+    }
+  )
 })
 
 describe('structured worker incarnation liveness', () => {
