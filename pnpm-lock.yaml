@@ -213,6 +213,9 @@ importers:
       '@monaco-editor/react':
         specifier: ^4.7.0
         version: 4.7.0(monaco-editor@0.55.1)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)
+      '@oxlint/plugins':
+        specifier: 1.80.0
+        version: 1.80.0
       '@playwright/test':
         specifier: ^1.59.1
         version: 1.59.1
@@ -1939,6 +1942,10 @@ packages:
     engines: {node: ^20.19.0 || >=22.12.0}
     cpu: [x64]
     os: [win32]
+
+  '@oxlint/plugins@1.80.0':
+    resolution: {integrity: sha512-QRgH1XqQEYNHa4f1vvPQ5fAdNdncHGIUG1ZWLlGIZHky3qwCEeAKYitZNbZMtaXtAQAAFFTOwqUfzESvimqZNA==}
+    engines: {node: ^12.22.0 || ^14.17.0 || >=16.0.0}
 
   '@parcel/watcher-android-arm64@2.5.6':
     resolution: {integrity: sha512-YQxSS34tPF/6ZG7r/Ih9xy+kP/WwediEUsqmtf0cuCV5TPPKw/PQHRhueUo6JdeFJaqV3pyjm0GdYjZotbRt/A==}
@@ -8604,6 +8611,8 @@ snapshots:
 
   '@oxlint/binding-win32-x64-msvc@1.80.0':
     optional: true
+
+  '@oxlint/plugins@1.80.0': {}
 
   '@parcel/watcher-android-arm64@2.5.6':
     optional: true
