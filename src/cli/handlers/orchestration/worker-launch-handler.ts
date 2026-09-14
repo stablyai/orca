@@ -45,6 +45,11 @@ export const ORCHESTRATION_WORKER_LAUNCH_HANDLER: Record<string, CommandHandler>
       effects: unknown[]
       residualResources: unknown[]
       nextCommands?: string[]
+      launch?: {
+        effective: { agent: string | null; model: string | null; effort: string | null } | null
+        source?: 'probe' | 'catalog' | 'unverified'
+        unverifiedReason?: string
+      }
     }>(client, flags, 'orchestration.workerStart', {
       task,
       ...(spec ? { spec } : {}),

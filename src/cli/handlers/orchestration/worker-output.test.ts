@@ -99,6 +99,38 @@ describe('worker-start plain formatting', () => {
       })
     ).toBe('Worker ctx_ready [ready] for task_1')
   })
+
+  // Why: issue #10846 — the receipt's `launch.source` says whether `effective`
+  // was actually verified against the installed CLI, never a silent copy.
+  it.each([
+    [
+      'probe' as const,
+      { agent: 'claude', model: 'opus', effort: 'high' },
+      undefined,
+      'Launch: opus / effort high (verified against the installed CLI)'
+    ],
+    [
+      'catalog' as const,
+      { agent: 'codex', model: 'gpt-5.6-sol', effort: 'ultra' },
+      undefined,
+      'Launch: gpt-5.6-sol / effort ultra (from the static catalog, not live-verified)'
+    ],
+    [
+      'unverified' as const,
+      null,
+      'claude not found on PATH.',
+      'Launch: unverified — claude not found on PATH.'
+    ]
+  ])('renders the launch line for source %j', (source, effective, unverifiedReason, expected) => {
+    expect(
+      formatWorkerStart({
+        taskId: 'task_1',
+        dispatchId: 'ctx_ready',
+        state: 'ready',
+        launch: { effective, source, ...(unverifiedReason ? { unverifiedReason } : {}) }
+      })
+    ).toBe(`Worker ctx_ready [ready] for task_1\n${expected}`)
+  })
 })
 
 describe('worker-read plain formatting', () => {
