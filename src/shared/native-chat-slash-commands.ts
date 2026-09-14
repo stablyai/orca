@@ -17,9 +17,7 @@ export type SlashCommandSuggestion = {
   kindUnspecified?: true
 }
 
-// Best-effort, curated per-agent catalogs. The CLIs ship no machine-readable
-// command list, so these track the common, stable commands each TUI documents.
-// The composer treats commands as plain data, so this can grow freely.
+// Best-effort catalogs for terminal-backed chat; session-reported catalogs remain authoritative.
 
 const COMMON_COMMANDS: readonly SlashCommandSuggestion[] = [
   { name: 'clear', description: 'Clear the conversation' },
@@ -82,10 +80,40 @@ const CODEX_COMMANDS: readonly SlashCommandSuggestion[] = [
   { name: 'subagents', description: 'Switch the active agent thread' }
 ]
 
+// OMP v18.1.21: https://github.com/can1357/oh-my-pi/blob/a2501722aa05670eeab327ea1325e3fde55e51a9/packages/coding-agent/src/slash-commands/builtin-registry.ts
+const OMP_COMMANDS: readonly SlashCommandSuggestion[] = [
+  { name: 'model', description: 'Open the model selector in Terminal' },
+  {
+    name: 'switch',
+    description: 'Switch the session model; without arguments, choose in Terminal'
+  },
+  { name: 'plan', description: 'Toggle plan mode' },
+  { name: 'compact', description: 'Compact conversation context' },
+  { name: 'clear', description: 'Clear context while keeping the session' },
+  { name: 'new', description: 'Start a new session' },
+  { name: 'resume', description: 'Resume a session; without arguments, choose in Terminal' },
+  { name: 'fork', description: 'Fork from a previous message in Terminal' },
+  { name: 'branch', description: 'Rewind to a previous message in Terminal' },
+  { name: 'tree', description: 'Browse the session tree in Terminal' },
+  { name: 'session', description: 'Show session information and controls' },
+  { name: 'rename', description: 'Rename the session; omit the title to generate one' },
+  { name: 'context', description: 'Show estimated context usage' },
+  { name: 'usage', description: 'Show provider usage and limits' },
+  { name: 'fast', description: 'Toggle priority service tier' },
+  { name: 'tools', description: 'Show tools visible to the agent' },
+  { name: 'jobs', description: 'Show background jobs' },
+  { name: 'git', description: 'Open the Git viewer in Terminal' },
+  { name: 'export', description: 'Export the session to HTML' },
+  { name: 'settings', description: 'Open settings in Terminal' },
+  { name: 'extensions', description: 'Open the extension dashboard in Terminal' },
+  { name: 'hotkeys', description: 'Show keyboard shortcuts in Terminal' }
+]
+
 const COMMANDS_BY_AGENT: Partial<Record<AgentType, readonly SlashCommandSuggestion[]>> = {
   claude: CLAUDE_COMMANDS,
   openclaude: CLAUDE_COMMANDS,
-  codex: CODEX_COMMANDS
+  codex: CODEX_COMMANDS,
+  omp: OMP_COMMANDS
 }
 
 /** Known slash commands for an agent, falling back to a small common set so the

@@ -9,6 +9,11 @@ describe('classifyMobileNativeChatSend', () => {
     expect(classifyMobileNativeChatSend('codex', '/permissions')).toBe('command')
   })
 
+  it('distinguishes OMP model selectors from unknown slash commands', () => {
+    expect(classifyMobileNativeChatSend('omp', '/switch @smol')).toBe('command')
+    expect(classifyMobileNativeChatSend('omp', '/smol')).toBe('unknown-token')
+  })
+
   it('treats slash tokens outside the agent catalog as unknown, never chat', () => {
     // `/model` is not a verified Claude command — it still dispatches to the
     // TUI, so it must not get a chat bubble, but it can't claim a command ran.
