@@ -63,6 +63,10 @@ export type SleepingAgentSessionRecord = {
    *  so only the pane's own cold-restore path may consume them — activation
    *  launching a tab too would duplicate a warm-reattached session (#5232). */
   origin?: 'worktree-sleep' | 'quit' | 'live'
+  /** Limits who may consume the resume identity. Pi's idle `session_start`
+   *  carries provider metadata before a real turn, so worktree activation must
+   *  not turn that placeholder into a new empty tab. */
+  resumeScope?: 'worktree' | 'pane'
   /** Set on a finished pane captured by an explicit workspace sleep. Its
    *  `--resume` is issued by the pane's own cold restore when its tab is
    *  opened, so a mobile wake must not background-mount every such tab and
