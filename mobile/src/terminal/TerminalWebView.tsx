@@ -363,12 +363,17 @@ export const TerminalWebView = forwardRef<TerminalWebViewHandle, Props>(function
     [armWebReadyWatchdog, postMessage, sendToWebView, terminalTheme, textScale, writeCoalescer]
   )
 
+  // Why: the frame must follow the resolved terminal background, not the app
+  // palette, or a device-picked light theme renders inside a dark halo.
+  const frameBackground = terminalTheme?.theme?.background
+  const frameOverride = frameBackground ? { backgroundColor: frameBackground } : null
+
   return (
-    <View style={[TERMINAL_WEBVIEW_FRAME_STYLES.container, style]}>
+    <View style={[TERMINAL_WEBVIEW_FRAME_STYLES.container, frameOverride, style]}>
       <WebView
         ref={webViewRef}
         source={XTERM_WEBVIEW_SOURCE}
-        style={TERMINAL_WEBVIEW_FRAME_STYLES.webview}
+        style={[TERMINAL_WEBVIEW_FRAME_STYLES.webview, frameOverride]}
         originWhitelist={['*']}
         javaScriptEnabled
         scrollEnabled={false}
