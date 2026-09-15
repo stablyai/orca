@@ -19,7 +19,7 @@ const COMMANDS = [
 
 describe('serializeIdentityExclusion', () => {
   it('round-trips patterns through JSON so a relay can rebuild them', () => {
-    const wire = JSON.parse(JSON.stringify(BOB_EXCLUSION)) as SerializedIdentityExclusion
+    const wire: SerializedIdentityExclusion = JSON.parse(JSON.stringify(BOB_EXCLUSION))
     expect(identityProbeKeepsAgent(wire, { stdout: 'A version manager for Neovim' })).toBe(false)
     expect(identityProbeKeepsAgent(wire, { stdout: 'Bob in your terminal' })).toBe(true)
     expect(identityProbeKeepsAgent(wire, { stdout: 'usage: bob <target>' })).toBe(false)
