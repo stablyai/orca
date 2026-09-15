@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as ReactModule from 'react'
 import type { Repo } from '../../../../shared/repo-types'
+import type { AddProjectTarget } from '@/lib/added-project-group-assignment'
 
 const mocks = vi.hoisted(() => ({
   stateValues: [] as unknown[],
@@ -10,6 +11,7 @@ const mocks = vi.hoisted(() => ({
     repos: [] as Repo[],
     projects: [],
     projectHostSetups: [],
+    addProjectTarget: null as AddProjectTarget | null,
     clearOrcaHookTrustForRepo: vi.fn(),
     openModal: vi.fn(),
     cancelNestedRepoScan: vi.fn()
@@ -96,6 +98,7 @@ describe('useRemoteRepo default-checkout handoff', () => {
     mocks.storeState.repos = []
     mocks.storeState.projects = []
     mocks.storeState.projectHostSetups = []
+    mocks.storeState.addProjectTarget = null
     mocks.listTargets.mockResolvedValue([
       { id: 'ssh-1', label: 'Builder 1' },
       { id: 'ssh-2', label: 'Builder 2' }
@@ -225,5 +228,24 @@ describe('useRemoteRepo default-checkout handoff', () => {
     expect(mocks.storeState.cancelNestedRepoScan).toHaveBeenCalledWith('scan-ssh', {
       runtimeEnvironmentId: null
     })
+  })
+
+  // Why: closing add-repo drops the Add Project target, so the confirm step re-declares it.
+  it('carries the Add Project target into the non-git folder confirmation', async () => {
+    const addProjectTarget: AddProjectTarget = { groupId: 'group-1', hostId: 'ssh:ssh-1' }
+    mocks.storeState.addProjectTarget = addProjectTarget
+    mocks.addRemote.mockRejectedValue(new Error('Not a valid git repository: /srv/repo'))
+    const closeModal = vi.fn()
+    const { useRemoteRepo } = await import('./AddRepoSteps')
+
+    const result = useRemoteRepo(mocks.fetchWorktrees, vi.fn(), closeModal, mocks.onGitRepoReady)
+    await result.handleAddRemoteRepo()
+
+    expect(closeModal).toHaveBeenCalledTimes(1)
+    expect(mocks.storeState.openModal).toHaveBeenCalledWith(
+      'confirm-non-git-folder',
+      expect.objectContaining({ folderPath: '/srv/repo', connectionId: 'ssh-1', addProjectTarget })
+    )
+    expect(mocks.onGitRepoReady).not.toHaveBeenCalled()
   })
 })

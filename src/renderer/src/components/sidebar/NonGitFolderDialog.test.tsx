@@ -3,6 +3,8 @@ import type * as ReactModule from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
+import type { ProjectGroup } from '../../../../shared/project-group-types'
+import type { AddProjectTarget } from '@/lib/added-project-group-assignment'
 
 type ButtonCapture = {
   label: string
@@ -17,8 +19,15 @@ const mocks = vi.hoisted(() => ({
       folderPath: '/srv/non-git',
       runtimeEnvironmentId: 'env-1'
     } as Record<string, unknown>,
-    closeModal: vi.fn(),
+    // Why: mirrors the real slice — closing drops the target, which is exactly what confirm races.
+    closeModal: vi.fn(() => {
+      mocks.state.addProjectTarget = null
+    }),
     addNonGitFolder: vi.fn(),
+    addProjectTarget: null as AddProjectTarget | null,
+    clearAddProjectTarget: vi.fn(),
+    moveProjectToGroup: vi.fn(),
+    projectGroups: [] as ProjectGroup[],
     runtimeEnvironments: [{ id: 'env-1', name: 'Remote Mac' }],
     repos: [] as Repo[],
     projects: [],
@@ -126,6 +135,9 @@ describe('NonGitFolderDialog', () => {
     mocks.state.repos = []
     mocks.state.projects = []
     mocks.state.projectHostSetups = []
+    mocks.state.addProjectTarget = null
+    mocks.state.projectGroups = []
+    mocks.state.moveProjectToGroup.mockResolvedValue(true)
     mocks.state.worktreesByRepo = {}
     mocks.state.fetchWorktrees.mockResolvedValue(true)
     mocks.onboardingGet.mockResolvedValue(null)
@@ -252,6 +264,65 @@ describe('NonGitFolderDialog', () => {
     expect(mocks.activateAndRevealWorktree).not.toHaveBeenCalledWith(
       localWorktree.id,
       expect.anything()
+    )
+  })
+
+  // Why: confirm closes the dialog at once, which drops the store target before the add can read
+  // it — so the target has to ride along with the add itself.
+  it('hands the Add Project target to the local folder add before closing', () => {
+    const addProjectTarget: AddProjectTarget = { groupId: 'group-1', hostId: 'local' }
+    mocks.state.modalData = { folderPath: '/srv/non-git', addProjectTarget }
+    mocks.state.addProjectTarget = addProjectTarget
+    renderToStaticMarkup(<NonGitFolderDialog />)
+
+    const button = mocks.buttons.find((entry) => entry.label.includes('Open as Folder'))
+    button?.onClick?.()
+
+    expect(mocks.state.addNonGitFolder).toHaveBeenCalledWith(
+      '/srv/non-git',
+      expect.objectContaining({ addProjectTarget })
+    )
+    expect(mocks.state.closeModal).toHaveBeenCalled()
+  })
+
+  it('groups an SSH folder even though confirm closes the dialog first', async () => {
+    const addProjectTarget: AddProjectTarget = { groupId: 'group-1', hostId: 'ssh:ssh-1' }
+    mocks.state.modalData = { folderPath: '/srv/non-git', connectionId: 'ssh-1', addProjectTarget }
+    mocks.state.addProjectTarget = addProjectTarget
+    mocks.state.projectGroups = [
+      {
+        id: 'group-1',
+        name: 'OSS',
+        parentPath: null,
+        connectionId: 'ssh-1',
+        parentGroupId: null,
+        createdFrom: 'manual',
+        tabOrder: 0,
+        isCollapsed: false,
+        color: null,
+        createdAt: 1,
+        updatedAt: 1
+      }
+    ]
+    mocks.addRemote.mockResolvedValue({
+      repo: {
+        id: 'ssh-repo',
+        path: '/srv/non-git',
+        displayName: 'non-git',
+        badgeColor: '#111',
+        addedAt: 1,
+        kind: 'folder',
+        connectionId: 'ssh-1'
+      } satisfies Repo
+    })
+    renderToStaticMarkup(<NonGitFolderDialog />)
+
+    const button = mocks.buttons.find((entry) => entry.label.includes('Open as Folder'))
+    button?.onClick?.()
+
+    expect(mocks.state.closeModal).toHaveBeenCalled()
+    await vi.waitFor(() =>
+      expect(mocks.state.moveProjectToGroup).toHaveBeenCalledWith('ssh-repo', 'group-1')
     )
   })
 })

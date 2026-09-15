@@ -25,6 +25,7 @@ import type {
   FolderWorkspacePathStatusRequest
 } from '../../../../shared/folder-workspace-path-status'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
+import type { AddProjectTarget } from '../../lib/added-project-group-assignment'
 
 export const ERROR_TOAST_DURATION = 60_000
 
@@ -134,6 +135,8 @@ export type AddRepoPathOptions = {
   runtimeEnvironmentId?: string | null
   /** Overrides the host's basename naming for the new project. */
   displayName?: string
+  /** Group to place the project in; wins over the UI slice's in-flight target. */
+  addProjectTarget?: AddProjectTarget | null
 }
 
 export type RuntimeCatalogFetchOptions = { runtimeEnvironmentId?: string | null }
