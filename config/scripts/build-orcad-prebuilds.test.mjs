@@ -1,4 +1,5 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { spawnSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -131,5 +132,88 @@ describe('readManifest', () => {
     const dir = mkdtempSync(join(tmpdir(), 'orcad-prebuild-manifest-'))
     dirs.push(dir)
     expect(readManifest(dir)).toBeNull()
+  })
+})
+
+// Run the actual entry point so the libc decision also guards manifest publication.
+describe('prebuild floor gate', () => {
+  const runBuild = (header, { slot, reject = false } = {}) => {
+    const root = mkdtempSync(join(tmpdir(), 'orcad-prebuild-gate-'))
+    dirs.push(root)
+    const scripts = join(root, 'config', 'scripts')
+    const moduleDir = join(root, 'node_modules', 'node-pty')
+    mkdirSync(scripts, { recursive: true })
+    mkdirSync(join(moduleDir, 'build', 'Release'), { recursive: true })
+    mkdirSync(join(moduleDir, 'src', 'unix'), { recursive: true })
+    copyFileSync(
+      new URL('./build-orcad-prebuilds.mjs', import.meta.url),
+      join(scripts, 'build-orcad-prebuilds.mjs')
+    )
+    writeFileSync(join(moduleDir, 'package.json'), JSON.stringify({ version: '1.1.0' }))
+    writeFileSync(join(moduleDir, 'binding.gyp'), PATCHED_BINDING_GYP)
+    writeFileSync(join(moduleDir, 'src', 'unix', 'pty.cc'), PATCHED_PTY_CC)
+    writeFileSync(join(moduleDir, 'build', 'Release', 'pty.node'), 'fixture')
+    writeFileSync(
+      join(scripts, 'verify-linux-glibc-floor.cjs'),
+      `exports.verifyLinuxGlibcFloor = () => {
+        console.log('floor gate called');
+        if (${reject}) throw new Error('floor rejected fixture');
+      };`
+    )
+    const preload = join(root, 'platform.cjs')
+    writeFileSync(
+      preload,
+      `Object.defineProperty(process, 'platform', { value: 'linux' });
+       process.report.getReport = () => ({ header: ${JSON.stringify(header)} });`
+    )
+    const result = spawnSync(
+      process.execPath,
+      [
+        '--require',
+        preload,
+        join(scripts, 'build-orcad-prebuilds.mjs'),
+        ...(slot ? [`--slot=${slot}`] : [])
+      ],
+      { encoding: 'utf8', timeout: 10000, windowsHide: true }
+    )
+    return { ...result, manifest: join(root, 'out', 'orcad', 'prebuilds', 'manifest.json') }
+  }
+
+  it('publishes a musl slot without applying Ubuntu glibc requirements', () => {
+    const result = runBuild({}, { reject: true })
+    expect(result.status, result.stderr).toBe(0)
+    expect(result.stdout).not.toContain('floor gate called')
+    expect(existsSync(result.manifest)).toBe(true)
+  })
+
+  it('gates glibc artifacts before publishing the manifest', () => {
+    const result = runBuild({ glibcVersionRuntime: '2.43' }, { reject: true })
+    expect(result.status).not.toBe(0)
+    expect(result.stderr).toContain('floor rejected fixture')
+    expect(existsSync(result.manifest)).toBe(false)
+  })
+
+  it('does not let a forced musl label bypass the gate on glibc', () => {
+    const result = runBuild(
+      { glibcVersionRuntime: '2.43' },
+      { slot: 'linux-x64-musl', reject: true }
+    )
+    expect(result.status).not.toBe(0)
+    expect(result.stderr).toContain('floor rejected fixture')
+    expect(existsSync(result.manifest)).toBe(false)
+  })
+
+  it('publishes a glibc slot after its floor gate passes', () => {
+    const result = runBuild({ glibcVersionRuntime: '2.43' })
+    expect(result.status, result.stderr).toBe(0)
+    expect(result.stdout).toContain('floor gate called')
+    expect(existsSync(result.manifest)).toBe(true)
+  })
+
+  it('refuses to publish when the Linux libc report is unavailable', () => {
+    const result = runBuild(undefined, { slot: 'linux-x64-musl' })
+    expect(result.status).not.toBe(0)
+    expect(result.stderr).toContain('cannot determine the build host libc')
+    expect(existsSync(result.manifest)).toBe(false)
   })
 })

@@ -124,6 +124,14 @@ than a first-connect error. CI runs it once per slot inside the matching contain
 (`--slot=` forces the label), merges the trees, and `--require-slots` fails a release with
 a hole in the matrix.
 
+The prebuild script applies the Ubuntu 20.04 static floor gate only on glibc
+build hosts. Musl has no glibc symbol versions or `libutil.so.1` provider, so
+applying that gate would reject a valid musl addon. The decision uses the Node
+runtime report, independently of the forced `--slot` label; an unavailable
+Linux report stops the build. The desktop packaging gate is unchanged. Validate
+musl prebuilds by loading the emitted addon and spawning a shell in the matching
+musl container; skipping the glibc floor does not establish runtime compatibility.
+
 ## Adding or upgrading a native dependency
 
 - Prefer packages that ship prebuilt binaries compiled against an old toolchain
