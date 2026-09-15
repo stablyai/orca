@@ -61,7 +61,7 @@ it('creates cold and prepared worktrees with real Git while status capacity is o
     })
   )
   expect(events.length).toBeGreaterThan(0)
-  expect(events.every((event) => event.tier === 'background')).toBe(true)
+  expect(events.every((event) => event.tier === 'status')).toBe(true)
   const [prepared] = listPreparations()
   expect(prepared).toBeDefined()
   takePreparation(prepared)

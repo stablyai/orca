@@ -2307,9 +2307,15 @@ export function createLocalWorktree(
   mainWindow: BrowserWindow,
   runtime?: OrcaRuntimeService
 ): Promise<CreateWorktreeResult> {
-  return worktreeCreateGit.run(() =>
-    performLocalWorktreeCreate(args, repo, store, mainWindow, runtime)
-  )
+  // Why a holder fired in `finally`: consuming a prepared checkout leaves the pool one short, so a
+  // create that fails after that point — include copy, push target, terminal startup — must still
+  // arm the replacement. Fires exactly once, after startup on the success path.
+  const rearm: { fire: () => void } = { fire: () => {} }
+  return worktreeCreateGit
+    .run(() => performLocalWorktreeCreate(args, repo, store, mainWindow, rearm, runtime))
+    .finally(() => {
+      rearm.fire()
+    })
 }
 
 async function performLocalWorktreeCreate(
@@ -2317,6 +2323,7 @@ async function performLocalWorktreeCreate(
   repo: Repo,
   store: Store,
   mainWindow: BrowserWindow,
+  rearm: { fire: () => void },
   runtime?: OrcaRuntimeService
 ): Promise<CreateWorktreeResult> {
   const timing = createWorktreeCreateTimingRecorder()
@@ -2717,9 +2724,6 @@ async function performLocalWorktreeCreate(
       : remoteTrackingBaseOption
   )
   let addResult: AddWorktreeResult
-  // Why deferred: re-arming the prepared-checkout pool is a full `reset --hard`; started here it
-  // would hold a general admission slot for the rest of this create's own git.
-  let rearmPreparation: () => void = () => {}
   try {
     addResult =
       (await timing.time('git_worktree_add', async () => {
@@ -2739,7 +2743,9 @@ async function performLocalWorktreeCreate(
               : { status: 'miss', reason: prepared.reason }
           )
           if (prepared.status === 'hit') {
-            rearmPreparation = prepared.rearm
+            // Why deferred: re-arming is a full `reset --hard`; started here it would hold a
+            // general admission slot for the rest of this create's own git.
+            rearm.fire = prepared.rearm
             return prepared.result
           }
         } else {
@@ -3033,7 +3039,6 @@ async function performLocalWorktreeCreate(
   )
 
   notifyWorktreesChanged(mainWindow, repo.id)
-  rearmPreparation()
   return {
     worktree: {
       ...worktree,

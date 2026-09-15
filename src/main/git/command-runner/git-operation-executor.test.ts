@@ -11,14 +11,14 @@ import { worktreeCreateGit, worktreePreparationGit } from '../worktree-create-gi
 afterEach(() => _resetGitAdmissionForTests())
 
 describe('Git operation execution policy', () => {
-  it('isolates concurrent callers and restores the create policy after background work', async () => {
+  it('isolates concurrent callers and restores the create policy after nested work', async () => {
     const entered = Promise.withResolvers<void>()
     const finish = Promise.withResolvers<void>()
     const create = worktreeCreateGit.run(async () => {
       expect(resolveGitAdmissionTier()).toBe('interactive')
       await worktreePreparationGit.run(async () => {
         await Promise.resolve()
-        expect(resolveGitAdmissionTier()).toBe('background')
+        expect(resolveGitAdmissionTier()).toBe('status')
       })
       entered.resolve()
       await finish.promise
@@ -49,10 +49,10 @@ describe('Git operation execution policy', () => {
     }
   )
 
-  it('admits nested commands without priority options while background work stays queued', async () => {
+  it('admits nested commands without priority options while preparation work stays queued', async () => {
     _resetGitAdmissionForTests(new GitAdmissionScheduler({ generalCap: 1, generalHeadroom: 1 }))
     const blocker = await acquireGitAdmission({ args: ['status'], cwd: '/repo' })
-    const background = worktreePreparationGit.run(() =>
+    const preparation = worktreePreparationGit.run(() =>
       acquireGitAdmission({ args: ['status'], cwd: '/repo' })
     )
     try {
@@ -66,7 +66,7 @@ describe('Git operation execution policy', () => {
       })
     } finally {
       blocker.release()
-      const grant = await background
+      const grant = await preparation
       grant.release()
     }
     expect(_gitAdmissionSnapshotForTests().queued).toBe(0)

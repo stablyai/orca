@@ -16,6 +16,21 @@ export class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWithGetWork
   async createManagedWorktree(
     args: RuntimeManagedWorktreeCreateArgs
   ): Promise<CreateWorktreeResult> {
+    // Why a holder fired in `finally`: consuming a prepared checkout empties a pool slot, so a
+    // create that fails after that point — setup hook, terminal startup — must still arm the
+    // replacement. On success it fires last, once the startup terminals are up.
+    const rearm: { fire: () => void } = { fire: () => {} }
+    try {
+      return await this.performManagedWorktreeCreate(args, rearm)
+    } finally {
+      rearm.fire()
+    }
+  }
+
+  private async performManagedWorktreeCreate(
+    args: RuntimeManagedWorktreeCreateArgs,
+    rearm: { fire: () => void }
+  ): Promise<CreateWorktreeResult> {
     if (!this.store) {
       throw new Error('runtime_unavailable')
     }
@@ -167,6 +182,7 @@ export class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWithGetWork
       onWorktreeMetadataPersisted: (persistedWorktree) =>
         this.recordCreatedWorktreeLineage(persistedWorktree, lineageResolution)
     })
+    rearm.fire = rearmPreparation
     const settings = createSettings
     const { lineage, workspaceLineage, warnings: lineageWarnings } = metadataResult
 
@@ -247,9 +263,6 @@ export class OrcaRuntimeWithCreateManagedWorktree extends OrcaRuntimeWithGetWork
       path: worktree.path,
       branch: worktree.branch
     })
-    // Why last: re-arming the prepared-checkout pool is a full `reset --hard` that would
-    // otherwise hold a git admission slot while this create still has terminals to launch.
-    rearmPreparation()
     return {
       worktree: {
         ...worktree,

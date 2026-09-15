@@ -115,6 +115,8 @@ async function performRuntimeLocalWorktreeCreate<T>(args: RuntimeLocalWorktreeCr
     refreshRemoteTrackingBase: args.refreshRemoteTrackingBase,
     fetchRemote: args.fetchRemote
   })
+  // Why fire on the way out: a failed materialization still consumed the pool slot, so the
+  // replacement has to be armed here rather than waiting for the next prefetch.
   const materialized = await materializeRuntimeLocalWorktree({
     request,
     repo,
@@ -134,6 +136,9 @@ async function performRuntimeLocalWorktreeCreate<T>(args: RuntimeLocalWorktreeCr
     effectiveCreatedWithAgent: args.createdWithAgent,
     localWorktreeGitOptions: worktreeGitOptions,
     onMetadataPersisted: args.onWorktreeMetadataPersisted
+  }).catch((error: unknown) => {
+    git.rearmPreparation()
+    throw error
   })
   return {
     ...materialized,

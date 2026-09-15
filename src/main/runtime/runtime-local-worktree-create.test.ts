@@ -166,10 +166,11 @@ describe('runtime prepared-worktree replenishment', () => {
     expect(mocks.rearm).toHaveBeenCalledOnce()
   })
 
-  it('leaves replenishment to a later prefetch when materialization fails', async () => {
+  it('arms the replacement itself when materialization fails', async () => {
     mocks.copyPaths.mockRejectedValue(new Error('copy failed'))
     await expect(createWorktree()).rejects.toThrow('copy failed')
-    expect(mocks.rearm).not.toHaveBeenCalled()
+    // The slot was consumed either way, so the pool must not be left one short.
+    expect(mocks.rearm).toHaveBeenCalledOnce()
   })
 })
 

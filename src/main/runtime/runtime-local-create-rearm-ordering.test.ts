@@ -117,7 +117,7 @@ describe('runtime local create prepared-pool re-arm ordering', () => {
     expect(calls.order).toEqual(['terminals', 'rearm'])
   })
 
-  it('leaves the pool unarmed when terminal launch fails', async () => {
+  it('still arms the pool when terminal launch fails', async () => {
     startTerminalsMock.mockRejectedValue(new Error('spawn failed'))
     const runtime = makeRuntime()
 
@@ -125,6 +125,7 @@ describe('runtime local create prepared-pool re-arm ordering', () => {
       runtime.createManagedWorktree({ repoSelector: 'repo-1', name: 'app' })
     ).rejects.toThrow('spawn failed')
 
-    expect(calls.order).toEqual([])
+    // The prepared checkout was consumed before the failure, so the replacement is still owed.
+    expect(calls.order).toEqual(['rearm'])
   })
 })

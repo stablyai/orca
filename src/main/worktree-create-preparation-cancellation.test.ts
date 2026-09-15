@@ -187,36 +187,32 @@ describe('worktree create preparation cancellation', () => {
     expect(mocks.discard).not.toHaveBeenCalled()
   })
 
-  it('leaves an in-flight checkout for the next create instead of waiting on it', async () => {
+  it('keeps a claimed in-flight checkout alive when new preparations fill the pool', async () => {
+    let signal: AbortSignal | undefined
     let finishCheckout!: () => void
-    mocks.prepareCheckout.mockImplementationOnce(() => {
+    mocks.prepareCheckout.mockImplementationOnce((_repo, _path, _base, _lock, options) => {
+      signal = options.signal
       return new Promise<void>((resolve) => {
         finishCheckout = resolve
       })
     })
     const preparation = prepareWorktreeCreateForRepo(store, repo, 'origin/main')
     await flushBackgroundWork()
-
-    const consume = (worktreePath: string): ReturnType<typeof consumePreparedWorktreeCreate> =>
-      consumePreparedWorktreeCreate({
-        repoPath: repo.path,
-        workspaceRoot: '/workspace',
-        worktreePath,
-        branch: 'claimed',
-        baseBranch: 'origin/main'
-      })
-
-    // The checkout is queued at `background`; awaiting it would put this create behind every
-    // status poller, so the create misses and does its own add at `interactive` instead.
-    expect(await consume('/workspace/first')).toMatchObject({
-      status: 'miss',
-      reason: 'not_ready'
+    const create = consumePreparedWorktreeCreate({
+      repoPath: repo.path,
+      workspaceRoot: '/workspace',
+      worktreePath: '/workspace/claimed',
+      branch: 'claimed',
+      baseBranch: 'origin/main'
     })
-
+    await flushBackgroundWork()
+    for (const base of ['origin/one', 'origin/two', 'origin/three', 'origin/four']) {
+      await prepareWorktreeCreateForRepo(store, repo, base)
+    }
+    expect(signal?.aborted).toBe(false)
     finishCheckout()
     await preparation
-    // Still armed, and claimable the moment the checkout lands.
-    expect(await consume('/workspace/second')).toMatchObject({ status: 'hit' })
+    expect(await create).toMatchObject({ status: 'hit' })
   })
 
   it('cancels an expired in-flight checkout', async () => {

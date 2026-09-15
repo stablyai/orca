@@ -41,7 +41,6 @@ export type PreparationEntry = {
   expiration: NodeJS.Timeout
   controller: AbortController
   checkoutStarted: boolean
-  checkoutFinished: boolean
 }
 
 export type StartPreparationArgs = {
@@ -198,7 +197,6 @@ function startBackgroundPreparation({
     expiration,
     controller,
     checkoutStarted: false,
-    checkoutFinished: false,
     ready: (async () => {
       await startStalePreparationCleanup(
         preparationHostKey(repoPathKey, wslDistro),
@@ -214,7 +212,6 @@ function startBackgroundPreparation({
         ...options,
         signal
       })
-      entry.checkoutFinished = true
     })()
   } satisfies PreparationEntry)
   preparations.set(key, entry)

@@ -40,10 +40,6 @@ export type PreparedCheckoutMissReason =
    *  evicted it for another repo. Distinguished from `none_armed` because it is the signal that
    *  the cap is thrashing for a multi-project user. */
   | 'repo_mismatch'
-  /** A preparation for this repo is armed but its checkout is still running. The create does its
-   *  own add instead of waiting: the preparation's git is queued at `background`, so waiting would
-   *  park an interactive create behind every status poller until aging promotes it. */
-  | 'not_ready'
   | 'base_mismatch'
   | 'retarget_too_divergent'
   /** The drift check returned no answer. Distinct from `retarget_too_divergent` because that one

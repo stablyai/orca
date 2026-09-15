@@ -187,38 +187,45 @@ export async function createRuntimeLocalGitWorktree(args: {
     }
     throw error
   }
-  if (shouldRetireGeneratedName) {
-    await retireGeneratedWorktreeName(
-      args.store as Parameters<typeof retireGeneratedWorktreeName>[0],
-      args.repo,
-      args.settings,
-      args.effectiveSanitizedName!
+  // Why fire on the way out: the consume already emptied its pool slot, so a failure between here
+  // and the caller would strand it. The success path hands the thunk over unfired instead.
+  try {
+    if (shouldRetireGeneratedName) {
+      await retireGeneratedWorktreeName(
+        args.store as Parameters<typeof retireGeneratedWorktreeName>[0],
+        args.repo,
+        args.settings,
+        args.effectiveSanitizedName!
+      )
+    }
+    // Why: `--set-upstream-to` requires the remote to already exist -- safe for a
+    // same-repo target (its remote, e.g. `origin`, always exists) but not for a
+    // deferred fork remote, which is materialized lazily at first push/pull/fetch.
+    const configuredPushTarget =
+      preparedPushTarget && !preparedPushTarget.remoteUrl
+        ? await configureCreatedWorktreePushTarget(
+            args.worktreePath,
+            args.branchName,
+            preparedPushTarget,
+            args.localWorktreeGitOptions
+          )
+        : preparedPushTarget
+    const { created } = await resolveCreatedWorktree(
+      args.repo.path,
+      args.worktreePath,
+      args.branchName,
+      args.localWorktreeGitOptions
     )
-  }
-  // Why: `--set-upstream-to` requires the remote to already exist -- safe for a
-  // same-repo target (its remote, e.g. `origin`, always exists) but not for a
-  // deferred fork remote, which is materialized lazily at first push/pull/fetch.
-  const configuredPushTarget =
-    preparedPushTarget && !preparedPushTarget.remoteUrl
-      ? await configureCreatedWorktreePushTarget(
-          args.worktreePath,
-          args.branchName,
-          preparedPushTarget,
-          args.localWorktreeGitOptions
-        )
-      : preparedPushTarget
-  const { created } = await resolveCreatedWorktree(
-    args.repo.path,
-    args.worktreePath,
-    args.branchName,
-    args.localWorktreeGitOptions
-  )
-  return {
-    remoteTrackingBase,
-    sparseDirectories,
-    ...(configuredPushTarget ? { configuredPushTarget } : {}),
-    created,
-    addResult,
-    rearmPreparation
+    return {
+      remoteTrackingBase,
+      sparseDirectories,
+      ...(configuredPushTarget ? { configuredPushTarget } : {}),
+      created,
+      addResult,
+      rearmPreparation
+    }
+  } catch (error) {
+    rearmPreparation()
+    throw error
   }
 }

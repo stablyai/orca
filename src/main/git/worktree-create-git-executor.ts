@@ -2,4 +2,4 @@ import { createGitOperationExecutor } from './command-runner/git-operation-execu
 
 export const worktreeCreateGit = createGitOperationExecutor('interactive')
 
-export const worktreePreparationGit = createGitOperationExecutor('background')
+export const worktreePreparationGit = createGitOperationExecutor('status')

@@ -14,7 +14,6 @@ function candidate(overrides: Partial<PreparationCandidate> = {}): PreparationCa
     baseBranch: 'origin/main',
     canonicalBase: 'refs/remotes/origin/main',
     createdAt: 1_000,
-    checkoutFinished: true,
     ...overrides
   }
 }
@@ -52,35 +51,6 @@ describe('selectPreparationForCreate', () => {
     expect(
       selectPreparationForCreate([], request({ baseBranch: 'main', canonicalBase: null }))
     ).toEqual({ kind: 'miss', reason: 'none_armed' })
-  })
-
-  it('leaves a preparation whose checkout is still running for the next create', () => {
-    const running = candidate({ checkoutFinished: false })
-
-    // Claiming it would make an interactive create await a checkout queued at `background`.
-    expect(selectPreparationForCreate([running], request())).toEqual({
-      kind: 'miss',
-      reason: 'not_ready'
-    })
-    // The same entry is claimable the moment its checkout lands.
-    expect(selectPreparationForCreate([candidate()], request())).toEqual({
-      kind: 'exact',
-      candidate: candidate(),
-      canonicalBase: 'refs/remotes/origin/main'
-    })
-    // Another repo's in-flight preparation is a cap eviction from this create's side, not `not_ready`.
-    expect(selectPreparationForCreate([running], request({ repoPathKey: '/other' }))).toEqual({
-      kind: 'miss',
-      reason: 'repo_mismatch'
-    })
-    // A finished sibling is still claimable while the other is in flight.
-    expect(
-      selectPreparationForCreate([running, candidate({ createdAt: 2_000 })], request())
-    ).toEqual({
-      kind: 'exact',
-      candidate: candidate({ createdAt: 2_000 }),
-      canonicalBase: 'refs/remotes/origin/main'
-    })
   })
 
   it('matches when the two sides spell the same ref differently', () => {

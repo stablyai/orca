@@ -34,8 +34,8 @@ export async function startStalePreparationCleanup(
   }
   void retryPendingPreparationDiscards(cleanupKey)
   // Why 'background': reclaiming another process's leftovers is never what a user is waiting on, and
-  // removing a large tree holds a general admission slot for seconds. The scan is background too —
-  // the sole caller is the preparation itself, which already runs in the background scope.
+  // removing a large tree holds a general admission slot for seconds. The scan keeps the caller's
+  // tier — a create can await a preparation, and so transitively this scan.
   const reclaimOptions: AddWorktreeOptions = { ...options, admissionTier: 'background' }
   const scan = listWorktreeGraph(repoPath, {
     ...options,
