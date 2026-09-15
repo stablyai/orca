@@ -264,3 +264,19 @@ test('cleanup accepts already deleted snapshot tombstones without deleting them 
   await t.resources.destroy()
   assert.equal(t.journal.value.phase, 'deleted')
 })
+
+for (const operation of ['suspend', 'resume']) {
+  test(`${operation} refuses a sandbox that disappears during the transition`, async () => {
+    const t = setup()
+    await t.resources.create(config)
+    t.box.status = operation === 'resume' ? 'stopped' : 'running'
+    t.box[operation === 'suspend' ? 'stop' : 'resume'] = () => t.box.delete()
+    const expected =
+      operation === 'suspend'
+        ? /Stop did not produce recovery state/
+        : /Environment missing; recovery cannot create a replacement/
+    await assert.rejects(t.resources[operation](), expected)
+    assert.equal(t.journal.value.phase, 'created')
+    assert.equal(t.calls.filter((call) => call === 'create').length, 1)
+  })
+}

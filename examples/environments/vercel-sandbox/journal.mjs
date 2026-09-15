@@ -50,9 +50,12 @@ export function openJournal(directory, id, initial) {
   const path = join(directory, `${id}.json`)
   const lock = `${path}.lock`
   const fd = openSync(lock, 'wx', 0o600)
-  writeFileSync(fd, JSON.stringify({ pid: process.pid, at: new Date().toISOString() }))
-  closeSync(fd)
   try {
+    try {
+      writeFileSync(fd, JSON.stringify({ pid: process.pid, at: new Date().toISOString() }))
+    } finally {
+      closeSync(fd)
+    }
     let bytes = readBytes(path)
     let value = bytes ? JSON.parse(bytes) : initial
     if (!value) {

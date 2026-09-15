@@ -106,7 +106,7 @@ export class Resources {
       throw new Error(`Environment is ${box.status}; retry after transition`)
     }
     const stopped = await this.get()
-    if (stopped.status !== 'stopped' || !stopped.currentSnapshotId) {
+    if (!stopped || stopped.status !== 'stopped' || !stopped.currentSnapshotId) {
       throw new Error('Stop did not produce recovery state')
     }
     const snapshot = await this.api.Snapshot.get({
@@ -141,6 +141,9 @@ export class Resources {
       }
       await box.resume()
       box = await this.get()
+      if (!box) {
+        throw new Error('Environment missing; recovery cannot create a replacement')
+      }
     }
     if (box.status !== 'running') {
       throw new Error(`Environment is ${box.status}; retry after transition`)
