@@ -13,6 +13,7 @@ import type { AiVaultHostScopeOption } from './ai-vault-host-scope'
 import type { AiVaultSessionLimit } from './ai-vault-session-limit'
 
 type AiVaultPanelHeaderProps = {
+  searching?: boolean
   query: string
   loading: boolean
   shownCount: number
@@ -44,6 +45,7 @@ type AiVaultPanelHeaderProps = {
 
 export function AiVaultPanelHeader({
   query,
+  searching = false,
   loading,
   shownCount,
   sessionCount,
@@ -88,7 +90,9 @@ export function AiVaultPanelHeader({
             </span>
           </div>
           <div className="truncate text-[11px] text-muted-foreground">
-            {hasScanResult ? (
+            {searching ? (
+              translate('sessionSearch.panel.indexedHistory', 'Indexed history · best matches')
+            ) : hasScanResult ? (
               <>
                 <span className="@max-[300px]/ai-vault:hidden">
                   {translate(
@@ -120,6 +124,7 @@ export function AiVaultPanelHeader({
             onExecutionHostScopeChange={onExecutionHostScopeChange}
           />
           <VaultViewMenu
+            searching={searching}
             agents={agents}
             sort={sort}
             group={group}
@@ -175,6 +180,16 @@ export function AiVaultPanelHeader({
             'Search sessions'
           )}
           className="min-w-0 flex-1 bg-transparent py-1.5 text-xs text-foreground outline-none placeholder:text-muted-foreground/50"
+          aria-label={translate(
+            'auto.components.right.sidebar.AiVaultPanel.searchSessions',
+            'Search sessions'
+          )}
+          onKeyDown={(event) => {
+            if (event.key === 'Escape') {
+              event.stopPropagation()
+              onQueryChange('')
+            }
+          }}
           spellCheck={false}
         />
         {loading ? <LoaderCircle className="size-3 animate-spin text-muted-foreground" /> : null}

@@ -6,6 +6,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import type { AiVaultSession } from '../../../../shared/ai-vault-types'
 import type { AiVaultSessionWorktreeInfo } from './ai-vault-session-worktree'
+import { searchHit } from '../../../../shared/ai-vault-search-test-fixture'
+import type { AiVaultSearchHit } from '../../../../shared/ai-vault-search-types'
 import type { AiVaultSubagentResumeActions } from './AiVaultSessionSubagents'
 import { VaultSessionRow } from './AiVaultSessionRow'
 
@@ -59,6 +61,7 @@ afterEach(() => {
 
 function renderRow(
   overrides: {
+    searchHit?: AiVaultSearchHit
     session?: AiVaultSession
     subagentResume?: AiVaultSubagentResumeActions
     detailsExpanded?: boolean
@@ -71,6 +74,7 @@ function renderRow(
     <TooltipProvider>
       <VaultSessionRow
         session={overrides.session ?? session}
+        searchHit={overrides.searchHit}
         subagentResume={overrides.subagentResume}
         liveState={null}
         resumeStartup={{ command: 'gemini --resume sess-1' }}
@@ -162,6 +166,11 @@ describe('VaultSessionRow agent metadata line', () => {
 
     expect(container.querySelectorAll(`[title="${worktreeInfo.label}"]`)).toHaveLength(1)
   })
+})
+
+it('keeps matching evidence visible in expanded search rows', () => {
+  const { container } = renderRow({ detailsExpanded: true, searchHit: searchHit() })
+  expect(container.querySelector('mark')?.textContent).toBe('needle')
 })
 
 it('threads child resume through expanded parent details without resuming the parent', async () => {

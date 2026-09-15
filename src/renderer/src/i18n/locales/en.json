@@ -13377,6 +13377,12 @@
             "90cabf6cfc": "Stack this PR above #{{value0}}",
             "ff81473a57": "Creates a GitHub Stack or extends the parent's existing stack.",
             "29732f2fb0": "new PR"
+          },
+          "AiVaultSearchEvidence": {
+            "sourceUnverifiable": "Transcript availability could not be verified",
+            "sourceMissing": "Transcript is no longer available",
+            "metadataMatch": "Match in session metadata",
+            "sourceActionsUnavailable": "The transcript source is unavailable."
           }
         }
       },
@@ -17912,6 +17918,26 @@
       "working": "working",
       "stopped": "stopped",
       "finished": "finished"
+    }
+  },
+  "sessionSearch": {
+    "panel": {
+      "rankedResults": "Best matches",
+      "noMatches": "No matching sessions in the indexed history. Try another query or scope.",
+      "loadMore": "Load more matches",
+      "indexedHistory": "Indexed history · best matches",
+      "chooseHost": "Choose one computer to search its sessions.",
+      "consent": "Enable full-text search? Orca builds an index on this computer from local agent transcripts, including full conversations and up to 3,072 characters per tool output. Content is not redacted. Authenticated paired clients can search it.",
+      "remoteDisabled": "Search is disabled on this computer. Enable transcript indexing on that computer to search its sessions.",
+      "notReady": "The search index is not ready yet. Try again shortly.",
+      "noService": "Search is unavailable on this computer. It may need an Orca update or a runtime with search support.",
+      "failed": "Could not search this computer. Check its connection and try again.",
+      "changed": "The index changed while searching. Search again for current results.",
+      "truncated": "Some results or matching text were limited. Narrow your search for more precise results.",
+      "enableFailed": "Could not enable search. Try again.",
+      "enable": "Enable",
+      "notNow": "Not now",
+      "retry": "Try again"
     }
   },
   "aiVault": {

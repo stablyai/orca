@@ -22,6 +22,7 @@ import {
 } from './ai-vault-virtual-rows'
 import type { AiVaultResumeInChatEligibility } from './ai-vault-session-resume-in-chat'
 import { AiVaultVirtualRow, type AiVaultListRow } from './AiVaultVirtualRow'
+import type { AiVaultSearchHit } from '../../../../shared/ai-vault-search-types'
 
 const VAULT_ROW_OVERSCAN = 8
 const VAULT_EXPANDED_SESSION_ROW_ESTIMATED_HEIGHT = 420
@@ -54,7 +55,8 @@ export function AiVaultSessionVirtualList({
   onOpenLog,
   onRevealLog,
   onOpenCwd,
-  onRequestDelete
+  onRequestDelete,
+  searchHits
 }: {
   groups: readonly AiVaultSessionGroup[]
   collapsedGroups: ReadonlySet<string>
@@ -84,6 +86,7 @@ export function AiVaultSessionVirtualList({
   onRevealLog: (session: AiVaultSession) => void
   onOpenCwd: (session: AiVaultSession) => void
   onRequestDelete: (session: AiVaultSession) => void
+  searchHits?: ReadonlyMap<string, AiVaultSearchHit>
 }): React.JSX.Element {
   const listScrollRef = useRef<HTMLDivElement>(null)
   const stickyRangeStartIndexRef = useRef(0)
@@ -203,6 +206,7 @@ export function AiVaultSessionVirtualList({
                 collapsedGroups={collapsedGroups}
                 expandedSessionIds={expandedSessionIds}
                 vaultScope={vaultScope}
+                searchHits={searchHits}
                 buildResumeStartup={buildResumeStartup}
                 getOriginalPaneTarget={getOriginalPaneTarget}
                 getSessionLiveState={getSessionLiveState}
