@@ -41,6 +41,7 @@ function filterState(overrides: Partial<FilterState> = {}): FilterState {
     hideDetachedHeadWorkspaces: false,
     hideWorkspacesFromOtherDevices: false,
     alwaysShowDefaultBranchWorkspace: true,
+    filterAgentIds: null,
     workspaceHostScope: 'all',
     ...overrides
   }
@@ -127,6 +128,10 @@ describe('sidebarHasActiveFilters', () => {
   it('returns true when only host visibility is narrowed', () => {
     expect(sidebarHasActiveFilters(filterState({ visibleWorkspaceHostIds: ['local'] }))).toBe(true)
   })
+
+  it('returns true when an agent filter is selected', () => {
+    expect(sidebarHasActiveFilters(filterState({ filterAgentIds: ['codex'] }))).toBe(true)
+  })
 })
 
 describe('isSleepingSweepExemptionNarrowingList', () => {
@@ -155,6 +160,7 @@ describe('computeClearFilterActions', () => {
       resetHideDetachedHeadWorkspaces: false,
       resetHideWorkspacesFromOtherDevices: false,
       resetAlwaysShowDefaultBranchWorkspace: false,
+      resetFilterAgentIds: false,
       resetVisibleWorkspaceHostIds: false
     })
   })
@@ -172,6 +178,7 @@ describe('computeClearFilterActions', () => {
       resetHideDetachedHeadWorkspaces: false,
       resetHideWorkspacesFromOtherDevices: false,
       resetAlwaysShowDefaultBranchWorkspace: false,
+      resetFilterAgentIds: false,
       resetVisibleWorkspaceHostIds: false
     })
   })
@@ -188,6 +195,7 @@ describe('computeClearFilterActions', () => {
       resetHideDetachedHeadWorkspaces: false,
       resetHideWorkspacesFromOtherDevices: false,
       resetAlwaysShowDefaultBranchWorkspace: false,
+      resetFilterAgentIds: false,
       resetVisibleWorkspaceHostIds: false
     })
   })
@@ -202,6 +210,7 @@ describe('computeClearFilterActions', () => {
       resetHideDetachedHeadWorkspaces: false,
       resetHideWorkspacesFromOtherDevices: false,
       resetAlwaysShowDefaultBranchWorkspace: false,
+      resetFilterAgentIds: false,
       resetVisibleWorkspaceHostIds: false
     })
   })
@@ -216,6 +225,7 @@ describe('computeClearFilterActions', () => {
       resetHideDetachedHeadWorkspaces: true,
       resetHideWorkspacesFromOtherDevices: false,
       resetAlwaysShowDefaultBranchWorkspace: false,
+      resetFilterAgentIds: false,
       resetVisibleWorkspaceHostIds: false
     })
   })
@@ -243,7 +253,23 @@ describe('computeClearFilterActions', () => {
       resetHideDetachedHeadWorkspaces: false,
       resetHideWorkspacesFromOtherDevices: false,
       resetAlwaysShowDefaultBranchWorkspace: false,
+      resetFilterAgentIds: false,
       resetVisibleWorkspaceHostIds: true
+    })
+  })
+
+  it('flags only the agent filter for reset when it is the sole filter', () => {
+    expect(computeClearFilterActions(filterState({ filterAgentIds: ['claude'] }))).toEqual({
+      resetShowSleepingWorkspaces: false,
+      resetFilterRepoIds: false,
+      resetHideDefaultBranchWorkspace: false,
+      resetHideAutomationGeneratedWorkspaces: false,
+      resetHideCliCreatedWorkspaces: false,
+      resetHideDetachedHeadWorkspaces: false,
+      resetHideWorkspacesFromOtherDevices: false,
+      resetAlwaysShowDefaultBranchWorkspace: false,
+      resetFilterAgentIds: true,
+      resetVisibleWorkspaceHostIds: false
     })
   })
 
@@ -259,6 +285,7 @@ describe('computeClearFilterActions', () => {
       resetHideDetachedHeadWorkspaces: false,
       resetHideWorkspacesFromOtherDevices: false,
       resetAlwaysShowDefaultBranchWorkspace: true,
+      resetFilterAgentIds: false,
       resetVisibleWorkspaceHostIds: false
     })
   })
@@ -271,6 +298,7 @@ describe('computeClearFilterActions', () => {
           filterRepoIds: ['repo1', 'repo2'],
           hideDefaultBranchWorkspace: true,
           hideAutomationGeneratedWorkspaces: true,
+          filterAgentIds: ['claude'],
           visibleWorkspaceHostIds: ['local']
         })
       )
@@ -283,6 +311,7 @@ describe('computeClearFilterActions', () => {
       resetHideDetachedHeadWorkspaces: false,
       resetHideWorkspacesFromOtherDevices: false,
       resetAlwaysShowDefaultBranchWorkspace: false,
+      resetFilterAgentIds: true,
       resetVisibleWorkspaceHostIds: true
     })
   })
