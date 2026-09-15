@@ -87,6 +87,21 @@ describe('orchestration kernel', () => {
     expect(kernel).not.toContain('## Worker Terminals')
   })
 
+  it('models the flag-free default launch in the canonical loop', () => {
+    const kernel = readKernel()
+
+    expect(kernel).toContain(
+      'ORCA orchestration worker-start --spec "<worker A task>" --worktree current --json'
+    )
+    expect(kernel).toContain(
+      'ORCA orchestration worker-start --spec "<worker B task>" --worktree current --json'
+    )
+    // Why: the always-loaded example is the most copied one; a flag here reads as the default.
+    for (const flag of ['--agent', '--model', '--effort']) {
+      expect(kernel).not.toContain(flag)
+    }
+  })
+
   it('classifies coordinator, dispatched worker, handoff, compatibility, and ordinary roles', () => {
     const kernel = readKernel()
 
@@ -288,13 +303,51 @@ describe('owned orchestration references', () => {
     const reference = readReference('coordinator-loop.md')
 
     expect(reference).toContain('task-list --ready --brief --json')
+    expect(reference).toContain(
+      'ORCA orchestration worker-start --task <task_id> --worktree current --json'
+    )
+    expect(squash(reference)).toContain(
+      "Unless the user or the task names one, omit `--agent`, `--model`, and `--effort`. Omitted fields inherit the user's configured Settings > Orchestration Worker defaults"
+    )
     expect(reference).toContain('`--effort` requires `--model`')
     expect(reference).toContain('neither option combines with `--terminal`')
     expect(reference).toContain('`launch.requested` with `launch.effective`')
+    expect(reference).toContain('reusing a terminal does not inject the configured worker defaults')
     expect(reference).toContain('worker-start --task <next_task_id> --terminal')
     expect(reference).toContain('A review-only `worker_done` authorizes synthesis')
     expect(squash(reference)).toContain(
       'post-review fixes and PR preparation remain with that owner'
+    )
+  })
+
+  it('bars coordinator-chosen agents, models, efforts, and diversity', () => {
+    const reference = squash(readReference('coordinator-loop.md'))
+
+    expect(reference).toContain(
+      'Quality, depth, thoroughness, or meticulousness language is not a request for a specific agent, model, or effort'
+    )
+    expect(reference).toContain(
+      "Your own quality judgment — results seem shallow, a deeper second pass or a retry seems useful, a stronger model seems preferable — never authorizes overriding the user's defaults, including for a deep second pass, retry, or verification."
+    )
+    expect(reference).toContain(
+      'stop and ask the user directly in your own turn, then wait for the answer; there is no CLI path for this'
+    )
+    expect(reference).toContain(
+      'Mix agents only when the user requests multiple agents or the task specifies them, never for coordinator-chosen diversity.'
+    )
+  })
+
+  it('routes agent_unconfigured back to the user instead of a coordinator pick', () => {
+    const reference = squash(readReference('coordinator-loop.md'))
+
+    expect(reference).toContain(
+      'If `worker-start` fails with `agent_unconfigured`, no default worker agent is configured and you have no basis to pick one: stop and ask the user which agent to launch'
+    )
+    expect(reference).toContain(
+      'Never resolve `agent_unconfigured` by choosing an agent yourself, and tell the user to set a default worker agent in Settings > Orchestration so later launches stay flag-free.'
+    )
+    expect(reference).toContain(
+      'This is missing-configuration recovery, not permission to override defaults.'
     )
   })
 
@@ -341,7 +394,11 @@ describe('owned orchestration references', () => {
   it('owns local, folder, worktree, SSH, WSL, remote, and mixed-version placement', () => {
     const reference = readReference('placement-and-remote.md')
 
-    expect(reference).toContain('--worktree current --agent codex')
+    expect(reference).toContain('--worktree current --json')
+    // Why: placement is the decision here; an --agent in these examples re-teaches the override.
+    for (const flag of ['--agent', '--model', '--effort']) {
+      expect(reference).not.toContain(flag)
+    }
     expect(squash(reference)).toContain(
       'A worktree selector needs the full `<repo-id>::<path>` value Orca returned, passed as `id:<newFullWorktreeId>`; a bare repo id is not a worktree id'
     )
@@ -400,7 +457,12 @@ describe('owned orchestration references', () => {
     expect(squash(reference)).toContain('| `outcome_unknown` | Inspect')
     expect(squash(reference)).toContain('| Remote contact lost | Preserve `unverifiable`')
     expect(reference).toContain('--retry-of <dispatch_id>')
-    expect(squash(reference)).toContain('Placement is never silently inherited')
+    expect(squash(reference)).toContain(
+      "Placement is never silently inherited, and a failed attempt is not a reason to promote the worker's agent, model, or effort; a replacement follows the same defaults rule as an ordinary launch"
+    )
+    expect(reference).toContain(
+      'ORCA orchestration worker-start --task <task_id> --retry-of <dispatch_id> --worktree <explicit_placement> --json'
+    )
     expect(reference).toContain('worker-abandon --dispatch')
     expect(reference).toContain('worker-retain --dispatch')
     expect(reference).toContain('worker-release --dispatch')
