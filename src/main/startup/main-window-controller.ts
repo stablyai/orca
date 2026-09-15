@@ -1,5 +1,6 @@
 import { app, type BrowserWindow } from 'electron'
 import { createMainWindow, loadMainWindow } from '../window/createMainWindow'
+import { WindowRegistry } from '../window/window-registry'
 import {
   recordCrashBreadcrumb,
   recordCoalescedCrashBreadcrumb
@@ -47,6 +48,9 @@ import { requireMainWindowServices } from './main-window-service-readiness'
 
 const TRAY_CREATE_FALLBACK_MS = 12_000
 const AGENT_STATE_CRASH_BREADCRUMB_MIN_INTERVAL_MS = 30_000
+
+// Singleton instance for managing window-to-worktree mappings
+const windowRegistry = new WindowRegistry()
 
 export function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}): BrowserWindow {
   logStartupMilestone('open-main-window-start')
@@ -212,6 +216,17 @@ export function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}
   logStartupMilestone('load-start')
   loadMainWindow(window)
   return window
+}
+
+export function openMainWindowForWorktree(
+  worktreeId: string,
+  workspaceKey: string,
+  store?: typeof state.store
+): number {
+  const window = createMainWindow(store ?? null, { initialWorktreeId: worktreeId })
+  const windowId = window.webContents.id
+  windowRegistry.register(windowId, worktreeId)
+  return windowId
 }
 
 export function configureWindowActions(): void {
