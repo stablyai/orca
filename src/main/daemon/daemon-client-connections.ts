@@ -35,6 +35,26 @@ type DaemonClientConnectionOptions = {
   onStreamDisconnected: (clientId: string) => void
 }
 
+/**
+ * The minimum a control frame must carry to be routable: an `id` the reply can be
+ * correlated against. Anything else is undispatchable, not merely unknown — an unknown
+ * method still gets an error reply, but only if we know where to send it.
+ *
+ * The narrowing asserts *routability, not method validity*, and stopping at `id` is
+ * deliberate: `type` belongs to `DaemonRequestRouter.route`, which ends its switch with
+ * `throw new Error('Unknown request type: …')` and so answers a bad method with a reply.
+ * Checking `type` here would demote that reply to a silent drop, which is the one outcome
+ * a client cannot debug.
+ */
+export function isDispatchableRequest(message: unknown): message is DaemonRequest {
+  return (
+    typeof message === 'object' &&
+    message !== null &&
+    typeof (message as { id?: unknown }).id === 'string' &&
+    (message as { id: string }).id.length > 0
+  )
+}
+
 export class DaemonClientConnections {
   private readonly clients = new Map<string, ConnectedDaemonClient>()
   private readonly transportSockets = new Set<Socket>()
@@ -104,6 +124,16 @@ export class DaemonClientConnections {
   }
 
   private handleFirstMessage(socket: Socket, message: unknown): void {
+    // The same unchecked cast as the control parser had, one frame earlier and before any
+    // token is checked: `JSON.parse('null')` is a valid frame, and reading `.type` off it
+    // threw synchronously inside the socket's `data` handler — an uncaught exception, so
+    // the daemon died before it could reject the hello.
+    if (typeof message !== 'object' || message === null) {
+      this.options.log.log('client-hello-rejected', { reason: 'not-an-object' })
+      socket.write(encodeNdjson({ type: 'hello', ok: false, error: 'Expected hello' }))
+      socket.destroy()
+      return
+    }
     const hello = message as HelloMessage
     if (hello.type !== 'hello') {
       this.options.log.log('client-hello-rejected', { reason: 'expected-hello' })
@@ -197,7 +227,21 @@ export class DaemonClientConnections {
   private setupControlParser(socket: Socket, clientId: string): void {
     const decoder = new StringDecoder('utf8')
     const parser = createNdjsonParser(
-      (message) => this.options.onControlRequest(socket, clientId, message as DaemonRequest),
+      (message) => {
+        // `as DaemonRequest` asserted a shape nothing had checked: the parser hands through
+        // any parsed JSON, `null` included. One frame without a usable `id` was enough to
+        // take the daemon down — and the daemon is the process kept alive precisely so
+        // terminals outlive everything else. Dropping is the only correlatable answer,
+        // since a reply needs the id the frame did not carry.
+        if (!isDispatchableRequest(message)) {
+          this.options.log.log('control-frame-dropped', {
+            clientId,
+            reason: 'missing-or-invalid-id'
+          })
+          return
+        }
+        this.options.onControlRequest(socket, clientId, message)
+      },
       () => {}
     )
     socket.removeAllListeners('data')

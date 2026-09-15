@@ -123,8 +123,17 @@ export class DaemonServer {
       },
       onLastAuthenticatedClientDisconnected: () =>
         this.lifecycle.onLastAuthenticatedClientDisconnected(),
-      onControlRequest: (socket, clientId, request) =>
-        void this.handleRequest(socket, clientId, request),
+      onControlRequest: (socket, clientId, request) => {
+        // Why a catch and not bare `void`: an unhandled rejection reaches the daemon's
+        // uncaughtException handler, which rethrows anything that is not a native PTY
+        // error. One escaping throw is therefore fatal to every terminal on the host.
+        void this.handleRequest(socket, clientId, request).catch((error: unknown) => {
+          this.log.log('control-request-failed', {
+            clientId,
+            message: error instanceof Error ? error.message : String(error)
+          })
+        })
+      },
       onControlReplaced: (clientId) => {
         this.preparations.cancelForClient(clientId)
         this.historySeedTransfers.clearOwner(clientId)
@@ -257,6 +266,13 @@ export class DaemonServer {
     clientId: string,
     request: DaemonRequest
   ): Promise<void> {
+    // Why `typeof` and not a bare `.id`: this read used to sit one line above the try
+    // below, so a frame without an `id` threw a TypeError that escaped as an unhandled
+    // rejection and killed the daemon — taking every running terminal with it. The try
+    // was already there; only this line was outside it.
+    if (typeof request?.id !== 'string' || request.id.length === 0) {
+      return
+    }
     const isNotify = request.id.startsWith(NOTIFY_PREFIX)
     try {
       const result = await this.requestRouter.route(clientId, request)
