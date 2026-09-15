@@ -25,6 +25,7 @@ vi.mock('./NativeChatMessageList', () => moduleFactories.nativeChatMessageList()
 vi.mock('./NativeChatComposer', () => moduleFactories.nativeChatComposer())
 vi.mock('./NativeChatEmptyState', () => moduleFactories.nativeChatEmptyState())
 vi.mock('./NativeChatApprovalCard', () => moduleFactories.nativeChatApprovalCard())
+vi.mock('./NativeChatPlanApprovalCard', () => moduleFactories.nativeChatPlanApprovalCard())
 vi.mock('./NativeChatQuestionCard', () => moduleFactories.nativeChatQuestionCard())
 
 import { NativeChatStructuredSession } from './NativeChatStructuredSession'
@@ -257,6 +258,55 @@ describe('NativeChatStructuredSession', () => {
       itemId: 'approval-item',
       expectedRevision: 1
     })
+  })
+
+  it('routes a typed plan only through the plan approval card', () => {
+    mocks.promptItems = [
+      {
+        itemId: 'plan-approval-item',
+        revision: 1,
+        sequence: 1,
+        observedAt: 1,
+        body: {
+          kind: 'approval',
+          title: 'Claude wants to present a plan',
+          subject: { kind: 'plan', text: '# Plan\n\n- Test it', filePath: '/repo/plan.md' },
+          detail: null,
+          options: [
+            { id: 'allow', label: 'Approve plan' },
+            { id: 'deny', label: 'Keep planning' }
+          ],
+          resolution: {
+            state: 'pending',
+            selectedOptionId: null,
+            resolvedBy: null,
+            resolvedAt: null
+          }
+        }
+      }
+    ]
+
+    render(
+      <NativeChatStructuredSession
+        isVisible
+        isFocusedGroup
+        tabId="structured-plan"
+        sessionId="session-plan"
+        target={{ kind: 'local' }}
+        agent="claude"
+      />
+    )
+
+    expect(mocks.planApprovalCardProps?.plan).toEqual({
+      kind: 'plan',
+      text: '# Plan\n\n- Test it',
+      filePath: '/repo/plan.md'
+    })
+    expect(mocks.planApprovalCardProps?.approval.options).toEqual([
+      { label: 'Approve plan', send: 'allow' },
+      { label: 'Keep planning', send: 'deny' }
+    ])
+    expect(mocks.approvalCardProps).toBeNull()
   })
 
   // Every background-task test mounts the same local Claude session; only the ids

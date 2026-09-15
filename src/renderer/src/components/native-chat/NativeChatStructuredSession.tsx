@@ -6,6 +6,7 @@ import { structuredAgentSessionPaneKey } from '../../../../shared/structured-age
 import type { NativeChatLiveSession } from './use-native-chat-live-session'
 import { Button } from '@/components/ui/button'
 import { NativeChatApprovalCard } from './NativeChatApprovalCard'
+import { NativeChatPlanApprovalCard } from './NativeChatPlanApprovalCard'
 import { NativeChatComposer, type NativeChatComposerHandle } from './NativeChatComposer'
 import { NativeChatEmptyState } from './NativeChatEmptyState'
 import { NativeChatMessageList } from './NativeChatMessageList'
@@ -23,6 +24,10 @@ import { useStructuredNativeChatPaneCommands } from './use-structured-native-cha
 import type { NativeChatStructuredViewProps } from './native-chat-view-types'
 import { NativeChatBackgroundTasksStatus } from './NativeChatBackgroundTasksStatus'
 import { useNativeChatLaunchDraftSignal } from './use-native-chat-launch-draft-adoption'
+import {
+  NativeChatDisclosureContext,
+  useNativeChatDisclosures
+} from './native-chat-disclosure-store'
 
 type StoppingBackgroundTasks = {
   sessionId: string
@@ -115,6 +120,23 @@ export function NativeChatStructuredSession(
   const activeStoppingBackgroundTasks =
     stoppingBackgroundTasks?.sessionId === props.sessionId ? stoppingBackgroundTasks : null
   const prompt = controller.prompts[0] ?? null
+  const approvalBody = prompt?.body.kind === 'approval' ? prompt.body : null
+  const approval = approvalBody
+    ? {
+        title: approvalBody.title,
+        ...(approvalBody.displayName ? { displayName: approvalBody.displayName } : {}),
+        ...(approvalBody.description ? { description: approvalBody.description } : {}),
+        ...(approvalBody.decisionReason ? { decisionReason: approvalBody.decisionReason } : {}),
+        ...(approvalBody.blockedPath ? { blockedPath: approvalBody.blockedPath } : {}),
+        ...(approvalBody.matchedAskRule ? { matchedAskRule: approvalBody.matchedAskRule } : {}),
+        ...(approvalBody.detail ? { detail: approvalBody.detail } : {}),
+        options: approvalBody.options.map((option) => ({
+          label: option.label,
+          send: option.id
+        }))
+      }
+    : null
+  const promptDisclosures = useNativeChatDisclosures()
   const cancelPrompt = () => {
     if (controller.turnId && prompt) {
       void controller.cancel(controller.turnId, {
@@ -243,19 +265,30 @@ export function NativeChatStructuredSession(
           />
         )}
       </div>
-      {prompt?.body.kind === 'approval' ? (
-        <NativeChatApprovalCard
-          approval={{
-            title: prompt.body.title,
-            ...(prompt.body.detail ? { detail: prompt.body.detail } : {}),
-            options: prompt.body.options.map((option) => ({
-              label: option.label,
-              send: option.id
-            }))
-          }}
-          onChoose={(optionId) => void controller.respond(prompt, optionId)}
-          onCancel={cancelPrompt}
-        />
+      {prompt && approvalBody && approval ? (
+        <NativeChatDisclosureContext.Provider value={promptDisclosures}>
+          {approvalBody.subject?.kind === 'plan' ? (
+            <NativeChatPlanApprovalCard
+              key={`${prompt.itemId}:${prompt.revision}`}
+              approval={approval}
+              plan={approvalBody.subject}
+              disclosureKey={`${prompt.itemId}:plan`}
+              onLinkClick={onLinkClick}
+              allowFileUriLinks={onLinkClick !== undefined}
+              onChoose={(optionId) => void controller.respond(prompt, optionId)}
+              onCancel={cancelPrompt}
+              shouldFocus={props.isVisible && props.isFocusedGroup}
+            />
+          ) : (
+            <NativeChatApprovalCard
+              key={`${prompt.itemId}:${prompt.revision}`}
+              approval={approval}
+              onChoose={(optionId) => void controller.respond(prompt, optionId)}
+              onCancel={cancelPrompt}
+              shouldFocus={props.isVisible && props.isFocusedGroup}
+            />
+          )}
+        </NativeChatDisclosureContext.Provider>
       ) : null}
       {prompt && questionBody ? (
         <NativeChatQuestionCard

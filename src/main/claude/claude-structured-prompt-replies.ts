@@ -10,6 +10,7 @@ export {
   ClaudePromptRegistry,
   type ClaudePendingPrompt,
   type ClaudePromptClaim,
+  type ClaudePromptPresentation,
   type ClaudePromptRegistration,
   type ClaudePromptSettle
 } from './claude-prompt-registry'

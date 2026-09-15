@@ -3,12 +3,98 @@ import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key
 import { encodeAgentSessionQuestionAnswers } from '../../shared/agent-session-question-answer'
 import { cancelledJournalPromptBody } from '../native-chat/agent-session-journal/journal-prompt-body-bounds'
 import { MAX_JOURNAL_LIFECYCLE_BATCH_BYTES } from '../native-chat/agent-session-journal/journal-row-schema'
-import { claudeQuestionItems } from './claude-structured-prompt-items'
+import { MAX_TOOL_DETAIL_LENGTH } from '../../shared/native-chat-tool-summary'
+import { claudeApprovalItem, claudeQuestionItems } from './claude-structured-prompt-items'
 import {
   applyClaudePromptAnswer,
   encodeClaudeQuestionOptionId,
   type ClaudePendingPrompt
 } from './claude-structured-prompt-replies'
+
+function approvalPrompt(
+  input: Record<string, unknown>,
+  presentation: Partial<ClaudePendingPrompt> = {}
+): ClaudePendingPrompt {
+  return {
+    requestId: 'approval-1',
+    promptKey: 'approval-1',
+    toolUseId: 'tool-approval',
+    toolName: 'ExitPlanMode',
+    kind: 'approval',
+    input,
+    suggestions: [],
+    questionIds: [],
+    answers: new Map(),
+    settle: () => {},
+    ...presentation
+  }
+}
+
+describe('Claude structured approval presentation', () => {
+  it('journals a plan as a typed subject without the generic JSON detail', () => {
+    const prompt = approvalPrompt(
+      { plan: '# Release\n\n- Run tests', planFilePath: '/repo/plan.md' },
+      {
+        title: 'Claude wants to present its plan',
+        displayName: 'Present plan',
+        description: 'Review the implementation plan.',
+        decisionReason: 'Plan mode requires approval.',
+        blockedPath: '/repo/plan.md',
+        matchedAskRule: { source: 'project', toolName: 'ExitPlanMode', ruleContent: 'ask' },
+        subject: { kind: 'plan', text: '# Release\n\n- Run tests', filePath: '/repo/plan.md' }
+      }
+    )
+
+    expect(claudeApprovalItem(prompt)).toMatchObject({
+      kind: 'approval',
+      title: 'Claude wants to present its plan',
+      displayName: 'Present plan',
+      description: 'Review the implementation plan.',
+      decisionReason: 'Plan mode requires approval.',
+      blockedPath: '/repo/plan.md',
+      matchedAskRule: { source: 'project', toolName: 'ExitPlanMode', ruleContent: 'ask' },
+      subject: { kind: 'plan', text: '# Release\n\n- Run tests', filePath: '/repo/plan.md' },
+      detail: null,
+      options: [
+        { id: 'allow', label: 'Approve plan' },
+        { id: 'allowForSession', label: 'Approve plan for this session' },
+        { id: 'deny', label: 'Keep planning' },
+        { id: 'cancel', label: 'Stop' }
+      ]
+    })
+  })
+
+  it.each([{ plan: '' }, {}])('degrades an empty plan to a visible generic detail', (input) => {
+    const item = claudeApprovalItem(approvalPrompt(input))
+
+    expect(item.title).toBe('Allow ExitPlanMode?')
+    expect(item.subject).toBeUndefined()
+    expect(item.detail).toContain('{')
+    expect(item.options[0]?.label).toBe('Allow')
+  })
+
+  it('caps an oversized generic payload with the shared tool-detail limit', () => {
+    const item = claudeApprovalItem(
+      approvalPrompt({ plan: '', payload: 'x'.repeat(MAX_TOOL_DETAIL_LENGTH * 2) })
+    )
+
+    expect(item.detail?.length).toBeLessThanOrEqual(MAX_TOOL_DETAIL_LENGTH + 1)
+    expect(item.detail?.endsWith('…')).toBe(true)
+  })
+
+  it('denying a plan authorizes nothing', () => {
+    const prompt = approvalPrompt(
+      { plan: '# Release' },
+      { subject: { kind: 'plan', text: '# Release' } }
+    )
+
+    expect(applyClaudePromptAnswer({ prompt }, 'deny')).toEqual({
+      behavior: 'deny',
+      message: 'User denied this action.',
+      toolUseID: 'tool-approval'
+    })
+  })
+})
 
 describe('Claude structured question addressing', () => {
   it('bounds a valid grouped question before cancellation enters a lifecycle batch', () => {

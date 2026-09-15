@@ -14,13 +14,15 @@ function permissionOptions(
   requestId: string,
   toolUseID: string,
   signal: AbortSignal,
-  suggestions?: unknown[]
+  suggestions?: unknown[],
+  presentation: Partial<CanUseToolOptions> = {}
 ): CanUseToolOptions {
   return {
     requestId,
     toolUseID,
     signal,
-    ...(suggestions ? { suggestions } : {})
+    ...(suggestions ? { suggestions } : {}),
+    ...presentation
   } as unknown as CanUseToolOptions
 }
 
@@ -56,6 +58,61 @@ describe('Claude permission callbacks', () => {
     // The prompt's settle is the SDK callback's own resolve — answering resolves this promise.
     found?.prompt.settle({ behavior: 'allow', toolUseID: 'tool-1' })
     await expect(answered).resolves.toEqual({ behavior: 'allow', toolUseID: 'tool-1' })
+  })
+
+  it('keeps the SDK permission presentation and strips terminal escapes', async () => {
+    const control = callbacksFor()
+    const answered = control.canUseTool(
+      'Read',
+      { file_path: '/repo/secrets.txt' },
+      permissionOptions(
+        'perm-presentation',
+        'tool-presentation',
+        new AbortController().signal,
+        [],
+        {
+          title: '\u001b[31mClaude wants to read secrets.txt\u001b[0m',
+          displayName: 'Read file',
+          description: 'Read access outside the workspace',
+          decisionReason: '\u001b[33mThe path is outside the allowed root.\u001b[0m',
+          blockedPath: '/repo/secrets.txt',
+          matchedAskRule: { source: 'project', toolName: 'Read', ruleContent: '/repo/**' }
+        }
+      )
+    )
+
+    const prompt = control.prompts.find('perm-presentation')?.prompt
+    expect(prompt).toMatchObject({
+      title: 'Claude wants to read secrets.txt',
+      displayName: 'Read file',
+      description: 'Read access outside the workspace',
+      decisionReason: 'The path is outside the allowed root.',
+      blockedPath: '/repo/secrets.txt',
+      matchedAskRule: { source: 'project', toolName: 'Read', ruleContent: '/repo/**' }
+    })
+    expect(JSON.stringify(prompt)).not.toContain('\\u001b')
+    prompt?.settle({ behavior: 'deny', message: 'done', toolUseID: 'tool-presentation' })
+    await expect(answered).resolves.toMatchObject({ behavior: 'deny' })
+  })
+
+  it('classifies a plan before generic permission registration', async () => {
+    const control = callbacksFor()
+    const register = vi.spyOn(control.prompts, 'register')
+    const answered = control.canUseTool(
+      'ExitPlanMode',
+      { plan: '# Release\n\n- Run tests', planFilePath: '/repo/plan.md' },
+      permissionOptions('perm-plan', 'tool-plan', new AbortController().signal)
+    )
+
+    expect(register).toHaveBeenCalledWith(
+      expect.objectContaining({
+        subject: { kind: 'plan', text: '# Release\n\n- Run tests', filePath: '/repo/plan.md' }
+      })
+    )
+    const prompt = control.prompts.find('perm-plan')?.prompt
+    expect(prompt?.subject?.kind).toBe('plan')
+    prompt?.settle({ behavior: 'deny', message: 'done', toolUseID: 'tool-plan' })
+    await expect(answered).resolves.toMatchObject({ behavior: 'deny' })
   })
 
   it('denies a malformed permission request without registering a prompt', async () => {

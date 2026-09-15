@@ -31,6 +31,15 @@ export {
 
 export type ChatApproval = {
   title: string
+  displayName?: string
+  description?: string
+  decisionReason?: string
+  blockedPath?: string
+  matchedAskRule?: {
+    source: string
+    toolName: string
+    ruleContent?: string
+  }
   detail?: string
   options: { label: string; send: string }[]
 }

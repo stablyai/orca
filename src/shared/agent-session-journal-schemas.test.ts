@@ -50,7 +50,13 @@ const CANONICAL_BODIES: AgentJournalItemBody[] = [
   { kind: 'diff', path: 'a.ts', patch: PAYLOAD },
   {
     kind: 'approval',
-    title: 'Run?',
+    title: 'Claude wants to present a plan',
+    displayName: 'Present plan',
+    description: 'Review the proposed implementation steps.',
+    decisionReason: 'Plan mode requires approval.',
+    blockedPath: '/repo/PLAN.md',
+    matchedAskRule: { source: 'project', toolName: 'ExitPlanMode', ruleContent: 'ask' },
+    subject: { kind: 'plan', text: '# Plan\n\n- Ship it', filePath: '/repo/PLAN.md' },
     detail: null,
     options: [{ id: 'a', label: 'Yes' }],
     resolution: RESOLUTION
@@ -137,6 +143,16 @@ describe('nested corruption is rejected', () => {
         detail: null,
         options: [{ id: 'a' }],
         resolution: RESOLUTION
+      })
+    ).toBe(false)
+    expect(
+      isAdmissibleAgentJournalItemBody({
+        kind: 'approval',
+        title: 'Review?',
+        detail: null,
+        options: [],
+        resolution: RESOLUTION,
+        subject: { kind: 'plan', text: null }
       })
     ).toBe(false)
   })

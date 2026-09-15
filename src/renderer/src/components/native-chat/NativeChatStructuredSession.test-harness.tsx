@@ -3,6 +3,7 @@ import { vi, type Mock } from 'vitest'
 import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
 import type { AgentSessionBackgroundTask } from '../../../../shared/agent-session-wire'
 import type { NativeChatApprovalCardProps } from './NativeChatApprovalCard'
+import type { NativeChatPlanApprovalCardProps } from './NativeChatPlanApprovalCard'
 import type { NativeChatQuestionCardProps } from './NativeChatQuestionCard'
 import type { NativeChatLaunchSeed } from './native-chat-composer-types'
 
@@ -20,6 +21,7 @@ type StructuredSessionMessageListProps = {
 
 const initialMessageListProps: StructuredSessionMessageListProps | null = null
 const initialApprovalCardProps: NativeChatApprovalCardProps | null = null
+const initialPlanApprovalCardProps: NativeChatPlanApprovalCardProps | null = null
 
 /**
  * Shared mock state and `vi.mock` factories for the NativeChatStructuredSession test files.
@@ -40,6 +42,7 @@ export function createStructuredSessionMocks() {
       isWorking?: boolean
     },
     approvalCardProps: initialApprovalCardProps,
+    planApprovalCardProps: initialPlanApprovalCardProps,
     questionCardProps: null as NativeChatQuestionCardProps | null,
     promptItems: [] as AgentJournalRenderItem[],
     respond: vi.fn() as StructuredSessionSpy,
@@ -187,6 +190,12 @@ export function createStructuredSessionMocks() {
         return null
       }
     }),
+    nativeChatPlanApprovalCard: () => ({
+      NativeChatPlanApprovalCard: (props: NativeChatPlanApprovalCardProps) => {
+        mocks.planApprovalCardProps = props
+        return null
+      }
+    }),
     nativeChatQuestionCard: () => ({
       NativeChatQuestionCard: (props: NativeChatQuestionCardProps) => {
         mocks.questionCardProps = props
@@ -203,6 +212,7 @@ export function createStructuredSessionMocks() {
     mocks.messageListProps = null
     mocks.composerProps = null
     mocks.approvalCardProps = null
+    mocks.planApprovalCardProps = null
     mocks.questionCardProps = null
     mocks.promptItems = []
     mocks.respond.mockReset()

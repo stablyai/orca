@@ -5,10 +5,7 @@ import type {
   AgentJournalQuestion,
   AgentJournalQuestionItem
 } from '../../shared/agent-session-journal-types'
-import {
-  boundInlineText,
-  DEFAULT_JOURNAL_PAYLOAD_LIMITS
-} from '../native-chat/agent-session-journal/journal-payload-bounds'
+import { formatToolInput, truncateToolDetail } from '../../shared/native-chat-tool-summary'
 import { boundJournalPromptBody } from '../native-chat/agent-session-journal/journal-prompt-body-bounds'
 import { claudeRecord, claudeText } from './claude-structured-item-translation'
 import {
@@ -22,6 +19,13 @@ const APPROVAL_LABELS: Record<ClaudeApprovalDecision, string> = {
   allow: 'Allow',
   allowForSession: 'Allow for this session',
   deny: 'Deny',
+  cancel: 'Stop'
+}
+
+const PLAN_APPROVAL_LABELS: Record<ClaudeApprovalDecision, string> = {
+  allow: 'Approve plan',
+  allowForSession: 'Approve plan for this session',
+  deny: 'Keep planning',
   cancel: 'Stop'
 }
 
@@ -45,17 +49,24 @@ export function claudePromptIdentity(input: {
 }
 
 export function claudeApprovalItem(prompt: ClaudePendingPrompt): AgentJournalApprovalItem {
-  const serialized = JSON.stringify(prompt.input)
-  return {
+  const detail = prompt.subject ? '' : truncateToolDetail(formatToolInput(prompt.input))
+  const labels = prompt.subject?.kind === 'plan' ? PLAN_APPROVAL_LABELS : APPROVAL_LABELS
+  return boundJournalPromptBody({
     kind: 'approval',
-    title: `Allow ${prompt.toolName}?`,
-    detail: serialized ? boundInlineText(serialized, DEFAULT_JOURNAL_PAYLOAD_LIMITS).text : null,
+    title: prompt.title ?? `Allow ${prompt.toolName}?`,
+    ...(prompt.displayName ? { displayName: prompt.displayName } : {}),
+    ...(prompt.description ? { description: prompt.description } : {}),
+    ...(prompt.decisionReason ? { decisionReason: prompt.decisionReason } : {}),
+    ...(prompt.blockedPath ? { blockedPath: prompt.blockedPath } : {}),
+    ...(prompt.matchedAskRule ? { matchedAskRule: prompt.matchedAskRule } : {}),
+    ...(prompt.subject ? { subject: prompt.subject } : {}),
+    detail: detail || null,
     options: CLAUDE_APPROVAL_DECISIONS.map((decision) => ({
       id: decision,
-      label: APPROVAL_LABELS[decision]
+      label: labels[decision]
     })),
     resolution: { ...PENDING }
-  }
+  })
 }
 
 export type ClaudeQuestionItem = {

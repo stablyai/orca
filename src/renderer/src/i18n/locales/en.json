@@ -17274,7 +17274,15 @@
         "title": "Allow {{value0}}?",
         "allow": "Allow",
         "deny": "Deny",
-        "cancel": "Cancel"
+        "cancel": "Cancel",
+        "reason": "Reason",
+        "blockedPath": "Blocked path",
+        "askRule": "Ask rule",
+        "plan": {
+          "collapse": "Collapse plan",
+          "expand": "Expand plan",
+          "file": "Plan file"
+        }
       },
       "launchPromptNotDelivered": "Not delivered — check the terminal",
       "structuredSessionCloseFailed": "Could not close this chat session",

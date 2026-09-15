@@ -613,6 +613,29 @@ describe('Claude structured journal translation', () => {
     expect(lifecycleAppends(state.items).at(-1)).toEqual(['turn-lifecycle:user-1', 'completed'])
   })
 
+  it('keeps an assistant ExitPlanMode tool use independently journalled', () => {
+    const state = sinkState()
+    const translator = createClaudeJournalTranslator({ sink: state.sink })
+
+    translator.handle(
+      message('assistant', 'assistant-plan', [
+        {
+          type: 'tool_use',
+          id: 'tool-plan-stream',
+          name: 'ExitPlanMode',
+          input: { plan: '# Streamed plan\n\n- Keep this ingress' }
+        }
+      ])
+    )
+
+    expect(state.items.at(-1)?.body).toMatchObject({
+      kind: 'tool-call',
+      name: 'ExitPlanMode',
+      callId: 'tool-plan-stream',
+      input: { plan: '# Streamed plan\n\n- Keep this ingress' }
+    })
+  })
+
   it('bounds persisted thinking text to the shared journal payload limit', () => {
     const state = sinkState()
     const translator = createClaudeJournalTranslator({ sink: state.sink })
