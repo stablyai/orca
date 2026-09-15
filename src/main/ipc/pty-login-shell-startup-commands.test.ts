@@ -2,7 +2,8 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   loginPreflightExecFileMock,
   spawnMock,
-  openCodeBuildPtyEnvMock
+  openCodeBuildPtyEnvMock,
+  piBuildPtyEnvMock
 } from './pty-ipc-mock-registry'
 import { posixOnlyIt } from './pty-ipc-test-constants'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
@@ -138,20 +139,25 @@ describe('registerPtyHandlers', () => {
       }
     }
   })
-  it('uses the POSIX shell wrapper so Pi config survives shell startup files', async () => {
+  it('does not classify managed-extension Pi source metadata as an overlay', async () => {
     const originalPlatform = process.platform
     const originalShell = process.env.SHELL
+    const originalZdotdir = process.env.ZDOTDIR
 
     Object.defineProperty(process, 'platform', {
       configurable: true,
       value: 'darwin'
     })
     process.env.SHELL = '/bin/zsh'
+    process.env.ZDOTDIR = '/tmp/user-zdotdir'
     openCodeBuildPtyEnvMock.mockImplementationOnce(() => ({
       ORCA_OPENCODE_HOOK_PORT: '4567',
       ORCA_OPENCODE_HOOK_TOKEN: 'opencode-token',
       ORCA_OPENCODE_PTY_ID: 'test-pty'
     }))
+    piBuildPtyEnvMock.mockImplementation((_ptyId, existingAgentDir, kind) =>
+      kind === 'pi' ? { ORCA_PI_SOURCE_AGENT_DIR: existingAgentDir } : {}
+    )
 
     try {
       const [shell, args, options] = await spawnAndGetCall({
@@ -165,8 +171,10 @@ describe('registerPtyHandlers', () => {
       expect(options.env.PI_CODING_AGENT_DIR).toBe('/tmp/user-pi-agent')
       expect(options.env.ORCA_PI_CODING_AGENT_DIR).toBeUndefined()
       expect(options.env.ORCA_PI_SOURCE_AGENT_DIR).toBe('/tmp/user-pi-agent')
-      expect(options.env.ZDOTDIR).toBe(join(getShellReadyWrapperRoot(), 'zsh'))
-      expect(options.env.ORCA_SHELL_FEATURES).not.toContain('ready')
+      expect(options.env.ORCA_OMP_STATUS_EXTENSION).toBeUndefined()
+      expect(options.env.ZDOTDIR).toBe('/tmp/user-zdotdir')
+      expect(options.env.ZDOTDIR).not.toBe(join(getShellReadyWrapperRoot(), 'zsh'))
+      expect(options.env.ORCA_SHELL_FEATURES).toBeUndefined()
     } finally {
       Object.defineProperty(process, 'platform', {
         configurable: true,
@@ -176,6 +184,11 @@ describe('registerPtyHandlers', () => {
         delete process.env.SHELL
       } else {
         process.env.SHELL = originalShell
+      }
+      if (originalZdotdir === undefined) {
+        delete process.env.ZDOTDIR
+      } else {
+        process.env.ZDOTDIR = originalZdotdir
       }
     }
   })
