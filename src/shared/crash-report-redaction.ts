@@ -25,6 +25,19 @@ const SECRET_ASSIGNMENT_PATTERN =
 
 // Quoted paths retain spaces; unquoted paths stop at whitespace to preserve prose.
 const PATH_PATTERNS = [
+  // A file:// URL, whatever follows the scheme. The unquoted rules below cannot
+  // see one: `file:///Users/…` puts a slash before the path's own leading
+  // slash, which rule 5's lookbehind rejects, so POSIX file URLs were reaching
+  // submitted reports unredacted. Quoted first, so a URL holding spaces is
+  // taken whole rather than truncated at the first one.
+  //
+  // Why the unquoted form takes everything after the scheme rather than
+  // requiring a separator: `file://localhost/…`, `file://host/share/…` and
+  // `file://Users/…` put an authority where a separator was expected, and all
+  // three then escaped every rule in this list. The `+` keeps the literal token
+  // in prose ("use the file:// scheme") intact, since nothing follows it there.
+  /(["'`])file:\/\/(?:(?!\1)[^<>\n\r])+\1/gi,
+  /\bfile:\/\/[^\s"'`<>)]+/gi,
   /(["'`])\/[A-Za-z0-9._-]+\/(?:(?!\1)[^<>\n\r])+\1/g,
   /(["'`])[A-Za-z]:\\(?:(?!\1)[^<>\n\r])+\1/gi,
   /(["'`])\\\\[^\\\s"'`<>\n\r)]+\\(?:(?!\1)[^<>\n\r])+\1/gi,
