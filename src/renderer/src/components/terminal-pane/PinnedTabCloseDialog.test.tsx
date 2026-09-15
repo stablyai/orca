@@ -12,21 +12,24 @@ const mountedRoots: Root[] = []
 
 async function renderDialog({
   tabLabel = 'Docs',
+  variant,
   onConfirm,
   onCancel,
   updateSettings
 }: {
   tabLabel?: string
+  variant?: 'pinned' | 'any'
   onConfirm: () => void
   onCancel?: () => void
   updateSettings: AppState['updateSettings']
 }): Promise<void> {
   useAppStore.setState({
-    settings: { confirmClosePinnedTab: true } as AppState['settings'],
+    settings: { confirmClosePinnedTab: true, confirmCloseAnyTab: true } as AppState['settings'],
     updateSettings
   })
   useAppStore.getState().requestPinnedTabCloseConfirm({
     tabLabel,
+    ...(variant ? { variant } : {}),
     onConfirm,
     ...(onCancel ? { onCancel } : {})
   })
@@ -105,6 +108,40 @@ describe('PinnedTabCloseDialog', () => {
     })
 
     expect(updateSettings).toHaveBeenCalledWith({ confirmClosePinnedTab: false })
+    expect(onConfirm).toHaveBeenCalledTimes(1)
+  })
+
+  it('renders generic copy for the any-tab variant', async () => {
+    const onConfirm = vi.fn()
+    const updateSettings = vi.fn().mockResolvedValue(undefined)
+
+    await renderDialog({ variant: 'any', onConfirm, updateSettings })
+
+    expect(document.body.textContent).toContain('Close tab?')
+    expect(document.body.textContent).toContain("Don't ask again when closing tabs")
+
+    await act(async () => {
+      getButton('Close').click()
+    })
+
+    expect(updateSettings).not.toHaveBeenCalled()
+    expect(onConfirm).toHaveBeenCalledTimes(1)
+  })
+
+  it('turns off future any-tab confirmations when checked and confirmed', async () => {
+    const onConfirm = vi.fn()
+    const updateSettings = vi.fn().mockResolvedValue(undefined)
+
+    await renderDialog({ variant: 'any', onConfirm, updateSettings })
+
+    await act(async () => {
+      getCheckbox().click()
+    })
+    await act(async () => {
+      getButton('Close').click()
+    })
+
+    expect(updateSettings).toHaveBeenCalledWith({ confirmCloseAnyTab: false })
     expect(onConfirm).toHaveBeenCalledTimes(1)
   })
 

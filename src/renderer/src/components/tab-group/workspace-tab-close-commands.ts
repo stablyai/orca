@@ -68,7 +68,11 @@ export function createWorkspaceTabCloseCommands({
 
   const closeItem = (
     itemId: string,
-    opts?: { skipEmptyCheck?: boolean; skipRunningProcessConfirm?: boolean }
+    opts?: {
+      skipEmptyCheck?: boolean
+      skipRunningProcessConfirm?: boolean
+      userInitiated?: boolean
+    }
   ) => {
     const item = groupTabs.find((candidate) => candidate.id === itemId)
     if (!item) {
@@ -112,6 +116,7 @@ export function createWorkspaceTabCloseCommands({
       // Why: closeTerminalTab can defer behind a pin / running-process dialog, so the
       // empty check has to run on the actual close — never on cancel.
       closeTerminalTab(item.entityId, {
+        ...(opts?.userInitiated !== undefined ? { userInitiated: opts.userInitiated } : {}),
         ...(opts?.skipRunningProcessConfirm ? { skipRunningProcessConfirm: true } : {}),
         ...(!opts?.skipEmptyCheck ? { onClosed: leaveWorktreeIfEmpty } : {})
       })
