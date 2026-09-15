@@ -207,8 +207,18 @@ export function hasUnansweredStructuredAgentSessionDispatch(
 
 export type StructuredAgentSessionProjectedStatus = 'working' | 'attention' | 'idle'
 
+const STRUCTURED_AGENT_SESSION_TAB_PREFIX = 'structured-agent-session-'
+
 export function structuredAgentSessionTabId(sessionId: string): string {
-  return `structured-agent-session-${sessionId}`
+  return `${STRUCTURED_AGENT_SESSION_TAB_PREFIX}${sessionId}`
+}
+
+export function structuredAgentSessionIdFromTabId(tabId: string): string | undefined {
+  if (!tabId.startsWith(STRUCTURED_AGENT_SESSION_TAB_PREFIX)) {
+    return undefined
+  }
+  const sessionId = tabId.slice(STRUCTURED_AGENT_SESSION_TAB_PREFIX.length)
+  return sessionId.length > 0 ? sessionId : undefined
 }
 
 export function projectStructuredAgentSessionStatus(
