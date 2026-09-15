@@ -187,6 +187,43 @@ describe('Orca cloud profile service', () => {
     }
   )
 
+  it('revokes a session minted after Cancel instead of linking it', async () => {
+    configureCloudEnv()
+    const controller = new AbortController()
+    // Why: the browser callback and the Cancel click race; model Cancel landing
+    // after the code arrived but before the exchange completed.
+    beginOrcaCloudPkceFlowMock.mockImplementation(async () => {
+      controller.abort()
+      return {
+        code: 'auth-code',
+        codeVerifier: 'code-verifier',
+        nonce: 'nonce',
+        redirectUri: 'http://127.0.0.1:4100/auth/callback',
+        state: 'state'
+      }
+    })
+    exchangeOrcaCloudAuthCodeMock.mockResolvedValue({
+      accessToken: 'access-token',
+      refreshToken: 'refresh-token',
+      expiresAt: futureExpiresAt(),
+      cloud: cloudSummary,
+      organizations,
+      capabilities
+    } satisfies OrcaCloudSessionExchangeResponse)
+
+    const result = await connectCurrentOrcaProfile(userDataPath, { signal: controller.signal })
+
+    expect(result.status).toBe('cancelled')
+    expect(revokeOrcaCloudSessionMock).toHaveBeenCalledWith(
+      expect.any(Object),
+      expect.objectContaining({ refreshToken: 'refresh-token' })
+    )
+    expect(getCurrentOrcaProfileAuthStatus(userDataPath)).toMatchObject({
+      state: 'local',
+      persistence: 'none'
+    })
+  })
+
   it('reports callback failures as failed instead of cancelled', async () => {
     configureCloudEnv()
     beginOrcaCloudPkceFlowMock.mockRejectedValue(new Error('orca_cloud_auth_callback_failed'))

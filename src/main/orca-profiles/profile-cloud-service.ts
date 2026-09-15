@@ -90,6 +90,12 @@ export async function connectCurrentOrcaProfile(
       ...code,
       localProfileId: active.profile.id
     })
+    if (options?.signal?.aborted) {
+      // Why: the browser callback beat the Cancel click. The user asked not to be
+      // signed in, so the freshly minted session is revoked instead of linked.
+      await revokeOrcaCloudSession(configState.config, exchange).catch(() => undefined)
+      throw new Error('orca_cloud_auth_cancelled')
+    }
     saveOrcaCloudSessionExchange(active.profile.id, userDataPath, exchange)
     const list = linkOrcaProfileToCloud(active.profile.id, exchange.cloud, userDataPath)
     return {
