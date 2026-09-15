@@ -20,6 +20,9 @@ export async function presentRendererRecoveryPrompt(
   deps: RendererRecoveryPromptDeps
 ): Promise<void> {
   const stalled = deps.failure === 'reload-stalled'
+  // A document that loaded but never ran its JavaScript looks like neither a crash loop nor a
+  // stalled load to the user: the window is simply, silently white.
+  const blank = deps.failure === 'bootstrap-absent'
   // Copying must preserve the only available recovery surface.
   while (!deps.isQuitting()) {
     const diagnosis = deps.diagnose()
@@ -28,16 +31,21 @@ export async function presentRendererRecoveryPrompt(
       buttons.push(translateMain('rendererRecovery.copyCommands', 'Copy Commands'))
     }
     buttons.push(translateMain('rendererRecovery.quit', 'Quit'))
-    const recoveryDetail = stalled
+    const recoveryDetail = blank
       ? translateMain(
-          'rendererRecovery.stalledDetail',
-          'Orca reloaded the window after a crash, but it never finished loading.'
+          'rendererRecovery.blankDetail',
+          'The window finished loading but Orca never started inside it, and reloading did not help.'
         )
-      : translateMain(
-          'rendererRecovery.crashLoopDetail',
-          'Orca tried to recover {{recoveryCount}} times in a row without success.',
-          { recoveryCount: deps.recentRecoveryCount }
-        )
+      : stalled
+        ? translateMain(
+            'rendererRecovery.stalledDetail',
+            'Orca reloaded the window after a crash, but it never finished loading.'
+          )
+        : translateMain(
+            'rendererRecovery.crashLoopDetail',
+            'Orca tried to recover {{recoveryCount}} times in a row without success.',
+            { recoveryCount: deps.recentRecoveryCount }
+          )
     const causeDetail = diagnosis
       ? `${diagnosis.detail}\n\n${translateMain(
           'rendererRecovery.driverFallback',
@@ -54,15 +62,17 @@ export async function presentRendererRecoveryPrompt(
       // Escape retries instead of destroying the session.
       cancelId: 0,
       title: translateMain('rendererRecovery.title', 'Orca keeps failing to load'),
-      message: stalled
-        ? translateMain(
-            'rendererRecovery.stalledMessage',
-            'The app window stopped responding while reloading after a crash.'
-          )
-        : translateMain(
-            'rendererRecovery.crashLoopMessage',
-            'The app window crashed repeatedly and stopped reloading automatically.'
-          ),
+      message: blank
+        ? translateMain('rendererRecovery.blankMessage', 'The app window opened but stayed blank.')
+        : stalled
+          ? translateMain(
+              'rendererRecovery.stalledMessage',
+              'The app window stopped responding while reloading after a crash.'
+            )
+          : translateMain(
+              'rendererRecovery.crashLoopMessage',
+              'The app window crashed repeatedly and stopped reloading automatically.'
+            ),
       detail: `${recoveryDetail}\n\n${causeDetail}`
     })
     if (response === 1 && diagnosis) {
