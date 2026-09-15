@@ -12,6 +12,7 @@ import {
   skipInlineTransportStartScan
 } from './rich-markdown-source-transport'
 import { matchHtmlSuperscriptLinkSource } from './rich-markdown-html-superscript-link-source'
+import { consumeMarkdownFenceDelimiterLine } from './raw-markdown-html-fence'
 
 const INLINE_HTML_PATTERN = /^<!--[\s\S]*?-->|^<\/?[A-Za-z][\w.:-]*(?:\s[^<>]*?)?\/?>/
 
@@ -61,37 +62,22 @@ export function encodeRawMarkdownHtmlForRichEditor(
   const { transport } = codec
   let index = 0
   let isLineStart = true
-  let activeFence: '`' | '~' | null = null
-  let activeFenceLength = 0
+  const fenceState = { activeFence: null as '`' | '~' | null, activeFenceLength: 0 }
   let result = ''
-  const nonWhitespace = /\S/g
-  const fencePrefix = /(`{3,}|~{3,})/y
-  let fenceProbe = -1
-  let fenceMatch: RegExpExecArray | null = null
 
   while (index < normalizedContent.length) {
     if (isLineStart) {
-      // Reuse the lookahead across blank lines, preserving cross-line fence semantics.
-      if (index > fenceProbe) {
-        nonWhitespace.lastIndex = index
-        fenceProbe = nonWhitespace.exec(normalizedContent)?.index ?? normalizedContent.length
-        fencePrefix.lastIndex = fenceProbe
-        fenceMatch = fencePrefix.exec(normalizedContent)
-      }
-      if (fenceMatch) {
-        const fenceChar = fenceMatch[1][0] as '`' | '~'
-        const fenceLength = fenceMatch[1].length
-        if (activeFence === null) {
-          activeFence = fenceChar
-          activeFenceLength = fenceLength
-        } else if (activeFence === fenceChar && fenceLength >= activeFenceLength) {
-          activeFence = null
-          activeFenceLength = 0
-        }
+      // Why: fence open/close must not let \S / ^\\s* cross newlines (#13307 / #7056).
+      const fenceEnd = consumeMarkdownFenceDelimiterLine(normalizedContent, index, fenceState)
+      if (fenceEnd !== null) {
+        result += normalizedContent.slice(index, fenceEnd)
+        isLineStart = fenceEnd > index && normalizedContent[fenceEnd - 1] === '\n'
+        index = fenceEnd
+        continue
       }
     }
 
-    if (activeFence) {
+    if (fenceState.activeFence) {
       const nextChar = normalizedContent[index]
       result += nextChar
       isLineStart = nextChar === '\n'
