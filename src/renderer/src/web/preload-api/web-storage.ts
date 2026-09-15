@@ -1,8 +1,14 @@
 export const SETTINGS_STORAGE_KEY = 'orca.web.settings.v1'
 
-export const UI_STORAGE_KEY = 'orca.web.ui.v1'
+import {
+  WORKSPACE_WINDOW_UI_STORAGE_KEY,
+  WORKSPACE_WINDOW_SESSION_STORAGE_KEY,
+  isWorkspaceWindowPresentationKey
+} from '../../../../shared/workspace-window-presentation-storage'
 
-export const SESSION_STORAGE_KEY = 'orca.web.workspaceSession.v1'
+export const UI_STORAGE_KEY = WORKSPACE_WINDOW_UI_STORAGE_KEY
+
+export const SESSION_STORAGE_KEY = WORKSPACE_WINDOW_SESSION_STORAGE_KEY
 
 export const ONBOARDING_STORAGE_KEY = 'orca.web.onboarding.v1'
 
@@ -21,19 +27,31 @@ export function getBrowserPlatform(): NodeJS.Platform {
 }
 
 export function readJson<T>(key: string, fallback: T): T {
+  const storage = isWorkspaceWindowPresentationKey(key)
+    ? window.orcaWorkspaceWindowNative?.presentationStorage
+    : undefined
+  const nativeRaw = storage?.getItem(key)
   const raw = window.localStorage.getItem(key)
-  if (!raw) {
+  if (!raw && !nativeRaw) {
     return cloneJson(fallback)
   }
   try {
-    return { ...cloneJson(fallback), ...JSON.parse(raw) } as T
+    return {
+      ...cloneJson(fallback),
+      ...(raw ? JSON.parse(raw) : {}),
+      ...(nativeRaw ? JSON.parse(nativeRaw) : {})
+    } as T
   } catch {
     return cloneJson(fallback)
   }
 }
 
 export function writeJson<T>(key: string, value: T): void {
-  window.localStorage.setItem(key, JSON.stringify(value))
+  const raw = JSON.stringify(value)
+  if (isWorkspaceWindowPresentationKey(key)) {
+    window.orcaWorkspaceWindowNative?.presentationStorage?.setItem(key, raw)
+  }
+  window.localStorage.setItem(key, raw)
 }
 
 export function cloneJson<T>(value: T): T {

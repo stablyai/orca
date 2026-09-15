@@ -131,6 +131,7 @@
 /* ── Light Mode ──────────────────────────────────────── */
 
 :root {
+  --project-accent-mix: 70%;
   --app-font-family: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --font-sans: var(--app-font-family);
   --font-mono:
@@ -254,7 +255,20 @@
 
 /* ── Dark Mode ───────────────────────────────────────── */
 
+.project-accent-mark {
+  display: inline-block;
+  width: 3px;
+  height: 0.75rem;
+  border-radius: 1px;
+  background: color-mix(
+    in srgb,
+    var(--project-accent-source) var(--project-accent-mix),
+    var(--foreground)
+  );
+}
+
 .dark {
+  --project-accent-mix: 85%;
   --orca-security-background: #0a0a0a;
   --orca-security-foreground: #fafafa;
   --orca-security-card: #171717;
@@ -713,6 +727,25 @@
   mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 1.5rem), transparent);
 }
 
+/* The active workspace region is marked by one quiet contour that follows the
+   panel's upper corners. Keeping it on the region (rather than the tab row)
+   makes focus legible when tabs are mixed across projects. */
+.workspace-pane-region[data-current='true']::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto;
+  z-index: 20;
+  height: 33px;
+  border: 1px solid color-mix(in srgb, var(--ring) 72%, transparent);
+  border-bottom: 0;
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  pointer-events: none;
+}
+
+.workspace-pane-region[data-current='true'] > [data-tab-group-strip-id] {
+  background: color-mix(in srgb, var(--ring) 4%, var(--card));
+}
+
 /* Tab activity affordance (amber wash) is rendered as a React DOM child in
    SortableTab.tsx rather than via ::after here, so the drop-indicator
    ::before/::after pseudo-elements stay free for drag-and-drop feedback. See
@@ -918,6 +951,13 @@ html.native-shell .app-layout {
 .window-controls-titlebar-spacer {
   flex-shrink: 0;
   width: var(--window-controls-width, 0px);
+}
+
+/* Why: cross-project panes own their tab/action strip at the very top of the
+   window. Keep the rightmost strip's actions outside the fixed Windows/Linux
+   controls overlay while leaving the pane body at its full width. */
+[data-window-controls-inset='true'] {
+  padding-right: var(--window-controls-width, 0px);
 }
 
 .right-sidebar-header-drag {

@@ -4,6 +4,7 @@ import {
 } from './host-guest/webview-drag-passthrough'
 import { registerBrowserClientPagePositionSync } from './browser-client-page-position-driver'
 import type { BrowserClientRetainedRendererPage as RetainedPage } from './browser-client-page-retained-state'
+import { canControlWorkspaceBrowserPage } from '../cross-project-panes/workspace-browser-control'
 
 export type BrowserClientPageVisibleAttachment = {
   webview: Electron.WebviewTag
@@ -72,7 +73,9 @@ function applyRetainedHostPointerEvents(
   visible: boolean,
   dragPassthrough: boolean
 ): void {
-  host.style.pointerEvents = visible && !dragPassthrough ? 'auto' : 'none'
+  const active = visible && canControlWorkspaceBrowserPage(host.dataset.browserClientPageId ?? '')
+  host.inert = !active
+  host.style.pointerEvents = active && !dragPassthrough ? 'auto' : 'none'
 }
 
 /** Enrols a retained host in the shared guest passthrough set, so a drag reaches the document
@@ -90,6 +93,10 @@ function showRetainedHost(host: HTMLDivElement, container: HTMLElement): () => v
   applyRetainedHostPointerEvents(host, true, isWebviewDragPassthroughActive())
   let appliedBounds = ''
   const syncViewport = (): void => {
+    applyRetainedHostPointerEvents(host, true, isWebviewDragPassthroughActive())
+    if (!canControlWorkspaceBrowserPage(host.dataset.browserClientPageId ?? '')) {
+      return
+    }
     const bounds = container.getBoundingClientRect()
     const next = `${bounds.left}|${bounds.top}|${bounds.width}|${bounds.height}`
     if (next === appliedBounds) {

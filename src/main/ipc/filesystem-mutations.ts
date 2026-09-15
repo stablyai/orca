@@ -1,3 +1,4 @@
+import { registerWorkspaceWindowFileTransferHandler } from '../window/workspace-window-file-transfer-handlers'
 import { app, ipcMain } from 'electron'
 import { constants } from 'node:fs'
 import { copyFile, mkdir, writeFile } from 'node:fs/promises'
@@ -33,7 +34,7 @@ import { resolveEnvironment } from '../../shared/runtime-environment-store'
  * Deletion is handled separately via `fs:deletePath` (shell.trashItem).
  */
 export function registerFilesystemMutationHandlers(store: Store): void {
-  ipcMain.handle(
+  registerWorkspaceWindowFileTransferHandler(
     'fs:createFile',
     async (
       _event,
@@ -60,7 +61,7 @@ export function registerFilesystemMutationHandlers(store: Store): void {
     }
   )
 
-  ipcMain.handle(
+  registerWorkspaceWindowFileTransferHandler(
     'fs:createDir',
     async (
       _event,
@@ -85,7 +86,7 @@ export function registerFilesystemMutationHandlers(store: Store): void {
   // Note: fs.rename throws EXDEV if old and new paths are on different
   // filesystems/volumes. This is unlikely since both paths are under the same
   // workspace root, but a cross-drive rename would surface as an IPC error.
-  ipcMain.handle(
+  registerWorkspaceWindowFileTransferHandler(
     'fs:rename',
     async (
       _event,
@@ -113,7 +114,7 @@ export function registerFilesystemMutationHandlers(store: Store): void {
     }
   )
 
-  ipcMain.handle(
+  registerWorkspaceWindowFileTransferHandler(
     'fs:copy',
     async (
       _event,
@@ -146,7 +147,7 @@ export function registerFilesystemMutationHandlers(store: Store): void {
     }
   )
 
-  ipcMain.handle(
+  registerWorkspaceWindowFileTransferHandler(
     'fs:importExternalPaths',
     async (
       _event,
@@ -197,7 +198,7 @@ export function registerFilesystemMutationHandlers(store: Store): void {
     }
   )
 
-  ipcMain.handle(
+  registerWorkspaceWindowFileTransferHandler(
     'fs:stageExternalPathsForRuntimeUpload',
     async (
       _event,
@@ -258,7 +259,7 @@ export function registerFilesystemMutationHandlers(store: Store): void {
   // paths the remote agent can read. Kept as a separate IPC from
   // fs:importExternalPaths because terminal semantics differ from the
   // explorer's "copy into user-picked destDir". See docs/terminal-drop-ssh.md.
-  ipcMain.handle(
+  registerWorkspaceWindowFileTransferHandler(
     'fs:resolveDroppedPathsForAgent',
     async (
       _event,

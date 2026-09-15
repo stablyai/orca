@@ -10,17 +10,24 @@ export type {
   ShellOpenLocalPathResult
 } from '../../shared/shell-open-types'
 
+export type ShellPathScope =
+  | { kind: 'local-artifact' }
+  | { kind: 'workspace'; runtimeId: string | null; connectionId?: string | null }
+
+export type ShellRuntimeScope = string | null | ShellPathScope
+
 export type ShellApi = {
-  openPath: (path: string) => Promise<void>
-  openInFileManager: (path: string) => Promise<ShellOpenLocalPathResult>
+  openPath: (path: string, scope?: ShellRuntimeScope) => Promise<void>
+  openInFileManager: (path: string, scope?: ShellRuntimeScope) => Promise<ShellOpenLocalPathResult>
   openInExternalEditor: (
-    request: ShellOpenExternalEditorRequest
+    request: ShellOpenExternalEditorRequest,
+    scope?: ShellRuntimeScope
   ) => Promise<ShellOpenExternalEditorResult>
   openUrl: (url: string) => Promise<void>
-  openFilePath: (path: string) => Promise<boolean>
-  openFileUri: (uri: string) => Promise<void>
+  openFilePath: (path: string, scope?: ShellPathScope) => Promise<boolean>
+  openFileUri: (uri: string, scope?: ShellPathScope) => Promise<void>
   pathsExist?: (paths: string[]) => Promise<boolean[]>
-  pathExists: (path: string) => Promise<boolean>
+  pathExists: (path: string, scope?: ShellPathScope) => Promise<boolean>
   pickAttachment: () => Promise<string | null>
   pickImage: () => Promise<string | null>
   pickRepoIconImage: () => Promise<{
@@ -29,5 +36,5 @@ export type ShellApi = {
   } | null>
   pickAudio: () => Promise<string | null>
   pickDirectory: (args: { defaultPath?: string }) => Promise<string | null>
-  copyFile: (args: { srcPath: string; destPath: string }) => Promise<void>
+  copyFile: (args: { srcPath: string; destPath: string }, scope?: ShellPathScope) => Promise<void>
 }

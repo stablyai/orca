@@ -1,8 +1,82 @@
 import { describe, expect, it } from 'vitest'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 import { sanitizeWebRuntimeWorkspaceSession } from './web-workspace-session'
+import { getDefaultWorkspaceSession } from '../../../shared/constants'
 
 describe('sanitizeWebRuntimeWorkspaceSession', () => {
+  it('retains native editor tab identities and groups while dropping execution rows', () => {
+    const editor = {
+      id: 'editor-uuid',
+      entityId: '/draft.md',
+      groupId: 'group',
+      worktreeId: 'folder',
+      contentType: 'editor' as const,
+      label: 'draft.md',
+      customLabel: null,
+      color: null,
+      sortOrder: 0,
+      createdAt: 1,
+      isPreview: false,
+      isPinned: false
+    }
+    const session = {
+      ...getDefaultWorkspaceSession(),
+      unifiedTabs: {
+        folder: [
+          editor,
+          { ...editor, id: 'terminal', entityId: 'terminal', contentType: 'terminal' as const }
+        ]
+      },
+      tabGroups: {
+        folder: [
+          {
+            id: 'group',
+            worktreeId: 'folder',
+            activeTabId: editor.id,
+            tabOrder: [editor.id, 'terminal'],
+            recentTabIds: ['terminal', editor.id]
+          }
+        ]
+      },
+      tabGroupLayouts: { folder: { type: 'leaf' as const, groupId: 'group' } },
+      activeGroupIdByWorktree: { folder: 'group' }
+    }
+    const restored = sanitizeWebRuntimeWorkspaceSession(session, true)
+    expect(restored.unifiedTabs).toEqual({ folder: [editor] })
+    expect(restored.tabGroups?.folder).toEqual([
+      { ...session.tabGroups.folder[0], tabOrder: [editor.id], recentTabIds: [editor.id] }
+    ])
+    expect(restored.tabGroupLayouts).toEqual(session.tabGroupLayouts)
+    expect(restored.activeGroupIdByWorktree).toEqual(session.activeGroupIdByWorktree)
+  })
+  it('preserves native editor drafts and owner metadata without replaying execution handles', () => {
+    const session = {
+      activeRepoId: null,
+      activeWorktreeId: null,
+      activeTabId: 'stale',
+      tabsByWorktree: {},
+      terminalLayoutsByTabId: {},
+      openFilesByWorktree: {
+        folder: [
+          {
+            filePath: '/draft.md',
+            relativePath: 'draft.md',
+            worktreeId: 'folder',
+            language: 'markdown',
+            runtimeEnvironmentId: 'owner',
+            dirtyDraftContent: 'unsaved',
+            lastKnownDiskSignature: 'baseline'
+          }
+        ]
+      },
+      activeFileIdByWorktree: { folder: '/draft.md' },
+      activeTabTypeByWorktree: { folder: 'editor' as const }
+    }
+    const restored = sanitizeWebRuntimeWorkspaceSession(session, true)
+    expect(restored.openFilesByWorktree).toEqual(session.openFilesByWorktree)
+    expect(restored.activeFileIdByWorktree).toEqual(session.activeFileIdByWorktree)
+    expect(restored.activeTabId).toBeNull()
+  })
   it('drops persisted remote panes while preserving harmless web-local session fields', () => {
     const session: WorkspaceSessionState = {
       activeRepoId: 'repo-1',

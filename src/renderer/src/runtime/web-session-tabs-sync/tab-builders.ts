@@ -10,6 +10,8 @@ import { toRuntimeExecutionHostId } from '../../../../shared/execution-host'
 import type { ReadyEditorSurface, MirroredEditorTab } from './state'
 import type { WebSessionExistingTabIndex } from '../web-session-existing-tab-index'
 import { isReadyEditorTab, localEditorFileId, editorSourceFileId } from './terminal-surfaces'
+import { buildOwnedEditorFileId } from '../../store/slices/editor/file-ids/editor-file-ids'
+import { firstOpenFileByIdForWorktree } from './state-equality-files'
 
 export function buildTerminalUnifiedTab(
   tab: TerminalTab,
@@ -98,16 +100,34 @@ export function buildEditorUnifiedTab(
 export function buildMirroredEditorTabs(
   snapshot: RuntimeMobileSessionTabsResult,
   environmentId: string,
-  worktreeOpenFileById: ReadonlyMap<string, OpenFile>,
+  worktreeOpenFiles: readonly OpenFile[],
   existingTabIndex: WebSessionExistingTabIndex,
   hostGroupIdByTabId: ReadonlyMap<string, string>,
   fallbackGroupId: string,
   sortOffset: number,
-  now: number
+  now: number,
+  editorDrafts?: Readonly<Record<string, string>>
 ): MirroredEditorTab[] {
+  const worktreeOpenFileById = firstOpenFileByIdForWorktree(worktreeOpenFiles)
+  const ownerFiles = firstOpenFileByIdForWorktree(
+    worktreeOpenFiles.filter((file) => file.runtimeEnvironmentId === environmentId)
+  )
   return snapshot.tabs.filter(isReadyEditorTab).map((tab, index) => {
-    const fileId = localEditorFileId(tab)
-    const existingFile = worktreeOpenFileById.get(fileId)
+    const sourceId = localEditorFileId(tab)
+    const ownedId = buildOwnedEditorFileId(sourceId, snapshot.worktree, environmentId)
+    const restoredFile = ownerFiles.get(ownedId)
+    const rawFile = worktreeOpenFileById.get(sourceId)
+    const sameOwner = (file: OpenFile | undefined) =>
+      file?.runtimeEnvironmentId === environmentId &&
+      file.worktreeId === snapshot.worktree &&
+      file.filePath === tab.filePath
+    const ownRawFile = ownerFiles.get(sourceId)
+    const existingFile = sameOwner(restoredFile)
+      ? restoredFile
+      : sameOwner(ownRawFile)
+        ? ownRawFile
+        : undefined
+    const fileId = rawFile && !sameOwner(rawFile) ? ownedId : (existingFile?.id ?? sourceId)
     const existingUnifiedTab = existingTabIndex.getEditorUnifiedTab(fileId, tab.id)
     const sourceFileId = editorSourceFileId(tab)
     const groupId = hostGroupIdByTabId.get(tab.id) ?? fallbackGroupId
@@ -118,7 +138,8 @@ export function buildMirroredEditorTabs(
       relativePath: tab.relativePath,
       worktreeId: snapshot.worktree,
       language: tab.language,
-      isDirty: tab.isDirty,
+      isDirty:
+        tab.isDirty || (existingFile?.isDirty === true && editorDrafts?.[fileId] !== undefined),
       runtimeEnvironmentId: environmentId,
       mode: tab.type === 'markdown' ? tab.mode : 'edit',
       markdownPreviewSourceFileId: sourceFileId,

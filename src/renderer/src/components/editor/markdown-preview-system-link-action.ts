@@ -1,4 +1,5 @@
 import { toast } from 'sonner'
+import { getWorkspaceShellApi } from '@/lib/workspace-shell-scope'
 import { translate } from '@/i18n/i18n'
 import { isLocalPathOpenBlocked, showLocalPathOpenBlockedToast } from '@/lib/local-path-open-guard'
 import { openHttpLink } from '@/lib/http-link-routing'
@@ -68,12 +69,17 @@ export function handleMarkdownPreviewSystemLinkClick({
     return true
   }
   const classified = resolveMarkdownLinkTarget(href, filePath, worktreeRoot)
+  const shell = getWorkspaceShellApi({
+    worktreeId: sourceRoutingWorktreeId,
+    runtimeEnvironmentId: resolvedSourceRuntimeEnvironmentId,
+    connectionId: sourceConnectionId
+  })
   if (
     classified?.kind === 'markdown' ||
     (classified?.kind === 'file' && classified.line !== undefined)
   ) {
     const cleanUri = absolutePathToFileUri(classified.absolutePath)
-    void window.api.shell.pathExists(classified.absolutePath).then((exists) => {
+    void shell.pathExists(classified.absolutePath).then((exists) => {
       if (!exists) {
         toast.error(
           translate(
@@ -84,10 +90,10 @@ export function handleMarkdownPreviewSystemLinkClick({
         )
         return
       }
-      void window.api.shell.openFileUri(cleanUri)
+      void shell.openFileUri(cleanUri)
     })
     return true
   }
-  void window.api.shell.openFileUri(parsed.toString())
+  void shell.openFileUri(parsed.toString())
   return true
 }

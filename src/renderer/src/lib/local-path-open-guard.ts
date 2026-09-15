@@ -1,12 +1,17 @@
 import { toast } from 'sonner'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import { translate } from '@/i18n/i18n'
+import { isLocalWorkspaceWindowEnvironment } from './workspace-window-runtime-scope'
 
 export function isLocalPathOpenBlocked(
   settings: Pick<GlobalSettings, 'activeRuntimeEnvironmentId'> | null | undefined,
   context?: { connectionId?: string | null }
 ): boolean {
-  return Boolean(settings?.activeRuntimeEnvironmentId?.trim() || context?.connectionId?.trim())
+  const environmentId = settings?.activeRuntimeEnvironmentId?.trim()
+  return Boolean(
+    (environmentId && !isLocalWorkspaceWindowEnvironment(environmentId)) ||
+    context?.connectionId?.trim()
+  )
 }
 
 export function showLocalPathOpenBlockedToast(): void {

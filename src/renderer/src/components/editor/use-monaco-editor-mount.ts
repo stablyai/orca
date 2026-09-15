@@ -1,4 +1,5 @@
 import { useCallback } from 'react'
+import { captureEditorView, registerEditorView } from './editor-view-transfer'
 import type { OnMount } from '@monaco-editor/react'
 import { useAppStore } from '@/store'
 import { registerFileSearchSelectedTextProvider } from '@/lib/file-search-selection'
@@ -67,6 +68,12 @@ export function useMonacoEditorMount(params: MonacoEditorMountParams): OnMount {
       editorRef.current = editorInstance
       setMountedEditor(editorInstance)
       const uninstallE2EProbe = installMonacoE2EProbe(editorInstance, filePath)
+      const transferred = captureEditorView(viewStateId ?? viewStateKey)
+      const unregisterTransfer = registerEditorView(viewStateId ?? viewStateKey, () => ({
+        text: editorInstance.getValue(),
+        version: editorInstance.getModel()?.getAlternativeVersionId() ?? 0,
+        state: editorInstance.saveViewState()
+      }))
       let autoHeightSub: { dispose: () => void } | null = null
       let autoHeightFrame: number | null = null
       const updateAutoHeight = (): void => {
@@ -168,6 +175,7 @@ export function useMonacoEditorMount(params: MonacoEditorMountParams): OnMount {
       })
 
       editorInstance.onDidDispose(() => {
+        unregisterTransfer()
         cursorPositionSub.dispose()
         scrollStateSub.dispose()
         gutterMouseDownSub.dispose()
@@ -195,6 +203,8 @@ export function useMonacoEditorMount(params: MonacoEditorMountParams): OnMount {
         queueReveal(editorInstance, reveal.line, reveal.column, reveal.matchLength, () => {
           useAppStore.getState().setPendingEditorReveal(null)
         })
+      } else if (transferred?.state) {
+        editorInstance.restoreViewState(transferred.state)
       } else {
         restoreMonacoViewState(editorInstance, viewStateKey)
       }

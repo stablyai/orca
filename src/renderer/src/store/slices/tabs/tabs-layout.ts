@@ -17,6 +17,32 @@ export function buildSplitNode(
   }
 }
 
+function buildBalancedSplitLayoutAtDepth(
+  groupIds: readonly string[],
+  depth: number
+): TabGroupLayoutNode {
+  if (groupIds.length === 0) {
+    throw new Error('Cannot build a pane layout without groups')
+  }
+  if (groupIds.length === 1) {
+    return { type: 'leaf', groupId: groupIds[0] }
+  }
+  const firstCount = Math.ceil(groupIds.length / 2)
+  const first = buildBalancedSplitLayoutAtDepth(groupIds.slice(0, firstCount), depth + 1)
+  const second = buildBalancedSplitLayoutAtDepth(groupIds.slice(firstCount), depth + 1)
+  return {
+    type: 'split',
+    direction: depth % 2 === 0 ? 'horizontal' : 'vertical',
+    first,
+    second,
+    ratio: firstCount / groupIds.length
+  }
+}
+
+export function buildBalancedSplitLayout(groupIds: readonly string[]): TabGroupLayoutNode {
+  return buildBalancedSplitLayoutAtDepth(groupIds, 0)
+}
+
 export function replaceLeaf(
   root: TabGroupLayoutNode,
   targetGroupId: string,

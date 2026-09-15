@@ -1,4 +1,5 @@
 import { toast } from 'sonner'
+import { getWorkspaceShellApi } from '@/lib/workspace-shell-scope'
 import { translate } from '@/i18n/i18n'
 import { getConnectionIdForFileFromState } from '@/lib/connection-owner-resolution'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
@@ -76,7 +77,11 @@ export function openDocPreviewExternally(document: DocPreviewDocument): void {
   const ownedByThisMachine =
     connectionId === null && runtimeEnvironmentId === null && worktreeRoot !== null
   if (ownedByThisMachine && canClientOsOpenWorkspaceFile(fileContext, document.filePath)) {
-    void window.api.shell.openFilePath(document.filePath)
+    void getWorkspaceShellApi({
+      worktreeId: document.worktreeId,
+      runtimeEnvironmentId,
+      connectionId
+    }).openFilePath(document.filePath)
     return
   }
   // Why refuse instead of downloading: with neither owner resolved the download route reads the

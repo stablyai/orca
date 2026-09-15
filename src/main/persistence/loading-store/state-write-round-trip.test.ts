@@ -9,6 +9,8 @@ import { mkdtempSync, readFileSync, realpathSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { ipcMain } from 'electron'
+import { registerWorkspaceWindowPresentationStorage } from '../../window/workspace-window-presentation-storage'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 
 vi.mock('electron', () => ({
@@ -26,8 +28,11 @@ vi.mock('electron', () => ({
     encryptString: (value: string) => Buffer.from(`enc:${value}`),
     decryptString: (value: Buffer) => value.toString().slice(4)
   },
-  ipcMain: { on: () => {}, handle: () => {} },
+  ipcMain: { on: vi.fn(), handle: () => {} },
   BrowserWindow: { getAllWindows: () => [] }
+}))
+vi.mock('../../window/workspace-window-native-bridge', () => ({
+  getWorkspaceWindowNavigationId: () => 'native-window'
 }))
 
 const { Store } = await import('./store')
@@ -71,6 +76,57 @@ function session(activeTabId: string): WorkspaceSessionState {
 }
 
 describe('persisted state survives a save/load round trip', () => {
+  it('does not write private UI session links into native window presentation JSON', () => {
+    const dataFile = join(
+      realpathSync(mkdtempSync(join(tmpdir(), 'orca-window-private-'))),
+      'orca-data.json'
+    )
+    const store = openStore(dataFile)
+    registerWorkspaceWindowPresentationStorage(() => store)
+    const handler = vi
+      .mocked(ipcMain.on)
+      .mock.calls.find((call) => call[0] === 'workspaceWindow:presentationStorage')![1]
+    const event = {} as Electron.IpcMainEvent
+    handler(
+      event,
+      'orca.web.ui.v1',
+      JSON.stringify({ activeView: 'terminal', browserKagiSessionLink: 'private-kagi-sentinel' })
+    )
+    expect(event.returnValue).not.toHaveProperty('error')
+    store.flushOrThrow()
+    expect(readFileSync(dataFile, 'utf8')).not.toContain('private-kagi-sentinel')
+    expect(
+      openStore(dataFile).getWorkspaceWindowPresentation('native-window', 'orca.web.ui.v1')
+    ).toBe('{"activeView":"terminal"}')
+  })
+  it('keeps native window presentation isolated across origin changes and profile restart', () => {
+    const dataFile = join(
+      realpathSync(mkdtempSync(join(tmpdir(), 'orca-window-storage-'))),
+      'orca-data.json'
+    )
+    const written = openStore(dataFile)
+    written.setWorkspaceWindowPresentation('first', 'orca.web.ui.v1', '{"selected":"first"}')
+    written.setWorkspaceWindowPresentation('second', 'orca.web.ui.v1', '{"selected":"second"}')
+    written.setWorkspaceWindowPresentation(
+      'first',
+      'orca.web.workspaceSession.v1.runtime:remote',
+      '{"draft":"unsaved"}'
+    )
+    written.flushOrThrow()
+    const restored = openStore(dataFile)
+    expect(restored.getWorkspaceWindowPresentation('first', 'orca.web.ui.v1')).toBe(
+      '{"selected":"first"}'
+    )
+    expect(restored.getWorkspaceWindowPresentation('second', 'orca.web.ui.v1')).toBe(
+      '{"selected":"second"}'
+    )
+    expect(
+      restored.getWorkspaceWindowPresentation(
+        'first',
+        'orca.web.workspaceSession.v1.runtime:remote'
+      )
+    ).toBe('{"draft":"unsaved"}')
+  })
   it('reloads settings, secrets and both session partitions unchanged', () => {
     const dataFile = join(
       realpathSync(mkdtempSync(join(tmpdir(), 'orca-store-round-trip-'))),

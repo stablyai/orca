@@ -39,6 +39,7 @@ import { triggerStartupNotificationRegistration } from '../ipc/startup-notificat
 import { startDesktopPushService } from './main-process-push-startup'
 import { mainProcessState as state } from './main-process-state'
 import { logStartupMilestone } from './startup-diagnostics'
+import { restoreWorkspaceWindows } from './main-window-controller'
 
 type RuntimeService = NonNullable<typeof state.runtime>
 
@@ -241,6 +242,8 @@ async function launchDesktopMode(
     void state.mainProcessI18nReady.then(() =>
       showRuntimeRpcStartupFailureDialog(win, runtimeRpcStartResult.error)
     )
+  } else {
+    restoreWorkspaceWindows()
   }
   // Why after the window and not before it: the default-session request guard already holds every
   // fetcher until the persisted proxy lands, so this only has to keep the launch phase itself

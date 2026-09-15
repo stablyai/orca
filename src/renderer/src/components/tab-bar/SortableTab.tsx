@@ -6,6 +6,7 @@ import { useTabAgent } from '@/lib/use-tab-agent'
 import { isImeCompositionKeyDown } from '@/lib/ime-composition-keyboard-event'
 import { Input } from '@/components/ui/input'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { ProjectAccentMark } from '../repo/ProjectAccentMark'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { TabDragItemData } from '../tab-group/useTabDragSplit'
 import { useAppStore } from '../../store'
@@ -121,7 +122,7 @@ export default function SortableTab({
     tab.customTitle ?? (tabAgent ? stripLeadingAgentTitleDecoration(tab.title) : tab.title)
 
   const { attributes, listeners, setNodeRef } = useSortable({
-    id: tab.id,
+    id: dragData?.workspaceViewId ?? tab.id,
     // Why: carry the resolved agent into the drag overlay so dragged tabs keep the same glyph without another store lookup.
     data: { ...dragData, agent: tabAgent }
   })
@@ -188,6 +189,8 @@ export default function SortableTab({
       data-agent-activity-status={activityStatus}
       {...attributes}
       {...dragListeners}
+      aria-label={dragData.projectContext?.label}
+      data-project-label={dragData.projectContext?.projectName || undefined}
       // Why: subtle amber wash flags unread activity at a glance, layered over the active highlight so it still reads selected.
       className={`group relative flex items-center h-full px-1.5 text-xs cursor-pointer select-none outline-none focus:outline-none focus-visible:outline-none ${getTabStripBorderClasses(hasTabsToRight, { includeTopBorder: includeTopTabBorder })} ${getDropIndicatorClasses(dropIndicator ?? null)} ${getTabRootStateClasses(isActive)}`}
       onDoubleClick={(e) => {
@@ -224,6 +227,12 @@ export default function SortableTab({
         }
       }}
     >
+      {dragData.projectContext?.projectName && (
+        <span className="inline-flex max-w-32 items-center gap-1 truncate pr-1.5 text-muted-foreground">
+          <ProjectAccentMark color={dragData.projectContext.accentColor} />
+          <span className="truncate">{dragData.projectContext.projectName}</span>
+        </span>
+      )}
       {isActive && <span className={ACTIVE_TAB_INDICATOR_CLASSES} aria-hidden />}
       {showUnreadActivity && (
         // Why: a real DOM child keeps both drop-indicator pseudo-elements free and pointer events reaching the tab.
@@ -292,7 +301,7 @@ export default function SortableTab({
             sideOffset={6}
             className="max-w-80 whitespace-normal break-words text-left"
           >
-            {displayTitle}
+            {dragData.projectContext?.label ?? displayTitle}
           </TooltipContent>
         </Tooltip>
       )}

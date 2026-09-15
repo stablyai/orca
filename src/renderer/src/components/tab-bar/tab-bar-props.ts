@@ -10,6 +10,13 @@ export type TabBarProps = {
   tabs: (TerminalTab & { unifiedTabId?: string })[]
   activeTabId: string | null
   groupId?: string
+  presentationTabs?: readonly (Tab & { presentationId?: string })[]
+  presentationContext?: Record<
+    string,
+    { projectName: string; label: string; viewId: string; paneId: string; accentColor?: string }
+  >
+  creationDisabled?: boolean
+  presentationPaneId?: string
   worktreeId: string
   expandedPaneByTabId: Record<string, boolean>
   onActivate: (tabId: string) => void

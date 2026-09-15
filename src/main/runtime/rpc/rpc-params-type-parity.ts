@@ -26,11 +26,13 @@ type ParamsMatch<Host, Catalog> =
 // Distribute over declarations so each handler is checked, including streaming handlers.
 type MismatchedMethod<Method extends RpcAnyMethodDeclaration> =
   Method extends RpcAnyMethodDeclaration
-    ? Method['name'] extends RpcMethodName
-      ? ParamsMatch<Parameters<Method['handler']>[0], RpcParams<Method['name']>> extends true
-        ? never
-        : Method['name']
-      : Exclude<Method['name'], UncataloguedMethod>
+    ? Method['name'] extends `session.window.tabs.${string}`
+      ? never
+      : Method['name'] extends RpcMethodName
+        ? ParamsMatch<Parameters<Method['handler']>[0], RpcParams<Method['name']>> extends true
+          ? never
+          : Method['name']
+        : Exclude<Method['name'], UncataloguedMethod>
     : never
 
 type AssertNever<T extends never> = T

@@ -4,6 +4,8 @@ import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { resolveWorktreeOperationRouteResult } from '@/lib/worktree-operation-route'
 import { isWebClientLocation } from '@/lib/web-client-location'
+import { toast } from 'sonner'
+import { translate } from '@/i18n/i18n'
 import type { TerminalSlice, TerminalStoreGet, TerminalStoreSet } from './terminal-state'
 
 export function createActiveWorkspaceTerminalActions(
@@ -30,12 +32,22 @@ export function createActiveWorkspaceTerminalActions(
         : getRuntimeEnvironmentIdForWorktree(state, worktreeId)
       if (runtimeEnvironmentId) {
         const { createWebRuntimeSessionTerminal } = await import('@/runtime/web-runtime-session')
-        await createWebRuntimeSessionTerminal({
+        const outcome = await createWebRuntimeSessionTerminal({
           worktreeId,
           environmentId: runtimeEnvironmentId,
           targetGroupId: groupId,
           activate: true
         })
+        if (outcome.status === 'failed') {
+          toast.error(
+            outcome.message.includes('workspace_window_navigation_unsupported')
+              ? translate(
+                  'workspaceWindow.navigationUnsupported',
+                  'This host does not support independent window navigation. Update Orca on the host.'
+                )
+              : outcome.message
+          )
+        }
         return
       }
       if (isWebClientLocation() && worktreeId !== FLOATING_TERMINAL_WORKTREE_ID) {

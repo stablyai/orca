@@ -1,4 +1,5 @@
 import { absolutePathToFileUri } from '@/components/editor/markdown-internal-links'
+import { getWorkspaceShellApi } from '@/lib/workspace-shell-scope'
 import { getWorkspaceFilePreviewPlan, openFileInBrowserTab } from '@/lib/file-preview'
 import { downloadAndOpenRemoteTerminalFile } from './terminal-remote-file-download-open'
 import { detectLanguage } from '@/lib/language-detect'
@@ -177,7 +178,10 @@ export function openDetectedFilePath(
     if (openWithSystemDefault && canOpenWithSystemDefault) {
       // Why: Shift+Cmd/Ctrl mirrors URL links by escaping Orca and honoring the
       // user's OS file associations without adding editor-specific settings.
-      const openedWithSystemDefault = await window.api.shell.openFilePath(mappedFilePath)
+      const openedWithSystemDefault = await getWorkspaceShellApi({
+        worktreeId,
+        runtimeEnvironmentId
+      }).openFilePath(mappedFilePath)
       if (openedWithSystemDefault || statResult.isDirectory) {
         return
       }
@@ -185,7 +189,9 @@ export function openDetectedFilePath(
 
     if (statResult.isDirectory) {
       if (canOpenWithSystemDefault) {
-        await window.api.shell.openFilePath(mappedFilePath)
+        await getWorkspaceShellApi({ worktreeId, runtimeEnvironmentId }).openFilePath(
+          mappedFilePath
+        )
       }
       return
     }

@@ -1,4 +1,9 @@
 import type {
+  ComposedPageExecutor,
+  ComposedClientHost,
+  PairedRuntimeBrowserClientHostCompositionOptions
+} from './paired-runtime-browser-client-host-contracts'
+import type {
   BrowserClientHostedPageInventory,
   BrowserClientHostCommandEvent,
   BrowserClientHostCommandResult,
@@ -10,73 +15,8 @@ import {
   asCompositionError,
   closeBrowserClientHostComposition
 } from './paired-runtime-browser-client-host-teardown'
-import type { BrowserClientPageNetworkRoute } from './browser-client-page-cleanup'
 import type { BrowserClientPageAuthorityIdentity as BrowserClientHostAuthorityTransitionInput } from './browser-client-page-command-executor-dependencies'
-import {
-  type ComposedBrowserClientNetworkRoutes,
-  PairedRuntimeBrowserClientHostRouteSets
-} from './paired-runtime-browser-client-host-route-sets'
-
-type ComposedPageExecutor = {
-  handle(
-    event: BrowserClientHostCommandEvent,
-    signal: AbortSignal
-  ): Promise<BrowserClientHostCommandResult>
-  retirePage(browserPageId: string, pageHostGeneration: number): Promise<boolean>
-  hasUnresolvedPage(browserPageId: string, pageHostGeneration: number): boolean
-  snapshotPageInventory(): readonly BrowserClientHostedPageInventory[]
-  beginAuthorityTransition(): void
-  completeAuthorityTransition(input: BrowserClientHostAuthorityTransitionInput): void
-  fenceNavigation(): void
-  close(): Promise<void>
-}
-
-type ComposedClientHost = {
-  start(): Promise<BrowserClientHostLeaseAuthority>
-  retirePage(browserPageId: string, pageHostGeneration: number): Promise<boolean>
-  forgetPage(browserPageId: string, pageHostGeneration: number): boolean
-  whenHandlersSettled(): Promise<void>
-  refreshPageInventory(): Promise<void>
-  close(error?: Error): Promise<boolean>
-}
-
-type ClientHostCallbacks = {
-  handler(
-    event: BrowserClientHostCommandEvent,
-    signal: AbortSignal
-  ): Promise<BrowserClientHostCommandResult>
-  onAuthority(authority: BrowserClientHostLeaseAuthority): void
-  getPageInventory(): readonly BrowserClientHostedPageInventory[]
-  onError(error: Error): void
-  onTransportLost(error: Error): void
-  onReconnected(authority: BrowserClientHostLeaseAuthority): void
-}
-
-type PairedRuntimeBrowserClientHostCompositionOptions<
-  Start extends BrowserClientHostAuthorityTransitionInput
-> = {
-  initialInput: Start
-  createRoutes(
-    input: Start,
-    authority: BrowserClientHostLeaseAuthority
-  ): ComposedBrowserClientNetworkRoutes
-  createExecutor(
-    input: Start,
-    options: {
-      retainNetworkRoute(
-        executionHostKey: string,
-        signal: AbortSignal
-      ): Promise<BrowserClientPageNetworkRoute>
-      onPageUnavailable(browserPageId: string, pageHostGeneration: number): void
-    }
-  ): ComposedPageExecutor
-  createHost(input: Start, callbacks: ClientHostCallbacks): ComposedClientHost
-  onError?: (error: Error) => void
-  /** Runs as closing begins, before teardown: the point after which this composition owns nothing. */
-  onClosing?: () => void
-  /** Injected so the grace a restart depends on is drivable; production supplies the real deadline. */
-  createAuthorityReplacementWait?: () => BrowserClientHostAuthorityReplacementWait
-}
+import { PairedRuntimeBrowserClientHostRouteSets } from './paired-runtime-browser-client-host-route-sets'
 
 export class PairedRuntimeBrowserClientHostComposition<
   Start extends BrowserClientHostAuthorityTransitionInput
@@ -114,6 +54,14 @@ export class PairedRuntimeBrowserClientHostComposition<
     }
     this.startPromise ??= this.host.start()
     return this.startPromise
+  }
+
+  findPage(browserPageId: string): BrowserClientHostedPageInventory | null {
+    return this.closed
+      ? null
+      : (this.executor
+          .snapshotPageInventory()
+          .find((page) => page.browserPageId === browserPageId) ?? null)
   }
 
   replaceAuthority(input: Start): Promise<BrowserClientHostLeaseAuthority> {

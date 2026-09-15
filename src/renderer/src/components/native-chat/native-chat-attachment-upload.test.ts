@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AppState } from '@/store/types'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
+import { noteWorkspaceWindowRuntimeEnvironment } from '@/lib/workspace-window-runtime-scope'
 
 const mocks = vi.hoisted(() => ({
   toastLoading: vi.fn(() => 'toast-1'),
@@ -63,6 +64,24 @@ function state(overrides: Partial<AppState> = {}): AppState {
 }
 
 describe('resolveNativeChatAttachmentOwner', () => {
+  it('resolves a verified local workspace window owner to local attachment handling', () => {
+    vi.stubGlobal('window', { orcaWorkspaceWindowNative: { localRuntimeId: 'local' } })
+    noteWorkspaceWindowRuntimeEnvironment('loopback', 'local')
+    try {
+      expect(
+        resolveNativeChatAttachmentOwner(
+          state({
+            repos: [
+              { id: 'repo', connectionId: null, executionHostId: 'runtime:loopback' }
+            ] as never
+          }),
+          'tab-1'
+        )
+      ).toEqual({ kind: 'local' })
+    } finally {
+      vi.unstubAllGlobals()
+    }
+  })
   it('resolves a local repo worktree to local', () => {
     expect(resolveNativeChatAttachmentOwner(state(), 'tab-1')).toEqual({ kind: 'local' })
   })

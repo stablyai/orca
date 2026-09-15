@@ -18,6 +18,7 @@ import {
   DropdownMenuTrigger
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { ProjectAccentMark } from '../repo/ProjectAccentMark'
 import { ORCA_BROWSER_BLANK_URL } from '../../../../shared/constants'
 import { redactKagiSessionToken } from '../../../../shared/browser-url'
 import type { BrowserTab as BrowserTabState } from '../../../../shared/browser-workspace-types'
@@ -106,7 +107,7 @@ export default function BrowserTab({
   // Why: no transform/transition/isDragging styling — the drag design is
   // that tabs stay visually anchored; only the blue insertion bar moves.
   const { attributes, listeners, setNodeRef } = useSortable({
-    id: tab.id,
+    id: dragData?.workspaceViewId ?? tab.id,
     data: dragData
   })
   const [menuOpen, setMenuOpen] = useState(false)
@@ -157,6 +158,8 @@ export default function BrowserTab({
       data-pinned={isPinned ? 'true' : 'false'}
       {...attributes}
       {...listeners}
+      aria-label={dragData.projectContext?.label}
+      data-project-label={dragData.projectContext?.projectName || undefined}
       className={`group relative flex items-center h-full px-1.5 text-xs cursor-pointer select-none outline-none focus:outline-none focus-visible:outline-none ${getTabStripBorderClasses(hasTabsToRight, { includeTopBorder: includeTopTabBorder })} ${getDropIndicatorClasses(dropIndicator ?? null)} ${getTabRootStateClasses(isActive)}`}
       onPointerDown={(e) => {
         onTabPointerDown(
@@ -182,6 +185,12 @@ export default function BrowserTab({
       }}
     >
       {isActive && <span className={ACTIVE_TAB_INDICATOR_CLASSES} aria-hidden />}
+      {dragData.projectContext?.projectName && (
+        <span className="inline-flex max-w-32 items-center gap-1 truncate pr-1.5 text-muted-foreground">
+          <ProjectAccentMark color={dragData.projectContext.accentColor} />
+          <span className="truncate">{dragData.projectContext.projectName}</span>
+        </span>
+      )}
       {/* Why: the browser tab icon is the only non-terminal, non-editor
           surface in the tab strip. Coloring the Globe blue (matching the
           in-app browser's identity and the default tab insertion bar)
@@ -237,7 +246,7 @@ export default function BrowserTab({
               sideOffset={6}
               className="max-w-80 whitespace-normal break-words text-left"
             >
-              {tabLabel}
+              {dragData.projectContext?.label ?? tabLabel}
             </TooltipContent>
           </Tooltip>
         )}

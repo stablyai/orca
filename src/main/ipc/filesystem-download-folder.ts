@@ -1,4 +1,5 @@
-import { BrowserWindow, dialog, ipcMain } from 'electron'
+import { registerWorkspaceWindowFileTransferHandler } from '../window/workspace-window-file-transfer-handlers'
+import { BrowserWindow, dialog } from 'electron'
 import { randomUUID } from 'node:crypto'
 import { rm, stat } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
@@ -47,7 +48,7 @@ async function cleanupLocalTransferDirectory(dirPath: string): Promise<void> {
 
 // Why: keep folder-download IPC out of filesystem.ts — that module is already large.
 export function registerFilesystemDownloadFolderHandlers(): void {
-  ipcMain.handle(
+  registerWorkspaceWindowFileTransferHandler(
     'fs:downloadFolder',
     async (
       event,

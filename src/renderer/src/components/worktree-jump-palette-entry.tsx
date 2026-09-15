@@ -16,6 +16,7 @@ import {
   WorktreeJumpPaletteSimulatorRow
 } from './worktree-jump-palette-browser-simulator-rows'
 import { translate } from '@/i18n/i18n'
+import { WorktreeJumpPaletteViewRow } from './worktree-jump-palette-view-row'
 
 export function WorktreeJumpPaletteEntry({
   entry,
@@ -80,6 +81,11 @@ export function WorktreeJumpPaletteEntry({
   if (entry.type === 'worktree') {
     return (
       <WorktreeJumpPaletteWorktreeRow entry={entry} renderKey={renderKey} controller={controller} />
+    )
+  }
+  if (entry.type === 'workspace-view') {
+    return (
+      <WorktreeJumpPaletteViewRow entry={entry} renderKey={renderKey} controller={controller} />
     )
   }
   if (entry.type === 'project-target') {

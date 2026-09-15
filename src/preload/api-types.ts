@@ -1,3 +1,4 @@
+import type { WorkspaceViewBridge } from '../shared/workspace-view-bridge'
 import type {
   ClaudeAccountsApi,
   CodexAccountsApi,
@@ -204,6 +205,9 @@ export type {
 declare global {
   // oxlint-disable-next-line typescript-eslint/consistent-type-definitions -- declaration merging requires interface
   interface Window {
+    orcaWorkspaceWindowNative?: WorkspaceWindowNativeBridge
+    orcaWorkspaceViews?: WorkspaceViewBridge
     api: PreloadApi
   }
 }
+import type { WorkspaceWindowNativeBridge } from './api/workspace-window-native-api'

@@ -116,6 +116,17 @@ afterEach(() => {
 })
 
 describe('TerminalPaneOverlayLayer fallback measure<->fit loop (React #185)', () => {
+  it('measures relative to the positioned ancestor when the workspace wrapper has no box', () => {
+    renderSlot()
+    const overlay = container.querySelector<HTMLElement>('[data-terminal-overlay-tab-id]')!
+    const positionedAncestor = document.createElement('div')
+    positionedAncestor.getBoundingClientRect = () => createRect({ left: 220, top: 28 })
+    Object.defineProperty(overlay, 'offsetParent', { value: positionedAncestor })
+    bodyRect = createRect({ left: 620, top: 60, width: 400, height: 500 })
+    act(() => capturedResizeCallback?.())
+    expect(overlay.style.left).toBe('400px')
+    expect(overlay.style.top).toBe('32px')
+  })
   it('keeps the tab when the host reports an unverified PTY loss', () => {
     renderSlot()
 

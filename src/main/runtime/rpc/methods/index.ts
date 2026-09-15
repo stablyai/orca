@@ -18,7 +18,7 @@ import { DIAGNOSTICS_METHODS } from './diagnostics'
 import { ACCOUNT_METHODS } from './accounts'
 import { PREFLIGHT_METHODS } from './preflight'
 import { COMPUTER_METHODS } from './computer'
-import { SESSION_TAB_METHODS } from './session-tabs'
+import { SESSION_TAB_METHOD_DECLARATIONS_WITH_WINDOWS } from './session-tabs'
 import { NATIVE_CHAT_METHODS } from './native-chat'
 import { FILE_METHODS } from './files'
 import { GIT_METHODS } from './git'
@@ -74,7 +74,7 @@ export const ALL_RPC_METHODS = [
   ...ACCOUNT_METHODS,
   ...PREFLIGHT_METHODS,
   ...COMPUTER_METHODS,
-  ...SESSION_TAB_METHODS,
+  ...SESSION_TAB_METHOD_DECLARATIONS_WITH_WINDOWS,
   ...NATIVE_CHAT_METHODS,
   ...FILE_METHODS,
   ...GIT_METHODS,

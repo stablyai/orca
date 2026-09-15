@@ -1,44 +1,75 @@
-import { ipcRenderer } from 'electron'
+import type { IpcRenderer } from 'electron'
+const { ipcRenderer } = require('electron') as { ipcRenderer: IpcRenderer }
 import type {
   ShellOpenExternalEditorRequest,
   ShellOpenExternalEditorResult,
   ShellOpenLocalPathResult
 } from '../../shared/shell-open-types'
 import type { PreloadApi } from '../api-types'
+import type { ShellPathScope, ShellRuntimeScope } from './shell-api'
 
-export const shellApi = {
-  openPath: (path: string): Promise<void> => ipcRenderer.invoke('shell:openPath', path),
+export function createShellBridge(prefix = 'shell'): PreloadApi['shell'] {
+  return {
+    openPath: (path: string, runtimeId?: ShellRuntimeScope): Promise<void> =>
+      ipcRenderer.invoke(
+        `${prefix}:openPath`,
+        path,
+        ...(runtimeId === undefined ? [] : [runtimeId])
+      ),
 
-  openInFileManager: (path: string): Promise<ShellOpenLocalPathResult> =>
-    ipcRenderer.invoke('shell:openInFileManager', path),
+    openInFileManager: (
+      path: string,
+      runtimeId?: ShellRuntimeScope
+    ): Promise<ShellOpenLocalPathResult> =>
+      ipcRenderer.invoke(
+        `${prefix}:openInFileManager`,
+        path,
+        ...(runtimeId === undefined ? [] : [runtimeId])
+      ),
 
-  openInExternalEditor: (
-    request: ShellOpenExternalEditorRequest
-  ): Promise<ShellOpenExternalEditorResult> =>
-    ipcRenderer.invoke('shell:openInExternalEditor', request),
+    openInExternalEditor: (
+      request: ShellOpenExternalEditorRequest,
+      runtimeId?: ShellRuntimeScope
+    ): Promise<ShellOpenExternalEditorResult> =>
+      ipcRenderer.invoke(
+        `${prefix}:openInExternalEditor`,
+        request,
+        ...(runtimeId === undefined ? [] : [runtimeId])
+      ),
 
-  openUrl: (url: string): Promise<void> => ipcRenderer.invoke('shell:openUrl', url),
+    openUrl: (url: string): Promise<void> => ipcRenderer.invoke(`${prefix}:openUrl`, url),
 
-  openFilePath: (path: string): Promise<boolean> => ipcRenderer.invoke('shell:openFilePath', path),
+    openFilePath: (path: string, scope?: ShellPathScope): Promise<boolean> =>
+      ipcRenderer.invoke(`${prefix}:openFilePath`, path, scope),
 
-  openFileUri: (uri: string): Promise<void> => ipcRenderer.invoke('shell:openFileUri', uri),
+    openFileUri: (uri: string, scope?: ShellPathScope): Promise<void> =>
+      ipcRenderer.invoke(`${prefix}:openFileUri`, uri, scope),
 
-  pathsExist: (paths: string[]): Promise<boolean[]> =>
-    ipcRenderer.invoke('shell:pathsExist', paths),
-  pathExists: (path: string): Promise<boolean> => ipcRenderer.invoke('shell:pathExists', path),
+    pathsExist:
+      prefix === 'shell'
+        ? (paths: string[]): Promise<boolean[]> => ipcRenderer.invoke('shell:pathsExist', paths)
+        : undefined,
 
-  pickAttachment: (): Promise<string | null> => ipcRenderer.invoke('shell:pickAttachment'),
+    pathExists: (path: string, scope?: ShellPathScope): Promise<boolean> =>
+      ipcRenderer.invoke(`${prefix}:pathExists`, path, scope),
 
-  pickImage: (): Promise<string | null> => ipcRenderer.invoke('shell:pickImage'),
+    pickAttachment: (): Promise<string | null> => ipcRenderer.invoke(`${prefix}:pickAttachment`),
 
-  pickRepoIconImage: (): Promise<{ dataUrl: string; fileName: string } | null> =>
-    ipcRenderer.invoke('shell:pickRepoIconImage'),
+    pickImage: (): Promise<string | null> => ipcRenderer.invoke(`${prefix}:pickImage`),
 
-  pickAudio: (): Promise<string | null> => ipcRenderer.invoke('shell:pickAudio'),
+    pickRepoIconImage: (): Promise<{ dataUrl: string; fileName: string } | null> =>
+      ipcRenderer.invoke(`${prefix}:pickRepoIconImage`),
 
-  pickDirectory: (args: { defaultPath?: string }): Promise<string | null> =>
-    ipcRenderer.invoke('shell:pickDirectory', args),
+    pickAudio: (): Promise<string | null> => ipcRenderer.invoke(`${prefix}:pickAudio`),
 
-  copyFile: (args: { srcPath: string; destPath: string }): Promise<void> =>
-    ipcRenderer.invoke('shell:copyFile', args)
-} satisfies PreloadApi['shell']
+    pickDirectory: (args: { defaultPath?: string }): Promise<string | null> =>
+      ipcRenderer.invoke(`${prefix}:pickDirectory`, args),
+
+    copyFile: (
+      args: { srcPath: string; destPath: string },
+      scope?: ShellPathScope
+    ): Promise<void> => ipcRenderer.invoke(`${prefix}:copyFile`, args, scope)
+  }
+}
+
+export const shellApi = createShellBridge()

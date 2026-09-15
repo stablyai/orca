@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 
+import { createOpenFile, createDeferredContentRead } from './editor-content-test-fixtures'
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -55,22 +56,6 @@ import { useEditorPanelContentState } from './useEditorPanelContentState'
 import { getDiskBaselineSignature } from './diff-content-signature'
 import { ORCA_EDITOR_EXTERNAL_FILE_CHANGE_EVENT } from './editor-autosave'
 
-type Deferred<T> = {
-  promise: Promise<T>
-  resolve: (value: T) => void
-  reject: (reason: unknown) => void
-}
-
-function createDeferred<T>(): Deferred<T> {
-  let resolve!: (value: T) => void
-  let reject!: (reason: unknown) => void
-  const promise = new Promise<T>((res, rej) => {
-    resolve = res
-    reject = rej
-  })
-  return { promise, resolve, reject }
-}
-
 function dispatchExternalFileChange(file: OpenFile, worktreePath: string): void {
   act(() => {
     window.dispatchEvent(
@@ -116,19 +101,6 @@ function HookProbe({
   latestDiffContents = state.diffContents
   latestReloadContent = state.reloadContent
   return null
-}
-
-function createOpenFile(overrides: Partial<OpenFile> = {}): OpenFile {
-  return {
-    id: '/repo/file.ts',
-    filePath: '/repo/file.ts',
-    relativePath: 'file.ts',
-    worktreeId: 'wt-1',
-    language: 'typescript',
-    isDirty: false,
-    mode: 'edit',
-    ...overrides
-  }
 }
 
 describe('useEditorPanelContentState', () => {
@@ -614,8 +586,8 @@ describe('useEditorPanelContentState', () => {
     // fire in the same effect flush, while the first read is still registered
     // in flight. The forced reload must delete that entry and start a new read.
     const activeFile = createOpenFile({ fileContentReloadNonce: 1 })
-    const firstRead = createDeferred<FileContent>()
-    const secondRead = createDeferred<FileContent>()
+    const firstRead = createDeferredContentRead<FileContent>()
+    const secondRead = createDeferredContentRead<FileContent>()
     mocks.readRuntimeFileContent
       .mockReturnValueOnce(firstRead.promise)
       .mockReturnValueOnce(secondRead.promise)
@@ -639,8 +611,8 @@ describe('useEditorPanelContentState', () => {
 
   it('ignores an older file read that resolves after a newer forced read', async () => {
     const activeFile = createOpenFile()
-    const staleRead = createDeferred<FileContent>()
-    const freshRead = createDeferred<FileContent>()
+    const staleRead = createDeferredContentRead<FileContent>()
+    const freshRead = createDeferredContentRead<FileContent>()
     mocks.readRuntimeFileContent
       .mockReturnValueOnce(staleRead.promise)
       .mockReturnValueOnce(freshRead.promise)
@@ -684,7 +656,7 @@ describe('useEditorPanelContentState', () => {
         entries: [{ path: 'src/conflict.ts', conflictKind: 'both_modified' }]
       }
     })
-    const conflictRead = createDeferred<FileContent>()
+    const conflictRead = createDeferredContentRead<FileContent>()
     mocks.readRuntimeFileContent.mockReturnValueOnce(conflictRead.promise)
 
     container = document.createElement('div')
@@ -725,8 +697,8 @@ describe('useEditorPanelContentState', () => {
 
   it('ignores an older file read after closing and reopening the same tab id', async () => {
     const activeFile = createOpenFile()
-    const staleRead = createDeferred<FileContent>()
-    const freshRead = createDeferred<FileContent>()
+    const staleRead = createDeferredContentRead<FileContent>()
+    const freshRead = createDeferredContentRead<FileContent>()
     mocks.readRuntimeFileContent
       .mockReturnValueOnce(staleRead.promise)
       .mockReturnValueOnce(freshRead.promise)
@@ -771,8 +743,8 @@ describe('useEditorPanelContentState', () => {
       mode: 'diff',
       diffSource: 'unstaged'
     })
-    const staleDiff = createDeferred<DiffContent>()
-    const freshDiff = createDeferred<DiffContent>()
+    const staleDiff = createDeferredContentRead<DiffContent>()
+    const freshDiff = createDeferredContentRead<DiffContent>()
     mocks.getRuntimeGitDiff
       .mockReturnValueOnce(staleDiff.promise)
       .mockReturnValueOnce(freshDiff.promise)
@@ -887,52 +859,69 @@ describe('useEditorPanelContentState', () => {
     expect(mocks.getRuntimeGitDiff).not.toHaveBeenCalled()
   })
 
-  it('stamps the disk baseline when a clean tab load resolves', async () => {
-    const activeFile = createOpenFile()
-    const setLastKnownDiskSignature = vi.fn()
-    mocks.getState.mockReturnValue({
-      settings: null,
-      openFiles: [activeFile],
-      setLastKnownDiskSignature
-    })
-    mocks.readRuntimeFileContent.mockResolvedValue({ content: 'disk content', isBinary: false })
+  it.each([false, true])(
+    'stamps the initial disk baseline (mirrored dirty flag: %s)',
+    async (mirrored) => {
+      const activeFile = createOpenFile({ isDirty: mirrored, mirroredFromRuntimeSession: mirrored })
+      const setLastKnownDiskSignature = vi.fn()
+      mocks.getState.mockReturnValue({
+        settings: null,
+        openFiles: [activeFile],
+        editorDrafts: {},
+        setLastKnownDiskSignature
+      })
+      mocks.readRuntimeFileContent.mockResolvedValue({ content: 'disk content', isBinary: false })
 
-    container = document.createElement('div')
-    document.body.appendChild(container)
-    root = createRoot(container)
-    await act(async () => {
-      root?.render(<HookProbe activeFile={activeFile} openFiles={[activeFile]} />)
-    })
+      container = document.createElement('div')
+      document.body.appendChild(container)
+      root = createRoot(container)
+      await act(async () => {
+        root?.render(<HookProbe activeFile={activeFile} openFiles={[activeFile]} />)
+      })
 
-    await vi.waitFor(() =>
-      expect(setLastKnownDiskSignature).toHaveBeenCalledWith(
-        activeFile.id,
-        getDiskBaselineSignature('disk content')
+      await vi.waitFor(() =>
+        expect(setLastKnownDiskSignature).toHaveBeenCalledWith(
+          activeFile.id,
+          getDiskBaselineSignature('disk content')
+        )
       )
-    )
-  })
+    }
+  )
 
-  it('keeps a dirty tab baseline untouched by content loads', async () => {
-    // Why: a dirty tab's draft still derives from the OLD content — moving
-    // the baseline on load would hide the conflict its restore check exists
-    // to catch.
-    const activeFile = createOpenFile({ isDirty: true })
-    const setLastKnownDiskSignature = vi.fn()
-    mocks.getState.mockReturnValue({
-      settings: null,
-      openFiles: [activeFile],
-      setLastKnownDiskSignature
-    })
-    mocks.readRuntimeFileContent.mockResolvedValue({ content: 'disk content', isBinary: false })
+  it.each(['local', 'baseline', 'draft', 'empty-draft'])(
+    'keeps a dirty tab baseline untouched by content loads: %s',
+    async (kind) => {
+      // Why: a dirty tab's draft still derives from the OLD content — moving
+      // the baseline on load would hide the conflict its restore check exists
+      // to catch.
+      const activeFile = createOpenFile({
+        isDirty: true,
+        mirroredFromRuntimeSession: kind !== 'local',
+        lastKnownDiskSignature:
+          kind === 'baseline' ? getDiskBaselineSignature('old disk') : undefined
+      })
+      const setLastKnownDiskSignature = vi.fn()
+      mocks.getState.mockReturnValue({
+        settings: null,
+        openFiles: [activeFile],
+        editorDrafts: kind.endsWith('draft')
+          ? { [activeFile.id]: kind === 'draft' ? 'local edits' : '' }
+          : {},
+        setLastKnownDiskSignature
+      })
+      mocks.readRuntimeFileContent.mockResolvedValue({ content: 'disk content', isBinary: false })
 
-    container = document.createElement('div')
-    document.body.appendChild(container)
-    root = createRoot(container)
-    await act(async () => {
-      root?.render(<HookProbe activeFile={activeFile} openFiles={[activeFile]} />)
-    })
+      container = document.createElement('div')
+      document.body.appendChild(container)
+      root = createRoot(container)
+      await act(async () => {
+        root?.render(<HookProbe activeFile={activeFile} openFiles={[activeFile]} />)
+      })
 
-    await vi.waitFor(() => expect(latestFileContents[activeFile.id]?.content).toBe('disk content'))
-    expect(setLastKnownDiskSignature).not.toHaveBeenCalled()
-  })
+      await vi.waitFor(() =>
+        expect(latestFileContents[activeFile.id]?.content).toBe('disk content')
+      )
+      expect(setLastKnownDiskSignature).not.toHaveBeenCalled()
+    }
+  )
 })

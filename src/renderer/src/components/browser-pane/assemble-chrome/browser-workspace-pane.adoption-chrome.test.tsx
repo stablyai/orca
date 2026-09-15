@@ -369,11 +369,20 @@ describe.each([
   })
 
   afterEach(() => {
+    delete window.orcaWorkspaceWindowNative
     cleanup()
     clearBrowserAddressBarEditSession(PAGE_ID)
     clearBrowserPageDeferredNavigation(PAGE_ID)
     vi.unstubAllGlobals()
     vi.clearAllMocks()
+  })
+
+  it('streams an existing client-hosted page in another native window without attaching its guest', () => {
+    window.orcaWorkspaceWindowNative = {} as NonNullable<Window['orcaWorkspaceWindowNative']>
+    adoptOntoClient()
+    renderWorkspacePane()
+    expect(screen.queryByTestId('streamed-viewport')).not.toBeNull()
+    expect(mocks.attach).not.toHaveBeenCalled()
   })
 
   it('carries the draft, caret and open suggestions through the staged-to-client swap', () => {

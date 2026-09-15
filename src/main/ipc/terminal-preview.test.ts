@@ -84,6 +84,27 @@ function eventFor(sender: ReturnType<typeof makeSender>) {
 }
 
 describe('registerTerminalPreviewHandlers', () => {
+  it('keeps independent view subscriptions to the same PTY', async () => {
+    const runtime = makeRuntime()
+    registerTerminalPreviewHandlers(runtime as never)
+    const sender = makeSender()
+    await handlers.get('terminalPreview:connect')!(eventFor(sender), {
+      ptyId: 'pty',
+      opts: { viewId: 'first' }
+    })
+    await handlers.get('terminalPreview:connect')!(eventFor(sender), {
+      ptyId: 'pty',
+      opts: { viewId: 'second' }
+    })
+    expect(runtime.releaseRawView).not.toHaveBeenCalled()
+    handlers.get('terminalPreview:unsubscribe')!(eventFor(sender), {
+      ptyId: 'pty',
+      viewId: 'first'
+    })
+    expect(runtime.releaseRawView).toHaveBeenCalledTimes(1)
+    sender.fireDestroyed()
+    expect(runtime.releaseRawView).toHaveBeenCalledTimes(2)
+  })
   beforeEach(() => {
     handlers.clear()
     isDashboardPopoutRendererMock.mockReturnValue(true)

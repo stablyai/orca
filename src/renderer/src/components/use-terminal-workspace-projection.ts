@@ -8,8 +8,10 @@ import { getEffectiveLayoutForWorktree as getEffectiveLayout } from './terminal/
 import { useContextualTour } from './contextual-tours/use-contextual-tour'
 import type { TerminalWorkspaceStoreController } from './use-terminal-workspace-store-bindings'
 import { useWorktreeFiles } from './terminal/use-worktree-files'
+import { visiblePaneViews } from '@/store/slices/window-pane-selection'
 
 export function useTerminalWorkspaceProjection(controller: TerminalWorkspaceStoreController) {
+  const paneLayout = useAppStore((s) => s.windowPaneLayout)
   const {
     activeGroupIdByWorktree,
     activeTabId,
@@ -29,6 +31,13 @@ export function useTerminalWorkspaceProjection(controller: TerminalWorkspaceStor
   } = controller
   const foregroundTerminalTabIds = useMemo(() => {
     const ids = new Set<string>()
+    if (activeView === 'terminal') {
+      for (const view of visiblePaneViews(paneLayout)) {
+        if (view.contentType === 'terminal') {
+          ids.add(view.entityId)
+        }
+      }
+    }
     if (activeView === 'terminal' && activeTabType === 'terminal' && activeTabId) {
       ids.add(activeTabId)
     }
@@ -36,7 +45,7 @@ export function useTerminalWorkspaceProjection(controller: TerminalWorkspaceStor
       ids.add(portal.tabId)
     }
     return Array.from(ids)
-  }, [activeTabId, activeTabType, activeView, activityTerminalPortals])
+  }, [activeTabId, activeTabType, activeView, activityTerminalPortals, paneLayout])
 
   useEffect(() => {
     setForegroundTerminalTabIds(foregroundTerminalTabIds)

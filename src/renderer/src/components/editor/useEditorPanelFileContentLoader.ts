@@ -49,7 +49,11 @@ function stampCleanTabDiskBaseline(id: string, result: FileContent): void {
   try {
     const state = useAppStore.getState()
     const loadedFile = state.openFiles.find((file) => file.id === id)
-    if (loadedFile && !loadedFile.isDirty) {
+    const needsMirrorBaseline =
+      loadedFile?.mirroredFromRuntimeSession === true &&
+      loadedFile.lastKnownDiskSignature === undefined &&
+      !Object.hasOwn(state.editorDrafts, id)
+    if (loadedFile && (!loadedFile.isDirty || needsMirrorBaseline)) {
       state.setLastKnownDiskSignature(id, getDiskBaselineSignature(result.content))
     }
   } catch (err) {

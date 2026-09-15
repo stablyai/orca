@@ -12,7 +12,6 @@ import type { prepareWebSessionTabsSnapshotBase } from './apply-preparation-base
 import type { OpenFile } from '../../store/slices/editor'
 import {
   advanceWebSessionOpenFilesIndex,
-  firstOpenFileByIdForWorktree,
   sameOpenFiles,
   webSessionOpenFilesForWorktree
 } from './state-equality-files'
@@ -108,12 +107,13 @@ export function prepareWebSessionTabsSnapshotBrowser(
   const mirroredEditorTabs = buildMirroredEditorTabs(
     snapshot,
     environmentId,
-    firstOpenFileByIdForWorktree(worktreeOpenFiles),
+    worktreeOpenFiles,
     existingTabIndex,
     hostGroupIdByTabId,
     targetGroupId,
     mirroredTerminalTabEntries.length + mirroredBrowserTabs.length,
-    now
+    now,
+    state.editorDrafts
   )
   const mirroredAgentTabs = buildMirroredAgentTabs(
     snapshot,

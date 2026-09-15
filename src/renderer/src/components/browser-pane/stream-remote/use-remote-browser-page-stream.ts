@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useState } from 'react'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
+import { canControlWorkspaceBrowserPage } from '../../cross-project-panes/workspace-browser-control'
 
 import { decodeBrowserScreencastFrame } from '../../../../../shared/browser-screencast-protocol'
 import type { BrowserScreencastFrameMetadata } from '../../../../../shared/browser-screencast-protocol'
@@ -125,6 +126,9 @@ export function useRemoteBrowserPageStream({
 
   const syncRemoteViewport = useCallback(
     async (pageId: string): Promise<void> => {
+      if (!canControlWorkspaceBrowserPage(browserPageId)) {
+        return
+      }
       const target = runtimeTarget()
       const size = readRemoteViewportSize()
       if (!target || !size) {
@@ -160,7 +164,13 @@ export function useRemoteBrowserPageStream({
         remoteCssViewportSizeRef.current = size
       }
     },
-    [readRemoteViewportSize, remoteCssViewportSizeRef, runtimeTarget, runtimeWorktree]
+    [
+      browserPageId,
+      readRemoteViewportSize,
+      remoteCssViewportSizeRef,
+      runtimeTarget,
+      runtimeWorktree
+    ]
   )
 
   useEffect(() => {

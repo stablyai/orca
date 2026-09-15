@@ -145,6 +145,7 @@ export function usePersistedUIWriter(): void {
   const ui = useAppStore(
     useShallow((s): PersistedUIWriteBaseline => ({
       sidebarWidth: s.sidebarWidth,
+      windowPaneLayout: s.windowPaneLayout,
       rightSidebarOpen: s.rightSidebarOpen,
       rightSidebarTab: s.rightSidebarTab,
       rightSidebarExplorerView: s.rightSidebarExplorerView,

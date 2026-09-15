@@ -46,6 +46,26 @@ describe('web repos preload API', () => {
     ).rejects.toThrow('Host-scoped project reordering is unavailable in paired web clients.')
   })
 
+  it('uses the native workspace-window bridge for project folder selection', async () => {
+    const globals = installBrowserGlobals('Linux')
+    const pickFolder = vi.fn(async () => 'C:/repo')
+    const pickFolders = vi.fn(async () => ['C:/repo-a', 'C:/repo-b'])
+    const pickDirectory = vi.fn(async () => 'C:/parent')
+    Object.assign(globals.window, {
+      orcaWorkspaceWindowNative: { pickDirectory, pickFolder, pickFolders }
+    })
+    writeStoredRuntimeEnvironment(globals.storage)
+    const { installWebPreloadApi } = await import('./web-preload-api')
+    installWebPreloadApi()
+
+    await expect(globals.window.api.repos.pickFolder()).resolves.toBe('C:/repo')
+    await expect(globals.window.api.repos.pickFolders()).resolves.toEqual([
+      'C:/repo-a',
+      'C:/repo-b'
+    ])
+    await expect(globals.window.api.repos.pickDirectory()).resolves.toBe('C:/parent')
+  })
+
   it('attributes a server-local catalog to the paired runtime that returned it', async () => {
     vi.doMock('./web-runtime-client', () => ({
       WebRuntimeClient: class {

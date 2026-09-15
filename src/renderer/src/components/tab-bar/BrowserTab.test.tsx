@@ -10,6 +10,7 @@ vi.mock('react', async () => {
   const actual = await vi.importActual<typeof import('react')>('react') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
   return {
     ...actual,
+    useContext: () => null,
     useEffect: () => {},
     // Why: this shallow harness calls the component as a plain function (no React
     // render), so ref/callback hooks must be stubbed like useState/useEffect. The

@@ -8,6 +8,7 @@ import { translate } from '@/i18n/i18n'
 import { extractIpcErrorMessage } from '@/lib/ipc-error'
 import { getConnectionIdFromState } from '@/lib/connection-context'
 import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner'
+import { isLocalWorkspaceWindowEnvironment } from '@/lib/workspace-window-runtime-scope'
 import type { AppState } from '@/store/types'
 import { reportTerminalDropUploadSkipsAndFailures } from '../terminal-pane/terminal-drop-upload-report'
 import {
@@ -66,7 +67,8 @@ export function resolveNativeChatAttachmentOwnerForWorktree(
   worktreeId: string,
   terminalTabId?: string
 ): NativeChatAttachmentOwner {
-  if (getRuntimeEnvironmentIdForWorktree(state, worktreeId)) {
+  const environmentId = getRuntimeEnvironmentIdForWorktree(state, worktreeId)
+  if (environmentId && !isLocalWorkspaceWindowEnvironment(environmentId)) {
     return { kind: 'runtime' }
   }
   const connectionId = getConnectionIdFromState(state, worktreeId)

@@ -271,11 +271,19 @@ export class ClientSessionTabSelectionStore {
   }
 
   forgetClient(clientNavigationId: string): void {
-    const statesByWorktree = this.statesByClient.get(clientNavigationId)
-    const hadPersistedState = [...(statesByWorktree?.values() ?? [])].some(
-      (state) => state.shouldPersist
-    )
-    if (this.statesByClient.delete(clientNavigationId) && hadPersistedState) {
+    let hadPersistedState = false
+    for (const [key, states] of this.statesByClient) {
+      const namespace = key.lastIndexOf(':window:')
+      if (
+        key !== clientNavigationId &&
+        (namespace === -1 || key.slice(0, namespace) !== clientNavigationId)
+      ) {
+        continue
+      }
+      hadPersistedState ||= [...states.values()].some((state) => state.shouldPersist)
+      this.statesByClient.delete(key)
+    }
+    if (hadPersistedState) {
       this.persistNow()
     }
   }

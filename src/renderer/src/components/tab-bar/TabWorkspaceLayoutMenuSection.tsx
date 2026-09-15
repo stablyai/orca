@@ -7,6 +7,9 @@ import {
   DropdownMenuShortcut
 } from '@/components/ui/dropdown-menu'
 import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, Columns2 } from 'lucide-react'
+import { useContext } from 'react'
+import { WorkspaceViewPresentationContext } from '../cross-project-panes/workspace-view-presentation-context'
+import { WorkspaceLayoutMenuItems } from '../cross-project-panes/WorkspaceLayoutMenuItems'
 import type { TabSplitDirection } from '../../store/slices/tabs'
 import { translate } from '@/i18n/i18n'
 import { canMoveTabToNewPaneColumn, moveTabToNewPaneColumn } from './tab-move-to-pane-column'
@@ -53,6 +56,10 @@ export function TabWorkspaceLayoutMenuSection({
   trailingSeparator?: boolean
   shortcutLabels?: Partial<Record<TabSplitDirection, string>>
 }): React.JSX.Element | null {
+  const view = useContext(WorkspaceViewPresentationContext)
+  if (view) {
+    return <WorkspaceLayoutMenuItems {...view} />
+  }
   if (!canMoveTabToNewPaneColumn(unifiedTabId, groupId)) {
     return null
   }

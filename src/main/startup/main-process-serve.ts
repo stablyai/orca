@@ -13,7 +13,9 @@ export function getBundledWebClientRoot(): string | undefined {
   const roots = [
     join(appPath, 'out', 'web'),
     // Why: unpacked electron-vite entrypoints set appPath to out/main, next to the web bundle.
-    join(appPath, '..', 'web')
+    join(appPath, '..', 'web'),
+    join(appPath, 'out', 'renderer'),
+    join(appPath, '..', 'renderer')
   ]
   return roots.find((root) => existsSync(join(root, 'web-index.html')))
 }

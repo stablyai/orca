@@ -17,7 +17,7 @@ import {
   createElectronHomeIsolation
 } from './electron-home-isolation'
 import { retryTransientMainEvaluate } from './electron-main-evaluate-retry'
-import { forwardElectronProcessLogs } from './orca-app'
+import { expect, forwardElectronProcessLogs } from './orca-app'
 import {
   replaceRuntimePairingInPlace,
   type SameIdPairingReplacement
@@ -191,7 +191,11 @@ export async function launchPairedElectronClient(
       ),
       homeIsolation
     )
-    const page = await app.firstWindow({ timeout: 120_000 })
+    await app.firstWindow({ timeout: 120_000 })
+    await expect
+      .poll(() => app.windows().some((page) => page.url().startsWith('file:')), { timeout: 30_000 })
+      .toBe(true)
+    const page = app.windows().find((page) => page.url().startsWith('file:'))!
     await page.waitForLoadState('domcontentloaded')
     await page.waitForFunction(() => Boolean(window.__store), null, { timeout: 30_000 })
     await page.waitForFunction(

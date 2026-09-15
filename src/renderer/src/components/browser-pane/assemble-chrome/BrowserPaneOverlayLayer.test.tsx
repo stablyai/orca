@@ -125,6 +125,18 @@ describe('BrowserPaneOverlayLayer', () => {
     expect(view.container.querySelectorAll('[data-browser-overlay-tab-id]')).toHaveLength(2)
   })
 
+  it('keeps an unassigned guest paintable for a moved view without enabling source input', () => {
+    mocks.state!.unifiedTabsByWorktree['wt-1'] = []
+    mocks.remotelyViewedPageIds.add('page-a')
+    const view = render(<BrowserPaneOverlayLayer worktreeId="wt-1" isWorktreeActive={false} />)
+    const slot = view.container.querySelector<HTMLElement>(
+      '[data-browser-overlay-tab-id="browser-a"]'
+    )!
+    expect(slot.style.display).toBe('flex')
+    expect(slot.style.width).not.toBe('0px')
+    expect(slot.style.pointerEvents).toBe('none')
+  })
+
   it('discards the retained latch when the worktree surface unmounts', () => {
     const view = render(
       <RetainedBrowserPaneOverlayLayer worktreeId="wt-1" isWorktreeActive mountEligible />

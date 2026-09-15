@@ -5,6 +5,7 @@ import {
   resetWebSessionFocusIntentForTests
 } from './web-session-focus-intent'
 import {
+  clearWebSessionCloseIntentsForOwner,
   isWebSessionCloseIntentPending,
   recordWebSessionCloseIntent,
   resetWebSessionCloseIntentForTests
@@ -180,6 +181,33 @@ describe('web runtime session tab actions', () => {
       timeoutMs: 15_000
     })
     expect(mocks.applyWebSessionTabsSnapshot).toHaveBeenCalled()
+  })
+
+  it.each([false, true])('closes only the native window view (secondary=%s)', async (secondary) => {
+    vi.stubGlobal('__ORCA_WEB_CLIENT__', secondary)
+    const runtimeCall = vi.fn().mockResolvedValue({ ok: true, result: makeSnapshot() })
+    vi.stubGlobal('window', {
+      ...(secondary ? { orcaWorkspaceWindowNative: {} } : {}),
+      localStorage: { getItem: () => null, setItem: vi.fn() },
+      api: { runtimeEnvironments: { call: runtimeCall } }
+    })
+    expect(
+      await closeWebRuntimeSessionTab({
+        worktreeId: WORKTREE_ID,
+        tabId: 'local-browser-unified',
+        reason: 'user'
+      })
+    ).toBe('applied')
+    expect(runtimeCall).not.toHaveBeenCalled()
+    clearWebSessionCloseIntentsForOwner({ environmentId: ENVIRONMENT_ID })
+    expect(
+      isWebSessionCloseIntentPending(
+        { environmentId: ENVIRONMENT_ID },
+        WORKTREE_ID,
+        'host-browser-unified',
+        Date.now() + 60_000
+      )
+    ).toBe(true)
   })
 
   it('supersedes browser focus intent when a terminal is activated next', async () => {

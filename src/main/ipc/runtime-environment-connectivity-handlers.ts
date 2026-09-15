@@ -1,4 +1,5 @@
 import { ipcMain } from 'electron'
+import { registerWorkspaceWindowRuntimeHandler } from '../window/workspace-window-runtime-routing'
 import {
   addEnvironmentFromPairingCode,
   listEnvironments,
@@ -65,10 +66,10 @@ export function registerRuntimeEnvironmentConnectivityHandlers({
   ipcMain.handle('runtimeEnvironments:getStatusSnapshots', () =>
     getRuntimeEnvironmentStatusSnapshots()
   )
-  ipcMain.handle('runtimeEnvironments:list', () =>
+  registerWorkspaceWindowRuntimeHandler('runtimeEnvironments:list', () =>
     listEnvironments(getUserDataPath()).map(redactRuntimeEnvironment)
   )
-  ipcMain.handle(
+  registerWorkspaceWindowRuntimeHandler(
     'runtimeEnvironments:addFromPairingCode',
     (
       _event,
@@ -79,7 +80,7 @@ export function registerRuntimeEnvironmentConnectivityHandlers({
       return { environment: redactRuntimeEnvironment(environment) }
     }
   )
-  ipcMain.handle(
+  registerWorkspaceWindowRuntimeHandler(
     'runtimeEnvironments:verifyAndAddFromPairingCode',
     async (_event, args: { name: string; pairingCode: string; allowLoopback?: boolean }) => {
       const result = await verifyAndAddRuntimeEnvironmentFromPairingCode(getUserDataPath(), args)
@@ -95,10 +96,12 @@ export function registerRuntimeEnvironmentConnectivityHandlers({
       return result
     }
   )
-  ipcMain.handle('runtimeEnvironments:resolve', (_event, args: { selector: string }) =>
-    redactRuntimeEnvironment(resolveEnvironment(getUserDataPath(), args.selector))
+  registerWorkspaceWindowRuntimeHandler(
+    'runtimeEnvironments:resolve',
+    (_event, args: { selector: string }) =>
+      redactRuntimeEnvironment(resolveEnvironment(getUserDataPath(), args.selector))
   )
-  ipcMain.handle(
+  registerWorkspaceWindowRuntimeHandler(
     'runtimeEnvironments:remove',
     (_event, args: { selector: string }): { removed: PublicKnownRuntimeEnvironment } => {
       const environment = resolveEnvironment(getUserDataPath(), args.selector)
@@ -125,7 +128,7 @@ export function registerRuntimeEnvironmentConnectivityHandlers({
       return { removed: redactRuntimeEnvironment(removed) }
     }
   )
-  ipcMain.handle(
+  registerWorkspaceWindowRuntimeHandler(
     'runtimeEnvironments:disconnect',
     (_event, args: { selector: string }): { disconnected: PublicKnownRuntimeEnvironment } => {
       const environment = resolveEnvironment(getUserDataPath(), args.selector)
@@ -137,7 +140,7 @@ export function registerRuntimeEnvironmentConnectivityHandlers({
       return { disconnected: redactRuntimeEnvironment(environment) }
     }
   )
-  ipcMain.handle(
+  registerWorkspaceWindowRuntimeHandler(
     'runtimeEnvironments:connect',
     async (
       _event,
@@ -150,7 +153,7 @@ export function registerRuntimeEnvironmentConnectivityHandlers({
       })
     }
   )
-  ipcMain.handle(
+  registerWorkspaceWindowRuntimeHandler(
     'runtimeEnvironments:retryControlConnection',
     (_event, args: { selector: string }): void => {
       const environment = resolveEnvironment(getUserDataPath(), args.selector)
@@ -174,7 +177,7 @@ function closeLegacySelectorTransport(selector: string, environmentId: string): 
 }
 
 function registerPassiveStatusHandler(getUserDataPath: () => string): void {
-  ipcMain.handle(
+  registerWorkspaceWindowRuntimeHandler(
     'runtimeEnvironments:getStatus',
     async (
       _event,
@@ -217,7 +220,7 @@ function runtimeEnvironmentCallFailure(
 }
 
 function registerPassiveCallHandler(getUserDataPath: () => string): void {
-  ipcMain.handle(
+  registerWorkspaceWindowRuntimeHandler(
     'runtimeEnvironments:call',
     async (
       _event,

@@ -1,5 +1,6 @@
-import { createTerminalPathExistenceBatch } from './terminal-path-existence-batch'
 import type { IDisposable, ILink, ILinkProvider, Terminal } from '@xterm/xterm'
+import { createTerminalPathExistenceBatch } from './terminal-path-existence-batch'
+import { getWorkspaceShellApi } from '@/lib/workspace-shell-scope'
 import {
   extractTerminalFileLinkCandidates,
   extractTerminalFileLinks,
@@ -103,6 +104,7 @@ export function createFilePathLinkProvider(
   openLinkHint: string
 ): ILinkProvider {
   const { startupCwd, managerRef, pathExistsCache, worktreeId, worktreePath } = deps
+  const pathExistsBatch = createTerminalPathExistenceBatch()
   return {
     provideLinks: (bufferLineNumber, callback) => {
       const pane = managerRef.current?.getPanes().find((candidate) => candidate.id === paneId)
@@ -129,7 +131,6 @@ export function createFilePathLinkProvider(
         return
       }
 
-      const pathExists = createTerminalPathExistenceBatch()
       void Promise.all(
         logicalLines.flatMap((logicalLine) =>
           extractTerminalFileLinkCandidates(logicalLine.text).map(
@@ -174,7 +175,14 @@ export function createFilePathLinkProvider(
               if (!worktreeRootLink) {
                 const cachedExists = readTerminalPathExistsCache(pathExistsCache, cacheKey)
                 const exists =
-                  cachedExists ?? (await pathExists(fileContext, mappedPath, isRemoteRuntimePath))
+                  cachedExists ??
+                  (window.orcaWorkspaceWindowNative &&
+                  !fileContext.connectionId &&
+                  !isRemoteRuntimePath
+                    ? await getWorkspaceShellApi({ worktreeId, runtimeEnvironmentId }).pathExists(
+                        mappedPath
+                      )
+                    : await pathExistsBatch(fileContext, mappedPath, isRemoteRuntimePath))
                 writeTerminalPathExistsCache(pathExistsCache, cacheKey, exists)
                 if (!exists) {
                   return null

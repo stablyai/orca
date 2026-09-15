@@ -38,6 +38,25 @@ const {
 })
 
 describe('createRemoteRuntimePtyTransport', () => {
+  it('does not send input or viewport changes from a watching presentation', async () => {
+    const policy = await import('../cross-project-panes/workspace-pty-control')
+    const allowed = vi.spyOn(policy, 'canControlWorkspacePty').mockReturnValue(true)
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const transport = createRemoteRuntimePtyTransport('env-1', {
+      worktreeId: 'wt-1',
+      tabId: 'tab-1',
+      leafId: 'pane:1'
+    })
+    await transport.connect({ url: '', cols: 80, rows: 24, callbacks: {} })
+    allowed.mockReturnValue(false)
+    expect(transport.sendInput('key')).toBe(false)
+    expect(await transport.sendInputAccepted?.('paste')).toBe(false)
+    expect(transport.sendInputImmediate('reply')).toBe(false)
+    expect(transport.resize(120, 40)).toBe(false)
+    expect(transport.claimViewport?.(120, 40)).toBe(false)
+    transport.detach?.()
+    allowed.mockRestore()
+  })
   beforeEach(() => {
     resetRemoteRuntimeTransport()
   })
@@ -61,6 +80,35 @@ describe('createRemoteRuntimePtyTransport', () => {
     await vi.waitFor(() => {
       expect(latestSubscribePayload().viewport).toEqual({ cols: 132, rows: 43 })
     })
+  })
+  it('drops queued claim input if control changes before the stream becomes ready', async () => {
+    const policy = await import('../cross-project-panes/workspace-pty-control')
+    const allowed = vi.spyOn(policy, 'canControlWorkspacePty').mockReturnValue(true)
+    runtimeSubscribe.mockImplementation(
+      async (_args: unknown, callbacks: typeof subscriptionCallbacks) => {
+        subscriptionCallbacks = callbacks
+        return { unsubscribe: vi.fn(), sendBinary: subscriptionSendBinary }
+      }
+    )
+    const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+    const transport = createRemoteRuntimePtyTransport('env-1', {
+      worktreeId: 'wt-1',
+      tabId: 'tab-1',
+      leafId: 'pane:1'
+    })
+    transport.attach({ existingPtyId: 'remote:terminal-1', cols: 80, rows: 24, callbacks: {} })
+    await vi.waitFor(() => expect(runtimeSubscribe).toHaveBeenCalled())
+    transport.claimViewport?.(101, 33)
+    transport.sendInputImmediate('queued')
+    allowed.mockReturnValue(false)
+    emitMultiplexReady()
+    await vi.waitFor(() => expect(subscriptionSendBinary).toHaveBeenCalled())
+    await new Promise((resolve) => setTimeout(resolve, 20))
+    expect(
+      subscriptionSendBinary.mock.calls.map((call) => decodeTerminalStreamFrame(call[0])?.opcode)
+    ).not.toContain(TerminalStreamOpcode.Input)
+    transport.detach?.()
+    allowed.mockRestore()
   })
 
   it('replays a viewport that changed during the subscribe round-trip once the stream is current', async () => {

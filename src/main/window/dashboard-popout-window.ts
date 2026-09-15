@@ -1,9 +1,14 @@
-import { app, BrowserWindow, nativeTheme, type WebContents } from 'electron'
+import { app, BrowserWindow, nativeTheme, screen, type WebContents } from 'electron'
 import { join } from 'node:path'
 import { is } from '@electron-toolkit/utils'
 import type { Store } from '../persistence'
 import { isBackgroundLaunch, showWindowWithoutStealingFocus } from './foreground-activation-policy'
-import { rectHasVisibleAreaOnAnyDisplay } from './window-bounds-validation'
+import {
+  isValidWindowPlacement,
+  readMonitorDisplays,
+  recoverWindowPlacement
+} from './monitor-placement'
+import { installMonitorTopologyRecovery } from './monitor-topology'
 import { sendToTrustedUIRenderer } from '../ipc/ui'
 import { installPrivilegedWindowNavigationPolicy } from './privileged-window-navigation'
 import { stepUIZoomLevel, type UIZoomDirection } from '../../shared/ui-zoom-level'
@@ -72,9 +77,12 @@ function resolveZoomShortcut(
  * the main window instead — the menu's zoom items must act on the window the
  * user is looking at.
  */
-export function zoomDashboardPopoutIfFocused(direction: UIZoomDirection): boolean {
+export function zoomDashboardPopoutIfFocused(
+  direction: UIZoomDirection,
+  invokingWindow?: Electron.BaseWindow | null
+): boolean {
   const popout = getDashboardPopoutWindow()
-  if (!popout || !popout.isFocused()) {
+  if (!popout || (invokingWindow ? invokingWindow !== popout : !popout.isFocused())) {
     return false
   }
   zoomDashboardPopout(popout, direction)
@@ -117,13 +125,11 @@ function resolveRestoredBounds(store: Store | null): {
   height: number
 } | null {
   const raw = store?.getUI().dashboardPopoutBounds ?? null
-  if (
-    raw &&
-    raw.width >= MIN_WIDTH &&
-    raw.height >= MIN_HEIGHT &&
-    rectHasVisibleAreaOnAnyDisplay(raw, MIN_WIDTH / 2, MIN_HEIGHT / 2)
-  ) {
-    return raw
+  if (raw && isValidWindowPlacement(raw) && raw.width >= MIN_WIDTH && raw.height >= MIN_HEIGHT) {
+    return recoverWindowPlacement(
+      raw,
+      readMonitorDisplays(() => screen.getAllDisplays())
+    )
   }
   if (raw) {
     console.warn('[dashboard-popout] Discarding off-screen/near-min popout bounds:', raw)
@@ -253,6 +259,16 @@ export function createOrFocusDashboardPopout(
   // near-minimum bounds.
   let boundsTimer: ReturnType<typeof setTimeout> | null = null
   let windowClosing = false
+  installMonitorTopologyRecovery({
+    window,
+    screen,
+    displays: () => screen.getAllDisplays(),
+    onRecovered: (dashboardPopoutBounds) => {
+      if (!windowClosing) {
+        store?.updateUI({ dashboardPopoutBounds })
+      }
+    }
+  })
   const saveBounds = (): void => {
     if (boundsTimer) {
       clearTimeout(boundsTimer)

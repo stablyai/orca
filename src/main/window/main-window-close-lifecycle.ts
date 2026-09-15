@@ -7,6 +7,8 @@ import type { CreateMainWindowOptions } from './main-window-contracts'
 import type { MainWindowFocusLifecycle } from './main-window-focus-lifecycle'
 import type { MainWindowStateLifecycle } from './main-window-state-lifecycle'
 import { syncTrafficLightPosition } from './main-window-visual-lifecycle'
+import { retainPrimaryWindowForWorkspaces } from './workspace-window-native-bridge'
+import { RendererQuitAcknowledgement } from './renderer-quit-acknowledgement'
 
 export const WINDOW_QUIT_RENDERER_ACK_TIMEOUT_MS = QUIT_RENDERER_ACK_TIMEOUT_MS
 
@@ -24,37 +26,19 @@ export function installMainWindowCloseLifecycle(args: {
   const confirmCloseChannel = 'window:confirm-close'
   const closeRequestReceivedChannel = 'window:close-request-received'
   let closeRequestSequence = 0
-  let quitRendererAckRequestId: number | null = null
-  let quitRendererAckTimer: ReturnType<typeof setTimeout> | null = null
-  const clearQuitRendererAckTimer = (): void => {
-    quitRendererAckRequestId = null
-    if (quitRendererAckTimer) {
-      clearTimeout(quitRendererAckTimer)
-      quitRendererAckTimer = null
-    }
-  }
-  const armQuitRendererAckTimer = (requestId: number): void => {
-    quitRendererAckRequestId = requestId
-    if (quitRendererAckTimer) {
+  const quitAcknowledgement = new RendererQuitAcknowledgement(() => {
+    if (mainWindow.isDestroyed()) {
       return
     }
-    // Why: will-quit cannot run until the renderer-backed window closes; an
-    // already-frozen renderer otherwise makes Force Quit the only escape.
-    quitRendererAckTimer = setTimeout(() => {
-      quitRendererAckTimer = null
-      quitRendererAckRequestId = null
-      if (mainWindow.isDestroyed()) {
-        return
-      }
-      console.warn('[window] Renderer did not acknowledge quit; destroying unresponsive window')
-      state.freezeBoundsOnQuit()
-      mainWindow.destroy()
-    }, WINDOW_QUIT_RENDERER_ACK_TIMEOUT_MS)
-    quitRendererAckTimer.unref?.()
-  }
+    console.warn('[window] Renderer did not acknowledge quit; destroying unresponsive window')
+    state.freezeBoundsOnQuit()
+    mainWindow.destroy()
+  })
+  const clearQuitRendererAckTimer = (): void => quitAcknowledgement.clear()
+  const armQuitRendererAckTimer = (requestId: number): void => quitAcknowledgement.arm(requestId)
   const onCloseRequestReceived = (event: Electron.IpcMainEvent, requestId: number): void => {
-    if (event.sender.id === rendererWebContentsId && requestId === quitRendererAckRequestId) {
-      clearQuitRendererAckTimer()
+    if (event.sender.id === rendererWebContentsId) {
+      quitAcknowledgement.acknowledge(requestId)
     }
   }
 
@@ -90,6 +74,10 @@ export function installMainWindowCloseLifecycle(args: {
   }
 
   mainWindow.on('close', (e) => {
+    if (opts?.getIsQuitting?.() !== true && retainPrimaryWindowForWorkspaces(mainWindow)) {
+      e.preventDefault()
+      return
+    }
     // Why: Alt+F4/programmatic closes hit the native event; apply the same minimize-to-tray guard the renderer-drawn X uses.
     if (!windowCloseConfirmed && hideToTrayIfEnabled()) {
       e.preventDefault()
@@ -134,6 +122,14 @@ export function installMainWindowCloseLifecycle(args: {
 
   const onConfirmClose = (): void => {
     clearQuitRendererAckTimer()
+    if (
+      !mainWindow.isDestroyed() &&
+      opts?.getIsQuitting?.() !== true &&
+      retainPrimaryWindowForWorkspaces(mainWindow)
+    ) {
+      mainWindow.webContents.send('window:unload-prevented')
+      return
+    }
     windowCloseConfirmed = true
     if (!mainWindow.isDestroyed()) {
       mainWindow.close()
@@ -167,6 +163,9 @@ export function installMainWindowCloseLifecycle(args: {
   const requestCloseChannel = 'window:request-close'
   const onRequestClose = (): void => {
     if (mainWindow.isDestroyed()) {
+      return
+    }
+    if (opts?.getIsQuitting?.() !== true && retainPrimaryWindowForWorkspaces(mainWindow)) {
       return
     }
     // Why: renderer-drawn X routes here (not the native close event), so the minimize-to-tray guard must also run here.

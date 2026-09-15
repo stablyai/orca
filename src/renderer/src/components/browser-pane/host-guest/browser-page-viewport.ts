@@ -4,6 +4,8 @@
 // (chrome inset spacer + flex-1 container) that mirrors the in-tree layout
 // without reparenting the webview or using fixed/float-over positioning.
 
+import { canControlWorkspaceBrowserPage } from '../../cross-project-panes/workspace-browser-control'
+
 const slotViewportRoots = new Map<string, HTMLDivElement>()
 
 type BrowserPageViewport = {
@@ -225,6 +227,7 @@ export function applyBrowserPageViewportLayout(
   if (!viewport) {
     return
   }
+  layout = { ...layout, active: layout.active && canControlWorkspaceBrowserPage(browserPageId) }
   if (!layout.paintable) {
     viewport.shell.style.display = 'none'
     viewport.shell.inert = true

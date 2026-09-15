@@ -11,6 +11,8 @@ type DashboardAgentRowTrailingControlsProps = {
   /** Subagent child rows have no store entry of their own to dismiss —
    *  offering the X would be a silent no-op. */
   hideDismiss?: boolean
+  /** Completed retained rows are history, so their cleanup action stays visible. */
+  alwaysShowDismiss?: boolean
   sendTargetStatus?: 'eligible' | 'disabled' | 'sending'
   onDismiss: (paneKey: string) => void
   onToggleExpanded: () => void
@@ -23,6 +25,7 @@ export function DashboardAgentRowTrailingControls({
   expanded,
   hideExpand,
   hideDismiss = false,
+  alwaysShowDismiss = false,
   sendTargetStatus,
   onDismiss,
   onToggleExpanded,
@@ -119,7 +122,8 @@ export function DashboardAgentRowTrailingControls({
             onKeyDown={stopKeyDown}
             className={cn(
               '[grid-area:1/1] inline-flex items-center justify-center text-muted-foreground/70 hover:text-foreground',
-              'can-hover:opacity-0 transition-opacity duration-150',
+              !alwaysShowDismiss && 'can-hover:opacity-0',
+              'transition-opacity duration-150',
               'group-hover/agent-row:opacity-100 focus-visible:opacity-100'
             )}
             aria-label={translate(
@@ -140,7 +144,8 @@ export function DashboardAgentRowTrailingControls({
           onKeyDown={stopKeyDown}
           className={cn(
             'inline-flex shrink-0 items-center justify-center text-muted-foreground/70 hover:text-foreground',
-            'can-hover:opacity-0 transition-opacity duration-150',
+            !alwaysShowDismiss && 'can-hover:opacity-0',
+            'transition-opacity duration-150',
             'group-hover/agent-row:opacity-100 focus-visible:opacity-100'
           )}
           aria-label={translate(

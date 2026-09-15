@@ -473,7 +473,19 @@ describe('web UI preload API', () => {
     agentsReadFilter: 'unread',
     agentsGroupBy: 'project',
     activityClearedAtByPaneKey: { 'tab-1:leaf-1': 123 },
-    manuallyUnreadTurnsByPaneKey: { 'tab-1:leaf-1': 321 }
+    manuallyUnreadTurnsByPaneKey: { 'tab-1:leaf-1': 321 },
+    workspaceWindowIds: ['browser-window'],
+    workspaceWindowPlacements: {
+      'browser-window': { bounds: { x: 10, y: 20, width: 900, height: 700 }, maximized: false }
+    },
+    windowPaneLayout: {
+      version: 1,
+      root: { type: 'leaf', groupId: 'pane' },
+      activePaneId: 'pane',
+      expandedPaneId: null,
+      panes: { pane: { id: 'pane', viewIds: [], selectedViewId: null } },
+      views: {}
+    }
   }
   const hostUiSamples: Record<PairingLocalUiField, unknown> = {
     automationHostFilter: { kind: 'all' },
@@ -488,7 +500,12 @@ describe('web UI preload API', () => {
     agentsReadFilter: 'all',
     agentsGroupBy: 'status',
     activityClearedAtByPaneKey: { 'tab-2:leaf-2': 456 },
-    manuallyUnreadTurnsByPaneKey: { 'tab-2:leaf-2': 654 }
+    manuallyUnreadTurnsByPaneKey: { 'tab-2:leaf-2': 654 },
+    workspaceWindowIds: ['host-window'],
+    workspaceWindowPlacements: {
+      'host-window': { bounds: { x: 30, y: 40, width: 1000, height: 800 }, maximized: true }
+    },
+    windowPaneLayout: null
   }
 
   it.each(PAIRING_LOCAL_UI_FIELDS.map((field) => [field] as const))(

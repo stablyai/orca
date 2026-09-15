@@ -70,9 +70,13 @@ export function useTabBarItemProjection({
   const simulatorTabIds = useMemo(
     () =>
       unifiedTabs
-        .filter((tab) => tab.groupId === resolvedGroupId && tab.contentType === 'simulator')
+        .filter(
+          (tab) =>
+            (props.presentationTabs || tab.groupId === resolvedGroupId) &&
+            tab.contentType === 'simulator'
+        )
         .map((tab) => tab.id),
-    [unifiedTabs, resolvedGroupId]
+    [unifiedTabs, resolvedGroupId, props.presentationTabs]
   )
   const agentSessionTabIds = useMemo(
     () => agentSessionTabs?.map((tab) => tab.id) ?? [],
@@ -107,7 +111,10 @@ export function useTabBarItemProjection({
       unifiedTabByVisibleId
     ]
   )
-  const sortableIds = useMemo(() => orderedItems.map((item) => item.id), [orderedItems])
+  const sortableIds = useMemo(
+    () => orderedItems.map((item) => props.presentationContext?.[item.id]?.viewId ?? item.id),
+    [orderedItems, props.presentationContext]
+  )
   const activeIndicator =
     hoveredTabInsertion?.groupId === resolvedGroupId ? hoveredTabInsertion : null
   const dropIndicatorByVisibleId = useMemo(

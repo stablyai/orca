@@ -106,6 +106,7 @@ export function SkillsList({
     <>
       <SkillDetailDialog
         skill={detailSkill}
+        local={local}
         agentByRootPath={agentByRootPath}
         shareable={detailSkill ? isSkillShareEligible(detailSkill, local) : false}
         deletable={detailSkill ? deleteSupported && isSkillDeleteEligible(detailSkill) : false}
@@ -145,6 +146,7 @@ export function SkillsList({
             <SkillRow
               key={skill.id}
               skill={skill}
+              local={local}
               selectionMode={selectionMode !== null}
               selected={selectedIds.has(skill.id)}
               selectable={deleting ? deleteEligible : shareEligible && !duplicateNameSelected}

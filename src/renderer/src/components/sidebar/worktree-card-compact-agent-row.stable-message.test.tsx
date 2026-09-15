@@ -20,16 +20,19 @@ vi.mock('./CacheTimer', () => ({
 function makeAgent({
   stateStartedAt,
   lastAssistantMessage,
-  state = 'working'
+  state = 'working',
+  rowSource
 }: {
   stateStartedAt: number
   lastAssistantMessage?: string
   state?: string
+  rowSource?: DashboardAgentRowData['rowSource']
 }): DashboardAgentRowData {
   return {
     paneKey: 'tab-1:leaf-1',
     tab: { id: 'tab-1' },
     agentType: 'claude',
+    rowSource,
     state,
     startedAt: 500,
     entry: {
@@ -108,5 +111,41 @@ describe('CompactAgentRow stable assistant message', () => {
     rerenderRow(makeAgent({ stateStartedAt: 1000, state: 'done' }))
     rerenderRow(makeAgent({ stateStartedAt: 1000, state: 'working' }))
     expect(container.textContent).not.toContain('First reply')
+  })
+
+  it('treats retained completion as passive history with a visible dismiss action', () => {
+    const activate = vi.fn()
+    const dismiss = vi.fn()
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    root = createRoot(container)
+    act(() => {
+      root!.render(
+        <TooltipProvider>
+          <CompactAgentRow
+            agent={makeAgent({ stateStartedAt: 1000, state: 'done', rowSource: 'retained' })}
+            now={2000}
+            onActivate={activate}
+            onDismiss={dismiss}
+            isPassive
+          />
+        </TooltipProvider>
+      )
+    })
+
+    const row = container.firstElementChild as HTMLElement
+    expect(row.getAttribute('aria-disabled')).toBe('true')
+    expect(row.classList.contains('cursor-default')).toBe(true)
+    expect(row.querySelector('button[aria-label="Dismiss agent"]')).not.toBeNull()
+
+    act(() => {
+      row.dispatchEvent(new MouseEvent('click', { bubbles: true }))
+    })
+    expect(activate).not.toHaveBeenCalled()
+
+    act(() => {
+      row.querySelector<HTMLButtonElement>('button[aria-label="Dismiss agent"]')!.click()
+    })
+    expect(dismiss).toHaveBeenCalledWith('tab-1:leaf-1')
   })
 })

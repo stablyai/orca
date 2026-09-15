@@ -6,6 +6,7 @@ import {
   type BrowserScreencastSubscriber
 } from './browser-screencast-driver-scope'
 import type { RuntimeBrowserCommands } from './orca-runtime-browser'
+import type { LocalWindowBrowserTarget } from './local-window-browser-target'
 
 type RuntimeBrowserScreencastControllerDeps = {
   getCommands: () => RuntimeBrowserCommands
@@ -59,6 +60,7 @@ export class RuntimeBrowserScreencastController {
     params: Parameters<RuntimeBrowserCommands['browserScreencast']>[0],
     options: {
       connectionId?: string
+      localWindowTarget?: LocalWindowBrowserTarget
       pairedDeviceId?: string
       clientKind?: 'mobile' | 'runtime'
       sendBinary?: (bytes: Uint8Array<ArrayBufferLike>) => boolean | void
@@ -128,7 +130,8 @@ export class RuntimeBrowserScreencastController {
       screencast = await this.deps.getCommands().browserScreencast(params, {
         sendBinary: sendBinaryAfterReady,
         emit: options.emit,
-        pairedDeviceId: options.pairedDeviceId
+        pairedDeviceId: options.pairedDeviceId,
+        localWindowTarget: options.localWindowTarget
       })
       if (cancelledBeforeStart || options.signal?.aborted) {
         end(false)

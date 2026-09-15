@@ -21,6 +21,9 @@ import {
 } from './runtime-rpc-pairing-types'
 
 export class RuntimeRpcPairing extends RuntimeRpcNetworkExposure {
+  getRuntimeId(): string {
+    return this.runtime.getRuntimeId()
+  }
   private onPushUnregisterQueued?: () => void
 
   getDeviceRegistry(): DeviceRegistry | null {
@@ -125,6 +128,7 @@ export class RuntimeRpcPairing extends RuntimeRpcNetworkExposure {
   createPairingOffer(args: {
     address?: string | null
     name?: string
+    reuseDeviceName?: boolean
     rotate?: boolean
     scope?: DeviceScope
     // Why: STA-2370 — recorded on the grant so a "This computer only" client reconnecting cannot make the
@@ -167,9 +171,11 @@ export class RuntimeRpcPairing extends RuntimeRpcNetworkExposure {
     let device: DeviceEntry
     try {
       const reach = args.reach ?? 'network'
-      device = args.rotate
-        ? this.deviceRegistry.rotatePendingDevice(deviceName, scope, reach)
-        : this.deviceRegistry.getOrCreatePendingDevice(deviceName, scope, reach)
+      device = args.reuseDeviceName
+        ? this.deviceRegistry.getOrCreateNamedDevice(deviceName, scope, reach)
+        : args.rotate
+          ? this.deviceRegistry.rotatePendingDevice(deviceName, scope, reach)
+          : this.deviceRegistry.getOrCreatePendingDevice(deviceName, scope, reach)
     } catch (error) {
       console.error('[runtime] Failed to persist pairing credential:', error)
       return pairingUnavailable('device_registry_unavailable', DEVICE_REGISTRY_UNAVAILABLE_GUIDANCE)

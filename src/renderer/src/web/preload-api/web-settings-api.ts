@@ -89,7 +89,10 @@ export function createWebSettingsApi(): Partial<PreloadApi> {
       setActiveRuntimeEnvironmentPreference: async ({ environmentId }) => {
         const requestedEnvironmentId = environmentId?.trim() || null
         const activeRuntimeEnvironmentId = requestedEnvironmentId
-          ? resolveEnvironment(requestedEnvironmentId).id
+          ? window.orcaWorkspaceWindowNative
+            ? (await window.api.runtimeEnvironments.resolve({ selector: requestedEnvironmentId }))
+                .id
+            : resolveEnvironment(requestedEnvironmentId).id
           : null
         const next = mergeSettings(getStoredSettings(), {
           activeRuntimeEnvironmentId

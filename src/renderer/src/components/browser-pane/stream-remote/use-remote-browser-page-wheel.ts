@@ -76,6 +76,9 @@ export function useRemoteBrowserPageWheel({
             { ...params, x: point.x, y: point.y },
             { timeoutMs: 15_000, suppressFeatureInteraction: true }
           )
+          if (!isCurrentRemoteOperationToken(operationToken)) {
+            return
+          }
           await callRuntimeRpc(
             target,
             'browser.mouseWheel',

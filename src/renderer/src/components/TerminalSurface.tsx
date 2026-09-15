@@ -5,12 +5,14 @@ import { TerminalSplitWorkspaceSurfaces } from './TerminalSplitWorkspaceSurfaces
 import { TerminalLegacyWorkspaceSurface } from './TerminalLegacyWorkspaceSurface'
 import { TerminalWorkspaceDialogs } from './TerminalWorkspaceDialogs'
 import type { TerminalController } from './use-terminal-controller'
+import { useAppStore } from '@/store'
 
 export function TerminalSurface({
   controller
 }: {
   controller: TerminalController
 }): React.JSX.Element {
+  const hasPanes = useAppStore((s) => Boolean(s.windowPaneLayout))
   const { renderedActiveWorktreeId } = controller
   const retainBrowserGuestPaint = useAnyBrowserGuestNeedsPaint(!renderedActiveWorktreeId)
   return (
@@ -18,7 +20,7 @@ export function TerminalSurface({
       // Why: already out of flow via the workbench container when hidden, so retention only
       // has to drop `hidden` — it does not need to leave the flex column a second time.
       className={`flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden${
-        renderedActiveWorktreeId
+        hasPanes || renderedActiveWorktreeId
           ? ''
           : retainBrowserGuestPaint
             ? ' opacity-0 pointer-events-none'

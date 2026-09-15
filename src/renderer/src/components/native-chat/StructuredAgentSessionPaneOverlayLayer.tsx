@@ -7,6 +7,7 @@ import { getRuntimeEnvironmentIdForWorktree } from '@/lib/worktree-runtime-owner
 import { getActiveRuntimeTarget, type RuntimeClientTarget } from '@/runtime/runtime-rpc-client'
 import { RetainedPaneHost } from '../tab-group/RetainedPaneHost'
 import NativeChatView from './NativeChatView'
+import { usePaneOverlayAssignments } from '../cross-project-panes/use-pane-overlay-assignments'
 
 type StructuredAgentSessionTab = Tab & {
   contentType: 'agent-session'
@@ -43,10 +44,10 @@ const StructuredAgentSessionOverlaySlot = memo(function StructuredAgentSessionOv
         tabId={tab.id}
         groupId={groupId}
         sessionId={tab.entityId}
-        agent={tab.agentSessionAgent}
-        isVisible={isActive}
-        isFocusedGroup={isFocusedGroup}
-        target={target}
+      agent={tab.agentSessionAgent}
+      isVisible={isActive}
+      isFocusedGroup={isFocusedGroup}
+      target={target}
       />
     </RetainedPaneHost>
   )
@@ -60,6 +61,7 @@ const StructuredAgentSessionPaneOverlayLayer = memo(
     worktreeId: string
     isWorktreeActive: boolean
   }): React.JSX.Element {
+    const presentation = usePaneOverlayAssignments(worktreeId)
     const { unifiedTabs, groups, runtimeEnvironmentId, activeGroupId } = useAppStore(
       useShallow((state) => ({
         unifiedTabs: state.unifiedTabsByWorktree[worktreeId] ?? EMPTY_UNIFIED_TABS,
@@ -74,8 +76,9 @@ const StructuredAgentSessionPaneOverlayLayer = memo(
       [runtimeEnvironmentId]
     )
     const focusOwningGroup = useCallback(
-      (groupId: string) => focusGroup(worktreeId, groupId),
-      [focusGroup, worktreeId]
+      (groupId: string) =>
+        presentation.assignments ? presentation.focus(groupId) : focusGroup(worktreeId, groupId),
+      [focusGroup, worktreeId, presentation]
     )
     const groupActiveTabById = useMemo(
       () => new Map(groups.map((group) => [group.id, group.activeTabId] as const)),
@@ -94,19 +97,23 @@ const StructuredAgentSessionPaneOverlayLayer = memo(
     return (
       <>
         {structuredTabs.map((tab) => (
-          <StructuredAgentSessionOverlaySlot
-            key={tab.id}
-            tab={tab}
-            groupId={tab.groupId}
-            isActive={Boolean(isWorktreeActive && groupActiveTabById.get(tab.groupId) === tab.id)}
-            isFocusedGroup={Boolean(
-              isWorktreeActive &&
-              groupActiveTabById.get(tab.groupId) === tab.id &&
-              tab.groupId === activeGroupId
-            )}
-            target={target}
-            onFocusOwningGroup={focusOwningGroup}
-          />
+          (() => {
+            const assignment = presentation.assignments?.get(tab.id)
+            const groupId = assignment?.groupId ?? tab.groupId
+            const isActiveInGroup =
+              assignment?.isActiveInGroup ?? groupActiveTabById.get(tab.groupId) === tab.id
+            return (
+              <StructuredAgentSessionOverlaySlot
+                key={tab.id}
+                tab={tab}
+                groupId={groupId}
+                isActive={Boolean(isWorktreeActive && isActiveInGroup)}
+                isFocusedGroup={Boolean(isWorktreeActive && isActiveInGroup && groupId === activeGroupId)}
+                target={target}
+                onFocusOwningGroup={focusOwningGroup}
+              />
+            )
+          })()
         ))}
       </>
     )

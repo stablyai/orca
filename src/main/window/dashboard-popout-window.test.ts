@@ -87,6 +87,10 @@ const {
     isDestroyed(): boolean {
       return this.destroyed
     }
+    removeListener(event: string, cb: (...args: unknown[]) => void): this {
+      this.handlers[event] = (this.handlers[event] ?? []).filter((handler) => handler !== cb)
+      return this
+    }
     isFocused(): boolean {
       return this.focused
     }
@@ -125,7 +129,7 @@ vi.mock('electron', () => ({
   app: { on: appOnMock, removeListener: appRemoveListenerMock },
   BrowserWindow: BrowserWindowMock,
   nativeTheme: nativeThemeMock,
-  screen: { getAllDisplays: getAllDisplaysMock }
+  screen: { getAllDisplays: getAllDisplaysMock, on: vi.fn(), removeListener: vi.fn() }
 }))
 
 vi.mock('@electron-toolkit/utils', () => ({ is: isMock }))
@@ -308,7 +312,7 @@ describe('createOrFocusDashboardPopout', () => {
     expect(opts.height).toBe(800)
   })
 
-  it('discards off-screen persisted bounds and falls back to defaults', () => {
+  it('recovers off-screen persisted bounds without discarding the saved size', () => {
     // Display does not overlap the saved rect at all.
     getAllDisplaysMock.mockReturnValue([{ workArea: { x: 0, y: 0, width: 800, height: 600 } }])
     const store = makeStore({
@@ -316,10 +320,10 @@ describe('createOrFocusDashboardPopout', () => {
     })
     createOrFocusDashboardPopout(store as never)
     const opts = instances[0].options
-    expect(opts.x).toBeUndefined()
-    expect(opts.y).toBeUndefined()
-    expect(opts.width).toBe(960)
-    expect(opts.height).toBe(720)
+    expect(opts.x).toBe(0)
+    expect(opts.y).toBe(0)
+    expect(opts.width).toBe(1000)
+    expect(opts.height).toBe(800)
   })
 
   it('persists bounds on resize after the debounce, guarding near-minimum sizes', () => {
@@ -396,6 +400,13 @@ describe('createOrFocusDashboardPopout', () => {
 
     expect(zoomDashboardPopoutIfFocused('reset')).toBe(true)
     expect(win.zoomLevel).toBe(0)
+  })
+
+  it('zooms the invoking popout without relying on native focus', () => {
+    createOrFocusDashboardPopout(makeStore() as never)
+    const window = instances[0]!
+    expect(zoomDashboardPopoutIfFocused('in', window as never)).toBe(true)
+    expect(window.zoomLevel).toBeGreaterThan(0)
   })
 
   it('handles the zoom-in chord via before-input-event and ignores other keys', () => {

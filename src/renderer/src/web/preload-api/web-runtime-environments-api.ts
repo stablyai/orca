@@ -31,14 +31,33 @@ import {
 export function createRuntimeEnvironmentsApi(): NonNullable<
   Partial<PreloadApi>['runtimeEnvironments']
 > {
+  const native = window.orcaWorkspaceWindowNative?.runtimeEnvironments
+  const configured = (selector: string): boolean => {
+    if (!native) {
+      return false
+    }
+    const local = requireActiveEnvironmentOrNull()
+    return (
+      selector !== 'active' &&
+      selector !== local?.id &&
+      selector !== local?.name &&
+      !local?.compatibleEnvironmentIds?.includes(selector)
+    )
+  }
   return {
     onStatusChanged: subscribeWebRuntimeStatus,
     getStatusSnapshots: async () => readWebRuntimeStatusSnapshots(),
     list: async () => {
       const environment = requireActiveEnvironmentOrNull()
-      return environment ? [redactStoredWebRuntimeEnvironment(environment)] : []
+      return [
+        ...(environment ? [redactStoredWebRuntimeEnvironment(environment)] : []),
+        ...(native ? await native.list() : [])
+      ]
     },
     addFromPairingCode: async ({ name, pairingCode }) => {
+      if (native) {
+        return native.addFromPairingCode({ name, pairingCode })
+      }
       const offer = parseWebPairingInput(pairingCode)
       if (!offer) {
         throw new Error('Invalid Orca pairing code.')
@@ -55,6 +74,9 @@ export function createRuntimeEnvironmentsApi(): NonNullable<
       return { environment: redactStoredWebRuntimeEnvironment(webRuntimeState.activeEnvironment) }
     },
     verifyAndAddFromPairingCode: async ({ name, pairingCode, allowLoopback }) => {
+      if (native) {
+        return native.verifyAndAddFromPairingCode({ name, pairingCode, allowLoopback })
+      }
       const parsed = parseHostAccessLink(pairingCode)
       if (!parsed.ok) {
         return {
@@ -164,8 +186,13 @@ export function createRuntimeEnvironmentsApi(): NonNullable<
       }
     },
     resolve: async ({ selector }) =>
-      redactStoredWebRuntimeEnvironment(resolveEnvironment(selector)),
+      configured(selector)
+        ? native!.resolve({ selector })
+        : redactStoredWebRuntimeEnvironment(resolveEnvironment(selector)),
     remove: async ({ selector }) => {
+      if (configured(selector)) {
+        return native!.remove({ selector })
+      }
       const environment = resolveEnvironment(selector)
       if (webRuntimeState.activeEnvironment?.id === environment.id) {
         removeActiveRuntimeEnvironment()
@@ -174,6 +201,9 @@ export function createRuntimeEnvironmentsApi(): NonNullable<
       return { removed: redactStoredWebRuntimeEnvironment(environment) }
     },
     disconnect: async ({ selector }) => {
+      if (configured(selector)) {
+        return native!.disconnect({ selector })
+      }
       const environment = resolveEnvironment(selector)
       if (webRuntimeState.activeEnvironment?.id === environment.id) {
         manuallyDisconnectedEnvironmentIds.add(environment.id)
@@ -182,6 +212,9 @@ export function createRuntimeEnvironmentsApi(): NonNullable<
       return { disconnected: redactStoredWebRuntimeEnvironment(environment) }
     },
     connect: ({ selector, timeoutMs }) => {
+      if (configured(selector)) {
+        return native!.connect({ selector, timeoutMs })
+      }
       const environment = resolveEnvironment(selector)
       manuallyDisconnectedEnvironmentIds.delete(environment.id)
       closeActiveRuntimeClients()
@@ -193,14 +226,65 @@ export function createRuntimeEnvironmentsApi(): NonNullable<
       )
     },
     getStatus: ({ selector, timeoutMs, observeOnly }) =>
-      observeOnly
+      observeOnly && !configured(selector)
         ? observeWebRuntimeStatus(selector, timeoutMs)
-        : callEnvironmentEnvelope<RuntimeStatus>(selector, 'status.get', undefined, timeoutMs),
+        : configured(selector)
+          ? native!.getStatus({ selector, timeoutMs, observeOnly })
+          : callEnvironmentEnvelope<RuntimeStatus>(selector, 'status.get', undefined, timeoutMs),
     retryControlConnection: () => Promise.resolve(),
     prepareBrowserClientHostPlacement: async () => ({ kind: 'server' }),
-    call: ({ selector, method, params, timeoutMs }) =>
-      callEnvironmentEnvelope(selector, method, params, timeoutMs),
-    subscribe: async ({ selector, method, params, timeoutMs }, callbacks) => {
+    call: async (args) => {
+      const { selector, method, params, timeoutMs } = args
+      if (method.startsWith('browser.') && window.orcaWorkspaceWindowNative) {
+        const environment = configured(selector)
+          ? await native!.resolve({ selector })
+          : resolveEnvironment(selector)
+        const response = await window.orcaWorkspaceWindowNative.browserInput({
+          runtimeId: environment.runtimeId,
+          ...(configured(selector)
+            ? {
+                environmentId: environment.id,
+                expectedEnvironmentPairingRevision: args.expectedEnvironmentPairingRevision
+              }
+            : {}),
+          method,
+          params
+        })
+        if (response) {
+          return response
+        }
+      }
+      if (configured(selector)) {
+        return native!.call(args)
+      }
+      return callEnvironmentEnvelope(selector, method, params, timeoutMs)
+    },
+    subscribe: async (args, callbacks) => {
+      const { selector, method, params, timeoutMs } = args
+      if (method === 'browser.screencast' && window.orcaWorkspaceWindowNative) {
+        const environment = configured(selector)
+          ? await native!.resolve({ selector })
+          : resolveEnvironment(selector)
+        const nativeSubscription = await window.orcaWorkspaceWindowNative.subscribeBrowser(
+          {
+            runtimeId: environment.runtimeId,
+            params,
+            ...(configured(selector)
+              ? {
+                  environmentId: environment.id,
+                  expectedEnvironmentPairingRevision: args.expectedEnvironmentPairingRevision
+                }
+              : {})
+          },
+          callbacks
+        )
+        if (nativeSubscription) {
+          return nativeSubscription
+        }
+      }
+      if (configured(selector)) {
+        return native!.subscribe(args, callbacks)
+      }
       const environment = resolveEnvironment(selector)
       const client = getClientForEnvironment(environment)
       const subscription = await client.subscribe(method, params, callbacks, { timeoutMs })

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef } from 'react'
-import { ChevronRight } from 'lucide-react'
+import { ChevronRight, X } from 'lucide-react'
 import { AgentStateDot, agentStateLabel } from '@/components/AgentStateDot'
 import type { DashboardAgentRow as DashboardAgentRowData } from '@/components/dashboard/useDashboardData'
 import { AgentIcon } from '@/lib/agent-catalog'
@@ -77,6 +77,8 @@ type CompactAgentRowProps = {
   agent: DashboardAgentRowData
   now: number
   onActivate: (tabId: string, paneKey: string) => void
+  onDismiss?: (paneKey: string) => void
+  isPassive?: boolean
   // Why: send-popover target mode temporarily turns compact sidebar rows into
   // the picker surface, matching the full DashboardAgentRow behavior.
   sendTargetStatus?: 'eligible' | 'disabled' | 'sending'
@@ -95,6 +97,8 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
   agent,
   now,
   onActivate,
+  onDismiss,
+  isPassive = false,
   sendTargetStatus,
   sendTargetDisabledReason,
   onSendTargetClick,
@@ -150,11 +154,22 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
   const handleActivate = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation()
+      if (isPassive) {
+        return
+      }
       // Why: subagent child rows have no pane of their own; they focus the
       // parent pane whose session spawned them.
       onActivate(agent.tab.id, agent.activationPaneKey ?? agent.paneKey)
     },
-    [agent.activationPaneKey, agent.paneKey, agent.tab.id, onActivate]
+    [agent.activationPaneKey, agent.paneKey, agent.tab.id, isPassive, onActivate]
+  )
+  const handleDismiss = useCallback(
+    (e: React.MouseEvent<HTMLButtonElement>) => {
+      e.preventDefault()
+      e.stopPropagation()
+      onDismiss?.(agent.paneKey)
+    },
+    [agent.paneKey, onDismiss]
   )
   const handleSendTargetClickCapture = useCallback(
     (e: React.MouseEvent) => {
@@ -284,7 +299,9 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
       draggable={false}
       className={cn(
         'compact-agent-row group/compact-agent-row min-w-0 overflow-hidden cursor-pointer rounded-sm px-1 text-[11px] leading-none',
-        'text-muted-foreground worktree-agent-row-hover',
+        'text-muted-foreground',
+        !isPassive && 'worktree-agent-row-hover',
+        isPassive ? 'cursor-default' : 'cursor-pointer',
         hasChildDisclosure && 'worktree-agent-lineage-parent-row',
         isLineageChild && 'worktree-agent-lineage-child-row',
         'flex h-6 items-center gap-1',
@@ -299,12 +316,29 @@ export const CompactAgentRow = React.memo(function CompactAgentRow({
       onDragStart={(e) => e.stopPropagation()}
       data-focused-agent-pane={isFocusedPane ? 'true' : undefined}
       data-agent-send-target={sendTargetStatus}
+      aria-disabled={isPassive ? 'true' : undefined}
       role={agent.lineage ? 'treeitem' : undefined}
       aria-level={agent.lineage ? agent.lineage.depth + 1 : undefined}
       aria-expanded={hasChildDisclosure ? childAgentsExpanded : undefined}
       title={sendTargetDisabledReason}
     >
       {rowBody}
+      {(isPassive || agent.state === 'done') && (
+        <button
+          type="button"
+          onClick={handleDismiss}
+          onMouseDown={(e) => e.stopPropagation()}
+          onKeyDown={stopActivationKeyPropagation}
+          className="ml-0.5 inline-flex size-4 shrink-0 items-center justify-center rounded-sm text-muted-foreground/70 hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-worktree-sidebar-ring"
+          aria-label={translate(
+            'auto.components.dashboard.DashboardAgentRow.b06e13fcf7',
+            'Dismiss agent'
+          )}
+          title={translate('auto.components.dashboard.DashboardAgentRow.5ae84475cc', 'Dismiss')}
+        >
+          <X className="size-3" />
+        </button>
+      )}
     </div>
   )
 })

@@ -1,3 +1,4 @@
+import type { WorkspaceWindowNativeBridge } from '../../../../preload/api/workspace-window-native-api'
 import type { PreloadApi } from '../../../../preload/api-types'
 import { assertClipboardTextWithinLimitWithYield } from '../../../../shared/clipboard-text'
 import type { ReadClipboardTextOptions } from '../../../../shared/clipboard-text'
@@ -5,6 +6,7 @@ import { normalizeFeatureInteractions } from '../../../../shared/feature-interac
 import type { FeatureInteractionId } from '../../../../shared/feature-interactions'
 import { omitPairingLocalUiFields } from '../../../../shared/pairing-local-ui-fields'
 import type { PairedUiState } from '../../../../shared/pairing-local-ui-fields'
+import { WORKSPACE_WINDOW_NATIVE_BRIDGE_KEY } from '../../../../shared/workspace-window-native-bridge'
 import {
   readClipboardImagePngBase64,
   readClipboardImageThumbnail,
@@ -16,7 +18,8 @@ import {
   mergeFeatureInteractionState,
   mergeHostWebUIState,
   mergeOsc52ClipboardNoticePending,
-  mergeWebUIState
+  mergeWebUIState,
+  omitWebWindowNavigationFields
 } from './web-preference-normalization'
 import { readLocalWebUIState } from './web-preferences-store'
 import { callRuntimeResult } from './web-runtime-calls'
@@ -25,6 +28,12 @@ import { UI_STORAGE_KEY, noopUnsubscribe, writeJson } from './web-storage'
 
 export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
   let zoomLevel = readLocalWebUIState().uiZoomLevel
+  const nativeWindow = (
+    window as unknown as Record<
+      typeof WORKSPACE_WINDOW_NATIVE_BRIDGE_KEY,
+      WorkspaceWindowNativeBridge | undefined
+    >
+  )[WORKSPACE_WINDOW_NATIVE_BRIDGE_KEY]
   return {
     get: async () => {
       try {
@@ -55,7 +64,7 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
       zoomLevel = next.uiZoomLevel
       // Why strip here too when the host also strips: an old host predating that strip would
       // otherwise persist this browser's runtime:web-* keys over the desktop profile's order.
-      const hostUpdates = omitPairingLocalUiFields(updates)
+      const hostUpdates = omitWebWindowNavigationFields(omitPairingLocalUiFields(updates))
       try {
         await callRuntimeResult('ui.set', hostUpdates, 15_000)
       } catch {
@@ -69,7 +78,7 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
       const next = mergeWebUIState(readLocalWebUIState(), updates)
       writeJson(UI_STORAGE_KEY, next)
       zoomLevel = next.uiZoomLevel
-      const hostUpdates = omitPairingLocalUiFields(updates)
+      const hostUpdates = omitWebWindowNavigationFields(omitPairingLocalUiFields(updates))
       await callRuntimeResult('ui.set', hostUpdates, 15_000)
     },
     recordFeatureInteraction: async (id: FeatureInteractionId) => {
@@ -146,15 +155,22 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
       document.execCommand?.(action === 'copy' ? 'copy' : 'selectAll')
     },
     onExportPdfRequested: () => noopUnsubscribe,
-    onAppMenuPaste: () => noopUnsubscribe,
-    onAppMenuSelectionAction: () => noopUnsubscribe,
+    onAppMenuPaste: (callback) =>
+      nativeWindow?.onMenuEvent('ui:appMenuPaste', callback) ?? noopUnsubscribe,
+    onAppMenuSelectionAction: (callback) =>
+      nativeWindow?.onMenuEvent('ui:appMenuSelectionAction', (action) => {
+        if (action === 'copy' || action === 'select-all') {
+          callback(action)
+        }
+      }) ?? noopUnsubscribe,
     onEditableContextPaste: () => noopUnsubscribe,
     getZoomLevel: () => zoomLevel,
     setZoomLevel: (level) => {
       zoomLevel = level
     },
     isMaximized: () => Promise.resolve(false),
-    onOpenSettings: () => noopUnsubscribe,
+    onOpenSettings: (callback) =>
+      nativeWindow?.onMenuEvent('ui:openSettings', callback) ?? noopUnsubscribe,
     // Why: the web client has no native tray/menu bar, so there's never a queued open-settings intent to consume.
     consumePendingOpenSettings: () => Promise.resolve(false),
     onOpenSkillShare: () => noopUnsubscribe,
@@ -162,13 +178,18 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     // Why: the web client has no OS shell handing it files, so there is never a queued open.
     onOpenMarkdownFiles: () => noopUnsubscribe,
     consumePendingMarkdownFileOpens: () => Promise.resolve([]),
-    onOpenSetupGuide: () => noopUnsubscribe,
-    onOpenFeatureTour: () => noopUnsubscribe,
-    onOpenCrashReport: () => noopUnsubscribe,
+    onOpenSetupGuide: (callback) =>
+      nativeWindow?.onMenuEvent('ui:openSetupGuide', callback) ?? noopUnsubscribe,
+    onOpenFeatureTour: (callback) =>
+      nativeWindow?.onMenuEvent('ui:openFeatureTour', callback) ?? noopUnsubscribe,
+    onOpenCrashReport: (callback) =>
+      nativeWindow?.onMenuEvent('ui:openCrashReport', callback) ?? noopUnsubscribe,
     // No desktop main process to push state changes; the web client re-reads via ui.get on interaction.
     onStateChanged: () => noopUnsubscribe,
-    onToggleLeftSidebar: () => noopUnsubscribe,
-    onToggleRightSidebar: () => noopUnsubscribe,
+    onToggleLeftSidebar: (callback) =>
+      nativeWindow?.onMenuEvent('ui:toggleLeftSidebar', callback) ?? noopUnsubscribe,
+    onToggleRightSidebar: (callback) =>
+      nativeWindow?.onMenuEvent('ui:toggleRightSidebar', callback) ?? noopUnsubscribe,
     onToggleWorktreePalette: () => noopUnsubscribe,
     onToggleFloatingTerminal: () => noopUnsubscribe,
     onTerminalShortcutCaptured: () => noopUnsubscribe,
@@ -207,7 +228,8 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     onSwitchTerminalTab: () => noopUnsubscribe,
     onCtrlTabKeyDown: () => noopUnsubscribe,
     onCtrlTabKeyUp: () => noopUnsubscribe,
-    onToggleStatusBar: () => noopUnsubscribe,
+    onToggleStatusBar: (callback) =>
+      nativeWindow?.onMenuEvent('ui:toggleStatusBar', callback) ?? noopUnsubscribe,
     onDictationKeyDown: () => noopUnsubscribe,
     onActivateWorktree: () => noopUnsubscribe,
     onCreateTerminal: () => noopUnsubscribe,
@@ -232,7 +254,12 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     onSleepWorktree: () => noopUnsubscribe,
     // Why: paired web is a full renderer that wakes on activation; mobile wake is desktop-host-scoped and never reaches web.
     onResumeSleepingAgents: () => noopUnsubscribe,
-    onTerminalZoom: () => noopUnsubscribe,
+    onTerminalZoom: (callback) =>
+      nativeWindow?.onMenuEvent('terminal:zoom', (direction) => {
+        if (direction === 'in' || direction === 'out' || direction === 'reset') {
+          callback(direction)
+        }
+      }) ?? noopUnsubscribe,
     // Why: a paired web client has no OS sleep signal; occlusion-driven visibilitychange already covers wake recovery.
     onSystemResumed: () => noopUnsubscribe,
     onFileDrop: () => noopUnsubscribe,
@@ -247,10 +274,11 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     minimize: () => {},
     maximize: () => {},
     onMaximizeChanged: () => noopUnsubscribe,
-    requestClose: () => {},
+    requestClose: () => void nativeWindow?.requestClose(),
     popupMenu: () => {},
-    onWindowCloseRequested: () => noopUnsubscribe,
-    confirmWindowClose: () => {},
+    onWindowCloseRequested: (callback) =>
+      nativeWindow?.onCloseRequested(callback) ?? noopUnsubscribe,
+    confirmWindowClose: () => void nativeWindow?.confirmClose(),
     notifyWindowRevealed: () => {}
   }
 }

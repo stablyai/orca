@@ -387,6 +387,10 @@ export function createRemoteRuntimePtyTransport(
   }
   // Why: clearing the claim flag without draining strands the queued bytes.
   const flushPendingClaimInput = (stream: RemoteRuntimeMultiplexedTerminal): void => {
+    if (!canControlWorkspacePty(remotePtyId)) {
+      clearPendingViewportClaim()
+      return
+    }
     const queued = pendingClaimInput
     pendingViewportClaim = false
     pendingClaimInput = []
@@ -1376,6 +1380,9 @@ export function createRemoteRuntimePtyTransport(
   }
 
   async function sendInputAcceptedToRuntime(data: string): Promise<boolean> {
+    if (!canControlWorkspacePty(remotePtyId)) {
+      return false
+    }
     const targetHandle = handle
     if (!connected || !targetHandle || recoveryBlocksIo()) {
       return false
@@ -1407,6 +1414,9 @@ export function createRemoteRuntimePtyTransport(
     }
     try {
       for (const chunk of iterateTerminalInputChunks(text)) {
+        if (!canControlWorkspacePty(remotePtyId)) {
+          return false
+        }
         if (!connected || handle !== targetHandle || recoveryBlocksIo()) {
           return false
         }
@@ -1438,6 +1448,9 @@ export function createRemoteRuntimePtyTransport(
   }
 
   const sendUnacknowledgedInput = (text: string, queryReply = false): boolean => {
+    if (!canControlWorkspacePty(remotePtyId)) {
+      return false
+    }
     const targetHandle = handle
     const targetLifecycleEpoch = lifecycleEpoch
     if (!connected || !targetHandle || recoveryBlocksIo()) {
@@ -1487,6 +1500,9 @@ export function createRemoteRuntimePtyTransport(
   )
 
   function sendViewportUpdate(cols: number, rows: number, claim = false): void {
+    if (!canControlWorkspacePty(remotePtyId)) {
+      return
+    }
     const targetHandle = handle
     if (!connected || !targetHandle || recoveryBlocksIo()) {
       return
@@ -1953,7 +1969,7 @@ export function createRemoteRuntimePtyTransport(
     let subscriptionAttached = false
     let subscriptionSnapshotHadContent = false
     // Why: viewport handed to subscribe; a resize during the round-trip falls back to the refresh-only one-shot RPC, replayed through the stream below once current.
-    const subscribedViewport = desiredViewport
+    const subscribedViewport = canControlWorkspacePty(remotePtyId) ? desiredViewport : null
     const isCurrentSubscription = (): boolean =>
       !transportClosed &&
       generation === subscriptionGeneration &&
@@ -2148,9 +2164,10 @@ export function createRemoteRuntimePtyTransport(
       markRecoveryHealthy()
     }
     // Why: a viewport change during the subscribe round-trip hit the no-op one-shot fallback; replay the latest viewport so the PTY isn't stuck at subscribe-time size.
-    if (pendingViewportClaim && desiredViewport) {
+    if (canControlWorkspacePty(remotePtyId) && pendingViewportClaim && desiredViewport) {
       nextStream.claimViewport(desiredViewport.cols, desiredViewport.rows)
     } else if (
+      canControlWorkspacePty(remotePtyId) &&
       desiredViewport &&
       (desiredViewport.cols !== subscribedViewport?.cols ||
         desiredViewport.rows !== subscribedViewport?.rows)
@@ -2565,6 +2582,9 @@ export function createRemoteRuntimePtyTransport(
     },
 
     sendInput(data: string): boolean {
+      if (!canControlWorkspacePty(remotePtyId)) {
+        return false
+      }
       if (!connected || !handle || recoveryBlocksIo()) {
         return false
       }
@@ -2577,6 +2597,9 @@ export function createRemoteRuntimePtyTransport(
 
     // Why: query replies (CPR/DSR/DA/OSC) are read in raw mode with a short timeout; the 8ms debounce would miss it and echo the reply onto the prompt (#7329).
     sendInputImmediate(data: string): boolean {
+      if (!canControlWorkspacePty(remotePtyId)) {
+        return false
+      }
       const targetHandle = handle
       const targetLifecycleEpoch = lifecycleEpoch
       if (!connected || !targetHandle || recoveryBlocksIo()) {
@@ -2614,6 +2637,9 @@ export function createRemoteRuntimePtyTransport(
     sendInputAccepted: sendInputAcceptedToRuntime,
 
     claimViewport(cols: number, rows: number): boolean {
+      if (!canControlWorkspacePty(remotePtyId)) {
+        return false
+      }
       if (!connected || !handle) {
         return false
       }
@@ -2637,6 +2663,9 @@ export function createRemoteRuntimePtyTransport(
     },
 
     resize(cols: number, rows: number, meta): boolean {
+      if (!canControlWorkspacePty(remotePtyId)) {
+        return false
+      }
       if (!connected || !handle) {
         return false
       }
@@ -2781,3 +2810,4 @@ export function createRemoteRuntimePtyTransport(
   }
   return transport
 }
+import { canControlWorkspacePty } from '../cross-project-panes/workspace-pty-control'

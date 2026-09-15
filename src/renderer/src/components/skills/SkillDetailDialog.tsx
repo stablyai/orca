@@ -53,6 +53,7 @@ function agentNames(
 
 export function SkillDetailDialog({
   skill,
+  local,
   agentByRootPath,
   shareable,
   deletable,
@@ -62,6 +63,7 @@ export function SkillDetailDialog({
   onDelete
 }: {
   skill: DiscoveredSkill | null
+  local: boolean
   agentByRootPath: ReadonlyMap<string, string>
   shareable: boolean
   deletable: boolean
@@ -82,7 +84,10 @@ export function SkillDetailDialog({
   }
 
   const revealSkill = async (): Promise<void> => {
-    const result = await window.api.shell.openInFileManager(skill.skillFilePath)
+    const result = await window.api.shell.openInFileManager(
+      skill.skillFilePath,
+      local ? { kind: 'local-artifact' } : { kind: 'workspace', runtimeId: null }
+    )
     if (!result.ok) {
       toast.error(
         translate('auto.components.skills.SkillsPage.995fde8337', 'Could not reveal skill file')

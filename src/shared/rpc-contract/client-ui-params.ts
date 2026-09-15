@@ -14,6 +14,7 @@ import { ClientUiWorkspaceFilterFields } from './client-ui-workspace-filter-fiel
 import { TaskResumeState } from './task-resume-state-params'
 import { WorkspaceCleanup } from './workspace-cleanup-ui-params'
 import { omitUndefinedValues, tolerateUnknownValues } from './ui-update-value-tolerance-params'
+import { WindowPaneLayoutSchema } from '../window-pane-schema'
 
 export const NullableString = z.string().nullable()
 
@@ -200,6 +201,26 @@ export const UiUpdateFields = z
     acknowledgedAgentsByPaneKey: z.record(z.string(), z.number().finite()).optional(),
     activityClearedAtByPaneKey: z.record(z.string(), z.number().finite()).optional(),
     manuallyUnreadTurnsByPaneKey: z.record(z.string(), z.number().finite()).optional(),
+    workspaceWindowIds: StringArray.optional(),
+    windowPaneLayout: WindowPaneLayoutSchema.nullable().optional(),
+    workspaceWindowPlacements: z
+      .record(
+        z.string(),
+        z
+          .object({
+            bounds: z
+              .object({
+                x: z.number().finite(),
+                y: z.number().finite(),
+                width: z.number().finite(),
+                height: z.number().finite()
+              })
+              .strict(),
+            maximized: z.boolean()
+          })
+          .strict()
+      )
+      .optional(),
     browserDefaultUrl: NullableString.optional(),
     browserDefaultSearchEngine: z
       .enum(['google', 'duckduckgo', 'bing', 'kagi'])

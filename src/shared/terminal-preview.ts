@@ -31,5 +31,5 @@ export type TerminalPreviewConnectResult = {
 }
 
 export type TerminalPreviewDataPayload =
-  | { type: 'data'; ptyId: string; data: string; bytes: number }
-  | { type: 'resync'; ptyId: string }
+  | { type: 'data'; ptyId: string; data: string; bytes: number; viewId?: string }
+  | { type: 'resync'; ptyId: string; viewId?: string }

@@ -1,6 +1,7 @@
 import { DEFAULT_REPO_BADGE_COLOR, REPO_COLORS } from '../../../../shared/constants'
 import { normalizeRepoBadgeColor } from '../../../../shared/repo-badge-color'
 import { Label } from '../ui/label'
+import { Button } from '../ui/button'
 import { ColorPicker } from '../ui/color-picker'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
@@ -19,11 +20,21 @@ export function RepositoryIconColorSection({
 
   return (
     <div className="space-y-2">
-      <Label className="text-sm font-semibold">
-        {translate('auto.components.settings.RepositoryIconPicker.642dc29c6d', 'Color')}
-      </Label>
+      <Label className="text-sm font-semibold">Project accent</Label>
+      <p className="text-xs text-muted-foreground">
+        Shown beside project names. Neutral turns accents off.
+      </p>
       <div className="flex flex-wrap items-center gap-2">
-        {REPO_COLORS.map((color) => (
+        <Button
+          variant="outline"
+          size="sm"
+          aria-label="Neutral (accents off)"
+          aria-pressed={selectedBadgeColor === DEFAULT_REPO_BADGE_COLOR}
+          onClick={() => onBadgeColorChange(DEFAULT_REPO_BADGE_COLOR)}
+        >
+          Neutral
+        </Button>
+        {REPO_COLORS.filter((color) => color !== DEFAULT_REPO_BADGE_COLOR).map((color) => (
           <button
             key={color}
             type="button"

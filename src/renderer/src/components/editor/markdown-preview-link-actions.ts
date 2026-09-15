@@ -1,4 +1,5 @@
 import { toast } from 'sonner'
+import { getWorkspaceShellApi } from '@/lib/workspace-shell-scope'
 import { getConnectionIdForFile } from '@/lib/connection-context'
 import { detectLanguage } from '@/lib/language-detect'
 import { isLocalPathOpenBlocked, showLocalPathOpenBlockedToast } from '@/lib/local-path-open-guard'
@@ -159,7 +160,11 @@ export async function handleMarkdownPreviewLinkClick({
       showLocalPathOpenBlockedToast()
       return
     }
-    void window.api.shell.openFileUri(target.toString())
+    void getWorkspaceShellApi({
+      worktreeId: sourceRoutingWorktreeId,
+      runtimeEnvironmentId: resolvedSourceRuntimeEnvironmentId,
+      connectionId: sourceConnectionId
+    }).openFileUri(target.toString())
     return
   }
 

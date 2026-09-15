@@ -122,7 +122,7 @@ describe('registerShellHandlers', () => {
   })
 
   function getHandler(channel: string): (event: unknown, ...args: unknown[]) => Promise<unknown> {
-    registerShellHandlers(store as never)
+    registerShellHandlers(store as never, () => 'local-runtime')
     const call = handleMock.mock.calls.find((c: unknown[]) => c[0] === channel)
     if (!call) {
       throw new Error(`${channel} handler not registered`)
@@ -142,6 +142,18 @@ describe('registerShellHandlers', () => {
       properties: ['openFile'],
       filters: [{ name: 'Audio', extensions: ['ogg', 'mp3', 'wav', 'm4a', 'aac', 'flac'] }]
     })
+  })
+
+  it('uses the invoking window runtime scope instead of the primary selection', async () => {
+    settings.activeRuntimeEnvironmentId = 'remote-primary'
+    const handler = getHandler('shell:openInFileManager')
+    await expect(handler({}, resolve('workspace'), 'local-runtime')).resolves.toEqual({ ok: true })
+    settings.activeRuntimeEnvironmentId = null
+    await expect(handler({}, resolve('workspace'), 'foreign-runtime')).resolves.toEqual({
+      ok: false,
+      reason: 'remote-runtime-unsupported'
+    })
+    expect(showItemInFolderMock).toHaveBeenCalledTimes(1)
   })
 
   it('returns null when audio picking is canceled', async () => {

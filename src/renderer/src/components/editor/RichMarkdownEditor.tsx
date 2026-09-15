@@ -8,6 +8,7 @@ import { useRichMarkdownSearch } from './useRichMarkdownSearch'
 import type { LinkBubbleState } from './RichMarkdownLinkBubble'
 import { useLinkBubble } from './useLinkBubble'
 import { useEditorScrollRestore } from './useEditorScrollRestore'
+import { useRichMarkdownViewTransfer } from './use-rich-markdown-view-transfer'
 import { useModifierHeldClass } from './useModifierHeldClass'
 import { registerPendingEditorFlush } from './editor-pending-flush'
 import { useRichMarkdownTableOfContents } from './use-rich-markdown-table-of-contents'
@@ -268,6 +269,17 @@ export default function RichMarkdownEditor({
     return flushPendingSerialization
   }, [flushPendingSerialization])
 
+  const readTransferText = useCallback(() => {
+    flushPendingSerialization()
+    return lastCommittedMarkdownRef.current
+  }, [flushPendingSerialization])
+  useRichMarkdownViewTransfer(
+    editor,
+    viewStateId,
+    scrollCacheKey,
+    scrollContainerRef,
+    readTransferText
+  )
   useEditorScrollRestore(scrollContainerRef, scrollCacheKey, editor)
 
   useModifierHeldClass(rootRef, isMac)

@@ -15,6 +15,13 @@ import type { RecentWorkspaceTabRow } from '@/lib/recent-workspace-tab-rows'
 import type { Worktree } from '../../../shared/worktree/types'
 import { CREATE_WORKSPACE_QUICK_ACTION_ID } from '@/components/cmd-j/quick-actions'
 import type { CREATE_WORKTREE_ITEM_ID } from '@/lib/worktree-palette-create-action'
+import type { WorkspaceViewPlacement } from '../../../shared/workspace-view-bridge'
+export type WorkspaceViewPaletteItem = {
+  id: string
+  type: 'workspace-view'
+  placement: WorkspaceViewPlacement
+  localView?: WorkspaceViewPlacement['view']
+}
 
 export type WorktreePaletteItem = {
   id: string
@@ -72,6 +79,7 @@ export type CreateWorktreePaletteItem = {
 }
 
 export type PaletteItem =
+  | WorkspaceViewPaletteItem
   | WorktreePaletteItem
   | ProjectTargetPaletteItem
   | SettingsPaletteItem

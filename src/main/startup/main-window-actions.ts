@@ -22,11 +22,22 @@ import {
 } from '../window/renderer-recovery-prompt'
 
 // The window module injects this callback to avoid a cycle between actions and lifecycle code.
-let openWindow: (options?: { revealOnDidFinishLoad?: boolean }) => BrowserWindow
+type MainWindowOpenOptions = {
+  reopen?: boolean
+  kind?: 'primary' | 'workspace'
+  revealOnDidFinishLoad?: boolean
+  windowId?: string
+}
+
+let openWindow: (options?: MainWindowOpenOptions) => BrowserWindow
 export function setMainWindowOpener(
-  opener: (options?: { revealOnDidFinishLoad?: boolean }) => BrowserWindow
+  opener: (options?: MainWindowOpenOptions) => BrowserWindow
 ): void {
   openWindow = opener
+}
+
+export function openNewWorkspaceWindow(reopen = false): BrowserWindow {
+  return openWindow({ kind: 'workspace', ...(reopen ? { reopen } : {}) })
 }
 
 export function focusExistingWindow(): void {
@@ -51,15 +62,21 @@ export function showMainWindowFromTray(): void {
   }
 }
 
-export function openSettingsFromSystemMenu(): void {
-  showMainWindowFromTray()
-  const targetWindow = state.mainWindow && !state.mainWindow.isDestroyed() ? state.mainWindow : null
+export function openSettingsFromSystemMenu(invokingWindow?: BrowserWindow | null): void {
+  if (!invokingWindow) {
+    showMainWindowFromTray()
+  }
+  const targetWindow =
+    invokingWindow ??
+    (state.mainWindow && !state.mainWindow.isDestroyed() ? state.mainWindow : null)
   if (!targetWindow) {
     return
   }
   recordCrashBreadcrumb('settings_opened')
   targetWindow.webContents.send('ui:openSettings')
-  state.pendingOpenSettings.mark(targetWindow.webContents.id, Number.POSITIVE_INFINITY)
+  if (targetWindow === state.mainWindow) {
+    state.pendingOpenSettings.mark(targetWindow.webContents.id, Number.POSITIVE_INFINITY)
+  }
 }
 
 export function quitFromSystemTray(): void {

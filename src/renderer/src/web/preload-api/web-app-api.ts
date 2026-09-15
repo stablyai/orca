@@ -4,8 +4,24 @@ import { sessionStorageKeyForHost } from './web-workspace-session-api'
 import { mergeWebUIState } from './web-preference-normalization'
 import { readLocalWebUIState } from './web-preferences-store'
 import { UI_STORAGE_KEY, writeJson } from './web-storage'
+import { prepareRendererForAppRestart } from '../../../../shared/renderer-restart-preparation'
+import {
+  ORCA_APP_RESTART_STARTED_EVENT,
+  ORCA_APP_RESTART_ABORTED_EVENT
+} from '../../../../shared/updater-renderer-events'
 
 export function createWebAppApi(): Partial<PreloadApi> {
+  const reload = async (): Promise<void> => {
+    if (window.orcaWorkspaceWindowNative) {
+      await prepareRendererForAppRestart(window, {
+        startedEventName: ORCA_APP_RESTART_STARTED_EVENT,
+        abortedEventName: ORCA_APP_RESTART_ABORTED_EVENT,
+        awaitCheckpoint: () =>
+          window.orcaWorkspaceWindowNative?.presentationStorage?.flush() ?? Promise.resolve()
+      })
+    }
+    window.location.reload()
+  }
   return {
     app: {
       getIdentity: () =>
@@ -19,19 +35,23 @@ export function createWebAppApi(): Partial<PreloadApi> {
           dockBadgeLabel: null
         }),
       getFeatureWallAssetBaseUrl: () => Promise.resolve('/'),
-      relaunch: () => Promise.resolve(window.location.reload()),
-      restart: () => Promise.resolve(window.location.reload()),
-      reload: () => Promise.resolve(window.location.reload()),
+      relaunch: reload,
+      restart: reload,
+      reload,
       stageBeforeUnloadSync: ({ sessions, ui }) => {
         // Why: beforeunload cannot await the paired runtime, so the web adapter
         // guarantees immediate browser-local durability for the final snapshot.
         for (const { state, hostId } of sessions) {
-          writeJson(sessionStorageKeyForHost(hostId), sanitizeWebRuntimeWorkspaceSession(state))
+          writeJson(
+            sessionStorageKeyForHost(hostId),
+            sanitizeWebRuntimeWorkspaceSession(state, !!window.orcaWorkspaceWindowNative)
+          )
         }
         writeJson(UI_STORAGE_KEY, mergeWebUIState(readLocalWebUIState(), ui))
       },
       // Staging already wrote through to browser storage, so there is nothing left to join.
-      awaitBeforeUnloadCheckpoint: () => Promise.resolve(),
+      awaitBeforeUnloadCheckpoint: () =>
+        window.orcaWorkspaceWindowNative?.presentationStorage?.flush() ?? Promise.resolve(),
       awaitFirstWindowStartupServices: () => Promise.resolve(),
       awaitGitEnvironmentStartupBarrier: () => Promise.resolve(),
       prepareTerminalStartupRestoration: () => Promise.resolve(),

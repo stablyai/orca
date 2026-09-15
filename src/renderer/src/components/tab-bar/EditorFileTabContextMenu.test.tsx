@@ -2,6 +2,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const shortcutLabelMock = vi.hoisted(() => vi.fn())
 
+vi.mock('react', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  useContext: () => null
+}))
+
 vi.mock('@/components/ui/dropdown-menu', () => ({
   DropdownMenu: function DropdownMenu(props: { children?: unknown }) {
     return { type: 'DropdownMenu', props }

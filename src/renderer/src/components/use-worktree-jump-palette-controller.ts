@@ -16,6 +16,7 @@ import { useWorkspaceEmojiShortcodeInput } from '@/components/workspace-emoji/us
 import { usePaletteSearchEvaluationContext } from '@/hooks/use-palette-search-evaluation-context'
 import type { WorktreePaletteRequestGuard } from '@/lib/worktree-palette-create-action'
 import { useMemo } from 'react'
+import { useWorktreeJumpPalettePlacements } from './use-worktree-jump-palette-placements'
 
 export function useWorktreeJumpPaletteController({
   visible,
@@ -106,7 +107,13 @@ export function useWorktreeJumpPaletteController({
     ...quickActions,
     ...taskUrl
   })
+  const { placements, allPlacements } = useWorktreeJumpPalettePlacements(
+    visible,
+    localState.deferredQuery,
+    filter.filterPredicate
+  )
   const listEntries = useWorktreeJumpPaletteListEntries({
+    placements,
     ...localState,
     ...worktrees,
     ...openTabs,
@@ -127,6 +134,7 @@ export function useWorktreeJumpPaletteController({
     ...taskUrl
   })
   const selectionActions = useWorktreeJumpPaletteSelectionActions({
+    allPlacements,
     ...storeState,
     ...localState,
     ...quickActions,

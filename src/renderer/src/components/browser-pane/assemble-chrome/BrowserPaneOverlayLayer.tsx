@@ -1,4 +1,4 @@
-import { memo, useCallback, useMemo } from 'react'
+import { memo, useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { registerBrowserOverlaySlotViewport } from '../host-guest/browser-page-viewport'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '../../../store'
@@ -15,6 +15,7 @@ import {
   useClientHostedBrowserRows
 } from '@/lib/pane-manager/client-hosted-browser-row-state'
 import { ClientHostedBrowserHostRowPane } from '../client-hosted-browser-host-row-pane'
+import { usePaneOverlayAssignments } from '../../cross-project-panes/use-pane-overlay-assignments'
 import { useAnyBrowserPageMountAdmission } from '../host-guest/browser-page-mount-admission'
 
 // Why: Electron <webview> destroys its guest on DOM reparent, so BrowserPanes render at worktree level and moving a tab between groups only swaps the overlay's CSS position-anchor.
@@ -30,24 +31,40 @@ const EMPTY_GROUPS: readonly TabGroup[] = []
 
 type BrowserOverlaySlotProps = {
   browserTab: BrowserTabState
-  isWorktreeActive: boolean
   // Why: undefined = orphan tab (in browserTabs but not referenced by any group's unified-tab list); the fallback branch keeps these hidden.
   groupId: string | undefined
   isActive: boolean
   chromeShortcutScope: BrowserChromeShortcutScope
   // Why: overlay is a sibling of the group layout, so pane focus doesn't bubble to TabGroupPanel; re-sync it here or split-view clicks leave activeGroupIdByWorktree stale.
   onFocusOwningGroup: ((groupId: string) => void) | undefined
+  isWorktreeActive: boolean
 }
 
 // Why: memoize each slot so unrelated worktree mutations don't cascade a re-render into every BrowserPane subtree.
 const BrowserOverlaySlot = memo(function BrowserOverlaySlot({
   browserTab,
-  isWorktreeActive,
   groupId,
   isActive,
   chromeShortcutScope,
-  onFocusOwningGroup
+  onFocusOwningGroup,
+  isWorktreeActive
 }: BrowserOverlaySlotProps): React.JSX.Element {
+  const slotRef = useRef<HTMLDivElement>(null)
+  const retainedSize = useRef<{ width: number; height: number } | null>(null)
+  useLayoutEffect(() => {
+    const slot = slotRef.current
+    if (!slot || typeof ResizeObserver === 'undefined') {
+      return
+    }
+    const observer = new ResizeObserver(() => {
+      const { width, height } = slot.getBoundingClientRect()
+      if (width > 0 && height > 0) {
+        retainedSize.current = { width, height }
+      }
+    })
+    observer.observe(slot)
+    return () => observer.disconnect()
+  }, [])
   // Why: persistent page viewports (webview guests) live under this root so they survive BrowserPane chrome unmounts without reparenting.
   const setSlotViewportRef = useCallback(
     (node: HTMLDivElement | null): void => {
@@ -83,12 +100,13 @@ const BrowserOverlaySlot = memo(function BrowserOverlaySlot({
             position: 'absolute',
             top: 0,
             left: 0,
-            width: 0,
-            height: 0,
-            display: 'none',
+            width: needsGuestPaint ? (retainedSize.current?.width ?? '100%') : 0,
+            height: needsGuestPaint ? (retainedSize.current?.height ?? '100%') : 0,
+            opacity: 0,
+            display: needsGuestPaint ? 'flex' : 'none',
             pointerEvents: 'none'
           },
-    [anchorName, isActive, isPaintable]
+    [anchorName, isActive, isPaintable, needsGuestPaint]
   )
   const handleFocus = useCallback(() => {
     if (groupId !== undefined && onFocusOwningGroup) {
@@ -98,6 +116,8 @@ const BrowserOverlaySlot = memo(function BrowserOverlaySlot({
 
   return (
     <div
+      ref={slotRef}
+      inert={!isActive}
       style={style}
       className="relative flex min-h-0 flex-1 flex-col"
       data-browser-overlay-tab-id={browserTab.id}
@@ -105,6 +125,7 @@ const BrowserOverlaySlot = memo(function BrowserOverlaySlot({
       onFocusCapture={handleFocus}
     >
       <div ref={setSlotViewportRef} className="absolute inset-0 flex min-h-0 flex-col" />
+      {/* Why: hidden worktrees park the heavy pane subtree; visible ones keep stable slots so reparenting can't destroy the webview guest. */}
       <DeferredBrowserContent mountEligible={isPaintable} retainMounted={isWorktreeActive}>
         <BrowserPane
           browserTab={browserTab}
@@ -125,6 +146,7 @@ const BrowserPaneOverlayLayer = memo(function BrowserPaneOverlayLayer({
   worktreeId: string
   isWorktreeActive: boolean
 }): React.JSX.Element {
+  const presentation = usePaneOverlayAssignments(worktreeId)
   const { browserTabs, unifiedTabs, groups, focusedGroupId } = useAppStore(
     useShallow((state) => ({
       browserTabs: state.browserTabsByWorktree[worktreeId] ?? EMPTY_BROWSER_TABS,
@@ -145,8 +167,9 @@ const BrowserPaneOverlayLayer = memo(function BrowserPaneOverlayLayer({
 
   // Why: stable identity so BrowserOverlaySlot's memo holds; groupId is passed at call time so one callback serves every slot.
   const focusOwningGroup = useCallback(
-    (groupId: string) => focusGroup(worktreeId, groupId),
-    [focusGroup, worktreeId]
+    (groupId: string) =>
+      presentation.assignments ? presentation.focus(groupId) : focusGroup(worktreeId, groupId),
+    [focusGroup, worktreeId, presentation]
   )
 
   // Why: build this lookup outside the zustand selector — a fresh object inside it would break useShallow equality and re-render on every unrelated mutation.
@@ -165,13 +188,17 @@ const BrowserPaneOverlayLayer = memo(function BrowserPaneOverlayLayer({
       if (tab.contentType !== 'browser') {
         continue
       }
+      const placement = presentation.assignments?.get(tab.id)
+      if (presentation.assignments && !placement) {
+        continue
+      }
       entries.set(tab.entityId, {
-        groupId: tab.groupId,
-        isActiveInGroup: groupActiveTabById[tab.groupId] === tab.id
+        groupId: placement?.groupId ?? tab.groupId,
+        isActiveInGroup: placement?.isActiveInGroup ?? groupActiveTabById[tab.groupId] === tab.id
       })
     }
     return entries
-  }, [groupActiveTabById, unifiedTabs])
+  }, [groupActiveTabById, unifiedTabs, presentation.assignments])
 
   return (
     <>
@@ -180,20 +207,20 @@ const BrowserPaneOverlayLayer = memo(function BrowserPaneOverlayLayer({
         const isActive = Boolean(isWorktreeActive && assignment && assignment.isActiveInGroup)
         const chromeShortcutScope: BrowserChromeShortcutScope = !isActive
           ? 'inactive'
-          : knownFocusedGroupId === undefined
+          : (presentation.activePaneId ?? knownFocusedGroupId) === undefined
             ? 'owned-target'
-            : assignment?.groupId === knownFocusedGroupId
+            : assignment?.groupId === (presentation.activePaneId ?? knownFocusedGroupId)
               ? 'focused'
               : 'inactive'
         return (
           <BrowserOverlaySlot
             key={browserTab.id}
             browserTab={browserTab}
-            isWorktreeActive={isWorktreeActive}
             groupId={assignment?.groupId}
             isActive={isActive}
             chromeShortcutScope={chromeShortcutScope}
             onFocusOwningGroup={focusOwningGroup}
+            isWorktreeActive={isWorktreeActive}
           />
         )
       })}
@@ -266,11 +293,17 @@ export const RetainedBrowserPaneOverlayLayer = memo(function RetainedBrowserPane
   isWorktreeActive: boolean
   mountEligible: boolean
 }): React.JSX.Element | null {
-  return (
-    <DeferredBrowserContent mountEligible={mountEligible}>
-      <BrowserPaneOverlayLayer worktreeId={worktreeId} isWorktreeActive={isWorktreeActive} />
-    </DeferredBrowserContent>
-  )
+  const [hasCommittedMount, setHasCommittedMount] = useState(false)
+  // Why: commit the latch with the persistent slot DOM so discarded renders cannot retain a guest host.
+  useLayoutEffect(() => {
+    if (mountEligible && !hasCommittedMount) {
+      setHasCommittedMount(true)
+    }
+  }, [hasCommittedMount, mountEligible])
+  if (!mountEligible && !hasCommittedMount) {
+    return null
+  }
+  return <BrowserPaneOverlayLayer worktreeId={worktreeId} isWorktreeActive={isWorktreeActive} />
 })
 
 export default BrowserPaneOverlayLayer
