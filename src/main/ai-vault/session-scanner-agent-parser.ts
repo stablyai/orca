@@ -6,6 +6,8 @@ import { parseClineSessionFile } from './session-scanner-cline-parser'
 import { parseGrokSessionFile } from './session-scanner-grok-parser'
 import { parseMessageGraphSessionFile, parseRovoSessionFile } from './session-scanner-graph-parsers'
 import { parseKimiSessionFile } from './session-scanner-kimi-parser'
+import { splitHermesSqliteCandidate } from './session-scanner-hermes-sqlite-paths'
+import { parseHermesSqliteSession } from './session-scanner-hermes-sqlite'
 import {
   looksLikeOpenCodeSqliteCandidate,
   splitOpenCodeSqliteCandidate
@@ -80,8 +82,18 @@ export async function parseAgentSessionFile(
     }
     case 'grok':
       return parseGrokSessionFile(candidate.file, platform, messages)
-    case 'hermes':
+    case 'hermes': {
+      const sqliteCandidate = splitHermesSqliteCandidate(candidate.file.path)
+      if (sqliteCandidate) {
+        return parseHermesSqliteSession({
+          dbPath: sqliteCandidate.dbPath,
+          sessionId: sqliteCandidate.sessionId,
+          platform,
+          messages
+        })
+      }
       return parseHermesSessionFile(candidate.file, platform, messages)
+    }
     case 'rovo':
       return parseRovoSessionFile(candidate.file, platform, messages)
     case 'openclaw':
