@@ -452,17 +452,32 @@ test.describe('Onboarding flow', () => {
       // has a live, protocol-compatible status; without one it reads
       // 'disconnected' and the Add Project dialog falls back to Local Mac.
       // runtimeProtocolVersion 3 clears MIN_COMPATIBLE_RUNTIME_SERVER_VERSION.
+      const seededStatus = {
+        runtimeId: `${environment.id}-runtime`,
+        rendererGraphEpoch: 0,
+        graphStatus: 'ready' as const,
+        authoritativeWindowId: null,
+        liveTabCount: 0,
+        liveLeafCount: 0,
+        runtimeProtocolVersion: 3,
+        minCompatibleRuntimeClientVersion: 1
+      }
+      // Why a snapshot and not a bare status: since #20003 the published snapshot owns host health,
+      // and main's status owner publishes `checking` for this unreachable host as soon as any
+      // runtime RPC touches it — which flips the Add Project host to Local mid-test. Pinning the
+      // seed at the top sequence makes applyRuntimeHostStatusSnapshot's monotonic guard drop those
+      // publications. A snapshot-less write would also no-op once any snapshot exists.
       store.getState().setRuntimeEnvironmentStatus(environment.id, {
-        status: {
-          runtimeId: `${environment.id}-runtime`,
-          rendererGraphEpoch: 0,
-          graphStatus: 'ready',
-          authoritativeWindowId: null,
-          liveTabCount: 0,
-          liveLeafCount: 0,
-          runtimeProtocolVersion: 3,
-          minCompatibleRuntimeClientVersion: 1
+        snapshot: {
+          environmentId: environment.id,
+          pairingRevision: environment.pairingRevision ?? environment.createdAt,
+          sequence: Number.MAX_SAFE_INTEGER,
+          checkedAt: Date.now(),
+          status: seededStatus,
+          verification: 'verified',
+          transport: 'ready'
         },
+        status: seededStatus,
         checkedAt: Date.now()
       })
       // Why: the store's switchRuntimeEnvironment probes reachability, which a
