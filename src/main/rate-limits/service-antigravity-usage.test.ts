@@ -1,12 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { RateLimitService } from './service'
+import { ANTIGRAVITY_NO_NATIVE_SOURCE_REASON } from './antigravity-native-usage-source'
 import { fetchClaudeRateLimits } from './claude-fetcher'
 import { fetchCodexRateLimits } from './codex-fetcher'
 import { fetchGeminiRateLimits } from './gemini-usage-fetcher'
 import {
   errorProvider,
   okProvider,
-  resetRateLimitProviderMocks
+  resetRateLimitProviderMocks,
+  unavailableProvider
 } from './rate-limit-service-test-harness'
 
 vi.mock('./claude-fetcher', () => ({
@@ -54,7 +56,7 @@ describe('RateLimitService Antigravity usage', () => {
     vi.mocked(fetchCodexRateLimits).mockResolvedValue(okProvider('codex', 20))
   })
 
-  it('does not republish a Gemini failure as an Antigravity refresh failure', async () => {
+  it('does not republish a Gemini failure as an Antigravity failure', async () => {
     vi.mocked(fetchGeminiRateLimits).mockResolvedValue(
       errorProvider('gemini', 'Gemini project ID not found')
     )
@@ -71,16 +73,47 @@ describe('RateLimitService Antigravity usage', () => {
     expect(state.gemini?.error).toBe('Gemini project ID not found')
   })
 
-  it('keeps mirroring a successful Gemini read under the Antigravity provider', async () => {
-    vi.mocked(fetchGeminiRateLimits).mockResolvedValue(okProvider('gemini', 42, Date.now()))
+  it('never surfaces successful Gemini quota under the Antigravity label (#14515)', async () => {
+    vi.mocked(fetchGeminiRateLimits).mockResolvedValue({
+      ...okProvider('gemini', 42, Date.now()),
+      buckets: [
+        {
+          name: 'Gemini 3 Pro',
+          usedPercent: 42,
+          windowMinutes: 300,
+          resetsAt: null,
+          resetDescription: null
+        }
+      ]
+    })
     const service = new RateLimitService()
 
     await service.refresh()
 
     const state = service.getState()
-    expect(state.antigravity?.status).toBe('ok')
-    expect(state.antigravity?.provider).toBe('antigravity')
-    expect(state.antigravity?.session?.usedPercent).toBe(42)
+    expect(state.antigravity?.status).toBe('unavailable')
+    expect(state.antigravity?.session).toBeNull()
+    expect(state.antigravity?.buckets).toBeUndefined()
+    expect(state.antigravity?.error).toBe(ANTIGRAVITY_NO_NATIVE_SOURCE_REASON)
+    // Why: Gemini's own snapshot is untouched; only the impersonation is gone.
+    expect(state.gemini?.session?.usedPercent).toBe(42)
+  })
+
+  it('reports native unavailability when no Gemini CLI sign-in exists at all (#9122)', async () => {
+    // Why: "no Gemini binary" is the #9122 repro; Antigravity must not inherit that failure
+    // or name Gemini in its own reason.
+    vi.mocked(fetchGeminiRateLimits).mockResolvedValue(
+      unavailableProvider('gemini', 'Gemini CLI credentials not found')
+    )
+    const service = new RateLimitService()
+
+    await service.refresh()
+
+    const antigravity = service.getState().antigravity
+    expect(antigravity?.provider).toBe('antigravity')
+    expect(antigravity?.status).toBe('unavailable')
+    expect(antigravity?.error).not.toMatch(/gemini/i)
+    expect(antigravity?.error).toBe(ANTIGRAVITY_NO_NATIVE_SOURCE_REASON)
   })
 
   it('never leaves a cached Antigravity snapshot in the error retry lane', async () => {
@@ -93,7 +126,6 @@ describe('RateLimitService Antigravity usage', () => {
     )
     await service.refresh()
 
-    // Why: stale-retention would otherwise show Gemini numbers as "Refresh failed" Antigravity usage.
     expect(service.getState().antigravity?.status).toBe('unavailable')
     expect(service.getState().antigravity?.session).toBeNull()
   })

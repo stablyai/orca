@@ -163,21 +163,20 @@ describe('hasUsageProviderSettingsForProvider', () => {
     expect(hasUsageProviderSettingsForProvider('grok', usageSettings())).toBe(false)
   })
 
-  it('requires both a checked Antigravity item and Gemini OAuth as the durable Antigravity signal', () => {
+  it('treats a checked Antigravity item as durable on its own, with no Gemini opt-in', () => {
+    expect(
+      hasUsageProviderSettingsForProvider(
+        'antigravity',
+        usageSettings({ antigravityUsageConfigured: true })
+      )
+    ).toBe(true)
+    // Why: an unrelated provider's opt-in must never decide whether Antigravity's slot exists (#14515).
     expect(
       hasUsageProviderSettingsForProvider(
         'antigravity',
         usageSettings({ antigravityUsageConfigured: true, geminiCliOAuthEnabled: true })
       )
     ).toBe(true)
-    // Why: the snapshot mirrors the Gemini fetch — without the OAuth opt-in it
-    // is permanently unavailable, so the checked item alone is not durable.
-    expect(
-      hasUsageProviderSettingsForProvider(
-        'antigravity',
-        usageSettings({ antigravityUsageConfigured: true })
-      )
-    ).toBe(false)
     expect(
       hasUsageProviderSettingsForProvider(
         'antigravity',
@@ -345,11 +344,11 @@ describe('getVisibleUsageProvider', () => {
     ).toBe(null)
   })
 
-  it('keeps Antigravity visible while the snapshot is pending when checked and Gemini OAuth is on', () => {
+  it('keeps Antigravity visible while the snapshot is pending when its item is checked', () => {
     const visible = getVisibleUsageProvider(
       'antigravity',
       null,
-      usageSettings({ antigravityUsageConfigured: true, geminiCliOAuthEnabled: true })
+      usageSettings({ antigravityUsageConfigured: true })
     )
     expect(visible).toMatchObject({
       provider: 'antigravity',
@@ -359,26 +358,21 @@ describe('getVisibleUsageProvider', () => {
     })
   })
 
-  it('hides Antigravity while Gemini OAuth is off even when its status item is checked', () => {
-    // Why: without the OAuth opt-in the mirrored snapshot is permanently
-    // 'unavailable'; the default-on item must not pin a dead bar.
-    expect(
-      getVisibleUsageProvider(
-        'antigravity',
-        null,
-        usageSettings({ antigravityUsageConfigured: true })
-      )
-    ).toBe(null)
+  it('surfaces the unavailable Antigravity slot instead of hiding it or borrowing Gemini', () => {
+    // Why: the slot is how Orca says "no readable Antigravity quota yet"; hiding it
+    // leaves #9122's reporter with no explanation at all.
     expect(
       getVisibleUsageProvider(
         'antigravity',
         provider('unavailable', {
           provider: 'antigravity',
-          error: 'Gemini CLI OAuth is disabled in settings'
+          error: 'Antigravity usage is not available.'
         }),
         usageSettings({ antigravityUsageConfigured: true })
       )
-    ).toBe(null)
+    ).toMatchObject({ provider: 'antigravity', status: 'unavailable' })
+    // Why: an unchecked or undetected CLI still hides it entirely.
+    expect(getVisibleUsageProvider('antigravity', null, usageSettings())).toBe(null)
   })
 })
 
@@ -487,13 +481,13 @@ describe('isUsageEmptyState', () => {
           grok: provider('unavailable', { provider: 'grok' }),
           minimax: provider('unavailable', { provider: 'minimax' })
         },
-        usageSettings({ antigravityUsageConfigured: true, geminiCliOAuthEnabled: true })
+        usageSettings({ antigravityUsageConfigured: true })
       )
     ).toBe(false)
   })
 
-  it('still shows the setup CTA when Antigravity is checked but Gemini OAuth is off', () => {
-    // Why: the default-on Antigravity item is not configured usage on its own;
+  it('still shows the setup CTA once the Antigravity slot settles as unavailable', () => {
+    // Why: an Antigravity slot with no readable quota is not configured usage;
     // it must not hide the teaching CTA from users who set nothing up.
     expect(
       isUsageEmptyState(
@@ -503,7 +497,7 @@ describe('isUsageEmptyState', () => {
           gemini: provider('unavailable'),
           opencodeGo: provider('unavailable', { provider: 'opencode-go' }),
           kimi: provider('unavailable', { provider: 'kimi' }),
-          antigravity: null,
+          antigravity: provider('unavailable', { provider: 'antigravity' }),
           grok: provider('unavailable', { provider: 'grok' }),
           minimax: provider('unavailable', { provider: 'minimax' })
         },
