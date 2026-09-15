@@ -69,6 +69,7 @@ export const createOrcaProfilesAuthActions: StateCreator<
     }
   },
 
+  /** Starts the browser sign-in; the pending toast's Cancel aborts main's loopback wait. */
   connectCurrentOrcaProfile: async () => {
     if (get().orcaProfileConnecting) {
       return null

@@ -40,6 +40,7 @@ function closeServer(server: Server): void {
   }
 }
 
+/** Opens the browser sign-in and waits for the loopback code; `signal` aborts the wait as cancelled. */
 export function beginOrcaCloudPkceFlow(
   config: OrcaCloudAuthConfig,
   localProfileId: string,

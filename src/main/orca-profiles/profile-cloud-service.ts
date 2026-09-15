@@ -36,6 +36,7 @@ import { selectCloudOrgWithMutationFence } from './profile-cloud-org-selection'
 
 export { refreshCurrentOrcaProfileAuth } from './profile-cloud-capability-refresh'
 
+/** Sign-in errors the user caused on purpose, reported as `cancelled` rather than `failed`. */
 function isUserCancelledAuthError(message: string): boolean {
   return (
     message === 'orca_cloud_auth_timeout' ||
@@ -55,6 +56,7 @@ export function getCurrentOrcaProfileAuthStatus(userDataPath: string): OrcaProfi
   return getOrcaProfileAuthStatusFromProfile(ensureActiveOrcaProfile(userDataPath), userDataPath)
 }
 
+/** Runs the browser sign-in for the active profile; `options.signal` cancels a pending wait. */
 export async function connectCurrentOrcaProfile(
   userDataPath: string,
   options?: { signal?: AbortSignal }

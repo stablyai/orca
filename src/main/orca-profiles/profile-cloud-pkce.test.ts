@@ -60,6 +60,7 @@ function callbackUrl(redirectUri: string, params: Record<string, string>): strin
   return url.toString()
 }
 
+/** Starts a flow and returns the nonce/state/redirect the authorize URL carries. */
 async function startedFlow(signal?: AbortSignal): Promise<{
   authUrl: URL
   flow: ReturnType<typeof beginOrcaCloudPkceFlow>

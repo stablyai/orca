@@ -166,6 +166,7 @@ function scheduleProfileRelaunch(reason: Extract<AppRelaunchReason, `profile-${s
   }, 150)
 }
 
+/** Registers the `orcaProfiles:*` IPC surface: local profiles, cloud auth, org members. */
 export function registerOrcaProfileHandlers(
   store: Store,
   options: RegisterOrcaProfileHandlersOptions = {}
