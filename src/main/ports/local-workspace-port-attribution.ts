@@ -66,19 +66,31 @@ function attributePortToNormalizedWorkspaces(
   )
   return commandMatch ? toOwner(commandMatch.worktree, 'command') : undefined
 }
+/** Projects a listener into a workspace, container, or external port with a safe process label. */
 export function enrichPort(
   port: RawListeningPort,
   worktrees: readonly NormalizedWorkspacePortProbe[],
   urlWatcher: Pick<AdvertisedUrlWatcher, 'lookup'>
 ): WorkspacePort {
   const owner = attributePortToNormalizedWorkspaces(port, worktrees)
+  // Node titles can name a service; never expose full command lines as labels.
+  const title = port.commandLine
+  const processName =
+    port.processName === 'node' &&
+    title &&
+    title !== 'Electron' && // Preserve the UI's protected-process sentinel.
+    title.length <= 64 &&
+    /^[a-zA-Z0-9]/.test(title) &&
+    !/[^a-zA-Z0-9._-]/.test(title)
+      ? title
+      : port.processName
   const base = {
     id: `${port.host}:${port.port}:${port.pid ?? 'unknown'}`,
     bindHost: port.host,
     connectHost: connectHostForBindHost(port.host),
     port: port.port,
     pid: port.pid,
-    processName: port.processName,
+    processName,
     protocol: inferProtocol(port.port)
   }
 
