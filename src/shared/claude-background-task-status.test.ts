@@ -229,7 +229,7 @@ describe('Claude background task status', () => {
     expect(finished?.turnCompletedAt).toBeUndefined()
   })
 
-  it('keeps foreground child work active before falling back to monitoring', () => {
+  it('keeps the resumed parent active before its next boundary falls back to monitoring', () => {
     const state = createHookListenerState()
     claudeEvent(state, SOURCE_PANE, {
       hook_event_name: 'SubagentStart',
@@ -246,6 +246,12 @@ describe('Claude background task status', () => {
       claudeEvent(state, SOURCE_PANE, {
         hook_event_name: 'SubagentStop',
         agent_id: 'child-1'
+      })
+    ).toMatchObject({ state: 'working', workingMode: undefined })
+    expect(
+      claudeEvent(state, SOURCE_PANE, {
+        hook_event_name: 'Stop',
+        background_tasks: [RUNNING_SHELL]
       })
     ).toMatchObject({ state: 'working', workingMode: 'monitoring' })
   })
