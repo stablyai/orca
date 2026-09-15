@@ -14,6 +14,10 @@ import {
   type ServeUpdateVerdict
 } from '../shared/serve-update-spool'
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
 export const DEFAULT_SERVE_UPDATE_SPOOL_DIR = '/var/lib/orca-server-update'
 export const DEFAULT_SERVE_UPDATE_UNIT_NAME = 'orca-serve.service'
 export const DEFAULT_SERVE_UPDATE_APPIMAGE_PATH = '/opt/orca/orca-linux.AppImage'
@@ -128,10 +132,11 @@ export function readServeUpdateResultFor(
   // previous boot or a replayed request. The helper echoes the per-attempt attemptId
   // and targetVersion from the request.
   try {
-    const raw = JSON.parse(readFileSync(getResultPath(resolveSpoolDir()), 'utf8')) as Record<
-      string,
-      unknown
-    >
+    const parsed: unknown = JSON.parse(readFileSync(getResultPath(resolveSpoolDir()), 'utf8'))
+    if (!isRecord(parsed)) {
+      return null
+    }
+    const raw = parsed
     if (raw.attemptId !== attemptId) {
       return null
     }

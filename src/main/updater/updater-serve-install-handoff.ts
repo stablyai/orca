@@ -23,6 +23,10 @@ const SERVE_UPDATE_VERDICT_TIMEOUT_MS = 90_000
 const SERVE_UPDATE_VERDICT_POLL_MS = 500
 const SERVE_UPDATE_HELPER_SPAWN_TIMEOUT_MS = 15_000
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
 /**
  * Linux supervised-headless-serve install: spool the request, hand it to the root
  * helper, and quit only after the helper accepts. Split from
@@ -51,8 +55,7 @@ export abstract class UpdaterServeInstallHandoff extends UpdaterPackageRecovery 
     if (this.updateInstallMode !== 'supervised-headless-serve') {
       return
     }
-    this.supervisedServeDownloadInfo =
-      info && typeof info === 'object' ? (info as Record<string, unknown>) : null
+    this.supervisedServeDownloadInfo = isRecord(info) ? info : null
   }
 
   private consumeSupervisedServeDownloadInfo(): Record<string, unknown> | null {

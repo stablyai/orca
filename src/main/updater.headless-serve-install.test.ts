@@ -507,9 +507,10 @@ describe('headless serve update install handoff', () => {
         listTerminals: async () => ({
           terminals: [],
           totalCount: 0,
+          truncated: false,
           hostScope: { hostIds: ['local'], omittedHostIds: [] }
         })
-      } as never)
+      })
       const {
         checkForUpdatesFromMenu,
         downloadUpdate,
