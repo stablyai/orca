@@ -60,6 +60,16 @@ describe('getUsageRosterRowState', () => {
     expect(
       getUsageRosterRowState(
         provider({
+          status: 'error',
+          error: 'Claude sign-in expired',
+          usageMetadata: { failureKind: 'signed-out' }
+        }),
+        false
+      )
+    ).toEqual({ kind: 'sign-in', statusLabel: 'not signed in' })
+    expect(
+      getUsageRosterRowState(
+        provider({
           provider: 'codex',
           status: 'error',
           error: 'ChatGPT authentication required to read rate limits'
