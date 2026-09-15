@@ -246,7 +246,7 @@ export default function TabGroupPanel({
       {/* Why: each split group needs its own tab row because multiple groups can show at once but the titlebar has only one shared center slot. */}
       {/* Why: macOS hiddenInset titleBarStyle makes -webkit-app-region: drag the only way to move the window from this tab row. */}
       <div
-        className="h-[32px] shrink-0 border-b border-border bg-card"
+        className="h-[36px] shrink-0 border-b border-border bg-card"
         data-tab-group-strip-id={groupId}
         data-terminal-focus-release-surface="true"
         data-worktree-id={worktreeId}
