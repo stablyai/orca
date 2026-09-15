@@ -113,7 +113,13 @@ export function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}
         reason: details.reason,
         expectedTeardown: getExpectedTeardownScope(webContentsId, false)
       }),
-    onRendererRecoveryExhausted: ({ details, recentRecoveryCount, cause, retry }) => {
+    onRendererRecoveryExhausted: ({
+      details,
+      recentRecoveryCount,
+      cause,
+      retry,
+      supersedesStandingPrompt
+    }) => {
       // Why two names: a stalled reload never opened the breaker, and a bundle that says it did misreads the failure.
       recordDurableCrashBreadcrumb(
         cause === 'reload-stalled'
@@ -125,6 +131,10 @@ export function openMainWindow(options: { revealOnDidFinishLoad?: boolean } = {}
           recentRecoveryCount
         }
       )
+      // The standing box is unanswered and cannot be replaced; a second one would stack on top of it.
+      if (supersedesStandingPrompt) {
+        return
+      }
       void showRendererRecoveryPrompt(recentRecoveryCount, cause, retry)
     },
     deferLoad: true,
