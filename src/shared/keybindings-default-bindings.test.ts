@@ -437,4 +437,74 @@ describe('keybindings', () => {
       })
     ).toBe(true)
   })
+
+  it('matches the default file explorer rename shortcut', () => {
+    expect(getEffectiveKeybindingsForAction('fileExplorer.rename', 'darwin')).toEqual([
+      'Enter',
+      'F2'
+    ])
+    expect(getEffectiveKeybindingsForAction('fileExplorer.rename', 'linux')).toEqual([
+      'F2',
+      'Enter'
+    ])
+    expect(getEffectiveKeybindingsForAction('fileExplorer.rename', 'win32')).toEqual([
+      'F2',
+      'Enter'
+    ])
+    expect(
+      keybindingMatchesAction(
+        'fileExplorer.rename',
+        { key: 'F2', code: 'F2', control: false, meta: false, alt: false, shift: false },
+        'win32'
+      )
+    ).toBe(true)
+    expect(
+      keybindingMatchesAction(
+        'fileExplorer.rename',
+        { key: 'Enter', code: 'Enter', control: false, meta: false, alt: false, shift: false },
+        'darwin'
+      )
+    ).toBe(true)
+    expect(
+      keybindingMatchesAction(
+        'fileExplorer.rename',
+        { key: 'Enter', code: 'Enter', control: false, meta: false, alt: false, shift: true },
+        'linux'
+      )
+    ).toBe(false)
+
+    const remapped = { 'fileExplorer.rename': ['Enter'] }
+    expect(getEffectiveKeybindingsForAction('fileExplorer.rename', 'win32', remapped)).toEqual([
+      'Enter'
+    ])
+    expect(
+      keybindingMatchesAction(
+        'fileExplorer.rename',
+        { key: 'F2', code: 'F2', control: false, meta: false, alt: false, shift: false },
+        'win32',
+        remapped
+      )
+    ).toBe(false)
+    expect(
+      keybindingMatchesAction(
+        'fileExplorer.rename',
+        { key: 'Enter', code: 'Enter', control: false, meta: false, alt: false, shift: false },
+        'win32',
+        remapped
+      )
+    ).toBe(true)
+    expect(
+      getEffectiveKeybindingsForAction('fileExplorer.rename', 'win32', {
+        'fileExplorer.rename': []
+      })
+    ).toEqual([])
+    expect(
+      keybindingMatchesAction(
+        'fileExplorer.rename',
+        { key: 'F2', code: 'F2', control: false, meta: false, alt: false, shift: false },
+        'win32',
+        { 'fileExplorer.rename': [] }
+      )
+    ).toBe(false)
+  })
 })
