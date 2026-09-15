@@ -102,46 +102,44 @@ export const UNVALIDATED_RPC_REQUEST_PORT_PENDING: readonly UnvalidatedRpcReques
   // faking either would record a fiction of device state rather than of the wire.
   { file: 'src/notifications/push-dismissal-reconciliation.ts', references: 2 },
 
-  // src/session/ — session screen: chat, diff review, PR actions, tabs
-  { file: 'src/session/ai-vault-resume-launch.ts', references: 3 },
-  { file: 'src/session/ai-vault-resume-preparation.ts', references: 2 },
-  { file: 'src/session/mobile-clipboard-image.ts', references: 7 },
-  { file: 'src/session/mobile-file-tap-open.ts', references: 3 },
-  { file: 'src/session/mobile-image-attachment.ts', references: 2 },
-  { file: 'src/session/mobile-native-chat-image-attachment.ts', references: 1 },
-  { file: 'src/session/mobile-native-chat-image-send.ts', references: 2 },
-  { file: 'src/session/mobile-native-chat-send.ts', references: 2 },
-  { file: 'src/session/mobile-native-chat-session-option-persistence.ts', references: 1 },
-  { file: 'src/session/mobile-native-chat-stale-input.ts', references: 1 },
-  { file: 'src/session/mobile-new-tab-agent-loader.ts', references: 4 },
-  { file: 'src/session/mobile-session-tab-activation.ts', references: 3 },
-  { file: 'src/session/mobile-session-tabs-stream-health.ts', references: 1 },
-  { file: 'src/session/mobile-structured-agent-session-launch.ts', references: 3 },
+  // src/session/ — session screen: chat, diff review, PR actions, tabs. The github.* PR surface,
+  // the diff-review loaders and the rest of the screen migrated in step 4; see
+  // mobile-session-{read,write,launch}-operations.ts, mobile-clipboard-image-operations.ts and
+  // mobile-diff-review-git-operations.ts.
+  // Holdout: the method is a parameter. `callAgentSession` takes a method string and a generic
+  // result type, and five call sites across two hooks pass their own, plus one inside this module's
+  // own mutation wrapper; an operation fixes the method at definition time, so migrating it is a
+  // restructure of those callers rather than of this send.
   { file: 'src/session/mobile-structured-agent-session-rpc.ts', references: 1 },
+  // Holdout: unrecorded site, record-first rule. `worktree.show` here sits inside the same focus
+  // effect as a `runtime.clientEvents` subscription, and the request-only recording runner refuses
+  // to open one, so no golden can hold this file's behaviour.
   { file: 'src/session/use-live-worktree-name.ts', references: 1 },
-  { file: 'src/session/use-mobile-diff-review-comment-actions.ts', references: 1 },
-  { file: 'src/session/use-mobile-diff-review-git-actions.ts', references: 2 },
-  { file: 'src/session/use-mobile-diff-review-interactions.ts', references: 1 },
-  { file: 'src/session/use-mobile-diff-review-send-actions.ts', references: 3 },
-  { file: 'src/session/use-mobile-file-tap-handlers.ts', references: 1 },
-  { file: 'src/session/use-mobile-native-chat-file-search.ts', references: 2 },
-  { file: 'src/session/use-mobile-native-chat-readability.ts', references: 1 },
+  // Holdout: unrecorded site, record-first rule. The `nativeChat.readSession` read lives in the
+  // paging callback, not in an effect, but only the mount effect's `nativeChat.subscribe` arms the
+  // offset and generation it pages against — and the request-only runner refuses to open one.
   { file: 'src/session/use-mobile-native-chat-session.ts', references: 1 },
-  { file: 'src/session/use-mobile-native-chat-stop.ts', references: 1 },
+  // Holdout: unrecorded site, record-first rule. The hook reads the pasteboard and the PTY mode
+  // registry before the send, so a recording would pin device state rather than the wire.
   { file: 'src/session/use-mobile-session-accessory-selection.ts', references: 1 },
-  { file: 'src/session/use-mobile-session-close-actions.ts', references: 3 },
-  { file: 'src/session/use-mobile-session-content-create-actions.ts', references: 4 },
-  { file: 'src/session/use-mobile-session-diff-comments.ts', references: 2 },
-  { file: 'src/session/use-mobile-session-document-readers.ts', references: 2 },
-  { file: 'src/session/use-mobile-session-markdown-actions.ts', references: 1 },
+  // Holdout: unrecorded site, record-first rule. The startup effect drives 36 members of the
+  // session model including the terminal subscription lifecycle, which is a later step.
   { file: 'src/session/use-mobile-session-startup.ts', references: 2 },
+  // Holdout: unrecorded site, record-first rule. The create path subscribes to the terminal it
+  // makes, and the request-only runner refuses the subscription.
   { file: 'src/session/use-mobile-session-terminal-create-actions.ts', references: 2 },
+  // Holdout: unrecorded site, record-first rule. Gesture input is queued against a live PTY mode
+  // and a webview handle; neither exists in the runner.
   { file: 'src/session/use-mobile-session-terminal-input.ts', references: 2 },
-  { file: 'src/session/use-mobile-session-terminal-list.ts', references: 1 },
+  // Holdout: unrecorded site, record-first rule. The send reads the buffered draft store and the
+  // keyboard, both native state a recording would have to invent.
   { file: 'src/session/use-mobile-session-terminal-send-actions.ts', references: 2 },
+  // Holdout: unrecorded site, record-first rule. The display-mode write is gated on an open
+  // terminal subscription, which is a later step.
   { file: 'src/session/use-mobile-session-terminal-stream-display.ts', references: 1 },
+  // Holdout: unrecorded site, record-first rule. The paste reads a clipboard image through
+  // expo-image-manipulator and expo-file-system before any send.
   { file: 'src/session/use-mobile-terminal-paste.ts', references: 1 },
-  { file: 'src/session/use-quick-commands.ts', references: 2 },
 
   // src/settings/ — notification display probe
   { file: 'src/settings/notification-display-test.tsx', references: 1 },

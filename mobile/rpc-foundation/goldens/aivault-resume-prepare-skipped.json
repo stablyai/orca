@@ -1,0 +1,56 @@
+{
+  "operation": "aiVault.resume-preparation",
+  "family": "aiVault.resume-preparation",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
+  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
+  "recorderSha256": "64a741e034b13bca69c466f93f713aa5c0cf3fbb2bbb02f357003506b17fe353",
+  "adapterSha256": "2f43211e4084c0493bd02ec98868acf53a4c748f89a70cd9657c9c3ee87b12fb",
+  "scenarioSha256": "3afaf2807506f5bde2159b367f34c6b777739d6aad564796d54ac0da05b5bd02",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "5d9b438a0a47": {
+      "failure": {
+        "$rpc": "null"
+      },
+      "prepared": {
+        "agent": "claude",
+        "codexHome": "/hosts/codex-runtime-home/home",
+        "executionHostId": "local",
+        "filePath": "/sessions/rollout.jsonl"
+      }
+    },
+    "fd5226716450": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "agent": "claude",
+        "codexHome": "/hosts/codex-runtime-home/home",
+        "executionHostId": "local",
+        "filePath": "/sessions/rollout.jsonl"
+      }
+    }
+  },
+  "recording": {
+    "scenario": "aivault-resume-prepare-skipped",
+    "checkpoints": [
+      {
+        "id": "no-wire",
+        "observation": {
+          "sender": [],
+          "payloads": [],
+          "settlements": {
+            "claude": "fd5226716450"
+          },
+          "state": "5d9b438a0a47",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

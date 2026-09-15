@@ -1,0 +1,713 @@
+{
+  "operation": "settings.quick-commands",
+  "family": "settings.quick-commands",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
+  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
+  "recorderSha256": "64a741e034b13bca69c466f93f713aa5c0cf3fbb2bbb02f357003506b17fe353",
+  "adapterSha256": "42334358b5e5966001639653b553f15033f6e201d785107871fe056536f0a5e2",
+  "scenarioSha256": "b9edb5c27852d4e1e968f85668f1ea7afde3ed1c6e5c6582d6607f9fa5643356",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "35b74155a70e": {
+      "name": "settings.updateTerminalQuickCommands#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "settings.updateTerminalQuickCommands"
+        },
+        {
+          "name": "params",
+          "value": {
+            "mutation": {
+              "command": {
+                "appendEnter": true,
+                "command": "pnpm build",
+                "id": "qc-1",
+                "label": "build"
+              },
+              "type": "upsert"
+            }
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "transport failure",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "4d6187982484": {
+      "commands": [],
+      "error": "transport failure",
+      "loading": false,
+      "persisted": [false],
+      "ready": true
+    },
+    "7ed3d39f0607": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": false
+    },
+    "90d68a1db07c": {
+      "commands": [],
+      "error": "Unknown method",
+      "loading": false,
+      "persisted": [false],
+      "ready": true
+    },
+    "aa6cb2d59de0": {
+      "name": "settings.updateTerminalQuickCommands#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "settings.updateTerminalQuickCommands"
+        },
+        {
+          "name": "params",
+          "value": {
+            "mutation": {
+              "command": {
+                "appendEnter": true,
+                "command": "pnpm build",
+                "id": "qc-1",
+                "label": "build"
+              },
+              "type": "upsert"
+            }
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true
+        }
+      }
+    },
+    "b0069ba7e0a2": {
+      "name": "settings.updateTerminalQuickCommands#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "settings.updateTerminalQuickCommands"
+        },
+        {
+          "name": "params",
+          "value": {
+            "mutation": {
+              "command": {
+                "appendEnter": true,
+                "command": "pnpm build",
+                "id": "qc-1",
+                "label": "build"
+              },
+              "type": "upsert"
+            }
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "terminalQuickCommands": [
+              {
+                "appendEnter": true,
+                "command": "pnpm build",
+                "id": "qc-1",
+                "label": "build"
+              }
+            ]
+          }
+        }
+      }
+    },
+    "b5abe986e17a": {
+      "name": "settings.updateTerminalQuickCommands#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "settings.updateTerminalQuickCommands"
+        },
+        {
+          "name": "params",
+          "value": {
+            "mutation": {
+              "command": {
+                "appendEnter": true,
+                "command": "pnpm build",
+                "id": "qc-1",
+                "label": "build"
+              },
+              "type": "upsert"
+            }
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "b8ac830eaf5f": {
+      "name": "settings.updateTerminalQuickCommands#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "settings.updateTerminalQuickCommands"
+        },
+        {
+          "name": "params",
+          "value": {
+            "mutation": {
+              "command": {
+                "appendEnter": true,
+                "command": "pnpm build",
+                "id": "qc-1",
+                "label": "build"
+              },
+              "type": "upsert"
+            }
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "$rpc": "null"
+          }
+        }
+      }
+    },
+    "bea1533ac9d4": {
+      "commands": [],
+      "error": "outer refused",
+      "loading": false,
+      "persisted": [false],
+      "ready": true
+    },
+    "c321b3e8e439": {
+      "name": "settings.updateTerminalQuickCommands#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "settings.updateTerminalQuickCommands"
+        },
+        {
+          "name": "params",
+          "value": {
+            "mutation": {
+              "command": {
+                "appendEnter": true,
+                "command": "pnpm build",
+                "id": "qc-1",
+                "label": "build"
+              },
+              "type": "upsert"
+            }
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "method_not_found",
+            "message": "Unknown method"
+          },
+          "id": "frame-2",
+          "ok": false
+        }
+      }
+    },
+    "cd5b13bf9061": {
+      "name": "settings.updateTerminalQuickCommands#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "settings.updateTerminalQuickCommands"
+        },
+        {
+          "name": "params",
+          "value": {
+            "mutation": {
+              "command": {
+                "appendEnter": true,
+                "command": "pnpm build",
+                "id": "qc-1",
+                "label": "build"
+              },
+              "type": "upsert"
+            }
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "error": {
+              "message": "inner refused"
+            },
+            "ok": false
+          }
+        }
+      }
+    },
+    "d02852b743c2": {
+      "name": "settings.updateTerminalQuickCommands#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "settings.updateTerminalQuickCommands"
+        },
+        {
+          "name": "params",
+          "value": {
+            "mutation": {
+              "command": {
+                "appendEnter": true,
+                "command": "pnpm build",
+                "id": "qc-1",
+                "label": "build"
+              },
+              "type": "upsert"
+            }
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": ""
+          },
+          "id": "frame-2",
+          "ok": false
+        }
+      }
+    },
+    "d766ce9ee125": {
+      "name": "settings.getTerminalQuickCommands#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "settings.getTerminalQuickCommands"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "terminalQuickCommands": []
+          }
+        }
+      }
+    },
+    "da090221e587": {
+      "name": "settings.updateTerminalQuickCommands#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "settings.updateTerminalQuickCommands"
+        },
+        {
+          "name": "params",
+          "value": {
+            "mutation": {
+              "command": {
+                "appendEnter": true,
+                "command": "pnpm build",
+                "id": "qc-1",
+                "label": "build"
+              },
+              "type": "upsert"
+            }
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "error": "refused"
+          }
+        }
+      }
+    },
+    "e1603b0c081f": {
+      "name": "settings.updateTerminalQuickCommands#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "settings.updateTerminalQuickCommands"
+        },
+        {
+          "name": "params",
+          "value": {
+            "mutation": {
+              "command": {
+                "appendEnter": true,
+                "command": "pnpm build",
+                "id": "qc-1",
+                "label": "build"
+              },
+              "type": "upsert"
+            }
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "error": "inner refused",
+            "ok": false
+          }
+        }
+      }
+    },
+    "e1663c7c38e3": {
+      "name": "settings.getTerminalQuickCommands#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.getTerminalQuickCommands\"}"
+    },
+    "e1a6101399e1": {
+      "name": "settings.updateTerminalQuickCommands#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "settings.updateTerminalQuickCommands"
+        },
+        {
+          "name": "params",
+          "value": {
+            "mutation": {
+              "command": {
+                "appendEnter": true,
+                "command": "pnpm build",
+                "id": "qc-1",
+                "label": "build"
+              },
+              "type": "upsert"
+            }
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": "outer refused"
+          },
+          "id": "frame-2",
+          "ok": false
+        }
+      }
+    },
+    "e3cf3d452fcf": {
+      "name": "settings.updateTerminalQuickCommands#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"settings.updateTerminalQuickCommands\",\"params\":{\"mutation\":{\"type\":\"upsert\",\"command\":{\"id\":\"qc-1\",\"label\":\"build\",\"command\":\"pnpm build\",\"appendEnter\":true}}}}"
+    },
+    "e481e68c74c9": {
+      "commands": [],
+      "error": "",
+      "loading": false,
+      "persisted": [false],
+      "ready": true
+    },
+    "e9c308be6dea": {
+      "commands": [],
+      "error": "Failed to save quick command",
+      "loading": false,
+      "persisted": [false],
+      "ready": true
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    }
+  },
+  "recording": {
+    "scenario": "matrix-settings.quick-commands-settings.updateterminalquickcommands-1",
+    "checkpoints": [
+      {
+        "id": "quick-commands-loaded-and-saved.normal:saved",
+        "observation": {
+          "sender": ["d766ce9ee125", "b0069ba7e0a2"],
+          "payloads": ["e1663c7c38e3", "e3cf3d452fcf"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "persist": "7ed3d39f0607"
+          },
+          "state": "e9c308be6dea",
+          "effects": []
+        }
+      },
+      {
+        "id": "quick-commands-loaded-and-saved.result-absent:saved",
+        "observation": {
+          "sender": ["d766ce9ee125", "aa6cb2d59de0"],
+          "payloads": ["e1663c7c38e3", "e3cf3d452fcf"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "persist": "7ed3d39f0607"
+          },
+          "state": "e9c308be6dea",
+          "effects": []
+        }
+      },
+      {
+        "id": "quick-commands-loaded-and-saved.result-null:saved",
+        "observation": {
+          "sender": ["d766ce9ee125", "b8ac830eaf5f"],
+          "payloads": ["e1663c7c38e3", "e3cf3d452fcf"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "persist": "7ed3d39f0607"
+          },
+          "state": "e9c308be6dea",
+          "effects": []
+        }
+      },
+      {
+        "id": "quick-commands-loaded-and-saved.inner-ok-missing:saved",
+        "observation": {
+          "sender": ["d766ce9ee125", "da090221e587"],
+          "payloads": ["e1663c7c38e3", "e3cf3d452fcf"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "persist": "7ed3d39f0607"
+          },
+          "state": "e9c308be6dea",
+          "effects": []
+        }
+      },
+      {
+        "id": "quick-commands-loaded-and-saved.inner-false-string-error:saved",
+        "observation": {
+          "sender": ["d766ce9ee125", "e1603b0c081f"],
+          "payloads": ["e1663c7c38e3", "e3cf3d452fcf"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "persist": "7ed3d39f0607"
+          },
+          "state": "e9c308be6dea",
+          "effects": []
+        }
+      },
+      {
+        "id": "quick-commands-loaded-and-saved.inner-false-object-error:saved",
+        "observation": {
+          "sender": ["d766ce9ee125", "cd5b13bf9061"],
+          "payloads": ["e1663c7c38e3", "e3cf3d452fcf"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "persist": "7ed3d39f0607"
+          },
+          "state": "e9c308be6dea",
+          "effects": []
+        }
+      },
+      {
+        "id": "quick-commands-loaded-and-saved.outer-refused:saved",
+        "observation": {
+          "sender": ["d766ce9ee125", "e1a6101399e1"],
+          "payloads": ["e1663c7c38e3", "e3cf3d452fcf"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "persist": "7ed3d39f0607"
+          },
+          "state": "bea1533ac9d4",
+          "effects": []
+        }
+      },
+      {
+        "id": "quick-commands-loaded-and-saved.outer-refused-no-message:saved",
+        "observation": {
+          "sender": ["d766ce9ee125", "d02852b743c2"],
+          "payloads": ["e1663c7c38e3", "e3cf3d452fcf"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "persist": "7ed3d39f0607"
+          },
+          "state": "e9c308be6dea",
+          "effects": []
+        }
+      },
+      {
+        "id": "quick-commands-loaded-and-saved.method-not-found:saved",
+        "observation": {
+          "sender": ["d766ce9ee125", "c321b3e8e439"],
+          "payloads": ["e1663c7c38e3", "e3cf3d452fcf"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "persist": "7ed3d39f0607"
+          },
+          "state": "90d68a1db07c",
+          "effects": []
+        }
+      },
+      {
+        "id": "quick-commands-loaded-and-saved.transport-rejection:saved",
+        "observation": {
+          "sender": ["d766ce9ee125", "35b74155a70e"],
+          "payloads": ["e1663c7c38e3", "e3cf3d452fcf"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "persist": "7ed3d39f0607"
+          },
+          "state": "4d6187982484",
+          "effects": []
+        }
+      },
+      {
+        "id": "quick-commands-loaded-and-saved.transport-rejection-no-message:saved",
+        "observation": {
+          "sender": ["d766ce9ee125", "b5abe986e17a"],
+          "payloads": ["e1663c7c38e3", "e3cf3d452fcf"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "persist": "7ed3d39f0607"
+          },
+          "state": "e481e68c74c9",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

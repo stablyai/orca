@@ -1,21 +1,26 @@
+import { aiVaultResumeMountAdapters } from './ai-vault-resume-mount-adapters'
 import {
   agentHistoryMountAdapters,
   agentHistoryMountExposures
 } from './agent-history-mount-adapters'
 import { browserMountAdapters } from './browser-mount-adapters'
+import { clipboardImageMountAdapters } from './clipboard-image-mount-adapters'
 import { codexResetCreditMountAdapters } from './codex-reset-credit-mount-adapters'
 import { dictationMountAdapters } from './dictation-mount-adapters'
+import { diffReviewActionMountAdapters } from './diff-review-action-mount-adapters'
 import { diffReviewMountAdapters } from './diff-review-mount-adapters'
 import {
   fileExplorerScreenMountAdapters,
   fileExplorerScreenMountExposures
 } from './file-explorer-screen-mount-adapters'
 import { fileInventoryMountAdapters } from './file-inventory-mount-adapters'
+import { fileTapOpenMountAdapters } from './file-tap-open-mount-adapters'
 import { fileRequestMountAdapters } from './file-request-mount-adapters'
 import { githubPrMountAdapters } from './github-pr-mount-adapters'
 import { hostScreenMountAdapters } from './host-screen-mount-adapters'
 import { hostWorktreeActionMountAdapters } from './host-worktree-action-mount-adapters'
 import { hostedReviewMountAdapters } from './hosted-review-mount-adapters'
+import { nativeChatWriteMountAdapters } from './native-chat-write-mount-adapters'
 import { newTabAgentMountAdapters } from './new-tab-agent-mount-adapters'
 import { newWorkspaceMountAdapters } from './new-workspace-mount-adapters'
 import { newWorkspaceRepositoryMountAdapters } from './new-workspace-repository-mount-adapters'
@@ -26,8 +31,13 @@ import {
   pushRegistrationMountExposures
 } from './push-registration-mount-adapters'
 import { relayCredentialMountAdapters } from './relay-credential-mount-adapters'
+import { sessionNotesMountAdapters } from './session-notes-mount-adapters'
+import { sessionScreenReadMountAdapters } from './session-screen-read-mount-adapters'
+import { sessionScreenTabMountAdapters } from './session-screen-tab-mount-adapters'
+import { sessionTabMountAdapters } from './session-tab-mount-adapters'
 import { settingsMountAdapters, settingsMountExposures } from './settings-mount-adapters'
 import { sourceControlMountAdapters } from './source-control-mount-adapters'
+import { structuredAgentLaunchMountAdapters } from './structured-agent-launch-mount-adapters'
 import { taskItemChecksStatusMountAdapters } from './task-item-checks-status-mount-adapters'
 import { taskItemConversationMountAdapters } from './task-item-conversation-mount-adapters'
 import { taskItemDetailMountAdapters } from './task-item-detail-mount-adapters'
@@ -59,9 +69,12 @@ export const MOUNTED_OPERATION_MODULES: readonly MountedOperationModule[] = [
     mounts: agentHistoryMountAdapters,
     exposes: agentHistoryMountExposures
   },
+  { source: 'ai-vault-resume-mount-adapters.ts', mounts: aiVaultResumeMountAdapters },
   { source: 'browser-mount-adapters.ts', mounts: browserMountAdapters },
+  { source: 'clipboard-image-mount-adapters.ts', mounts: clipboardImageMountAdapters },
   { source: 'codex-reset-credit-mount-adapters.ts', mounts: codexResetCreditMountAdapters },
   { source: 'dictation-mount-adapters.ts', mounts: dictationMountAdapters },
+  { source: 'diff-review-action-mount-adapters.ts', mounts: diffReviewActionMountAdapters },
   { source: 'diff-review-mount-adapters.ts', mounts: diffReviewMountAdapters },
   {
     source: 'file-explorer-screen-mount-adapters.ts',
@@ -69,6 +82,7 @@ export const MOUNTED_OPERATION_MODULES: readonly MountedOperationModule[] = [
     exposes: fileExplorerScreenMountExposures
   },
   { source: 'file-inventory-mount-adapters.ts', mounts: fileInventoryMountAdapters },
+  { source: 'file-tap-open-mount-adapters.ts', mounts: fileTapOpenMountAdapters },
   { source: 'file-request-mount-adapters.ts', mounts: fileRequestMountAdapters },
   { source: 'github-pr-mount-adapters.ts', mounts: githubPrMountAdapters },
   { source: 'host-screen-mount-adapters.ts', mounts: hostScreenMountAdapters },
@@ -77,6 +91,7 @@ export const MOUNTED_OPERATION_MODULES: readonly MountedOperationModule[] = [
     mounts: hostWorktreeActionMountAdapters
   },
   { source: 'hosted-review-mount-adapters.ts', mounts: hostedReviewMountAdapters },
+  { source: 'native-chat-write-mount-adapters.ts', mounts: nativeChatWriteMountAdapters },
   { source: 'new-tab-agent-mount-adapters.ts', mounts: newTabAgentMountAdapters },
   { source: 'new-workspace-mount-adapters.ts', mounts: newWorkspaceMountAdapters },
   {
@@ -91,12 +106,23 @@ export const MOUNTED_OPERATION_MODULES: readonly MountedOperationModule[] = [
     exposes: pushRegistrationMountExposures
   },
   { source: 'relay-credential-mount-adapters.ts', mounts: relayCredentialMountAdapters },
+  { source: 'session-notes-mount-adapters.ts', mounts: sessionNotesMountAdapters },
+  {
+    source: 'session-screen-read-mount-adapters.ts',
+    mounts: sessionScreenReadMountAdapters
+  },
+  { source: 'session-screen-tab-mount-adapters.ts', mounts: sessionScreenTabMountAdapters },
+  { source: 'session-tab-mount-adapters.ts', mounts: sessionTabMountAdapters },
   {
     source: 'settings-mount-adapters.ts',
     mounts: settingsMountAdapters,
     exposes: settingsMountExposures
   },
   { source: 'source-control-mount-adapters.ts', mounts: sourceControlMountAdapters },
+  {
+    source: 'structured-agent-launch-mount-adapters.ts',
+    mounts: structuredAgentLaunchMountAdapters
+  },
   {
     source: 'task-item-checks-status-mount-adapters.ts',
     mounts: taskItemChecksStatusMountAdapters

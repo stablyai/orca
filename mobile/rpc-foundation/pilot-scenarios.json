@@ -14436,6 +14436,3876 @@
       ]
     },
     {
+      "id": "aivault-resume-prepare-repin",
+      "operation": "aiVault.resume-preparation",
+      "version": 1,
+      "family": "aiVault.resume-preparation",
+      "sites": ["mobile/src/session/ai-vault-resume-preparation.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "prepare",
+          "id": "prepare"
+        },
+        {
+          "complete": "aiVault.prepareSessionResume#1",
+          "params": {
+            "agent": "codex",
+            "codexHome": "/hosts/codex-runtime-home/home",
+            "executionHostId": "local",
+            "filePath": "/sessions/rollout.jsonl"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "useRealCodexHome": false,
+              "substituteCodexHome": "/hosts/codex-accounts/acct-1/home"
+            }
+          }
+        },
+        {
+          "checkpoint": "repinned"
+        }
+      ]
+    },
+    {
+      "id": "aivault-resume-prepare-unavailable",
+      "operation": "aiVault.resume-preparation",
+      "version": 1,
+      "family": "aiVault.resume-preparation",
+      "sites": ["mobile/src/session/ai-vault-resume-preparation.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "prepare",
+          "id": "prepare"
+        },
+        {
+          "complete": "aiVault.prepareSessionResume#1",
+          "params": {
+            "agent": "codex",
+            "codexHome": "/hosts/codex-runtime-home/home",
+            "executionHostId": "local",
+            "filePath": "/sessions/rollout.jsonl"
+          },
+          "reply": {
+            "ok": false,
+            "error": {
+              "code": "forbidden",
+              "message": "Method 'aiVault.prepareSessionResume' is not available to mobile clients"
+            }
+          }
+        },
+        {
+          "checkpoint": "degraded-to-legacy"
+        }
+      ]
+    },
+    {
+      "id": "aivault-resume-prepare-refused",
+      "operation": "aiVault.resume-preparation",
+      "version": 1,
+      "family": "aiVault.resume-preparation",
+      "sites": ["mobile/src/session/ai-vault-resume-preparation.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "prepare",
+          "id": "prepare"
+        },
+        {
+          "complete": "aiVault.prepareSessionResume#1",
+          "params": {
+            "agent": "codex",
+            "codexHome": "/hosts/codex-runtime-home/home",
+            "executionHostId": "local",
+            "filePath": "/sessions/rollout.jsonl"
+          },
+          "reply": {
+            "ok": false,
+            "error": {
+              "code": "internal",
+              "message": "codex home is locked"
+            }
+          }
+        },
+        {
+          "checkpoint": "refused"
+        }
+      ]
+    },
+    {
+      "id": "aivault-resume-prepare-skipped",
+      "operation": "aiVault.resume-preparation",
+      "version": 1,
+      "family": "aiVault.resume-preparation",
+      "sites": ["mobile/src/session/ai-vault-resume-preparation.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "claude",
+          "id": "claude"
+        },
+        {
+          "checkpoint": "no-wire"
+        }
+      ]
+    },
+    {
+      "id": "aivault-resume-launch-sent",
+      "operation": "aiVault.resume-launch",
+      "version": 1,
+      "family": "aiVault.resume-launch",
+      "sites": ["mobile/src/session/ai-vault-resume-launch.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "full",
+          "id": "full"
+        },
+        {
+          "complete": "session.tabs.createTerminal#1",
+          "params": {
+            "activate": false,
+            "clientMutationId": "resume-mutation-1",
+            "env": {
+              "ORCA_RESUME": "1"
+            },
+            "envToDelete": ["CODEX_HOME"],
+            "launchAgent": "codex",
+            "navigation": "caller",
+            "select": true,
+            "worktree": "id:workspace-1"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "tab": {
+                "id": "tab-9",
+                "type": "terminal",
+                "title": "codex",
+                "terminal": "terminal-9"
+              }
+            }
+          }
+        },
+        {
+          "complete": "terminal.send#1",
+          "params": {
+            "terminal": "terminal-9",
+            "text": "codex resume rollout",
+            "enter": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "send": {
+                "accepted": true
+              }
+            }
+          }
+        },
+        {
+          "checkpoint": "resumed"
+        }
+      ]
+    },
+    {
+      "id": "aivault-resume-launch-locked",
+      "operation": "aiVault.resume-launch",
+      "version": 1,
+      "family": "aiVault.resume-launch",
+      "sites": ["mobile/src/session/ai-vault-resume-launch.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "full",
+          "id": "full"
+        },
+        {
+          "complete": "session.tabs.createTerminal#1",
+          "params": {
+            "activate": false,
+            "clientMutationId": "resume-mutation-1",
+            "env": {
+              "ORCA_RESUME": "1"
+            },
+            "envToDelete": ["CODEX_HOME"],
+            "launchAgent": "codex",
+            "navigation": "caller",
+            "select": true,
+            "worktree": "id:workspace-1"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "tab": {
+                "id": "tab-9",
+                "type": "terminal",
+                "title": "codex",
+                "terminal": "terminal-9"
+              }
+            }
+          }
+        },
+        {
+          "complete": "terminal.send#1",
+          "params": {
+            "terminal": "terminal-9",
+            "text": "codex resume rollout",
+            "enter": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "send": {
+                "accepted": false
+              }
+            }
+          }
+        },
+        {
+          "checkpoint": "input-locked"
+        }
+      ]
+    },
+    {
+      "id": "aivault-resume-launch-create-refused",
+      "operation": "aiVault.resume-launch",
+      "version": 1,
+      "family": "aiVault.resume-launch",
+      "sites": ["mobile/src/session/ai-vault-resume-launch.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "bare",
+          "id": "bare"
+        },
+        {
+          "complete": "session.tabs.createTerminal#1",
+          "params": {
+            "activate": false,
+            "navigation": "caller",
+            "select": true,
+            "worktree": "id:workspace-1"
+          },
+          "reply": {
+            "ok": false,
+            "error": {
+              "code": "worktree_busy",
+              "message": "Workspace is busy"
+            }
+          }
+        },
+        {
+          "checkpoint": "create-refused"
+        }
+      ]
+    },
+    {
+      "id": "aivault-resume-launch-invalid-tab",
+      "operation": "aiVault.resume-launch",
+      "version": 1,
+      "family": "aiVault.resume-launch",
+      "sites": ["mobile/src/session/ai-vault-resume-launch.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "full",
+          "id": "full"
+        },
+        {
+          "complete": "session.tabs.createTerminal#1",
+          "params": {
+            "activate": false,
+            "clientMutationId": "resume-mutation-1",
+            "env": {
+              "ORCA_RESUME": "1"
+            },
+            "envToDelete": ["CODEX_HOME"],
+            "launchAgent": "codex",
+            "navigation": "caller",
+            "select": true,
+            "worktree": "id:workspace-1"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "tab": {
+                "id": "tab-9"
+              }
+            }
+          }
+        },
+        {
+          "checkpoint": "invalid-tab"
+        }
+      ]
+    },
+    {
+      "id": "clipboard-image-upload-single-frame-fallback",
+      "operation": "clipboard.image-upload",
+      "version": 1,
+      "family": "clipboard.image-upload",
+      "sites": ["mobile/src/session/mobile-clipboard-image.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "remote",
+          "id": "remote"
+        },
+        {
+          "complete": "clipboard.startImageUpload#1",
+          "params": {
+            "connectionId": "connection-1",
+            "expectedBase64Length": 32
+          },
+          "reply": {
+            "ok": false,
+            "error": {
+              "code": "method_not_found",
+              "message": "Unknown method"
+            }
+          }
+        },
+        {
+          "complete": "clipboard.saveImageAsTempFile#1",
+          "params": {
+            "contentBase64": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+            "connectionId": "connection-1"
+          },
+          "reply": {
+            "ok": true,
+            "result": "/tmp/legacy.png"
+          }
+        },
+        {
+          "checkpoint": "fell-back"
+        }
+      ]
+    },
+    {
+      "id": "clipboard-image-upload-chunked",
+      "operation": "clipboard.image-upload",
+      "version": 1,
+      "family": "clipboard.image-upload",
+      "sites": ["mobile/src/session/mobile-clipboard-image.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "remote",
+          "id": "remote"
+        },
+        {
+          "complete": "clipboard.startImageUpload#1",
+          "params": {
+            "connectionId": "connection-1",
+            "expectedBase64Length": 32
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "uploadId": "upload-1"
+            }
+          }
+        },
+        {
+          "complete": "clipboard.appendImageUploadChunk#1",
+          "params": {
+            "uploadId": "upload-1",
+            "offset": 0,
+            "contentBase64": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "received": 32
+            }
+          }
+        },
+        {
+          "complete": "clipboard.commitImageUpload#1",
+          "params": {
+            "uploadId": "upload-1"
+          },
+          "reply": {
+            "ok": true,
+            "result": "/tmp/img.png"
+          }
+        },
+        {
+          "checkpoint": "uploaded"
+        }
+      ]
+    },
+    {
+      "id": "clipboard-image-upload-aborts-on-chunk-failure",
+      "operation": "clipboard.image-upload",
+      "version": 1,
+      "family": "clipboard.image-upload",
+      "sites": ["mobile/src/session/mobile-clipboard-image.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "local",
+          "id": "local"
+        },
+        {
+          "complete": "clipboard.startImageUpload#1",
+          "params": {
+            "connectionId": null,
+            "expectedBase64Length": 32
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "uploadId": "upload-2"
+            }
+          }
+        },
+        {
+          "complete": "clipboard.appendImageUploadChunk#1",
+          "params": {
+            "uploadId": "upload-2",
+            "offset": 0,
+            "contentBase64": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+          },
+          "reply": {
+            "ok": false,
+            "error": {
+              "code": "upload_expired",
+              "message": "Upload slot expired"
+            }
+          }
+        },
+        {
+          "complete": "clipboard.abortImageUpload#1",
+          "params": {
+            "uploadId": "upload-2"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "aborted": true
+            }
+          }
+        },
+        {
+          "checkpoint": "aborted"
+        }
+      ]
+    },
+    {
+      "id": "clipboard-image-upload-start-refused",
+      "operation": "clipboard.image-upload",
+      "version": 1,
+      "family": "clipboard.image-upload",
+      "sites": ["mobile/src/session/mobile-clipboard-image.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "remote",
+          "id": "remote"
+        },
+        {
+          "complete": "clipboard.startImageUpload#1",
+          "params": {
+            "connectionId": "connection-1",
+            "expectedBase64Length": 32
+          },
+          "reply": {
+            "ok": false,
+            "error": {
+              "code": "too_large",
+              "message": "Image is too large"
+            }
+          }
+        },
+        {
+          "checkpoint": "start-refused"
+        }
+      ]
+    },
+    {
+      "id": "clipboard-image-attachment-upload-refused",
+      "operation": "clipboard.image-terminal-attachment",
+      "version": 1,
+      "family": "clipboard.image-attachment",
+      "sites": [
+        "mobile/src/session/mobile-image-attachment.ts",
+        "mobile/src/session/mobile-clipboard-image.ts"
+      ],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "normal",
+          "id": "normal"
+        },
+        {
+          "complete": "clipboard.startImageUpload#1",
+          "params": {
+            "connectionId": "connection-1",
+            "expectedBase64Length": 32
+          },
+          "reply": {
+            "ok": false,
+            "error": {
+              "code": "too_large",
+              "message": "Image is too large"
+            }
+          }
+        },
+        {
+          "checkpoint": "upload-refused"
+        }
+      ]
+    },
+    {
+      "id": "clipboard-image-attachment-pasted",
+      "operation": "clipboard.image-terminal-attachment",
+      "version": 1,
+      "family": "clipboard.image-attachment",
+      "sites": [
+        "mobile/src/session/mobile-image-attachment.ts",
+        "mobile/src/session/mobile-clipboard-image.ts"
+      ],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "normal",
+          "id": "normal"
+        },
+        {
+          "complete": "clipboard.startImageUpload#1",
+          "params": {
+            "connectionId": "connection-1",
+            "expectedBase64Length": 32
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "uploadId": "upload-1"
+            }
+          }
+        },
+        {
+          "complete": "clipboard.appendImageUploadChunk#1",
+          "params": {
+            "uploadId": "upload-1",
+            "offset": 0,
+            "contentBase64": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "received": 32
+            }
+          }
+        },
+        {
+          "complete": "clipboard.commitImageUpload#1",
+          "params": {
+            "uploadId": "upload-1"
+          },
+          "reply": {
+            "ok": true,
+            "result": "/tmp/img.png"
+          }
+        },
+        {
+          "complete": "terminal.send#1",
+          "params": {
+            "terminal": "terminal-1",
+            "text": "\u001b[200~/tmp/img.png\u001b[201~ ",
+            "enter": false,
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            }
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "send": {
+                "accepted": true
+              }
+            }
+          }
+        },
+        {
+          "checkpoint": "attached"
+        }
+      ]
+    },
+    {
+      "id": "clipboard-image-attachment-cancelled",
+      "operation": "clipboard.image-terminal-attachment",
+      "version": 1,
+      "family": "clipboard.image-attachment",
+      "sites": [
+        "mobile/src/session/mobile-image-attachment.ts",
+        "mobile/src/session/mobile-clipboard-image.ts"
+      ],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "cancelled",
+          "id": "cancelled"
+        },
+        {
+          "checkpoint": "no-wire"
+        }
+      ]
+    },
+    {
+      "id": "clipboard-image-attachment-blocked-before-send",
+      "operation": "clipboard.image-terminal-attachment",
+      "version": 1,
+      "family": "clipboard.image-attachment",
+      "sites": [
+        "mobile/src/session/mobile-image-attachment.ts",
+        "mobile/src/session/mobile-clipboard-image.ts"
+      ],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "blocked",
+          "id": "blocked"
+        },
+        {
+          "complete": "clipboard.startImageUpload#1",
+          "params": {
+            "connectionId": "connection-1",
+            "expectedBase64Length": 32
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "uploadId": "upload-1"
+            }
+          }
+        },
+        {
+          "complete": "clipboard.appendImageUploadChunk#1",
+          "params": {
+            "uploadId": "upload-1",
+            "offset": 0,
+            "contentBase64": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "received": 32
+            }
+          }
+        },
+        {
+          "complete": "clipboard.commitImageUpload#1",
+          "params": {
+            "uploadId": "upload-1"
+          },
+          "reply": {
+            "ok": true,
+            "result": "/tmp/img.png"
+          }
+        },
+        {
+          "checkpoint": "blocked"
+        }
+      ]
+    },
+    {
+      "id": "clipboard-image-attachment-anonymous",
+      "operation": "clipboard.image-terminal-attachment",
+      "version": 1,
+      "family": "clipboard.image-attachment",
+      "sites": [
+        "mobile/src/session/mobile-image-attachment.ts",
+        "mobile/src/session/mobile-clipboard-image.ts"
+      ],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "anonymous",
+          "id": "anonymous"
+        },
+        {
+          "complete": "clipboard.startImageUpload#1",
+          "params": {
+            "connectionId": "connection-1",
+            "expectedBase64Length": 32
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "uploadId": "upload-1"
+            }
+          }
+        },
+        {
+          "complete": "clipboard.appendImageUploadChunk#1",
+          "params": {
+            "uploadId": "upload-1",
+            "offset": 0,
+            "contentBase64": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "received": 32
+            }
+          }
+        },
+        {
+          "complete": "clipboard.commitImageUpload#1",
+          "params": {
+            "uploadId": "upload-1"
+          },
+          "reply": {
+            "ok": true,
+            "result": "/tmp/img.png"
+          }
+        },
+        {
+          "complete": "terminal.send#1",
+          "params": {
+            "terminal": "terminal-1",
+            "text": "\u001b[200~/tmp/img.png\u001b[201~ ",
+            "enter": false
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "send": {
+                "accepted": false
+              }
+            }
+          }
+        },
+        {
+          "checkpoint": "rejected"
+        }
+      ]
+    },
+    {
+      "id": "native-chat-image-paste-single",
+      "operation": "nativeChat.image-paste",
+      "version": 1,
+      "family": "nativeChat.image-paste",
+      "sites": ["mobile/src/session/mobile-native-chat-image-send.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "one",
+          "id": "one"
+        },
+        {
+          "complete": "terminal.send#1",
+          "params": {
+            "terminal": "terminal-1",
+            "text": "\u0015",
+            "enter": false,
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            }
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "send": {
+                "accepted": true
+              }
+            }
+          }
+        },
+        {
+          "complete": "terminal.send#2",
+          "params": {
+            "terminal": "terminal-1",
+            "text": "\u001b[200~/tmp/a.png\u001b[201~ ",
+            "enter": false,
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            }
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "send": {
+                "accepted": true
+              }
+            }
+          }
+        },
+        {
+          "checkpoint": "pasted"
+        }
+      ]
+    },
+    {
+      "id": "native-chat-image-paste-two-images",
+      "operation": "nativeChat.image-paste",
+      "version": 1,
+      "family": "nativeChat.image-paste",
+      "sites": ["mobile/src/session/mobile-native-chat-image-send.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "two",
+          "id": "two"
+        },
+        {
+          "complete": "terminal.send#1",
+          "params": {
+            "terminal": "terminal-1",
+            "text": "\u0015",
+            "enter": false,
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            }
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "send": {
+                "accepted": true
+              }
+            }
+          }
+        },
+        {
+          "complete": "terminal.send#2",
+          "params": {
+            "terminal": "terminal-1",
+            "text": "\u001b[200~/tmp/a.png\u001b[201~",
+            "enter": false,
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            }
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "send": {
+                "accepted": true
+              }
+            }
+          }
+        },
+        {
+          "complete": "terminal.send#3",
+          "params": {
+            "terminal": "terminal-1",
+            "text": "\u001b[200~/tmp/b.png\u001b[201~ ",
+            "enter": false,
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            }
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "send": {
+                "accepted": true
+              }
+            }
+          }
+        },
+        {
+          "checkpoint": "pasted-both"
+        }
+      ]
+    },
+    {
+      "id": "native-chat-image-paste-stops-on-rejection",
+      "operation": "nativeChat.image-paste",
+      "version": 1,
+      "family": "nativeChat.image-paste",
+      "sites": ["mobile/src/session/mobile-native-chat-image-send.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "two",
+          "id": "two"
+        },
+        {
+          "complete": "terminal.send#1",
+          "params": {
+            "terminal": "terminal-1",
+            "text": "\u0015",
+            "enter": false,
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            }
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "send": {
+                "accepted": true
+              }
+            }
+          }
+        },
+        {
+          "complete": "terminal.send#2",
+          "params": {
+            "terminal": "terminal-1",
+            "text": "\u001b[200~/tmp/a.png\u001b[201~",
+            "enter": false,
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            }
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "send": {
+                "accepted": false
+              }
+            }
+          }
+        },
+        {
+          "checkpoint": "stopped"
+        }
+      ]
+    },
+    {
+      "id": "native-chat-image-paste-trailing-image",
+      "operation": "nativeChat.image-paste",
+      "version": 1,
+      "family": "nativeChat.image-paste",
+      "sites": ["mobile/src/session/mobile-native-chat-image-send.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "trailing",
+          "id": "trailing"
+        },
+        {
+          "complete": "terminal.send#1",
+          "params": {
+            "terminal": "terminal-1",
+            "text": "\u0015",
+            "enter": false,
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            }
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "send": {
+                "accepted": true
+              }
+            }
+          }
+        },
+        {
+          "complete": "terminal.send#2",
+          "params": {
+            "terminal": "terminal-1",
+            "text": "\u001b[200~/tmp/a.png\u001b[201~",
+            "enter": false,
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            }
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "send": {
+                "accepted": true
+              }
+            }
+          }
+        },
+        {
+          "checkpoint": "pasted"
+        }
+      ]
+    },
+    {
+      "id": "native-chat-write-accepted",
+      "operation": "nativeChat.terminal-write",
+      "version": 1,
+      "family": "nativeChat.terminal-write",
+      "sites": ["mobile/src/session/mobile-native-chat-send.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "body",
+          "id": "body"
+        },
+        {
+          "complete": "terminal.send#1",
+          "params": {
+            "terminal": "terminal-1",
+            "text": "hello",
+            "enter": true,
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            }
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "send": {
+                "accepted": true
+              }
+            }
+          }
+        },
+        {
+          "complete": "orchestration.workerTerminalUserInput#1",
+          "params": {
+            "terminal": "terminal-1"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "reported": true
+            }
+          }
+        },
+        {
+          "checkpoint": "accepted"
+        }
+      ]
+    },
+    {
+      "id": "native-chat-write-rejected",
+      "operation": "nativeChat.terminal-write",
+      "version": 1,
+      "family": "nativeChat.terminal-write",
+      "sites": ["mobile/src/session/mobile-native-chat-send.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "body",
+          "id": "body"
+        },
+        {
+          "complete": "terminal.send#1",
+          "params": {
+            "terminal": "terminal-1",
+            "text": "hello",
+            "enter": true,
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            }
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "send": {
+                "accepted": false
+              }
+            }
+          }
+        },
+        {
+          "checkpoint": "rejected"
+        }
+      ]
+    },
+    {
+      "id": "native-chat-write-delivery-unknown",
+      "operation": "nativeChat.terminal-write",
+      "version": 1,
+      "family": "nativeChat.terminal-write",
+      "sites": ["mobile/src/session/mobile-native-chat-send.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "body",
+          "id": "body"
+        },
+        {
+          "complete": "terminal.send#1",
+          "params": {
+            "terminal": "terminal-1",
+            "text": "hello",
+            "enter": true,
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            }
+          },
+          "reject": {
+            "message": "Connection lost",
+            "deliveryUnknown": true
+          }
+        },
+        {
+          "checkpoint": "unknown"
+        }
+      ]
+    },
+    {
+      "id": "native-chat-write-clear-line",
+      "operation": "nativeChat.terminal-write",
+      "version": 1,
+      "family": "nativeChat.terminal-write",
+      "sites": ["mobile/src/session/mobile-native-chat-send.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "clear",
+          "id": "clear"
+        },
+        {
+          "complete": "terminal.send#1",
+          "params": {
+            "terminal": "terminal-1",
+            "text": "\u0015",
+            "enter": false,
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            }
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "send": {
+                "accepted": true
+              }
+            }
+          }
+        },
+        {
+          "checkpoint": "cleared"
+        }
+      ]
+    },
+    {
+      "id": "native-chat-write-typed-command",
+      "operation": "nativeChat.terminal-write",
+      "version": 1,
+      "family": "nativeChat.terminal-write",
+      "sites": ["mobile/src/session/mobile-native-chat-send.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "command",
+          "id": "command"
+        },
+        {
+          "complete": "terminal.send#1",
+          "params": {
+            "terminal": "terminal-1",
+            "text": "\u0015",
+            "enter": false,
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            }
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "send": {
+                "accepted": true
+              }
+            }
+          }
+        },
+        {
+          "complete": "orchestration.workerTerminalUserInput#1",
+          "params": {
+            "terminal": "terminal-1"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "reported": true
+            }
+          }
+        },
+        {
+          "advance": 16
+        },
+        {
+          "complete": "terminal.send#2",
+          "params": {
+            "terminal": "terminal-1",
+            "text": "o",
+            "enter": false,
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            }
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "send": {
+                "accepted": true
+              }
+            }
+          }
+        },
+        {
+          "advance": 16
+        },
+        {
+          "complete": "terminal.send#3",
+          "params": {
+            "terminal": "terminal-1",
+            "text": "k",
+            "enter": false,
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            }
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "send": {
+                "accepted": true
+              }
+            }
+          }
+        },
+        {
+          "advance": 16
+        },
+        {
+          "complete": "terminal.send#4",
+          "params": {
+            "terminal": "terminal-1",
+            "text": "\r",
+            "enter": false,
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            }
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "send": {
+                "accepted": true
+              }
+            }
+          }
+        },
+        {
+          "checkpoint": "typed"
+        }
+      ]
+    },
+    {
+      "id": "native-chat-session-option-pick-written",
+      "operation": "nativeChat.session-option-pick",
+      "version": 1,
+      "family": "nativeChat.session-option-pick",
+      "sites": ["mobile/src/session/mobile-native-chat-session-option-persistence.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "pick",
+          "id": "pick"
+        },
+        {
+          "complete": "settings.mutateNativeChatSessionOptions#1",
+          "params": {
+            "type": "apply-picks",
+            "agent": "claude",
+            "picks": [
+              {
+                "modelId": "opus",
+                "optionId": "model",
+                "value": "opus"
+              }
+            ]
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "applied": true
+            }
+          }
+        },
+        {
+          "checkpoint": "written"
+        }
+      ]
+    },
+    {
+      "id": "native-chat-session-option-pick-refused",
+      "operation": "nativeChat.session-option-pick",
+      "version": 1,
+      "family": "nativeChat.session-option-pick",
+      "sites": ["mobile/src/session/mobile-native-chat-session-option-persistence.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "pick",
+          "id": "pick"
+        },
+        {
+          "complete": "settings.mutateNativeChatSessionOptions#1",
+          "params": {
+            "type": "apply-picks",
+            "agent": "claude",
+            "picks": [
+              {
+                "modelId": "opus",
+                "optionId": "model",
+                "value": "opus"
+              }
+            ]
+          },
+          "reply": {
+            "ok": false,
+            "error": {
+              "code": "method_not_found",
+              "message": "Unknown method"
+            }
+          }
+        },
+        {
+          "checkpoint": "refusal-swallowed"
+        }
+      ]
+    },
+    {
+      "id": "native-chat-session-option-pick-empty",
+      "operation": "nativeChat.session-option-pick",
+      "version": 1,
+      "family": "nativeChat.session-option-pick",
+      "sites": ["mobile/src/session/mobile-native-chat-session-option-persistence.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "empty",
+          "id": "empty"
+        },
+        {
+          "checkpoint": "no-wire"
+        }
+      ]
+    },
+    {
+      "id": "session-tab-activation-focus-and-activate",
+      "operation": "session.tab-activation",
+      "version": 1,
+      "family": "session.tab-activation",
+      "sites": ["mobile/src/session/mobile-session-tab-activation.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "focus",
+          "id": "focus"
+        },
+        {
+          "complete": "terminal.focus#1",
+          "params": {
+            "navigation": "host",
+            "terminal": "terminal-1"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "focused": true
+            }
+          }
+        },
+        {
+          "action": "activate",
+          "id": "activate"
+        },
+        {
+          "complete": "session.tabs.activate#1",
+          "params": {
+            "intent": "user",
+            "navigation": "caller",
+            "notifyClients": false,
+            "tabId": "tab-1",
+            "worktree": "id:workspace-1"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "activated": true
+            }
+          }
+        },
+        {
+          "checkpoint": "activated"
+        }
+      ]
+    },
+    {
+      "id": "session-tab-activation-refused",
+      "operation": "session.tab-activation",
+      "version": 1,
+      "family": "session.tab-activation",
+      "sites": ["mobile/src/session/mobile-session-tab-activation.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "activate",
+          "id": "activate"
+        },
+        {
+          "complete": "session.tabs.activate#1",
+          "params": {
+            "intent": "user",
+            "navigation": "caller",
+            "notifyClients": false,
+            "tabId": "tab-1",
+            "worktree": "id:workspace-1"
+          },
+          "reply": {
+            "ok": false,
+            "error": {
+              "code": "tab_not_found",
+              "message": "No such tab"
+            }
+          }
+        },
+        {
+          "checkpoint": "refused"
+        }
+      ]
+    },
+    {
+      "id": "session-tab-activation-transport-error",
+      "operation": "session.tab-activation",
+      "version": 1,
+      "family": "session.tab-activation",
+      "sites": ["mobile/src/session/mobile-session-tab-activation.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "focus",
+          "id": "focus"
+        },
+        {
+          "complete": "terminal.focus#1",
+          "params": {
+            "navigation": "host",
+            "terminal": "terminal-1"
+          },
+          "reject": {
+            "message": "Request timed out"
+          }
+        },
+        {
+          "checkpoint": "errored"
+        }
+      ]
+    },
+    {
+      "id": "session-tabs-health-reconciled",
+      "operation": "session.tabs-stream-health",
+      "version": 1,
+      "family": "session.tabs-stream-health",
+      "sites": ["mobile/src/session/mobile-session-tabs-stream-health.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "activate",
+          "id": "activate"
+        },
+        {
+          "action": "reconcile",
+          "id": "reconcile"
+        },
+        {
+          "complete": "session.tabs.list#1",
+          "params": {
+            "worktree": "id:workspace-1"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "tabs": [
+                {
+                  "id": "tab-1"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "checkpoint": "reconciled"
+        }
+      ]
+    },
+    {
+      "id": "session-tabs-health-refused",
+      "operation": "session.tabs-stream-health",
+      "version": 1,
+      "family": "session.tabs-stream-health",
+      "sites": ["mobile/src/session/mobile-session-tabs-stream-health.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "activate",
+          "id": "activate"
+        },
+        {
+          "action": "reconcile",
+          "id": "reconcile"
+        },
+        {
+          "complete": "session.tabs.list#1",
+          "params": {
+            "worktree": "id:workspace-1"
+          },
+          "reply": {
+            "ok": false,
+            "error": {
+              "code": "worktree_not_found",
+              "message": "No such workspace"
+            }
+          }
+        },
+        {
+          "checkpoint": "refused"
+        }
+      ]
+    },
+    {
+      "id": "session-tabs-health-stale-application-revision",
+      "operation": "session.tabs-stream-health",
+      "version": 1,
+      "family": "session.tabs-stream-health",
+      "sites": ["mobile/src/session/mobile-session-tabs-stream-health.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "activate",
+          "id": "activate"
+        },
+        {
+          "action": "reconcile",
+          "id": "reconcile"
+        },
+        {
+          "action": "revise",
+          "id": "revise"
+        },
+        {
+          "complete": "session.tabs.list#1",
+          "params": {
+            "worktree": "id:workspace-1"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "tabs": [
+                {
+                  "id": "tab-1"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "checkpoint": "dropped"
+        }
+      ]
+    },
+    {
+      "id": "session-tabs-health-errored",
+      "operation": "session.tabs-stream-health",
+      "version": 1,
+      "family": "session.tabs-stream-health",
+      "sites": ["mobile/src/session/mobile-session-tabs-stream-health.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "activate",
+          "id": "activate"
+        },
+        {
+          "action": "reconcile",
+          "id": "reconcile"
+        },
+        {
+          "complete": "session.tabs.list#1",
+          "params": {
+            "worktree": "id:workspace-1"
+          },
+          "reject": {
+            "message": "Connection lost",
+            "deliveryUnknown": true
+          }
+        },
+        {
+          "checkpoint": "errored"
+        }
+      ]
+    },
+    {
+      "id": "file-tap-opens-worktree-file",
+      "operation": "files.terminal-path-tap",
+      "version": 1,
+      "family": "files.terminal-path-tap",
+      "sites": ["mobile/src/session/mobile-file-tap-open.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "tap",
+          "id": "tap"
+        },
+        {
+          "complete": "files.resolveTerminalPath#1",
+          "params": {
+            "crossWorkspace": true,
+            "cwd": "/repo",
+            "pathText": "src/app.ts",
+            "terminal": "terminal-1",
+            "worktree": "id:workspace-1"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "exists": true,
+              "isDirectory": false,
+              "relativePath": "src/app.ts",
+              "openTarget": {
+                "kind": "worktree-file",
+                "relativePath": "src/app.ts",
+                "absolutePath": "/repo/src/app.ts",
+                "provider": "ssh"
+              }
+            }
+          }
+        },
+        {
+          "complete": "files.open#1",
+          "params": {
+            "worktree": "id:workspace-1",
+            "relativePath": "src/app.ts"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "opened": true
+            }
+          }
+        },
+        {
+          "action": "list",
+          "id": "list"
+        },
+        {
+          "advance": 300
+        },
+        {
+          "checkpoint": "switched"
+        },
+        {
+          "advance": 1500
+        },
+        {
+          "checkpoint": "settled"
+        }
+      ]
+    },
+    {
+      "id": "file-tap-resolve-miss",
+      "operation": "files.terminal-path-tap",
+      "version": 1,
+      "family": "files.terminal-path-tap",
+      "sites": ["mobile/src/session/mobile-file-tap-open.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "tap",
+          "id": "tap"
+        },
+        {
+          "complete": "files.resolveTerminalPath#1",
+          "params": {
+            "crossWorkspace": true,
+            "cwd": "/repo",
+            "pathText": "src/app.ts",
+            "terminal": "terminal-1",
+            "worktree": "id:workspace-1"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "exists": false,
+              "isDirectory": false
+            }
+          }
+        },
+        {
+          "checkpoint": "missed"
+        }
+      ]
+    },
+    {
+      "id": "file-tap-resolve-refused",
+      "operation": "files.terminal-path-tap",
+      "version": 1,
+      "family": "files.terminal-path-tap",
+      "sites": ["mobile/src/session/mobile-file-tap-open.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "tap",
+          "id": "tap"
+        },
+        {
+          "complete": "files.resolveTerminalPath#1",
+          "params": {
+            "crossWorkspace": true,
+            "cwd": "/repo",
+            "pathText": "src/app.ts",
+            "terminal": "terminal-1",
+            "worktree": "id:workspace-1"
+          },
+          "reply": {
+            "ok": false,
+            "error": {
+              "code": "worktree_not_found",
+              "message": "No such workspace"
+            }
+          }
+        },
+        {
+          "checkpoint": "refused"
+        }
+      ]
+    },
+    {
+      "id": "file-tap-open-refused",
+      "operation": "files.terminal-path-tap",
+      "version": 1,
+      "family": "files.terminal-path-tap",
+      "sites": ["mobile/src/session/mobile-file-tap-open.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "tap",
+          "id": "tap"
+        },
+        {
+          "complete": "files.resolveTerminalPath#1",
+          "params": {
+            "crossWorkspace": true,
+            "cwd": "/repo",
+            "pathText": "src/app.ts",
+            "terminal": "terminal-1",
+            "worktree": "id:workspace-1"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "exists": true,
+              "isDirectory": false,
+              "relativePath": "src/app.ts",
+              "openTarget": {
+                "kind": "worktree-file",
+                "relativePath": "src/app.ts",
+                "absolutePath": "/repo/src/app.ts",
+                "provider": "ssh"
+              }
+            }
+          }
+        },
+        {
+          "complete": "files.open#1",
+          "params": {
+            "worktree": "id:workspace-1",
+            "relativePath": "src/app.ts"
+          },
+          "reply": {
+            "ok": false,
+            "error": {
+              "code": "file_locked",
+              "message": "File is locked"
+            }
+          }
+        },
+        {
+          "checkpoint": "open-refused"
+        }
+      ]
+    },
+    {
+      "id": "file-tap-previews-absolute-artifact",
+      "operation": "files.terminal-path-tap",
+      "version": 1,
+      "family": "files.terminal-path-tap",
+      "sites": ["mobile/src/session/mobile-file-tap-open.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "tap",
+          "id": "tap"
+        },
+        {
+          "complete": "files.resolveTerminalPath#1",
+          "params": {
+            "crossWorkspace": true,
+            "cwd": "/repo",
+            "pathText": "src/app.ts",
+            "terminal": "terminal-1",
+            "worktree": "id:workspace-1"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "exists": true,
+              "isDirectory": false,
+              "openTarget": {
+                "kind": "absolute-file",
+                "absolutePath": "/logs/run.txt",
+                "grantId": "grant-1"
+              }
+            }
+          }
+        },
+        {
+          "checkpoint": "previewed"
+        }
+      ]
+    },
+    {
+      "id": "structured-launch-unsupported",
+      "operation": "agentSession.structured-launch",
+      "version": 1,
+      "family": "agentSession.structured-launch",
+      "sites": ["mobile/src/session/mobile-structured-agent-session-launch.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "claude",
+          "id": "claude"
+        },
+        {
+          "complete": "agentSession.createSupport#1",
+          "params": {
+            "agent": "claude",
+            "worktree": "id:workspace-1"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "supported": false,
+              "reason": "remote"
+            }
+          }
+        },
+        {
+          "checkpoint": "unsupported"
+        }
+      ]
+    },
+    {
+      "id": "structured-launch-support-refused",
+      "operation": "agentSession.structured-launch",
+      "version": 1,
+      "family": "agentSession.structured-launch",
+      "sites": ["mobile/src/session/mobile-structured-agent-session-launch.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "claude",
+          "id": "claude"
+        },
+        {
+          "complete": "agentSession.createSupport#1",
+          "params": {
+            "agent": "claude",
+            "worktree": "id:workspace-1"
+          },
+          "reply": {
+            "ok": false,
+            "error": {
+              "code": "method_not_found",
+              "message": "Unknown method"
+            }
+          }
+        },
+        {
+          "checkpoint": "unsupported"
+        }
+      ]
+    },
+    {
+      "id": "structured-launch-created",
+      "operation": "agentSession.structured-launch",
+      "version": 1,
+      "family": "agentSession.structured-launch",
+      "sites": ["mobile/src/session/mobile-structured-agent-session-launch.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "claude",
+          "id": "claude"
+        },
+        {
+          "complete": "agentSession.createSupport#1",
+          "params": {
+            "agent": "claude",
+            "worktree": "id:workspace-1"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "supported": true
+            }
+          }
+        },
+        {
+          "complete": "agentSession.create#1",
+          "params": {
+            "agent": "claude",
+            "envelope": {
+              "clientOperationId": "1767225600000-00000000000040008000000000000002",
+              "expectedRuntimeFence": null,
+              "payloadFingerprint": "ce04a6ad4f07079b36cb0b4e9b1bcfd95481b5cb2428fbe93b3c0cf995ef8605",
+              "sessionId": "claude_00000000_0000_4000_8000_000000000001"
+            },
+            "worktree": "id:workspace-1"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "ok": true,
+              "value": {
+                "sessionId": "claude_00000000_0000_4000_8000_000000000001"
+              }
+            }
+          }
+        },
+        {
+          "checkpoint": "created"
+        }
+      ]
+    },
+    {
+      "id": "structured-launch-definitive-refusal",
+      "operation": "agentSession.structured-launch",
+      "version": 1,
+      "family": "agentSession.structured-launch",
+      "sites": ["mobile/src/session/mobile-structured-agent-session-launch.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "claude",
+          "id": "claude"
+        },
+        {
+          "complete": "agentSession.createSupport#1",
+          "params": {
+            "agent": "claude",
+            "worktree": "id:workspace-1"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "supported": true
+            }
+          }
+        },
+        {
+          "complete": "agentSession.create#1",
+          "params": {
+            "agent": "claude",
+            "envelope": {
+              "clientOperationId": "1767225600000-00000000000040008000000000000002",
+              "expectedRuntimeFence": null,
+              "payloadFingerprint": "ce04a6ad4f07079b36cb0b4e9b1bcfd95481b5cb2428fbe93b3c0cf995ef8605",
+              "sessionId": "claude_00000000_0000_4000_8000_000000000001"
+            },
+            "worktree": "id:workspace-1"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "ok": false,
+              "refusal": {
+                "code": "agent_session_unsupported",
+                "message": "No agent"
+              }
+            }
+          }
+        },
+        {
+          "checkpoint": "refused"
+        }
+      ]
+    },
+    {
+      "id": "structured-launch-replays-dropped-create",
+      "operation": "agentSession.structured-launch",
+      "version": 1,
+      "family": "agentSession.structured-launch",
+      "sites": ["mobile/src/session/mobile-structured-agent-session-launch.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "claude",
+          "id": "claude"
+        },
+        {
+          "complete": "agentSession.createSupport#1",
+          "params": {
+            "agent": "claude",
+            "worktree": "id:workspace-1"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "supported": true
+            }
+          }
+        },
+        {
+          "complete": "agentSession.create#1",
+          "params": {
+            "agent": "claude",
+            "envelope": {
+              "clientOperationId": "1767225600000-00000000000040008000000000000002",
+              "expectedRuntimeFence": null,
+              "payloadFingerprint": "ce04a6ad4f07079b36cb0b4e9b1bcfd95481b5cb2428fbe93b3c0cf995ef8605",
+              "sessionId": "claude_00000000_0000_4000_8000_000000000001"
+            },
+            "worktree": "id:workspace-1"
+          },
+          "reject": {
+            "message": "Connection lost",
+            "deliveryUnknown": true
+          }
+        },
+        {
+          "complete": "agentSession.create#2",
+          "params": {
+            "agent": "claude",
+            "envelope": {
+              "clientOperationId": "1767225600000-00000000000040008000000000000002",
+              "expectedRuntimeFence": null,
+              "payloadFingerprint": "ce04a6ad4f07079b36cb0b4e9b1bcfd95481b5cb2428fbe93b3c0cf995ef8605",
+              "sessionId": "claude_00000000_0000_4000_8000_000000000001"
+            },
+            "worktree": "id:workspace-1"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "ok": true,
+              "value": {
+                "sessionId": "claude_00000000_0000_4000_8000_000000000001"
+              }
+            }
+          }
+        },
+        {
+          "checkpoint": "replayed"
+        }
+      ]
+    },
+    {
+      "id": "session-markdown-tab-read",
+      "operation": "session.tab-documents",
+      "version": 1,
+      "family": "session.tab-documents",
+      "sites": ["mobile/src/session/use-mobile-session-document-readers.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "markdown",
+          "id": "markdown"
+        },
+        {
+          "complete": "markdown.readTab#1",
+          "params": {
+            "tabId": "tab-md",
+            "worktree": "id:workspace-1"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "content": "# a",
+              "version": "v1",
+              "isDirty": false,
+              "editable": true
+            }
+          }
+        },
+        {
+          "checkpoint": "read"
+        }
+      ]
+    },
+    {
+      "id": "session-markdown-tab-disk-fallback",
+      "operation": "session.tab-documents",
+      "version": 1,
+      "family": "session.tab-documents",
+      "sites": ["mobile/src/session/use-mobile-session-document-readers.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "markdown",
+          "id": "markdown"
+        },
+        {
+          "complete": "markdown.readTab#1",
+          "params": {
+            "tabId": "tab-md",
+            "worktree": "id:workspace-1"
+          },
+          "reply": {
+            "ok": false,
+            "error": {
+              "code": "renderer_unavailable",
+              "message": "Renderer unavailable"
+            }
+          }
+        },
+        {
+          "complete": "files.read#1",
+          "params": {
+            "relativePath": "docs/readme.md",
+            "worktree": "id:workspace-1"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "content": "# disk",
+              "truncated": false,
+              "byteLength": 6
+            }
+          }
+        },
+        {
+          "checkpoint": "fell-back"
+        }
+      ]
+    },
+    {
+      "id": "session-markdown-tab-refused",
+      "operation": "session.tab-documents",
+      "version": 1,
+      "family": "session.tab-documents",
+      "sites": ["mobile/src/session/use-mobile-session-document-readers.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "markdown",
+          "id": "markdown"
+        },
+        {
+          "complete": "markdown.readTab#1",
+          "params": {
+            "tabId": "tab-md",
+            "worktree": "id:workspace-1"
+          },
+          "reply": {
+            "ok": false,
+            "error": {
+              "code": "tab_not_found",
+              "message": "No such tab"
+            }
+          }
+        },
+        {
+          "checkpoint": "errored"
+        }
+      ]
+    },
+    {
+      "id": "session-file-tab-read",
+      "operation": "session.tab-documents",
+      "version": 1,
+      "family": "session.tab-documents",
+      "sites": ["mobile/src/session/use-mobile-session-document-readers.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "file",
+          "id": "file"
+        },
+        {
+          "complete": "files.read#1",
+          "params": {
+            "relativePath": "src/app.ts",
+            "worktree": "id:workspace-1"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "content": "a\n",
+              "truncated": false,
+              "byteLength": 2
+            }
+          }
+        },
+        {
+          "checkpoint": "read"
+        }
+      ]
+    },
+    {
+      "id": "session-terminal-list-merged",
+      "operation": "session.terminal-inventory",
+      "version": 1,
+      "family": "session.terminal-inventory",
+      "sites": ["mobile/src/session/use-mobile-session-terminal-list.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "fetch",
+          "id": "fetch"
+        },
+        {
+          "complete": "terminal.list#1",
+          "params": {
+            "includeVisualLayouts": false,
+            "worktree": "id:workspace-1"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "terminals": [
+                {
+                  "handle": "terminal-1",
+                  "title": "one"
+                },
+                {
+                  "handle": "terminal-2",
+                  "title": "two"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "checkpoint": "listed"
+        }
+      ]
+    },
+    {
+      "id": "session-terminal-list-dedupes-handles",
+      "operation": "session.terminal-inventory",
+      "version": 1,
+      "family": "session.terminal-inventory",
+      "sites": ["mobile/src/session/use-mobile-session-terminal-list.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "fetch",
+          "id": "fetch"
+        },
+        {
+          "complete": "terminal.list#1",
+          "params": {
+            "includeVisualLayouts": false,
+            "worktree": "id:workspace-1"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "terminals": [
+                {
+                  "handle": "terminal-1",
+                  "title": "one"
+                },
+                {
+                  "handle": "terminal-1",
+                  "title": "renamed"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "checkpoint": "deduped"
+        }
+      ]
+    },
+    {
+      "id": "session-terminal-list-refused",
+      "operation": "session.terminal-inventory",
+      "version": 1,
+      "family": "session.terminal-inventory",
+      "sites": ["mobile/src/session/use-mobile-session-terminal-list.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "fetch",
+          "id": "fetch"
+        },
+        {
+          "complete": "terminal.list#1",
+          "params": {
+            "includeVisualLayouts": false,
+            "worktree": "id:workspace-1"
+          },
+          "reply": {
+            "ok": false,
+            "error": {
+              "code": "worktree_not_found",
+              "message": "No such workspace"
+            }
+          }
+        },
+        {
+          "checkpoint": "refused"
+        }
+      ]
+    },
+    {
+      "id": "session-terminal-list-empty-guarded",
+      "operation": "session.terminal-inventory",
+      "version": 1,
+      "family": "session.terminal-inventory",
+      "sites": ["mobile/src/session/use-mobile-session-terminal-list.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "no-empty",
+          "id": "no-empty"
+        },
+        {
+          "complete": "terminal.list#1",
+          "params": {
+            "includeVisualLayouts": false,
+            "worktree": "id:workspace-1"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "terminals": []
+            }
+          }
+        },
+        {
+          "checkpoint": "kept"
+        }
+      ]
+    },
+    {
+      "id": "native-chat-readability-local-repo",
+      "operation": "session.native-chat-readability",
+      "version": 1,
+      "family": "session.native-chat-readability",
+      "sites": ["mobile/src/session/use-mobile-native-chat-readability.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount"
+        },
+        {
+          "complete": "repo.list#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "repos": [
+                {
+                  "id": "repo-1",
+                  "connectionId": null
+                }
+              ]
+            }
+          }
+        },
+        {
+          "checkpoint": "readable"
+        }
+      ]
+    },
+    {
+      "id": "native-chat-readability-remote-repo",
+      "operation": "session.native-chat-readability",
+      "version": 1,
+      "family": "session.native-chat-readability",
+      "sites": ["mobile/src/session/use-mobile-native-chat-readability.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount"
+        },
+        {
+          "complete": "repo.list#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "repos": [
+                {
+                  "id": "repo-1",
+                  "connectionId": "ssh-1"
+                }
+              ]
+            }
+          }
+        },
+        {
+          "checkpoint": "unreadable"
+        }
+      ]
+    },
+    {
+      "id": "native-chat-readability-refused",
+      "operation": "session.native-chat-readability",
+      "version": 1,
+      "family": "session.native-chat-readability",
+      "sites": ["mobile/src/session/use-mobile-native-chat-readability.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount"
+        },
+        {
+          "complete": "repo.list#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": false,
+            "error": {
+              "code": "internal",
+              "message": "Scan failed"
+            }
+          }
+        },
+        {
+          "checkpoint": "unreadable"
+        }
+      ]
+    },
+    {
+      "id": "native-chat-stop-accepted",
+      "operation": "session.native-chat-stop",
+      "version": 1,
+      "family": "session.native-chat-stop",
+      "sites": ["mobile/src/session/use-mobile-native-chat-stop.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "stop",
+          "id": "stop"
+        },
+        {
+          "complete": "terminal.send#1",
+          "params": {
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            },
+            "terminal": "terminal-1",
+            "text": "\u001b"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "send": {
+                "accepted": true
+              }
+            }
+          }
+        },
+        {
+          "complete": "orchestration.workerTerminalUserInput#1",
+          "params": {
+            "terminal": "terminal-1"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "reported": true
+            }
+          }
+        },
+        {
+          "checkpoint": "first-accepted"
+        },
+        {
+          "advance": 120
+        },
+        {
+          "complete": "terminal.send#2",
+          "params": {
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            },
+            "terminal": "terminal-1",
+            "text": "\u001b"
+          },
+          "optional": true,
+          "reply": {
+            "ok": true,
+            "result": {
+              "send": {
+                "accepted": true
+              }
+            }
+          }
+        },
+        {
+          "checkpoint": "settled"
+        }
+      ]
+    },
+    {
+      "id": "native-chat-stop-both-rejected",
+      "operation": "session.native-chat-stop",
+      "version": 1,
+      "family": "session.native-chat-stop",
+      "sites": ["mobile/src/session/use-mobile-native-chat-stop.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "stop",
+          "id": "stop"
+        },
+        {
+          "complete": "terminal.send#1",
+          "params": {
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            },
+            "terminal": "terminal-1",
+            "text": "\u001b"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "send": {
+                "accepted": false
+              }
+            }
+          }
+        },
+        {
+          "advance": 120
+        },
+        {
+          "complete": "terminal.send#2",
+          "params": {
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            },
+            "terminal": "terminal-1",
+            "text": "\u001b"
+          },
+          "optional": true,
+          "reply": {
+            "ok": true,
+            "result": {
+              "send": {
+                "accepted": false
+              }
+            }
+          }
+        },
+        {
+          "checkpoint": "reported"
+        }
+      ]
+    },
+    {
+      "id": "native-chat-stop-delivery-unknown",
+      "operation": "session.native-chat-stop",
+      "version": 1,
+      "family": "session.native-chat-stop",
+      "sites": ["mobile/src/session/use-mobile-native-chat-stop.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "stop",
+          "id": "stop"
+        },
+        {
+          "complete": "terminal.send#1",
+          "params": {
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            },
+            "terminal": "terminal-1",
+            "text": "\u001b"
+          },
+          "reject": {
+            "message": "Connection lost",
+            "deliveryUnknown": true
+          }
+        },
+        {
+          "advance": 120
+        },
+        {
+          "complete": "terminal.send#2",
+          "params": {
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            },
+            "terminal": "terminal-1",
+            "text": "\u001b"
+          },
+          "optional": true,
+          "reject": {
+            "message": "Connection lost",
+            "deliveryUnknown": true
+          }
+        },
+        {
+          "checkpoint": "unconfirmed"
+        }
+      ]
+    },
+    {
+      "id": "session-create-markdown-note",
+      "operation": "session.content-create",
+      "version": 1,
+      "family": "session.content-create",
+      "sites": ["mobile/src/session/use-mobile-session-content-create-actions.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "markdown",
+          "id": "markdown"
+        },
+        {
+          "complete": "status.get#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "capabilities": ["files.mutation-ownership.v1"]
+            }
+          }
+        },
+        {
+          "complete": "worktree.show#1",
+          "params": {
+            "worktree": "id:workspace-1"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "worktree": {
+                "hostId": "local"
+              }
+            }
+          }
+        },
+        {
+          "complete": "files.createFile#1",
+          "params": {
+            "expectedExecutionHostId": "local",
+            "relativePath": "untitled.md",
+            "worktree": "id:workspace-1"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "created": true
+            }
+          }
+        },
+        {
+          "complete": "files.open#1",
+          "params": {
+            "relativePath": "untitled.md",
+            "worktree": "id:workspace-1"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "opened": true
+            }
+          }
+        },
+        {
+          "advance": 300
+        },
+        {
+          "checkpoint": "created"
+        }
+      ]
+    },
+    {
+      "id": "session-create-markdown-name-collision",
+      "operation": "session.content-create",
+      "version": 1,
+      "family": "session.content-create",
+      "sites": ["mobile/src/session/use-mobile-session-content-create-actions.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "markdown",
+          "id": "markdown"
+        },
+        {
+          "complete": "status.get#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "capabilities": ["files.mutation-ownership.v1"]
+            }
+          }
+        },
+        {
+          "complete": "worktree.show#1",
+          "params": {
+            "worktree": "id:workspace-1"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "worktree": {
+                "hostId": "local"
+              }
+            }
+          }
+        },
+        {
+          "complete": "files.createFile#1",
+          "params": {
+            "expectedExecutionHostId": "local",
+            "relativePath": "untitled.md",
+            "worktree": "id:workspace-1"
+          },
+          "reply": {
+            "ok": false,
+            "error": {
+              "code": "file_exists",
+              "message": "File already exists"
+            }
+          }
+        },
+        {
+          "complete": "files.createFile#2",
+          "params": {
+            "expectedExecutionHostId": "local",
+            "relativePath": "untitled-2.md",
+            "worktree": "id:workspace-1"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "created": true
+            }
+          }
+        },
+        {
+          "complete": "files.open#1",
+          "params": {
+            "relativePath": "untitled-2.md",
+            "worktree": "id:workspace-1"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "opened": true
+            }
+          }
+        },
+        {
+          "advance": 300
+        },
+        {
+          "checkpoint": "created-second"
+        }
+      ]
+    },
+    {
+      "id": "session-create-browser-tab",
+      "operation": "session.content-create",
+      "version": 1,
+      "family": "session.content-create",
+      "sites": ["mobile/src/session/use-mobile-session-content-create-actions.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "browser",
+          "id": "browser"
+        },
+        {
+          "complete": "browser.tabCreate#1",
+          "params": {
+            "activate": true,
+            "url": "https://example.com/",
+            "worktree": "id:workspace-1"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "browserPageId": "page-1"
+            }
+          }
+        },
+        {
+          "advance": 1200
+        },
+        {
+          "checkpoint": "created"
+        }
+      ]
+    },
+    {
+      "id": "session-create-browser-refused",
+      "operation": "session.content-create",
+      "version": 1,
+      "family": "session.content-create",
+      "sites": ["mobile/src/session/use-mobile-session-content-create-actions.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "browser",
+          "id": "browser"
+        },
+        {
+          "complete": "browser.tabCreate#1",
+          "params": {
+            "activate": true,
+            "url": "https://example.com/",
+            "worktree": "id:workspace-1"
+          },
+          "reply": {
+            "ok": false,
+            "error": {
+              "code": "browser_unavailable",
+              "message": "Browser unavailable"
+            }
+          }
+        },
+        {
+          "checkpoint": "refused"
+        }
+      ]
+    },
+    {
+      "id": "session-tab-close-terminal",
+      "operation": "session.tab-close",
+      "version": 1,
+      "family": "session.tab-close",
+      "sites": ["mobile/src/session/use-mobile-session-close-actions.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "close-terminal",
+          "id": "close-terminal"
+        },
+        {
+          "complete": "terminal.close#1",
+          "params": {
+            "terminal": "terminal-1"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "closed": true
+            }
+          }
+        },
+        {
+          "checkpoint": "closed"
+        }
+      ]
+    },
+    {
+      "id": "session-tab-close-refused-keeps-tab",
+      "operation": "session.tab-close",
+      "version": 1,
+      "family": "session.tab-close",
+      "sites": ["mobile/src/session/use-mobile-session-close-actions.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "close-terminal",
+          "id": "close-terminal"
+        },
+        {
+          "complete": "terminal.close#1",
+          "params": {
+            "terminal": "terminal-1"
+          },
+          "reply": {
+            "ok": false,
+            "error": {
+              "code": "terminal_not_found",
+              "message": "No such terminal"
+            }
+          }
+        },
+        {
+          "checkpoint": "kept"
+        }
+      ]
+    },
+    {
+      "id": "session-tab-rename",
+      "operation": "session.tab-close",
+      "version": 1,
+      "family": "session.tab-close",
+      "sites": ["mobile/src/session/use-mobile-session-close-actions.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "rename",
+          "id": "rename",
+          "args": {
+            "title": "build"
+          }
+        },
+        {
+          "complete": "terminal.rename#1",
+          "params": {
+            "terminal": "terminal-1",
+            "title": "build"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "renamed": true
+            }
+          }
+        },
+        {
+          "advance": 300
+        },
+        {
+          "checkpoint": "renamed"
+        }
+      ]
+    },
+    {
+      "id": "session-tab-close-session-tab",
+      "operation": "session.tab-close",
+      "version": 1,
+      "family": "session.tab-close",
+      "sites": ["mobile/src/session/use-mobile-session-close-actions.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "close-tab",
+          "id": "close-tab"
+        },
+        {
+          "complete": "session.tabs.close#1",
+          "params": {
+            "reason": "user",
+            "tabId": "tab-1",
+            "worktree": "id:workspace-1"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "closed": true
+            }
+          }
+        },
+        {
+          "checkpoint": "closed"
+        }
+      ]
+    },
+    {
+      "id": "review-mark-reviewed-persists",
+      "operation": "session.diff-review-actions",
+      "version": 1,
+      "family": "session.diff-review-actions",
+      "sites": [
+        "mobile/src/session/use-mobile-diff-review-interactions.ts",
+        "mobile/src/session/use-mobile-diff-review-comment-actions.ts",
+        "mobile/src/session/use-mobile-diff-review-git-actions.ts",
+        "mobile/src/session/use-mobile-diff-review-send-actions.ts",
+        "mobile/src/session/mobile-native-chat-stale-input.ts"
+      ],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "mark-reviewed",
+          "id": "mark-reviewed"
+        },
+        {
+          "complete": "worktree.set#1",
+          "params": {
+            "diffComments": [
+              {
+                "body": "needs a test",
+                "createdAt": 0,
+                "filePath": "src/app.ts",
+                "id": "note-1",
+                "lineNumber": 4,
+                "worktreeId": "workspace-1",
+                "side": "modified"
+              }
+            ],
+            "mobileDiffReview": {
+              "completedAt": 1767225600000,
+              "files": {
+                "unstaged:src/app.ts": {
+                  "filePath": "src/app.ts",
+                  "key": "unstaged:src/app.ts",
+                  "lastOpenedAt": {
+                    "$undefined": true
+                  },
+                  "lastSeenDiffIdentity": "identity-1",
+                  "oldPath": {
+                    "$undefined": true
+                  },
+                  "reviewDiffIdentity": "identity-1",
+                  "reviewedAt": 1767225600000,
+                  "scope": "unstaged"
+                }
+              },
+              "updatedAt": 1767225600000,
+              "version": 1
+            },
+            "worktree": "id:workspace-1"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "updated": true
+            }
+          }
+        },
+        {
+          "checkpoint": "persisted"
+        }
+      ]
+    },
+    {
+      "id": "review-mark-reviewed-rolls-back",
+      "operation": "session.diff-review-actions",
+      "version": 1,
+      "family": "session.diff-review-actions",
+      "sites": [
+        "mobile/src/session/use-mobile-diff-review-interactions.ts",
+        "mobile/src/session/use-mobile-diff-review-comment-actions.ts",
+        "mobile/src/session/use-mobile-diff-review-git-actions.ts",
+        "mobile/src/session/use-mobile-diff-review-send-actions.ts",
+        "mobile/src/session/mobile-native-chat-stale-input.ts"
+      ],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "mark-reviewed",
+          "id": "mark-reviewed"
+        },
+        {
+          "complete": "worktree.set#1",
+          "params": {
+            "diffComments": [
+              {
+                "body": "needs a test",
+                "createdAt": 0,
+                "filePath": "src/app.ts",
+                "id": "note-1",
+                "lineNumber": 4,
+                "worktreeId": "workspace-1",
+                "side": "modified"
+              }
+            ],
+            "mobileDiffReview": {
+              "completedAt": 1767225600000,
+              "files": {
+                "unstaged:src/app.ts": {
+                  "filePath": "src/app.ts",
+                  "key": "unstaged:src/app.ts",
+                  "lastOpenedAt": {
+                    "$undefined": true
+                  },
+                  "lastSeenDiffIdentity": "identity-1",
+                  "oldPath": {
+                    "$undefined": true
+                  },
+                  "reviewDiffIdentity": "identity-1",
+                  "reviewedAt": 1767225600000,
+                  "scope": "unstaged"
+                }
+              },
+              "updatedAt": 1767225600000,
+              "version": 1
+            },
+            "worktree": "id:workspace-1"
+          },
+          "reply": {
+            "ok": false,
+            "error": {
+              "code": "worktree_locked",
+              "message": "Workspace is locked"
+            }
+          }
+        },
+        {
+          "checkpoint": "rolled-back"
+        }
+      ]
+    },
+    {
+      "id": "review-stage-file",
+      "operation": "session.diff-review-actions",
+      "version": 1,
+      "family": "session.diff-review-actions",
+      "sites": [
+        "mobile/src/session/use-mobile-diff-review-interactions.ts",
+        "mobile/src/session/use-mobile-diff-review-comment-actions.ts",
+        "mobile/src/session/use-mobile-diff-review-git-actions.ts",
+        "mobile/src/session/use-mobile-diff-review-send-actions.ts",
+        "mobile/src/session/mobile-native-chat-stale-input.ts"
+      ],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "stage",
+          "id": "stage"
+        },
+        {
+          "complete": "git.stage#1",
+          "params": {
+            "filePath": "src/app.ts",
+            "worktree": "id:workspace-1"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "staged": true
+            }
+          }
+        },
+        {
+          "checkpoint": "staged"
+        }
+      ]
+    },
+    {
+      "id": "review-stage-refused",
+      "operation": "session.diff-review-actions",
+      "version": 1,
+      "family": "session.diff-review-actions",
+      "sites": [
+        "mobile/src/session/use-mobile-diff-review-interactions.ts",
+        "mobile/src/session/use-mobile-diff-review-comment-actions.ts",
+        "mobile/src/session/use-mobile-diff-review-git-actions.ts",
+        "mobile/src/session/use-mobile-diff-review-send-actions.ts",
+        "mobile/src/session/mobile-native-chat-stale-input.ts"
+      ],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "discard",
+          "id": "discard"
+        },
+        {
+          "complete": "git.discard#1",
+          "params": {
+            "filePath": "src/app.ts",
+            "worktree": "id:workspace-1"
+          },
+          "reply": {
+            "ok": false,
+            "error": {
+              "code": "git_conflict",
+              "message": "Cannot discard during a merge"
+            }
+          }
+        },
+        {
+          "checkpoint": "refused"
+        }
+      ]
+    },
+    {
+      "id": "review-open-in-session",
+      "operation": "session.diff-review-actions",
+      "version": 1,
+      "family": "session.diff-review-actions",
+      "sites": [
+        "mobile/src/session/use-mobile-diff-review-interactions.ts",
+        "mobile/src/session/use-mobile-diff-review-comment-actions.ts",
+        "mobile/src/session/use-mobile-diff-review-git-actions.ts",
+        "mobile/src/session/use-mobile-diff-review-send-actions.ts",
+        "mobile/src/session/mobile-native-chat-stale-input.ts"
+      ],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "open-in-session",
+          "id": "open-in-session"
+        },
+        {
+          "complete": "files.openDiff#1",
+          "params": {
+            "relativePath": "src/app.ts",
+            "staged": false,
+            "worktree": "id:workspace-1"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "opened": true
+            }
+          }
+        },
+        {
+          "checkpoint": "opened"
+        }
+      ]
+    },
+    {
+      "id": "review-send-notes-heals-stale-input",
+      "operation": "session.diff-review-actions",
+      "version": 1,
+      "family": "session.diff-review-actions",
+      "sites": [
+        "mobile/src/session/use-mobile-diff-review-interactions.ts",
+        "mobile/src/session/use-mobile-diff-review-comment-actions.ts",
+        "mobile/src/session/use-mobile-diff-review-git-actions.ts",
+        "mobile/src/session/use-mobile-diff-review-send-actions.ts",
+        "mobile/src/session/mobile-native-chat-stale-input.ts"
+      ],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "mark-stale",
+          "id": "mark-stale"
+        },
+        {
+          "action": "send-notes",
+          "id": "send-notes"
+        },
+        {
+          "complete": "terminal.send#1",
+          "params": {
+            "enter": false,
+            "terminal": "terminal-1",
+            "text": "\u0015"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "send": {
+                "accepted": true
+              }
+            }
+          }
+        },
+        {
+          "checkpoint": "healed"
+        }
+      ]
+    },
+    {
+      "id": "review-create-terminal-refused",
+      "operation": "session.diff-review-actions",
+      "version": 1,
+      "family": "session.diff-review-actions",
+      "sites": [
+        "mobile/src/session/use-mobile-diff-review-interactions.ts",
+        "mobile/src/session/use-mobile-diff-review-comment-actions.ts",
+        "mobile/src/session/use-mobile-diff-review-git-actions.ts",
+        "mobile/src/session/use-mobile-diff-review-send-actions.ts",
+        "mobile/src/session/mobile-native-chat-stale-input.ts"
+      ],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "create-and-send",
+          "id": "create-and-send"
+        },
+        {
+          "complete": "session.tabs.createTerminal#1",
+          "params": {
+            "activate": false,
+            "navigation": "caller",
+            "select": true,
+            "worktree": "id:workspace-1"
+          },
+          "reply": {
+            "ok": false,
+            "error": {
+              "code": "worktree_busy",
+              "message": "Workspace is busy"
+            }
+          }
+        },
+        {
+          "checkpoint": "refused"
+        }
+      ]
+    },
+    {
+      "id": "session-diff-notes-loaded",
+      "operation": "session.diff-notes",
+      "version": 1,
+      "family": "session.diff-notes",
+      "sites": ["mobile/src/session/use-mobile-session-diff-comments.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount"
+        },
+        {
+          "complete": "worktree.show#1",
+          "params": {
+            "worktree": "id:workspace-1"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "worktree": {
+                "diffComments": [
+                  {
+                    "body": "needs a test",
+                    "createdAt": 0,
+                    "filePath": "src/app.ts",
+                    "id": "note-1",
+                    "lineNumber": 4,
+                    "worktreeId": "workspace-1"
+                  }
+                ]
+              }
+            }
+          }
+        },
+        {
+          "checkpoint": "loaded"
+        }
+      ]
+    },
+    {
+      "id": "session-diff-notes-load-refused",
+      "operation": "session.diff-notes",
+      "version": 1,
+      "family": "session.diff-notes",
+      "sites": ["mobile/src/session/use-mobile-session-diff-comments.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount"
+        },
+        {
+          "complete": "worktree.show#1",
+          "params": {
+            "worktree": "id:workspace-1"
+          },
+          "reply": {
+            "ok": false,
+            "error": {
+              "code": "worktree_not_found",
+              "message": "No such workspace"
+            }
+          }
+        },
+        {
+          "checkpoint": "unchanged"
+        }
+      ]
+    },
+    {
+      "id": "session-markdown-saved",
+      "operation": "session.markdown-save",
+      "version": 1,
+      "family": "session.markdown-save",
+      "sites": ["mobile/src/session/use-mobile-session-markdown-actions.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "save",
+          "id": "save"
+        },
+        {
+          "complete": "markdown.saveTab#1",
+          "params": {
+            "baseVersion": "v1",
+            "content": "# b",
+            "tabId": "tab-md",
+            "worktree": "id:workspace-1"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "content": "# b",
+              "version": "v2",
+              "isDirty": false
+            }
+          }
+        },
+        {
+          "checkpoint": "saved"
+        }
+      ]
+    },
+    {
+      "id": "session-markdown-save-conflict",
+      "operation": "session.markdown-save",
+      "version": 1,
+      "family": "session.markdown-save",
+      "sites": ["mobile/src/session/use-mobile-session-markdown-actions.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "save",
+          "id": "save"
+        },
+        {
+          "complete": "markdown.saveTab#1",
+          "params": {
+            "baseVersion": "v1",
+            "content": "# b",
+            "tabId": "tab-md",
+            "worktree": "id:workspace-1"
+          },
+          "reply": {
+            "ok": false,
+            "error": {
+              "code": "version_conflict",
+              "message": "Document changed on disk"
+            }
+          }
+        },
+        {
+          "checkpoint": "conflicted"
+        }
+      ]
+    },
+    {
+      "id": "quick-commands-loaded-and-saved",
+      "operation": "settings.quick-commands",
+      "version": 1,
+      "family": "settings.quick-commands",
+      "sites": ["mobile/src/session/use-quick-commands.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount"
+        },
+        {
+          "complete": "settings.getTerminalQuickCommands#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "terminalQuickCommands": []
+            }
+          }
+        },
+        {
+          "action": "persist",
+          "id": "persist"
+        },
+        {
+          "complete": "settings.updateTerminalQuickCommands#1",
+          "params": {
+            "mutation": {
+              "command": {
+                "appendEnter": true,
+                "command": "pnpm build",
+                "id": "qc-1",
+                "label": "build"
+              },
+              "type": "upsert"
+            }
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "terminalQuickCommands": [
+                {
+                  "id": "qc-1",
+                  "label": "build",
+                  "command": "pnpm build",
+                  "appendEnter": true
+                }
+              ]
+            }
+          }
+        },
+        {
+          "checkpoint": "saved"
+        }
+      ]
+    },
+    {
+      "id": "quick-commands-save-refused-rolls-back",
+      "operation": "settings.quick-commands",
+      "version": 1,
+      "family": "settings.quick-commands",
+      "sites": ["mobile/src/session/use-quick-commands.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount"
+        },
+        {
+          "complete": "settings.getTerminalQuickCommands#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "terminalQuickCommands": []
+            }
+          }
+        },
+        {
+          "action": "persist",
+          "id": "persist"
+        },
+        {
+          "complete": "settings.updateTerminalQuickCommands#1",
+          "params": {
+            "mutation": {
+              "command": {
+                "appendEnter": true,
+                "command": "pnpm build",
+                "id": "qc-1",
+                "label": "build"
+              },
+              "type": "upsert"
+            }
+          },
+          "reply": {
+            "ok": false,
+            "error": {
+              "code": "settings_locked",
+              "message": "Settings are locked"
+            }
+          }
+        },
+        {
+          "checkpoint": "rolled-back"
+        }
+      ]
+    },
+    {
+      "id": "quick-commands-load-refused",
+      "operation": "settings.quick-commands",
+      "version": 1,
+      "family": "settings.quick-commands",
+      "sites": ["mobile/src/session/use-quick-commands.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "mount",
+          "id": "mount"
+        },
+        {
+          "complete": "settings.getTerminalQuickCommands#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": false,
+            "error": {
+              "code": "method_not_found",
+              "message": "Unknown method"
+            }
+          }
+        },
+        {
+          "checkpoint": "errored"
+        }
+      ]
+    },
+    {
+      "id": "native-chat-image-upload-start-refused",
+      "operation": "nativeChat.image-upload",
+      "version": 1,
+      "family": "nativeChat.image-upload",
+      "sites": ["mobile/src/session/mobile-native-chat-image-attachment.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "normal",
+          "id": "normal"
+        },
+        {
+          "complete": "clipboard.startImageUpload#1",
+          "params": {
+            "connectionId": "connection-1",
+            "expectedBase64Length": 32
+          },
+          "reply": {
+            "ok": false,
+            "error": {
+              "code": "too_large",
+              "message": "Image is too large"
+            }
+          }
+        },
+        {
+          "checkpoint": "refused"
+        }
+      ]
+    },
+    {
+      "id": "native-chat-image-upload-single",
+      "operation": "nativeChat.image-upload",
+      "version": 1,
+      "family": "nativeChat.image-upload",
+      "sites": ["mobile/src/session/mobile-native-chat-image-attachment.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "normal",
+          "id": "normal"
+        },
+        {
+          "complete": "clipboard.startImageUpload#1",
+          "params": {
+            "connectionId": "connection-1",
+            "expectedBase64Length": 32
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "uploadId": "upload-1"
+            }
+          }
+        },
+        {
+          "complete": "clipboard.appendImageUploadChunk#1",
+          "params": {
+            "uploadId": "upload-1",
+            "offset": 0,
+            "contentBase64": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "received": 32
+            }
+          }
+        },
+        {
+          "complete": "clipboard.commitImageUpload#1",
+          "params": {
+            "uploadId": "upload-1"
+          },
+          "reply": {
+            "ok": true,
+            "result": "/tmp/img-1.png"
+          }
+        },
+        {
+          "checkpoint": "uploaded"
+        }
+      ]
+    },
+    {
+      "id": "native-chat-image-upload-two",
+      "operation": "nativeChat.image-upload",
+      "version": 1,
+      "family": "nativeChat.image-upload",
+      "sites": ["mobile/src/session/mobile-native-chat-image-attachment.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "two",
+          "id": "two"
+        },
+        {
+          "complete": "clipboard.startImageUpload#1",
+          "params": {
+            "connectionId": "connection-1",
+            "expectedBase64Length": 32
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "uploadId": "upload-1"
+            }
+          }
+        },
+        {
+          "complete": "clipboard.appendImageUploadChunk#1",
+          "params": {
+            "uploadId": "upload-1",
+            "offset": 0,
+            "contentBase64": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "received": 32
+            }
+          }
+        },
+        {
+          "complete": "clipboard.commitImageUpload#1",
+          "params": {
+            "uploadId": "upload-1"
+          },
+          "reply": {
+            "ok": true,
+            "result": "/tmp/img-1.png"
+          }
+        },
+        {
+          "complete": "clipboard.startImageUpload#2",
+          "params": {
+            "connectionId": "connection-1",
+            "expectedBase64Length": 32
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "uploadId": "upload-2"
+            }
+          }
+        },
+        {
+          "complete": "clipboard.appendImageUploadChunk#2",
+          "params": {
+            "uploadId": "upload-2",
+            "offset": 0,
+            "contentBase64": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "received": 32
+            }
+          }
+        },
+        {
+          "complete": "clipboard.commitImageUpload#2",
+          "params": {
+            "uploadId": "upload-2"
+          },
+          "reply": {
+            "ok": true,
+            "result": "/tmp/img-2.png"
+          }
+        },
+        {
+          "checkpoint": "uploaded-both"
+        }
+      ]
+    },
+    {
+      "id": "native-chat-image-upload-second-fails",
+      "operation": "nativeChat.image-upload",
+      "version": 1,
+      "family": "nativeChat.image-upload",
+      "sites": ["mobile/src/session/mobile-native-chat-image-attachment.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "two",
+          "id": "two"
+        },
+        {
+          "complete": "clipboard.startImageUpload#1",
+          "params": {
+            "connectionId": "connection-1",
+            "expectedBase64Length": 32
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "uploadId": "upload-1"
+            }
+          }
+        },
+        {
+          "complete": "clipboard.appendImageUploadChunk#1",
+          "params": {
+            "uploadId": "upload-1",
+            "offset": 0,
+            "contentBase64": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "received": 32
+            }
+          }
+        },
+        {
+          "complete": "clipboard.commitImageUpload#1",
+          "params": {
+            "uploadId": "upload-1"
+          },
+          "reply": {
+            "ok": true,
+            "result": "/tmp/img-1.png"
+          }
+        },
+        {
+          "complete": "clipboard.startImageUpload#2",
+          "params": {
+            "connectionId": "connection-1",
+            "expectedBase64Length": 32
+          },
+          "reply": {
+            "ok": false,
+            "error": {
+              "code": "too_large",
+              "message": "Image is too large"
+            }
+          }
+        },
+        {
+          "checkpoint": "partial"
+        }
+      ]
+    },
+    {
+      "id": "native-chat-image-upload-cancelled",
+      "operation": "nativeChat.image-upload",
+      "version": 1,
+      "family": "nativeChat.image-upload",
+      "sites": ["mobile/src/session/mobile-native-chat-image-attachment.ts"],
+      "schedules": [],
+      "steps": [
+        {
+          "action": "cancelled",
+          "id": "cancelled"
+        },
+        {
+          "checkpoint": "no-wire"
+        }
+      ]
+    },
+    {
       "id": "files-explorer-legacy-fallback",
       "operation": "files.explorer-screen",
       "version": 1,

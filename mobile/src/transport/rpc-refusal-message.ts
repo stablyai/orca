@@ -12,10 +12,7 @@ export function refusedRpcMessageOrFallback(error: unknown, fallback: string): s
  * as a thunk, so a transport rejection stays outside the catch and reaches the caller as the object
  * the transport threw, delivery-unknown mark intact.
  */
-export function interpretOrThrowRefusalMessage(
-  interpret: () => unknown,
-  fallback: string
-): unknown {
+export function interpretOrThrowRefusalMessage<T>(interpret: () => T, fallback: string): T {
   try {
     return interpret()
   } catch (error) {

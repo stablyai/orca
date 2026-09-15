@@ -1,0 +1,89 @@
+{
+  "operation": "nativeChat.terminal-write",
+  "family": "nativeChat.terminal-write",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
+  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
+  "recorderSha256": "64a741e034b13bca69c466f93f713aa5c0cf3fbb2bbb02f357003506b17fe353",
+  "adapterSha256": "b98a3ca3818678b88cf629bc4635300a103637126a136f025a1600dc16f08008",
+  "scenarioSha256": "7e05773966a18123aaae297aed9ac44bd841713de88c8a1fa30c31b324118f6f",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "19f53fb21e4e": {
+      "body": "rejected"
+    },
+    "6bb5bb25e4d4": {
+      "name": "terminal.send#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-1\",\"text\":\"hello\",\"enter\":true,\"client\":{\"id\":\"device-token-1\",\"type\":\"mobile\"}}}"
+    },
+    "8b7ac879220d": {
+      "name": "terminal.send#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.send"
+        },
+        {
+          "name": "params",
+          "value": {
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            },
+            "enter": true,
+            "terminal": "terminal-1",
+            "text": "hello"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "budgetSpansConnect": true,
+            "timeoutMs": 15000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "send": {
+              "accepted": false
+            }
+          }
+        }
+      }
+    },
+    "9bd3ea1ff2bb": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": "rejected"
+    }
+  },
+  "recording": {
+    "scenario": "native-chat-write-rejected",
+    "checkpoints": [
+      {
+        "id": "rejected",
+        "observation": {
+          "sender": ["8b7ac879220d"],
+          "payloads": ["6bb5bb25e4d4"],
+          "settlements": {
+            "body": "9bd3ea1ff2bb"
+          },
+          "state": "19f53fb21e4e",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

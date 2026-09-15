@@ -1,0 +1,85 @@
+{
+  "operation": "nativeChat.terminal-write",
+  "family": "nativeChat.terminal-write",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
+  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
+  "recorderSha256": "64a741e034b13bca69c466f93f713aa5c0cf3fbb2bbb02f357003506b17fe353",
+  "adapterSha256": "b98a3ca3818678b88cf629bc4635300a103637126a136f025a1600dc16f08008",
+  "scenarioSha256": "22f7711ed82a4d56f1886a746838e3eb85c555c9069694ba3aa958e121cc1ee9",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "44d966fae591": {
+      "body": "unknown"
+    },
+    "6bb5bb25e4d4": {
+      "name": "terminal.send#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-1\",\"text\":\"hello\",\"enter\":true,\"client\":{\"id\":\"device-token-1\",\"type\":\"mobile\"}}}"
+    },
+    "ed1d171deda5": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": "unknown"
+    },
+    "f1e77c2f84bd": {
+      "name": "terminal.send#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.send"
+        },
+        {
+          "name": "params",
+          "value": {
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            },
+            "enter": true,
+            "terminal": "terminal-1",
+            "text": "hello"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "budgetSpansConnect": true,
+            "timeoutMs": 15000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "Connection lost",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    }
+  },
+  "recording": {
+    "scenario": "native-chat-write-delivery-unknown",
+    "checkpoints": [
+      {
+        "id": "unknown",
+        "observation": {
+          "sender": ["f1e77c2f84bd"],
+          "payloads": ["6bb5bb25e4d4"],
+          "settlements": {
+            "body": "ed1d171deda5"
+          },
+          "state": "44d966fae591",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

@@ -66,11 +66,15 @@ const HEAD_MAIN_HOOK_SHA256 = 'c7a1bbc0588a5d27797bbab13168e76eb20200288921fdc33
 const HEAD_HOOK_BINDING_SHA256 = '06edf1a4314eba41b1d3e1cb67b0cfab2a936aef7d127c5dc48e789c9adc6c8f'
 const HEAD_CALLBACK_IDENTITY_SHA256 =
   '2a9e4825df007f6ef53b81aa5004991d6318eee7507b44d625c07e630be432eb'
-const HEAD_CALLBACK_BODY_SHA256 = '85c4f4605e66c45e2b6bc7de739cb3493d9e2d0db9c9242c379db8ed34a8cefe'
+// Body text, not behaviour: refreshed when the session hooks' refusal try/catch blocks became
+// `interpretOrThrowRefusalMessage` calls. One of them lives in a callback.
+const HEAD_CALLBACK_BODY_SHA256 = '309666c03fdfaa4b48fe6e32d86e885e0c92c42954bc2917ac605ef1e50061de'
 const HEAD_EFFECT_SHA256 = '73d80845e0a4b6363cfb4bb55551af97965b1f676b97adf0b2a8504219b9a501'
 const HEAD_CONTENT_HOOK_SHA256 = '9c3b612fef3f370d66873aefdbe1d701f20cb64ded31fef5cc45fde6f8189581'
+// Same refresh as the callback-body hash above, for the three of those blocks that sit in
+// nested functions rather than callbacks. Count still 12.
 const HEAD_NESTED_FUNCTION_SHA256 =
-  '97ce5457d8059974f500022a4382ff687074e26843d6c1525be938d6c0537928'
+  '74772a16be98781d85d12caa7771b373a908e3da00651412a1e15647ec67398c'
 const HEAD_NATIVE_REGISTRATION_SHA256 =
   'cab85e4e4a3f43289ba93ddea9ccce57aea83e0bf14fd1620a965aad0c1cb49e'
 const HEAD_NATIVE_REMOVAL_SHA256 =
@@ -79,7 +83,7 @@ const HEAD_TIMER_CREATION_SHA256 =
   '1a31b625e2174c3db77272249843196d2b6b06ab1e654a96d8f7858e3082e66b'
 const HEAD_TIMER_CLEANUP_SHA256 = 'c73f1d1c2cc89642f3d727d6f3b6b81860a9d6f34234541a2065ec3d1a8cd116'
 const HEAD_RUNTIME_STRING_SHA256 =
-  '57ef354b97fb4fd3776fd1b09a34305d84022c04c43c6391bd130517bf6e37af'
+  '3d4c680adb34c5871530fa4bd7ecd2f800048b8b00f98ef503693d9c44cf6464'
 const HEAD_HOST_JSX_SHA256 = '390405926b1695fa3a33686f0bc192b432f5468d8576499d7cafbb4922defbb5'
 const HEAD_LEAF_JSX_SHA256 = '21dba981875e173f692590bf910d60964660c5f4cbb79f3a377c7e54f6a1f016'
 const HEAD_STYLE_REFERENCE_SHA256 =
@@ -517,7 +521,7 @@ describe('mobile session route extraction parity', () => {
 
   it('preserves runtime strings, styles, and the expanded JSX tree', () => {
     const strings = readRuntimeStrings()
-    expect(strings).toHaveLength(546)
+    expect(strings).toHaveLength(540)
     expect(hash(strings)).toBe(HEAD_RUNTIME_STRING_SHA256)
     const jsx = readJsxFacts(readDefinitions())
     expect(jsx.host).toHaveLength(124)

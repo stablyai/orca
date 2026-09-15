@@ -1,0 +1,132 @@
+{
+  "operation": "session.native-chat-stop",
+  "family": "session.native-chat-stop",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
+  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
+  "recorderSha256": "64a741e034b13bca69c466f93f713aa5c0cf3fbb2bbb02f357003506b17fe353",
+  "adapterSha256": "a3daf9a05d05424959baf77feb45cb0c076d77d8c49e877941ed612cc1e5ce95",
+  "scenarioSha256": "977ee5602e3a612d537686d17d15312f8b0e775df8800b27bb0d42b8642b4675",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "161bbe9b0076": {
+      "name": "terminal.send#2",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-1\",\"text\":\"\\u001b\",\"client\":{\"id\":\"device-token-1\",\"type\":\"mobile\"}}}"
+    },
+    "1a91fe5e4856": {
+      "name": "terminal.send#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-1\",\"text\":\"\\u001b\",\"client\":{\"id\":\"device-token-1\",\"type\":\"mobile\"}}}"
+    },
+    "60fbbfd9bd11": {
+      "name": "cancel-pending",
+      "value": {},
+      "sent": 0
+    },
+    "9fe5713ca2d1": {
+      "errors": ["Stop unconfirmed — check chat before retrying"]
+    },
+    "a60dea16497c": {
+      "name": "terminal.send#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.send"
+        },
+        {
+          "name": "params",
+          "value": {
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            },
+            "terminal": "terminal-1",
+            "text": "\u001b"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "budgetSpansConnect": true,
+            "timeoutMs": 15000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "Connection lost",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "c7ad8e4bd48f": {
+      "name": "terminal.send#2",
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.send"
+        },
+        {
+          "name": "params",
+          "value": {
+            "client": {
+              "id": "device-token-1",
+              "type": "mobile"
+            },
+            "terminal": "terminal-1",
+            "text": "\u001b"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "budgetSpansConnect": true,
+            "timeoutMs": 14920
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 80,
+        "settledAt": 120,
+        "error": {
+          "category": "Error",
+          "message": "Connection lost",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    }
+  },
+  "recording": {
+    "scenario": "native-chat-stop-delivery-unknown",
+    "checkpoints": [
+      {
+        "id": "unconfirmed",
+        "observation": {
+          "sender": ["a60dea16497c", "c7ad8e4bd48f"],
+          "payloads": ["1a91fe5e4856", "161bbe9b0076"],
+          "settlements": {
+            "stop": "eb79a9b3682a"
+          },
+          "state": "9fe5713ca2d1",
+          "effects": ["60fbbfd9bd11"]
+        }
+      }
+    ]
+  }
+}

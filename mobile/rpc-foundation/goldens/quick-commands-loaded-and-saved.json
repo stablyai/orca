@@ -1,0 +1,145 @@
+{
+  "operation": "settings.quick-commands",
+  "family": "settings.quick-commands",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
+  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
+  "recorderSha256": "64a741e034b13bca69c466f93f713aa5c0cf3fbb2bbb02f357003506b17fe353",
+  "adapterSha256": "42334358b5e5966001639653b553f15033f6e201d785107871fe056536f0a5e2",
+  "scenarioSha256": "a621156bbb662c78a0baa356b60d0af41d10a7bd14e54f23be0581a59377cec3",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "7ed3d39f0607": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": false
+    },
+    "b0069ba7e0a2": {
+      "name": "settings.updateTerminalQuickCommands#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "settings.updateTerminalQuickCommands"
+        },
+        {
+          "name": "params",
+          "value": {
+            "mutation": {
+              "command": {
+                "appendEnter": true,
+                "command": "pnpm build",
+                "id": "qc-1",
+                "label": "build"
+              },
+              "type": "upsert"
+            }
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "terminalQuickCommands": [
+              {
+                "appendEnter": true,
+                "command": "pnpm build",
+                "id": "qc-1",
+                "label": "build"
+              }
+            ]
+          }
+        }
+      }
+    },
+    "d766ce9ee125": {
+      "name": "settings.getTerminalQuickCommands#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "settings.getTerminalQuickCommands"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "absent"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "terminalQuickCommands": []
+          }
+        }
+      }
+    },
+    "e1663c7c38e3": {
+      "name": "settings.getTerminalQuickCommands#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.getTerminalQuickCommands\"}"
+    },
+    "e3cf3d452fcf": {
+      "name": "settings.updateTerminalQuickCommands#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"settings.updateTerminalQuickCommands\",\"params\":{\"mutation\":{\"type\":\"upsert\",\"command\":{\"id\":\"qc-1\",\"label\":\"build\",\"command\":\"pnpm build\",\"appendEnter\":true}}}}"
+    },
+    "e9c308be6dea": {
+      "commands": [],
+      "error": "Failed to save quick command",
+      "loading": false,
+      "persisted": [false],
+      "ready": true
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    }
+  },
+  "recording": {
+    "scenario": "quick-commands-loaded-and-saved",
+    "checkpoints": [
+      {
+        "id": "saved",
+        "observation": {
+          "sender": ["d766ce9ee125", "b0069ba7e0a2"],
+          "payloads": ["e1663c7c38e3", "e3cf3d452fcf"],
+          "settlements": {
+            "mount": "eb79a9b3682a",
+            "persist": "7ed3d39f0607"
+          },
+          "state": "e9c308be6dea",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

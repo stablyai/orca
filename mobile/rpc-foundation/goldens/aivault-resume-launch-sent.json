@@ -1,0 +1,146 @@
+{
+  "operation": "aiVault.resume-launch",
+  "family": "aiVault.resume-launch",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
+  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
+  "recorderSha256": "64a741e034b13bca69c466f93f713aa5c0cf3fbb2bbb02f357003506b17fe353",
+  "adapterSha256": "2f43211e4084c0493bd02ec98868acf53a4c748f89a70cd9657c9c3ee87b12fb",
+  "scenarioSha256": "f0ac1c996e5b1b4043e0a081978476c6c2dd8a5d517d5752857721205a588fb0",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "400d946a183d": {
+      "failure": {
+        "$rpc": "null"
+      },
+      "launched": {
+        "id": "tab-9",
+        "terminal": "terminal-9",
+        "title": "codex"
+      }
+    },
+    "6b1e36abce6b": {
+      "name": "session.tabs.createTerminal#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "session.tabs.createTerminal"
+        },
+        {
+          "name": "params",
+          "value": {
+            "activate": false,
+            "clientMutationId": "resume-mutation-1",
+            "env": {
+              "ORCA_RESUME": "1"
+            },
+            "envToDelete": ["CODEX_HOME"],
+            "launchAgent": "codex",
+            "navigation": "caller",
+            "select": true,
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "tab": {
+              "id": "tab-9",
+              "terminal": "terminal-9",
+              "title": "codex",
+              "type": "terminal"
+            }
+          }
+        }
+      }
+    },
+    "6e79da536ca9": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "id": "tab-9",
+        "terminal": "terminal-9",
+        "title": "codex"
+      }
+    },
+    "a84f5d45a48b": {
+      "name": "terminal.send#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.send"
+        },
+        {
+          "name": "params",
+          "value": {
+            "enter": true,
+            "terminal": "terminal-9",
+            "text": "codex resume rollout"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "send": {
+              "accepted": true
+            }
+          }
+        }
+      }
+    },
+    "a9a45875782f": {
+      "name": "terminal.send#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-9\",\"text\":\"codex resume rollout\",\"enter\":true}}"
+    },
+    "eb30e498d168": {
+      "name": "session.tabs.createTerminal#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"session.tabs.createTerminal\",\"params\":{\"worktree\":\"id:workspace-1\",\"env\":{\"ORCA_RESUME\":\"1\"},\"envToDelete\":[\"CODEX_HOME\"],\"launchAgent\":\"codex\",\"clientMutationId\":\"resume-mutation-1\",\"activate\":false,\"select\":true,\"navigation\":\"caller\"}}"
+    }
+  },
+  "recording": {
+    "scenario": "aivault-resume-launch-sent",
+    "checkpoints": [
+      {
+        "id": "resumed",
+        "observation": {
+          "sender": ["6b1e36abce6b", "a84f5d45a48b"],
+          "payloads": ["eb30e498d168", "a9a45875782f"],
+          "settlements": {
+            "full": "6e79da536ca9"
+          },
+          "state": "400d946a183d",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

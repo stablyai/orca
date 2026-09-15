@@ -1,0 +1,86 @@
+{
+  "operation": "agentSession.structured-launch",
+  "family": "agentSession.structured-launch",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
+  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
+  "recorderSha256": "64a741e034b13bca69c466f93f713aa5c0cf3fbb2bbb02f357003506b17fe353",
+  "adapterSha256": "d340697a64a198066b1037a550afb9a0de7507246a545901d2fc0a23407f38d6",
+  "scenarioSha256": "d8928461e3295d265872e5f98fb8aad445b5edc55fc76f137e45c0cff0d8b961",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "2c227fd1941f": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "kind": "unsupported"
+      }
+    },
+    "4a8f44bda967": {
+      "name": "agentSession.createSupport#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"agentSession.createSupport\",\"params\":{\"worktree\":\"id:workspace-1\",\"agent\":\"claude\"}}"
+    },
+    "99caa4276b06": {
+      "name": "agentSession.createSupport#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "agentSession.createSupport"
+        },
+        {
+          "name": "params",
+          "value": {
+            "agent": "claude",
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "method_not_found",
+            "message": "Unknown method"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "f40adca316f9": {
+      "launched": {
+        "kind": "unsupported"
+      }
+    }
+  },
+  "recording": {
+    "scenario": "structured-launch-support-refused",
+    "checkpoints": [
+      {
+        "id": "unsupported",
+        "observation": {
+          "sender": ["99caa4276b06"],
+          "payloads": ["4a8f44bda967"],
+          "settlements": {
+            "claude": "2c227fd1941f"
+          },
+          "state": "f40adca316f9",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

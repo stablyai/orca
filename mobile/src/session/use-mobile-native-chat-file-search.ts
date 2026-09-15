@@ -1,17 +1,21 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { RpcClient } from '../transport/rpc-client'
+import {
+  nativeChatFileInventoryRead,
+  nativeChatFileSearchRead
+} from './mobile-session-read-operations'
 import { rankSuggestions } from './mobile-native-chat-autocomplete'
+
+function extractPaths(files: unknown): string[] {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
+  return ((files as { relativePath?: string }[] | undefined) ?? [])
+    .map((file) => file.relativePath ?? '')
+    .filter((path): path is string => path.length > 0)
+}
 
 const FILE_SEARCH_DEBOUNCE_MS = 120
 const FILE_SEARCH_RESULT_LIMIT = 16
 const FILE_SEARCH_QUERY_CACHE_LIMIT = 20
-
-function extractPaths(result: unknown): string[] {
-  const files = (result as { files?: Array<{ relativePath?: string }> }).files ?? []
-  return files
-    .map((file) => file.relativePath ?? '')
-    .filter((path): path is string => path.length > 0)
-}
 
 /** Debounces current-host path searches, bounds the mobile result/cache, and
  *  falls back to the legacy one-time full list when paired to an older host. */
@@ -88,13 +92,14 @@ export function useMobileNativeChatFileSearch(args: {
         const loadLegacyPaths = async (): Promise<void> => {
           if (!legacyPathsRef.current) {
             if (!legacyLoadRef.current) {
-              const request = client
-                .sendRequest('files.list', { worktree: `id:${worktreeId}` })
+              const request = nativeChatFileInventoryRead
+                .request(client, { worktree: `id:${worktreeId}` })
                 .then((response) => {
-                  if (!response.ok || generationRef.current !== generation) {
+                  const accepted = nativeChatFileInventoryRead.interpret(response)
+                  if (!accepted.accepted || generationRef.current !== generation) {
                     return null
                   }
-                  const paths = extractPaths(response.result)
+                  const paths = extractPaths(accepted.value)
                   legacyPathsRef.current = paths
                   return paths
                 })
@@ -122,17 +127,20 @@ export function useMobileNativeChatFileSearch(args: {
             await loadLegacyPaths()
             return
           }
-          const response = await client.sendRequest('files.searchPaths', {
+          const response = await nativeChatFileSearchRead.request(client, {
             worktree: `id:${worktreeId}`,
             query: normalizedQuery,
             limit: FILE_SEARCH_RESULT_LIMIT
           })
-          if (response.ok) {
+          const accepted = nativeChatFileSearchRead.interpret(response)
+          if (accepted.accepted) {
             searchSupportedRef.current = true
-            applyPaths(extractPaths(response.result))
+            applyPaths(extractPaths(accepted.value))
             return
           }
-          if (response.error.code === 'method_not_found') {
+          // Why the raw refusal: `method_not_found` is what makes the composer fall back to the
+          // full inventory, and no acceptance policy carries a code.
+          if (!response.ok && response.error.code === 'method_not_found') {
             searchSupportedRef.current = false
             await loadLegacyPaths()
           }

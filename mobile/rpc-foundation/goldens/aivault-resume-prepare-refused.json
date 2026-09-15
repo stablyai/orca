@@ -1,0 +1,89 @@
+{
+  "operation": "aiVault.resume-preparation",
+  "family": "aiVault.resume-preparation",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
+  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
+  "recorderSha256": "64a741e034b13bca69c466f93f713aa5c0cf3fbb2bbb02f357003506b17fe353",
+  "adapterSha256": "2f43211e4084c0493bd02ec98868acf53a4c748f89a70cd9657c9c3ee87b12fb",
+  "scenarioSha256": "dc9926f95475413627315e1f1c96740ececa697c6a0a5e3c42e18cfd4d58448a",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "1c21b98bedb1": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "codex home is locked",
+        "isRpcDeliveryUnknown": false
+      }
+    },
+    "3a299ed75c3d": {
+      "name": "aiVault.prepareSessionResume#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "aiVault.prepareSessionResume"
+        },
+        {
+          "name": "params",
+          "value": {
+            "agent": "codex",
+            "codexHome": "/hosts/codex-runtime-home/home",
+            "executionHostId": "local",
+            "filePath": "/sessions/rollout.jsonl"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 30000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "internal",
+            "message": "codex home is locked"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "7e4864f4412b": {
+      "failure": "codex home is locked",
+      "prepared": "unprepared"
+    },
+    "9a6c365d544f": {
+      "name": "aiVault.prepareSessionResume#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"aiVault.prepareSessionResume\",\"params\":{\"agent\":\"codex\",\"filePath\":\"/sessions/rollout.jsonl\",\"codexHome\":\"/hosts/codex-runtime-home/home\",\"executionHostId\":\"local\"}}"
+    }
+  },
+  "recording": {
+    "scenario": "aivault-resume-prepare-refused",
+    "checkpoints": [
+      {
+        "id": "refused",
+        "observation": {
+          "sender": ["3a299ed75c3d"],
+          "payloads": ["9a6c365d544f"],
+          "settlements": {
+            "prepare": "1c21b98bedb1"
+          },
+          "state": "7e4864f4412b",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,685 @@
+{
+  "operation": "session.markdown-save",
+  "family": "session.markdown-save",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
+  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
+  "recorderSha256": "64a741e034b13bca69c466f93f713aa5c0cf3fbb2bbb02f357003506b17fe353",
+  "adapterSha256": "42334358b5e5966001639653b553f15033f6e201d785107871fe056536f0a5e2",
+  "scenarioSha256": "389c6118f3137b78e88af6b901554b0331c652063a00d8ba3119e0883ce82f25",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "13f8c99bcf0e": {
+      "markdown": {
+        "tab-md": {
+          "baseVersion": "v1",
+          "content": "# a",
+          "editable": true,
+          "isDirty": true,
+          "localContent": "# b",
+          "saveError": "outer refused",
+          "saving": false,
+          "status": "ready"
+        }
+      }
+    },
+    "20d209219e76": {
+      "markdown": {
+        "tab-md": {
+          "baseVersion": {
+            "$rpc": "undefined"
+          },
+          "content": {
+            "$rpc": "undefined"
+          },
+          "editable": true,
+          "isDirty": false,
+          "localContent": {
+            "$rpc": "undefined"
+          },
+          "status": "ready"
+        }
+      }
+    },
+    "2853dae4d5f0": {
+      "markdown": {
+        "tab-md": {
+          "baseVersion": "v1",
+          "content": "# a",
+          "editable": true,
+          "isDirty": true,
+          "localContent": "# b",
+          "saveError": "Cannot read properties of undefined (reading 'content')",
+          "saving": false,
+          "status": "ready"
+        }
+      }
+    },
+    "2a1476024127": {
+      "name": "markdown.saveTab#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "markdown.saveTab"
+        },
+        {
+          "name": "params",
+          "value": {
+            "baseVersion": "v1",
+            "content": "# b",
+            "tabId": "tab-md",
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "inner refused",
+            "ok": false
+          }
+        }
+      }
+    },
+    "36de5fd645a3": {
+      "markdown": {
+        "tab-md": {
+          "baseVersion": "v2",
+          "content": "# b",
+          "editable": true,
+          "isDirty": false,
+          "localContent": "# b",
+          "status": "ready"
+        }
+      }
+    },
+    "3cab53956ec5": {
+      "name": "markdown.saveTab#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "markdown.saveTab"
+        },
+        {
+          "name": "params",
+          "value": {
+            "baseVersion": "v1",
+            "content": "# b",
+            "tabId": "tab-md",
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": {
+              "message": "inner refused"
+            },
+            "ok": false
+          }
+        }
+      }
+    },
+    "6808229bc6b9": {
+      "markdown": {
+        "tab-md": {
+          "baseVersion": "v1",
+          "content": "# a",
+          "editable": true,
+          "isDirty": true,
+          "localContent": "# b",
+          "saveError": "Cannot read properties of null (reading 'content')",
+          "saving": false,
+          "status": "ready"
+        }
+      }
+    },
+    "7afacfd8853f": {
+      "name": "markdown.saveTab#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "markdown.saveTab"
+        },
+        {
+          "name": "params",
+          "value": {
+            "baseVersion": "v1",
+            "content": "# b",
+            "tabId": "tab-md",
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "976e04874a1e": {
+      "name": "toast",
+      "value": {
+        "message": "Saved"
+      },
+      "sent": 1
+    },
+    "a06e17cbe383": {
+      "name": "markdown.saveTab#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "markdown.saveTab"
+        },
+        {
+          "name": "params",
+          "value": {
+            "baseVersion": "v1",
+            "content": "# b",
+            "tabId": "tab-md",
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "content": "# b",
+            "isDirty": false,
+            "version": "v2"
+          }
+        }
+      }
+    },
+    "ae15e570e49e": {
+      "markdown": {
+        "tab-md": {
+          "baseVersion": "v1",
+          "content": "# a",
+          "editable": true,
+          "isDirty": true,
+          "localContent": "# b",
+          "saveError": "Save failed",
+          "saving": false,
+          "status": "ready"
+        }
+      }
+    },
+    "b7782c6305b8": {
+      "name": "markdown.saveTab#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "markdown.saveTab"
+        },
+        {
+          "name": "params",
+          "value": {
+            "baseVersion": "v1",
+            "content": "# b",
+            "tabId": "tab-md",
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "$rpc": "null"
+          }
+        }
+      }
+    },
+    "bd0650cd45fe": {
+      "name": "markdown.saveTab#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "markdown.saveTab"
+        },
+        {
+          "name": "params",
+          "value": {
+            "baseVersion": "v1",
+            "content": "# b",
+            "tabId": "tab-md",
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "method_not_found",
+            "message": "Unknown method"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "be35c536a20e": {
+      "name": "markdown.saveTab#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"markdown.saveTab\",\"params\":{\"worktree\":\"id:workspace-1\",\"tabId\":\"tab-md\",\"baseVersion\":\"v1\",\"content\":\"# b\"}}"
+    },
+    "c1e52e8ff7d9": {
+      "markdown": {
+        "tab-md": {
+          "baseVersion": "v1",
+          "content": "# a",
+          "editable": true,
+          "isDirty": true,
+          "localContent": "# b",
+          "saveError": "Unknown method",
+          "saving": false,
+          "status": "ready"
+        }
+      }
+    },
+    "cb2fb2a37dbd": {
+      "name": "markdown.saveTab#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "markdown.saveTab"
+        },
+        {
+          "name": "params",
+          "value": {
+            "baseVersion": "v1",
+            "content": "# b",
+            "tabId": "tab-md",
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "transport failure",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "cb4014f2aac3": {
+      "markdown": {
+        "tab-md": {
+          "baseVersion": "v1",
+          "content": "# a",
+          "editable": true,
+          "isDirty": true,
+          "localContent": "# b",
+          "saveError": "transport failure",
+          "saving": false,
+          "status": "ready"
+        }
+      }
+    },
+    "d4147861284a": {
+      "name": "markdown.saveTab#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "markdown.saveTab"
+        },
+        {
+          "name": "params",
+          "value": {
+            "baseVersion": "v1",
+            "content": "# b",
+            "tabId": "tab-md",
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": ""
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "db1a22f5197e": {
+      "name": "markdown.saveTab#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "markdown.saveTab"
+        },
+        {
+          "name": "params",
+          "value": {
+            "baseVersion": "v1",
+            "content": "# b",
+            "tabId": "tab-md",
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": "outer refused"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "dec169f24f21": {
+      "name": "markdown.saveTab#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "markdown.saveTab"
+        },
+        {
+          "name": "params",
+          "value": {
+            "baseVersion": "v1",
+            "content": "# b",
+            "tabId": "tab-md",
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "refused"
+          }
+        }
+      }
+    },
+    "e167231dab00": {
+      "name": "markdown.saveTab#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "markdown.saveTab"
+        },
+        {
+          "name": "params",
+          "value": {
+            "baseVersion": "v1",
+            "content": "# b",
+            "tabId": "tab-md",
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true
+        }
+      }
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    }
+  },
+  "recording": {
+    "scenario": "matrix-session.markdown-save-markdown.savetab-1",
+    "checkpoints": [
+      {
+        "id": "session-markdown-saved.normal:saved",
+        "observation": {
+          "sender": ["a06e17cbe383"],
+          "payloads": ["be35c536a20e"],
+          "settlements": {
+            "save": "eb79a9b3682a"
+          },
+          "state": "36de5fd645a3",
+          "effects": ["976e04874a1e"]
+        }
+      },
+      {
+        "id": "session-markdown-saved.result-absent:saved",
+        "observation": {
+          "sender": ["e167231dab00"],
+          "payloads": ["be35c536a20e"],
+          "settlements": {
+            "save": "eb79a9b3682a"
+          },
+          "state": "2853dae4d5f0",
+          "effects": []
+        }
+      },
+      {
+        "id": "session-markdown-saved.result-null:saved",
+        "observation": {
+          "sender": ["b7782c6305b8"],
+          "payloads": ["be35c536a20e"],
+          "settlements": {
+            "save": "eb79a9b3682a"
+          },
+          "state": "6808229bc6b9",
+          "effects": []
+        }
+      },
+      {
+        "id": "session-markdown-saved.inner-ok-missing:saved",
+        "observation": {
+          "sender": ["dec169f24f21"],
+          "payloads": ["be35c536a20e"],
+          "settlements": {
+            "save": "eb79a9b3682a"
+          },
+          "state": "20d209219e76",
+          "effects": ["976e04874a1e"]
+        }
+      },
+      {
+        "id": "session-markdown-saved.inner-false-string-error:saved",
+        "observation": {
+          "sender": ["2a1476024127"],
+          "payloads": ["be35c536a20e"],
+          "settlements": {
+            "save": "eb79a9b3682a"
+          },
+          "state": "20d209219e76",
+          "effects": ["976e04874a1e"]
+        }
+      },
+      {
+        "id": "session-markdown-saved.inner-false-object-error:saved",
+        "observation": {
+          "sender": ["3cab53956ec5"],
+          "payloads": ["be35c536a20e"],
+          "settlements": {
+            "save": "eb79a9b3682a"
+          },
+          "state": "20d209219e76",
+          "effects": ["976e04874a1e"]
+        }
+      },
+      {
+        "id": "session-markdown-saved.outer-refused:saved",
+        "observation": {
+          "sender": ["db1a22f5197e"],
+          "payloads": ["be35c536a20e"],
+          "settlements": {
+            "save": "eb79a9b3682a"
+          },
+          "state": "13f8c99bcf0e",
+          "effects": []
+        }
+      },
+      {
+        "id": "session-markdown-saved.outer-refused-no-message:saved",
+        "observation": {
+          "sender": ["d4147861284a"],
+          "payloads": ["be35c536a20e"],
+          "settlements": {
+            "save": "eb79a9b3682a"
+          },
+          "state": "ae15e570e49e",
+          "effects": []
+        }
+      },
+      {
+        "id": "session-markdown-saved.method-not-found:saved",
+        "observation": {
+          "sender": ["bd0650cd45fe"],
+          "payloads": ["be35c536a20e"],
+          "settlements": {
+            "save": "eb79a9b3682a"
+          },
+          "state": "c1e52e8ff7d9",
+          "effects": []
+        }
+      },
+      {
+        "id": "session-markdown-saved.transport-rejection:saved",
+        "observation": {
+          "sender": ["cb2fb2a37dbd"],
+          "payloads": ["be35c536a20e"],
+          "settlements": {
+            "save": "eb79a9b3682a"
+          },
+          "state": "cb4014f2aac3",
+          "effects": []
+        }
+      },
+      {
+        "id": "session-markdown-saved.transport-rejection-no-message:saved",
+        "observation": {
+          "sender": ["7afacfd8853f"],
+          "payloads": ["be35c536a20e"],
+          "settlements": {
+            "save": "eb79a9b3682a"
+          },
+          "state": "ae15e570e49e",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

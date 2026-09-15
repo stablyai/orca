@@ -1,0 +1,153 @@
+{
+  "operation": "session.diff-review-actions",
+  "family": "session.diff-review-actions",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
+  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
+  "recorderSha256": "64a741e034b13bca69c466f93f713aa5c0cf3fbb2bbb02f357003506b17fe353",
+  "adapterSha256": "fd443c85a6d2b0c1355e29f6f366e35d330a2033c7ddb90ab6713584ddda2f6f",
+  "scenarioSha256": "7099d7311b2046dde21a2750201718995c0869bc4f17fb7f3ce2b997ce0e6506",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "0229bd778610": {
+      "name": "terminal.send#2",
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.send"
+        },
+        {
+          "name": "params",
+          "value": {
+            "enter": true,
+            "terminal": "terminal-1",
+            "text": "You are reviewing the current worktree. Address the following mobile review notes.\n\nFile: src/app.ts\nLine: 4\nUser comment: \"needs a test\"\n\nAfter applying fixes:\n1. Summarize changed files.\n2. Run relevant tests.\n3. Tell me if anything remains risky."
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "pending",
+        "startedAt": 0
+      }
+    },
+    "09a1d177b71c": {
+      "name": "terminal.send#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-1\",\"text\":\"\\u0015\",\"enter\":false}}"
+    },
+    "0db3b6958ec7": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": "terminal-1"
+    },
+    "2fc890e4b748": {
+      "actionError": {
+        "$rpc": "null"
+      },
+      "busyAction": {
+        "$rpc": "null"
+      },
+      "screenState": {
+        "branchCompare": {
+          "$rpc": "null"
+        },
+        "comments": [
+          {
+            "body": "needs a test",
+            "createdAt": 0,
+            "filePath": "src/app.ts",
+            "id": "note-1",
+            "lineNumber": 4,
+            "side": "modified",
+            "worktreeId": "workspace-1"
+          }
+        ],
+        "kind": "ready",
+        "reviewState": {
+          "files": {},
+          "version": 1
+        },
+        "status": {
+          "entries": []
+        }
+      },
+      "sendSheet": {
+        "$rpc": "null"
+      }
+    },
+    "8e18c9a6a750": {
+      "name": "terminal.send#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "terminal.send"
+        },
+        {
+          "name": "params",
+          "value": {
+            "enter": false,
+            "terminal": "terminal-1",
+            "text": "\u0015"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "budgetSpansConnect": true,
+            "timeoutMs": 15000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "send": {
+              "accepted": true
+            }
+          }
+        }
+      }
+    },
+    "9270aeb7d9c6": {
+      "status": "pending",
+      "startedAt": 0
+    },
+    "c5d2e61b325b": {
+      "name": "terminal.send#2",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"terminal.send\",\"params\":{\"terminal\":\"terminal-1\",\"text\":\"You are reviewing the current worktree. Address the following mobile review notes.\\n\\nFile: src/app.ts\\nLine: 4\\nUser comment: \\\"needs a test\\\"\\n\\nAfter applying fixes:\\n1. Summarize changed files.\\n2. Run relevant tests.\\n3. Tell me if anything remains risky.\",\"enter\":true}}"
+    }
+  },
+  "recording": {
+    "scenario": "review-send-notes-heals-stale-input",
+    "checkpoints": [
+      {
+        "id": "healed",
+        "observation": {
+          "sender": ["8e18c9a6a750", "0229bd778610"],
+          "payloads": ["09a1d177b71c", "c5d2e61b325b"],
+          "settlements": {
+            "mark-stale": "0db3b6958ec7",
+            "send-notes": "9270aeb7d9c6"
+          },
+          "state": "2fc890e4b748",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

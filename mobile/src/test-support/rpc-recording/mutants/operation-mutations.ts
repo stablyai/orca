@@ -6,11 +6,21 @@ import type { OperationMutation } from '../operation-module-loader'
  * is what proves that family's `state()` projection observes the operation's actual output.
  */
 export const OPERATION_MUTATIONS = {
-  // Loses the generation comparison, so a stale workspace response poisons the search cache.
+  // Drops the delivery-unknown arm of a native-chat send, so an ack lost after the frame was
+  // written reads as a definite rejection and invites the user to send the same message twice.
+  'native-chat-send-delivery-unknown': {
+    file: 'mobile-native-chat-send.ts',
+    before: `    return isRpcDeliveryUnknown(error) || isLogicalClientCutoverError(error)
+      ? 'unknown'
+      : 'rejected'`,
+    after: `    return isLogicalClientCutoverError(error) ? 'unknown' : 'rejected'`
+  },
+  // Re-anchored where the operation migration moved the acceptance read; the defect it injects —
+  // a stale workspace response poisoning the search cache — is unchanged.
   race: {
     file: 'use-mobile-native-chat-file-search.ts',
-    before: '!response.ok || generationRef.current !== generation',
-    after: '!response.ok'
+    before: '!accepted.accepted || generationRef.current !== generation',
+    after: '!accepted.accepted'
   },
   // Accepts a null result envelope instead of rejecting it. The guard is repeated for three
   // mutations in this file; the anchor carries the message so only the recorded one is edited.
@@ -108,15 +118,13 @@ export const OPERATION_MUTATIONS = {
   },
   // Checks the sibling's refusal before the operation's own, so a correlated refusal reports the
   // sibling. Invisible to every scenario whose sibling succeeds or rejects at the transport.
+  // Re-anchored where the operation migration moved both reads; the reorder it injects — the
+  // detection refusal deciding the error before the settings read is interpreted — is unchanged.
   'new-tab-refusal-order': {
     file: 'mobile-new-tab-agent-loader.ts',
-    before: `  const readSettings = newTabSettingsRead.interpret(settingsResponse)
-  if (!detectedResponse.ok) {
-    throw new Error((detectedResponse as RpcFailure).error.message)
-  }`,
-    after: `  if (!detectedResponse.ok) {
-    throw new Error((detectedResponse as RpcFailure).error.message)
-  }
+    before: `  const readSettings = newTabSettingsRead.interpret(settingsResponse)`,
+    after: `  const detected0 = detectedAgents.interpret(detectedAgents.reply)
+  void detected0
   const readSettings = newTabSettingsRead.interpret(settingsResponse)`
   },
   // Publishes an unaccepted read, blanking settings a refusal should have left alone. Invisible

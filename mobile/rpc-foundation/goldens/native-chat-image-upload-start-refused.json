@@ -1,0 +1,92 @@
+{
+  "operation": "nativeChat.image-upload",
+  "family": "nativeChat.image-upload",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
+  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
+  "recorderSha256": "64a741e034b13bca69c466f93f713aa5c0cf3fbb2bbb02f357003506b17fe353",
+  "adapterSha256": "16779b663f4faec8cbccdb42efd7b568a2912845b161f8a4827754687eb4235c",
+  "scenarioSha256": "09fd9bf97a4da7313e24f8c333b66c7c1af927bbea0a6d9fef9803856a608c78",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "520b3fe0fb07": {
+      "name": "clipboard.startImageUpload#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"clipboard.startImageUpload\",\"params\":{\"expectedBase64Length\":32,\"connectionId\":\"connection-1\"}}"
+    },
+    "5f71b4d3d25c": {
+      "name": "upload-start",
+      "value": {},
+      "sent": 0
+    },
+    "765ab192e1a5": {
+      "status": "rejected",
+      "startedAt": 0,
+      "settledAt": 0,
+      "error": {
+        "category": "Error",
+        "message": "Image is too large",
+        "isRpcDeliveryUnknown": false
+      }
+    },
+    "b2b1a4389f58": {
+      "failure": "Image is too large",
+      "uploaded": "unuploaded"
+    },
+    "ec6fd7f06461": {
+      "name": "clipboard.startImageUpload#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "clipboard.startImageUpload"
+        },
+        {
+          "name": "params",
+          "value": {
+            "connectionId": "connection-1",
+            "expectedBase64Length": 32
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "too_large",
+            "message": "Image is too large"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    }
+  },
+  "recording": {
+    "scenario": "native-chat-image-upload-start-refused",
+    "checkpoints": [
+      {
+        "id": "refused",
+        "observation": {
+          "sender": ["ec6fd7f06461"],
+          "payloads": ["520b3fe0fb07"],
+          "settlements": {
+            "normal": "765ab192e1a5"
+          },
+          "state": "b2b1a4389f58",
+          "effects": ["5f71b4d3d25c"]
+        }
+      }
+    ]
+  }
+}

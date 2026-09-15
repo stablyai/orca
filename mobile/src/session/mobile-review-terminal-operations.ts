@@ -4,6 +4,7 @@ import { rpcReadUnchecked } from '../transport/rpc-reader-payload'
 import {
   readMobileReviewCreatedTerminal,
   readMobileReviewTerminalSendAccepted,
+  readMobileReviewTerminalTabs,
   type MobileReviewTerminalTab
 } from './mobile-diff-review-rpc'
 
@@ -49,5 +50,21 @@ export const reviewTerminalSendRun = bindDeferredRpcOperation(
     acceptance: 'require-result-or-throw-message',
     barrier: 'after-caller-barrier',
     read: terminalSendAcceptedReader
+  })
+)
+
+/**
+ * The agent terminals the send sheet lists. Third reader on `session.tabs.list`: the reveal poller
+ * projects file tabs and answers null for anything else, and the reconciliation controller hands
+ * its owner the snapshot whole so its own type parameter can name it. This one keeps only the
+ * terminal tabs the sheet can drop a prompt into, which both of those drop.
+ */
+export const reviewTerminalListRead = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'session.review-terminal-list',
+    method: 'session.tabs.list',
+    acceptance: 'require-result-or-throw-message',
+    barrier: 'after-caller-barrier',
+    read: (raw) => rpcReadUnchecked('review-terminal-tabs', readMobileReviewTerminalTabs(raw))
   })
 )

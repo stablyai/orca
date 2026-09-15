@@ -1,6 +1,12 @@
-import type { RpcClient } from '../transport/rpc-client'
 import { isLogicalClientCutoverError } from '../transport/stable-logical-rpc-client'
-import type { RpcFailure, RpcSuccess } from '../transport/types'
+import {
+  clipboardImageSaveAsTempFile,
+  clipboardImageUploadAbort,
+  clipboardImageUploadAppend,
+  clipboardImageUploadCommit,
+  clipboardImageUploadStart,
+  type MobileClipboardImageRpcSender
+} from './mobile-clipboard-image-operations'
 
 export const MOBILE_CLIPBOARD_IMAGE_MAX_BASE64_CHARS = 24 * 1024 * 1024
 export const MOBILE_CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS = 512 * 1024
@@ -94,15 +100,8 @@ export async function prepareMobileClipboardImageBase64(
   return data
 }
 
-function assertSuccess<T>(response: RpcSuccess | RpcFailure): T {
-  if (!response.ok) {
-    throw new Error(response.error.message)
-  }
-  return response.result as T
-}
-
 export async function saveMobileClipboardImageAsTempFile(
-  client: Pick<RpcClient, 'sendRequest'>,
+  client: MobileClipboardImageRpcSender,
   imageData: string,
   args?: { connectionId?: string | null }
 ): Promise<string> {
@@ -124,27 +123,35 @@ export async function saveMobileClipboardImageAsTempFile(
 }
 
 async function uploadMobileClipboardImageTransaction(
-  client: Pick<RpcClient, 'sendRequest'>,
+  client: MobileClipboardImageRpcSender,
   contentBase64: string,
   connectionId: string | null
 ): Promise<string> {
-  const startResponse = await client.sendRequest('clipboard.startImageUpload', {
+  const startResponse = await clipboardImageUploadStart.request(client, {
     expectedBase64Length: contentBase64.length,
     connectionId
   })
 
+  // Why the raw refusal: a host too old to offer a slot answers with a code, and a small enough
+  // image then goes over the single-frame method — no acceptance policy carries the code.
   if (!startResponse.ok) {
     if (
       startResponse.error.code === 'method_not_found' &&
       contentBase64.length <= MOBILE_CLIPBOARD_IMAGE_SINGLE_FRAME_FALLBACK_BASE64_CHARS
     ) {
-      return assertSuccess<string>(
-        await client.sendRequest('clipboard.saveImageAsTempFile', { contentBase64, connectionId })
-      )
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
+      return clipboardImageSaveAsTempFile.interpret(
+        await clipboardImageSaveAsTempFile.request(client, { contentBase64, connectionId })
+      ) as string
     }
     throw new Error(startResponse.error.message)
   }
 
+  // Why the raw result rather than the interpretation: a success carrying no result throws a
+  // TypeError here, and V8 puts the destructured expression's source text in its message — which
+  // the composer then shows. Reading the slot off the accepted payload would rewrite that sentence
+  // for every user who hits a malformed reply, which is the one change this migration must not make.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the same cast main made, kept so the thrown message is the same one.
   const { uploadId } = startResponse.result as { uploadId: string }
   try {
     for (
@@ -152,8 +159,8 @@ async function uploadMobileClipboardImageTransaction(
       offset < contentBase64.length;
       offset += MOBILE_CLIPBOARD_IMAGE_UPLOAD_CHUNK_BASE64_CHARS
     ) {
-      assertSuccess(
-        await client.sendRequest('clipboard.appendImageUploadChunk', {
+      clipboardImageUploadAppend.interpret(
+        await clipboardImageUploadAppend.request(client, {
           uploadId,
           offset,
           contentBase64: contentBase64.slice(
@@ -163,13 +170,14 @@ async function uploadMobileClipboardImageTransaction(
         })
       )
     }
-    return assertSuccess<string>(
-      await client.sendRequest('clipboard.commitImageUpload', { uploadId })
-    )
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
+    return clipboardImageUploadCommit.interpret(
+      await clipboardImageUploadCommit.request(client, { uploadId })
+    ) as string
   } catch (error) {
     // Why: failed mobile image sends create server-side upload state; abort so
     // the bounded upload slot is released immediately instead of waiting for TTL.
-    await client.sendRequest('clipboard.abortImageUpload', { uploadId }).catch(() => {})
+    await clipboardImageUploadAbort.request(client, { uploadId }).catch(() => {})
     throw error
   }
 }

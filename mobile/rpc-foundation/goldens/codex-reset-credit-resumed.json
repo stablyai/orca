@@ -5,7 +5,7 @@
   "runnerVersion": 1,
   "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
   "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
-  "recorderSha256": "0ddc0dc472e2efbe58004c6dfaf5360e368fed321e40dfe15c11a9ad1817dea4",
+  "recorderSha256": "64a741e034b13bca69c466f93f713aa5c0cf3fbb2bbb02f357003506b17fe353",
   "adapterSha256": "76b53dea504a688493843e23e8e7d052fc196f559bb1e2579d0fd38bf3156d0e",
   "scenarioSha256": "d85a4031b701e563941afcdd7375cf78a1ee1487a0dab722f8516c2bc8d3dcee",
   "platform": "darwin",

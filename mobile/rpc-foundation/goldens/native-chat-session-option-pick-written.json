@@ -1,0 +1,90 @@
+{
+  "operation": "nativeChat.session-option-pick",
+  "family": "nativeChat.session-option-pick",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
+  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
+  "recorderSha256": "64a741e034b13bca69c466f93f713aa5c0cf3fbb2bbb02f357003506b17fe353",
+  "adapterSha256": "b98a3ca3818678b88cf629bc4635300a103637126a136f025a1600dc16f08008",
+  "scenarioSha256": "a180b7ae1f84bc69d7819c7c17b1e2915cb380e8ea8543d68fe6777feb90d0bd",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "0aa1124bf746": {
+      "settled": "settled"
+    },
+    "738c95d85c66": {
+      "name": "settings.mutateNativeChatSessionOptions#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "settings.mutateNativeChatSessionOptions"
+        },
+        {
+          "name": "params",
+          "value": {
+            "agent": "claude",
+            "picks": [
+              {
+                "modelId": "opus",
+                "optionId": "model",
+                "value": "opus"
+              }
+            ],
+            "type": "apply-picks"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "applied": true
+          }
+        }
+      }
+    },
+    "9c0980cfe789": {
+      "name": "settings.mutateNativeChatSessionOptions#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"settings.mutateNativeChatSessionOptions\",\"params\":{\"type\":\"apply-picks\",\"agent\":\"claude\",\"picks\":[{\"modelId\":\"opus\",\"optionId\":\"model\",\"value\":\"opus\"}]}}"
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    }
+  },
+  "recording": {
+    "scenario": "native-chat-session-option-pick-written",
+    "checkpoints": [
+      {
+        "id": "written",
+        "observation": {
+          "sender": ["738c95d85c66"],
+          "payloads": ["9c0980cfe789"],
+          "settlements": {
+            "pick": "eb79a9b3682a"
+          },
+          "state": "0aa1124bf746",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

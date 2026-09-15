@@ -1,0 +1,142 @@
+{
+  "operation": "files.terminal-path-tap",
+  "family": "files.terminal-path-tap",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
+  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
+  "recorderSha256": "64a741e034b13bca69c466f93f713aa5c0cf3fbb2bbb02f357003506b17fe353",
+  "adapterSha256": "e20a76ecd5e820dc4797fb25307810af68b5ced996dba2b9599464a21b5cbe1b",
+  "scenarioSha256": "a927e85c3ae58cd3b017955fe28aeffec6a5471b51d782f116639a3aaf4af77d",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "18cda90904c3": {
+      "name": "files.resolveTerminalPath#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "files.resolveTerminalPath"
+        },
+        {
+          "name": "params",
+          "value": {
+            "crossWorkspace": true,
+            "cwd": "/repo",
+            "pathText": "src/app.ts",
+            "terminal": "terminal-1",
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 10000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "exists": true,
+            "isDirectory": false,
+            "openTarget": {
+              "absolutePath": "/repo/src/app.ts",
+              "kind": "worktree-file",
+              "provider": "ssh",
+              "relativePath": "src/app.ts"
+            },
+            "relativePath": "src/app.ts"
+          }
+        }
+      }
+    },
+    "1d18c66a85d5": {
+      "name": "open-feedback",
+      "value": {},
+      "sent": 1
+    },
+    "9a73d7a9fdc6": {
+      "name": "files.open#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "files.open"
+        },
+        {
+          "name": "params",
+          "value": {
+            "relativePath": "src/app.ts",
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 15000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "file_locked",
+            "message": "File is locked"
+          },
+          "id": "frame-2",
+          "ok": false
+        }
+      }
+    },
+    "c7ce9c8dc60e": {
+      "activeSessionTabId": "tab-source",
+      "failed": 1,
+      "switched": {
+        "$rpc": "null"
+      }
+    },
+    "d88940bfb593": {
+      "name": "files.resolveTerminalPath#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"files.resolveTerminalPath\",\"params\":{\"worktree\":\"id:workspace-1\",\"pathText\":\"src/app.ts\",\"crossWorkspace\":true,\"terminal\":\"terminal-1\",\"cwd\":\"/repo\"}}"
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    },
+    "f334b291fecc": {
+      "name": "files.open#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"files.open\",\"params\":{\"worktree\":\"id:workspace-1\",\"relativePath\":\"src/app.ts\"}}"
+    }
+  },
+  "recording": {
+    "scenario": "file-tap-open-refused",
+    "checkpoints": [
+      {
+        "id": "open-refused",
+        "observation": {
+          "sender": ["18cda90904c3", "9a73d7a9fdc6"],
+          "payloads": ["d88940bfb593", "f334b291fecc"],
+          "settlements": {
+            "tap": "eb79a9b3682a"
+          },
+          "state": "c7ce9c8dc60e",
+          "effects": ["1d18c66a85d5"]
+        }
+      }
+    ]
+  }
+}

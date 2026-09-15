@@ -1,0 +1,260 @@
+{
+  "operation": "session.content-create",
+  "family": "session.content-create",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
+  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
+  "recorderSha256": "64a741e034b13bca69c466f93f713aa5c0cf3fbb2bbb02f357003506b17fe353",
+  "adapterSha256": "562c2f4ab669e774dd7045ecd9518e483845433fef6034688090f3b056df2815",
+  "scenarioSha256": "be8d4b4be07b0ee5988471b26813d7d0d2a97fbd789b52e7ce00dd09a2e9d75c",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "13a89fc89dab": {
+      "name": "files.createFile#2",
+      "json": "{\"id\":\"frame-4\",\"deviceToken\":\"recording-device\",\"method\":\"files.createFile\",\"params\":{\"worktree\":\"id:workspace-1\",\"relativePath\":\"untitled-2.md\",\"expectedExecutionHostId\":\"local\"}}"
+    },
+    "1516e9dc6c00": {
+      "name": "files.createFile#2",
+      "args": [
+        {
+          "name": "method",
+          "value": "files.createFile"
+        },
+        {
+          "name": "params",
+          "value": {
+            "expectedExecutionHostId": "local",
+            "relativePath": "untitled-2.md",
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 15000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-4",
+          "ok": true,
+          "result": {
+            "created": true
+          }
+        }
+      }
+    },
+    "1ae76b6c393a": {
+      "name": "files.createFile#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "files.createFile"
+        },
+        {
+          "name": "params",
+          "value": {
+            "expectedExecutionHostId": "local",
+            "relativePath": "untitled.md",
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 15000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "file_exists",
+            "message": "File already exists"
+          },
+          "id": "frame-3",
+          "ok": false
+        }
+      }
+    },
+    "1e5b32902af7": {
+      "name": "status.get#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"status.get\"}"
+    },
+    "28f2fcd8bdba": {
+      "name": "files.open#1",
+      "json": "{\"id\":\"frame-5\",\"deviceToken\":\"recording-device\",\"method\":\"files.open\",\"params\":{\"worktree\":\"id:workspace-1\",\"relativePath\":\"untitled-2.md\"}}"
+    },
+    "8bdc2aec524d": {
+      "name": "worktree.show#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "worktree.show"
+        },
+        {
+          "name": "params",
+          "value": {
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 15000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-2",
+          "ok": true,
+          "result": {
+            "worktree": {
+              "hostId": "local"
+            }
+          }
+        }
+      }
+    },
+    "9199aee60486": {
+      "name": "worktree.show#1",
+      "json": "{\"id\":\"frame-2\",\"deviceToken\":\"recording-device\",\"method\":\"worktree.show\",\"params\":{\"worktree\":\"id:workspace-1\"}}"
+    },
+    "a56852d6836b": {
+      "name": "status.get#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "status.get"
+        },
+        {
+          "name": "params",
+          "value": {
+            "$rpc": "undefined"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 15000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "capabilities": ["files.mutation-ownership.v1"]
+          }
+        }
+      }
+    },
+    "c9a43ed104a1": {
+      "name": "fetch-session-tabs",
+      "value": {},
+      "sent": 5
+    },
+    "d574cdcd4bef": {
+      "createError": "",
+      "creatingBrowser": false,
+      "creatingMarkdown": false,
+      "pendingBrowserFocusPageId": {
+        "$rpc": "null"
+      }
+    },
+    "e344f453f8a0": {
+      "name": "files.createFile#1",
+      "json": "{\"id\":\"frame-3\",\"deviceToken\":\"recording-device\",\"method\":\"files.createFile\",\"params\":{\"worktree\":\"id:workspace-1\",\"relativePath\":\"untitled.md\",\"expectedExecutionHostId\":\"local\"}}"
+    },
+    "e841975c6b30": {
+      "name": "files.open#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "files.open"
+        },
+        {
+          "name": "params",
+          "value": {
+            "relativePath": "untitled-2.md",
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "timeoutMs": 15000
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-5",
+          "ok": true,
+          "result": {
+            "opened": true
+          }
+        }
+      }
+    },
+    "eb79a9b3682a": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "$rpc": "undefined"
+      }
+    }
+  },
+  "recording": {
+    "scenario": "session-create-markdown-name-collision",
+    "checkpoints": [
+      {
+        "id": "created-second",
+        "observation": {
+          "sender": [
+            "a56852d6836b",
+            "8bdc2aec524d",
+            "1ae76b6c393a",
+            "1516e9dc6c00",
+            "e841975c6b30"
+          ],
+          "payloads": [
+            "1e5b32902af7",
+            "9199aee60486",
+            "e344f453f8a0",
+            "13a89fc89dab",
+            "28f2fcd8bdba"
+          ],
+          "settlements": {
+            "markdown": "eb79a9b3682a"
+          },
+          "state": "d574cdcd4bef",
+          "effects": ["c9a43ed104a1"]
+        }
+      }
+    ]
+  }
+}

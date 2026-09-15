@@ -1,0 +1,580 @@
+{
+  "operation": "agentSession.structured-launch",
+  "family": "agentSession.structured-launch",
+  "namedDeltas": [],
+  "runnerVersion": 1,
+  "baseline": "e7206f62a827f4fe0a2badf3eecd2167b8ac4285",
+  "lockfileSha256": "788c1234b38a61fc882fca292341fce6690deee9cc6695673b0575cf2c4cf571",
+  "recorderSha256": "64a741e034b13bca69c466f93f713aa5c0cf3fbb2bbb02f357003506b17fe353",
+  "adapterSha256": "d340697a64a198066b1037a550afb9a0de7507246a545901d2fc0a23407f38d6",
+  "scenarioSha256": "211e3780edc0ff5fa0529c0de0e8bc2fd746a19c8a6b4e49900f6c4e56d53f7c",
+  "platform": "darwin",
+  "scenarioVersion": 1,
+  "projectionVersion": 2,
+  "goldenFormatVersion": 5,
+  "values": {
+    "03bae1ffdae6": {
+      "name": "agentSession.createSupport#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "agentSession.createSupport"
+        },
+        {
+          "name": "params",
+          "value": {
+            "agent": "claude",
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": {
+              "message": "inner refused"
+            },
+            "ok": false
+          }
+        }
+      }
+    },
+    "04f63acf891a": {
+      "launched": {
+        "kind": "unsupported",
+        "reason": {
+          "$rpc": "undefined"
+        }
+      }
+    },
+    "0972c78c3d52": {
+      "name": "agentSession.createSupport#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "agentSession.createSupport"
+        },
+        {
+          "name": "params",
+          "value": {
+            "agent": "claude",
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": ""
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "2c227fd1941f": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "kind": "unsupported"
+      }
+    },
+    "4a8f44bda967": {
+      "name": "agentSession.createSupport#1",
+      "json": "{\"id\":\"frame-1\",\"deviceToken\":\"recording-device\",\"method\":\"agentSession.createSupport\",\"params\":{\"worktree\":\"id:workspace-1\",\"agent\":\"claude\"}}"
+    },
+    "551313dcc738": {
+      "launched": {
+        "kind": "unsupported",
+        "reason": "remote"
+      }
+    },
+    "70998d5a1f56": {
+      "name": "agentSession.createSupport#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "agentSession.createSupport"
+        },
+        {
+          "name": "params",
+          "value": {
+            "agent": "claude",
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "$rpc": "null"
+          }
+        }
+      }
+    },
+    "99caa4276b06": {
+      "name": "agentSession.createSupport#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "agentSession.createSupport"
+        },
+        {
+          "name": "params",
+          "value": {
+            "agent": "claude",
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "method_not_found",
+            "message": "Unknown method"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    },
+    "add0a607a4c6": {
+      "name": "agentSession.createSupport#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "agentSession.createSupport"
+        },
+        {
+          "name": "params",
+          "value": {
+            "agent": "claude",
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "refused"
+          }
+        }
+      }
+    },
+    "af6b02a86254": {
+      "name": "agentSession.createSupport#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "agentSession.createSupport"
+        },
+        {
+          "name": "params",
+          "value": {
+            "agent": "claude",
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "error": "inner refused",
+            "ok": false
+          }
+        }
+      }
+    },
+    "b5992e9c9c01": {
+      "name": "agentSession.createSupport#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "agentSession.createSupport"
+        },
+        {
+          "name": "params",
+          "value": {
+            "agent": "claude",
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true
+        }
+      }
+    },
+    "bef30d717da6": {
+      "name": "agentSession.createSupport#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "agentSession.createSupport"
+        },
+        {
+          "name": "params",
+          "value": {
+            "agent": "claude",
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "id": "frame-1",
+          "ok": true,
+          "result": {
+            "reason": "remote",
+            "supported": false
+          }
+        }
+      }
+    },
+    "c0c67a317e23": {
+      "name": "agentSession.createSupport#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "agentSession.createSupport"
+        },
+        {
+          "name": "params",
+          "value": {
+            "agent": "claude",
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "dd51c5566f19": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "kind": "unsupported",
+        "reason": "remote"
+      }
+    },
+    "e4a3b2c6a246": {
+      "name": "agentSession.createSupport#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "agentSession.createSupport"
+        },
+        {
+          "name": "params",
+          "value": {
+            "agent": "claude",
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "rejected",
+        "startedAt": 0,
+        "settledAt": 0,
+        "error": {
+          "category": "Error",
+          "message": "transport failure",
+          "isRpcDeliveryUnknown": true
+        }
+      }
+    },
+    "f0bb9de9827c": {
+      "status": "fulfilled",
+      "startedAt": 0,
+      "settledAt": 0,
+      "value": {
+        "kind": "unsupported",
+        "reason": {
+          "$rpc": "undefined"
+        }
+      }
+    },
+    "f40adca316f9": {
+      "launched": {
+        "kind": "unsupported"
+      }
+    },
+    "f698ccf3773d": {
+      "name": "agentSession.createSupport#1",
+      "args": [
+        {
+          "name": "method",
+          "value": "agentSession.createSupport"
+        },
+        {
+          "name": "params",
+          "value": {
+            "agent": "claude",
+            "worktree": "id:workspace-1"
+          }
+        },
+        {
+          "name": "options",
+          "value": {
+            "$rpc": "absent"
+          }
+        }
+      ],
+      "settlement": {
+        "status": "fulfilled",
+        "startedAt": 0,
+        "settledAt": 0,
+        "value": {
+          "error": {
+            "code": "refused",
+            "message": "outer refused"
+          },
+          "id": "frame-1",
+          "ok": false
+        }
+      }
+    }
+  },
+  "recording": {
+    "scenario": "matrix-agentsession.structured-launch-agentsession.createsupport-1",
+    "checkpoints": [
+      {
+        "id": "structured-launch-unsupported.normal:unsupported",
+        "observation": {
+          "sender": ["bef30d717da6"],
+          "payloads": ["4a8f44bda967"],
+          "settlements": {
+            "claude": "dd51c5566f19"
+          },
+          "state": "551313dcc738",
+          "effects": []
+        }
+      },
+      {
+        "id": "structured-launch-unsupported.result-absent:unsupported",
+        "observation": {
+          "sender": ["b5992e9c9c01"],
+          "payloads": ["4a8f44bda967"],
+          "settlements": {
+            "claude": "f0bb9de9827c"
+          },
+          "state": "04f63acf891a",
+          "effects": []
+        }
+      },
+      {
+        "id": "structured-launch-unsupported.result-null:unsupported",
+        "observation": {
+          "sender": ["70998d5a1f56"],
+          "payloads": ["4a8f44bda967"],
+          "settlements": {
+            "claude": "f0bb9de9827c"
+          },
+          "state": "04f63acf891a",
+          "effects": []
+        }
+      },
+      {
+        "id": "structured-launch-unsupported.inner-ok-missing:unsupported",
+        "observation": {
+          "sender": ["add0a607a4c6"],
+          "payloads": ["4a8f44bda967"],
+          "settlements": {
+            "claude": "f0bb9de9827c"
+          },
+          "state": "04f63acf891a",
+          "effects": []
+        }
+      },
+      {
+        "id": "structured-launch-unsupported.inner-false-string-error:unsupported",
+        "observation": {
+          "sender": ["af6b02a86254"],
+          "payloads": ["4a8f44bda967"],
+          "settlements": {
+            "claude": "f0bb9de9827c"
+          },
+          "state": "04f63acf891a",
+          "effects": []
+        }
+      },
+      {
+        "id": "structured-launch-unsupported.inner-false-object-error:unsupported",
+        "observation": {
+          "sender": ["03bae1ffdae6"],
+          "payloads": ["4a8f44bda967"],
+          "settlements": {
+            "claude": "f0bb9de9827c"
+          },
+          "state": "04f63acf891a",
+          "effects": []
+        }
+      },
+      {
+        "id": "structured-launch-unsupported.outer-refused:unsupported",
+        "observation": {
+          "sender": ["f698ccf3773d"],
+          "payloads": ["4a8f44bda967"],
+          "settlements": {
+            "claude": "2c227fd1941f"
+          },
+          "state": "f40adca316f9",
+          "effects": []
+        }
+      },
+      {
+        "id": "structured-launch-unsupported.outer-refused-no-message:unsupported",
+        "observation": {
+          "sender": ["0972c78c3d52"],
+          "payloads": ["4a8f44bda967"],
+          "settlements": {
+            "claude": "2c227fd1941f"
+          },
+          "state": "f40adca316f9",
+          "effects": []
+        }
+      },
+      {
+        "id": "structured-launch-unsupported.method-not-found:unsupported",
+        "observation": {
+          "sender": ["99caa4276b06"],
+          "payloads": ["4a8f44bda967"],
+          "settlements": {
+            "claude": "2c227fd1941f"
+          },
+          "state": "f40adca316f9",
+          "effects": []
+        }
+      },
+      {
+        "id": "structured-launch-unsupported.transport-rejection:unsupported",
+        "observation": {
+          "sender": ["e4a3b2c6a246"],
+          "payloads": ["4a8f44bda967"],
+          "settlements": {
+            "claude": "2c227fd1941f"
+          },
+          "state": "f40adca316f9",
+          "effects": []
+        }
+      },
+      {
+        "id": "structured-launch-unsupported.transport-rejection-no-message:unsupported",
+        "observation": {
+          "sender": ["c0c67a317e23"],
+          "payloads": ["4a8f44bda967"],
+          "settlements": {
+            "claude": "2c227fd1941f"
+          },
+          "state": "f40adca316f9",
+          "effects": []
+        }
+      }
+    ]
+  }
+}

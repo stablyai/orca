@@ -37,7 +37,31 @@ import { reactNativeScreenMembers, screenNativeSubstitutes } from './screen-nati
  * audio is produced — because every send the dictation and terminal hooks make is driven through
  * the operation's own API instead. A recording that needed a native event would have to say so by
  * adding an emitter here.
+ *
+ * `expo-haptics` is the only one whose real members are already fire-and-forget: every caller in
+ * `platform/haptics.ts` is `void …catch(() => {})`, so resolving is what the device does with the
+ * reply too. Only the iOS members are listed because `Platform.OS` above is pinned to `ios` and
+ * the Android branch is never evaluated; adding a second platform would have to add them.
+ *
+ * `expo-clipboard` is a pasteboard the session screens read and write, so it is a fixture rather
+ * than a no-op: it starts empty and remembers what a recorded action put there. It is per-recording,
+ * so nothing leaks between scenarios. Unlike the declared entries it needs no declaration, because
+ * every byte it can return was written inside the same recording.
  */
+/** The system pasteboard as a per-recording cell: empty at mount, readable after a write. */
+function pasteboardNativeStore(): unknown {
+  let text: string | null = null
+  return partialNativeModule('expo-clipboard', {
+    getStringAsync: () => Promise.resolve(text ?? ''),
+    hasStringAsync: () => Promise.resolve(text !== null),
+    hasImageAsync: () => Promise.resolve(false),
+    setStringAsync: (value: string) => {
+      text = value
+      return Promise.resolve(true)
+    }
+  })
+}
+
 export function nativeMountingSubstitutes(): Map<string, unknown> {
   return new Map<string, unknown>([
     ['react', React],
@@ -59,6 +83,8 @@ export function nativeMountingSubstitutes(): Map<string, unknown> {
       partialNativeModule('react-native', {
         Platform: { OS: 'ios' },
         AppState: { currentState: 'active', addEventListener: silentNativeSubscription },
+        BackHandler: { addEventListener: silentNativeSubscription },
+        Keyboard: { dismiss: () => {} },
         useWindowDimensions: () => ({ width: 390, height: 844 }),
         ...reactNativeScreenMembers()
       })
@@ -73,6 +99,17 @@ export function nativeMountingSubstitutes(): Map<string, unknown> {
         toggleRecording: () => true
       })
     ],
+    [
+      'expo-haptics',
+      partialNativeModule('expo-haptics', {
+        impactAsync: () => Promise.resolve(),
+        notificationAsync: () => Promise.resolve(),
+        selectionAsync: () => Promise.resolve(),
+        ImpactFeedbackStyle: { Light: 'light', Medium: 'medium' },
+        NotificationFeedbackType: { Error: 'error', Success: 'success' }
+      })
+    ],
+    ['expo-clipboard', pasteboardNativeStore()],
     [
       'expo-keep-awake',
       partialNativeModule('expo-keep-awake', {
