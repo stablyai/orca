@@ -1,4 +1,5 @@
 import type {
+  JiraAuthType,
   JiraComment,
   JiraConnectionStatus,
   JiraCreateField,
@@ -21,7 +22,7 @@ export type JiraApi = {
     siteUrl: string
     email: string
     apiToken: string
-    authType?: 'cloud' | 'server'
+    authType?: JiraAuthType
   }) => Promise<{ ok: true; viewer: JiraViewer } | { ok: false; error: string }>
   disconnect: (args?: { siteId?: string }) => Promise<void>
   selectSite: (args: { siteId: JiraSiteSelection }) => Promise<JiraConnectionStatus>

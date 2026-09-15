@@ -1,5 +1,6 @@
 import { ipcMain } from 'electron'
 import { connect, disconnect, getStatus, selectSite, testConnection } from '../jira/client'
+import { normalizeJiraAuthType } from '../../shared/jira-auth-type'
 import { _resetPreflightCache } from './preflight'
 import { JiraCancellableRequests } from './jira-cancellable-requests'
 import {
@@ -99,7 +100,7 @@ export function registerJiraHandlers(): void {
       siteUrl: args.siteUrl,
       email: args.email,
       apiToken: args.apiToken,
-      authType: args.authType === 'server' ? 'server' : 'cloud'
+      authType: normalizeJiraAuthType(args.authType)
     })
     if (result.ok) {
       _resetPreflightCache()

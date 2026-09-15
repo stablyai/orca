@@ -16,8 +16,9 @@ Jira sits next to GitHub and Linear in the task drawer. Browse Jira issues, upda
 **Cloud**
 
 - **Jira Cloud site URL** — e.g. `https://example.atlassian.net`.
-- **Atlassian email** — the address on your Atlassian account.
-- **Atlassian API token** — create one at [id.atlassian.com → Security → API tokens](https://id.atlassian.com/manage-profile/security/api-tokens).
+- **Atlassian email** and **API token** — create the token at [id.atlassian.com → Security → API tokens](https://id.atlassian.com/manage-profile/security/api-tokens), with or without scopes.
+
+A token created with scopes only works on the `api.atlassian.com` gateway. When the site rejects the token, Orca resolves the site's cloud id and retries through `https://api.atlassian.com/ex/jira/<cloudId>`, then keeps using the gateway for that site; the site URL is still used for browse links. A scoped token needs `read:jira-work`, `write:jira-work`, and `read:jira-user`; to keep board column order, also grant `read:board-scope:jira-software`, `read:board-scope.admin:jira-software`, and `read:project:jira`, otherwise statuses sort alphabetically. The connect dialog lists every scope with a copy button.
 
 **Self-hosted**
 

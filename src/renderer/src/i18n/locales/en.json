@@ -11808,13 +11808,13 @@
               "apiTokenPlaceholder": "Atlassian API token",
               "baseUrl": "API base URL (optional)",
               "baseUrlPlaceholder": "https://api.bitbucket.org/2.0",
-              "tokenHint": "Repository, project, and workspace access tokens are created from the matching Bitbucket settings page and need read access to pull requests.",
-              "basicHint": "Create an Atlassian API token for your account, then pair it with the email address that owns it.",
               "docsLink": "Bitbucket API token docs",
               "storageNote": "Stored on this machine with encrypted storage when the OS keychain is available. ORCA_BITBUCKET_* environment variables always take precedence over what you save here.",
               "cancel": "Cancel",
               "verifying": "Verifying...",
-              "connect": "Connect"
+              "connect": "Connect",
+              "basicHint": "Create an Atlassian API token for your account, then pair it with the email address that owns it.",
+              "tokenHint": "Repository, project, and workspace access tokens are created from the matching Bitbucket settings page and need read access to pull requests."
             }
           },
           "integration": {
@@ -11833,6 +11833,12 @@
               "disconnectFailed": "Could not remove the saved Bitbucket credential.",
               "statusLoadFailed": "Could not check for a saved Bitbucket credential.",
               "replaceCredentials": "Add or replace credentials"
+            }
+          },
+          "token": {
+            "scopes": {
+              "read": "Verify and read",
+              "write": "Create pull requests"
             }
           }
         },
@@ -16385,6 +16391,12 @@
             "c50abbf340": "Jira account password",
             "d8737db691": "Use your Jira Server or Data Center account username and password."
           }
+        },
+        "token": {
+          "scopes": {
+            "required": "Required",
+            "boardOptional": "Board column order (optional)"
+          }
         }
       },
       "rightSidebar": {
@@ -16941,6 +16953,20 @@
         "3d8e5f1b9c": "Share skills behind an unlisted link and install them on any machine you use.",
         "7e1a9c4d2f": "Signing in…",
         "c5b3e8a17d": "Sign in to Orca"
+      },
+      "atlassian": {
+        "token": {
+          "scope": {
+            "list": {
+              "intro": "If you create the token with scopes, grant these:",
+              "copyAll": "Copy all",
+              "copied": "Copied",
+              "copyGroup": "Copy all {{value0}} scopes",
+              "copyScope": "Copy {{value0}}",
+              "copyFailed": "Failed to copy scopes."
+            }
+          }
+        }
       }
     },
     "i18n": {
