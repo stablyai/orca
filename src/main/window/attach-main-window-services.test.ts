@@ -1,3 +1,6 @@
+vi.mock('../ephemeral-vm-runtime-ssh-restore', () => ({
+  restoreRunningRuntimeOwnedSshTargets: async () => undefined
+}))
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Store } from '../persistence'
 
@@ -54,7 +57,7 @@ const {
 }))
 
 vi.mock('electron', () => ({
-  app: {},
+  app: { getPath: () => '/tmp/orca-test' },
   clipboard: {},
   systemPreferences: {
     askForMediaAccess: systemPreferencesAskForMediaAccessMock,

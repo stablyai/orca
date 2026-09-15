@@ -1,4 +1,5 @@
-import { ipcMain } from 'electron'
+import { app, ipcMain } from 'electron'
+import { restoreRunningRuntimeOwnedSshTargets } from '../ephemeral-vm-runtime-ssh-restore'
 import type { BrowserWindow, IpcMainInvokeEvent } from 'electron'
 import type { Store } from '../persistence'
 import {
@@ -46,6 +47,10 @@ let activeAppReloadHandlerToken: number | null = null
 let tccPromptHandlerTokenCounter = 0
 let activeTccPromptHandlerToken: number | null = null
 
+/**
+ * Attach IPC, lifecycle, and permission services to the main window.
+ * Start VM transport restoration after SSH registration without blocking window setup.
+ */
 export function attachMainWindowServices(
   mainWindow: BrowserWindow,
   store: Store,
@@ -119,6 +124,9 @@ export function attachMainWindowServices(
     void hydrateLocalPtyRegistryAtBoot(store)
   }
   registerSshHandlers(store, () => mainWindow, runtime)
+  void restoreRunningRuntimeOwnedSshTargets(app.getPath('userData')).catch((error) => {
+    console.warn('[runtime-ssh] Could not restore running VM connections:', error)
+  })
   registerRemoteWorkspaceHandlers(store, () => mainWindow)
   registerFileDropRelay(mainWindow)
   registerTccPromptNoticeHandlers(mainWindow)

@@ -1,3 +1,4 @@
+import { getSshPtyProvider } from './ipc/pty'
 import { getSshFilesystemProvider } from './providers/ssh-filesystem-dispatch'
 import { getSshGitProvider } from './providers/ssh-git-dispatch'
 import { connectRegisteredSshTarget, getSshConnectionStore } from './ipc/ssh'
@@ -55,13 +56,24 @@ export async function removeRuntimeOwnedSshTarget(targetId: string | undefined):
   await removeRegisteredSshTarget(targetId)
 }
 
-async function waitForRuntimeSshProviders(targetId: string, signal?: AbortSignal): Promise<void> {
+/**
+ * Wait for Git, filesystem, and PTY providers before exposing a usable VM connection.
+ * Reject on cancellation or timeout; transport connectivity alone is insufficient.
+ */
+export async function waitForRuntimeSshProviders(
+  targetId: string,
+  signal?: AbortSignal
+): Promise<void> {
   const startedAt = Date.now()
   while (Date.now() - startedAt < SSH_PROVIDER_READY_TIMEOUT_MS) {
     if (signal?.aborted) {
       throw new Error(`SSH provider wait aborted for target "${targetId}".`)
     }
-    if (getSshGitProvider(targetId) && getSshFilesystemProvider(targetId)) {
+    if (
+      getSshGitProvider(targetId) &&
+      getSshFilesystemProvider(targetId) &&
+      getSshPtyProvider(targetId)
+    ) {
       return
     }
     await new Promise((resolve) => setTimeout(resolve, SSH_PROVIDER_READY_INTERVAL_MS))
