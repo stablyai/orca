@@ -42,13 +42,8 @@ function isLineOnlyHtml(line: string): boolean {
 }
 
 function matchBlockHtml(content: string, start: number): string | null {
-  const lineEnd = findLineEnd(content, start)
-  const line = content.slice(start, lineEnd)
-  if (!isLineOnlyHtml(line)) {
-    return null
-  }
-
-  return line
+  const line = content.slice(start, findLineEnd(content, start))
+  return isLineOnlyHtml(line) ? line : null
 }
 
 export function encodeRawMarkdownHtmlForRichEditor(
@@ -64,29 +59,33 @@ export function encodeRawMarkdownHtmlForRichEditor(
   let activeFence: '`' | '~' | null = null
   let activeFenceLength = 0
   let result = ''
-  const nonWhitespace = /\S/g
-  const fencePrefix = /(`{3,}|~{3,})/y
-  let fenceProbe = -1
-  let fenceMatch: RegExpExecArray | null = null
-
   while (index < normalizedContent.length) {
     if (isLineStart) {
-      // Reuse the lookahead across blank lines, preserving cross-line fence semantics.
-      if (index > fenceProbe) {
-        nonWhitespace.lastIndex = index
-        fenceProbe = nonWhitespace.exec(normalizedContent)?.index ?? normalizedContent.length
-        fencePrefix.lastIndex = fenceProbe
-        fenceMatch = fencePrefix.exec(normalizedContent)
-      }
+      const lineEnd = findLineEnd(normalizedContent, index)
+      const line = normalizedContent.slice(index, lineEnd)
+      const fenceMatch = line.match(/^[ \t]*(`{3,}|~{3,})/)
       if (fenceMatch) {
-        const fenceChar = fenceMatch[1][0] as '`' | '~'
+        const fenceChar = fenceMatch[1][0] === '`' ? '`' : '~'
         const fenceLength = fenceMatch[1].length
-        if (activeFence === null) {
-          activeFence = fenceChar
-          activeFenceLength = fenceLength
-        } else if (activeFence === fenceChar && fenceLength >= activeFenceLength) {
-          activeFence = null
-          activeFenceLength = 0
+        const suffix = line.slice(fenceMatch[0].length)
+        const validOpener = fenceChar === '~' || !suffix.includes('`')
+        if (activeFence !== null || validOpener) {
+          if (activeFence === null) {
+            activeFence = fenceChar
+            activeFenceLength = fenceLength
+          } else if (
+            activeFence === fenceChar &&
+            fenceLength >= activeFenceLength &&
+            /^[ \t\r]*$/.test(suffix)
+          ) {
+            activeFence = null
+            activeFenceLength = 0
+          }
+          // Consume the fence line so a closer cannot become an inline-code opener.
+          const end = lineEnd < normalizedContent.length ? lineEnd + 1 : lineEnd
+          result += normalizedContent.slice(index, end)
+          index = end
+          continue
         }
       }
     }
