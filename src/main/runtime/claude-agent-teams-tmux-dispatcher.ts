@@ -4,6 +4,7 @@ import {
   tmuxSendKeysText,
   tmuxValue
 } from '../../shared/claude-agent-teams-tmux-compat'
+import { claudeAgentTeamsPaneCommand } from '../../shared/claude-agent-teams-pane-command'
 import { describeUnconfirmedAgentStop } from '../../shared/pty-liveness-verdict'
 import {
   formatContext,
@@ -12,6 +13,7 @@ import {
   updateMainVerticalAfterSplit
 } from './claude-agent-teams-pane-layout'
 import type { AgentTeam, AgentTeamsTerminalApi, TeamPane } from './claude-agent-teams-types'
+import { closeUntilConfirmed } from './claude-agent-teams-close-until-confirmed'
 
 type ResolvedTarget = { type: 'pane'; pane: TeamPane } | { type: 'window' }
 
@@ -116,7 +118,7 @@ export class ClaudeAgentTeamsTmuxDispatcher {
     const splitTarget = resolveSplitTarget(team, targetPane, parsed.flags.has('-h'))
     const split = await api.splitTerminal(splitTarget.pane.handle, {
       direction: splitTarget.direction,
-      command: parsed.positional.join(' ') || undefined,
+      command: claudeAgentTeamsPaneCommand(parsed.positional.join(' '), team.paneShell),
       env: paneEnv(team, fakePaneId),
       envToDelete: ['TERM_PROGRAM'],
       activate: false
@@ -165,15 +167,15 @@ export class ClaudeAgentTeamsTmuxDispatcher {
       (pane.splitFromPane ? team.panes.get(pane.splitFromPane) : undefined) ??
       team.panes.get(team.leaderPane)!
     const previousHandle = pane.handle
-    const close = await api.closeTerminal(previousHandle)
-    if (!close.ptyKilled) {
-      pane.respawnBlockedReason = describeUnconfirmedAgentStop(close)
+    const stopped = await closeUntilConfirmed(previousHandle, api)
+    if (!stopped.confirmed) {
+      pane.respawnBlockedReason = describeUnconfirmedAgentStop(stopped.close)
       throw new Error(pane.respawnBlockedReason)
     }
     try {
       const split = await api.splitTerminal(origin.handle, {
         direction: pane.splitDirection ?? 'horizontal',
-        command,
+        command: claudeAgentTeamsPaneCommand(command, team.paneShell),
         env: paneEnv(team, pane.fakePaneId),
         envToDelete: ['TERM_PROGRAM'],
         activate: false

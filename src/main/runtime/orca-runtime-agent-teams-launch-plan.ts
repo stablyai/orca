@@ -1,5 +1,6 @@
 // @ts-nocheck -- the launch-plan adapter is kept independent from the runtime mixin chain.
 import type { ClaudeAgentTeamsMode } from '../../shared/claude-agent-teams-tmux-compat'
+import type { AgentStartupShell } from '../../shared/tui-agent-startup-shell'
 import type { TerminalCreateOptions } from './runtime-terminal-contracts'
 import {
   addClaudeTeammateModeAuto,
@@ -7,6 +8,7 @@ import {
   buildClaudeAgentTeamsLaunchPlan,
   inferCapturedClaudeAgentTeamsMode
 } from './orca-runtime-create-terminal-dependencies'
+import { resolveClaudeAgentTeamsPaneShell } from './claude-agent-teams-shim-env'
 
 export async function buildRuntimeAgentTeamsLaunchPlan(args: {
   launchConfig: TerminalCreateOptions['launchConfig']
@@ -15,7 +17,13 @@ export async function buildRuntimeAgentTeamsLaunchPlan(args: {
   claudeAgentTeamsMode?: ClaudeAgentTeamsMode
   baseEnv: Record<string, string | undefined>
   adoptedBeforeLaunch: boolean
-  createTeamEnv: (shimDir: string, shimBin: string) => Record<string, string>
+  /** Windows shell teammate panes type into; decides whether Orca can spell the pane command. */
+  terminalWindowsShell?: string | null
+  createTeamEnv: (
+    shimDir: string,
+    shimBin: string,
+    paneShell?: AgentStartupShell
+  ) => Record<string, string>
 }): Promise<{
   plan: Awaited<ReturnType<typeof buildClaudeAgentTeamsLaunchPlan>> | undefined
   sequencedStartupCommand?: string
@@ -34,6 +42,7 @@ export async function buildRuntimeAgentTeamsLaunchPlan(args: {
         command: sourceCommand,
         mode,
         baseEnv: args.baseEnv,
+        paneShell: resolveClaudeAgentTeamsPaneShell(args.terminalWindowsShell),
         createTeamEnv: args.createTeamEnv
       })
   const sequencedStartupCommand =
@@ -45,7 +54,7 @@ export async function buildRuntimeAgentTeamsLaunchPlan(args: {
       ? {
           ...args.launchConfig,
           agentCommand: args.launchConfig.agentCommand
-            ? mode === 'in-process' || process.platform === 'win32'
+            ? plan.mode === 'in-process'
               ? addClaudeTeammateModeInProcess(args.launchConfig.agentCommand)
               : addClaudeTeammateModeAuto(args.launchConfig.agentCommand)
             : plan.command,
