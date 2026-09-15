@@ -1,5 +1,6 @@
 import type { RelayControlOriginOptions } from './relay-control-origin-options'
 import { CloudRelayTransport } from '../rpc/relay-transport'
+import { outboundProxySocketAgent } from '../../network/outbound-proxy'
 import { RelayControlClient } from './relay-control-client'
 import { RELAY_HOST_ATTACH_DEADLINE_MS } from './relay-control-protocol'
 import type {
@@ -173,6 +174,16 @@ export class RelayControlOrigin {
     previousGeneration: number
     controlResumeSecret: string
   }): Promise<{ control: RelayControlClient; ack: RelayHostHelloAckMessage }> {
+    // Why before the client exists: resolving the socket agent awaits, and a close() landing in
+    // that window has already cleared `controls`, so a client built afterwards would never be
+    // included in its teardown and could still become the active control after shutdown.
+    // An injected factory owns its own transport, proxy included.
+    const socketAgent = this.options.createControlSocket
+      ? undefined
+      : await outboundProxySocketAgent(this.cellUrl)
+    if (this.closed) {
+      throw new Error('relay_control_closed')
+    }
     let control!: RelayControlClient
     control = new RelayControlClient({
       cellUrl: this.cellUrl,
@@ -203,7 +214,8 @@ export class RelayControlOrigin {
           this.options.onClose(this, code)
         }
       },
-      createSocket: this.options.createControlSocket
+      createSocket: this.options.createControlSocket,
+      socketAgent
     })
     this.controls.add(control)
     try {
