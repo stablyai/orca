@@ -7,6 +7,7 @@ import {
   maskMcpEnv,
   MCP_CONFIG_CANDIDATES,
   MCP_STARTER_CONFIG,
+  PARALLEL_SEARCH_MCP_CONFIG,
   selectExistingMcpConfigCandidates
 } from './mcp-config'
 import {
@@ -150,6 +151,22 @@ describe('mcp-config', () => {
       status: 'valid',
       servers: []
     })
+  })
+
+  it('provides an anonymous Parallel Search HTTP preset', () => {
+    expect(inspectMcpConfigContent(workspaceCandidate, PARALLEL_SEARCH_MCP_CONFIG)).toMatchObject({
+      exists: true,
+      status: 'valid',
+      servers: [
+        {
+          name: 'parallel-search',
+          transport: 'http',
+          status: 'enabled',
+          url: 'https://search.parallel.ai/mcp'
+        }
+      ]
+    })
+    expect(PARALLEL_SEARCH_MCP_CONFIG).not.toMatch(/authorization|api[_-]?key|token/i)
   })
 
   it('parses the exact input boundary and rejects +1 before JSON parsing', () => {
