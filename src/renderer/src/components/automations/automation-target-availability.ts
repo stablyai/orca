@@ -253,16 +253,15 @@ function getAutomationSourceAvailability(
 }
 
 function getAutomationSourceProviderLabel(provider: TaskSourceContext['provider']): string {
-  switch (provider) {
-    case 'github':
-      return 'GitHub'
-    case 'gitlab':
-      return 'GitLab'
-    case 'linear':
-      return 'Linear'
-    case 'jira':
-      return 'Jira'
-  }
+  return (
+    {
+      github: 'GitHub',
+      gitlab: 'GitLab',
+      linear: 'Linear',
+      jira: 'Jira',
+      redmine: 'Redmine'
+    } as const
+  )[provider]
 }
 
 export function getRuntimeAutomationAvailability(

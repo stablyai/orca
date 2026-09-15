@@ -30,5 +30,9 @@ export function shouldHideTaskPageListChrome({
       return hasJiraDetail
     case 'linear':
       return hasLinearIssueDetail || hasLinearProjectContext || hasLinearViewContext
+    // Why: Redmine detail opens in a separate workspace surface; the list
+    // chrome does not need to hide while it is focused.
+    case 'redmine':
+      return false
   }
 }

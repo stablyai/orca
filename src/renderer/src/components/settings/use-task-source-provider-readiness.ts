@@ -27,6 +27,9 @@ export function useTaskSourceProviderReadiness(
   const jiraStatus = useAppStore((s) => s.jiraStatus)
   const jiraStatusChecked = useAppStore((s) => s.jiraStatusChecked)
   const jiraStatusContextKey = useAppStore((s) => s.jiraStatusContextKey)
+  const redmineStatus = useAppStore((s) => s.redmineStatus)
+  const redmineStatusChecked = useAppStore((s) => s.redmineStatusChecked)
+  const redmineStatusContextKey = useAppStore((s) => s.redmineStatusContextKey)
   const linearConnected = useLinearProviderConnected()
   const linearStatusChecked = useAppStore((s) => s.linearStatusChecked)
   const linearStatusContextKey = useAppStore((s) => s.linearStatusContextKey)
@@ -58,6 +61,9 @@ export function useTaskSourceProviderReadiness(
     preflightStatus.glab.authenticated === true
   const jiraChecking = jiraStatusContextKey !== providerRuntimeContextKey || !jiraStatusChecked
   const jiraConnected = !jiraChecking && jiraStatus.connected === true
+  const redmineChecking =
+    redmineStatusContextKey !== providerRuntimeContextKey || !redmineStatusChecked
+  const redmineConnected = !redmineChecking && redmineStatus.connected === true
   const linearChecking =
     linearStatusContextKey !== providerRuntimeContextKey || !linearStatusChecked
   // Normalization returns a new array, so memoize by provider contents.
@@ -89,6 +95,11 @@ export function useTaskSourceProviderReadiness(
         connected: jiraConnected,
         checking: jiraChecking,
         visible: visible.has('jira')
+      },
+      redmine: {
+        connected: redmineConnected,
+        checking: redmineChecking,
+        visible: visible.has('redmine')
       }
     }
   }, [
@@ -96,6 +107,8 @@ export function useTaskSourceProviderReadiness(
     gitlabConnected,
     jiraChecking,
     jiraConnected,
+    redmineChecking,
+    redmineConnected,
     linearChecking,
     linearConnected,
     linearSkillInstalled,
