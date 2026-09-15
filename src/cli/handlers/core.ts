@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process'
+import { closeSync, fstatSync, openSync } from 'node:fs'
 import type { CommandHandler } from '../dispatch'
 import { formatCliStatus, formatStatus, printResult } from '../format'
 import { RuntimeClientError, serveOrcaApp } from '../runtime-client'
@@ -26,21 +27,56 @@ function withTeammateModeAuto(args: string[]): string[] {
   return ['--teammate-mode', 'auto', ...args]
 }
 
+/**
+ * A stdin Claude can put into raw mode, or null when inheriting fd 0 is right.
+ *
+ * Why: the `orca` launcher runs Orca's Electron binary as Node, and that
+ * process is handed no TTY on fd 0 even though it is attached to the pane's
+ * console. `stdio: 'inherit'` passes that dead descriptor straight through, so
+ * Claude's TUI cannot enter raw mode — it renders nothing and reads no keys,
+ * while stdout (a real TTY) keeps `-p` print mode working. Opening the console
+ * input buffer by name gives Claude the handle the pane actually has.
+ *
+ * Why fstat and not just isTTY: under Electron a console fd 0 is a character
+ * device that simply is not wrapped as a TTY, whereas a redirect is a pipe or a
+ * file. Reading it wrong would hijack the input of `orca claude-teams < file`.
+ */
+function openConsoleStdin(): number | null {
+  if (process.platform !== 'win32' || process.stdin.isTTY) {
+    return null
+  }
+  try {
+    if (!fstatSync(0).isCharacterDevice()) {
+      return null
+    }
+    return openSync('\\\\.\\CONIN$', 'r+')
+  } catch {
+    return null
+  }
+}
+
 async function runClaudeAgentTeams(env: Record<string, string>, args: string[]): Promise<number> {
-  return await new Promise((resolve, reject) => {
-    const child = spawn('claude', withTeammateModeAuto(args), {
-      stdio: 'inherit',
-      env
+  const consoleStdin = openConsoleStdin()
+  try {
+    return await new Promise((resolve, reject) => {
+      const child = spawn('claude', withTeammateModeAuto(args), {
+        stdio: [consoleStdin ?? 'inherit', 'inherit', 'inherit'],
+        env
+      })
+      child.once('error', reject)
+      child.once('exit', (code, signal) => {
+        if (typeof code === 'number') {
+          resolve(code)
+          return
+        }
+        resolve(signal ? 1 : 0)
+      })
     })
-    child.once('error', reject)
-    child.once('exit', (code, signal) => {
-      if (typeof code === 'number') {
-        resolve(code)
-        return
-      }
-      resolve(signal ? 1 : 0)
-    })
-  })
+  } finally {
+    if (consoleStdin !== null) {
+      closeSync(consoleStdin)
+    }
+  }
 }
 
 function getOptionalServePort(flags: Map<string, string | boolean>): string | null {

@@ -8,6 +8,7 @@ import {
   buildClaudeAgentTeamsLaunchPlan,
   inferCapturedClaudeAgentTeamsMode
 } from './orca-runtime-create-terminal-dependencies'
+import { resolveClaudeAgentTeamsPaneShell } from './claude-agent-teams-shim-env'
 
 export async function buildRuntimeAgentTeamsLaunchPlan(args: {
   launchConfig: TerminalCreateOptions['launchConfig']
@@ -16,9 +17,13 @@ export async function buildRuntimeAgentTeamsLaunchPlan(args: {
   claudeAgentTeamsMode?: ClaudeAgentTeamsMode
   baseEnv: Record<string, string | undefined>
   adoptedBeforeLaunch: boolean
-  /** Shell the panes type into; decides whether Orca can spell the teammate command. */
-  paneShell?: AgentStartupShell
-  createTeamEnv: (shimDir: string, shimBin: string) => Record<string, string>
+  /** Windows shell teammate panes type into; decides whether Orca can spell the pane command. */
+  terminalWindowsShell?: string | null
+  createTeamEnv: (
+    shimDir: string,
+    shimBin: string,
+    paneShell?: AgentStartupShell
+  ) => Record<string, string>
 }): Promise<{
   plan: Awaited<ReturnType<typeof buildClaudeAgentTeamsLaunchPlan>> | undefined
   sequencedStartupCommand?: string
@@ -37,7 +42,7 @@ export async function buildRuntimeAgentTeamsLaunchPlan(args: {
         command: sourceCommand,
         mode,
         baseEnv: args.baseEnv,
-        paneShell: args.paneShell,
+        paneShell: resolveClaudeAgentTeamsPaneShell(args.terminalWindowsShell),
         createTeamEnv: args.createTeamEnv
       })
   const sequencedStartupCommand =

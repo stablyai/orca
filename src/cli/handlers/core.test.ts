@@ -90,41 +90,44 @@ describe('orca claude-teams CLI handler', () => {
     process.exitCode = previousExitCode
   })
 
-  it(
-    'does not leak ELECTRON_RUN_AS_NODE into the spawned claude child',
-    async () => {
+  it('does not leak ELECTRON_RUN_AS_NODE into the spawned claude child', async () => {
+    await runClaudeTeams()
+
+    expect(spawnMock).toHaveBeenCalledWith('claude', expect.any(Array), expect.any(Object))
+    const spawnEnv = spawnMock.mock.calls.at(-1)?.[2].env as SpawnEnv
+    expect(spawnEnv.ELECTRON_RUN_AS_NODE).toBeUndefined()
+
+    // The prepareLaunch request env is built from the same helper, so it must
+    // be sanitized too.
+    const prepareLaunchEnv = (callMock.mock.calls[0][1] as { env: SpawnEnv }).env
+    expect(prepareLaunchEnv.ELECTRON_RUN_AS_NODE).toBeUndefined()
+  })
+
+  it('still forwards non-Electron parent env and prepareLaunch env to claude', async () => {
+    const previousMarker = process.env.ORCA_TEST_MARKER
+    process.env.ORCA_TEST_MARKER = 'keep-me'
+    try {
       await runClaudeTeams()
-
-      expect(spawnMock).toHaveBeenCalledWith('claude', expect.any(Array), expect.any(Object))
-      const spawnEnv = spawnMock.mock.calls.at(-1)?.[2].env as SpawnEnv
-      expect(spawnEnv.ELECTRON_RUN_AS_NODE).toBeUndefined()
-
-      // The prepareLaunch request env is built from the same helper, so it must
-      // be sanitized too.
-      const prepareLaunchEnv = (callMock.mock.calls[0][1] as { env: SpawnEnv }).env
-      expect(prepareLaunchEnv.ELECTRON_RUN_AS_NODE).toBeUndefined()
-    }
-  )
-
-  it(
-    'still forwards non-Electron parent env and prepareLaunch env to claude',
-    async () => {
-      const previousMarker = process.env.ORCA_TEST_MARKER
-      process.env.ORCA_TEST_MARKER = 'keep-me'
-      try {
-        await runClaudeTeams()
-      } finally {
-        if (previousMarker === undefined) {
-          delete process.env.ORCA_TEST_MARKER
-        } else {
-          process.env.ORCA_TEST_MARKER = previousMarker
-        }
+    } finally {
+      if (previousMarker === undefined) {
+        delete process.env.ORCA_TEST_MARKER
+      } else {
+        process.env.ORCA_TEST_MARKER = previousMarker
       }
-
-      const spawnEnv = spawnMock.mock.calls.at(-1)?.[2].env as SpawnEnv
-      expect(spawnEnv.ORCA_TEST_MARKER).toBe('keep-me')
-      expect(spawnEnv.CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS).toBe('1')
-      expect(spawnEnv.PATH).toBe('/shim:/usr/bin')
     }
-  )
+
+    const spawnEnv = spawnMock.mock.calls.at(-1)?.[2].env as SpawnEnv
+    expect(spawnEnv.ORCA_TEST_MARKER).toBe('keep-me')
+    expect(spawnEnv.CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS).toBe('1')
+    expect(spawnEnv.PATH).toBe('/shim:/usr/bin')
+  })
+
+  // A vitest worker's fd 0 is never a console, so this pins the fallback the
+  // redirected case relies on: `orca claude-teams < file` must keep reading it.
+  it('inherits stdin when there is no console input buffer to open', async () => {
+    await runClaudeTeams()
+
+    const stdio = spawnMock.mock.calls.at(-1)?.[2].stdio as unknown[]
+    expect(stdio).toEqual(['inherit', 'inherit', 'inherit'])
+  })
 })

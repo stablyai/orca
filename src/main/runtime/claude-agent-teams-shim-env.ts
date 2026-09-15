@@ -10,10 +10,7 @@ import {
 } from '../../shared/claude-agent-teams-tmux-compat'
 import { supportsClaudeAgentTeamsPaneCommand } from '../../shared/claude-agent-teams-pane-command'
 import { getOrcaCliCommandNameForPlatform } from '../../shared/orca-cli-command-name'
-import {
-  resolveStartupShell,
-  type AgentStartupShell
-} from '../../shared/tui-agent-startup-shell'
+import { resolveStartupShell, type AgentStartupShell } from '../../shared/tui-agent-startup-shell'
 import { resolveLocalWindowsAgentStartupShell } from '../../shared/windows-terminal-shell'
 import { resolvePathEnvKey } from '../pty/windows-path-segment-merge'
 
@@ -61,7 +58,11 @@ export async function buildClaudeAgentTeamsLaunchPlan(args: {
   /** Shell the panes type into; decides whether Orca can spell the teammate command. */
   paneShell?: AgentStartupShell
   shimRoot?: string
-  createTeamEnv: (shimDir: string, shimBin: string) => Record<string, string>
+  createTeamEnv: (
+    shimDir: string,
+    shimBin: string,
+    paneShell?: AgentStartupShell
+  ) => Record<string, string>
 }): Promise<ClaudeAgentTeamsLaunchPlan | null> {
   const mode = args.mode ?? 'off'
   if (!args.command || mode === 'off' || !isDirectClaudeCommand(args.command)) {
@@ -91,7 +92,7 @@ export async function buildClaudeAgentTeamsLaunchPlan(args: {
   ) {
     return inProcess
   }
-  const env = args.createTeamEnv(shimDir, shimBin)
+  const env = args.createTeamEnv(shimDir, shimBin, args.paneShell)
   return {
     command: addClaudeTeammateModeAuto(args.command),
     env,

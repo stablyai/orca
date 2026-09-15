@@ -82,4 +82,6 @@ export type AgentTeam = {
     lastColumnPane: string | null
   } | null
   previouslyFocusedPane: string | null
+  /** Tail of this team's serialized command chain; see ClaudeAgentTeamsService.runSerialized. */
+  commandQueue: Promise<void>
 }
