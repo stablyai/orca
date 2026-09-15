@@ -61,15 +61,21 @@ export function useFileExplorerAutoReveal({
       return
     }
 
-    // Why: markdown preview tabs are separate UI surfaces, but they still map
-    // to one concrete file on disk and should keep Explorer selection in sync
-    // just like a normal edit tab. Diffs and conflict-review tabs do not.
+    // Why: markdown preview tabs and working-tree diff tabs (staged/unstaged) map
+    // to a concrete file on disk and should keep Explorer selection in sync
+    // just like a normal edit tab. Committed diffs (commit/branch) and conflict-review tabs do not.
     const activeFile = openFiles.find((f) => f.id === activeFileId)
-    if (
-      !activeFile ||
-      activeFile.worktreeId !== activeWorktreeId ||
-      (activeFile.mode !== 'edit' && activeFile.mode !== 'markdown-preview')
-    ) {
+    if (!activeFile || activeFile.worktreeId !== activeWorktreeId) {
+      return
+    }
+
+    const isWorkingTreeDiff =
+      activeFile.mode === 'diff' &&
+      (activeFile.diffSource === 'staged' || activeFile.diffSource === 'unstaged')
+    const isSupportedMode =
+      activeFile.mode === 'edit' || activeFile.mode === 'markdown-preview' || isWorkingTreeDiff
+
+    if (!isSupportedMode) {
       return
     }
 
