@@ -152,7 +152,12 @@ export async function executeWorktreeRemoval(
       repo.connectionId ? 'remote' : 'local',
       async () => {
         const result = repo.connectionId
-          ? await runRemoteArchiveHook(repo, canonicalWorktreePath, archiveScript)
+          ? await runRemoteArchiveHook(
+              repo,
+              repo.connectionId,
+              canonicalWorktreePath,
+              archiveScript
+            )
           : await runHook(
               'archive',
               canonicalWorktreePath,
