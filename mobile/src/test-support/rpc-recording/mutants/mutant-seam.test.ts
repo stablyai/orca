@@ -71,9 +71,11 @@ describe('the mutant seam', () => {
 
   it('is unreachable from every recording driver', () => {
     const graph = reachable(RECORDING_DRIVERS.map((driver) => join(recorder, driver)))
-    const reached = [...graph]
+    const reached = graph
+      .values()
       .filter((file) => file.startsWith(`${mutants}${sep}`))
       .map(relative)
+      .toArray()
       .sort()
     expect(reached).toEqual([])
     // A walk that resolved nothing would pass by reaching nothing, so name what it missed: every
