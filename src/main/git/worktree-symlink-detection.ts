@@ -20,7 +20,12 @@ export function getSafeRelativePath(rawPath: string): SafeRelativePathResult {
   // Why: strip leading separators (both `/` and `\`) before the guard so
   // Windows-style input like `\foo` is normalized the same way POSIX `/foo`
   // is, and the traversal check below sees the already-relative form.
-  const rel = rawPath.trim().replace(/^[\\/]+/, '')
+  const rel = rawPath
+    .trim()
+    .replace(/\\/g, '/')
+    .replace(/^\/+/, '')
+    .replace(/^\.\//, '')
+    .replace(/\/+$/, '')
   // Why: split on both separators so a Windows-authored `..\escape` is
   // rejected the same way POSIX `../escape` is; the split catches relative
   // backslash traversal that `.split('/')` would otherwise miss.

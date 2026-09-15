@@ -1,3 +1,4 @@
+import { isWorktreeCopyPathList } from '../worktree-copy-paths'
 import { z } from 'zod'
 import { normalizeRepoSourceControlAiOverrides } from '../source-control-ai'
 import { normalizeRepoBadgeColor } from '../repo-badge-color'
@@ -55,6 +56,7 @@ export function createRepoUpdateSchema<T extends Readonly<Record<string, z.ZodTy
       worktreeBasePath: OptionalString,
       kind: z.enum(['git', 'folder']).optional(),
       symlinkPaths: z.array(z.string()).optional(),
+      worktreeCopyPaths: z.array(z.string()).refine(isWorktreeCopyPathList).optional(),
       issueSourcePreference: z.enum(['auto', 'upstream', 'origin']).optional(),
       forkSyncMode: z.enum(['ask', 'safe-auto', 'off']).optional(),
       externalWorktreeVisibility: z.enum(['hide', 'show']).nullable().optional(),

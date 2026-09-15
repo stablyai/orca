@@ -102,6 +102,57 @@ beforeEach(() => {
 })
 
 describe('repo slice host identity routing', () => {
+  it('refuses legacy conversion before sending updates to a runtime without copy support', async () => {
+    runtimeEnvironmentTransportCall.mockImplementation((args: RuntimeEnvironmentCallRequest) => {
+      const status = createCompatibleRuntimeStatusResponseIfNeeded(args)
+      if (status?.ok) {
+        status.result.capabilities = status.result.capabilities?.filter(
+          (entry) => entry !== 'repo.worktree-copy-paths.v1'
+        )
+      }
+      return status ?? runtimeEnvironmentCall(args)
+    })
+    const store = createTestStore()
+    const original = { ...remoteDuplicate, symlinkPaths: ['.env'] }
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
+      repos: [localDuplicate, original]
+    })
+    expect(
+      await store
+        .getState()
+        .updateRepo(
+          'same-repo',
+          { symlinkPaths: [], worktreeCopyPaths: ['.env'] },
+          { hostId: 'runtime:env-1' }
+        )
+    ).toBe(false)
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+    expect(reposUpdate).not.toHaveBeenCalled()
+    expect(store.getState().repos).toEqual([localDuplicate, original])
+  })
+
+  it('keeps personal copy additions on the explicit local host even when another runtime is focused', async () => {
+    reposUpdate.mockResolvedValue({ ...localDuplicate, worktreeCopyPaths: ['.env'] })
+    const store = createTestStore()
+    store.setState({
+      settings: { activeRuntimeEnvironmentId: 'env-1' } as never,
+      repos: [localDuplicate, remoteDuplicate]
+    })
+    expect(
+      await store
+        .getState()
+        .updateRepo('same-repo', { worktreeCopyPaths: ['.env'] }, { hostId: 'local' })
+    ).toBe(true)
+    expect(reposUpdate).toHaveBeenCalledWith({
+      repoId: 'same-repo',
+      hostId: 'local',
+      updates: { worktreeCopyPaths: ['.env'] }
+    })
+    expect(store.getState().repos[1]).toEqual(remoteDuplicate)
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+  })
+
   it('updates only the focused host row when repo ids are duplicated across hosts', async () => {
     runtimeEnvironmentCall.mockResolvedValue({
       id: 'rpc-duplicate-update',

@@ -1,3 +1,4 @@
+import type { WorktreeSharedLinks } from '../../shared/worktree-path-materialization'
 import type { GitStatusResult } from '../../shared/git-status-types'
 import type { RemoveWorktreeResult } from '../../shared/worktree/create-types'
 import type { GitWorktreeInfo } from '../../shared/worktree/types'
@@ -83,7 +84,11 @@ export class SshGitWorktreeProvider extends SshGitReviewHeadProvider {
   async removeWorktree(
     worktreePath: string,
     force?: boolean,
-    options?: { deleteBranch?: boolean; forceBranchDelete?: boolean }
+    options?: {
+      deleteBranch?: boolean
+      forceBranchDelete?: boolean
+      sharedLinks?: WorktreeSharedLinks
+    }
   ): Promise<RemoveWorktreeResult> {
     return this.runWithGitReadInvalidation(
       async () =>
@@ -97,14 +102,15 @@ export class SshGitWorktreeProvider extends SshGitReviewHeadProvider {
 
   async worktreeIsClean(
     worktreePath: string,
-    options: { includeUntracked?: boolean } = {}
+    options: { includeUntracked?: boolean; sharedLinks?: WorktreeSharedLinks } = {}
   ): Promise<{ clean: boolean; stdout?: string }> {
     return this.worktreeIsCleanCapabilityCache.runWithFallback(
       WORKTREE_IS_CLEAN_CAPABILITY,
       async () => {
         const result = (await this.mux.request('git.worktreeIsClean', {
           worktreePath,
-          ...(options.includeUntracked === false ? { includeUntracked: false } : {})
+          ...(options.includeUntracked === false ? { includeUntracked: false } : {}),
+          ...(options.sharedLinks ? { sharedLinks: options.sharedLinks } : {})
         })) as { clean: boolean; stdout?: string }
         if (options.includeUntracked === false) {
           if (!result.clean && result.stdout === undefined) {

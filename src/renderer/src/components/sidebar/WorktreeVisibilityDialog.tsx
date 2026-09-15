@@ -197,6 +197,7 @@ export default function WorktreeVisibilityDialog(): React.JSX.Element | null {
       setIsToggling(true)
       try {
         const updated = await updateTargetRepo(repoId, updates)
+        const updateValues = typeof updates === 'function' ? {} : updates
         const latestRepo = getLatestRepoForVisibilityScope(mutationScope)
         if (!updated || !latestRepo || !isAccepted(latestRepo)) {
           if (currentMutationScopeRef.current === mutationScope) {
@@ -205,7 +206,7 @@ export default function WorktreeVisibilityDialog(): React.JSX.Element | null {
               error: worktreeVisibilityUpdateError(
                 updated,
                 latestRepo?.worktreeVisibilitySourcePreferences,
-                updates.worktreeVisibilitySourcePreferences
+                updateValues.worktreeVisibilitySourcePreferences
               )
             })
           }

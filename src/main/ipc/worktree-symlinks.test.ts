@@ -1,4 +1,6 @@
 import {
+  copyFileSync,
+  cpSync,
   mkdtempSync,
   mkdirSync,
   writeFileSync,
@@ -9,69 +11,100 @@ import {
   rmSync,
   symlinkSync,
   existsSync,
-  chmodSync
+  chmodSync,
+  renameSync
 } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join, sep } from 'node:path'
+import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   createWorktreeCopiedPaths,
   createWorktreeLinkedPaths,
   createWorktreeSharedPaths,
-  createWorktreeSymlinks,
   worktreeSymlinkTypeCandidates,
   findExistingWorktreeSymlinkPaths,
   removeWorktreeLinkedPaths,
   removeWorktreeSymlinks
 } from './worktree-symlinks'
 
+import { WorktreeLinkedPathTargetExistsError } from './worktree-clone-copy-errors'
+
 type WorktreeLinkedPathOptionsForTest = NonNullable<Parameters<typeof createWorktreeLinkedPaths>[3]>
 type ApfsCloneDepsForTest = NonNullable<WorktreeLinkedPathOptionsForTest['apfsCloneDeps']>
+type ReflinkCloneDepsForTest = NonNullable<WorktreeLinkedPathOptionsForTest['reflinkCloneDeps']>
 const posixIt = process.platform === 'win32' ? it.skip : it
 
-function createApfsCloneDeps(options: {
-  uuid?: string
-  onCp?: (args: readonly string[]) => void
-  onDiskutil?: () => void
-  diskutilError?: Error
-}): ApfsCloneDepsForTest {
-  const execFileAsync = vi.fn<ApfsCloneDepsForTest['execFileAsync']>(async (file, args) => {
-    if (file === '/bin/df') {
-      return {
-        stdout: `Filesystem 512-blocks Used Available Capacity Mounted on
-/dev/disk3s1 100 50 50 50% /
-`,
-        stderr: ''
-      }
-    }
-    if (file === '/usr/sbin/diskutil') {
-      if (options.diskutilError) {
-        throw options.diskutilError
-      }
-      options.onDiskutil?.()
-      return {
-        stdout: `<plist><dict><key>FilesystemName</key><string>APFS</string></dict></plist>`,
-        stderr: ''
-      }
-    }
-    if (file === '/bin/cp') {
-      options.onCp?.(args)
-      return { stdout: '', stderr: '' }
-    }
-    throw new Error(`Unexpected execFile command: ${file}`)
-  })
+function notSupported(): never {
+  throw Object.assign(new Error('ENOTSUP: operation not supported'), { code: 'ENOTSUP' })
+}
+
+/** A stand-in reflink backend. `supported: false` answers the probe the way
+ *  ext4 and tmpfs do; `supported: true` copies bytes instead of sharing them,
+ *  which nothing above the backend can tell apart from a real reflink. Linux
+ *  tests inject one or the other so the host's own /tmp filesystem never
+ *  decides the outcome. */
+function createReflinkCloneDeps(options: {
+  supported: boolean
+  onReflink?: (source: string, target: string) => void
+}): ReflinkCloneDepsForTest {
   return {
-    execFileAsync,
-    randomUUID: () => options.uuid ?? 'test'
+    reflinkFileOrFail: vi.fn(async (source: string, target: string) => {
+      if (!options.supported) {
+        notSupported()
+      }
+      copyFileSync(source, target)
+    }),
+    reflinkFile: vi.fn(async (source: string, target: string) => {
+      options.onReflink?.(source, target)
+      copyFileSync(source, target)
+    }),
+    reflinkTree: vi.fn(async (source: string, target: string) => {
+      options.onReflink?.(source, target)
+      cpSync(source, target, { recursive: true, force: false, errorOnExist: false })
+    }),
+    publishTree: async (source, target) => {
+      cpSync(source, target, { recursive: true, force: false, errorOnExist: false })
+    }
   }
 }
 
-describe('createWorktreeSymlinks', () => {
+function createApfsCloneDeps(options: {
+  onClone?: (args: readonly string[]) => void
+  onProbe?: () => void
+}): ApfsCloneDepsForTest {
+  const execFileAsync = vi.fn<ApfsCloneDepsForTest['execFileAsync']>(async (_file, args) => {
+    const [command, source, target] = args
+    if (command === 'probe') {
+      options.onProbe?.()
+    } else if (command === 'clone') {
+      cpSync(source, target, { recursive: true, force: false, errorOnExist: true })
+      chmodSync(target, statSync(source).mode & 0o777)
+      options.onClone?.(args)
+    } else if (command === 'publish') {
+      if (existsSync(target)) {
+        throw new WorktreeLinkedPathTargetExistsError(target)
+      }
+      renameSync(source, target)
+    } else {
+      throw new Error(`Unexpected native clone operation: ${command}`)
+    }
+    return { stdout: '', stderr: '' }
+  })
+  return { execFileAsync }
+}
+
+describe('createWorktreeLinkedPaths', () => {
   let root: string
   let primary: string
   let worktree: string
   let warn: ReturnType<typeof vi.spyOn>
   let error: ReturnType<typeof vi.spyOn>
+  // Link mode on a Linux filesystem that cannot reflink: the symlink path.
+  const linkOnLinux = (paths: readonly string[]): Promise<void> =>
+    createWorktreeLinkedPaths(primary, worktree, paths, {
+      platform: 'linux',
+      reflinkCloneDeps: createReflinkCloneDeps({ supported: false })
+    })
 
   beforeEach(() => {
     root = mkdtempSync(join(tmpdir(), 'orca-symlinks-'))
@@ -91,7 +124,7 @@ describe('createWorktreeSymlinks', () => {
 
   it('symlinks a file from primary into the worktree at the same relative path', async () => {
     writeFileSync(join(primary, '.env'), 'SECRET=1\n')
-    await createWorktreeSymlinks(primary, worktree, ['.env'])
+    await linkOnLinux(['.env'])
 
     const linkStat = lstatSync(join(worktree, '.env'))
     expect(linkStat.isSymbolicLink()).toBe(true)
@@ -103,7 +136,7 @@ describe('createWorktreeSymlinks', () => {
   it('symlinks a directory from primary into the worktree', async () => {
     mkdirSync(join(primary, 'node_modules'))
     writeFileSync(join(primary, 'node_modules', 'marker'), 'installed')
-    await createWorktreeSymlinks(primary, worktree, ['node_modules'])
+    await linkOnLinux(['node_modules'])
 
     expect(lstatSync(join(worktree, 'node_modules')).isSymbolicLink()).toBe(true)
     expect(statSync(join(worktree, 'node_modules', 'marker')).isFile()).toBe(true)
@@ -112,13 +145,13 @@ describe('createWorktreeSymlinks', () => {
   it('creates parent directories lazily for nested paths', async () => {
     mkdirSync(join(primary, 'apps', 'web'), { recursive: true })
     writeFileSync(join(primary, 'apps', 'web', '.env'), 'X=1\n')
-    await createWorktreeSymlinks(primary, worktree, ['apps/web/.env'])
+    await linkOnLinux(['apps/web/.env'])
 
     expect(lstatSync(join(worktree, 'apps', 'web', '.env')).isSymbolicLink()).toBe(true)
   })
 
   it('skips entries whose source is missing in the primary checkout', async () => {
-    await createWorktreeSymlinks(primary, worktree, ['node_modules'])
+    await linkOnLinux(['node_modules'])
     // No link created, no throw.
     expect(() => lstatSync(join(worktree, 'node_modules'))).toThrow()
     expect(error).not.toHaveBeenCalled()
@@ -128,7 +161,7 @@ describe('createWorktreeSymlinks', () => {
     writeFileSync(join(primary, '.env'), 'FROM_PRIMARY=1\n')
     writeFileSync(join(worktree, '.env'), 'FROM_WORKTREE=1\n')
 
-    await createWorktreeSymlinks(primary, worktree, ['.env'])
+    await linkOnLinux(['.env'])
 
     // The pre-existing regular file stays; no symlink was created.
     expect(lstatSync(join(worktree, '.env')).isSymbolicLink()).toBe(false)
@@ -140,14 +173,14 @@ describe('createWorktreeSymlinks', () => {
     // relative `etc/passwd`). No file is created outside the worktree, and the
     // resolved source — which falls inside `primary/etc/passwd` — is missing,
     // so the entry is silently skipped rather than linking to `/etc/passwd`.
-    await createWorktreeSymlinks(primary, worktree, ['/etc/passwd'])
+    await linkOnLinux(['/etc/passwd'])
 
     expect(() => lstatSync(join(worktree, 'etc', 'passwd'))).toThrow()
     expect(error).not.toHaveBeenCalled()
   })
 
   it('rejects parent-directory traversal', async () => {
-    await createWorktreeSymlinks(primary, worktree, ['../secrets'])
+    await linkOnLinux(['../secrets'])
 
     expect(warn).toHaveBeenCalledWith(
       expect.stringContaining('[worktree-symlinks] Skipping unsafe path "../secrets"')
@@ -155,7 +188,7 @@ describe('createWorktreeSymlinks', () => {
   })
 
   it('rejects nested traversal via ..', async () => {
-    await createWorktreeSymlinks(primary, worktree, ['safe/../../escape'])
+    await linkOnLinux(['safe/../../escape'])
 
     expect(warn).toHaveBeenCalledWith(
       expect.stringContaining('[worktree-symlinks] Skipping unsafe path "safe/../../escape"')
@@ -166,8 +199,8 @@ describe('createWorktreeSymlinks', () => {
     // Why: users configuring paths on Windows (or pasting a mixed-separator
     // value) could bypass a POSIX-only split. The guard normalizes across
     // `/` and `\` so `..\escape` and `foo\..\..\escape` both get rejected.
-    await createWorktreeSymlinks(primary, worktree, ['..\\escape'])
-    await createWorktreeSymlinks(primary, worktree, ['foo\\..\\..\\escape'])
+    await linkOnLinux(['..\\escape'])
+    await linkOnLinux(['foo\\..\\..\\escape'])
 
     expect(warn).toHaveBeenCalledWith(
       expect.stringContaining('[worktree-symlinks] Skipping unsafe path "..\\escape"')
@@ -179,7 +212,7 @@ describe('createWorktreeSymlinks', () => {
 
   it('strips a leading slash then treats the remainder as a relative path', async () => {
     writeFileSync(join(primary, '.env'), 'X=1\n')
-    await createWorktreeSymlinks(primary, worktree, ['/.env'])
+    await linkOnLinux(['/.env'])
 
     // Leading slash is stripped in the helper; the remaining `.env` is a valid relative path.
     expect(lstatSync(join(worktree, '.env')).isSymbolicLink()).toBe(true)
@@ -188,7 +221,7 @@ describe('createWorktreeSymlinks', () => {
 
   it('skips empty and whitespace-only entries', async () => {
     // The helper logs an "unsafe path" warn for these; nothing gets linked.
-    await createWorktreeSymlinks(primary, worktree, ['', '   '])
+    await linkOnLinux(['', '   '])
     expect(error).not.toHaveBeenCalled()
   })
 
@@ -196,7 +229,7 @@ describe('createWorktreeSymlinks', () => {
     writeFileSync(join(primary, '.env'), 'X=1\n')
     writeFileSync(join(primary, 'config.json'), '{}')
 
-    await createWorktreeSymlinks(primary, worktree, [
+    await linkOnLinux([
       '../escape', // rejected
       'missing-source', // no source, skipped
       '.env', // succeeds
@@ -208,7 +241,7 @@ describe('createWorktreeSymlinks', () => {
   })
 
   it('is a no-op for an empty paths list', async () => {
-    await createWorktreeSymlinks(primary, worktree, [])
+    await linkOnLinux([])
     expect(warn).not.toHaveBeenCalled()
     expect(error).not.toHaveBeenCalled()
   })
@@ -237,8 +270,7 @@ describe('createWorktreeSymlinks', () => {
     writeFileSync(join(primary, '.env'), 'SECRET=1\n')
     const target = join(worktree, '.env')
     const deps = createApfsCloneDeps({
-      uuid: 'file-race',
-      onCp: (args) => {
+      onClone: (args) => {
         const tempTarget = args.at(-1)
         if (!tempTarget) {
           throw new Error('Missing APFS clone temp target')
@@ -265,14 +297,14 @@ describe('createWorktreeSymlinks', () => {
     const target = join(worktree, 'node_modules')
     let createdRacedTarget = false
     const deps = createApfsCloneDeps({
-      onDiskutil: () => {
+      onProbe: () => {
         if (!createdRacedTarget) {
           createdRacedTarget = true
           mkdirSync(target)
           writeFileSync(join(target, 'user-marker'), 'USER\n')
         }
       },
-      onCp: () => {
+      onClone: () => {
         throw new Error('APFS clone-copy should not run after the target appears')
       }
     })
@@ -284,7 +316,9 @@ describe('createWorktreeSymlinks', () => {
 
     expect(readFileSync(join(target, 'user-marker'), 'utf8')).toBe('USER\n')
     expect(existsSync(join(target, 'primary-marker'))).toBe(false)
-    expect(deps.execFileAsync).not.toHaveBeenCalledWith('/bin/cp', expect.anything())
+    expect(
+      vi.mocked(deps.execFileAsync).mock.calls.filter(([, args]) => args[0] === 'clone')
+    ).toHaveLength(0)
     expect(warn).not.toHaveBeenCalled()
     expect(error).not.toHaveBeenCalled()
   })
@@ -296,10 +330,10 @@ describe('createWorktreeSymlinks', () => {
     const target = join(worktree, 'node_modules')
     let cpArgs: readonly string[] | undefined
     const deps = createApfsCloneDeps({
-      onCp: (args) => {
+      onClone: (args) => {
         cpArgs = args
+        mkdirSync(target)
         writeFileSync(join(target, 'primary-marker'), 'USER\n')
-        throw new Error('clone-copy skipped an existing nested target')
       }
     })
 
@@ -308,16 +342,10 @@ describe('createWorktreeSymlinks', () => {
       apfsCloneDeps: deps
     })
 
-    expect(cpArgs).toEqual(['-n', '-c', '-R', `${source}${sep}.`, target])
+    expect(cpArgs).toEqual(['clone', source, expect.stringContaining('.orca-apfs-stage-')])
     expect(readFileSync(join(target, 'primary-marker'), 'utf8')).toBe('USER\n')
-    expect(warn).toHaveBeenCalledWith(
-      expect.stringContaining('[worktree-symlinks] APFS clone-copy unavailable'),
-      expect.any(Error)
-    )
-    expect(error).toHaveBeenCalledWith(
-      expect.stringContaining('[worktree-symlinks] Failed to link "node_modules"'),
-      expect.any(Error)
-    )
+    expect(warn).not.toHaveBeenCalled()
+    expect(error).not.toHaveBeenCalled()
   })
 
   posixIt('preserves the source directory mode after APFS clone-copy reserves it', async () => {
@@ -326,8 +354,8 @@ describe('createWorktreeSymlinks', () => {
     chmodSync(source, 0o700)
     const target = join(worktree, 'node_modules')
     const deps = createApfsCloneDeps({
-      onCp: () => {
-        writeFileSync(join(target, 'marker'), 'CLONED\n')
+      onClone: (args) => {
+        writeFileSync(join(args[2], 'marker'), 'CLONED\n')
       }
     })
 
@@ -394,6 +422,163 @@ describe('createWorktreeSymlinks', () => {
     expect(lstatSync(join(worktree, '.env')).isSymbolicLink()).toBe(true)
     expect(readlinkSync(join(worktree, '.env'))).toBe(join(primary, '.env'))
   })
+
+  it('reflink clone-copies configured paths on Linux when the filesystem shares blocks', async () => {
+    writeFileSync(join(primary, '.env'), 'SECRET=1\n')
+    const deps = createReflinkCloneDeps({ supported: true })
+
+    await createWorktreeLinkedPaths(primary, worktree, ['.env'], {
+      platform: 'linux',
+      reflinkCloneDeps: deps
+    })
+
+    expect(lstatSync(join(worktree, '.env')).isSymbolicLink()).toBe(false)
+    expect(readFileSync(join(worktree, '.env'), 'utf8')).toBe('SECRET=1\n')
+    // A private copy: worktree edits stay in the worktree.
+    writeFileSync(join(worktree, '.env'), 'SECRET=2\n')
+    expect(readFileSync(join(primary, '.env'), 'utf8')).toBe('SECRET=1\n')
+    // Neither the probe nor the clone leaves its temp file behind.
+    expect(existsSync(join(worktree, '.orca-reflink-probe-test'))).toBe(false)
+    expect(existsSync(join(worktree, '.orca-reflink-clone-test'))).toBe(false)
+    expect(warn).not.toHaveBeenCalled()
+    expect(error).not.toHaveBeenCalled()
+  })
+
+  posixIt('reflink clone-copies a directory on Linux and preserves its mode', async () => {
+    const source = join(primary, 'node_modules')
+    mkdirSync(source)
+    writeFileSync(join(source, 'marker'), 'installed\n')
+    chmodSync(source, 0o700)
+    const deps = createReflinkCloneDeps({ supported: true })
+
+    await createWorktreeLinkedPaths(primary, worktree, ['node_modules'], {
+      platform: 'linux',
+      reflinkCloneDeps: deps
+    })
+
+    const target = join(worktree, 'node_modules')
+    expect(lstatSync(target).isSymbolicLink()).toBe(false)
+    expect(statSync(target).mode & 0o777).toBe(0o700)
+    expect(readFileSync(join(target, 'marker'), 'utf8')).toBe('installed\n')
+    expect(vi.mocked(deps.reflinkTree)).toHaveBeenCalledWith(
+      source,
+      expect.stringContaining('.orca-reflink-stage-')
+    )
+  })
+
+  it('falls back to a symlink on Linux when the filesystem cannot reflink', async () => {
+    writeFileSync(join(primary, '.env'), 'SECRET=1\n')
+    const deps = createReflinkCloneDeps({ supported: false })
+
+    await createWorktreeLinkedPaths(primary, worktree, ['.env'], {
+      platform: 'linux',
+      reflinkCloneDeps: deps
+    })
+
+    expect(lstatSync(join(worktree, '.env')).isSymbolicLink()).toBe(true)
+    expect(readlinkSync(join(worktree, '.env'))).toBe(join(primary, '.env'))
+    expect(vi.mocked(deps.reflinkFile)).not.toHaveBeenCalled()
+    // "Unavailable" is a verdict, not a failure — nothing to warn about.
+    expect(warn).not.toHaveBeenCalled()
+    expect(error).not.toHaveBeenCalled()
+  })
+
+  it('falls back to a symlink when a Linux reflink fails after the probe passed', async () => {
+    writeFileSync(join(primary, '.env'), 'SECRET=1\n')
+    const deps = createReflinkCloneDeps({ supported: true })
+    vi.mocked(deps.reflinkFile).mockRejectedValue(
+      Object.assign(new Error('EIO: i/o error'), { code: 'EIO' })
+    )
+
+    await createWorktreeLinkedPaths(primary, worktree, ['.env'], {
+      platform: 'linux',
+      reflinkCloneDeps: deps
+    })
+
+    expect(lstatSync(join(worktree, '.env')).isSymbolicLink()).toBe(true)
+    expect(warn).toHaveBeenCalledWith(
+      expect.stringContaining('[worktree-symlinks] reflink clone-copy unavailable'),
+      expect.any(Error)
+    )
+  })
+
+  it('byte-copies complete content after a strict Linux tree clone leaves an empty file', async () => {
+    mkdirSync(join(primary, 'cache'))
+    writeFileSync(join(primary, 'cache', 'file'), 'complete payload')
+    const deps = createReflinkCloneDeps({ supported: true })
+    vi.mocked(deps.reflinkTree).mockImplementation(async (_source, target) => {
+      writeFileSync(join(target, 'file'), '')
+      throw Object.assign(new Error('dirty block'), { code: 'EAGAIN' })
+    })
+
+    const skipped = await createWorktreeCopiedPaths(primary, worktree, ['cache'], {
+      platform: 'linux',
+      reflinkCloneDeps: deps
+    })
+
+    expect(skipped).toEqual([])
+    expect(readFileSync(join(worktree, 'cache', 'file'), 'utf8')).toBe('complete payload')
+    expect(readFileSync(join(primary, 'cache', 'file'), 'utf8')).toBe('complete payload')
+  })
+
+  // Perf: reflink support is a property of the filesystem pair, so the probe
+  // must not scale with the number of materialized paths.
+  it('probes reflink support once per filesystem pair on Linux', async () => {
+    for (const name of ['.env', '.env.local', 'config.json', 'secrets.json']) {
+      writeFileSync(join(primary, name), `${name}\n`)
+    }
+    const deps = createReflinkCloneDeps({ supported: true })
+
+    await createWorktreeLinkedPaths(
+      primary,
+      worktree,
+      ['.env', '.env.local', 'config.json', 'secrets.json'],
+      { platform: 'linux', reflinkCloneDeps: deps }
+    )
+
+    expect(vi.mocked(deps.reflinkFileOrFail)).toHaveBeenCalledTimes(1)
+    // The clones themselves still happen per path.
+    expect(vi.mocked(deps.reflinkFile)).toHaveBeenCalledTimes(4)
+  })
+
+  it('does not overwrite a file target that appears before the reflink clone is published', async () => {
+    writeFileSync(join(primary, '.env'), 'SECRET=1\n')
+    const target = join(worktree, '.env')
+    const deps = createReflinkCloneDeps({
+      supported: true,
+      onReflink: () => {
+        writeFileSync(target, 'RACE=1\n')
+      }
+    })
+
+    await createWorktreeLinkedPaths(primary, worktree, ['.env'], {
+      platform: 'linux',
+      reflinkCloneDeps: deps
+    })
+
+    expect(readFileSync(target, 'utf8')).toBe('RACE=1\n')
+    expect(existsSync(join(worktree, '.orca-reflink-clone-file-race'))).toBe(false)
+    expect(warn).not.toHaveBeenCalled()
+    expect(error).not.toHaveBeenCalled()
+  })
+
+  posixIt(
+    'keeps symlink sources as symlinks instead of reflinking their targets on Linux',
+    async () => {
+      writeFileSync(join(primary, '.env.real'), 'SECRET=1\n')
+      symlinkSync(join(primary, '.env.real'), join(primary, '.env'), 'file')
+      const deps = createReflinkCloneDeps({ supported: true })
+
+      await createWorktreeLinkedPaths(primary, worktree, ['.env'], {
+        platform: 'linux',
+        reflinkCloneDeps: deps
+      })
+
+      expect(vi.mocked(deps.reflinkFileOrFail)).not.toHaveBeenCalled()
+      expect(lstatSync(join(worktree, '.env')).isSymbolicLink()).toBe(true)
+      expect(readlinkSync(join(worktree, '.env'))).toBe(join(primary, '.env'))
+    }
+  )
 })
 
 // Why: a plain `fs.symlink` needs Developer Mode or admin on Windows, so an
@@ -457,6 +642,21 @@ describe('createWorktreeSharedPaths', () => {
     })
 
     expect(cloneWorktreePath).not.toHaveBeenCalled()
+    expect(lstatSync(join(worktree, 'node_modules')).isSymbolicLink()).toBe(true)
+  })
+
+  posixIt('symlinks on Linux instead of reflink clone-copying', async () => {
+    mkdirSync(join(primary, 'node_modules'))
+    writeFileSync(join(primary, 'node_modules', 'marker'), 'ORIG\n')
+    const deps = createReflinkCloneDeps({ supported: true })
+
+    await createWorktreeSharedPaths(primary, worktree, ['node_modules'], {
+      platform: 'linux',
+      reflinkCloneDeps: deps
+    })
+
+    expect(vi.mocked(deps.reflinkFileOrFail)).not.toHaveBeenCalled()
+    expect(vi.mocked(deps.reflinkTree)).not.toHaveBeenCalled()
     expect(lstatSync(join(worktree, 'node_modules')).isSymbolicLink()).toBe(true)
   })
 
@@ -605,6 +805,35 @@ describe('createWorktreeCopiedPaths', () => {
     expect(readFileSync(join(worktree, '.env'), 'utf8')).toBe('SECRET=1\n')
   })
 
+  it('reflink clone-copies .worktreeinclude paths on Linux so edits stay private', async () => {
+    writeFileSync(join(primary, '.env'), 'SECRET=1\n')
+    const deps = createReflinkCloneDeps({ supported: true })
+
+    await createWorktreeCopiedPaths(primary, worktree, ['.env'], {
+      platform: 'linux',
+      reflinkCloneDeps: deps
+    })
+
+    expect(vi.mocked(deps.reflinkFile)).toHaveBeenCalledTimes(1)
+    expect(lstatSync(join(worktree, '.env')).isSymbolicLink()).toBe(false)
+    writeFileSync(join(worktree, '.env'), 'SECRET=2\n')
+    expect(readFileSync(join(primary, '.env'), 'utf8')).toBe('SECRET=1\n')
+  })
+
+  it('falls back to a real copy, not a symlink, when the Linux filesystem cannot reflink', async () => {
+    writeFileSync(join(primary, '.env'), 'SECRET=1\n')
+    const deps = createReflinkCloneDeps({ supported: false })
+
+    await createWorktreeCopiedPaths(primary, worktree, ['.env'], {
+      platform: 'linux',
+      reflinkCloneDeps: deps
+    })
+
+    expect(vi.mocked(deps.reflinkFile)).not.toHaveBeenCalled()
+    expect(lstatSync(join(worktree, '.env')).isSymbolicLink()).toBe(false)
+    expect(readFileSync(join(worktree, '.env'), 'utf8')).toBe('SECRET=1\n')
+  })
+
   it('uses APFS clone-copy for configured paths on macOS', async () => {
     writeFileSync(join(primary, '.env'), 'SECRET=1\n')
     const cloneWorktreePath = vi.fn(async (_source: string, target: string) => {
@@ -624,13 +853,13 @@ describe('createWorktreeCopiedPaths', () => {
     expect(readFileSync(join(worktree, '.env'), 'utf8')).toBe('CLONED=1\n')
   })
 
-  // Perf: the df+diskutil volume probe must not scale with the number of copied
+  // Perf: the native filesystem probe must not scale with the number of copied
   // paths — one probe per distinct volume, cached across the materialization.
   it('probes each APFS volume once regardless of how many paths are copied', async () => {
     for (const name of ['.env', '.env.local', 'config.json', 'secrets.json']) {
       writeFileSync(join(primary, name), `${name}\n`)
     }
-    const deps = createApfsCloneDeps({ onCp: () => {} })
+    const deps = createApfsCloneDeps({ onClone: () => {} })
 
     await createWorktreeCopiedPaths(
       primary,
@@ -640,16 +869,8 @@ describe('createWorktreeCopiedPaths', () => {
     )
 
     const execFileAsyncMock = vi.mocked(deps.execFileAsync)
-    const dfCalls = execFileAsyncMock.mock.calls.filter(([file]) => file === '/bin/df').length
-    const diskutilCalls = execFileAsyncMock.mock.calls.filter(
-      ([file]) => file === '/usr/sbin/diskutil'
-    ).length
-    // 4 paths would be 8 df + 8 diskutil un-cached; source+worktree share one
-    // tmp volume, so caching collapses this to a single probe pair.
-    expect(dfCalls).toBeLessThanOrEqual(2)
-    expect(diskutilCalls).toBeLessThanOrEqual(2)
-    // The copies themselves still happen per path.
-    expect(execFileAsyncMock.mock.calls.filter(([file]) => file === '/bin/cp')).toHaveLength(4)
+    expect(execFileAsyncMock.mock.calls.filter(([, args]) => args[0] === 'probe')).toHaveLength(1)
+    expect(execFileAsyncMock.mock.calls.filter(([, args]) => args[0] === 'clone')).toHaveLength(4)
   })
 })
 
@@ -709,7 +930,7 @@ describe('removeWorktreeSymlinks', () => {
     ).resolves.toEqual(['.env'])
   })
 
-  it('leaves APFS clone-copied regular files for git removal to judge', async () => {
+  it('leaves clone-copied regular files for git removal to judge', async () => {
     writeFileSync(join(worktree, '.env'), 'CLONED=1\n')
 
     await removeWorktreeLinkedPaths(worktree, ['.env'])

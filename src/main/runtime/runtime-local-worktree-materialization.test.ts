@@ -1,11 +1,16 @@
 import { describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
+  materializeWslWorktreePaths: vi.fn(),
   createWorktreeCopiedPaths: vi.fn(),
   createWorktreeLinkedPaths: vi.fn(),
   createWorktreeSharedPaths: vi.fn(),
   resolveWorktreeIncludePaths: vi.fn(async () => []),
   resolveWorktreeSharedDirectories: vi.fn(async () => [])
+}))
+
+vi.mock('../ipc/wsl-worktree-path-materialization', () => ({
+  materializeWslWorktreePaths: mocks.materializeWslWorktreePaths
 }))
 
 vi.mock('../ipc/worktree-symlinks', () => ({
@@ -23,9 +28,11 @@ vi.mock('../git/worktree-shared-directories', () => ({
 import { materializeRuntimeLocalWorktree } from './runtime-local-worktree-materialization'
 
 describe('materializeRuntimeLocalWorktree', () => {
-  it('records lineage immediately after metadata and before filesystem setup', async () => {
+  it.each([false, true])('records lineage before host filesystem setup (WSL=%s)', async (wsl) => {
+    vi.clearAllMocks()
     const order: string[] = []
-    mocks.createWorktreeLinkedPaths.mockImplementationOnce(async () => {
+    const materialize = wsl ? mocks.materializeWslWorktreePaths : mocks.createWorktreeLinkedPaths
+    materialize.mockImplementationOnce(async () => {
       order.push('filesystem')
       throw new Error('link failed')
     })
@@ -61,7 +68,7 @@ describe('materializeRuntimeLocalWorktree', () => {
         branchName: 'feature/app',
         effectiveRequestedName: 'app',
         effectiveSanitizedName: 'app',
-        localWorktreeGitOptions: {},
+        localWorktreeGitOptions: wsl ? { wslDistro: 'Ubuntu' } : {},
         onMetadataPersisted: () => {
           order.push('metadata')
           return null

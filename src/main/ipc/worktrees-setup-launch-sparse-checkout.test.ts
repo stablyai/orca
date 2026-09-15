@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { Repo } from '../../shared/repo-types'
 import {
   listWorktreesMock,
   addWorktreeMock,
@@ -9,6 +10,8 @@ import {
   shouldRunSetupForCreateMock
 } from './worktrees-test-module-mocks'
 import { handlers, mainWindow, setupWorktreeHandlers, store } from './worktrees-test-harness'
+import { createWorktreeLinkedPaths } from './worktree-symlinks'
+import { WorktreeCloneInterruptedError } from './worktree-clone-copy-errors'
 import { createdWorktreeList } from './worktrees-test-fixtures'
 
 vi.mock('electron', async () =>
@@ -96,6 +99,27 @@ vi.mock('./pty', async () => (await import('./worktrees-test-module-mocks')).pty
 describe('registerWorktreeHandlers', () => {
   beforeEach(() => {
     setupWorktreeHandlers()
+  })
+
+  it('preserves the created workspace but does not prepare setup after an unverifiable clone', async () => {
+    listWorktreesMock.mockResolvedValue(createdWorktreeList)
+    const repo = { ...(store.getRepo('repo-1') as Repo), symlinkPaths: ['deps'] }
+    store.getRepo.mockReturnValue(repo)
+    store.getRepos.mockReturnValue([repo])
+    shouldRunSetupForCreateMock.mockReturnValue(true)
+    vi.mocked(createWorktreeLinkedPaths).mockRejectedValueOnce(
+      new WorktreeCloneInterruptedError('unverifiable')
+    )
+    await expect(
+      handlers['worktrees:create'](null, {
+        repoId: 'repo-1',
+        name: 'improve-dashboard',
+        setupDecision: 'run'
+      })
+    ).rejects.toThrow('termination is unverifiable')
+    expect(addWorktreeMock).toHaveBeenCalled()
+    expect(store.setWorktreeMeta).toHaveBeenCalled()
+    expect(createSetupRunnerScriptMock).not.toHaveBeenCalled()
   })
 
   it('returns a setup launch payload when setup should run', async () => {

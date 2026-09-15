@@ -1,3 +1,7 @@
+import {
+  buildDevWorkspaceCloneHelper,
+  getWorkspaceCloneHelperHash
+} from './workspace-cow-dev-bundle.mjs'
 import { execFileSync, spawn } from 'node:child_process'
 import { createHash } from 'node:crypto'
 import {
@@ -215,6 +219,7 @@ function prepareMacDevElectronApp() {
       sourceAppPath,
       electronVersion,
       bundleLayoutVersion,
+      workspaceCloneHelperHash: getWorkspaceCloneHelperHash(repoRoot),
       plistPatches: [...getDevBundlePlistPatches(), ...getDevHelperPlistPatches()]
     },
     null,
@@ -354,6 +359,8 @@ function prepareMacDevElectronApp() {
       `[orca-dev] keyboard-layout helper build failed (shifted Option composition stays conservative): ${error?.message ?? error}`
     )
   }
+
+  buildDevWorkspaceCloneHelper(repoRoot, appPath)
 
   // Why: the plist edits above (and the copy itself) break the bundle's
   // ad-hoc seal, and macOS refuses Notification Center registration for

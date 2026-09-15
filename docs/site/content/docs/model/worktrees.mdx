@@ -35,32 +35,49 @@ When creating a worktree you pick what to branch from. This can be:
 - A specific commit SHA.
 - An existing remote branch — Orca will fetch and check it out.
 
-## Shared directories & gitignored files
+## Files for new worktrees
 
-A brand-new worktree is a clean checkout. Dependencies, caches, and local secrets that live in gitignored paths are missing until you recreate them.
+Git brings the chosen branch’s tracked code. Orca can also copy selected ignored files from the **primary checkout on the execution host** into each new worktree.
 
-Orca fills that gap in three complementary ways:
+### Repository settings → Files to copy
 
-1. **Worktree Shared Paths** (per repo, in Settings → Repository) — paths materialize from the primary checkout into each new worktree (APFS clone-copy on macOS when possible, otherwise a symlink).
-1. **`worktree.sharedDirectories` in `orca.yaml`** — repo-checked-in list of **gitignored directories** to share the same way (symlink/share, not copy). Use this for large rebuildable trees like `node_modules` or `.cache`. Entries must exist as directories in the primary checkout **and** be gitignored; tracked or missing paths are skipped.
-1. **`.worktreeinclude` at the repo root** — list of **gitignored files or directories to copy** (not symlink) into each new worktree, so each worktree owns its copy. Typical entries: `.env`, local config under `.vscode/`. Blank lines and `#` comments are allowed. Only **literal** paths are supported today — globs and negation are skipped with a warning. Paths that are tracked, missing, or not gitignored are not copied.
+Open **Settings**, choose the **repository and host**, then find **Files to copy**. Add personal paths such as `.env.local` here. These choices apply only to this repository/host entry in Orca, are not written to the project’s files, and affect future worktrees only. Other clients of the same Orca runtime can see that runtime’s settings; this is not a per-account privacy boundary.
 
-`orca.yaml` shared directories **add to** the per-user Worktree Shared Paths list; they never replace it. Paths already shared/linked are not re-copied from `.worktreeinclude`.
-
-```yaml
-# orca.yaml (repo root)
-worktree:
-  sharedDirectories:
-    - node_modules
-    - .cache
-```
+The project can also list files in `.worktreeinclude`:
 
 ```text
-# .worktreeinclude (repo root)
+# .worktreeinclude, in the primary checkout
 .env
-.env.local
-.vscode/settings.json
+.vscode/
 ```
+
+Orca combines the personal and project lists, removes duplicate or covered paths, and copies them once. Removing a personal entry does not exclude a project entry. Commit the project list if everyone should use it; the list names `.env`, without committing its ignored contents.
+
+Use literal repository-relative paths to ignored files or folders. Blank lines and whole-line `#` comments are allowed; globs and negation are not. The manifest is limited to 256 KiB and 1,000 entries. Tracked files already come from Git. Missing extras are reported and skipped. Personal entries that are unsafe or nonignored need correction; unsupported project manifest patterns are skipped with a warning for compatibility. Conflicting selections need correction before preparation continues.
+
+### Fast copying is automatic
+
+There is no APFS switch. Orca uses strict APFS copies on supported Macs, reflinks on supported Linux filesystems, and bounded ordinary copies otherwise, including native Windows. WSL copies inside its distro; SSH copies on its host. Older SSH hosts report unsupported personal selections rather than interpreting them as shared links.
+
+**A private copy never falls back to a shared link.** Later edits to ordinary copied files stay in the new worktree. Nested links retain their targets, so external linked data can still be shared. The source is not an atomic snapshot.
+
+The whole copy list shares a budget of **2 GiB of ordinary copying and 50,000 entries**. CoW avoids the byte charge but still counts entries, so large `node_modules` trees may not fit. Use the normal setup install command for dependencies; optionally copy first and install afterwards to reconcile the destination branch’s lockfile. Setup configuration comes from the new worktree, while the extra-file lists and contents come from the primary checkout.
+
+Clean copy refusals are reported and normal setup can proceed. Possible partial output or unverifiable completion pauses dependent setup; inspect the retained worktree before retrying. Opening an existing folder workspace does not copy anything.
+
+### Explicit sharing and legacy paths
+
+Advanced projects can share ignored directories through `orca.yaml`:
+
+```yaml
+worktree:
+  sharedDirectories:
+    - .cache/tool
+```
+
+Sharing always means a link: edits affect the primary checkout too. Copy paths must not overlap shared or legacy paths. Deleting a worktree removes shared links, not their targets.
+
+Historical Settings entries appear under **Legacy paths** and keep their old behavior: a private clone when available, otherwise a shared link. Choose **Use copies…** to preview and confirm conversion of an eligible ignored path. Existing worktrees are never rewritten.
 
 ## Create dialog: Project, Run on, agent, and task links
 
