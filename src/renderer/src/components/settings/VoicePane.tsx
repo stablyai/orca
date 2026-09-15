@@ -6,6 +6,7 @@ import { Separator } from '../ui/separator'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { OpenAiTranscriptionKeyDialog } from './OpenAiTranscriptionKeyDialog'
+import { OpenAiCompatibleEndpointRow } from './OpenAiCompatibleEndpointRow'
 import { OpenAiTranscriptionSettingsRow } from './OpenAiTranscriptionSettingsRow'
 import { handleVoiceDictationToggle } from './voice-dictation-toggle'
 import { VoiceDictationSettingsSection } from './VoiceDictationSettingsSection'
@@ -235,6 +236,12 @@ export function VoicePane({ settings, updateSettings }: VoicePaneProps): React.J
             disabled={openAiKeyPending}
             onConfigure={() => openOpenAiDialog(null)}
             onClear={() => void clearOpenAiApiKey()}
+          />
+          <Separator />
+          <OpenAiCompatibleEndpointRow
+            settings={voiceSettings.openAiCompatible}
+            disabled={openAiKeyPending}
+            onChange={(openAiCompatible) => updateVoiceSettings({ openAiCompatible })}
           />
         </>
       )}

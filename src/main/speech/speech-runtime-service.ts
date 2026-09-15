@@ -1,6 +1,7 @@
 import type { ModelManager } from './model-manager'
 import type { SttService } from './stt-service'
 import type { VoiceSettings } from '../../shared/speech-types'
+import { setVoiceSettingsReader } from './openai-compatible-endpoint'
 
 /**
  * Lazy accessors for the speech services.
@@ -53,6 +54,9 @@ export function getSpeechModelManager(store: SpeechSettingsStore): ModelManager 
 }
 
 export function getSpeechSttService(store: SpeechSettingsStore): SttService {
+  // The STT session has no store of its own; give it a reader for the
+  // OpenAI-compatible endpoint settings before the first dictation starts.
+  setVoiceSettingsReader(() => store.getSettings().voice ?? null)
   if (!sttService) {
     sttService = requireFactories().createSttService(getSpeechModelManager(store))
   }
