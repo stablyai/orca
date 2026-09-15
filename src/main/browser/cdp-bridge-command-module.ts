@@ -5,6 +5,7 @@ import type { CdpCommandSender, RefEntry } from './snapshot-engine'
 import type { CdpBridgeState, CdpQueuedCommand } from './cdp-bridge-state'
 import type { CdpDebuggerLifecycle } from './cdp-debugger-lifecycle'
 import type { CdpNavigationOperations } from './cdp-navigation-operations'
+import type { ElementActionabilityRequirements } from './cdp-element-actionability'
 import type { CdpRefResolution } from './cdp-ref-resolution'
 
 export type CdpScrollDirection = BrowserScrollResult extends { scrolled: infer Direction }
@@ -88,9 +89,19 @@ export abstract class CdpBridgeCommandModule {
 
   protected getElementCenter(
     sender: CdpCommandSender,
-    backendNodeId: number
+    backendNodeId: number,
+    ref?: string
   ): Promise<{ cx: number; cy: number }> {
-    return this.refResolution.getElementCenter(sender, backendNodeId)
+    return this.refResolution.getElementCenter(sender, backendNodeId, ref)
+  }
+
+  protected assertElementInteractable(
+    sender: CdpCommandSender,
+    backendNodeId: number,
+    ref: string,
+    requirements?: ElementActionabilityRequirements
+  ): Promise<void> {
+    return this.refResolution.assertElementInteractable(sender, backendNodeId, ref, requirements)
   }
 
   protected getPageCoordinates(
