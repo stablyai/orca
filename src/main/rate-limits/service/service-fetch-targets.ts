@@ -85,6 +85,7 @@ export abstract class RateLimitServiceFetchTargets extends RateLimitServiceResul
       fresh = await fetchCodexRateLimits({
         codexHomePath,
         allowPtyFallback: this.shouldAllowCodexPtyFallback(),
+        networkProxySettings: this.networkProxySettingsResolver?.(),
         signal: controller.signal
       })
     } catch (error) {

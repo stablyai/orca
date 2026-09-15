@@ -41,6 +41,7 @@ export abstract class RateLimitServiceProviderCycles extends RateLimitServiceFul
         : fetchCodexRateLimits({
             codexHomePath,
             allowPtyFallback: this.shouldAllowCodexPtyFallback(),
+            networkProxySettings: this.networkProxySettingsResolver?.(),
             signal
           })
     ).catch((err): ProviderRateLimits => ({
