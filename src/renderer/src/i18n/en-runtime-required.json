@@ -1065,6 +1065,7 @@
           "f5d8d2a6a1": "Open platform.minimax.io/console/usage in your browser and sign in."
         },
         "AdvancedNetworkSettingsSection": {
+          "823e0f15b1": "Proxy URL for Orca network requests and local terminal children.",
           "d93c7cd531": "Configure app-level network routing.",
           "fb7130dcb9": "Hosts that should bypass the configured HTTP proxy."
         },

@@ -4,6 +4,7 @@ import {
   getProxyBypassRulesFromEnvironment,
   getProxyUrlFromEnvironment,
   normalizeProxyBypassRules,
+  normalizeProxyCaPath,
   normalizeProxyUrl,
   redactProxyUrl
 } from './network-proxy'
@@ -67,5 +68,75 @@ describe('network proxy settings', () => {
     expect(redactProxyUrl('http://user:pass@proxy.example:8080')).toBe(
       'http://***:***@proxy.example:8080'
     )
+  })
+
+  describe('proxy CA path', () => {
+    it('accepts an absolute posix or windows path and trims it', () => {
+      expect(normalizeProxyCaPath('  /etc/ssl/certs/proxy-ca.pem ')).toEqual({
+        ok: true,
+        value: '/etc/ssl/certs/proxy-ca.pem'
+      })
+      expect(normalizeProxyCaPath('C:\\certs\\proxy-ca.pem').ok).toBe(true)
+      expect(normalizeProxyCaPath('\\\\fileserver\\certs\\ca.pem').ok).toBe(true)
+    })
+
+    it('treats empty and non-string values as unset rather than invalid', () => {
+      expect(normalizeProxyCaPath('')).toEqual({ ok: true, value: '' })
+      expect(normalizeProxyCaPath('   ')).toEqual({ ok: true, value: '' })
+      expect(normalizeProxyCaPath(undefined)).toEqual({ ok: true, value: '' })
+      expect(normalizeProxyCaPath(null)).toEqual({ ok: true, value: '' })
+    })
+
+    it('rejects a relative path', () => {
+      // Agent CLIs are spawned with their own working directories, so a relative
+      // path would resolve differently for each of them.
+      const result = normalizeProxyCaPath('certs/proxy-ca.pem')
+      expect(result.ok).toBe(false)
+      expect(result.value).toBe('')
+    })
+
+    it('rejects an absurdly long path', () => {
+      expect(normalizeProxyCaPath(`/${'a'.repeat(5000)}`).ok).toBe(false)
+    })
+  })
+
+  describe('configured proxy environment', () => {
+    it('exports the CA to spawned agents as NODE_EXTRA_CA_CERTS', () => {
+      const env = buildConfiguredProxyEnv({
+        httpProxyUrl: 'http://127.0.0.1:8790',
+        httpProxyCaPath: '/etc/ssl/certs/proxy-ca.pem'
+      })
+      expect(env.NODE_EXTRA_CA_CERTS).toBe('/etc/ssl/certs/proxy-ca.pem')
+      expect(env.HTTPS_PROXY).toBe('http://127.0.0.1:8790')
+    })
+
+    it('still exports the CA when the proxy URL is inherited rather than configured', () => {
+      // buildPtyHostEnv keeps inherited proxy variables, so agents can be proxied
+      // while this setting is empty; the anchor is orthogonal to the address.
+      expect(buildConfiguredProxyEnv({ httpProxyCaPath: '/etc/ssl/certs/proxy-ca.pem' })).toEqual({
+        NODE_EXTRA_CA_CERTS: '/etc/ssl/certs/proxy-ca.pem'
+      })
+    })
+
+    it('returns nothing when neither a proxy nor a CA is configured', () => {
+      expect(buildConfiguredProxyEnv({})).toEqual({})
+      expect(buildConfiguredProxyEnv({ httpProxyCaPath: 'relative/path.pem' })).toEqual({})
+    })
+
+    it('omits NODE_EXTRA_CA_CERTS when no CA is configured', () => {
+      const env = buildConfiguredProxyEnv({ httpProxyUrl: 'http://127.0.0.1:8790' })
+      expect(env.NODE_EXTRA_CA_CERTS).toBeUndefined()
+    })
+
+    it('keeps bypass rules reaching agents as NO_PROXY', () => {
+      // Load-bearing for split-DNS overlays such as Tailscale: those hosts must
+      // resolve and connect directly, never through the proxy.
+      const env = buildConfiguredProxyEnv({
+        httpProxyUrl: 'http://127.0.0.1:8790',
+        httpProxyBypassRules: '127.0.0.1;*.ts.net;internal.example.com'
+      })
+      expect(env.NO_PROXY).toBe('127.0.0.1,*.ts.net,internal.example.com')
+      expect(env.no_proxy).toBe(env.NO_PROXY)
+    })
   })
 })
