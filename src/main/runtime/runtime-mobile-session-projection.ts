@@ -283,6 +283,22 @@ export function projectRuntimeMobileSessionTabs(
     const clientAgentStatus: { agentStatus?: AgentStatusEntry } = projectedStatusEntry
       ? { agentStatus: clientStatusFields as AgentStatusEntry }
       : {}
+    const lifecyclePty =
+      liveLeafPty ??
+      (pty &&
+      pty.worktreeId === snapshot.worktree &&
+      pty.tabId === tab.parentTabId &&
+      pty.paneKey === paneKey
+        ? pty
+        : null)
+    // Host-owned lifecycle distinguishes a process exit from a lost PTY record.
+    const lifecycle: 'live' | 'disconnected' | 'exited' | undefined = terminalHandle
+      ? 'live'
+      : lifecyclePty
+        ? lifecyclePty.lastExitCode !== null
+          ? 'exited'
+          : 'disconnected'
+        : undefined
     tabs.push({
       type: 'terminal',
       id: tab.id,
@@ -303,6 +319,7 @@ export function projectRuntimeMobileSessionTabs(
       ...(tab.launchDraftCreatedAt !== undefined
         ? { launchDraftCreatedAt: tab.launchDraftCreatedAt }
         : {}),
+      ...(lifecycle ? { lifecycle } : {}),
       isActive: tab.isActive,
       ...(terminalHandle
         ? { status: 'ready' as const, terminal: terminalHandle }

@@ -23,6 +23,7 @@ export const TerminalMultiplexSubscribeFrame = TerminalHandle.extend({
       ackOutputSourceRanges: z.literal(1).optional(),
       desktopViewportClaims: z.literal(1).optional(),
       outputPause: z.literal(1).optional(),
+      terminalExited: z.literal(1).optional(),
       writeUnavailable: z.literal(1).optional()
     })
     .optional()
