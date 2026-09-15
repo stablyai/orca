@@ -151,6 +151,39 @@ export const getGeneralNavigationSearchEntries = createLocalizedCatalog(() => [
       ...translateSearchKeyword('auto.components.settings.general.search.9f8558233a', 'confirm'),
       ...translateSearchKeyword('auto.components.settings.general.search.afa37a34e1', 'close')
     ]
+  },
+  {
+    title: translate(
+      'auto.components.settings.general.search.autoHideSingleTabStrip',
+      'Hide the tab bar when a pane has one tab'
+    ),
+    description: translate(
+      'auto.components.settings.general.search.autoHideSingleTabStripDescription',
+      'Collapse the tab bar until you hover the top edge of the pane.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('auto.components.settings.general.search.2a254b725e', 'tab'),
+      ...translateSearchKeyword(
+        'auto.components.settings.general.search.autoHideSingleTabStripKeywordBar',
+        'tab bar'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.general.search.autoHideSingleTabStripKeywordHide',
+        'hide'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.general.search.autoHideSingleTabStripKeywordAutoHide',
+        'auto hide'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.general.search.autoHideSingleTabStripKeywordSingle',
+        'single'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.general.search.autoHideSingleTabStripKeywordStrip',
+        'strip'
+      )
+    ]
   }
 ])
 

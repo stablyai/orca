@@ -1,15 +1,8 @@
-import { Suspense, useMemo } from 'react'
+import { Suspense, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
 import { useDroppable } from '@dnd-kit/core'
-import { Ellipsis, X } from 'lucide-react'
+import { SYNC_FIT_PANES_EVENT } from '@/constants/terminal'
 import { useAppStore } from '../../store'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger
-} from '@/components/ui/dropdown-menu'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import TabBar from '../tab-bar/TabBar'
 
 import { TabBarQuickCommandsButton } from '../tab-bar/TabBarQuickCommandsButton'
@@ -18,6 +11,10 @@ import { closeTerminalTab } from '../terminal/terminal-tab-actions'
 import { resolveGroupTabFromVisibleId } from './tab-group-visible-id'
 import { getTabPaneBodyDroppableId, type HoveredTabInsertion } from './useTabDragSplit'
 import { tabGroupBodyAnchorName } from './tab-group-body-anchor'
+import { isAutoHideSingleTabStripEnabled } from './auto-hide-single-tab-strip-preference'
+import { resolveSingleTabStripVisibility } from './single-tab-strip-visibility'
+import { useTabStripRevealHover } from './tab-strip-reveal-hover'
+import { TabGroupPaneActionsMenu } from './TabGroupPaneActionsMenu'
 import { translate } from '@/i18n/i18n'
 import type { TabGroup } from '../../../../shared/tab-types'
 import type { ClientHostedBrowserRow } from '../../../../shared/client-hosted-browser-rows'
@@ -84,6 +81,38 @@ export default function TabGroupPanel({
   const clientHostedRows = ownsClientHostedRows
     ? worktreeClientHostedRows
     : EMPTY_CLIENT_HOSTED_ROWS
+  const autoHideSingleTabStrip = useAppStore((state) =>
+    isAutoHideSingleTabStripEnabled(state.settings)
+  )
+  const [stripHovered, setStripHovered] = useState(false)
+  const { autoHidden: stripAutoHidden, revealed: stripRevealed } = resolveSingleTabStripVisibility({
+    autoHideEnabled: autoHideSingleTabStrip,
+    groupTabCount: model.groupTabs.length,
+    clientHostedRowCount: clientHostedRows.length,
+    stripHovered,
+    tabDragActive: isTabDragActive
+  })
+  // Why: the watcher stops with the collapsed strip, so a reveal that ends by gaining a tab never
+  // sees the pointer leave and would come back already revealed once the group drops to one tab again.
+  if (!stripAutoHidden && stripHovered) {
+    setStripHovered(false)
+  }
+  const panelRef = useRef<HTMLDivElement | null>(null)
+  useTabStripRevealHover({
+    enabled: stripAutoHidden && isVisible,
+    panelRef,
+    onHoverChange: setStripHovered
+  })
+  // Why: this transition moves the pane body by 32px and xterm only reflows on this event; skipping
+  // the mount run matters because every worktree's groups stay mounted and each would refit them all.
+  const didSyncStripHeightRef = useRef(false)
+  useLayoutEffect(() => {
+    if (!didSyncStripHeightRef.current) {
+      didSyncStripHeightRef.current = true
+      return
+    }
+    window.dispatchEvent(new CustomEvent(SYNC_FIT_PANES_EVENT))
+  }, [stripAutoHidden])
   const { setNodeRef: setBodyDropRef } = useDroppable({
     id: getTabPaneBodyDroppableId(groupId),
     data: {
@@ -217,14 +246,79 @@ export default function TabGroupPanel({
     />
   )
 
-  const menuButtonClassName =
-    'my-auto flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent/50 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent'
   // Why: focused-only so quick commands and Close split pane stay with the active pane and unfocused strips stay compact.
   const focusedActionChromeClassName = `flex shrink-0 items-center gap-0.5 overflow-hidden transition-[opacity] duration-150 ${
     isFocused ? 'ml-1.5 pointer-events-auto opacity-100' : 'pointer-events-none opacity-0 w-0'
   }`
+  // Why: dim the children, not the root — root opacity opens a stacking context that traps the revealed strip under the worktree-level pane overlays.
+  const unfocusedDimClassName = hasSplitGroups && !isFocused ? ' opacity-95' : ''
+  const stripRow = (
+    <div
+      className={`${
+        stripAutoHidden
+          ? // Why: no slide during a tab drag — dnd-kit measures droppable rects once at drag start and would record the strip mid-animation.
+            `absolute inset-x-0 top-0 h-[32px] border-b border-border bg-card ${
+              isTabDragActive ? '' : 'transition-transform duration-150'
+            } ${stripRevealed ? 'translate-y-0' : '-translate-y-full'}`
+          : 'h-[32px] shrink-0 border-b border-border bg-card'
+      }${unfocusedDimClassName}`}
+      // Why: a drag region swallows renderer pointer events, so a revealed strip that kept one would lose the hover that holds it open.
+      // Why: collapsed, the hover wrapper carries the strip identity instead — the translated-away strip has no rect a drop could land in.
+      {...(stripAutoHidden
+        ? {}
+        : {
+            'data-terminal-focus-release-surface': 'true',
+            'data-tab-group-strip-id': groupId,
+            'data-worktree-id': worktreeId
+          })}
+      inert={stripAutoHidden && !stripRevealed}
+    >
+      <div className="flex h-full items-stretch pr-1.5">
+        {/* Why: Electron drag hit-test respects no-drag only on DOM descendants, not z-index siblings, so this no-drag spacer keeps the collapsed left-sidebar's floating toggle clickable. */}
+        {reserveCollapsedSidebarHeaderSpace && !sidebarOpen ? (
+          <div
+            className="shrink-0"
+            style={
+              {
+                width: 'var(--collapsed-sidebar-header-width)',
+                WebkitAppRegion: 'no-drag'
+              } as React.CSSProperties
+            }
+          />
+        ) : null}
+        <div className="min-w-0 flex-1 h-full">{tabBar}</div>
+        <div
+          className="ml-1.5 flex shrink-0 items-center gap-0.5"
+          style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+        >
+          <div className={focusedActionChromeClassName}>
+            {isFocused ? (
+              <TabBarQuickCommandsButton worktreeId={worktreeId} groupId={groupId} />
+            ) : null}
+            {isFocused && hasSplitGroups ? (
+              <TabGroupPaneActionsMenu onCloseGroup={commands.closeGroup} />
+            ) : null}
+          </div>
+        </div>
+        {/* Why: Electron drag hit-test respects no-drag only on DOM descendants, not z-index siblings, so this no-drag spacer keeps the floating right-sidebar toggle + window controls clickable. */}
+        {reserveClosedExplorerToggleSpace && !rightSidebarOpen ? (
+          <div
+            className="shrink-0"
+            style={
+              {
+                width: 'calc(40px + var(--window-controls-width, 0px))',
+                WebkitAppRegion: 'no-drag'
+              } as React.CSSProperties
+            }
+          />
+        ) : null}
+      </div>
+    </div>
+  )
+
   return (
     <div
+      ref={panelRef}
       // Why: vertical borders stay `border-border` so the focus highlight (--accent ~#f5f5f5 in light) doesn't paint a near-white strip by the resize handle; only the bottom border changes on focus.
       // Why: unfocused split groups dim subtly so the focused one reads as selected; only when hasSplitGroups since a lone group has nothing to contrast against.
       className={`group/tab-group relative flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden${
@@ -236,7 +330,7 @@ export default function TabGroupPanel({
               touchesBottomEdge || suppressBottomBorder ? '' : 'border-b'
             } border-border ${
               isFocused && !touchesBottomEdge && !suppressBottomBorder ? 'border-b-accent' : ''
-            } ${isFocused ? '' : 'opacity-95'}`
+            }`
           : ''
       }`}
       onPointerDown={commands.focusGroup}
@@ -244,100 +338,29 @@ export default function TabGroupPanel({
       onFocusCapture={commands.focusGroup}
     >
       {/* Why: each split group needs its own tab row because multiple groups can show at once but the titlebar has only one shared center slot. */}
-      {/* Why: macOS hiddenInset titleBarStyle makes -webkit-app-region: drag the only way to move the window from this tab row. */}
-      <div
-        className="h-[32px] shrink-0 border-b border-border bg-card"
-        data-tab-group-strip-id={groupId}
-        data-terminal-focus-release-surface="true"
-        data-worktree-id={worktreeId}
-      >
-        <div className="flex h-full items-stretch pr-1.5">
-          {/* Why: Electron drag hit-test respects no-drag only on DOM descendants, not z-index siblings, so this no-drag spacer keeps the collapsed left-sidebar's floating toggle clickable. */}
-          {reserveCollapsedSidebarHeaderSpace && !sidebarOpen ? (
-            <div
-              className="shrink-0"
-              style={
-                {
-                  width: 'var(--collapsed-sidebar-header-width)',
-                  WebkitAppRegion: 'no-drag'
-                } as React.CSSProperties
-              }
-            />
-          ) : null}
-          <div className="min-w-0 flex-1 h-full">{tabBar}</div>
-          <div
-            className="ml-1.5 flex shrink-0 items-center gap-0.5"
-            style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
-          >
-            <div className={focusedActionChromeClassName}>
-              {isFocused ? (
-                <TabBarQuickCommandsButton worktreeId={worktreeId} groupId={groupId} />
-              ) : null}
-              {isFocused && hasSplitGroups ? (
-                <Tooltip>
-                  <DropdownMenu modal={false}>
-                    <TooltipTrigger asChild>
-                      <DropdownMenuTrigger asChild>
-                        <button
-                          type="button"
-                          aria-label={translate(
-                            'auto.components.tab.group.TabGroupPanel.9acaf92093',
-                            'Pane Actions'
-                          )}
-                          onClick={(event) => {
-                            event.stopPropagation()
-                          }}
-                          className={menuButtonClassName}
-                        >
-                          <Ellipsis className="size-4" />
-                        </button>
-                      </DropdownMenuTrigger>
-                    </TooltipTrigger>
-                    <DropdownMenuContent align="end" side="bottom" sideOffset={4}>
-                      <DropdownMenuItem
-                        variant="destructive"
-                        onSelect={() => {
-                          commands.closeGroup()
-                        }}
-                      >
-                        <X className="size-4" />
-                        {translate(
-                          'auto.components.tab.group.TabGroupPanel.closePaneColumn',
-                          'Close split pane'
-                        )}
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                  <TooltipContent side="bottom" sideOffset={6}>
-                    {translate(
-                      'auto.components.tab.group.TabGroupPanel.9acaf92093',
-                      'Pane Actions'
-                    )}
-                  </TooltipContent>
-                </Tooltip>
-              ) : null}
-            </div>
-          </div>
-          {/* Why: Electron drag hit-test respects no-drag only on DOM descendants, not z-index siblings, so this no-drag spacer keeps the floating right-sidebar toggle + window controls clickable. */}
-          {reserveClosedExplorerToggleSpace && !rightSidebarOpen ? (
-            <div
-              className="shrink-0"
-              style={
-                {
-                  width: 'calc(40px + var(--window-controls-width, 0px))',
-                  WebkitAppRegion: 'no-drag'
-                } as React.CSSProperties
-              }
-            />
-          ) : null}
+      {/* Why: macOS hiddenInset titleBarStyle makes -webkit-app-region: drag the only way to move the window from this tab row — except while auto-hide holds the row collapsed, which trades that drag surface away. */}
+      {stripAutoHidden ? (
+        // Why: click-through while collapsed, so the pane keeps its own top rows. It still carries
+        // the strip identity, which pane-detach matches by rect since hit-testing skips this.
+        <div
+          className={`absolute inset-x-0 top-0 z-20 h-[32px] ${
+            stripRevealed ? '' : 'pointer-events-none'
+          }`}
+          style={{ WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+          data-tab-group-strip-id={groupId}
+          data-worktree-id={worktreeId}
+        >
+          {stripRow}
         </div>
-      </div>
+      ) : (
+        stripRow
+      )}
 
       <div
         ref={setBodyDropRef}
         data-tab-group-body-id={groupId}
         data-worktree-id={worktreeId}
-        className="relative flex-1 min-h-0 overflow-hidden"
+        className={`relative flex-1 min-h-0 overflow-hidden${unfocusedDimClassName}`}
         style={bodyAnchorStyle}
       >
         {/* Why: empty anchor so the agent-sessions tour reads as a terminal-area tip, not toolbar chrome. */}

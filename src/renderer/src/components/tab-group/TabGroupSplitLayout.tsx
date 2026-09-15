@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { DndContext, DragOverlay } from '@dnd-kit/core'
-import type { TabGroupLayoutNode } from '../../../../shared/tab-types'
+import type { Tab, TabGroup, TabGroupLayoutNode } from '../../../../shared/tab-types'
 import { useAppStore } from '../../store'
+import { useClientHostedBrowserRows } from '@/lib/pane-manager/client-hosted-browser-row-state'
+import { isAutoHideSingleTabStripEnabled } from './auto-hide-single-tab-strip-preference'
+import { areAllTabStripsAutoHidden } from './single-tab-strip-visibility'
 import TabGroupPanel from './TabGroupPanel'
 import TabDragPreview from '../tab-bar/TabDragPreview'
 import { TabDragProvider } from './tab-drag-context'
@@ -10,6 +13,9 @@ import { type HoveredTabInsertion, useTabDragSplit } from './useTabDragSplit'
 
 const MIN_RATIO = 0.15
 const MAX_RATIO = 0.85
+// Why: stable fallbacks — a fresh `?? []` breaks Zustand v5 snapshot identity and loops renders.
+const EMPTY_GROUPS: readonly TabGroup[] = []
+const EMPTY_UNIFIED_TABS: readonly Tab[] = []
 
 function ResizeHandle({
   direction,
@@ -275,6 +281,16 @@ export default function TabGroupSplitLayout({
 }): React.JSX.Element {
   const dragSplit = useTabDragSplit({ worktreeId, enabled: isWorktreeActive })
   const hasSplits = layout.type === 'split'
+  const clientHostedRowCount = useClientHostedBrowserRows(worktreeId).length
+  const allStripsAutoHidden = useAppStore((state) => {
+    const groups = state.groupsByWorktree[worktreeId] ?? EMPTY_GROUPS
+    const tabs = state.unifiedTabsByWorktree[worktreeId] ?? EMPTY_UNIFIED_TABS
+    return areAllTabStripsAutoHidden({
+      autoHideEnabled: isAutoHideSingleTabStripEnabled(state.settings),
+      groupTabCounts: groups.map((group) => tabs.filter((tab) => tab.groupId === group.id).length),
+      clientHostedRowCount
+    })
+  })
 
   return (
     <TabDragProvider
@@ -316,7 +332,11 @@ export default function TabGroupSplitLayout({
           ref={dragSplit.setDragRootNode}
           className="flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden border-l border-border"
         >
-          <div className="h-[4px] shrink-0 bg-card" data-terminal-focus-release-surface="true" />
+          {/* Why: with every strip collapsed there is no 32px row to pair with, and the band is left
+            reading as a stray 4px ledge above the pane — drop it and let the pane reach the window edge. */}
+          {allStripsAutoHidden ? null : (
+            <div className="h-[4px] shrink-0 bg-card" data-terminal-focus-release-surface="true" />
+          )}
           <div className="flex flex-1 min-w-0 min-h-0 overflow-hidden">
             <SplitNode
               node={layout}
