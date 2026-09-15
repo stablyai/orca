@@ -85,11 +85,15 @@ describe('federated worker agent launch', () => {
 
     // Why: assert the worker actually reached ready — a spy-only assertion would
     // stay green even if every stage after terminal_create regressed.
+    // Odin (residual I): a federated worker's host is never probed from here, so `effective`
+    // is null with `source: 'unverified'`, never a copy of `requested` (I1; cursor became a
+    // probeable agent in I3, which is when this pin of the old clone stopped holding).
     expect(result).toMatchObject({
       state: 'ready',
       launch: {
         requested: { agent: 'cursor', model: 'gpt-5.3-codex', effort: 'high' },
-        effective: { agent: 'cursor', model: 'gpt-5.3-codex', effort: 'high' }
+        effective: null,
+        source: 'unverified'
       }
     })
     expect(db.getRemoteDispatchAttachment('ctx_remote')?.depth).toBe(2)
