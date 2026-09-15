@@ -147,6 +147,16 @@ export type AgentStatusEntry = {
   /** Live in-process subagents/teammates of this pane's session. Absent when
    *  none are tracked; the sidebar derives indented child rows from it. */
   subagents?: AgentSubagentSnapshot[]
+  /** Identity of THIS row when it is itself a synthesized in-process subagent
+   *  child row (see worktree-subagent-child-rows.ts). Never a Task/Dispatch id —
+   *  `orchestration.taskId`/`dispatchId` must not be fabricated for these rows
+   *  (issue #8251), so consumers branch on `subagent` instead. */
+  subagent?: {
+    /** Provider-assigned lifecycle id of the in-process child. */
+    id: string
+    /** Pane key of the parent session that spawned this child. */
+    parentPaneKey: string
+  }
   /** Provider-owned conversation/session id captured from hook payloads.
    *  Used only for exact CLI resume; Orca terminal ids are not agent-session ids. */
   providerSession?: AgentProviderSessionMetadata

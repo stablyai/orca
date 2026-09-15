@@ -768,7 +768,7 @@ describe('applyAgentRowLineage', () => {
     expect(ordered[2].lineage).toMatchObject({ depth: 1, isLastSibling: true })
   })
 
-  it('decays working subagent child rows to idle when the parent status is stale', () => {
+  it('decays working subagent child rows to unverifiable when the parent status is stale', () => {
     const entry = makeEntry(PANE_KEY_1, 1000, {
       state: 'working',
       subagents: [{ id: 'a1', state: 'working', startedAt: 1000 }]
@@ -781,7 +781,8 @@ describe('applyAgentRowLineage', () => {
     })
 
     const child = rows.find((row) => row.rowSource === 'subagent')
-    expect(child?.state).toBe('idle')
+    // Why 'unverifiable': odin(fix-k1) treats a stale parent as unknown, not a falsely confident 'idle'.
+    expect(child?.state).toBe('unverifiable')
   })
 
   it('surfaces a live subagent waiting state', () => {
