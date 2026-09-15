@@ -152,3 +152,13 @@ export const EmulatorListDevicesParams = z.object({ worktree: z.string().optiona
 export const EmulatorAvailabilityParams = z.object({ worktree: z.string().optional() }).partial()
 
 export const EmulatorListSimulatorsParams = z.object({ worktree: z.string().optional() }).partial()
+
+export const AdbConnectParams = z.object({
+  address: z.string().min(1),
+  worktree: z.string().optional()
+})
+
+export const AdbAddressOptionalParams = z.object({
+  address: z.string().min(1).optional(),
+  worktree: z.string().optional()
+})

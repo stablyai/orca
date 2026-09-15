@@ -1,10 +1,13 @@
 import { join } from 'node:path'
 
+// AVD tooling (emulator + avdmanager) is optional: platform-tools (adb) alone is
+// enough to talk to already-running/connected devices, so it discovers on its own.
+export type AndroidAvdTools = { emulator: string; avdmanager: string }
+
 export type AndroidSdkPaths = {
   sdkRoot: string
   adb: string
-  emulator: string
-  avdmanager: string
+  avdTools: AndroidAvdTools | null
 }
 
 export type DiscoverAndroidSdkOptions = {
@@ -21,10 +24,11 @@ export function discoverAndroidSdk(options: DiscoverAndroidSdkOptions): AndroidS
   const win32 = platform === 'win32'
 
   for (const sdkRoot of candidateSdkRoots(env, platform, homedir)) {
-    const paths = resolveToolPaths(sdkRoot, win32)
-    // Require both tools the backend depends on: adb (devices/input/stream) and
-    // the emulator binary (boot + list AVDs). A partial SDK isn't usable.
-    if (exists(paths.adb) && exists(paths.emulator)) {
+    const paths = resolveToolPaths(sdkRoot, win32, exists)
+    // adb (platform-tools) is the only mandatory tool: device ops (input, apps,
+    // streaming) work against a connected/network device without the emulator
+    // binary or an SDK's AVD tooling at all.
+    if (exists(paths.adb)) {
       return paths
     }
   }
@@ -63,17 +67,24 @@ function defaultSdkRoot(
   return join(homedir, 'Android', 'Sdk')
 }
 
-function resolveToolPaths(sdkRoot: string, win32: boolean): AndroidSdkPaths {
+function resolveToolPaths(
+  sdkRoot: string,
+  win32: boolean,
+  exists: (path: string) => boolean
+): AndroidSdkPaths {
+  const emulator = join(sdkRoot, 'emulator', win32 ? 'emulator.exe' : 'emulator')
+  const avdmanager = join(
+    sdkRoot,
+    'cmdline-tools',
+    'latest',
+    'bin',
+    win32 ? 'avdmanager.bat' : 'avdmanager'
+  )
   return {
     sdkRoot,
     adb: join(sdkRoot, 'platform-tools', win32 ? 'adb.exe' : 'adb'),
-    emulator: join(sdkRoot, 'emulator', win32 ? 'emulator.exe' : 'emulator'),
-    avdmanager: join(
-      sdkRoot,
-      'cmdline-tools',
-      'latest',
-      'bin',
-      win32 ? 'avdmanager.bat' : 'avdmanager'
-    )
+    // avdmanager's path is resolved but (as before) not existence-checked: only
+    // the emulator binary gates whether AVD tooling counts as available.
+    avdTools: exists(emulator) ? { emulator, avdmanager } : null
   }
 }

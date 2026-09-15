@@ -162,5 +162,49 @@ export const getMobileEmulatorSearchEntries = createLocalizedCatalog(() => [
         'mobile skill'
       )
     ]
+  },
+  {
+    title: translate(
+      'auto.components.settings.mobile.emulator.search.849bb5184b',
+      'ADB Device Connection'
+    ),
+    description: translate(
+      'auto.components.settings.mobile.emulator.search.a7b8188acc',
+      'Connect an Android device or cloud phone over ADB by address.'
+    ),
+    keywords: [
+      ...translateSearchKeyword(
+        'auto.components.settings.mobile.emulator.search.252f15438e',
+        'adb'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.mobile.emulator.search.7878a18ec0',
+        'device'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.mobile.emulator.search.badd8f59c3',
+        'address'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.mobile.emulator.search.ceceed63a7',
+        'tcp'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.mobile.emulator.search.5a84794ca0',
+        'cloud phone'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.mobile.emulator.search.4551927ee8',
+        'connect'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.mobile.emulator.search.78a62cc352',
+        'disconnect'
+      ),
+      ...translateSearchKeyword(
+        'auto.components.settings.mobile.emulator.search.ded8cfc31c',
+        'network'
+      )
+    ]
   }
 ])

@@ -10,11 +10,21 @@ vi.mock('node:child_process', async (importOriginal) => {
   return { ...actual, spawn: vi.fn(() => ({ on: () => {}, unref: () => {} })) }
 })
 
+// scrcpy-server-download (an ensureJar transitive import) reaches into
+// `electron.app`; these are pure adb/backend-logic tests with no Electron
+// runtime, so stub it like sibling main-process test files do.
+vi.mock('electron', () => ({ app: { getPath: () => '/mock-userdata' } }))
+
 const SDK: AndroidSdkPaths = {
   sdkRoot: '/sdk',
   adb: '/sdk/adb',
-  emulator: '/sdk/emulator',
-  avdmanager: '/sdk/avdmanager'
+  avdTools: { emulator: '/sdk/emulator', avdmanager: '/sdk/avdmanager' }
+}
+
+const SDK_NO_AVD_TOOLS: AndroidSdkPaths = {
+  sdkRoot: '/sdk',
+  adb: '/sdk/adb',
+  avdTools: null
 }
 
 const ok = (stdout: string): AndroidCommandResult => ({ stdout, stderr: '', code: 0 })
@@ -30,7 +40,7 @@ function defaultRunner(): ReturnType<typeof vi.fn> {
     if (binary === SDK.adb && a === 'devices -l') {
       return ok(RUNNING_ADB)
     }
-    if (binary === SDK.emulator && a === '-list-avds') {
+    if (binary === SDK.avdTools?.emulator && a === '-list-avds') {
       return ok('Pixel_7\nPixel_Tablet')
     }
     if (binary === SDK.adb && a === '-s emulator-5554 emu avd name') {
@@ -117,6 +127,19 @@ describe('AndroidEmulatorBackend', () => {
     })
   })
 
+  it('reports a disconnected network serial as not-connected, not "boot it"', async () => {
+    const android = backend(runner)
+    await expect(android.resolveDeviceId('127.0.0.1:5555')).rejects.toMatchObject({
+      code: 'emulator_adb_not_connected',
+      message: expect.stringContaining('Settings > Mobile Emulator')
+    })
+    // Every device verb funnels through resolveDeviceId, so input verbs get the
+    // same guidance instead of emulator_device_not_found.
+    await expect(android.tap('cloud-phone.internal:5555', 0.5, 0.5)).rejects.toMatchObject({
+      code: 'emulator_adb_not_connected'
+    })
+  })
+
   it('taps using device pixels from the live screen size', async () => {
     await backend(runner).tap('emulator-5554', 0.5, 0.5)
     expect(runner).toHaveBeenCalledWith(SDK.adb, [
@@ -186,6 +209,25 @@ describe('AndroidEmulatorBackend', () => {
     expect(runner).toHaveBeenCalledWith(SDK.adb, ['-s', 'emulator-5554', 'emu', 'kill'])
   })
 
+  it('never sends emu kill for a TCP or USB serial (clears state and returns)', async () => {
+    const networkRunner = vi.fn(async (binary: string, args: readonly string[]) => {
+      const a = args.join(' ')
+      if (binary === SDK.adb && a === 'devices -l') {
+        return ok(
+          'List of devices attached\n127.0.0.1:5555\tdevice\ncloud.internal:5555\tdevice\nR58N123ABC\tdevice'
+        )
+      }
+      return ok('')
+    })
+    const android = backend(networkRunner)
+    await android.shutdownDevice('127.0.0.1:5555')
+    await android.shutdownDevice('cloud.internal:5555')
+    await android.shutdownDevice('R58N123ABC')
+    for (const call of networkRunner.mock.calls) {
+      expect(call[1].join(' ')).not.toContain('emu kill')
+    }
+  })
+
   it('installs an apk and grants a permission on the resolved device', async () => {
     const android = backend(runner)
     await android.installApp('emulator-5554', '/tmp/app.apk')
@@ -237,7 +279,7 @@ describe('AndroidEmulatorBackend', () => {
       if (binary === SDK.adb && a === '-s emulator-5556 shell getprop sys.boot_completed') {
         return ok('1')
       }
-      if (binary === SDK.emulator && a === '-list-avds') {
+      if (binary === SDK.avdTools?.emulator && a === '-list-avds') {
         return ok('Pixel_Tablet')
       }
       return ok('')
@@ -245,7 +287,7 @@ describe('AndroidEmulatorBackend', () => {
     const serial = await backend(bootRunner).ensureBooted('Pixel_Tablet')
     expect(serial).toBe('emulator-5556')
     expect(spawn).toHaveBeenCalledWith(
-      SDK.emulator,
+      SDK.avdTools?.emulator,
       ['-avd', 'Pixel_Tablet', '-no-window'],
       expect.objectContaining({ windowsHide: true })
     )
@@ -272,5 +314,76 @@ describe('AndroidEmulatorBackend', () => {
     expect(info).toMatchObject({ deviceUdid: 'emulator-5554', streamCodec: 'h264' })
     await android.stopHelperForDevice('emulator-5554')
     expect(close).toHaveBeenCalledTimes(1)
+  })
+
+  describe('checkAvailability', () => {
+    it('is available with devices present regardless of avdTools', async () => {
+      const android = backend(runner)
+      const availability = await android.checkAvailability()
+      expect(availability).toMatchObject({ available: true, message: 'Ready' })
+    })
+
+    it('suggests Android Studio when no devices are found and avdTools exist', async () => {
+      const emptyRunner = vi.fn(async (binary: string, args: readonly string[]) => {
+        const a = args.join(' ')
+        if (binary === SDK.adb && a === 'devices -l') {
+          return ok('List of devices attached')
+        }
+        if (binary === SDK.avdTools?.emulator && a === '-list-avds') {
+          return ok('')
+        }
+        return ok('')
+      })
+      const android = backend(emptyRunner)
+      const availability = await android.checkAvailability()
+      expect(availability).toMatchObject({
+        available: false,
+        message: 'No Android devices or AVDs found. Create one in Android Studio.'
+      })
+    })
+
+    it('suggests connecting a device (not Android Studio) when adb exists but avdTools is null', async () => {
+      const emptyRunner = vi.fn(async (binary: string, args: readonly string[]) => {
+        const a = args.join(' ')
+        if (binary === SDK_NO_AVD_TOOLS.adb && a === 'devices -l') {
+          return ok('List of devices attached')
+        }
+        return ok('')
+      })
+      const android = new AndroidEmulatorBackend({
+        runner: emptyRunner as unknown as AndroidCommandRunner,
+        sdk: SDK_NO_AVD_TOOLS,
+        sleep: async () => {}
+      })
+      const availability = await android.checkAvailability()
+      expect(availability.available).toBe(false)
+      expect(availability.message).toContain('adb')
+      expect(availability.message).toContain('Settings > Mobile Emulator')
+      expect(availability.message).not.toContain('Android Studio')
+      // Never invoke the emulator binary when avdTools is null.
+      for (const call of emptyRunner.mock.calls) {
+        expect(call[0]).toBe(SDK_NO_AVD_TOOLS.adb)
+      }
+    })
+
+    it('is available with connected devices and no emulator invocation when avdTools is null', async () => {
+      const deviceRunner = vi.fn(async (binary: string, args: readonly string[]) => {
+        const a = args.join(' ')
+        if (binary === SDK_NO_AVD_TOOLS.adb && a === 'devices -l') {
+          return ok('List of devices attached\n192.168.1.5:5555\tdevice model:Pixel_7')
+        }
+        return ok('')
+      })
+      const android = new AndroidEmulatorBackend({
+        runner: deviceRunner as unknown as AndroidCommandRunner,
+        sdk: SDK_NO_AVD_TOOLS,
+        sleep: async () => {}
+      })
+      const availability = await android.checkAvailability()
+      expect(availability).toMatchObject({ available: true, message: 'Ready' })
+      for (const call of deviceRunner.mock.calls) {
+        expect(call[0]).toBe(SDK_NO_AVD_TOOLS.adb)
+      }
+    })
   })
 })
