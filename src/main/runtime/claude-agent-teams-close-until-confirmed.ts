@@ -11,8 +11,7 @@ export type CloseUntilConfirmedResult =
   | { confirmed: true }
   | { confirmed: false; close: RuntimeTerminalClose }
 
-// Why: a handle that goes stale between attempts means the PTY did die, just
-// not in time for the earlier attempt to see it confirmed.
+// Why: a stale handle does not prove the OS PTY exited, so it never confirms the close.
 export async function closeUntilConfirmed(
   handle: string,
   api: AgentTeamsTerminalApi
@@ -26,8 +25,8 @@ export async function closeUntilConfirmed(
       }
       lastClose = close
     } catch (error) {
-      if (error instanceof Error && error.message === 'terminal_handle_stale') {
-        return { confirmed: true }
+      if (lastClose && error instanceof Error && error.message === 'terminal_handle_stale') {
+        return { confirmed: false, close: lastClose }
       }
       throw error
     }
