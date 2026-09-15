@@ -103,7 +103,7 @@ waiting. `worker-start --spec` creates the Task and its attempt in one call:
 ```text
 ORCA status --json
 ORCA orchestration run-create --objective "<objective>" --json
-ORCA orchestration worker-start --spec "<worker A task>" --worktree current --agent codex --json
+ORCA orchestration worker-start --spec "<worker A task>" --worktree current --json
 ORCA orchestration worker-start --spec "<worker B task>" --worktree current --agent claude --json
 ORCA orchestration check --wait --types "worker_done,escalation,question" --timeout-ms 900000 --json
 ```
