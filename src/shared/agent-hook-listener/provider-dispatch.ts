@@ -146,7 +146,10 @@ export function normalizeProviderEvent(input: {
       payload = normalizeDevinEvent(state, eventName, promptText, paneKey, hookPayload)
       break
     case 'kimi':
-      payload = normalizeKimiEvent(state, eventName, promptText, paneKey, hookPayload)
+      payload =
+        eventName === 'UserPromptSubmit' && extractedPrompt.text && !promptText
+          ? null
+          : normalizeKimiEvent(state, eventName, promptText, paneKey, hookPayload)
       break
   }
 
