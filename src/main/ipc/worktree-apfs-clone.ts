@@ -3,6 +3,11 @@ import { randomUUID } from 'node:crypto'
 import { mkdir, stat, rm, link, rmdir, chmod } from 'node:fs/promises'
 import { dirname, resolve, sep } from 'node:path'
 import { promisify } from 'node:util'
+import {
+  isAlreadyExistsError,
+  WorktreeCloneUnavailableError,
+  WorktreeLinkedPathTargetExistsError
+} from './worktree-clone-copy-errors'
 
 type ExecFileAsync = (
   file: string,
@@ -35,22 +40,11 @@ type DarwinFilesystemInfo = {
  *  that to one probe per distinct volume. */
 export type DarwinFilesystemCache = Map<number, Promise<DarwinFilesystemInfo>>
 
-export class ApfsCloneUnavailableError extends Error {
+export class ApfsCloneUnavailableError extends WorktreeCloneUnavailableError {
   constructor(message: string) {
     super(message)
     this.name = 'ApfsCloneUnavailableError'
   }
-}
-
-export class WorktreeLinkedPathTargetExistsError extends Error {
-  constructor(target: string) {
-    super(`Worktree linked path target already exists: ${target}`)
-    this.name = 'WorktreeLinkedPathTargetExistsError'
-  }
-}
-
-function isAlreadyExistsError(error: unknown): boolean {
-  return (error as { code?: unknown })?.code === 'EEXIST'
 }
 
 async function getDarwinFilesystemInfo(
