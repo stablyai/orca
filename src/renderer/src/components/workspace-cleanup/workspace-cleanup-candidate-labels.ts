@@ -81,6 +81,11 @@ export function getWorkspaceCleanupBlockerLabel(blocker: WorkspaceCleanupBlocker
 
 export function formatWorkspaceCleanupGitStatusLabel(label: string): string {
   switch (label) {
+    case 'Merged':
+      return translate(
+        'auto.components.workspace.cleanup.candidateRow.mergedGit',
+        'Merged into base'
+      )
     case 'Clean':
       return translate('auto.components.workspace.cleanup.candidateRow.cleanGit', 'Clean git')
     case 'Dirty':

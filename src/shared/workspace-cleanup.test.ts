@@ -41,6 +41,7 @@ function makeCandidate(overrides: CandidateOverrides = {}): WorkspaceCleanupCand
       clean: true,
       upstreamAhead: 0,
       upstreamBehind: 0,
+      merged: null,
       checkedAt: 1_700_000_000_000
     },
     fingerprint: 'fingerprint',
@@ -107,6 +108,7 @@ describe('workspace cleanup policy', () => {
       branch: 'feature',
       head: 'abc123',
       gitClean: true,
+      gitMerged: null,
       lastActivityAt: 1_700_000_000_000
     })
     const candidate = makeCandidate({ fingerprint })
