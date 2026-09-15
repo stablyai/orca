@@ -124,7 +124,8 @@ export async function prepareRuntimePtySpawn(
         providerSession: args.resumeProviderSession,
         target: ctx.codexSelectionTarget,
         launchEnv: args.env,
-        workspacePath: ctx.cwd
+        workspacePath: ctx.cwd,
+        accountSwitchRestart: args.codexAccountSwitchRestart === true
       })
   const codexResumeLaunch = codexResumePreparation
     ? await ctx.deps.resolveCodexResumeLaunch(args.command, codexResumePreparation)

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect } from 'react'
 import { useAppStore } from '../../store'
 import { CODEX_ACCOUNT_RESTART_STARTUP } from '@/lib/codex-session-restart'
+import { buildCodexAccountRestartStartup } from '@/lib/codex-account-restart-startup'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import { connectPanePty } from './pty-connection'
 import { bindPanePtyId } from '@/lib/pane-manager/mobile-fit-overrides'
@@ -237,7 +238,18 @@ export function useTerminalPaneProcessExitActions(controller: TerminalPaneCloseC
         continue
       }
       if (consumePendingCodexPaneRestart(ptyId)) {
-        handleRestartCodexPane(pane.id)
+        const terminalTab = useAppStore
+          .getState()
+          .tabsByWorktree[worktreeId]?.find((tab) => tab.id === tabId)
+        handleRestartCodexPane(
+          pane.id,
+          buildCodexAccountRestartStartup({
+            tabId,
+            leafId: pane.leafId,
+            worktreeId,
+            shellOverride: terminalTab?.shellOverride
+          })
+        )
       }
     }
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- Preserve the pre-split dependency contract.

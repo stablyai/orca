@@ -32,6 +32,7 @@ export type PtyRuntimeControllerDeps = {
     target: CodexAccountSelectionTarget
     launchEnv?: NodeJS.ProcessEnv
     workspacePath?: string
+    accountSwitchRestart?: boolean
   }) => PreparedCodexResumeHome | null
   resolveCodexResumeLaunch: (
     command: string | undefined,
