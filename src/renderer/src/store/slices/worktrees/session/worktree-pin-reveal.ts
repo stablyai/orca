@@ -57,7 +57,7 @@ export function createSetWorktreesPinnedAndReveal(
   _set: WorktreeSliceSet,
   get: WorktreeSliceGet
 ): WorktreeSlice['setWorktreesPinnedAndReveal'] {
-  return (worktreeIds, isPinned) => {
+  return (targets, isPinned) => {
     // Only follow a toggled row with the viewport when it's the focused worktree, not an unfocused card.
     const activeSidebarWorktreeId = getActiveSidebarWorkspaceId(
       get().activeWorkspaceKey,
@@ -68,8 +68,12 @@ export function createSetWorktreesPinnedAndReveal(
     const changedWorktreeIds = new Set<string>()
     let didChange = false
     let revealWorktreeId: string | null = null
-    for (const worktreeId of worktreeIds) {
-      const current = get().getKnownWorktreeById(worktreeId)
+    for (const target of targets) {
+      const worktreeId = typeof target === 'string' ? target : target.worktreeId
+      const current =
+        typeof target === 'string'
+          ? get().getKnownWorktreeById(worktreeId)
+          : get().getKnownWorktreeById(worktreeId, target.executionHostId)
       if (!current || current.isPinned === isPinned) {
         continue
       }
@@ -89,7 +93,14 @@ export function createSetWorktreesPinnedAndReveal(
           executionHostId: current.hostId ?? 'local'
         })
       }
-      if (revealWorktreeId === null && worktreeId === activeSidebarWorktreeId) {
+      // The active id carries no host, so a changed remote twin would otherwise scroll the
+      // viewport to its local namesake; only follow a row the active host actually owns.
+      const activeExecutionHostId = get().activeWorkspaceExecutionHostId
+      if (
+        revealWorktreeId === null &&
+        worktreeId === activeSidebarWorktreeId &&
+        (activeExecutionHostId === null || (current.hostId ?? 'local') === activeExecutionHostId)
+      ) {
         revealWorktreeId = worktreeId
       }
     }

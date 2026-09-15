@@ -82,6 +82,13 @@ export type WorktreeMetaBatchUpdate = {
   executionHostId?: ExecutionHostId
 }
 
+/**
+ * A bare id resolves to whichever host owns it first, which is wrong whenever a
+ * repo is registered on two execution hosts and publishes the same id twice.
+ * Callers that already know the host pass the qualified form.
+ */
+export type WorkspacePinTarget = string | { worktreeId: string; executionHostId: ExecutionHostId }
+
 export type WorktreeRenameRequest = {
   worktreeId: string
   rowKey?: string
@@ -271,7 +278,7 @@ export type WorktreeSlice = {
    * the shortcut action visible even though pinned worktrees also remain in
    * their normal sidebar groups.
    */
-  setWorktreesPinnedAndReveal: (worktreeIds: readonly string[], isPinned: boolean) => void
+  setWorktreesPinnedAndReveal: (targets: readonly WorkspacePinTarget[], isPinned: boolean) => void
   markWorktreeUnread: (worktreeId: string) => void
   observeTerminalGitHubPullRequestLink: (worktreeId: string, link: TerminalGitHubPRLink) => void
   /** Clear the worktree's unread dot. Called on user interaction with any

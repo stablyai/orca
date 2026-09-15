@@ -101,6 +101,7 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
     workspaceStatuses
   } = model
   const deleteShortcut = useOptionalShortcutLabel('workspace.delete')
+  const togglePinShortcut = useOptionalShortcutLabel('workspace.togglePin')
   return (
     <div
       ref={scopeRef}
@@ -187,6 +188,9 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
                 {worktree.isPinned
                   ? translate('auto.components.sidebar.WorktreeContextMenu.697d0f6e1b', 'Unpin')
                   : translate('auto.components.sidebar.WorktreeContextMenu.3baa7d6507', 'Pin')}
+                {togglePinShortcut ? (
+                  <DropdownMenuShortcut>{togglePinShortcut}</DropdownMenuShortcut>
+                ) : null}
               </DropdownMenuItem>
               <DropdownMenuItem onSelect={handleToggleRead} disabled={isDeleting}>
                 {worktree.isUnread ? (
