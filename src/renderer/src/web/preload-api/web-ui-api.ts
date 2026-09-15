@@ -133,6 +133,8 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
       return saveClipboardImageAsTempFileInRuntime(contentBase64, args)
     },
     readClipboardImageThumbnail: () => readClipboardImageThumbnail().catch(() => null),
+    // The browser clipboard exposes no OS file entries, so paste stays text-only.
+    readClipboardFilePaths: () => Promise.resolve([]),
     writeClipboardText: writeWebClipboardText,
     writeTerminalClipboardText: writeWebClipboardText,
     writeSelectionClipboardText: () =>
