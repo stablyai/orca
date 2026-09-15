@@ -232,7 +232,8 @@ function getPathApi(platform: NodeJS.Platform): typeof win32 | typeof posix {
   return platform === 'win32' ? win32 : posix
 }
 
-function buildElectronRunAsNodeEnv(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+// Why exported: the extracted-runtime CLI redirect reuses the same node-mode env.
+export function buildElectronRunAsNodeEnv(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   const childEnv = { ...env }
   // Preserve user values without exposing them to Electron's bootstrap.
   childEnv.ORCA_NODE_OPTIONS = env.NODE_OPTIONS ?? ''
