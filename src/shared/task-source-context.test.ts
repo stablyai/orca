@@ -117,7 +117,7 @@ describe('task source context', () => {
     expect(local).not.toBe(enterpriseRepo)
   })
 
-  it('serializes provider identities for GitLab, Linear, and Jira cache scopes', () => {
+  it('serializes provider identities for GitLab, Linear, Jira, and HamTeamBoard cache scopes', () => {
     const base = {
       projectId: 'project-1',
       hostId: LOCAL_EXECUTION_HOST_ID,
@@ -149,6 +149,17 @@ describe('task source context', () => {
         }
       })
     ).toContain(encodeURIComponent('https://example.atlassian.net/OPS'))
+    expect(
+      getTaskSourceCacheScope({
+        ...base,
+        provider: 'hamteamboard',
+        providerIdentity: {
+          provider: 'hamteamboard',
+          serverUrl: 'https://board.example.com',
+          projectId: 'project-1'
+        }
+      })
+    ).toContain(encodeURIComponent('https://board.example.com/project-1'))
   })
 
   it('drops provider identities that do not match the source provider', () => {
