@@ -1,5 +1,4 @@
 import { RateLimitServiceFullCyclePreparation } from './service-full-cycle-preparation'
-import { deriveAntigravityRateLimits } from '../antigravity-usage-mirror'
 import type { ProviderRateLimits } from './service-types'
 
 export abstract class RateLimitServiceFullCycleApplication extends RateLimitServiceFullCyclePreparation {
@@ -29,7 +28,7 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
       results: [
         claudeResult,
         codexResult,
-        geminiResult,
+        antigravityResult,
         opencodeGoResult,
         kimiResult,
         miniMaxResult
@@ -66,21 +65,20 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
             status: 'error'
           } satisfies ProviderRateLimits)
 
-    const gemini =
-      geminiResult.status === 'fulfilled'
-        ? geminiResult.value
+    const antigravity =
+      antigravityResult.status === 'fulfilled'
+        ? antigravityResult.value
         : ({
-            provider: 'gemini',
+            provider: 'antigravity',
             session: null,
             weekly: null,
             updatedAt: Date.now(),
             error:
-              geminiResult.reason instanceof Error ? geminiResult.reason.message : 'Unknown error',
+              antigravityResult.reason instanceof Error
+                ? antigravityResult.reason.message
+                : 'Unknown error',
             status: 'error'
           } satisfies ProviderRateLimits)
-
-    // Why: Antigravity can only borrow a *successful* Gemini read; a Gemini failure is not an Antigravity failure.
-    const antigravity = deriveAntigravityRateLimits(gemini)
 
     const opencodeGo =
       opencodeGoResult.status === 'fulfilled'
@@ -155,7 +153,6 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
     if (shouldApplyCodex) {
       this.trackActiveFailureStreak('codex', codex)
     }
-    this.trackActiveFailureStreak('gemini', gemini)
     this.trackActiveFailureStreak('antigravity', antigravity)
     if (shouldApplyOpencode) {
       this.trackActiveFailureStreak('opencode-go', opencodeGo)
@@ -176,7 +173,7 @@ export abstract class RateLimitServiceFullCycleApplication extends RateLimitServ
         : codexBecameUnavailable
           ? codexStateBeforeFetch
           : this.state.codex,
-      gemini: this.applyStalePolicy(gemini, previousState.gemini),
+      gemini: null,
       opencodeGo: shouldApplyOpencode
         ? opencodeConfigChanged
           ? opencodeGo

@@ -15,7 +15,34 @@ vi.mock('./settings-search-keywords', () => ({
   translateSearchKeyword: (_key: string, fallback: string) => [fallback]
 }))
 
-import { getAccountsMiniMaxSearchEntries, getAccountsPaneSearchEntries } from './accounts-search'
+import {
+  getAccountsAntigravitySearchEntries,
+  getAccountsMiniMaxSearchEntries,
+  getAccountsPaneSearchEntries
+} from './accounts-search'
+
+describe('getAccountsAntigravitySearchEntries', () => {
+  it('returns an entry that targets Antigravity CLI quota flow', () => {
+    const entries = getAccountsAntigravitySearchEntries()
+    expect(entries).toHaveLength(1)
+    const [entry] = entries
+    expect(entry.title).toBe('Antigravity CLI Quota')
+    expect(entry.description.toLowerCase()).toContain('antigravity')
+  })
+
+  it('exposes keywords driving settings search index', () => {
+    const [entry] = getAccountsAntigravitySearchEntries()
+    expect(entry.keywords).toEqual(
+      expect.arrayContaining(['antigravity', 'agy', 'cli', 'oauth', 'quota', 'rate limit'])
+    )
+  })
+
+  it('is included in the rolled-up pane search entries', () => {
+    const allEntries = getAccountsPaneSearchEntries()
+    const titles = allEntries.map((entry) => entry.title)
+    expect(titles).toContain('Antigravity CLI Quota')
+  })
+})
 
 describe('getAccountsMiniMaxSearchEntries', () => {
   it('returns a single entry that targets the MiniMax session cookie flow', () => {
