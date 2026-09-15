@@ -7,11 +7,19 @@ import type { SparsePreset } from '../../../../shared/worktree/create-types'
 import { setRendererUiLanguage } from '@/i18n/i18n'
 import SparseCheckoutPresetSelect from './SparseCheckoutPresetSelect'
 
-const storeMock = vi.hoisted(() => ({
+type SparsePresetStoreState = {
+  sparsePresetsByRepo: Record<string, SparsePreset[] | undefined>
+  sparsePresetsLoadStatusByRepo: Record<string, 'idle' | 'loading' | 'loaded' | 'error'>
+  sparsePresetsErrorByRepo: Record<string, string | undefined>
+  fetchSparsePresets: ReturnType<typeof vi.fn>
+  saveSparsePreset: ReturnType<typeof vi.fn>
+}
+
+const storeMock = vi.hoisted((): { state: SparsePresetStoreState } => ({
   state: {
-    sparsePresetsByRepo: {} as Record<string, SparsePreset[] | undefined>,
-    sparsePresetsLoadStatusByRepo: {} as Record<string, 'idle' | 'loading' | 'loaded' | 'error'>,
-    sparsePresetsErrorByRepo: {} as Record<string, string | undefined>,
+    sparsePresetsByRepo: {},
+    sparsePresetsLoadStatusByRepo: {},
+    sparsePresetsErrorByRepo: {},
     fetchSparsePresets: vi.fn(),
     saveSparsePreset: vi.fn()
   }
