@@ -15,6 +15,7 @@ import {
   mergeMobileSessionSnapshotTabs,
   mergeMobileSessionTabGroups
 } from './mobile-session-tab-merge'
+import { resolveHostMobileTerminalTheme } from './resolve-host-mobile-terminal-theme'
 
 export class OrcaRuntimeWithPublishPtyBackedMobileSessionTerminal extends OrcaRuntimeWithHasLiveOrPersistedServeOrSshOwnedPtyBinding {
   /**
@@ -81,6 +82,7 @@ export class OrcaRuntimeWithPublishPtyBackedMobileSessionTerminal extends OrcaRu
           candidate.parentTabId === args.tabId &&
           candidate.viewMode !== undefined
       )?.viewMode
+    const terminalTheme = resolveHostMobileTerminalTheme(this.store?.getSettings?.())
     const tab: RuntimeMobileSessionTerminalTab = {
       type: 'terminal',
       id: `${args.tabId}::${args.leafId}`,
@@ -89,6 +91,7 @@ export class OrcaRuntimeWithPublishPtyBackedMobileSessionTerminal extends OrcaRu
       ptyId: pty.ptyId,
       incarnationId: pty.incarnationId,
       title,
+      ...(terminalTheme ? { terminalTheme } : {}),
       ...(pty.launchAgent ? { launchAgent: pty.launchAgent } : {}),
       ...(args.startupCwd ? { startupCwd: args.startupCwd } : {}),
       ...(viewMode ? { viewMode } : {}),

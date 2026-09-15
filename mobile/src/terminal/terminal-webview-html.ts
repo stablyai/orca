@@ -13,7 +13,10 @@ import { TERMINAL_HTML_SELECTION_OVERLAY } from './terminal-webview-html/selecti
 import { TERMINAL_HTML_SURFACE_TOUCH_GESTURES } from './terminal-webview-html/surface-touch-gestures'
 import { TERMINAL_HTML_MESSAGE_BRIDGE_AND_DOCUMENT_CLOSE } from './terminal-webview-html/message-bridge-and-document-close'
 
-export { MOBILE_TERMINAL_CARET_OPTIONS } from './terminal-webview-html/theme'
+export {
+  DEFAULT_TERMINAL_THEME,
+  MOBILE_TERMINAL_CARET_OPTIONS
+} from './terminal-webview-html/theme'
 
 // Why: keep the document source stable while each script/style concern remains independently
 // reviewable. Boundaries can only fall where the emitted document allows, so a few modules
