@@ -14,7 +14,11 @@ const store = {
       providerSession?: { transcriptPath?: string }
     }
   >,
-  tabsByWorktree: {} as Record<string, { id: string; launchAgent?: string | null }[]>
+  tabsByWorktree: {} as Record<
+    string,
+    { id: string; launchAgent?: string | null; title?: string; customTitle?: string | null }[]
+  >,
+  settings: undefined as { tabAutoGenerateTitle?: boolean } | undefined
 }
 
 vi.mock('@/store', () => ({ useAppStore: { getState: () => store } }))
@@ -78,6 +82,7 @@ describe('prepareAgentSessionContinuationFromPane', () => {
       }
     }
     store.tabsByWorktree = { 'wt-1': [{ id: 'tab-1', launchAgent: 'claude' }] }
+    store.settings = undefined
   })
 
   it('prepares a generic request without serializing when a transcript exists', () => {
@@ -122,5 +127,31 @@ describe('prepareAgentSessionContinuationFromPane', () => {
       capturedText: 'latest terminal context',
       transcriptPath: null
     })
+  })
+
+  it('carries the resolved tab label so the dialog can seed a branch name', () => {
+    // Why: the destination picker seeds the branch from this title; without it
+    // the terminal entry point hands the dialog nothing to seed from.
+    store.tabsByWorktree = {
+      'wt-1': [
+        {
+          id: 'tab-1',
+          launchAgent: 'claude',
+          title: 'claude working',
+          customTitle: '\u2733 RW-20595 nested components'
+        }
+      ]
+    }
+
+    const request = prepareAgentSessionContinuationFromPane({
+      pane: makePane('unused scrollback'),
+      tabId: 'tab-1',
+      worktreeId: 'wt-1',
+      groupId: null,
+      workspacePath: '/repo/worktree',
+      initialCwd: '/repo/worktree'
+    })
+
+    expect(request?.source.sourceTitle).toBe('\u2733 RW-20595 nested components')
   })
 })
