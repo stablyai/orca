@@ -235,7 +235,6 @@
     "**/out",
     "cloud/**",
     ".github/actions/cloud-sql-rollout-lease/**",
-    "tests/e2e/.cross-version-checkouts",
-    "config/oxlint-plugins/anti-slop/**"
+    "tests/e2e/.cross-version-checkouts"
   ]
 }

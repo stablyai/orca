@@ -7,6 +7,6 @@
   "ignorePatterns": [
     "cloud/**",
     ".github/actions/cloud-sql-rollout-lease/**",
-    "config/oxlint-plugins/anti-slop/**"
+    ".anti-slop-plugin/**"
   ]
 }

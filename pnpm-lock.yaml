@@ -414,6 +414,9 @@ importers:
       oxlint:
         specifier: ^1.80.0
         version: 1.80.0(oxlint-tsgolint@7.0.2001)
+      oxlint-plugin-anti-slop:
+        specifier: github:dmmulroy/anti-slop#c44ef22ca116d0ba62a3ff663a0bd13a3f3fa40b
+        version: https://codeload.github.com/dmmulroy/anti-slop/tar.gz/c44ef22ca116d0ba62a3ff663a0bd13a3f3fa40b
       oxlint-plugin-react-doctor:
         specifier: 0.9.1
         version: 0.9.1
@@ -1942,6 +1945,10 @@ packages:
     engines: {node: ^20.19.0 || >=22.12.0}
     cpu: [x64]
     os: [win32]
+
+  '@oxlint/plugins@1.78.0':
+    resolution: {integrity: sha512-Ypt8KeRYw+4jUtlPirfcHWMrn5ms12VrrFPD+Mds477/7tJxG1Kcz2Yrg2nVcTQEUx/GdlhS+BUg1kmxNm04Ug==}
+    engines: {node: ^12.22.0 || ^14.17.0 || >=16.0.0}
 
   '@oxlint/plugins@1.80.0':
     resolution: {integrity: sha512-QRgH1XqQEYNHa4f1vvPQ5fAdNdncHGIUG1ZWLlGIZHky3qwCEeAKYitZNbZMtaXtAQAAFFTOwqUfzESvimqZNA==}
@@ -6066,6 +6073,10 @@ packages:
       vite-plus:
         optional: true
 
+  oxlint-plugin-anti-slop@https://codeload.github.com/dmmulroy/anti-slop/tar.gz/c44ef22ca116d0ba62a3ff663a0bd13a3f3fa40b:
+    resolution: {gitHosted: true, integrity: sha512-Vj/M0k5Bt1Q2pGdfXZ24wGXycBcvFHwJ/pjHIFl1hV8soaZKHl1lba5UXlQFY5xgwQ5TNfEWiKfsEt0yyRyVUg==, tarball: https://codeload.github.com/dmmulroy/anti-slop/tar.gz/c44ef22ca116d0ba62a3ff663a0bd13a3f3fa40b}
+    version: 0.1.2
+
   oxlint-plugin-react-doctor@0.9.1:
     resolution: {integrity: sha512-yCW8USbiuszbVsUMN4fL1iU7mRu3Ae3w96+k/xqCyWvW6bF6DzCMtLy5N/w6WLRX78iQsWxVqW/SEgzRBXLfsA==}
     engines: {node: ^20.19.0 || >=22.13.0}
@@ -8611,6 +8622,8 @@ snapshots:
 
   '@oxlint/binding-win32-x64-msvc@1.80.0':
     optional: true
+
+  '@oxlint/plugins@1.78.0': {}
 
   '@oxlint/plugins@1.80.0': {}
 
@@ -13170,6 +13183,10 @@ snapshots:
       '@oxfmt/binding-win32-arm64-msvc': 0.65.0
       '@oxfmt/binding-win32-ia32-msvc': 0.65.0
       '@oxfmt/binding-win32-x64-msvc': 0.65.0
+
+  oxlint-plugin-anti-slop@https://codeload.github.com/dmmulroy/anti-slop/tar.gz/c44ef22ca116d0ba62a3ff663a0bd13a3f3fa40b:
+    dependencies:
+      '@oxlint/plugins': 1.78.0
 
   oxlint-plugin-react-doctor@0.9.1:
     dependencies:
