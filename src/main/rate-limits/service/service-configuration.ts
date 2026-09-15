@@ -126,6 +126,7 @@ export abstract class RateLimitServiceConfiguration extends RateLimitServiceAcco
       minimaxCookieConfigured: hasMiniMaxSessionCookie(),
       minimaxApiKeyConfigured: hasMiniMaxApiKey(),
       grokAuthConfigured: this.grokAuthConfigured,
+      antigravityAuthConfigured: this.antigravityAuthConfigured,
       claudeTarget: this.claudeFetchTarget,
       codexTarget: this.codexFetchTarget,
       inactiveClaudeAccounts: this.buildInactiveArray(

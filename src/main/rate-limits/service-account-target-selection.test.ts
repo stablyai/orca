@@ -44,6 +44,14 @@ vi.mock('./grok-auth', () => ({
   readGrokAuthSession: vi.fn(() => ({ status: 'missing' }))
 }))
 
+vi.mock('./antigravity-usage-fetcher', () => ({
+  fetchAntigravityRateLimits: vi.fn()
+}))
+
+vi.mock('./antigravity-oauth-sources', () => ({
+  readAntigravityAuthSession: vi.fn(() => ({ status: 'missing' }))
+}))
+
 vi.mock('../minimax/minimax-cookie-store', () => ({
   hasMiniMaxSessionCookie: vi.fn(() => false)
 }))

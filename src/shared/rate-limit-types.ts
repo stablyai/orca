@@ -115,6 +115,13 @@ export type GrokAccountStatus = {
   error: string | null
 }
 
+export type AntigravityAccountStatus = {
+  signedIn: boolean
+  email: string | null
+  tokenFresh: boolean
+  error: string | null
+}
+
 export type RateLimitState = {
   claude: ProviderRateLimits | null
   codex: ProviderRateLimits | null
@@ -140,6 +147,8 @@ export type RateLimitState = {
   minimaxApiKeyConfigured: boolean
   /** True when main finds a Grok CLI session file (~/.grok/auth.json or GROK_HOME). */
   grokAuthConfigured: boolean
+  /** True when main finds an Antigravity CLI token (~/.gemini/antigravity-cli). */
+  antigravityAuthConfigured: boolean
   claudeTarget: RateLimitRuntimeTarget
   codexTarget: RateLimitRuntimeTarget
   inactiveClaudeAccounts: InactiveAccountUsage[]
