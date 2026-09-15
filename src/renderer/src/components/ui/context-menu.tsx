@@ -2,6 +2,7 @@ import * as React from 'react'
 import { ChevronRightIcon, CircleIcon } from 'lucide-react'
 import { ContextMenu as ContextMenuPrimitive } from 'radix-ui'
 
+import { useResolvedPortalContainer } from '@/components/ui/portal-container-context'
 import { cn } from '@/lib/utils'
 
 function ContextMenu({ ...props }: React.ComponentProps<typeof ContextMenuPrimitive.Root>) {
@@ -51,10 +52,15 @@ function ContextMenuSubTrigger({
 function ContextMenuSubContent({
   className,
   style,
+  portalContainer,
   ...props
-}: React.ComponentProps<typeof ContextMenuPrimitive.SubContent>) {
+}: React.ComponentProps<typeof ContextMenuPrimitive.SubContent> & {
+  portalContainer?: HTMLElement | null
+}) {
+  const resolvedContainer = useResolvedPortalContainer(portalContainer)
+
   return (
-    <ContextMenuPrimitive.Portal>
+    <ContextMenuPrimitive.Portal container={resolvedContainer}>
       <ContextMenuPrimitive.SubContent
         data-slot="context-menu-sub-content"
         className={cn(
@@ -73,10 +79,15 @@ function ContextMenuSubContent({
 function ContextMenuContent({
   className,
   style,
+  portalContainer,
   ...props
-}: React.ComponentProps<typeof ContextMenuPrimitive.Content>) {
+}: React.ComponentProps<typeof ContextMenuPrimitive.Content> & {
+  portalContainer?: HTMLElement | null
+}) {
+  const resolvedContainer = useResolvedPortalContainer(portalContainer)
+
   return (
-    <ContextMenuPrimitive.Portal>
+    <ContextMenuPrimitive.Portal container={resolvedContainer}>
       <ContextMenuPrimitive.Content
         data-slot="context-menu-content"
         className={cn(

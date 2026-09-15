@@ -129,7 +129,7 @@ export function createTerminalPanePasteExecution(
       useAppStore.getState(),
       worktreeId
     )
-    const activeElementAtDispatch = document.activeElement
+    const activeElementAtDispatch = (pane.container.ownerDocument ?? document).activeElement
     void pasteTerminalClipboard({
       readClipboardText,
       saveClipboardImageAsTempFile: window.api.ui.saveClipboardImageAsTempFile,

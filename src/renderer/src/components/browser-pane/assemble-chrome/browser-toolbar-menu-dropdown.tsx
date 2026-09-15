@@ -4,7 +4,6 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuPortal,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
   DropdownMenuSeparator,
@@ -130,55 +129,51 @@ export function BrowserToolbarMenuDropdown({
               'Import Cookies'
             )}
           </DropdownMenuSubTrigger>
-          <DropdownMenuPortal>
-            <DropdownMenuSubContent>
-              <BrowserCookieImportMachineNotice />
-              {detectedBrowsers.map((browser) =>
-                browser.profiles.length > 1 ? (
-                  <DropdownMenuSub key={browser.family}>
-                    <DropdownMenuSubTrigger>
-                      {translate(
-                        'auto.components.browser.pane.BrowserToolbarMenu.eb280bfb11',
-                        'From {{value0}}',
-                        { value0: browser.label }
-                      )}
-                    </DropdownMenuSubTrigger>
-                    <DropdownMenuPortal>
-                      <DropdownMenuSubContent>
-                        {browser.profiles.map((profile) => (
-                          <DropdownMenuItem
-                            key={profile.directory}
-                            onSelect={() => onImportFromBrowser(browser.family, profile.directory)}
-                          >
-                            {profile.name}
-                          </DropdownMenuItem>
-                        ))}
-                      </DropdownMenuSubContent>
-                    </DropdownMenuPortal>
-                  </DropdownMenuSub>
-                ) : (
-                  <DropdownMenuItem
-                    key={browser.family}
-                    onSelect={() => onImportFromBrowser(browser.family)}
-                  >
+          <DropdownMenuSubContent>
+            <BrowserCookieImportMachineNotice />
+            {detectedBrowsers.map((browser) =>
+              browser.profiles.length > 1 ? (
+                <DropdownMenuSub key={browser.family}>
+                  <DropdownMenuSubTrigger>
                     {translate(
                       'auto.components.browser.pane.BrowserToolbarMenu.eb280bfb11',
                       'From {{value0}}',
                       { value0: browser.label }
                     )}
-                  </DropdownMenuItem>
-                )
+                  </DropdownMenuSubTrigger>
+                  <DropdownMenuSubContent>
+                    {browser.profiles.map((profile) => (
+                      <DropdownMenuItem
+                        key={profile.directory}
+                        onSelect={() => onImportFromBrowser(browser.family, profile.directory)}
+                      >
+                        {profile.name}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuSubContent>
+                </DropdownMenuSub>
+              ) : (
+                <DropdownMenuItem
+                  key={browser.family}
+                  onSelect={() => onImportFromBrowser(browser.family)}
+                >
+                  {translate(
+                    'auto.components.browser.pane.BrowserToolbarMenu.eb280bfb11',
+                    'From {{value0}}',
+                    { value0: browser.label }
+                  )}
+                </DropdownMenuItem>
+              )
+            )}
+            {detectedBrowsers.length > 0 && <DropdownMenuSeparator />}
+            <DropdownMenuItem onSelect={onImportFromFile}>
+              {translate(
+                'auto.components.browser.pane.BrowserToolbarMenu.56f94f4ffa',
+                'From File…'
               )}
-              {detectedBrowsers.length > 0 && <DropdownMenuSeparator />}
-              <DropdownMenuItem onSelect={onImportFromFile}>
-                {translate(
-                  'auto.components.browser.pane.BrowserToolbarMenu.56f94f4ffa',
-                  'From File…'
-                )}
-              </DropdownMenuItem>
-              <BrowserCookieImportDisclosure />
-            </DropdownMenuSubContent>
-          </DropdownMenuPortal>
+            </DropdownMenuItem>
+            <BrowserCookieImportDisclosure />
+          </DropdownMenuSubContent>
         </DropdownMenuSub>
 
         <DropdownMenuSeparator />
@@ -191,34 +186,29 @@ export function BrowserToolbarMenuDropdown({
               'Viewport Size'
             )}
           </DropdownMenuSubTrigger>
-          <DropdownMenuPortal>
-            <DropdownMenuSubContent>
-              {/* Why: Viewport is a "pick one of N" control, so use a radio group
-                  for proper a11y semantics (role="menuitemradio", aria-checked).
-                  The "Default" option represents a null preset (no override),
-                  encoded as the sentinel string 'default' because
-                  DropdownMenuRadioGroup values must be strings. */}
-              <DropdownMenuRadioGroup
-                value={viewportPresetId ?? 'default'}
-                onValueChange={(v) =>
-                  onApplyViewportPreset(v === 'default' ? null : (v as BrowserViewportPresetId))
-                }
-              >
-                <DropdownMenuRadioItem value="default">
-                  {translate(
-                    'auto.components.browser.pane.BrowserToolbarMenu.ed8f54509d',
-                    'Default'
-                  )}
+          <DropdownMenuSubContent>
+            {/* Why: Viewport is a "pick one of N" control, so use a radio group
+                for proper a11y semantics (role="menuitemradio", aria-checked).
+                The "Default" option represents a null preset (no override),
+                encoded as the sentinel string 'default' because
+                DropdownMenuRadioGroup values must be strings. */}
+            <DropdownMenuRadioGroup
+              value={viewportPresetId ?? 'default'}
+              onValueChange={(v) =>
+                onApplyViewportPreset(v === 'default' ? null : (v as BrowserViewportPresetId))
+              }
+            >
+              <DropdownMenuRadioItem value="default">
+                {translate('auto.components.browser.pane.BrowserToolbarMenu.ed8f54509d', 'Default')}
+              </DropdownMenuRadioItem>
+              <DropdownMenuSeparator />
+              {BROWSER_VIEWPORT_PRESETS.map((preset) => (
+                <DropdownMenuRadioItem key={preset.id} value={preset.id}>
+                  <span className="truncate">{preset.label}</span>
                 </DropdownMenuRadioItem>
-                <DropdownMenuSeparator />
-                {BROWSER_VIEWPORT_PRESETS.map((preset) => (
-                  <DropdownMenuRadioItem key={preset.id} value={preset.id}>
-                    <span className="truncate">{preset.label}</span>
-                  </DropdownMenuRadioItem>
-                ))}
-              </DropdownMenuRadioGroup>
-            </DropdownMenuSubContent>
-          </DropdownMenuPortal>
+              ))}
+            </DropdownMenuRadioGroup>
+          </DropdownMenuSubContent>
         </DropdownMenuSub>
 
         <DropdownMenuSeparator />

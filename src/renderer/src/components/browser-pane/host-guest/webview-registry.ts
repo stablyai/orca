@@ -1,5 +1,10 @@
 import { clearLiveBrowserUrl } from '../describe-page/live-browser-url-registry'
 import {
+  clearBrowserPageProgress,
+  ensureBrowserPageProgressTracking,
+  stopBrowserPageProgressTracking
+} from './browser-page-progress-retention'
+import {
   clearBrowserPageViewportPresetSize,
   removeBrowserPageViewport
 } from './browser-page-viewport'
@@ -116,6 +121,8 @@ function applyWebviewsDragPassthrough(passthrough: boolean): void {
     if (previous !== undefined) {
       webview.style.pointerEvents = previous
       dragPassthroughPreviousPointerEvents.delete(webview)
+    } else if (webview.style.pointerEvents === 'none') {
+      webview.style.pointerEvents = ''
     }
   }
 }
@@ -182,6 +189,7 @@ export function registerPersistentWebview(
   webviewRegistry.set(browserTabId, webview)
   applyCurrentDragPassthroughToWebview(webview)
   ensureDragListeners()
+  ensureBrowserPageProgressTracking()
 }
 
 export function unregisterPersistentWebview(browserTabId: string): void {
@@ -203,6 +211,7 @@ export function unregisterPersistentWebview(browserTabId: string): void {
   webviewRegistry.delete(browserTabId)
   if (webviewRegistry.size === 0) {
     removeDragListeners()
+    stopBrowserPageProgressTracking()
   }
 }
 
@@ -211,18 +220,17 @@ export function isBrowserPageRendererRecoveryPending(browserTabId: string): bool
 }
 
 function moveFocusToRendererIfWebviewOwnsFocus(webview: Electron.WebviewTag): boolean {
-  if (typeof document === 'undefined' || typeof window === 'undefined') {
-    return false
-  }
-  const activeElement = document.activeElement as HTMLElement | null
-  if (!activeElement) {
+  const ownerDoc = webview.ownerDocument ?? (typeof document !== 'undefined' ? document : null)
+  const ownerWindow = ownerDoc?.defaultView ?? (typeof window !== 'undefined' ? window : null)
+  const activeElement = ownerDoc?.activeElement as HTMLElement | null
+  if (!activeElement || !ownerWindow) {
     return false
   }
   // Why: hiding/removing a focused webview can let macOS reactivate the
   // previously-frontmost app. Give focus back to Orca's renderer first.
   if (webview === activeElement || webview.contains(activeElement)) {
     activeElement.blur?.()
-    window.focus()
+    ownerWindow.focus()
     return true
   }
   return false
@@ -255,9 +263,10 @@ function removePersistentWebview(
     if (!preserveViewport) {
       clearBrowserPageViewportPresetSize(browserTabId)
       removeBrowserPageViewport(browserTabId)
+      clearLiveBrowserUrl(browserTabId)
+      clearBrowserPageProgress(browserTabId)
     }
     registeredWebContentsIds.delete(browserTabId)
-    clearLiveBrowserUrl(browserTabId)
     return Promise.resolve()
   }
   const unregisterGuest = Promise.resolve(
@@ -269,9 +278,10 @@ function removePersistentWebview(
   if (!preserveViewport) {
     clearBrowserPageViewportPresetSize(browserTabId)
     removeBrowserPageViewport(browserTabId)
+    clearLiveBrowserUrl(browserTabId)
+    clearBrowserPageProgress(browserTabId)
   }
   registeredWebContentsIds.delete(browserTabId)
-  clearLiveBrowserUrl(browserTabId)
   return unregisterGuest
 }
 

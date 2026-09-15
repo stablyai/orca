@@ -21,6 +21,7 @@ import type { BrowserApi } from './api/browser-api'
 import type { CliApi } from './api/cli-install-api'
 import type { CrashReportsApi, FeedbackApi } from './api/crash-report-api'
 import type { DashboardApi, TerminalPreviewApi } from './api/dashboard-api'
+import type { FloatingWorkspaceApi } from './api/floating-workspace-api'
 import type { DocPreviewApi } from './api/doc-preview-api'
 import type { EmulatorApi } from './api/emulator-api'
 import type { EphemeralVmApi } from './api/ephemeral-vm-api'
@@ -149,6 +150,7 @@ export type PreloadApi = {
   agentStatus: AgentStatusApi
   mobile: MobileApi
   speech: SpeechApi
+  floatingWorkspace: FloatingWorkspaceApi
 }
 
 export type { ClaudeUsageApi, CodexUsageApi, OpenCodeUsageApi } from './api/agent-usage-api'

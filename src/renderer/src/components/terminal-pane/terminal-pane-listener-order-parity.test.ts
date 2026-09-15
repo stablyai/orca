@@ -7,8 +7,9 @@ import { describe, expect, it } from 'vitest'
 
 const LISTENER_SOURCE_PATTERN =
   /^(?:TerminalPane\.tsx|terminal-pane-paste-listeners\.ts|use-terminal-pane-(?:chat-state|close-actions|context-actions|controller|foundation|global-listeners|layout-bindings|layout-persistence|lifecycle-stage|mobile-actions|paste-listeners|projection|reconciliation|startup-actions|store-bindings|title-effects|title-state)\.ts)$/
+// Why: sha256 accounts for eventWindow/targetDoc/targetWin scoping on multi-window popouts.
 const PRE_REFACTOR_LISTENER_ORDER_SHA256 =
-  '2a2c5caaa368636d761ec819a7858f6b8010e578ccdd5c1be5960f87968c7e8a'
+  'c92738b1b20c3ba419a78134a53bd3157a9c3e38a9587defbe857190693e84ac'
 
 type FunctionDefinition = { declaration: ts.FunctionDeclaration; sourceFile: ts.SourceFile }
 

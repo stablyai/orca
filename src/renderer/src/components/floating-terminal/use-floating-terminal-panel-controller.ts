@@ -18,18 +18,22 @@ import { useFloatingTerminalPanelMaximize } from './use-floating-terminal-panel-
 import { useFloatingTerminalPanelShortcuts } from './use-floating-terminal-panel-shortcuts'
 import { useFloatingTerminalPanelStoreState } from './use-floating-terminal-panel-store-state'
 import { useFloatingTerminalShortcutDetails } from './use-floating-terminal-shortcut-details'
+import { useFloatingWorkspacePopout } from './use-floating-workspace-popout'
 
 export function useFloatingTerminalPanelController({
   open,
   onOpenChange,
   tourInteractionSnapshot
 }: FloatingTerminalPanelProps) {
+  const popout = useFloatingWorkspacePopout()
+  const isSurfaceActive = popout.isDetached || open
+
   const storeState = useFloatingTerminalPanelStoreState()
   const shortcutDetails = useFloatingTerminalShortcutDetails()
   const localState = useFloatingTerminalPanelLocalState()
-  const items = useFloatingTerminalPanelItems({ ...storeState, open })
+  const items = useFloatingTerminalPanelItems({ ...storeState, open: isSurfaceActive })
 
-  useContextualTour('floating-workspace', open, 'floating_workspace_visible', {
+  useContextualTour('floating-workspace', isSurfaceActive, 'floating_workspace_visible', {
     recordFeatureInteraction: tourInteractionSnapshot?.recordFeatureInteractionForTour ?? false,
     featureInteractionPersisted: tourInteractionSnapshot?.persisted,
     wasFeaturePreviouslyInteracted: tourInteractionSnapshot?.wasPreviouslyInteracted
@@ -37,10 +41,10 @@ export function useFloatingTerminalPanelController({
 
   const editorCloseQueue = useFloatingTerminalEditorCloseQueue({ ...storeState, ...localState })
   const geometry = useFloatingTerminalPanelGeometry({ ...storeState, ...localState })
-  useFloatingTerminalInitialFocusEffects({ ...items, ...localState, open })
+  useFloatingTerminalInitialFocusEffects({ ...items, ...localState, open: isSurfaceActive })
   const orchestrationVisibility = useFloatingTerminalOrchestrationVisibility({
     ...localState,
-    open
+    open: isSurfaceActive
   })
   const createActions = useFloatingTerminalCreateActions({
     ...storeState,
@@ -58,19 +62,25 @@ export function useFloatingTerminalPanelController({
     ...localState,
     ...items
   })
-  const maximize = useFloatingTerminalPanelMaximize({ ...storeState, ...localState, open })
+  const maximize = useFloatingTerminalPanelMaximize({
+    ...storeState,
+    ...localState,
+    open: isSurfaceActive
+  })
   const shortcuts = useFloatingTerminalPanelShortcuts({
     ...localState,
     ...items,
     ...createActions,
     ...closeActions,
     ...maximize,
-    open,
-    onOpenChange
+    open: isSurfaceActive,
+    onOpenChange,
+    isDetached: popout.isDetached,
+    minimize: popout.minimize
   })
-  useFloatingTerminalGlobalShortcutListeners({ ...localState, ...shortcuts, open })
-  useFloatingTerminalGuestBridge({ ...shortcuts, open })
-  useFloatingTerminalFocusLifecycle({ ...localState, ...items, open })
+  useFloatingTerminalGlobalShortcutListeners({ ...localState, ...shortcuts, open: isSurfaceActive })
+  useFloatingTerminalGuestBridge({ ...shortcuts, open: isSurfaceActive })
+  useFloatingTerminalFocusLifecycle({ ...localState, ...items, open: isSurfaceActive })
   const dragActions = createFloatingTerminalPanelDragActions({
     ...localState,
     ...geometry,
@@ -81,6 +91,7 @@ export function useFloatingTerminalPanelController({
 
   return {
     open,
+    isSurfaceActive,
     onOpenChange,
     ...storeState,
     ...shortcutDetails,
@@ -95,6 +106,7 @@ export function useFloatingTerminalPanelController({
     ...maximize,
     ...shortcuts,
     ...dragActions,
-    ...orchestrationDismissal
+    ...orchestrationDismissal,
+    ...popout
   }
 }
