@@ -60,6 +60,7 @@ export function buildMirroredAgentStatusPatch(
   currentTerminalTabs: readonly TerminalTab[],
   terminalSurfaceTabs: readonly TerminalSurface[],
   mirroredTerminalTabs: readonly MirroredTerminalTab[],
+  environmentId: string,
   now: number,
   batchContext?: WebSessionTabsBatchContext
 ): Pick<WebSessionTabsSyncState, 'agentStatusByPaneKey' | 'agentStatusEpoch' | 'sortEpoch'> | null {
@@ -100,7 +101,11 @@ export function buildMirroredAgentStatusPatch(
     }
     const existing =
       nextByPaneKey.get(hostEntry.paneKey) ?? state.agentStatusByPaneKey[hostEntry.paneKey]
-    const entry = withMirroredEvidenceReceipt(hostEntry, existing, now)
+    const entry = withMirroredEvidenceReceipt(
+      hostEntry.connectionId === undefined ? { ...hostEntry, connectionId: environmentId } : hostEntry,
+      existing,
+      now
+    )
     // Why: keep fresher OSC state while taking remapped ownership metadata from the authoritative host snapshot.
     const hostIdentityPredatesCurrentTurn =
       existing !== undefined &&

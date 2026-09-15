@@ -16,7 +16,7 @@ export function buildWebSessionTabsFinalPatch(
   const {
     state,
     snapshot,
-    worktreeId,
+    environmentId,
     now,
     batchContext,
     currentTerminalTabs,
@@ -57,6 +57,7 @@ export function buildWebSessionTabsFinalPatch(
     currentTerminalTabs,
     terminalSurfaceTabs,
     mirroredTerminalTabs,
+    environmentId,
     now,
     batchContext
   )
@@ -65,7 +66,6 @@ export function buildWebSessionTabsFinalPatch(
     ? null
     : buildRetractedMirroredTabSweepPatch(
         state,
-        worktreeId,
         nextTabsByWorktree,
         agentStatusPatch,
         removedTerminalResourceIds,

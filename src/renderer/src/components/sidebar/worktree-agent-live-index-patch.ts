@@ -1,6 +1,7 @@
 import type { AppState } from '@/store/types'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
+import { isWebTerminalSurfaceTabId } from '../../../../shared/terminal-surface-id'
 
 export type LiveEntriesByWorktreeCache = {
   tabsByWorktree: AppState['tabsByWorktree']
@@ -19,7 +20,7 @@ export function recordLiveEntriesFullRebuild(): void {
   liveEntriesFullRebuildCount += 1
 }
 
-// Why: keep early attributed child rows, but hide completed rows once their tab is gone.
+// Local completed orphans stay hidden; remote rows await host retraction, not tab hydration.
 export function liveEntryWorktreeId(
   paneKey: string,
   entry: AgentStatusEntry,
@@ -30,7 +31,8 @@ export function liveEntryWorktreeId(
     return undefined
   }
   const tabWorktreeId = tabIdToWorktreeId.get(parsed.tabId)
-  return tabWorktreeId ?? (entry.state === 'done' ? undefined : entry.worktreeId)
+  const remote = Boolean(entry.connectionId) || isWebTerminalSurfaceTabId(parsed.tabId)
+  return tabWorktreeId ?? (entry.state === 'done' && !remote ? undefined : entry.worktreeId)
 }
 
 /**
@@ -68,10 +70,11 @@ export function patchLiveEntriesByWorktree(
     }
     // Why: bail on added keys or bucket-determinant changes — the bucket rule
     // depends only on paneKey, the (reference-equal) tab index, worktree
-    // attribution, and done-ness, so equal determinants mean the same bucket.
+    // attribution, remote connection presence, and done-ness.
     if (
       previous === undefined ||
       previous.worktreeId !== entry.worktreeId ||
+      Boolean(previous.connectionId) !== Boolean(entry.connectionId) ||
       (previous.state === 'done') !== (entry.state === 'done')
     ) {
       return null

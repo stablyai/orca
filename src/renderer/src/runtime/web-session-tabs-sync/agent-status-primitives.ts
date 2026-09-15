@@ -150,7 +150,6 @@ export function buildRemirroredClosedTabMarkerLiftPatch(
  */
 export function buildRetractedMirroredTabSweepPatch(
   state: WebSessionTabsSyncState,
-  worktreeId: string,
   nextTabsByWorktree: WebSessionTabsSyncState['tabsByWorktree'],
   agentStatusPatch: Pick<
     WebSessionTabsSyncState,
@@ -179,13 +178,13 @@ export function buildRetractedMirroredTabSweepPatch(
     retainedAgentsByPaneKey: state.retainedAgentsByPaneKey ?? {},
     retentionSuppressedPaneKeys: state.retentionSuppressedPaneKeys ?? {},
     sortEpoch: agentStatusPatch?.sortEpoch ?? state.sortEpoch,
-    // Why: the drop's completed-orphan rule reads "keyed under a tab this worktree no longer has",
-    // so it must see the post-removal tab list, not the one the snapshot replaced.
+    // Keep the sweep state consistent with the accepted host inventory.
     tabsByWorktree: nextTabsByWorktree
   }
   // Why: a retraction can be a reconnect re-key, not pane death (ssh-execution-boundary); keeping
   // cutoffs means a republished pane cannot replay activity the user cleared on this client.
-  const sweep = buildRetiredTerminalTabStateSweepPatch(sweepState, retractedTabIds, worktreeId, {
+  // The host retracts exact tab ids; a worktree-wide orphan sweep could erase a sibling host.
+  const sweep = buildRetiredTerminalTabStateSweepPatch(sweepState, retractedTabIds, undefined, {
     preserveActivityClearedState: true
   })
   if (!sweep?.agentStatusByPaneKey || !batchContext) {
