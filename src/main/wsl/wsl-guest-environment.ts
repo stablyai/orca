@@ -92,7 +92,15 @@ async function probeGuestEnvironment(
     // and the NUL-separated payload below is read through NUL-riddled text.
     env: { ...process.env, WSL_UTF8: '1' },
     timeoutMs: Math.min(PROBE_TIMEOUT_MS, budgetMs),
-    maxOutputBytes: PROBE_MAX_OUTPUT_BYTES
+    maxOutputBytes: PROBE_MAX_OUTPUT_BYTES,
+    // Same reason as the runner's own spawn: without a barrier the timeout kills
+    // only the root and leaves whatever holds the console behind. This probe is
+    // the one that matters most on a wedged distro -- it is what fails FIRST, and
+    // it is what pushes every later call onto the shell-free lane, so it runs on
+    // the critical path of every occurrence. `TRANSIENT_RETRY_MS` throttles it to
+    // roughly one attempt per 5s per distro, which is a standing residue for as
+    // long as the wedge lasts.
+    terminationBarrier: true
   })
   if (result.timedOut) {
     return { kind: 'transient' }
