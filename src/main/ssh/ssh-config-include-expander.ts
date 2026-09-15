@@ -1,40 +1,54 @@
-import { existsSync, globSync, readFileSync, realpathSync, statSync } from 'node:fs'
-import { homedir, hostname, userInfo } from 'node:os'
-import { posix, win32 } from 'node:path'
+import { globSync, readFileSync, realpathSync, statSync } from 'node:fs'
+import { homedir, hostname } from 'node:os'
+import { isDefinitiveAbsence } from '../../shared/definitive-filesystem-absence'
+import { findGlobExpansionUncertainty, hasGlobPattern } from './ssh-config-include-glob-readability'
+import {
+  expandEnvironmentVariables,
+  expandIncludeTokens,
+  getCurrentUid,
+  getCurrentUser,
+  getPathApi,
+  resolveIncludePatternPath,
+  type IncludePathContext
+} from './ssh-config-include-path-resolution'
 
-type PathApi = typeof posix | typeof win32
+type SshConfigExpansion = {
+  content: string
+  /** False when an Include may have hidden config from the parser. */
+  fullyExpanded: boolean
+}
 
-type IncludeExpansionContext = {
+type IncludeExpansionContext = IncludePathContext & {
   cache: Map<string, string>
-  home: string
-  pathApi: PathApi
-  rootDir: string
-  shortHostname: string
-  uid?: string
-  username: string
+  fullyExpanded: boolean
 }
 
 const MAX_INCLUDE_GLOB_MATCHES = 256
 const MAX_INCLUDE_FILE_BYTES = 1024 * 1024
-const TARGET_DEPENDENT_INCLUDE_TOKENS = new Set(['h', 'n', 'p', 'r', 'j', 'k', 'C'])
 
-export function expandSshConfigIncludes(configPath: string): string {
+export function expandSshConfigIncludes(configPath: string): SshConfigExpansion {
   const home = homedir()
   const pathApi = getPathApi(configPath)
-  const currentUser = getCurrentUser()
   const localHostname = hostname()
 
   const context: IncludeExpansionContext = {
     cache: new Map(),
+    fullyExpanded: true,
     home,
     pathApi,
     rootDir: pathApi.dirname(configPath),
     shortHostname: localHostname.split('.')[0] || localHostname,
     uid: getCurrentUid(),
-    username: currentUser
+    username: getCurrentUser()
   }
 
-  return expandSshConfigFile(configPath, context, []).join('\n')
+  const lines = expandSshConfigFile(configPath, context, [])
+  return { content: lines.join('\n'), fullyExpanded: context.fullyExpanded }
+}
+
+function markIncomplete(context: IncludeExpansionContext, target: string): void {
+  context.fullyExpanded = false
+  console.warn(`[ssh] Could not expand SSH config Include "${target}"; hosts may be missing`)
 }
 
 function expandSshConfigFile(
@@ -42,7 +56,7 @@ function expandSshConfigFile(
   context: IncludeExpansionContext,
   activeStack: string[]
 ): string[] {
-  const canonicalPath = getCanonicalPath(filePath)
+  const canonicalPath = getCanonicalPath(filePath, context)
   if (!canonicalPath || activeStack.includes(canonicalPath)) {
     return []
   }
@@ -86,7 +100,7 @@ function readCachedFile(filePath: string, context: IncludeExpansionContext): str
     return cached
   }
 
-  if (!isReadableRegularFile(filePath)) {
+  if (!isReadableRegularFile(filePath, context)) {
     return null
   }
 
@@ -94,7 +108,10 @@ function readCachedFile(filePath: string, context: IncludeExpansionContext): str
     const content = readFileSync(filePath, 'utf-8')
     context.cache.set(filePath, content)
     return content
-  } catch {
+  } catch (error) {
+    if (!isDefinitiveAbsence(error)) {
+      markIncomplete(context, filePath)
+    }
     return null
   }
 }
@@ -158,11 +175,13 @@ function splitQuotedArguments(input: string): string[] {
 function resolveIncludePaths(pattern: string, context: IncludeExpansionContext): string[] {
   const withEnv = expandEnvironmentVariables(pattern)
   if (withEnv === null) {
+    markIncomplete(context, pattern)
     return []
   }
 
   const withTokens = expandIncludeTokens(withEnv, context)
   if (withTokens === null) {
+    markIncomplete(context, pattern)
     return []
   }
 
@@ -174,126 +193,48 @@ function resolveIncludePaths(pattern: string, context: IncludeExpansionContext):
         console.warn(
           `[ssh] Include pattern "${absolutePattern}" matched ${matches.length} files; processing first ${MAX_INCLUDE_GLOB_MATCHES}`
         )
+        context.fullyExpanded = false
         return matches.slice(0, MAX_INCLUDE_GLOB_MATCHES)
+      }
+      // Unconditional, not only on an empty result: a partial expansion is exactly as unproven, and
+      // it is the half that goes on to feed a confident alias claim.
+      const uncertainTarget = findGlobExpansionUncertainty(absolutePattern, context.pathApi)
+      if (uncertainTarget) {
+        markIncomplete(context, uncertainTarget)
       }
       return matches
     } catch {
+      // A glob that threw walked a directory it could not read; it never proved the set is empty.
+      markIncomplete(context, absolutePattern)
       return []
     }
   }
 
-  return existsSync(absolutePattern) ? [absolutePattern] : []
-}
-
-function expandEnvironmentVariables(input: string): string | null {
-  let missing = false
-  const expanded = input.replaceAll(/\$\{([^}]+)\}/g, (_, name: string) => {
-    const value = process.env[name]
-    if (value === undefined) {
-      missing = true
-      return ''
+  // Not existsSync: it answers false for a path it merely could not stat, which would drop an
+  // Include living behind an unreadable parent directory as if the user had never written it.
+  try {
+    statSync(absolutePattern)
+    return [absolutePattern]
+  } catch (error) {
+    if (!isDefinitiveAbsence(error)) {
+      markIncomplete(context, absolutePattern)
     }
-    return value
-  })
-
-  return missing ? null : expanded
-}
-
-function expandIncludeTokens(input: string, context: IncludeExpansionContext): string | null {
-  let output = ''
-
-  for (let i = 0; i < input.length; i += 1) {
-    const char = input[i]
-    if (char !== '%') {
-      output += char
-      continue
-    }
-
-    const token = input[i + 1]
-    if (!token) {
-      output += char
-      continue
-    }
-
-    if (token === '%') {
-      output += '%'
-      i += 1
-      continue
-    }
-
-    if (TARGET_DEPENDENT_INCLUDE_TOKENS.has(token)) {
-      return null
-    }
-
-    if (token === 'd') {
-      output += context.home
-      i += 1
-      continue
-    }
-
-    if (token === 'u') {
-      output += context.username
-      i += 1
-      continue
-    }
-
-    if (token === 'i') {
-      if (!context.uid) {
-        return null
-      }
-      output += context.uid
-      i += 1
-      continue
-    }
-
-    if (token === 'l') {
-      output += hostname()
-      i += 1
-      continue
-    }
-
-    if (token === 'L') {
-      output += context.shortHostname
-      i += 1
-      continue
-    }
-
-    output += `%${token}`
-    i += 1
+    return []
   }
-
-  return output
 }
 
-function resolveIncludePatternPath(input: string, context: IncludeExpansionContext): string {
-  const pathApi = context.pathApi
-  if (input === '~') {
-    return context.home
-  }
-  if (input.startsWith('~/') || input.startsWith('~\\')) {
-    return pathApi.join(context.home, input.slice(2))
-  }
-
-  if (pathApi.isAbsolute(input)) {
-    return pathApi.normalize(input)
-  }
-
-  return pathApi.normalize(pathApi.join(context.rootDir, input))
-}
-
-function hasGlobPattern(input: string): boolean {
-  return /[*?[]/.test(input)
-}
-
-function getCanonicalPath(filePath: string): string | null {
+function getCanonicalPath(filePath: string, context: IncludeExpansionContext): string | null {
   try {
     return realpathSync.native(filePath)
-  } catch {
+  } catch (error) {
+    if (!isDefinitiveAbsence(error)) {
+      markIncomplete(context, filePath)
+    }
     return null
   }
 }
 
-function isReadableRegularFile(filePath: string): boolean {
+function isReadableRegularFile(filePath: string, context: IncludeExpansionContext): boolean {
   try {
     const stats = statSync(filePath)
     if (!stats.isFile()) {
@@ -304,48 +245,14 @@ function isReadableRegularFile(filePath: string): boolean {
       console.warn(
         `[ssh] Skipping SSH config include "${filePath}": size ${stats.size} exceeds ${MAX_INCLUDE_FILE_BYTES} bytes`
       )
+      context.fullyExpanded = false
       return false
     }
     return true
-  } catch {
+  } catch (error) {
+    if (!isDefinitiveAbsence(error)) {
+      markIncomplete(context, filePath)
+    }
     return false
   }
-}
-
-function getCurrentUid(): string | undefined {
-  try {
-    const info = userInfo()
-    if (typeof info.uid === 'number' && info.uid >= 0) {
-      return String(info.uid)
-    }
-  } catch {
-    return undefined
-  }
-
-  if (typeof process.getuid === 'function') {
-    try {
-      return String(process.getuid())
-    } catch {
-      return undefined
-    }
-  }
-
-  return undefined
-}
-
-function getCurrentUser(): string {
-  try {
-    const info = userInfo()
-    if (info.username) {
-      return info.username
-    }
-  } catch {
-    // Fall back to environment variables below.
-  }
-
-  return process.env.USER ?? process.env.USERNAME ?? ''
-}
-
-function getPathApi(filePath: string): PathApi {
-  return /^[a-zA-Z]:[\\/]/.test(filePath) || filePath.startsWith('\\\\') ? win32 : posix
 }
