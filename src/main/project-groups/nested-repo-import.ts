@@ -31,6 +31,15 @@ export type ResolvedNestedRepoSelection = {
   rejectedPaths: string[]
 }
 
+export function includeSelectedGitRoot(
+  scan: NestedRepoScanResult,
+  selectedPaths: readonly string[]
+): string[] {
+  return scan.selectedPathKind === 'git_repo'
+    ? [scan.selectedPath, ...selectedPaths]
+    : [...selectedPaths]
+}
+
 type FolderScope = {
   relativePath: string
   name: string

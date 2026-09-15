@@ -239,4 +239,36 @@ describe('useAddRepoLocalFolderFlow', () => {
     expect(addRepoPath).not.toHaveBeenCalled()
     expect(onGitRepoReady).not.toHaveBeenCalled()
   })
+
+  it('offers grouped import for nested repos beneath a git root without re-adding it', async () => {
+    pickFolders.mockResolvedValue(['/projects/umbrella'])
+    const scan = makeScan('/projects/umbrella', {
+      repos: [{ path: '/projects/umbrella/api', displayName: 'api', depth: 1 }]
+    })
+    scanNestedRepos.mockResolvedValueOnce(scan)
+    const { useAddRepoLocalFolderFlow } = await import('./useAddRepoLocalFolderFlow')
+
+    const { handleBrowse } = useAddRepoLocalFolderFlow({
+      isOpen: true,
+      droppedLocalPath: '',
+      activeRuntimeEnvironmentId: null,
+      addRepoPath,
+      closeModal,
+      fetchWorktrees,
+      scanNestedRepos,
+      setActiveNestedScanId,
+      setNestedScanInProgress,
+      showNestedRepoReview,
+      onGitRepoReady,
+      setIsAdding,
+      setAddProjectBusyLabel
+    })
+
+    await handleBrowse()
+
+    expect(showNestedRepoReview).toHaveBeenCalledWith(
+      expect.objectContaining({ scan, selectedPath: '/projects/umbrella', inProgress: false })
+    )
+    expect(addRepoPath).not.toHaveBeenCalled()
+  })
 })

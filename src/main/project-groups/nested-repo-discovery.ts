@@ -79,15 +79,15 @@ export async function scanNestedRepos(args: {
     stopped = true
     return true
   }
+  const selectedPathKind = (await filesystem.isSelectedPathGitRepo(args.path))
+    ? 'git_repo'
+    : 'non_git_folder'
   const emitProgress = (): void => {
-    args.onProgress?.(buildResult('non_git_folder'))
+    args.onProgress?.(buildResult(selectedPathKind))
   }
 
-  if (await filesystem.isSelectedPathGitRepo(args.path)) {
-    return buildResult('git_repo')
-  }
   if (noteAbort()) {
-    return buildResult('non_git_folder')
+    return buildResult(selectedPathKind)
   }
 
   const foldersToTraverse: TraversalFolder[] = [
@@ -123,12 +123,14 @@ export async function scanNestedRepos(args: {
     }
     const currentIgnoreRules = [
       ...currentFolder.ignoreRules,
-      ...(await readNestedRepoGitignoreRules({
-        folderPath: currentFolder.path,
-        entries,
-        filesystem,
-        baseSegments: currentFolder.segments
-      }))
+      ...(selectedPathKind === 'git_repo' && currentFolder.depth === 0
+        ? []
+        : await readNestedRepoGitignoreRules({
+            folderPath: currentFolder.path,
+            entries,
+            filesystem,
+            baseSegments: currentFolder.segments
+          }))
     ]
 
     const dirs = entries
@@ -148,6 +150,9 @@ export async function scanNestedRepos(args: {
         break
       }
       const childSegments = [...currentFolder.segments, name]
+      if (selectedPathKind === 'git_repo' && currentFolder.depth === 0 && name.startsWith('.')) {
+        continue
+      }
       if (isIgnoredNestedRepoDirectory(name, childSegments, currentIgnoreRules)) {
         continue
       }
@@ -182,5 +187,5 @@ export async function scanNestedRepos(args: {
     }
   }
 
-  return buildResult('non_git_folder')
+  return buildResult(selectedPathKind)
 }

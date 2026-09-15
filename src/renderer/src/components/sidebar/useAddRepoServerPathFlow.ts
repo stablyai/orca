@@ -143,7 +143,7 @@ export function useAddRepoServerPathFlow({
               scan
             })
           )
-          if (scan?.selectedPathKind === 'non_git_folder' && scan.repos.length > 0) {
+          if (scan && scan.repos.length > 0) {
             showNestedRepoReview({
               scan,
               selectedPath: path,

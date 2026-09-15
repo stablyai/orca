@@ -13,6 +13,7 @@ import { getRepoName, isGitRepo } from '../git/repo'
 import { scanNestedRepos } from '../project-groups/nested-repo-discovery'
 import {
   createNestedProjectGroupResolver,
+  includeSelectedGitRoot,
   resolveNestedRepoSelection
 } from '../project-groups/nested-repo-import'
 import { createNestedRepoImportTargetResolver } from '../project-groups/nested-repo-import-target'
@@ -57,12 +58,13 @@ export class RuntimeNestedRepoImport {
     }
     const scan = await scanNestedRepos({ path: args.parentPath, options: { timeoutMs: 15_000 } })
     const selection = resolveNestedRepoSelection({ scan, projectPaths: args.projectPaths })
+    const importPaths = includeSelectedGitRoot(scan, selection.selectedPaths)
     const groupResolver = createNestedProjectGroupResolver({
       parentPath: args.parentPath,
       groupName: args.groupName,
       mode: args.mode,
       connectionId: null,
-      repoPaths: selection.selectedPaths,
+      repoPaths: importPaths,
       createGroup: (input) => store.createProjectGroup!(input)
     })
     const results: ProjectGroupImportResult['projects'] = selection.rejectedPaths.map(
@@ -74,7 +76,7 @@ export class RuntimeNestedRepoImport {
     )
     const importedProjectIdsByRepoPath = new Map<string, string>()
     const importTargetResolver = createNestedRepoImportTargetResolver()
-    for (const [projectGroupOrder, repoPath] of selection.selectedPaths.entries()) {
+    for (const [projectGroupOrder, repoPath] of importPaths.entries()) {
       try {
         await awaitWindowsHostGitEnvironmentReady({ cwd: repoPath })
         if (!isGitRepo(repoPath)) {

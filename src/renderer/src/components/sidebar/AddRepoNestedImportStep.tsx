@@ -108,6 +108,14 @@ export function AddRepoNestedImportStep({
           disabled={isAdding || scanInProgress}
           className="flex-1"
         />
+        {scan.selectedPathKind === 'git_repo' ? (
+          <p className="shrink-0 text-xs text-muted-foreground">
+            {translate(
+              'auto.components.sidebar.AddRepoNestedImportStep.gitRootPreserved',
+              'The selected Git project is included without replacing its existing workspaces.'
+            )}
+          </p>
+        ) : null}
         {scanInProgress || scan.truncated || scan.timedOut || scan.stopped ? (
           <NestedRepoScanLimitNotice scan={scan} />
         ) : null}

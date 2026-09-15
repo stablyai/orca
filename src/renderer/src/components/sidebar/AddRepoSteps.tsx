@@ -176,7 +176,7 @@ export function useRemoteRepo(
         return
       }
       onNestedScanResult?.(scan ?? null, attemptId)
-      if (scan?.selectedPathKind === 'non_git_folder' && scan.repos.length > 0) {
+      if (scan && scan.repos.length > 0) {
         showNestedRepoReview?.(scan, trimmedRemotePath, selectedTargetId, attemptId, false, scanId)
         setRemoteNestedScanId(null)
         return

@@ -369,17 +369,20 @@ describe('scanNestedRepos', () => {
     expect(result.truncated).toBe(true)
   })
 
-  it('treats a selected git repo as the existing repo path', async () => {
+  it('finds nested repos beneath a selected git root without applying its ignore-all rule', async () => {
     const root = await tempRoot()
     await makeGitRepo(root)
     await mkdir(join(root, 'child'), { recursive: true })
+    await mkdir(join(root, '.worktrees', 'hidden-child'), { recursive: true })
     await makeGitRepo(join(root, 'child'))
+    await makeGitRepo(join(root, '.worktrees', 'hidden-child'))
+    await writeFile(join(root, '.gitignore'), '/*\n')
     await writeFile(join(root, 'README.md'), '')
 
     const result = await scanNestedRepos({ path: root })
 
     expect(result.selectedPathKind).toBe('git_repo')
-    expect(result.repos).toEqual([])
+    expect(result.repos).toEqual([{ path: join(root, 'child'), displayName: 'child', depth: 1 }])
   })
 
   it.skipIf(process.platform === 'win32')(

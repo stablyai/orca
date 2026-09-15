@@ -146,7 +146,7 @@ export function useAddRepoLocalFolderFlow({
         if (scan?.selectedPathKind === 'non_git_folder' && mode === 'batch') {
           return { status: 'skipped' }
         }
-        if (scan?.selectedPathKind === 'non_git_folder' && scan.repos.length > 0) {
+        if (scan && scan.repos.length > 0) {
           // Why: a single-folder decision point cannot queue competing batch review states.
           showNestedRepoReview({
             scan,

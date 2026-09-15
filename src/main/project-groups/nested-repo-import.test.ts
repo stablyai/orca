@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   createNestedProjectGroupResolver,
+  includeSelectedGitRoot,
   resolveNestedRepoImportPaths,
   resolveNestedRepoSelection
 } from './nested-repo-import'
@@ -40,6 +41,26 @@ function createGroupRecorder(): {
 }
 
 describe('createNestedProjectGroupResolver', () => {
+  it('implicitly includes a selected git root before its nested repositories', () => {
+    expect(
+      includeSelectedGitRoot(
+        {
+          selectedPath: '/workspace',
+          selectedPathKind: 'git_repo',
+          repos: [{ path: '/workspace/api', displayName: 'api', depth: 1 }],
+          truncated: false,
+          timedOut: false,
+          stopped: false,
+          durationMs: 1,
+          maxDepth: 3,
+          maxRepos: 100,
+          timeoutMs: null
+        },
+        ['/workspace/api']
+      )
+    ).toEqual(['/workspace', '/workspace/api'])
+  })
+
   it('creates sparse folder scopes for nested repos in grouped imports', () => {
     const groups: ProjectGroup[] = []
     const resolver = createNestedProjectGroupResolver({
