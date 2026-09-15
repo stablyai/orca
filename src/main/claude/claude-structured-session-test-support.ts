@@ -14,6 +14,7 @@ import {
   type ClaudeStructuredLaunch,
   type ClaudeStructuredSessionEvent
 } from './claude-structured-session-adapter'
+import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 
 export const PROVIDER_SESSION_ID = '819cf9f8-e43c-4ad7-b50f-54aa158a726a'
 
@@ -245,8 +246,19 @@ export async function acquired(
     undefined,
     onDispatchSettledLate
   )
-  await adapter.acquire({ identity: identityFor(), fence: 7, spawnToken: 'spawn-9' })
+  await adapter.acquire({
+    identity: identityFor(),
+    fence: 7,
+    spawnToken: 'spawn-9',
+    // Production acquires with a journal sink, and turn identity lives on the
+    // translator it builds; without one this fixture models no session that ships.
+    events: recordingJournalSink()
+  })
   return adapter
+}
+
+export function recordingJournalSink(): StructuredAgentSessionEventSink {
+  return { appendItem: () => {}, appendTombstone: () => {}, publish: () => {} }
 }
 
 export function tick(): Promise<void> {

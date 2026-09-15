@@ -17,6 +17,7 @@ import type {
 } from '../../../shared/agent-session-wire'
 import { DISPATCH_DOUBT_PERSISTENCE_FAILED } from '../agent-session-journal/journal-dispatch-doubt-reasons'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
+import { latestJournalDispatchObservation } from '../agent-session-journal/journal-dispatch-observation'
 import type {
   AgentSessionDispatchOutcome,
   StructuredAgentSessionAdapter
@@ -201,6 +202,7 @@ export async function performCancel(
   let cancelled = false
   let note = 'Cancellation requested.'
   try {
+    const dispatchStatus = latestJournalDispatchObservation(ctx.journal, ctx.fence)
     cancelled = input.scope
       ? (
           await ctx.adapter.stopBackgroundTasks?.({
@@ -214,6 +216,7 @@ export async function performCancel(
             sessionId: ctx.sessionId,
             turnId: input.turnId,
             fence: ctx.fence,
+            ...(dispatchStatus ? { dispatchStatus } : {}),
             ...(input.prompt ? { prompt: { itemId: input.prompt.itemId } } : {})
           })
         ).cancelled

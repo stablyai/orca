@@ -232,7 +232,7 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
       journalItemId,
       promptKey,
       questionId,
-      session.activeTurnId ?? null
+      session.translator?.currentTurnId ?? null
     )
   }
 

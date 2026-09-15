@@ -38,7 +38,7 @@ describe('Claude structured dispatch image limits', () => {
     }
   )
 
-  it('takes the active turn identity from a replay that lands after dispatch returned', async () => {
+  it('settles the waiter from a replay that lands after dispatch returned', async () => {
     const session = sessionFor()
     const dispatched = dispatchClaudeTurn(session, {
       clientMessageId: 'client-1',
@@ -47,11 +47,9 @@ describe('Claude structured dispatch image limits', () => {
     await vi.waitFor(() => expect(session.dispatchWaiters).toHaveLength(1))
     const sentUuid = (session.dispatchWaiters[0] as { sentUuid?: string }).sentUuid
     await expect(dispatched).resolves.toEqual({ state: 'admitted' })
-    expect(session.activeTurnId).toBeUndefined()
 
     expect(resolveClaudeReplayWaiter(session, userReplayFrame(sentUuid!, 'one'))).toBe(true)
-    expect(session.activeTurnId).toBe(sentUuid)
-    expect(session.activeTurnSequence).toBe(session.dispatchSequence)
+    expect(session.dispatchWaiters).toHaveLength(0)
   })
 
   it('recovers the active identity when a replay lands after the child died', async () => {
@@ -68,8 +66,7 @@ describe('Claude structured dispatch image limits', () => {
     expect(session.retiredDispatchWaiters).toHaveLength(1)
 
     expect(resolveClaudeReplayWaiter(session, userReplayFrame(sentUuid!, 'one'))).toBe(true)
-    expect(session.activeTurnId).toBe(sentUuid)
-    expect(session.activeTurnSequence).toBe(session.dispatchSequence)
+    expect(session.retiredDispatchWaiters).toHaveLength(0)
   })
 
   it('settles the send the replay proves was delivered, whenever it arrives', async () => {
@@ -410,7 +407,7 @@ describe('Claude structured dispatch image limits', () => {
     expect(resolveClaudeReplayWaiter(session, userReplayFrame('fresh-replay', 'retry me'))).toBe(
       true
     )
-    expect(session.activeTurnId).toBe('fresh-replay')
+    expect(session.dispatchWaiters).toHaveLength(0)
   })
 
   it('does not claim an SDK-pulled frame was unwritten when its write outcome is ambiguous', async () => {
