@@ -399,7 +399,10 @@ describe('registerPtyHandlers', () => {
     try {
       process.env.SHELL = '/opt/homebrew/bin/bash'
 
-      registerPtyHandlers(mainWindow as never)
+      // Why: this test pins shell-fallback plumbing, not the consent gate.
+      registerPtyHandlers(mainWindow as never, undefined, undefined, (() => ({
+        agentStatusHooksEnabled: true
+      })) as never)
       await handlers.get('pty:spawn')!(null, {
         cols: 80,
         rows: 24,

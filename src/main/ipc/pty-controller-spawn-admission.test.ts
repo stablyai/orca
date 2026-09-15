@@ -88,7 +88,8 @@ describe('registerPtyHandlers', () => {
       mainWindow as never,
       runtime,
       undefined,
-      undefined,
+      // Why: this suite pins runtime-controller admission, not the consent gate.
+      (() => ({ agentStatusHooksEnabled: true })) as never,
       undefined,
       store as never
     )

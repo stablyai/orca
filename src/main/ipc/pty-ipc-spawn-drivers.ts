@@ -62,7 +62,9 @@ export function createPtyIpcSpawnDrivers(ctx: {
         mainWindow as never,
         undefined,
         getSelectedCodexHomePath,
-        getSettings as never
+        // Why: these suites pin hook/codex-home env injection, not the consent gate itself;
+        // default to consented so omitting getSettings keeps testing that injection.
+        (getSettings ?? (() => ({ agentStatusHooksEnabled: true }))) as never
       )
       await handlers.get('pty:spawn')!(null, {
         cols: 80,
@@ -92,7 +94,11 @@ export function createPtyIpcSpawnDrivers(ctx: {
     command?: string
   }): Promise<[string, string[], { cwd: string; env: Record<string, string> }]> {
     handlers.clear()
-    registerPtyHandlers(mainWindow as never)
+    // Why: this driver pins spawn argv/cwd/env plumbing, not the consent gate; default to
+    // consented so omitting a settings resolver keeps testing that plumbing.
+    registerPtyHandlers(mainWindow as never, undefined, undefined, (() => ({
+      agentStatusHooksEnabled: true
+    })) as never)
     await handlers.get('pty:spawn')!(null, {
       cols: 80,
       rows: 24,
