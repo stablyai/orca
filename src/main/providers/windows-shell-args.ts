@@ -10,7 +10,8 @@ import { getBashWrapperLaunchArgs } from './local-pty-shell-ready'
 import { ensureShellReadyWrappersAt } from './local-pty-shell-ready-wrapper-generation'
 import {
   encodePowerShellCommand,
-  getPowerShellOsc133Bootstrap
+  getPowerShellOsc133Bootstrap,
+  getPowerShellOsc133StartupCommandMark
 } from '../powershell-osc133-bootstrap'
 import { quoteStartupArg } from '../../shared/tui-agent-startup-shell'
 
@@ -121,7 +122,7 @@ function getPowerShellEncodedCommand(
     return { encodedCommand: encodePowerShellCommand(bootstrap) }
   }
 
-  const command = `${bootstrap}\n${startupCommand}`
+  const command = `${bootstrap}\n${getPowerShellOsc133StartupCommandMark()}\n${startupCommand}`
   const encodedCommand = encodePowerShellCommand(command)
   // Why: -EncodedCommand expands UTF-16 text into base64; keep a conservative
   // margin under Windows CreateProcess' 32,767-character command line limit.
