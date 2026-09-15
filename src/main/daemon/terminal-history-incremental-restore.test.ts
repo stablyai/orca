@@ -218,7 +218,7 @@ describe('incremental terminal history restore', () => {
       data: 'x'.repeat(2 * 1024 * 1024)
     }
     expect(await manager.appendIncrements(SESSION_ID, 1, [bigRecord])).toBe('ok')
-    expect(await manager.appendIncrements(SESSION_ID, 2, [bigRecord])).toBe('ok')
+    expect(await manager.appendIncrements(SESSION_ID, 2, [bigRecord])).toBe('checkpoint-needed')
     expect(await manager.appendIncrements(SESSION_ID, 3, [bigRecord])).toBe('needs-checkpoint')
     // Why: the rejected batch is subsumed by the snapshot the caller takes
     // next; checkpoint() resets the log for the new generation.
