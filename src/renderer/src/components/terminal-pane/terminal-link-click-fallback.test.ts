@@ -22,6 +22,10 @@ import {
 } from './terminal-link-handlers-test-harness'
 
 const doubles = createTerminalLinkTestDoubles()
+const filePreviewMocks = vi.hoisted(() => ({
+  getWorkspaceFilePreviewPlan: vi.fn(() => ({ status: 'doc-preview' as const })),
+  openFileInBrowserTab: vi.fn()
+}))
 const {
   storeState,
   openUrlMock,
@@ -50,6 +54,8 @@ vi.mock('@/lib/worktree-activation', () => ({
 vi.mock('@/lib/connection-context', () => ({
   getConnectionId: vi.fn(() => null)
 }))
+
+vi.mock('@/lib/file-preview', () => filePreviewMocks)
 
 installTerminalLinkTestEnvironment(doubles)
 
@@ -215,11 +221,11 @@ describe('createFilePathLinkProvider range bounds', () => {
     await flushAsyncWork()
 
     expect(opened).toBe(true)
-    expect(createBrowserTabMock).toHaveBeenCalledWith(
-      'wt-1',
-      'file:///tmp/mobile/mock-homepage.html',
-      expect.objectContaining({ title: 'mock-homepage.html', activate: true })
-    )
+    expect(filePreviewMocks.openFileInBrowserTab).toHaveBeenCalledWith({
+      filePath: '/tmp/mobile/mock-homepage.html',
+      worktreeId: 'wt-1'
+    })
+    expect(createBrowserTabMock).not.toHaveBeenCalled()
     expect(openFilePathMock).not.toHaveBeenCalled()
   })
 
