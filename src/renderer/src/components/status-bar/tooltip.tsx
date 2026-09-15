@@ -17,6 +17,9 @@ import {
   type UsagePercentageDisplay
 } from '../../../../shared/usage-percentage-display'
 import { formatUsagePercentageLabel } from './usage-percentage-label'
+import { getUsagePace, getUsagePaceNextChangeAt } from '../../../../shared/usage-pace'
+import { formatUsagePaceLine } from './usage-pace-copy'
+import { UsagePaceMarker } from './UsagePaceMarker'
 import { useResetCountdownClock } from '@/hooks/useResetCountdownClock'
 
 // Re-exported from its shared home so status-bar callers keep a single import.
@@ -198,6 +201,10 @@ export function barColor(usedPct: number): string {
   return 'bg-red-500'
 }
 
+/**
+ * One rate-limit window: label, meter, the used/reset row, and — where the
+ * window's timing supports it — a pace marker and its reading.
+ */
 function ProviderRateLimitWindowSection({
   window,
   label,
@@ -221,25 +228,44 @@ function ProviderRateLimitWindowSection({
   const usedPct = clampUsedPercent(window.usedPercent)
   const displayedPct = getDisplayedUsagePercentage(usedPct, usagePercentageDisplay)
   const resetLabel = window.resetsAt ? formatResetCountdown(window.resetsAt - now) : null
+  const pace = getUsagePace(window, now)
+  // Why: the marker tracks the fill, so in "remaining" mode it has to flip with it —
+  // otherwise the tick and the bar tell opposite stories about the same window.
+  const pacePct = pace
+    ? getDisplayedUsagePercentage(pace.expectedUsedPercent, usagePercentageDisplay)
+    : 0
 
   return (
     <div className="space-y-1">
       <div className={`font-medium ${textClass}`}>{label}</div>
-      <div className={`h-[6px] w-full overflow-hidden rounded-full ${emptyBarClass}`}>
-        {/* Why: fill follows the selected percentage; color still signals consumption urgency. */}
-        <div
-          className={`h-full rounded-full ${barColor(usedPct)} transition-all duration-300`}
-          style={{ width: `${displayedPct}%` }}
-        />
+      <div className="relative">
+        <div className={`h-[6px] w-full overflow-hidden rounded-full ${emptyBarClass}`}>
+          {/* Why: fill follows the selected percentage; color still signals consumption urgency. */}
+          <div
+            className={`h-full rounded-full ${barColor(usedPct)} transition-all duration-300`}
+            style={{ width: `${displayedPct}%` }}
+          />
+        </div>
+        {pace ? <UsagePaceMarker percent={pacePct} stage={pace.stage} /> : null}
       </div>
       <div className={`flex justify-between ${mutedClass}`}>
         <span>{formatUsagePercentageLabel(usedPct, usagePercentageDisplay)}</span>
         {resetLabel && <span>{resetLabel}</span>}
       </div>
+      {pace ? (
+        <div data-usage-pace={pace.stage} className={mutedClass}>
+          {formatUsagePaceLine(pace)}
+        </div>
+      ) : null}
     </div>
   )
 }
 
+/**
+ * A provider's usage card — one section per window, plus reset credits and any
+ * error state. Shared by the status-bar detail menu and the hover tooltip,
+ * which is why the palette is threaded through rather than hard-coded.
+ */
 export function ProviderPanel({
   p,
   inverted = false,
@@ -254,7 +280,15 @@ export function ProviderPanel({
   usagePercentageDisplay?: UsagePercentageDisplay
 }): React.JSX.Element {
   const windowSections = p ? getWindowSections(p) : []
-  const now = useResetCountdownClock(windowSections.map((section) => section.window?.resetsAt))
+  // Why: pace turns over on its own schedule, which is finer than the hourly
+  // countdown boundary once a reset is more than a day out.
+  const now = useResetCountdownClock(
+    windowSections.map((section) => section.window?.resetsAt),
+    (at) =>
+      windowSections.map((section) =>
+        section.window ? getUsagePaceNextChangeAt(section.window, at) : null
+      )
+  )
   const textClass = inverted ? 'text-background' : 'text-foreground'
   const mutedClass = inverted ? 'text-background/60' : 'text-muted-foreground'
   const faintClass = inverted ? 'text-background/50' : 'text-muted-foreground/80'
