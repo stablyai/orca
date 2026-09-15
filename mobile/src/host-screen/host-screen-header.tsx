@@ -1,5 +1,6 @@
 import { Pressable, Text, View } from 'react-native'
 import {
+  Bot,
   ChevronLeft,
   Filter,
   Layers,
@@ -211,6 +212,22 @@ export function HostScreenHeader({ controller }: { controller: HostScreenControl
               />
             </Pressable>
 
+            <Pressable
+              style={[
+                styles.embeddedToolbarIconButton,
+                connState !== 'connected' && styles.toolbarIconDisabled
+              ]}
+              onPress={() => actions.navigateFromHostList(`/h/${hostId}/agents`)}
+              disabled={connState !== 'connected'}
+              accessibilityRole="button"
+              accessibilityLabel="Agents"
+            >
+              <Bot
+                size={16}
+                color={connState === 'connected' ? colors.textSecondary : colors.textMuted}
+              />
+            </Pressable>
+
             {floatingWorkspaceEnabled ? (
               <Pressable
                 style={[
@@ -318,6 +335,17 @@ export function HostScreenHeader({ controller }: { controller: HostScreenControl
             disabled={connState !== 'connected'}
           >
             <List
+              size={16}
+              color={connState === 'connected' ? colors.textSecondary : colors.textMuted}
+            />
+          </Pressable>
+
+          <Pressable
+            style={styles.searchToggle}
+            onPress={() => actions.navigateFromHostList(`/h/${hostId}/agents`)}
+            disabled={connState !== 'connected'}
+          >
+            <Bot
               size={16}
               color={connState === 'connected' ? colors.textSecondary : colors.textMuted}
             />
