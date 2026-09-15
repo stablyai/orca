@@ -1,0 +1,13 @@
+diff --git a/src/fabric/gamma/stack/StackHeaderConfigAndroidNativeComponent.ts b/src/fabric/gamma/stack/StackHeaderConfigAndroidNativeComponent.ts
+index 06b8e7fbedb213fdb1bf15458ccbf025f5c77503..228cbef99e5eeaad756f0d8cd77c3cbcc6a5e319 100644
+--- a/src/fabric/gamma/stack/StackHeaderConfigAndroidNativeComponent.ts
++++ b/src/fabric/gamma/stack/StackHeaderConfigAndroidNativeComponent.ts
+@@ -123,7 +123,7 @@ export type StackHeaderToolbarMenuElementOptionsAndroid = Partial<
+ 
+ export interface NativeCommands {
+   setToolbarMenuElementOptions: (
+-    viewRef: React.ComponentRef<ComponentType>,
++    viewRef: React.ElementRef<ComponentType>,
+     id: string,
+     // We use the array here only due to codegen limitation. We're using only
+     // the first index of the array.
