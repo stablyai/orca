@@ -138,6 +138,7 @@ type ClaudeActionContext = {
   isRemoteAccountScope: boolean
   claudeAccounts: ClaudeRateLimitAccountsState
   setClaudeAccounts: Dispatch<SetStateAction<ClaudeRateLimitAccountsState>>
+  setClaudeAccountsLoaded: Dispatch<SetStateAction<boolean>>
   setClaudeAction: Dispatch<SetStateAction<ClaudeAccountAction>>
   fetchSettings: () => Promise<void>
   recordFeatureInteraction: (featureId: FeatureInteractionId) => void
@@ -153,10 +154,12 @@ export function createClaudeAccountActionRunner(
     isRemoteAccountScope,
     recordFeatureInteraction,
     setClaudeAccounts,
+    setClaudeAccountsLoaded,
     setClaudeAction
   } = context
   const syncClaudeAccounts = async (next: ClaudeRateLimitAccountsState): Promise<void> => {
     setClaudeAccounts(next)
+    setClaudeAccountsLoaded(true)
     if (!isRemoteAccountScope) {
       await fetchSettings()
     }

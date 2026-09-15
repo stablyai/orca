@@ -27,6 +27,7 @@ export function renderClaudeAccountsSection(model: AccountsPaneSectionModel): Re
     setRemoveClaudeTarget,
     settings,
     systemClaudeActive,
+    systemClaudeNeedsSignIn,
     visibleClaudeAccounts,
     wslCapabilitiesLoading
   } = model
@@ -131,9 +132,11 @@ export function renderClaudeAccountsSection(model: AccountsPaneSectionModel): Re
             }
             disabled={claudeAction !== 'idle' || accountRuntimeUnavailable}
             className={`flex w-full items-center justify-between gap-3 rounded-md border px-3 py-2.5 text-left transition-colors ${
-              systemClaudeActive
-                ? 'border-foreground/20 bg-accent/15'
-                : 'border-border/70 hover:border-border hover:bg-accent/8'
+              systemClaudeNeedsSignIn
+                ? 'border-destructive/50 bg-destructive/5'
+                : systemClaudeActive
+                  ? 'border-foreground/20 bg-accent/15'
+                  : 'border-border/70 hover:border-border hover:bg-accent/8'
             } disabled:cursor-default disabled:opacity-100`}
           >
             <div className="flex min-w-0 flex-1 flex-col gap-0.5">
@@ -141,7 +144,8 @@ export function renderClaudeAccountsSection(model: AccountsPaneSectionModel): Re
                 <span className="truncate text-sm font-medium">
                   {translate('auto.components.settings.AccountsPane.f2a265f8c7', 'System default')}
                 </span>
-                {systemClaudeActive ? (
+                {/* Why: a row cannot read as both selected-healthy and broken — the warning replaces Active, not joins it. */}
+                {systemClaudeActive && !systemClaudeNeedsSignIn ? (
                   <Badge
                     variant="outline"
                     className="h-4 shrink-0 rounded px-1.5 text-[10px] font-medium leading-none text-foreground/80"
@@ -149,8 +153,20 @@ export function renderClaudeAccountsSection(model: AccountsPaneSectionModel): Re
                     {translate('auto.components.settings.AccountsPane.e74831fb6b', 'Active')}
                   </Badge>
                 ) : null}
+                {systemClaudeNeedsSignIn ? (
+                  <Badge
+                    variant="destructive"
+                    className="h-4 shrink-0 rounded px-1.5 text-[10px] font-medium leading-none"
+                  >
+                    {translate('auto.components.settings.AccountsPane.93c47b333a', 'Needs sign-in')}
+                  </Badge>
+                ) : null}
               </div>
-              <span className="truncate text-[11px] text-muted-foreground">
+              <span
+                className={`truncate text-[11px] ${
+                  systemClaudeNeedsSignIn ? 'text-destructive' : 'text-muted-foreground'
+                }`}
+              >
                 {translate(
                   'auto.components.settings.AccountsPane.e05d0ff737',
                   'Use your current {{value0}} Claude login.',
