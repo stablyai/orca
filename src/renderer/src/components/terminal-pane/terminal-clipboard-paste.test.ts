@@ -388,4 +388,55 @@ describe('terminal clipboard paste', () => {
     expect(observedIgnoreBracketedPasteMode).toEqual([true])
     expect(saveClipboardImageAsTempFile).not.toHaveBeenCalled()
   })
+
+  it('pastes copied file paths through the drop pipeline instead of the display-name text', async () => {
+    const pasteText = vi.fn()
+    const pasteFilePaths = vi.fn().mockResolvedValue(undefined)
+    const saveClipboardImageAsTempFile = vi.fn().mockResolvedValue(null)
+
+    const result = await pasteTerminalClipboard({
+      // Why: Finder exposes a copied file as its bare name in the text flavor.
+      readClipboardText: vi.fn().mockResolvedValue('hello world.txt'),
+      readClipboardFilePaths: vi.fn().mockResolvedValue(['/Users/me/sub dir/hello world.txt']),
+      pasteFilePaths,
+      saveClipboardImageAsTempFile,
+      pasteText
+    })
+
+    expect(pasteFilePaths).toHaveBeenCalledWith(['/Users/me/sub dir/hello world.txt'])
+    expect(pasteText).not.toHaveBeenCalled()
+    expect(saveClipboardImageAsTempFile).not.toHaveBeenCalled()
+    expect(result).toEqual({ status: 'pasted', kind: 'file-path' })
+  })
+
+  it('keeps text paste when the clipboard holds no file reference', async () => {
+    const pasteText = vi.fn()
+    const pasteFilePaths = vi.fn()
+
+    const result = await pasteTerminalClipboard({
+      readClipboardText: vi.fn().mockResolvedValue('plain text'),
+      readClipboardFilePaths: vi.fn().mockResolvedValue([]),
+      pasteFilePaths,
+      saveClipboardImageAsTempFile: vi.fn().mockResolvedValue(null),
+      pasteText
+    })
+
+    expect(pasteFilePaths).not.toHaveBeenCalled()
+    expect(pasteText).toHaveBeenCalledWith('plain text')
+    expect(result).toEqual({ status: 'pasted', kind: 'text' })
+  })
+
+  it('keeps text paste when reading file references fails', async () => {
+    const pasteText = vi.fn()
+
+    await pasteTerminalClipboard({
+      readClipboardText: vi.fn().mockResolvedValue('plain text'),
+      readClipboardFilePaths: vi.fn().mockRejectedValue(new Error('clipboard unavailable')),
+      pasteFilePaths: vi.fn(),
+      saveClipboardImageAsTempFile: vi.fn().mockResolvedValue(null),
+      pasteText
+    })
+
+    expect(pasteText).toHaveBeenCalledWith('plain text')
+  })
 })
