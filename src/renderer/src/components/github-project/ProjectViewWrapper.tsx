@@ -1,9 +1,10 @@
-import React from 'react'
+import React, { useCallback } from 'react'
 import GitHubItemDialog from '@/components/GitHubItemDialog'
 import { launchWorkItemDirect } from '@/lib/launch-work-item-direct'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
 import ProjectViewList from './ProjectViewList'
+import ProjectBoard from './ProjectBoard'
 import ProjectRoadmap from './ProjectRoadmap'
 import ProjectItemSlugDialog from './ProjectItemSlugDialog'
 import { ProjectMissingRepoDialog } from './ProjectMissingRepoDialog'
@@ -15,6 +16,10 @@ import {
 } from './ProjectViewStates'
 import { useProjectRowActions } from './useProjectRowActions'
 import { useProjectViewTable } from './useProjectViewTable'
+import type {
+  GitHubProjectFieldMutationValue,
+  GitHubProjectRow
+} from '../../../../shared/github/project-types'
 
 type Props = { selectedRepoIds: ReadonlySet<string> }
 
@@ -60,6 +65,14 @@ function ProjectViewBody({
   rowActions: ReturnType<typeof useProjectRowActions>
 }): React.JSX.Element | null {
   const { activeProject, error, loading, table, visibleTable } = tableState
+  // Why: an inline arrow here would defeat ProjectBoard's moveRow memoization
+  // and re-register its document drop listener on every wrapper render.
+  const { editField } = rowActions
+  const onEditField = useCallback(
+    (row: GitHubProjectRow, fieldId: string, value: GitHubProjectFieldMutationValue | null) =>
+      void editField(row, fieldId, value),
+    [editField]
+  )
   if (!activeProject) {
     return (
       <div className="flex flex-1 items-center justify-center p-8 text-sm text-muted-foreground">
@@ -128,7 +141,7 @@ function ProjectViewBody({
     <ProjectViewList
       table={visibleTable}
       onOpenDialog={rowActions.openDialog}
-      onEditField={(row, fieldId, value) => void rowActions.editField(row, fieldId, value)}
+      onEditField={onEditField}
       onEditAssignees={(row, add, remove) => void rowActions.editAssignees(row, add, remove)}
       onEditLabels={(row, add, remove) => void rowActions.editLabels(row, add, remove)}
       onEditIssueType={(row, issueType) => void rowActions.editIssueType(row, issueType)}
@@ -144,6 +157,16 @@ function ProjectViewBody({
   if (visibleTable.selectedView.layout === 'ROADMAP_LAYOUT') {
     return (
       <ProjectRoadmap table={visibleTable} onOpenDialog={rowActions.openDialog} fallback={list} />
+    )
+  }
+  if (visibleTable.selectedView.layout === 'BOARD_LAYOUT') {
+    return (
+      <ProjectBoard
+        table={visibleTable}
+        onOpenDialog={rowActions.openDialog}
+        onEditField={onEditField}
+        fallback={list}
+      />
     )
   }
   return list
