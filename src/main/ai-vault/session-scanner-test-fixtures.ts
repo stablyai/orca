@@ -33,9 +33,12 @@ export function jsonLines(records: unknown[]): string {
   return records.map((record) => JSON.stringify(record)).join('\n')
 }
 
+// Newline-terminated, the way an agent writes each record: a file whose last
+// line has no break is a transcript mid-write, and the reader deliberately
+// withholds that line from consumers until it is complete.
 export async function writeJsonlFile(filePath: string, records: unknown[]): Promise<void> {
   await mkdir(dirname(filePath), { recursive: true })
-  await writeFile(filePath, jsonLines(records))
+  await writeFile(filePath, `${jsonLines(records)}\n`)
 }
 
 export async function writeAntigravityTranscript(

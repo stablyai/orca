@@ -1,12 +1,15 @@
 import { LazyWorkerThreadHost, type WorkerThreadFactory } from '../lazy-worker-thread-host'
 import type { AiVaultScanIssue, AiVaultSession } from '../../shared/ai-vault-types'
 import type {
+  OpenCodeSqliteCaptureRequest,
+  OpenCodeSqliteCaptureValue,
   OpenCodeSqliteListRequest,
   OpenCodeSqliteListValue,
   OpenCodeSqliteParseRequest,
   OpenCodeSqliteWorkerRequest,
   OpenCodeSqliteWorkerResponse
 } from './session-scanner-opencode-sqlite-worker-protocol'
+import { parseOpenCodeSqliteCaptureValue } from './session-scanner-opencode-sqlite-worker-response'
 import type { SessionFileCandidate } from './session-scanner-types'
 import { errorMessage } from './session-scanner-values'
 
@@ -19,6 +22,9 @@ import { errorMessage } from './session-scanner-values'
 
 export const LIST_TIMEOUT_MS = 30_000
 export const PARSE_TIMEOUT_MS = 15_000
+// Longer than a parse because it reads every part of the session rather than
+// the newest window, and shorter than nothing at all because the queue is FIFO.
+export const CAPTURE_TIMEOUT_MS = 30_000
 export const IDLE_TEARDOWN_MS = 30_000
 // After this many consecutive worker deaths, fail the remaining queued calls to
 // scan issues instead of respawning so a DB that reliably kills the worker can't
@@ -31,6 +37,7 @@ export const MAX_CONSECUTIVE_DEATHS = 3
 type OpenCodeSqliteRequestBody =
   | Omit<OpenCodeSqliteListRequest, 'id'>
   | Omit<OpenCodeSqliteParseRequest, 'id'>
+  | Omit<OpenCodeSqliteCaptureRequest, 'id'>
 
 type PendingCall = {
   request: OpenCodeSqliteWorkerRequest
@@ -43,6 +50,15 @@ type PendingCall = {
 // Distinguishes "no worker available at all" from a timeout or crash so callers
 // can surface a precise issue while keeping synchronous SQLite off the main thread.
 class OpenCodeSqliteWorkerUnavailableError extends Error {}
+
+// One session failed, not the whole source: the scanner turns this throw into a
+// per-session scan issue and the search index records a failed read.
+function sessionReadFailure(err: unknown): Error {
+  if (err instanceof OpenCodeSqliteWorkerUnavailableError) {
+    return new Error('OpenCode SQLite background scanner could not start.')
+  }
+  return err instanceof Error ? err : new Error(String(err))
+}
 
 /**
  * Main-thread bridge that runs OpenCode SQLite reads on a persistent worker
@@ -140,13 +156,43 @@ export class OpenCodeSqliteWorkerClient {
         { kind: 'parse', dbPath: args.dbPath, sessionId: args.sessionId, platform: args.platform },
         PARSE_TIMEOUT_MS
       )
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the worker's parse leg returns exactly this, built by the repo's own reader on the other side of a structured clone.
       return value as AiVaultSession | null
     } catch (err) {
-      if (err instanceof OpenCodeSqliteWorkerUnavailableError) {
-        throw new Error('OpenCode SQLite background scanner could not start.')
-      }
-      // Reject only this session; the scanner turns the throw into a scan issue.
-      throw err instanceof Error ? err : new Error(String(err))
+      throw sessionReadFailure(err)
+    }
+  }
+
+  /**
+   * Read one OpenCode session and its whole transcript on the worker.
+   *
+   * One request rather than a parse plus a second read: both halves then come
+   * from a single open of the database, so the messages the index folds cannot
+   * belong to a different generation of the session than the panel shows.
+   * @param args.dbPath - Absolute path to the opencode.db file.
+   * @param args.sessionId - Primary key in the `session` table.
+   * @param args.platform - Platform used for resume-command generation.
+   * @returns The session (null when it does not exist) and its messages;
+   *   rejects on worker timeout/crash so the read is recorded as failed.
+   */
+  async capture(args: {
+    dbPath: string
+    sessionId: string
+    platform: NodeJS.Platform
+  }): Promise<OpenCodeSqliteCaptureValue> {
+    try {
+      const value = await this.dispatch(
+        {
+          kind: 'capture',
+          dbPath: args.dbPath,
+          sessionId: args.sessionId,
+          platform: args.platform
+        },
+        CAPTURE_TIMEOUT_MS
+      )
+      return parseOpenCodeSqliteCaptureValue(value)
+    } catch (err) {
+      throw sessionReadFailure(err)
     }
   }
 

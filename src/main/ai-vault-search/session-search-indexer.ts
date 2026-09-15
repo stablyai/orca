@@ -40,6 +40,8 @@ export type SessionSearchIndexStatus = {
   lastReconcileAt: number | null
   /** When a whole-machine sweep last finished; null until one has. */
   lastSweepCompletedAt: number | null
+  /** Indexed sessions per agent; an agent with files and none is unsearchable. */
+  sessionsByAgent: Record<string, number>
 }
 
 /**
@@ -187,7 +189,8 @@ export class SessionSearchIndexer {
     const settled = (this.closed ? this.lastCounts : this.readCounts()) ?? {
       current: 0,
       due: 0,
-      failed: 0
+      failed: 0,
+      sessionsByAgent: {}
     }
     return {
       phase: this.phase(settled),
@@ -196,7 +199,8 @@ export class SessionSearchIndexer {
       filesFailed: settled.failed,
       degradedRoots: this.degradedRoots.map((root) => ({ ...root })),
       lastReconcileAt: this.lastReconcileAt,
-      lastSweepCompletedAt: this.lastSweepCompletedAt
+      lastSweepCompletedAt: this.lastSweepCompletedAt,
+      sessionsByAgent: { ...settled.sessionsByAgent }
     }
   }
 

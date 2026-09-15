@@ -24,7 +24,7 @@ async function fixture() {
   // degradedRoots is re-stated because the contract type leaves `root` optional
   // for relay redaction, while the indexer always names the root it degraded.
   const indexer = {
-    status: () => ({ ...status, degradedRoots: [] }),
+    status: () => ({ ...status, degradedRoots: [], sessionsByAgent: {} }),
     reconcile: vi.fn(async () => {})
   }
   const service = createSessionSearchService({ engine: harness.engine, indexer })

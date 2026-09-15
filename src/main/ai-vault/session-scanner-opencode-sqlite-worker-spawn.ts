@@ -3,6 +3,7 @@ import { join } from 'node:path'
 import { Worker } from 'node:worker_threads'
 import type { AiVaultScanIssue, AiVaultSession } from '../../shared/ai-vault-types'
 import type { SessionFileCandidate } from './session-scanner-types'
+import type { OpenCodeSqliteCaptureValue } from './session-scanner-opencode-sqlite-worker-protocol'
 import { OpenCodeSqliteWorkerClient } from './session-scanner-opencode-sqlite-worker-client'
 
 // Why: resolve the built worker entry + own the process-wide shared client so
@@ -69,4 +70,20 @@ export function parseOpenCodeSqliteSessionViaWorker(args: {
   platform: NodeJS.Platform
 }): Promise<AiVaultSession | null> {
   return getSharedClient().parse(args)
+}
+
+/**
+ * Read one OpenCode SQLite session and its whole transcript through the shared
+ * worker client.
+ * @param args.dbPath - Absolute path to the opencode.db file.
+ * @param args.sessionId - Primary key in the `session` table.
+ * @param args.platform - Platform used for resume-command generation.
+ * @returns The session and every message it holds.
+ */
+export function captureOpenCodeSqliteSessionViaWorker(args: {
+  dbPath: string
+  sessionId: string
+  platform: NodeJS.Platform
+}): Promise<OpenCodeSqliteCaptureValue> {
+  return getSharedClient().capture(args)
 }

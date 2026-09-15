@@ -104,5 +104,8 @@ export const AiVaultSearchStatusSchema = z.object({
   degradedRoots: z.array(z.object({ root: z.string().optional(), reason: z.string() })),
   lastReconcileAt: z.number().nullable(),
   lastSweepCompletedAt: z.number().nullable(),
+  // Optional: an older host answers without it, and a reader that has none
+  // should show no breakdown rather than a breakdown of zeroes.
+  sessionsByAgent: z.record(z.string(), z.number().int().nonnegative()).optional(),
   generation: z.number().int().nonnegative()
 })

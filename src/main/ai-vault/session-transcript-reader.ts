@@ -1,6 +1,6 @@
 import { readTranscriptSlice } from '../native-chat/wsl-transcript-fs-access'
 import type { AiVaultSession } from '../../shared/ai-vault-types'
-import { parseAgentSessionFile, parserPublishesMessages } from './session-scanner-agent-parser'
+import { parseAgentSessionFile } from './session-scanner-agent-parser'
 import { consumeCompleteJsonlLines } from './session-scanner-jsonl-reader'
 import type { ResumableSessionParseState, SessionFileCandidate } from './session-scanner-types'
 import {
@@ -159,12 +159,11 @@ export async function readWholeTranscript(args: {
     args.stats.fullParses++
     args.stats.bytesRead += file.sizeBytes ?? 0
   }
-  const publishes = parserPublishesMessages(args.candidate)
   const channel = new TranscriptMessageChannel()
   channel.beginRead({ candidate: args.candidate, mode: 'replace', previousByteOffset: 0 })
   try {
     const session = await parseAgentSessionFile(args.candidate, args.platform, channel)
-    channel.finishRead({ session, byteOffset: file.sizeBytes ?? 0, incomplete: !publishes })
+    channel.finishRead({ session, byteOffset: file.sizeBytes ?? 0, incomplete: false })
     return session
   } catch (error) {
     channel.finishRead({ session: null, byteOffset: 0, incomplete: true })

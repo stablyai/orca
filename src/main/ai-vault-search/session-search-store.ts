@@ -1,4 +1,5 @@
 import type SyncDatabase from '../sqlite/sync-database'
+import { asRecord } from '../ai-vault/session-scanner-record-value'
 import type { SessionFileCandidate } from '../ai-vault/session-scanner-types'
 import type { TranscriptSessionIdentity } from '../ai-vault/session-transcript-consumers'
 import type {
@@ -42,7 +43,20 @@ export type SessionSearchFileRow = {
 }
 
 /** How many rows are in each state; the whole of the indexer's progress report. */
-export type SessionSearchStateCounts = { current: number; due: number; failed: number }
+export type SessionSearchStateCounts = {
+  current: number
+  due: number
+  failed: number
+  /**
+   * Indexed sessions per agent.
+   *
+   * The one number that distinguishes an agent the index has read from one it
+   * has only listed: OpenCode's 606 rows in `files` with nothing in `sessions`
+   * was the shape of a whole source being silently unsearchable, and no
+   * file-state count could show it.
+   */
+  sessionsByAgent: Record<string, number>
+}
 
 /**
  * Owns the index database. PR 2 scope: the write half only — the transcript
@@ -272,9 +286,30 @@ export class SessionSearchStore {
       state: SessionSearchFileState
       n: number
     }[]
-    const counts: SessionSearchStateCounts = { current: 0, due: 0, failed: 0 }
+    const counts: SessionSearchStateCounts = {
+      current: 0,
+      due: 0,
+      failed: 0,
+      sessionsByAgent: this.sessionsByAgent()
+    }
     for (const row of rows) {
       counts[row.state] = Number(row.n)
+    }
+    return counts
+  }
+
+  // Grouped on `sessions_agent`, over one row per indexed session. Deliberately
+  // not the message count beside it: that would scan every indexed row on a call
+  // the panel polls, and it answers the same question one table later.
+  private sessionsByAgent(): Record<string, number> {
+    const rows = this.db.prepare('SELECT agent, count(*) AS n FROM sessions GROUP BY agent').all()
+    const counts: Record<string, number> = {}
+    for (const row of rows) {
+      const agent = asRecord(row)?.agent
+      const total = asRecord(row)?.n
+      if (typeof agent === 'string' && typeof total === 'number') {
+        counts[agent] = total
+      }
     }
     return counts
   }

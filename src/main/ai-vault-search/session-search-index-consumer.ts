@@ -1,4 +1,3 @@
-import { parserPublishesMessages } from '../ai-vault/session-scanner-agent-parser'
 import {
   registerTranscriptConsumer,
   type TranscriptConsumer,
@@ -7,7 +6,6 @@ import {
   type TranscriptReadOutcome,
   type TranscriptReadStart
 } from '../ai-vault/session-transcript-consumers'
-import type { SessionFileCandidate } from '../ai-vault/session-scanner-types'
 import { fileIdentity } from './session-search-file-cursor'
 import type { SessionSearchFileWrite } from './session-search-index-writer'
 import type { SessionSearchStore } from './session-search-store'
@@ -31,10 +29,6 @@ export class SessionSearchIndexConsumer implements TranscriptConsumer {
 
   beginRead(start: TranscriptReadStart): TranscriptReadConsumer | null {
     const { candidate } = start
-    if (!parserPublishesMessages(candidate)) {
-      this.noteUnreachableParser(candidate)
-      return null
-    }
     if (start.mode === 'append') {
       const cursor = this.store.indexedFile(candidate.file.path, fileIdentity(candidate.file))
       if (!cursor || cursor.byteOffset !== start.previousByteOffset) {
@@ -59,35 +53,6 @@ export class SessionSearchIndexConsumer implements TranscriptConsumer {
       return null
     }
     return new SessionSearchReadConsumer(this.store, start, write)
-  }
-
-  /**
-   * A source no read can ever index, recorded as one this index has seen.
-   *
-   * A parser that decodes where the message channel cannot reach it -- OpenCode's
-   * SQLite sessions today -- publishes nothing, so no read of it will ever
-   * commit a row. Leaving the file table silent about it is not free: the next
-   * pass sees a path the index holds nothing for, asks for a read, and asking
-   * over a warm cache drops the session list's own resume point. The sidebar's
-   * fold is thrown away and the whole database is decoded again, on every pass,
-   * for ever.
-   *
-   * The row written is the shape the store already has for a read that went
-   * through and decoded no session: cursor at the file's size, no session row.
-   * The decide step then skips it until its stat moves, and the retirement walk
-   * retires it like any other row when it goes.
-   */
-  private noteUnreachableParser(candidate: SessionFileCandidate): void {
-    const write = this.store.beginWrite(candidate, 'replace', 0)
-    const committed =
-      write?.commit({
-        session: null,
-        byteOffset: candidate.file.sizeBytes ?? 0,
-        incomplete: false
-      }) === true
-    if (committed) {
-      this.store.writeCommitted(candidate)
-    }
   }
 }
 
