@@ -120,6 +120,7 @@ describe('orca profile auth actions slice', () => {
   })
 
   it('offers Cancel while sign-in is pending and clears the prompt once it settles', async () => {
+    /** Lets the test settle the IPC call only after Cancel has been clicked. */
     let settleConnect: (result: ConnectCurrentOrcaProfileResult) => void = () => {}
     orcaProfilesApi.connectCurrent.mockReturnValue(
       new Promise((resolve) => {

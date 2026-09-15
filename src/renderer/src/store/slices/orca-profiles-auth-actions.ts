@@ -21,9 +21,11 @@ export type OrcaProfilesAuthActions = {
   selectOrcaProfileOrg: (orgId: string) => Promise<SelectOrcaProfileOrgResult | null>
 }
 
-// Why a separate module: the cloud-auth actions share the profiles slice's
-// state keys but form their own cohesive surface (connect/refresh/sign-out/
-// org selection), and the combined slice file exceeded the repo line budget.
+/**
+ * Why a separate module: the cloud-auth actions share the profiles slice's
+ * state keys but form their own cohesive surface (connect/refresh/sign-out/
+ * org selection), and the combined slice file exceeded the repo line budget.
+ */
 export const createOrcaProfilesAuthActions: StateCreator<
   AppState,
   [],

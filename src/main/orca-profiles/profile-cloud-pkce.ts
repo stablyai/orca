@@ -131,6 +131,7 @@ export function beginOrcaCloudPkceFlow(
     const timeout = setTimeout(() => {
       rejectFlow(new Error('orca_cloud_auth_timeout'))
     }, AUTH_TIMEOUT_MS)
+    /** Cancel from the requesting window settles the flow like a denied callback would. */
     const onAbort = (): void => rejectFlow(new Error('orca_cloud_auth_cancelled'))
     signal?.addEventListener('abort', onAbort, { once: true })
     server.once('close', () => {
