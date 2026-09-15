@@ -406,6 +406,63 @@ describe('OrcaRuntimeService', () => {
     }
   })
 
+  it('reports stale local base drift without replacing the selected base', async () => {
+    const runtime = new OrcaRuntimeService(store)
+    const createdWorktree = {
+      path: '/tmp/workspaces/local-stale-base',
+      head: 'develop-sha',
+      branch: 'local-stale-base',
+      isBare: false,
+      isMainWorktree: false
+    }
+    const repo = { ...store.getRepos()[0], worktreeBaseRef: 'develop' }
+    const getReposSpy = vi.spyOn(store, 'getRepos').mockReturnValue([repo] as never)
+    computeWorktreePathMock.mockReturnValue(createdWorktree.path)
+    ensurePathWithinWorkspaceMock.mockReturnValue(createdWorktree.path)
+    vi.mocked(addWorktree).mockResolvedValueOnce({})
+    vi.mocked(listWorktrees).mockResolvedValueOnce([createdWorktree])
+    const gitSpy = vi.spyOn(gitRunner, 'gitExecFileAsync').mockImplementation(async (args) => {
+      if (args[0] === 'remote') {
+        return { stdout: 'origin\n', stderr: '' }
+      }
+      if (args[0] === 'rev-list') {
+        return { stdout: '0\t692\n', stderr: '' }
+      }
+      if (args[0] === 'rev-parse' && args.includes('refs/heads/develop^{commit}')) {
+        return { stdout: 'develop-sha\n', stderr: '' }
+      }
+      if (args.includes('fetch')) {
+        throw new Error('network unavailable')
+      }
+      return { stdout: '', stderr: '' }
+    })
+    try {
+      const result = await runtime.createManagedWorktree({
+        repoSelector: 'id:repo-1',
+        name: 'local-stale-base'
+      })
+
+      expect(addWorktree).toHaveBeenCalledWith(
+        TEST_REPO_PATH,
+        createdWorktree.path,
+        'local-stale-base',
+        'develop',
+        false
+      )
+      expect(result.localBaseRefDriftWarning).toEqual({
+        baseRef: 'develop',
+        defaultBaseRef: 'origin/main',
+        ahead: 0,
+        behind: 692,
+        relation: 'behind'
+      })
+      expect(result.warning).toContain('develop is 692 commit(s) behind origin/main')
+    } finally {
+      getReposSpy.mockRestore()
+      gitSpy.mockRestore()
+    }
+  })
+
   it('creates a runtime local worktree from a slash-named local branch matching a remote prefix', async () => {
     const runtime = new OrcaRuntimeService(store)
     const createdWorktree = {

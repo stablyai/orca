@@ -15,6 +15,8 @@ import type { RemoteFetchResult, RemoteTrackingBase } from './runtime-remote-fet
 import type { HostedReviewExecutionOptions } from '../source-control/hosted-review-git-options'
 import { hasLocalGitOptions } from './runtime-worktree-selection'
 import { hasLocalWorktreeBaseRef } from '../git/worktree-base-ref-probe'
+import type { LocalBaseRefDriftWarning } from '../../shared/worktree/base-ref-drift-types'
+import { getLocalBaseRefDriftWarningForWorktreeCreate } from '../git/worktree-base-refresh-analysis'
 import { resolveRuntimeLocalWorktreeCreateCandidate } from './runtime-local-worktree-create-candidate'
 import { createRuntimeLocalGitWorktree } from './runtime-local-git-worktree-create'
 import { materializeRuntimeLocalWorktree } from './runtime-local-worktree-materialization'
@@ -53,6 +55,7 @@ export async function createRuntimeLocalManagedWorktree<T>(args: {
   const worktreeGitOptions = getLocalProjectWorktreeGitOptions(store, repo)
   const hasWorktreeGitOptions = hasLocalGitOptions(worktreeGitOptions)
   const worktreeGitArgs: LocalGitArgs = hasWorktreeGitOptions ? [worktreeGitOptions] : []
+  let localBaseRefDriftWarning: LocalBaseRefDriftWarning | undefined
   // Username and base resolution are independent read-only probes. Starting
   // both before awaiting removes one serial git/config round trip from create.
   const usernamePromise =
@@ -81,6 +84,14 @@ export async function createRuntimeLocalManagedWorktree<T>(args: {
       return hasLocalWorktreeBaseRef(
         repo.path,
         candidate,
+        hasWorktreeGitOptions ? worktreeGitOptions : {}
+      )
+    },
+    onPersistedBaseSelected: async (candidate, defaultBaseRef) => {
+      localBaseRefDriftWarning = await getLocalBaseRefDriftWarningForWorktreeCreate(
+        repo.path,
+        candidate,
+        defaultBaseRef,
         hasWorktreeGitOptions ? worktreeGitOptions : {}
       )
     }
@@ -147,6 +158,7 @@ export async function createRuntimeLocalManagedWorktree<T>(args: {
     ...materialized,
     worktreePath: candidate.worktreePath,
     created: git.created,
-    addResult: git.addResult
+    addResult: git.addResult,
+    localBaseRefDriftWarning
   }
 }

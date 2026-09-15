@@ -19,6 +19,7 @@ import type {
   WorktreeStartupLaunch
 } from './launch-types'
 import type {
+  LocalBaseRefDriftWarning,
   LocalBaseRefRefreshResult,
   LocalBaseRefUpdateSuggestion,
   WorktreeBaseStatusEvent
@@ -183,6 +184,7 @@ export type CreateWorktreeResult = {
   warning?: string
   baseFallback?: WorktreeCreateBaseFallback
   initialBaseStatus?: WorktreeBaseStatusEvent
+  localBaseRefDriftWarning?: LocalBaseRefDriftWarning
   localBaseRefRefresh?: LocalBaseRefRefreshResult
   localBaseRefUpdateSuggestion?: LocalBaseRefUpdateSuggestion
   startupTerminal?: {
