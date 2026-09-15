@@ -6,7 +6,8 @@ import {
   clampWorkspaceBoardColumnWidth,
   cloneDefaultWorkspaceStatuses,
   normalizePersistedWorkspaceStatuses,
-  normalizeWorkspaceStatuses
+  normalizeWorkspaceStatuses,
+  sanitizeFilterWorkspaceStatuses
 } from './workspace-statuses'
 
 describe('workspace status visuals', () => {
@@ -296,5 +297,40 @@ describe('workspace status visuals', () => {
     expect(clampWorkspaceBoardColumnWidth(100)).toBe(WORKSPACE_BOARD_COLUMN_WIDTH_MIN)
     expect(clampWorkspaceBoardColumnWidth(321.6)).toBe(322)
     expect(clampWorkspaceBoardColumnWidth(900)).toBe(WORKSPACE_BOARD_COLUMN_WIDTH_MAX)
+  })
+})
+
+describe('sanitizeFilterWorkspaceStatuses', () => {
+  const catalog = cloneDefaultWorkspaceStatuses()
+
+  it('returns an empty list for non-arrays or empty input', () => {
+    expect(sanitizeFilterWorkspaceStatuses(undefined, catalog)).toEqual([])
+    expect(sanitizeFilterWorkspaceStatuses(null, catalog)).toEqual([])
+    expect(sanitizeFilterWorkspaceStatuses('completed', catalog)).toEqual([])
+    expect(sanitizeFilterWorkspaceStatuses([], catalog)).toEqual([])
+  })
+
+  it('keeps only ids present in the live catalog', () => {
+    expect(sanitizeFilterWorkspaceStatuses(['completed', 'ghost-status', 'todo'], catalog)).toEqual(
+      ['todo', 'completed']
+    )
+  })
+
+  it('drops non-string entries and de-dupes', () => {
+    expect(sanitizeFilterWorkspaceStatuses(['completed', 42, 'completed', null], catalog)).toEqual([
+      'completed'
+    ])
+  })
+
+  it('orders the result by the catalog, not the input', () => {
+    // Input order is reversed; result must follow the board-column order.
+    expect(sanitizeFilterWorkspaceStatuses(['completed', 'todo'], catalog)).toEqual([
+      'todo',
+      'completed'
+    ])
+  })
+
+  it('returns empty when none of the ids survive against the catalog', () => {
+    expect(sanitizeFilterWorkspaceStatuses(['gone-1', 'gone-2'], catalog)).toEqual([])
   })
 })

@@ -37,6 +37,7 @@ export function useVisibleSidebarWorktrees(args: {
   const {
     showSleepingWorkspaces,
     filterRepoIds,
+    filterWorkspaceStatuses,
     hideDefaultBranchWorkspace,
     hideAutomationGeneratedWorkspaces,
     hideCliCreatedWorkspaces,
@@ -47,6 +48,7 @@ export function useVisibleSidebarWorktrees(args: {
     workspaceHostScope
   } = filterState
   const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
+  const workspaceStatuses = useAppStore((s) => s.workspaceStatuses)
   const agentStatusEpoch = useAppStore((s) => (!showSleepingWorkspaces ? s.agentStatusEpoch : 0))
   // Why: skip the clock entirely when the epoch is the opt-out sentinel, so a
   // sleeping-workspaces list cannot evict the sample the live lists share.
@@ -77,6 +79,8 @@ export function useVisibleSidebarWorktrees(args: {
     void agentStatusEpoch
     return computeVisibleWorktrees(worktreesByRepo, sortedIds, {
       filterRepoIds,
+      filterWorkspaceStatuses,
+      workspaceStatuses,
       showSleepingWorkspaces,
       tabsByWorktree,
       ptyIdsByTabId,
@@ -110,6 +114,8 @@ export function useVisibleSidebarWorktrees(args: {
     agentStatusEpoch,
     agentStatusNow,
     filterRepoIds,
+    filterWorkspaceStatuses,
+    workspaceStatuses,
     showSleepingWorkspaces,
     hideDefaultBranchWorkspace,
     hideAutomationGeneratedWorkspaces,

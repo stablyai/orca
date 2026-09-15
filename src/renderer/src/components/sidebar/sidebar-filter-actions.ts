@@ -13,6 +13,7 @@ export function sidebarHasActiveFilters(state: SidebarFilterState): boolean {
   return (
     state.showSleepingWorkspaces !== DEFAULT_SHOW_SLEEPING_WORKSPACES ||
     state.filterRepoIds.length > 0 ||
+    state.filterWorkspaceStatuses.length > 0 ||
     state.hideDefaultBranchWorkspace ||
     state.hideAutomationGeneratedWorkspaces ||
     state.hideCliCreatedWorkspaces ||
@@ -31,6 +32,7 @@ export function sidebarHasActiveFilters(state: SidebarFilterState): boolean {
 export type ClearFilterActions = {
   resetShowSleepingWorkspaces: boolean
   resetFilterRepoIds: boolean
+  resetFilterWorkspaceStatuses: boolean
   resetHideDefaultBranchWorkspace: boolean
   resetHideAutomationGeneratedWorkspaces: boolean
   resetHideCliCreatedWorkspaces: boolean
@@ -54,6 +56,7 @@ export function computeClearFilterActions(state: SidebarFilterState): ClearFilte
   return {
     resetShowSleepingWorkspaces: state.showSleepingWorkspaces !== DEFAULT_SHOW_SLEEPING_WORKSPACES,
     resetFilterRepoIds: state.filterRepoIds.length > 0,
+    resetFilterWorkspaceStatuses: state.filterWorkspaceStatuses.length > 0,
     resetHideDefaultBranchWorkspace: state.hideDefaultBranchWorkspace,
     resetHideAutomationGeneratedWorkspaces: state.hideAutomationGeneratedWorkspaces,
     resetHideCliCreatedWorkspaces: state.hideCliCreatedWorkspaces,

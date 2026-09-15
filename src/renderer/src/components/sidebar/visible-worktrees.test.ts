@@ -74,6 +74,8 @@ type VisibleOptions = Parameters<typeof computeVisibleWorktreeIds>[2]
 function visibleOptions(overrides: Partial<VisibleOptions> = {}): VisibleOptions {
   return {
     filterRepoIds: [],
+    filterWorkspaceStatuses: [],
+    workspaceStatuses: [],
     showSleepingWorkspaces: true,
     tabsByWorktree: {},
     ptyIdsByTabId: {},

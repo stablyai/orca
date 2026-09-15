@@ -27,7 +27,8 @@ import {
 import {
   clampWorkspaceBoardColumnWidth,
   clampWorkspaceBoardOpacity,
-  normalizeWorkspaceStatuses
+  normalizeWorkspaceStatuses,
+  sanitizeFilterWorkspaceStatuses
 } from '../../../../../shared/workspace-statuses'
 import { PET_SIZE_DEFAULT, PET_SIZE_MAX, PET_SIZE_MIN } from '../../../../../shared/pet-types'
 import { clampMarkdownTocPanelWidth } from '../../../../../shared/markdown-toc-panel-width'
@@ -197,6 +198,12 @@ export function createUiHydrationActions(set: UISliceSet, _get: UISliceGet): Par
           _worktreeCardModeDefaulted: ui._worktreeCardModeDefaulted === true,
           agentActivityDisplayMode: normalizeAgentActivityDisplayMode(ui.agentActivityDisplayMode),
           workspaceStatuses: normalizeWorkspaceStatuses(ui.workspaceStatuses),
+          // Why: validate against the same normalized catalog so a filter for a
+          // since-deleted custom status can't hide every workspace on restart.
+          filterWorkspaceStatuses: sanitizeFilterWorkspaceStatuses(
+            ui.filterWorkspaceStatuses,
+            normalizeWorkspaceStatuses(ui.workspaceStatuses)
+          ),
           workspaceBoardOpacity: clampWorkspaceBoardOpacity(ui.workspaceBoardOpacity),
           workspaceBoardColumnWidth: clampWorkspaceBoardColumnWidth(ui.workspaceBoardColumnWidth),
           syncTaskStatusFromWorkspaceBoard: ui.syncTaskStatusFromWorkspaceBoard === true,
