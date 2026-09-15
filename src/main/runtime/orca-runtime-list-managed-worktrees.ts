@@ -114,8 +114,11 @@ export class OrcaRuntimeWithListManagedWorktrees extends OrcaRuntimeWithRestoreS
     )
   }
 
+  // Why the plain resolver: `worktree current` reports `folder:<id>` for a terminal in a Folder
+  // Workspace, and `worktree show` must look that answer back up — but showing a row is a catalog
+  // read, so it must not gate on the folder path being reachable the way a browser launch does.
   async showManagedWorktree(worktreeSelector: string) {
-    return await this.resolveWorktreeSelector(worktreeSelector)
+    return await this.resolveWorkspaceSelector(worktreeSelector)
   }
 
   async showManagedTerminalWorkspace(worktreeSelector: string) {

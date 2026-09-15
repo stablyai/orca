@@ -72,7 +72,9 @@ export class RuntimeBrowserCommandsWithActiveScreencastsByPageId extends Runtime
     return Boolean(guest && !guest.isDestroyed())
   }
 
-  // Why: the CLI sends selectors (e.g. "path:/...") but the bridge keys tabs by "repoId::path"; resolve to that store-compatible id.
+  // Why: the CLI sends selectors (e.g. "path:/..." or "folder:<id>") but the bridge keys tabs by
+  // the workspace id; resolve through the folder-aware resolver so a Folder Workspace terminal
+  // reaches its own tabs instead of falling through to whichever workspace the UI has focused.
   private async resolveBrowserWorktreeId(selector?: string): Promise<string | undefined> {
     if (!selector) {
       // Why: after restart, webviews mount only when the pane is visible; activate the view so persisted tabs become operable via registerGuest.
@@ -87,7 +89,7 @@ export class RuntimeBrowserCommandsWithActiveScreencastsByPageId extends Runtime
       return undefined
     }
 
-    const worktreeId = (await this.host.resolveWorktreeSelector(selector)).id
+    const worktreeId = (await this.host.resolveBrowserWorkspace(selector)).id
     // Why: explicit selectors are user intent, so resolution errors surface (not silently widen scope); only activation stays best-effort.
     const bridge = this.host.getAgentBrowserBridge()
     if (bridge && !this.hasLiveRegisteredBrowserTab(bridge, worktreeId)) {
@@ -112,7 +114,7 @@ export class RuntimeBrowserCommandsWithActiveScreencastsByPageId extends Runtime
     }
 
     const worktreeId = params.worktree
-      ? (await this.host.resolveWorktreeSelector(params.worktree)).id
+      ? (await this.host.resolveBrowserWorkspace(params.worktree)).id
       : undefined
     const bridge = this.host.getAgentBrowserBridge()
     if (bridge && !this.hasLiveRegisteredBrowserPage(bridge, worktreeId, browserPageId)) {

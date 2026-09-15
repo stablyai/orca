@@ -23,6 +23,7 @@ import {
 import {
   getOptionalWorktreeSelector,
   getRequiredWorktreeSelector,
+  resolveCallerWorkspaceSelector,
   resolveCurrentWorktreeSelector
 } from '../selectors'
 import { isTuiAgent } from '../../shared/tui-agent-config'
@@ -103,14 +104,11 @@ function getOptionalSetupDecision(
   if (setup !== undefined && setup !== 'run' && setup !== 'skip' && setup !== 'inherit') {
     throw new RuntimeClientError('invalid_argument', '--setup must be one of: run, skip, inherit')
   }
-  if (flags.get('run-hooks') === true) {
-    if (setup !== undefined && setup !== 'run') {
-      throw new RuntimeClientError(
-        'invalid_argument',
-        'Choose either --run-hooks or --setup run, not contradictory setup flags.'
-      )
-    }
-    return setup
+  if (flags.get('run-hooks') === true && setup !== undefined && setup !== 'run') {
+    throw new RuntimeClientError(
+      'invalid_argument',
+      'Choose either --run-hooks or --setup run, not contradictory setup flags.'
+    )
   }
   return setup
 }
@@ -178,7 +176,7 @@ export const WORKTREE_HANDLERS: Record<string, CommandHandler> = {
   },
   'worktree current': async ({ client, cwd, json }) => {
     const result = await client.call<{ worktree: RuntimeWorktreeRecord }>('worktree.show', {
-      worktree: await resolveCurrentWorktreeSelector(cwd, client)
+      worktree: await resolveCallerWorkspaceSelector(cwd, client)
     })
     printResult(result, json, formatWorktreeShow)
   },
