@@ -266,6 +266,7 @@
     "marked": "^17.0.1",
     "mermaid": "^11.17.2",
     "monaco-editor": "^0.55.1",
+    "monaco-vim": "^0.4.4",
     "oxfmt": "^0.65.0",
     "oxlint": "^1.80.0",
     "oxlint-plugin-anti-slop": "github:dmmulroy/anti-slop#c44ef22ca116d0ba62a3ff663a0bd13a3f3fa40b",
