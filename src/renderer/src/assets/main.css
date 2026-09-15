@@ -1091,7 +1091,8 @@ html.native-shell .app-layout {
 .editor-header-path {
   display: block;
   min-width: 0;
-  flex: 0 1 auto;
+  /* Claim the row's free space so the measured path has the full width to fill. */
+  flex: 1 1 auto;
   padding: 0;
   max-width: 100%;
   border: none;

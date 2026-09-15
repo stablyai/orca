@@ -15,6 +15,7 @@ import type { OpenFile } from '@/store/slices/editor'
 import { CLOSE_ALL_CONTEXT_MENUS_EVENT } from '../tab-bar/SortableTab'
 import { useEditorHeaderFileRename } from './editor-header-file-rename'
 import { getEditorHeaderCopyState } from './editor-header'
+import { useEditorHeaderPathEllipsis } from './use-editor-header-path-ellipsis'
 
 const isMac = navigator.userAgent.includes('Mac')
 const isLinux = navigator.userAgent.includes('Linux')
@@ -67,6 +68,7 @@ export function EditorPanelHeaderPath({
     commitRename,
     cancelRename
   } = useEditorHeaderFileRename(activeFile)
+  const { pathRef, displayLabel } = useEditorHeaderPathEllipsis(headerCopyState.pathLabel)
 
   useEffect(() => {
     const closeMenu = (): void => setPathMenuOpen(false)
@@ -118,13 +120,15 @@ export function EditorPanelHeaderPath({
           />
         ) : (
           <button
+            ref={pathRef}
             type="button"
             className={`editor-header-path${canCopyHeaderPath ? '' : ' editor-header-path--static'}`}
             onClick={canCopyHeaderPath ? onCopyPath : undefined}
             disabled={!canCopyHeaderPath}
             title={headerCopyState.pathTitle}
+            aria-label={headerCopyState.pathLabel}
           >
-            {headerCopyState.pathLabel}
+            {displayLabel}
           </button>
         )}
         <span
