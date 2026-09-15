@@ -19,8 +19,13 @@ const mocks = vi.hoisted(() => ({
   closeStructuredAgentSession: vi.fn(async () => 'closed'),
   callRuntimeRpc: vi.fn(async () => ({ ok: true })),
   cancelStructuredAgentLaunch: vi.fn(),
+  launchFloatingWorkspaceAgentTab: vi.fn(),
   floatingFocused: false,
-  targetInsideFloatingPanel: false
+  targetInsideFloatingPanel: false,
+  agentShortcut: { actionId: null, agent: null } as {
+    actionId: string | null
+    agent: string | null
+  }
 }))
 
 vi.mock('../store', () => ({ useAppStore: { getState: () => mocks.state } }))
@@ -38,13 +43,14 @@ vi.mock('@/lib/floating-workspace-terminal-actions', () => ({
   isEmptyFloatingWorkspacePanelVisible: () => false,
   isEventTargetInsideFloatingWorkspacePanel: () => mocks.targetInsideFloatingPanel,
   isFloatingWorkspacePanelFocused: () => mocks.floatingFocused,
+  launchFloatingWorkspaceAgentTab: mocks.launchFloatingWorkspaceAgentTab,
   switchFloatingWorkspaceTab: vi.fn()
 }))
 vi.mock('@/lib/terminal-shortcut-capture-notification', () => ({
   showTerminalShortcutCaptureNotification: vi.fn()
 }))
 vi.mock('./terminal-agent-tab-shortcut', () => ({
-  resolveTerminalAgentTabShortcut: () => ({ actionId: null, agent: null })
+  resolveTerminalAgentTabShortcut: () => mocks.agentShortcut
 }))
 
 vi.mock('./terminal/terminal-tab-actions', () => ({ closeTerminalTab: mocks.closeTerminalTab }))
@@ -335,5 +341,41 @@ describe('shared tab navigation routing', () => {
     expect(switchFloatingWorkspaceTab).toHaveBeenCalledTimes(2)
     expect(switchFloatingWorkspaceTab).toHaveBeenLastCalledWith(mocks.state, 1, 'all-types')
     expect(handleSwitchTabAcrossAllTypes).not.toHaveBeenCalled()
+  })
+})
+
+describe('tab.newAgent (default agent shortcut)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mocks.floatingFocused = false
+    mocks.targetInsideFloatingPanel = false
+    mocks.agentShortcut = { actionId: 'tab.newAgent', agent: 'claude' }
+    mocks.state = { activeWorktreeId: controller.activeWorktreeId }
+  })
+
+  function pressDefaultAgentShortcut(): KeyboardEvent {
+    const target = document.createElement('div')
+    const event = new KeyboardEvent('keydown', {
+      key: 't',
+      metaKey: true,
+      altKey: true,
+      cancelable: true
+    })
+    Object.defineProperty(event, 'target', { value: target })
+    handleTerminalWorkspaceKeyDown(event, controller, 'darwin')
+    return event
+  }
+
+  it('launches the default agent in the active worktree when the floating panel is not focused', () => {
+    expect(pressDefaultAgentShortcut().defaultPrevented).toBe(true)
+    expect(controller.handleNewAgentTab).toHaveBeenCalledWith('claude')
+    expect(mocks.launchFloatingWorkspaceAgentTab).not.toHaveBeenCalled()
+  })
+
+  it('launches the default agent inside the floating panel when it owns focus, instead of the main window', () => {
+    mocks.floatingFocused = true
+    expect(pressDefaultAgentShortcut().defaultPrevented).toBe(true)
+    expect(mocks.launchFloatingWorkspaceAgentTab).toHaveBeenCalledWith(mocks.state, 'claude')
+    expect(controller.handleNewAgentTab).not.toHaveBeenCalled()
   })
 })

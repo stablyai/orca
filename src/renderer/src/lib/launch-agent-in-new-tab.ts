@@ -300,7 +300,9 @@ function launchAgentInNewTabInternal(
   }
 
   // Why: without setActiveTabType('terminal') a worktree showing an editor keeps rendering it and the new tab stays hidden.
-  store.setActiveTabType('terminal')
+  // Scoped to worktreeId (not the unscoped default) so a launch into a worktree other than the
+  // main window's active one — e.g. the floating workspace — can't flip the main window's visible view.
+  store.setActiveTabType('terminal', worktreeId)
 
   // Why: persist tab-bar order so reconcileTabOrder doesn't fall back to terminals-first and jump the new tab to index 0.
   persistAgentLaunchTabOrder(worktreeId, tab.id)
