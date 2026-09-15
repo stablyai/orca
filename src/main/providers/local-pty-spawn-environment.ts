@@ -1,4 +1,8 @@
 import { mergeGitConfigEnvProtocol } from '../../shared/git-credential-prompt-env'
+import {
+  ORCA_IMAGE_PROTOCOL_ENV,
+  ORCA_IMAGE_PROTOCOL_VALUE
+} from '../../shared/terminal-image-protocol'
 import { removeAppImageRuntimeEnv } from '../pty/appimage-terminal-env'
 import { stripInheritedBuildModeEnv } from '../pty/build-mode-env'
 import { removeInheritedNoColor } from '../pty/terminal-color-env'
@@ -24,7 +28,8 @@ export function buildLocalPtySpawnEnvironment(args: {
     // Why: TUIs feature-gate on TERM_PROGRAM_VERSION; the fallback keeps tests and non-Electron runs working.
     TERM_PROGRAM_VERSION: process.env.ORCA_APP_VERSION ?? '0.0.0-dev',
     // Why: supports-hyperlinks rejects TERM_PROGRAM=Orca, so tools drop OSC 8 links; force it since xterm.js parses them.
-    FORCE_HYPERLINK: '1'
+    FORCE_HYPERLINK: '1',
+    [ORCA_IMAGE_PROTOCOL_ENV]: ORCA_IMAGE_PROTOCOL_VALUE
   } as Record<string, string>
   // Why: Orca can be launched from an Orca terminal; pane identity belongs to the child PTY, not the parent shell.
   removeUnspecifiedPaneIdentityEnv(spawnEnv, spawn.env)

@@ -512,6 +512,16 @@ describe('PtyHandler', () => {
     }
   })
 
+  it('keeps the image protocol hint consistent after renderer and augmenter overrides', async () => {
+    handler.addEnvAugmenter(() => ({ ORCA_IMAGE_PROTOCOL: 'sixel' }))
+    await dispatcher.callRequest('pty.spawn', {
+      cols: 80,
+      rows: 24,
+      env: { ORCA_IMAGE_PROTOCOL: 'none' }
+    })
+    expect(mockPtySpawn.mock.calls[0][2].env.ORCA_IMAGE_PROTOCOL).toBe('kitty')
+  })
+
   it('applies env augmenters after process.env and renderer-supplied env (augmenter wins on key conflict)', async () => {
     handler.addEnvAugmenter(() => ({
       ORCA_AGENT_HOOK_PORT: '12345',
@@ -651,6 +661,7 @@ describe('PtyHandler', () => {
     expect(spawnEnv.name).toBe('xterm-256color')
     expect(spawnEnv.env.TERM).toBe('xterm-256color')
     expect(spawnEnv.env.TERM_PROGRAM).toBe('Orca')
+    expect(spawnEnv.env.ORCA_IMAGE_PROTOCOL).toBe('kitty')
   })
 
   it('expands variables in PATH before spawning a Windows relay shell', async () => {

@@ -9,6 +9,7 @@ import {
   SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV
 } from '../../shared/setup-agent-sequencing'
 import { getShellReadyWrapperRoot } from '../providers/local-pty-shell-ready-wrapper-root'
+import { ORCA_IMAGE_PROTOCOL_ENV } from '../../shared/terminal-image-protocol'
 
 const WSLENV_ENTRY_SEPARATOR = ':'
 
@@ -98,6 +99,8 @@ export function addOrcaWslInteropEnv(env: Record<string, string>): void {
     'ORCA_WSL_HOOK_INSTANCE/u',
     'ORCA_OMP_SOURCE_AGENT_DIR/p',
     'ORCA_OMP_STATUS_EXTENSION/p',
+    // A protocol name, never a path; in-guest agents read it to pick an image encoder.
+    `${ORCA_IMAGE_PROTOCOL_ENV}/u`,
     ...worktreeSetupWslenvEntries(env)
   ]
   applyWslenvPassthrough(env, passthroughEntries)
