@@ -9,6 +9,13 @@ describe('normalizeRightSidebarRoute', () => {
     })
   })
 
+  it('preserves the folder-only Workspace changes route', () => {
+    expect(normalizeRightSidebarRoute('workspace-changes')).toEqual({
+      rightSidebarTab: 'workspace-changes',
+      rightSidebarExplorerView: 'files'
+    })
+  })
+
   it('still normalizes invalid tabs to Explorer files', () => {
     expect(normalizeRightSidebarRoute('missing')).toEqual({
       rightSidebarTab: 'explorer',
