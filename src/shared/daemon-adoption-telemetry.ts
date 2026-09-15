@@ -11,6 +11,9 @@ export type DaemonAdoptedAppVersionMatch = (typeof DAEMON_ADOPTED_APP_VERSION_MA
  * Where the binary that forked the adopted daemon lives now. `updater-cache` is the Squirrel
  * ShipIt staging area — a daemon attributed there is the reported #17696 shape.
  */
+// Why both: the download lands under ~/Library/Caches/<id>.ShipIt/, but the bundle a running
+// daemon was forked from gets parked under $TMPDIR/<id>.ShipIt.<rand>/ at install time.
+const SHIPIT_STAGING_PATH = /\/(?:Library\/Caches\/[^/]*ShipIt|T\/[^/]*\.ShipIt\.[^/]+)\//
 export const DAEMON_SPAWNER_PATH_CLASSES = [
   'applications',
   'updater-cache',
@@ -20,7 +23,7 @@ export const DAEMON_SPAWNER_PATH_CLASSES = [
 ] as const
 export type DaemonSpawnerPathClass = (typeof DAEMON_SPAWNER_PATH_CLASSES)[number]
 
-export const DAEMON_TCC_ATTRIBUTION_VALUES = ['intact', 'severed', 'unknown'] as const
+export const DAEMON_TCC_ATTRIBUTION_VALUES = ['intact', 'at-risk', 'severed', 'unknown'] as const
 
 /** Which macOS-protected folder class the denied cwd falls under. */
 export const DAEMON_PTY_CWD_CLASSES = [
@@ -42,7 +45,7 @@ export function classifyDaemonSpawnerPath(
   if (!exists(spawnerExecPath)) {
     return 'missing'
   }
-  if (/\/Library\/Caches\/[^/]*ShipIt\//.test(spawnerExecPath)) {
+  if (SHIPIT_STAGING_PATH.test(spawnerExecPath)) {
     return 'updater-cache'
   }
   return /^(?:\/private)?\/Applications\//.test(spawnerExecPath) ? 'applications' : 'other'

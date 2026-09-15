@@ -497,6 +497,8 @@ module.exports = {
       NSBonjourServices: ['_http._tcp', '_https._tcp'],
       NSDocumentsFolderUsageDescription:
         "Application requests access to the user's Documents folder.",
+      // Why all three: without a usage string macOS cannot prompt for that folder and silently denies it.
+      NSDesktopFolderUsageDescription: "Application requests access to the user's Desktop folder.",
       NSDownloadsFolderUsageDescription:
         "Application requests access to the user's Downloads folder."
     },

@@ -56,24 +56,40 @@ export function trackDaemonAdopted(
 }
 
 /**
- * Emits only on proven divergence: the daemon reported the cwd unreadable AND this process can
- * read it. A cwd neither can read (chmod, ENOENT, unmounted volume) is not the #17696 shape.
+ * Proven divergence: the daemon reported the cwd unreadable AND this process can read it. A cwd
+ * neither can read (chmod, ENOENT, unmounted volume) is not the #17696 shape.
  */
+export function isDaemonPtyCwdDenialDiverged(
+  cwd: string | undefined,
+  cwdReadableByDaemon: boolean | undefined
+): boolean {
+  if (process.platform !== 'darwin' || !cwd || cwdReadableByDaemon !== false) {
+    return false
+  }
+  try {
+    accessSync(cwd, fsConstants.R_OK | fsConstants.X_OK)
+    return true
+  } catch {
+    return false
+  }
+}
+
+/** Emits only on proven divergence; every failure is swallowed so telemetry can never cost a terminal. */
 export function trackDaemonPtyCwdDeniedIfDiverged(
   cwd: string | undefined,
   cwdReadableByDaemon: boolean | undefined,
-  pidPath: string | null
+  pidPath: string | null,
+  evidence?: { pidRecord: ParsedDaemonPid | null }
 ): void {
   try {
-    if (process.platform !== 'darwin' || !cwd || cwdReadableByDaemon !== false) {
+    if (!cwd || (!evidence && !isDaemonPtyCwdDenialDiverged(cwd, cwdReadableByDaemon))) {
       return
     }
-    accessSync(cwd, fsConstants.R_OK | fsConstants.X_OK)
     // Why read now, not the adapter's startup snapshot: a respawn swaps the daemon under a
     // long-lived adapter, and the denial must be attributed to the daemon that just spawned.
     track('daemon_pty_cwd_denied', {
       cwd_class: classifyDaemonPtyCwd(cwd, homedir()),
-      ...classifyDaemonAdoptionOrigin(readDaemonPidRecord(pidPath))
+      ...classifyDaemonAdoptionOrigin(evidence ? evidence.pidRecord : readDaemonPidRecord(pidPath))
     })
   } catch {
     // Either the app cannot read it (no divergence) or telemetry failed; neither may reach the caller.

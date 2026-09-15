@@ -1143,7 +1143,7 @@
       },
       "useMacTccAttributionSeveredNotice": {
         "title": "macOS permissions may not reach Orca terminals",
-        "description": "Running Orca terminals are hosted by a daemon started by a previous Orca installation. macOS may not apply Orca’s Accessibility, Automation, or protected-file permissions to them. Restart the daemon from Manage Sessions to restore access. This will close all running Orca terminals.",
+        "description": "The terminal daemon reported a folder-access denial for a folder Orca can read. This can happen when macOS stops applying Orca’s permissions to an older daemon. Restarting the daemon may restore access; it will close running local terminal sessions. Save your work first.",
         "openManageSessions": "Open Manage Sessions",
         "dismiss": "Dismiss"
       },
@@ -11639,7 +11639,7 @@
           "permissionDenied": "Microphone access is blocked. Grant it in your system settings, then try again."
         },
         "TerminalTccAttributionNotice": {
-          "body": "The terminal daemon was started by an Orca install that no longer exists, so macOS can’t attribute its commands to Orca — Accessibility and Automation grants are silently ignored (osascript fails with error -25211). Restarting the daemon fixes this; running terminal sessions will close.",
+          "body": "The terminal daemon reported a folder-access denial for a folder Orca can read. This can happen when macOS stops applying Orca’s permissions to an older daemon. Restarting the daemon may restore access; it will close running local terminal sessions. Save your work first.",
           "openManageSessions": "Open Manage Sessions",
           "title": "macOS permission grants aren’t reaching terminals"
         },

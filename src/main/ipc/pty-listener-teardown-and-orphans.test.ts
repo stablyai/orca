@@ -327,7 +327,7 @@ describe('registerPtyHandlers', () => {
       secondWindow.webContents.on.mock.calls.filter(
         ([eventName]) => eventName === 'did-finish-load'
       )
-    ).toHaveLength(1)
+    ).toHaveLength(2)
   })
   // Why (#5787): a recovery reload re-fires did-finish-load; suppress the orphan sweep so live LOCAL PTYs survive until session restore re-adopts them.
   it('does not sweep local PTYs during a recovery reload', async () => {

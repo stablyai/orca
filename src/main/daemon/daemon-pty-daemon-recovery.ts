@@ -219,7 +219,9 @@ export abstract class DaemonPtyDaemonRecovery extends DaemonPtyCheckpointPersist
       this.runtimeDir,
       this.socketPath,
       this.tokenPath,
-      this.protocolVersion
+      this.protocolVersion,
+      undefined,
+      true
     )
     if (health !== 'severed') {
       return
@@ -233,6 +235,18 @@ export abstract class DaemonPtyDaemonRecovery extends DaemonPtyCheckpointPersist
           ? '[daemon] macOS TCC attribution severed - preserving daemon because live session state could not be verified'
           : `[daemon] macOS TCC attribution severed - preserving daemon because it owns ${liveSessionCount} live session${liveSessionCount === 1 ? '' : 's'}; restart from Manage Sessions when ready`
       )
+      // Why once: the owner swaps fresh-spawn routing away from this daemon (#17696); the
+      // spawn that got here was already routed, so it still lands on the daemon.
+      if (this.onSeveredWithLiveSessions && !this.severedDegradeRequested) {
+        this.severedDegradeRequested = true
+        try {
+          if (!(await this.onSeveredWithLiveSessions())) {
+            this.severedDegradeRequested = false
+          }
+        } catch {
+          this.severedDegradeRequested = false
+        }
+      }
       return
     }
 

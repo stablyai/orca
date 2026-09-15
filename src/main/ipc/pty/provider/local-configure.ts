@@ -18,7 +18,7 @@ import {
 } from '../host-env/codex-home'
 import type { GetSelectedCodexHomePath } from '../host-env/types'
 import { isCurrentPtyExit, ptyOwnership } from './ownership-state'
-import { localProvider } from './registry'
+import { getInProcessPtyProvider, localProvider } from './registry'
 import { clearProviderPtyState } from './state-cleanup'
 
 export function configureLocalPtyProvider(args: {
@@ -28,11 +28,20 @@ export function configureLocalPtyProvider(args: {
   trustedTerminalHandleEnv: Set<string>
 }): void {
   // Why: only LocalPtyProvider needs main-process hook injection; daemon-backed providers spawn subprocesses internally.
-  if (!(localProvider instanceof LocalPtyProvider)) {
+  // Why the in-process instance too: the daemon normally lands before handlers register, so
+  // the installed provider is the daemon and the fallback that degraded routing spawns on
+  // would otherwise never get hook env, terminal handles, or runtime data/exit callbacks.
+  const targets = new Set<LocalPtyProvider>()
+  for (const candidate of [localProvider, getInProcessPtyProvider()]) {
+    if (candidate instanceof LocalPtyProvider) {
+      targets.add(candidate)
+    }
+  }
+  if (targets.size === 0) {
     return
   }
   const { runtime, getSettings, getSelectedCodexHomePath, trustedTerminalHandleEnv } = args
-  localProvider.configure({
+  const options: Parameters<LocalPtyProvider['configure']>[0] = {
     isHistoryEnabled: () => getSettings?.()?.terminalScopeHistoryByWorktree ?? true,
     getWindowsShell: () => getSettings?.()?.terminalWindowsShell,
     getWindowsPowerShellImplementation: () =>
@@ -112,5 +121,8 @@ export function configureLocalPtyProvider(args: {
     },
     onData: (id, data, timestamp, sequenceChars, transformed) =>
       runtime?.onPtyData(id, data, timestamp, sequenceChars ?? data.length, transformed)
-  })
+  }
+  for (const target of targets) {
+    target.configure(options)
+  }
 }

@@ -28,6 +28,7 @@ import {
   runCoalescedDaemonRestart,
   type RestartDaemonResult
 } from './daemon-restart-state'
+import { degradeInstalledProviderForSeveredDaemon } from './daemon-severed-attribution-degrade'
 import { getDaemonPidPath, type DaemonSpawner } from './daemon-spawner'
 import { PROTOCOL_VERSION } from './types'
 
@@ -114,7 +115,8 @@ async function runRestartDaemon(): Promise<RestartDaemonResult> {
       currentSpawner.resetHandle()
       await currentSpawner.ensureRunning()
       return takeDaemonAdoptionLeaseRelease(currentSpawner.getHandle())
-    }
+    },
+    onSeveredWithLiveSessions: () => degradeInstalledProviderForSeveredDaemon(newCurrent)
   })
   let newProvider: DaemonProvider = newCurrent
   try {

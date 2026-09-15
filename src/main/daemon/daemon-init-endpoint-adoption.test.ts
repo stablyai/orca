@@ -210,32 +210,41 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     expect(trackDaemonReplacedMock).toHaveBeenCalledWith('severed_tcc_attribution', 0)
   })
 
-  it('preserves a severed-attribution daemon that owns live sessions', async () => {
-    const mod = await importFresh()
-    await mod.initDaemonPtyProvider(undefined, { macosLoginSessionWatch: true })
+  it.each(['match', 'mismatch'] as const)(
+    'preserves a severed-attribution daemon with live sessions in degraded mode (%s path)',
+    async (identity) => {
+      const mod = await importFresh()
+      await mod.initDaemonPtyProvider(undefined, { macosLoginSessionWatch: true })
 
-    const launcher = spawnerInstances[0].launcher as (
-      socketPath: string,
-      tokenPath: string
-    ) => Promise<{ shutdown(): Promise<void> }>
-    getMacDaemonTccAttributionHealthMock.mockResolvedValueOnce('severed')
-    // Why: live sessions must veto replacement — the Settings surface owns the remedy instead.
-    daemonClientMock.mockImplementation(function MockDaemonClient() {
-      return {
-        ensureConnected: vi.fn(async () => {}),
-        ensureConnectedWithin: vi.fn(async () => {}),
-        request: vi.fn(async () => ({ sessions: [{ sessionId: 's1', isAlive: true }] })),
-        disconnect: vi.fn()
+      const launcher = spawnerInstances[0].launcher
+      getMacDaemonTccAttributionHealthMock.mockResolvedValueOnce('severed')
+      getDaemonLaunchIdentityMock.mockReturnValueOnce(identity)
+      // Why: live sessions must veto replacement — the Settings surface owns the remedy instead.
+      daemonClientMock.mockImplementation(function MockDaemonClient() {
+        return {
+          ensureConnected: vi.fn(async () => {}),
+          ensureConnectedWithin: vi.fn(async () => {}),
+          request: vi.fn(async () => ({ sessions: [{ sessionId: 's1', isAlive: true }] })),
+          disconnect: vi.fn()
+        }
+      })
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+      try {
+        const handle = await launcher('/fake/socket', '/fake/token')
+
+        expect(handle).toBeDefined()
+        // #17696: every fresh terminal this daemon spawns gets EPERM on Documents, so fresh
+        // spawns must leave it even though its live sessions keep it alive.
+        expect(handle.mode).toBe('degraded-new-pty-fallback')
+        expect(forkMock).not.toHaveBeenCalled()
+        expect(killStaleDaemonMock).not.toHaveBeenCalled()
+        expect(trackDaemonReplacedMock).not.toHaveBeenCalled()
+      } finally {
+        warn.mockRestore()
       }
-    })
-
-    const handle = await launcher('/fake/socket', '/fake/token')
-
-    expect(handle).toBeDefined()
-    expect(forkMock).not.toHaveBeenCalled()
-    expect(killStaleDaemonMock).not.toHaveBeenCalled()
-    expect(trackDaemonReplacedMock).not.toHaveBeenCalled()
-  })
+    }
+  )
 
   it('holds a full adoption pair before a healthy launcher resolves', async () => {
     const mod = await importFresh()

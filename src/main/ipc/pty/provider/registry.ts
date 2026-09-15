@@ -6,7 +6,11 @@ import { ptyOwnership } from './ownership-state'
 // ─── Provider Registry ──────────────────────────────────────────────
 // Routes PTY operations by connectionId (null = local provider).
 
-export let localProvider: IPtyProvider = new LocalPtyProvider()
+// Why a separate handle: once a daemon is installed, `localProvider` is the daemon topology, so
+// anything that needs the in-process fallback (degraded routing) must not ask for the "local
+// provider" or it receives the daemon it is trying to route around.
+const inProcessPtyProvider = new LocalPtyProvider()
+export let localProvider: IPtyProvider = inProcessPtyProvider
 export const sshProviders = new Map<string, IPtyProvider>()
 export const sshProvidersByGeneration = new Map<number, IPtyProvider>()
 
@@ -127,6 +131,11 @@ export function getSshPtyProvider(connectionId: string): IPtyProvider | undefine
  *  callers needing LocalPtyProvider-specific methods must type-narrow or import the class. */
 export function getLocalPtyProvider(): IPtyProvider {
   return localProvider
+}
+
+/** The immutable in-process provider, whatever is currently installed for local-host routing. */
+export function getInProcessPtyProvider(): LocalPtyProvider {
+  return inProcessPtyProvider
 }
 
 /** Replace the local PTY provider with a daemon-backed one.

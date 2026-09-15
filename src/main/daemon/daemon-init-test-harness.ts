@@ -150,8 +150,15 @@ function createDaemonInitMockState(): DaemonInitMockState {
     onReplay: vi.fn(() => () => {}),
     onExit: vi.fn(() => () => {})
   }
-  const getLocalPtyProviderMock = vi.fn(() => localFallbackProvider)
-  const setLocalPtyProviderMock = vi.fn()
+  // Why mirror the real registry: after install getLocalPtyProvider() returns the daemon topology,
+  // and a mock that always answered the in-process provider hid a degraded provider falling
+  // back onto the very daemon it was routing around.
+  const ptyRegistryState: { installed: unknown } = { installed: localFallbackProvider }
+  const getLocalPtyProviderMock = vi.fn(() => ptyRegistryState.installed)
+  const getInProcessPtyProviderMock = vi.fn(() => localFallbackProvider)
+  const setLocalPtyProviderMock = vi.fn((provider: unknown) => {
+    ptyRegistryState.installed = provider
+  })
   const unbindLocalProviderListenersMock = vi.fn()
   const rebindLocalProviderListenersMock = vi.fn()
   const trackDaemonReplacedMock = vi.fn()
@@ -192,7 +199,9 @@ function createDaemonInitMockState(): DaemonInitMockState {
     adapterInstances,
     defaultListSessionsSessions,
     listProcessesControl,
+    ptyRegistryState,
     getLocalPtyProviderMock,
+    getInProcessPtyProviderMock,
     localFallbackProvider,
     setLocalPtyProviderMock,
     unbindLocalProviderListenersMock,

@@ -1,4 +1,5 @@
 import type * as pty from 'node-pty'
+import { markLocalRuntimeDelivered } from './local-pty-runtime-events'
 import { isBracketedPasteSafeShell } from '../../shared/startup-command-submission'
 import { PtyStartupIngress, type PtyIngressEmission } from '../../shared/pty-startup-ingress'
 import { resolvePtyOwnerBackend } from '../../shared/pty-owner-backend'
@@ -82,15 +83,17 @@ export function activateLocalPtySession(args: {
     }
     for (const cb of dataListeners) {
       cb(
-        emission.transformed || sequenceChars !== emission.data.length
-          ? {
-              id,
-              data: emission.data,
-              sequenceChars,
-              seq: emission.rawEndSeq,
-              transformed: true
-            }
-          : { id, data: emission.data }
+        markLocalRuntimeDelivered(
+          emission.transformed || sequenceChars !== emission.data.length
+            ? {
+                id,
+                data: emission.data,
+                sequenceChars,
+                seq: emission.rawEndSeq,
+                transformed: true
+              }
+            : { id, data: emission.data }
+        )
       )
     }
   }
@@ -147,7 +150,7 @@ export function activateLocalPtySession(args: {
     ptyReportsChildExitStatus.delete(id)
     getOptions().onExit?.(id, exitCode, incarnationId, cause)
     for (const cb of exitListeners) {
-      cb({ id, code: exitCode, incarnationId, cause })
+      cb(markLocalRuntimeDelivered({ id, code: exitCode, incarnationId, cause }))
     }
   })
   if (onExitDisposable) {

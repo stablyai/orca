@@ -5,7 +5,7 @@ import type {
   HistoryRecoveryContext,
   PendingDaemonSpawnOperation
 } from './daemon-pty-runtime-state'
-import { trackDaemonPtyCwdDeniedIfDiverged } from './daemon-adoption-telemetry-event'
+import { handleDaemonPtyCwdDenial } from './daemon-pty-cwd-denial'
 import { STABLE_PANE_ATTACH_ONLY_DAEMON_PROTOCOL_VERSION } from './daemon-protocol-version'
 import { TerminalKilledError } from './daemon-pty-lifecycle-errors'
 import { DaemonPtySpawnResult } from './daemon-pty-spawn-result'
@@ -251,9 +251,16 @@ export abstract class DaemonPtySessionSpawn extends DaemonPtySpawnResult {
       detectColdRestore
     }
     activeSpawnContext = context
+    const spawningIdentity = this.getLastAuthenticatedDaemonIdentity()
     const result = await this.createOrAttachSpawn(context, context.historySeedSegments)
     if (result.isNew && !attachOnly) {
-      trackDaemonPtyCwdDeniedIfDiverged(effectiveCwd, result.cwdReadableByDaemon, this.pidPath)
+      await handleDaemonPtyCwdDenial({
+        cwd: effectiveCwd,
+        cwdReadableByDaemon: result.cwdReadableByDaemon,
+        spawningIdentity,
+        pidPath: this.pidPath,
+        degrade: this.onSeveredWithLiveSessions
+      })
     }
     return this.finishSpawn(context, result)
   }

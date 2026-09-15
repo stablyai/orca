@@ -77,6 +77,7 @@ export class DegradedDaemonPtyProvider implements IPtyProvider {
   }
 
   recoverFreshSpawnRouting = (): Promise<boolean> => this.freshSpawns.recover()
+  degradeFreshSpawnRouting = (): void => this.freshSpawns.degrade()
 
   supportsGitCredentialGuardHost = (id?: string): boolean =>
     this.freshSpawns.supportsGitGuardHost(id)

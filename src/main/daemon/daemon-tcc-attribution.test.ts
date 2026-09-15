@@ -4,9 +4,13 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { getDaemonPidPath, serializeDaemonPidFile } from './daemon-spawner'
-import { getMacDaemonTccAttributionHealth } from './daemon-tcc-attribution'
+import {
+  getMacDaemonTccAttributionHealth,
+  inspectMacProcessCodeIdentity
+} from './daemon-tcc-attribution'
 import { getProcessStartedAtMs } from './daemon-process-start-time'
 import { parseDaemonPidFile } from './daemon-pid-file-parse'
+import { PROTOCOL_VERSION } from './types'
 
 // Real-process harness (same shape as daemon-bundle-staleness.test.ts): the health
 // check only trusts a pid record whose process is verifiably the daemon, so these
@@ -92,13 +96,13 @@ describe('macOS daemon TCC attribution health', () => {
     }
   }
 
-  it('reports severed when the recorded spawning binary no longer exists', async () => {
+  it('reports at-risk when the recorded spawning binary no longer exists', async () => {
     if (process.platform !== 'darwin') {
       return
     }
     await withDaemonLikeProcess(async (writePidFile) => {
       writePidFile({ spawnerExecPath: join(dir, 'deleted-bundle', 'Orca') })
-      expect(await getMacDaemonTccAttributionHealth(dir, socketPath, tokenPath)).toBe('severed')
+      expect(await getMacDaemonTccAttributionHealth(dir, socketPath, tokenPath)).toBe('at-risk')
     })
   })
 
@@ -123,6 +127,51 @@ describe('macOS daemon TCC attribution health', () => {
       writeFileSync(spawnerPath, '', 'utf8')
       writePidFile({ spawnerExecPath: spawnerPath, appVersion: '1.2.2' })
       expect(await getMacDaemonTccAttributionHealth(dir, socketPath, tokenPath)).toBe('intact')
+    })
+  })
+
+  // #17696: Squirrel deletes the parked bundle a still-running daemon was forked from, so the
+  // spawner path exists again (the update recreated /Applications/Orca.app) while tccd can no
+  // longer resolve the daemon's code. Only the live code-identity probe can see that.
+  it('reports at-risk when the spawning binary exists but the daemon image is unresolvable', async () => {
+    if (process.platform !== 'darwin') {
+      return
+    }
+    await withDaemonLikeProcess(async (writePidFile) => {
+      const spawnerPath = join(dir, 'Orca')
+      writeFileSync(spawnerPath, '', 'utf8')
+      writePidFile({ spawnerExecPath: spawnerPath, appVersion: '1.2.3' })
+      const inspect = async () => 'unresolvable' as const
+      expect(
+        await getMacDaemonTccAttributionHealth(
+          dir,
+          socketPath,
+          tokenPath,
+          PROTOCOL_VERSION,
+          inspect
+        )
+      ).toBe('at-risk')
+    })
+  })
+
+  it('fails open when the code-identity probe is inconclusive', async () => {
+    if (process.platform !== 'darwin') {
+      return
+    }
+    await withDaemonLikeProcess(async (writePidFile) => {
+      const spawnerPath = join(dir, 'Orca')
+      writeFileSync(spawnerPath, '', 'utf8')
+      writePidFile({ spawnerExecPath: spawnerPath, appVersion: '1.2.3' })
+      const inspect = async () => 'unknown' as const
+      expect(
+        await getMacDaemonTccAttributionHealth(
+          dir,
+          socketPath,
+          tokenPath,
+          PROTOCOL_VERSION,
+          inspect
+        )
+      ).toBe('unknown')
     })
   })
 
@@ -152,5 +201,29 @@ describe('macOS daemon TCC attribution health', () => {
       return
     }
     expect(await getMacDaemonTccAttributionHealth(dir, socketPath, tokenPath)).toBe('unknown')
+  })
+})
+
+describe('inspectMacProcessCodeIdentity', () => {
+  it('reports a live process with an on-disk image as valid', async () => {
+    if (process.platform !== 'darwin') {
+      return
+    }
+    expect(await inspectMacProcessCodeIdentity(process.pid)).toBe('valid')
+  })
+
+  it('fails open for a pid codesign cannot find', async () => {
+    if (process.platform !== 'darwin') {
+      return
+    }
+    // Why: "No such process" is not "no guest"; only the latter proves the image is gone.
+    expect(await inspectMacProcessCodeIdentity(2 ** 30)).toBe('unknown')
+  })
+
+  it('reports unknown off macOS', async () => {
+    if (process.platform === 'darwin') {
+      return
+    }
+    expect(await inspectMacProcessCodeIdentity(process.pid)).toBe('unknown')
   })
 })

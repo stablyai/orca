@@ -18,7 +18,7 @@ const {
   adapterInstances,
   defaultListSessionsSessions,
   listProcessesControl,
-  getLocalPtyProviderMock,
+  getInProcessPtyProviderMock,
   localFallbackProvider,
   setLocalPtyProviderMock,
   rebindLocalProviderListenersMock,
@@ -286,7 +286,7 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     const { DegradedDaemonPtyProvider } = await import('./degraded-daemon-pty-provider')
     const provider = mod.getDaemonProvider()
     expect(provider).toBeInstanceOf(DegradedDaemonPtyProvider)
-    expect(getLocalPtyProviderMock).toHaveBeenCalledOnce()
+    expect(getInProcessPtyProviderMock).toHaveBeenCalledOnce()
     expect(setLocalPtyProviderMock).toHaveBeenCalledWith(provider)
 
     const result = await provider!.spawn({ cols: 80, rows: 24 })
@@ -323,6 +323,7 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
 
   it('rechecks the preserved daemon endpoint before recovering fresh-spawn routing', async () => {
     const mod = await importFresh()
+    getMacDaemonTccAttributionHealthMock.mockResolvedValue('intact')
     ensureRunningOverrides.push(async () => ({
       socketPath: '/fake/degraded-socket',
       tokenPath: '/fake/degraded-token',
@@ -342,6 +343,63 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
       '/fake/degraded-token'
     )
     expect(degradedProvider.routesFreshSpawnsToLocalProvider).toBeUndefined()
+    expect(mod.daemonOwnsFreshPersistentPtys()).toBe(true)
+  })
+
+  it('keeps a severed daemon out of fresh-spawn recovery even when it answers the health probe', async () => {
+    // #17696: a TCC-severed daemon is protocol-healthy, so health alone would route fresh
+    // terminals straight back onto the daemon whose terminals cannot read ~/Documents.
+    const mod = await importFresh()
+    ensureRunningOverrides.push(async () => ({
+      socketPath: '/fake/degraded-socket',
+      tokenPath: '/fake/degraded-token',
+      mode: 'degraded-new-pty-fallback'
+    }))
+    await mod.initDaemonPtyProvider()
+    getMacDaemonTccAttributionHealthMock.mockResolvedValue('severed')
+
+    const { DegradedDaemonPtyProvider } = await import('./degraded-daemon-pty-provider')
+    const provider = mod.getDaemonProvider()
+    expect(provider).toBeInstanceOf(DegradedDaemonPtyProvider)
+    if (!(provider instanceof DegradedDaemonPtyProvider)) {
+      throw new Error('Expected degraded daemon provider')
+    }
+
+    await expect(provider.recoverFreshSpawnRouting()).resolves.toBe(false)
+    expect(provider.routesFreshSpawnsToLocalProvider).toBe(true)
+  })
+
+  it('degrades the installed provider mid-session when the daemon turns out severed with live sessions', async () => {
+    // #17696: the parked bundle is deleted by a later update while this app is already running
+    // on the daemon, so the verdict flips after adoption. The adapter reports it before the
+    // next fresh spawn; the installed provider must swap to degraded routing without a restart.
+    const mod = await importFresh()
+    await mod.initDaemonPtyProvider()
+    const { DegradedDaemonPtyProvider } = await import('./degraded-daemon-pty-provider')
+    expect(mod.getDaemonProvider()).not.toBeInstanceOf(DegradedDaemonPtyProvider)
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    try {
+      await expect(adapterInstances[0].options.onSeveredWithLiveSessions?.()).resolves.toBe(true)
+
+      const provider = mod.getDaemonProvider()
+      expect(provider).toBeInstanceOf(DegradedDaemonPtyProvider)
+      expect(setLocalPtyProviderMock).toHaveBeenLastCalledWith(provider)
+      expect(rebindLocalProviderListenersMock).toHaveBeenCalledTimes(2)
+      // The fallback must be the in-process provider: at this point getLocalPtyProvider()
+      // answers the installed daemon topology, which is exactly what degraded mode routes around.
+      const result = await provider!.spawn({ cols: 80, rows: 24 })
+      expect(result.id).toBe('local-fallback-pty')
+      expect(localFallbackProvider.spawn).toHaveBeenCalledOnce()
+      expect(getInProcessPtyProviderMock).toHaveBeenCalledOnce()
+      expect(mod.daemonOwnsFreshPersistentPtys()).toBe(false)
+
+      // Repeated evidence updates the existing wrapper instead of replacing it.
+      await expect(adapterInstances[0].options.onSeveredWithLiveSessions?.()).resolves.toBe(true)
+      expect(mod.getDaemonProvider()).toBe(provider)
+    } finally {
+      warn.mockRestore()
+    }
   })
 
   it('keeps legacy daemon pid/token files when the probe fails but the pid-file process is alive', async () => {

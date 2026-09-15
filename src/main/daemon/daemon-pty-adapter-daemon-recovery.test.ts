@@ -688,10 +688,57 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         dir,
         socketPath,
         tokenPath,
-        respawnAdapter.protocolVersion
+        respawnAdapter.protocolVersion,
+        undefined,
+        true
       )
       expect(respawnFn).not.toHaveBeenCalled()
       expect(next.id).toBeDefined()
+
+      respawnAdapter.dispose()
+    })
+
+    it('asks the owner to degrade fresh-spawn routing once when severed with live sessions', async () => {
+      const respawnFn = vi.fn()
+      const onSeveredWithLiveSessions = vi.fn(async () => true)
+      const respawnAdapter = new DaemonPtyAdapter({
+        socketPath,
+        tokenPath,
+        runtimeDir: dir,
+        respawn: respawnFn,
+        onSeveredWithLiveSessions
+      })
+      await respawnAdapter.spawn({ cols: 80, rows: 24, isNewSession: true })
+      getMacDaemonTccAttributionHealthMock.mockResolvedValue('severed')
+
+      // Why: the spawn that discovered the verdict was already routed here and must still land.
+      const next = await respawnAdapter.spawn({ cols: 80, rows: 24, isNewSession: true })
+      expect(next.id).toBeDefined()
+      expect(onSeveredWithLiveSessions).toHaveBeenCalledTimes(1)
+      expect(respawnFn).not.toHaveBeenCalled()
+
+      // Why once: the owner already swapped routing; repeated spawns must not re-swap.
+      await respawnAdapter.spawn({ cols: 80, rows: 24, isNewSession: true })
+      expect(onSeveredWithLiveSessions).toHaveBeenCalledTimes(1)
+
+      respawnAdapter.dispose()
+    })
+
+    it('retries the degrade request when the owner declined it', async () => {
+      const onSeveredWithLiveSessions = vi.fn(async () => false)
+      const respawnAdapter = new DaemonPtyAdapter({
+        socketPath,
+        tokenPath,
+        runtimeDir: dir,
+        respawn: vi.fn(),
+        onSeveredWithLiveSessions
+      })
+      await respawnAdapter.spawn({ cols: 80, rows: 24, isNewSession: true })
+      getMacDaemonTccAttributionHealthMock.mockResolvedValue('severed')
+
+      await respawnAdapter.spawn({ cols: 80, rows: 24, isNewSession: true })
+      await respawnAdapter.spawn({ cols: 80, rows: 24, isNewSession: true })
+      expect(onSeveredWithLiveSessions).toHaveBeenCalledTimes(2)
 
       respawnAdapter.dispose()
     })
@@ -750,7 +797,9 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         dir,
         socketPath,
         tokenPath,
-        respawnAdapter.protocolVersion
+        respawnAdapter.protocolVersion,
+        undefined,
+        true
       )
       expect(respawnFn).toHaveBeenCalledTimes(1)
       expect(respawnFn).toHaveBeenCalledWith('severed_tcc_attribution')
