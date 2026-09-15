@@ -71,6 +71,14 @@ export type PluginListEntry = {
     description?: string
     commands: { phase: 'create' | 'suspend' | 'resume' | 'destroy'; command: string }[]
   }[]
+  /** Declared, not approved: the consent dialog must show what a pending plugin is asking for. */
+  linkRoutes: {
+    hostname: string
+    destination: 'orca-browser' | 'system-browser'
+    description?: string
+    /** Another plugin claims this hostname; the renderer owns the wording. */
+    conflict?: true
+  }[]
   restarts: number
   blockedByKillList?: { reason: string; advisoryUrl?: string }
   source?: {
@@ -115,6 +123,7 @@ export async function buildPluginList(
           commands: [],
           hasWorker: false,
           vmRecipes: [],
+          linkRoutes: [],
           restarts: 0
         }
       }
@@ -190,6 +199,12 @@ export async function buildPluginList(
           name: recipe.name,
           ...(recipe.description ? { description: recipe.description } : {}),
           commands: listPluginVmRecipeCommands(recipe)
+        })),
+        linkRoutes: service.contentPacks.linkRoutes.declared(plugin.pluginKey).map((route) => ({
+          hostname: route.hostname,
+          destination: route.destination,
+          ...(route.description ? { description: route.description } : {}),
+          ...(route.conflict ? { conflict: route.conflict } : {})
         })),
         restarts: worker.restarts,
         ...(killListEntry

@@ -15,6 +15,7 @@ type ContributionValidationManifest = {
     keybindings: { command: string; key: string; when?: 'global' | 'worktree' }[]
     vmRecipes: PathContribution[]
     agents: PathContribution[]
+    linkRoutes: { hostname: string; destination: string; description?: string }[]
   }
   capabilities: { kind: string }[]
 }
@@ -58,6 +59,14 @@ export function validatePluginManifestContributions(
     (entry) => (entry as { locale: string }).locale.toLowerCase(),
     'languagePacks',
     'language pack locale',
+    ctx
+  )
+  // Hostnames are already canonical ascii here, so a plain compare catches case and idn duplicates.
+  rejectDuplicateValues(
+    manifest.contributes.linkRoutes,
+    (entry) => (entry as { hostname: string }).hostname,
+    'linkRoutes',
+    'link route hostname',
     ctx
   )
   for (const path of ['vmRecipes', 'agents'] as const) {

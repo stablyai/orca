@@ -1,3 +1,4 @@
+import { validateManifestLinkRoutes } from './plugin-link-route-suffix-policy'
 import { existsSync } from 'node:fs'
 import { cp, mkdir, rm } from 'node:fs/promises'
 import { join, relative, resolve, sep } from 'node:path'
@@ -75,6 +76,10 @@ async function readInstallManifest(
       ok: false,
       error: `plugin requires Orca ${parsed.manifest.engines.orca} (this is ${hostVersion})`
     }
+  }
+  const routePolicy = validateManifestLinkRoutes(parsed.manifest.contributes.linkRoutes)
+  if (routePolicy) {
+    return { ok: false, error: `invalid link route: ${routePolicy}` }
   }
   return { ok: true, manifest: parsed.manifest }
 }

@@ -1,4 +1,4 @@
-import { Suspense } from 'react'
+import { Suspense, useEffect } from 'react'
 import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
 import { AgentHibernationGate } from '../components/AgentHibernationGate'
 import { AiVaultTabTitleSyncGate } from '../components/AiVaultTabTitleSyncGate'
@@ -6,6 +6,7 @@ import RetainedAgentsSyncGate from '../components/dashboard/RetainedAgentsSyncGa
 import { WorkspacePortScanner } from '../components/ports/WorkspacePortScanner'
 import { MacosTccPromptNoticeHost } from '../hooks/MacosTccPromptNoticeHost'
 import { useAppStore } from '../store'
+import { ensurePluginLinkRoutesLoaded } from '../store/plugin-link-routes'
 import { StructuredAgentSessionStatusBridge } from '../components/native-chat/StructuredAgentSessionStatusBridge'
 
 const DashboardPopoutBridge = lazy(() => import('../components/dashboard/DashboardPopoutBridge'))
@@ -19,6 +20,10 @@ export function AppBackgroundServices(): React.JSX.Element {
   const dashboardPopoutEnabled = useAppStore(
     (s) => s.settings?.experimentalAgentDashboardPopout === true
   )
+
+  // Named call, not a hook: the route table is read synchronously at click time, so if the only
+  // initializer were buried in a hook a refactor could silently kill routing with no error.
+  useEffect(() => ensurePluginLinkRoutesLoaded(), [])
 
   return (
     <>

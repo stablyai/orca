@@ -49,7 +49,8 @@ describe('content-pack manifest contributions', () => {
       languagePacks: [],
       keybindings: [],
       vmRecipes: [],
-      agents: []
+      agents: [],
+      linkRoutes: []
     })
   })
 
@@ -151,5 +152,66 @@ describe('content-pack manifest contributions', () => {
         ])
       )
     }
+  })
+
+  describe('linkRoutes', () => {
+    it('accepts routes without a worker and stores the canonical hostname', () => {
+      const parsed = pluginManifestSchema.parse(
+        manifest({
+          linkRoutes: [
+            { hostname: '*-LoopSpark.test.', destination: 'orca-browser' },
+            { hostname: '*.example.com', destination: 'system-browser', description: 'docs' }
+          ]
+        })
+      )
+
+      expect(parsed.contributes.linkRoutes).toEqual([
+        { hostname: '*-loopspark.test', destination: 'orca-browser' },
+        { hostname: '*.example.com', destination: 'system-browser', description: 'docs' }
+      ])
+    })
+
+    it.each(['*', '*e.com', '*x.test', 'example.com*', 'app.test:8080', 'https://app.test'])(
+      'rejects over-broad or malformed pattern %s',
+      (hostname) => {
+        const parsed = pluginManifestSchema.safeParse(
+          manifest({ linkRoutes: [{ hostname, destination: 'orca-browser' }] })
+        )
+        expect(parsed.success).toBe(false)
+      }
+    )
+
+    it('rejects an unknown destination', () => {
+      const parsed = pluginManifestSchema.safeParse(
+        manifest({ linkRoutes: [{ hostname: 'app.test', destination: 'safari' }] })
+      )
+      expect(parsed.success).toBe(false)
+    })
+
+    it('rejects duplicate hostnames that differ only by case', () => {
+      const parsed = pluginManifestSchema.safeParse(
+        manifest({
+          linkRoutes: [
+            { hostname: 'app.example.com', destination: 'orca-browser' },
+            { hostname: 'APP.example.com', destination: 'system-browser' }
+          ]
+        })
+      )
+
+      expect(parsed.success).toBe(false)
+      if (!parsed.success) {
+        expect(parsed.error.issues.map((issue) => issue.message)).toEqual(
+          expect.arrayContaining(['duplicate link route hostname: app.example.com'])
+        )
+      }
+    })
+
+    it('rejects more than the contribution limit', () => {
+      const routes = Array.from({ length: 65 }, (_, index) => ({
+        hostname: `app${index}.example.com`,
+        destination: 'orca-browser'
+      }))
+      expect(pluginManifestSchema.safeParse(manifest({ linkRoutes: routes })).success).toBe(false)
+    })
   })
 })

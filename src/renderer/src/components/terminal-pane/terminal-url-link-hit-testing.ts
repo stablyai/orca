@@ -45,7 +45,7 @@ type UrlLinkClickFallbackDeps = {
   getSourceOwner?: () => HttpLinkSourceOwner
   requestOpenLinksInAppPreference?: TerminalLinkRoutingPreferenceRequester
   getLinkActionContext?: () => TerminalLinkActionContext | null
-  getActionDestinations?: () => TerminalHttpLinkActionDestinations
+  getActionDestinations?: (url: string) => TerminalHttpLinkActionDestinations
 }
 
 export type HttpLinkClickFallbackBinding = IDisposable & {
@@ -156,7 +156,7 @@ export function installHttpLinkClickFallback(
         sourceOwner: deps.getSourceOwner?.() ?? { kind: 'local' },
         requestOpenLinksInAppPreference: deps.requestOpenLinksInAppPreference,
         linkActionContext: deps.getLinkActionContext?.(),
-        actionDestinations: deps.getActionDestinations?.()
+        actionDestinations: deps.getActionDestinations?.(url)
       })
     )
     if (handled) {

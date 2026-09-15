@@ -269,4 +269,43 @@ describe('PluginConsentDialog', () => {
       'The plugin changed while you were reviewing it. Close this dialog and review the updated permissions.'
     )
   })
+
+  it('discloses every declared link route before approval', async () => {
+    // The consent dialog is the ONLY place a user ever sees which hostnames a plugin claims —
+    // nothing attributes a routed link at click time. Without this test the disclosure can be
+    // deleted and the whole suite still passes.
+    await renderConsent(
+      {
+        ...plugin,
+        hasWorker: false,
+        capabilities: [],
+        linkRoutes: [
+          { hostname: '*-devserver.test', destination: 'orca-browser' },
+          { hostname: 'docs.example.com', destination: 'system-browser', description: 'Docs.' }
+        ]
+      },
+      vi.fn().mockResolvedValue(undefined)
+    )
+
+    expect(document.body.textContent).toContain('*-devserver.test')
+    expect(document.body.textContent).toContain('docs.example.com')
+    expect(document.body.textContent).toContain('Docs.')
+    // A route-only plugin is instructional: it changes what a user gesture does.
+    expect(document.body.textContent).toContain('Instructional')
+  })
+
+  it('marks a conflicting route as inactive so consent is not misread', async () => {
+    await renderConsent(
+      {
+        ...plugin,
+        hasWorker: false,
+        capabilities: [],
+        linkRoutes: [{ hostname: '*-devserver.test', destination: 'orca-browser', conflict: true }]
+      },
+      vi.fn().mockResolvedValue(undefined)
+    )
+
+    expect(document.body.textContent).toContain('*-devserver.test')
+    expect(document.body.textContent?.toLowerCase()).toContain('stays inactive')
+  })
 })

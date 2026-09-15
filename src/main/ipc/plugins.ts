@@ -116,6 +116,12 @@ export function registerPluginHandlers(
     await pluginService.whenReady()
     return pluginService.contentPacks.languagePacks.list()
   })
+  ipcMain.handle('plugins:listLinkRoutes', async () => {
+    // whenReady() matters: an early renderer fetch would otherwise see the pre-discovery empty
+    // table and route nothing until the next plugin change event.
+    await pluginService.whenReady()
+    return pluginService.contentPacks.linkRoutes.list()
+  })
   ipcMain.handle('plugins:consent', async (event, args: unknown) => {
     await pluginService.whenReady()
     const parsed = parsePluginConsentArgs(args)

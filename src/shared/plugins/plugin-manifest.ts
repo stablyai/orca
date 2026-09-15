@@ -4,10 +4,12 @@ import {
   PLUGIN_AGENT_PROFILE_LIMIT,
   PLUGIN_KEYBINDING_LIMIT,
   PLUGIN_LANGUAGE_PACK_LIMIT,
+  PLUGIN_LINK_ROUTE_LIMIT,
   PLUGIN_VM_RECIPE_LIMIT,
   pluginAgentProfileContributionSchema,
   pluginKeybindingContributionSchema,
   pluginLanguagePackContributionSchema,
+  pluginLinkRouteContributionSchema,
   pluginVmRecipeContributionSchema
 } from './plugin-content-pack-contributions'
 import {
@@ -114,6 +116,10 @@ export const pluginManifestSchema = z
         agents: z
           .array(pluginAgentProfileContributionSchema)
           .max(PLUGIN_AGENT_PROFILE_LIMIT)
+          .default([]),
+        linkRoutes: z
+          .array(pluginLinkRouteContributionSchema)
+          .max(PLUGIN_LINK_ROUTE_LIMIT)
           .default([])
       })
       .strict()
@@ -124,7 +130,8 @@ export const pluginManifestSchema = z
         languagePacks: [],
         keybindings: [],
         vmRecipes: [],
-        agents: []
+        agents: [],
+        linkRoutes: []
       })),
     capabilities: z.array(pluginCapabilitySchema).max(32).default([])
   })

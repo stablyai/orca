@@ -11380,7 +11380,9 @@
           "close": "Close",
           "cancel": "Cancel",
           "update": "Update plugin",
-          "install": "Install plugin"
+          "install": "Install plugin",
+          "linkRoutesOne": "1 link destination override",
+          "linkRoutes": "{{value0}} link destination overrides"
         },
         "PluginMarketplaceSourceDialog": {
           "addFailed": "Could not add this marketplace. Check the Git URL, ref, and your Git credentials.",
@@ -11867,6 +11869,12 @@
           "targetDescription": "Higher values increase contrast where possible. Background colors stay unchanged.",
           "subtle": "Subtle",
           "strong": "Strong"
+        },
+        "PluginLinkRouteConsentPreview": {
+          "orcaBrowser": "Opens in Orca's built-in browser",
+          "systemBrowser": "Opens in your system browser",
+          "heading": "Link destinations",
+          "conflict": "Another plugin already claims this hostname, so this route stays inactive."
         }
       },
       "right": {
