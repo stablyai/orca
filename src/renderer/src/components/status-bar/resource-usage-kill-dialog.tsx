@@ -37,7 +37,10 @@ export function renderResourceUsageKillDialog({
       }}
     >
       <DialogContent
-        className="max-w-md"
+        // Why: rendered while the resource-manager popover (z-60) is still
+        // open; the default dialog z-50 would let the popover cover it.
+        overlayClassName="z-[110]"
+        className="z-[120] max-w-md"
         showCloseButton={!killing}
         onPointerDownOutside={(e) => {
           if (killing) {
