@@ -38,6 +38,32 @@ export function handleTerminalBinaryFrame(
     })
     return
   }
+  if (frame.opcode === TerminalStreamOpcode.OutputSpan) {
+    // Why: the host sends OutputSpan instead of Output whenever a chunk was transformed or its
+    // raw sequence length differs from the display text. Same payload, JSON-wrapped.
+    const span = decodeTerminalStreamJson<{
+      data?: unknown
+      rawLength?: unknown
+      transformed?: unknown
+    }>(frame.payload)
+    if (
+      typeof span?.data !== 'string' ||
+      typeof span.rawLength !== 'number' ||
+      !Number.isSafeInteger(span.rawLength) ||
+      span.rawLength < 0 ||
+      span.transformed !== true
+    ) {
+      // Why: rendering malformed span JSON would print protocol framing as terminal text.
+      return
+    }
+    options.recordValidatedInboundTraffic()
+    listener({
+      type: 'data',
+      streamId: frame.streamId,
+      chunk: span.data
+    })
+    return
+  }
   if (frame.opcode === TerminalStreamOpcode.SnapshotStart) {
     const meta = decodeTerminalStreamJson<Record<string, unknown>>(frame.payload)
     if (!meta) {
