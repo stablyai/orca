@@ -63,8 +63,9 @@ export function createNativeChatPtySessionOptions(
     return null
   }
   let models = [...(args.initialModels ?? catalog.models)]
-  // The enrichment cache only ever holds probe output, so being handed a list at all
-  // means `isDefault` below names the account's real default rather than the seed guess.
+  // The enrichment cache holds probe output plus consent-gated seed rows, which are stripped
+  // of `isDefault`, so being handed a list at all still means `isDefault` below names the
+  // account's real default rather than the seed guess.
   let modelsAreDiscovered = args.initialModels !== undefined
   let record =
     readNativeChatSessionOptionCache(args.scopeKey, args.fallbackScopeKey) ??

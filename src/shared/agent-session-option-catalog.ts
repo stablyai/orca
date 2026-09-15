@@ -71,6 +71,25 @@ export function mergeCatalogModels(
   return [...merged, ...discoveredById.values()]
 }
 
+/** Prepend seed rows the probe is allowed to hide, keeping discovery authoritative for the rest.
+ *  Why: a probe that omits a consent-gated id is not evidence the host cannot run it, but every
+ *  other seed id it omits is — so only the gated rows survive, ahead of the discovered list. */
+export function withConsentGatedSeedModels(
+  catalog: AgentSessionOptionCatalog,
+  discovered: readonly CatalogModel[]
+): CatalogModel[] {
+  const gated = catalog.consentGatedModelIds
+  if (!gated || gated.length === 0) {
+    return [...discovered]
+  }
+  const missing = catalog.models.filter(
+    (model) => gated.includes(model.id) && !discovered.some((live) => live.id === model.id)
+  )
+  // Why: consumers read `isDefault` on an enriched list as the probe's answer, and a row the
+  // probe never listed cannot name the account's default.
+  return [...missing.map(({ isDefault: _seeded, ...model }) => model), ...discovered]
+}
+
 /** Discovery decides membership; the seed keeps its option menus, which discovery never carries.
  *  Why: an unseeded model inherits the default seed's options because these catalogs' options are
  *  global CLI flags, not per-model capabilities — dropping them would hide the picker entirely. */

@@ -65,6 +65,9 @@ export type AgentSessionOptionCatalog = {
    * must be able to drop it rather than only add. Membership only — option menus
    * still come from the seed. */
   discoveredModelsAreAuthoritative?: true
+  /** Why: seed ids a successful probe may legitimately omit because the CLI hides them
+   * behind a one-time consent, so their absence is not evidence the host lacks them. */
+  consentGatedModelIds?: readonly string[]
   /** Set only when the `isDefault` model is provably what the CLI runs with no model
    * flag, so an untouched draft may show it as selected. Off means `isDefault` stays
    * decorative: agents whose default comes from account or user config would otherwise
