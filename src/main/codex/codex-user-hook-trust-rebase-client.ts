@@ -89,10 +89,11 @@ function matchingListings(
   )
   return new Map(
     listings
+      .values()
       .filter(
         (listing) => expected.get(normalizeHookTrustKeyForLookup(listing.key)) === listing.command
       )
-      .map((listing) => [normalizeHookTrustKeyForLookup(listing.key), listing])
+      .map((listing) => [normalizeHookTrustKeyForLookup(listing.key), listing] as const)
   )
 }
 

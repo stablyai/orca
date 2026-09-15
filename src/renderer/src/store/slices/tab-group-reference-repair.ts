@@ -39,7 +39,10 @@ export function resolveTabGroupOwners(
   const persistedGroupIds = new Set(groups.map((group) => group.id))
   const tabGroupIdById = new Map(tabs.map((tab) => [tab.id, tab.groupId]))
   const tabOwners = new Map(
-    tabs.filter((tab) => persistedGroupIds.has(tab.groupId)).map((tab) => [tab.id, tab.groupId])
+    tabs
+      .values()
+      .filter((tab) => persistedGroupIds.has(tab.groupId))
+      .map((tab) => [tab.id, tab.groupId])
   )
   for (const group of groups) {
     const tabIdAliases = tabIdAliasesByGroup?.get(group.id)

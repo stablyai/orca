@@ -168,8 +168,10 @@ describe('decodeGrokTranscriptLine', () => {
     ]
 
     const messages = rows
+      .values()
       .map((row, index) => decodeGrokTranscriptLine(JSON.stringify(row), `fb-real-schema-${index}`))
       .filter((message) => message !== null)
+      .toArray()
 
     expect(messages).toMatchObject([
       { role: 'user', blocks: [{ type: 'text', text: 'Visible prompt' }] },

@@ -293,7 +293,10 @@ function readDominantZeroPeerState(rows: NetstatTcpRow[]): DetectedPort[] {
   }
   const largest = Math.max(0, ...countByState.values())
   const dominant = new Set(
-    [...countByState].filter(([, count]) => count === largest).map(([state]) => state)
+    countByState
+      .entries()
+      .filter(([, count]) => count === largest)
+      .map(([state]) => state)
   )
   return rows.flatMap((row) => (row.zeroPeer && dominant.has(row.state) ? [row.port] : []))
 }

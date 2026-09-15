@@ -87,9 +87,12 @@ export function findBrowserRoutePartitionsForStorageScope(
   dependencies: Pick<BrowserRoutePartitionStorageDependencies, 'bindings'>,
   storageScope: string
 ): string[] {
-  return [...dependencies.bindings.listBindings()]
+  return dependencies.bindings
+    .listBindings()
+    .entries()
     .filter(([, binding]) => binding.storageScope === storageScope)
     .map(([partition]) => partition)
+    .toArray()
 }
 
 function partitionDirectory(

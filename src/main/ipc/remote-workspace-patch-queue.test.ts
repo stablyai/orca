@@ -81,7 +81,11 @@ describe('remoteWorkspace:setForConnectedTargets patch queue', () => {
   const KNOWN_REPO_IDS = ['repo-target-1', 'repo-target-2', 'repo-reset', 'repo-newer']
   const store = {
     getRepo: getRepoMock,
-    getRepos: () => KNOWN_REPO_IDS.map((repoId) => getRepoMock(repoId)).filter(Boolean)
+    getRepos: () =>
+      KNOWN_REPO_IDS.values()
+        .map((repoId) => getRepoMock(repoId))
+        .filter(Boolean)
+        .toArray()
   } as unknown as Store
 
   const target: SshTarget = {

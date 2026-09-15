@@ -121,9 +121,11 @@ describe('proxy-guarded fetch call-site audit (main)', () => {
       }
     }
 
-    const drifted = [...found]
+    const drifted = found
+      .entries()
       .filter(([file, count]) => AUDITED_NON_NET_FETCH_CALLS.get(file) !== count)
       .map(([file, count]) => `${file}: found ${count} call(s)`)
+      .toArray()
       .sort()
     expect(
       drifted,

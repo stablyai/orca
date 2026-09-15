@@ -114,8 +114,10 @@ function contributionSummary(
     }
   ]
   const summary: { key: string; label: string }[] = entries
+    .values()
     .filter((entry) => entry.count > 0)
     .map(({ key, count, one, many }) => ({ key, label: count === 1 ? one : many }))
+    .toArray()
   if (preview.manifest.main) {
     summary.push({
       key: 'worker',

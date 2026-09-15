@@ -181,9 +181,12 @@ describe('SidebarHeader', () => {
       root.render(<SidebarHeader onWorkspaceBoardMenuOpenChange={vi.fn()} />)
     })
 
-    const labels = [...container.querySelectorAll<HTMLElement>('[aria-label]')]
+    const labels = container
+      .querySelectorAll<HTMLElement>('[aria-label]')
+      .values()
       .map((node) => node.getAttribute('aria-label'))
       .filter((label): label is string => label === 'Add project' || label === 'New workspace')
+      .toArray()
     expect(labels).toEqual(['Add project', 'New workspace'])
   })
 

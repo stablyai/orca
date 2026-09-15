@@ -7,6 +7,7 @@ function isAbsoluteSparseDirectoryPath(entry: string): boolean {
 export function normalizeSparseDirectories(directories: string[]): string[] {
   const seen = new Set<string>()
   return directories
+    .values()
     .map((entry) => entry.trim())
     .map((entry) => {
       // Why: absolute paths can look repo-relative after slash normalization.
@@ -26,4 +27,5 @@ export function normalizeSparseDirectories(directories: string[]): string[] {
       seen.add(entry)
       return true
     })
+    .toArray()
 }

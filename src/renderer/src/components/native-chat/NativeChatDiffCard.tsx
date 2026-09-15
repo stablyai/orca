@@ -41,8 +41,10 @@ function baseName(path: string): string {
 
 function patchText(lines: readonly NativeChatEditLine[]): string {
   return lines
+    .values()
     .filter((line) => line.kind !== 'gap')
     .map((line) => `${line.kind === 'add' ? '+' : line.kind === 'del' ? '-' : ' '}${line.text}`)
+    .toArray()
     .join('\n')
 }
 

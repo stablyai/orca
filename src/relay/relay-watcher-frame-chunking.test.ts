@@ -33,9 +33,11 @@ function captureFrames(): { capture: ClientCapture; write: (frame: Buffer) => bo
   }
   const framedEvents = (): WatcherEventPayload[][] =>
     frames
+      .values()
       .map((frame) => decode(frame))
       .filter((decoded) => decoded.method === 'fs.changed')
       .map((decoded) => decoded.events)
+      .toArray()
   return {
     capture: {
       frames,

@@ -103,6 +103,7 @@ export function buildMissingWebSessionTabsRemovals(
   snapshot: RuntimeMobileSessionTabsRemovedResult
 }[] {
   return trackedWorktrees
+    .values()
     .filter((trackedWorktree) => {
       if (publishedWorktrees.has(trackedWorktree.worktree)) {
         clearTrackedWebSessionTabsInventoryAbsence(environmentId, trackedWorktree.worktree)
@@ -128,6 +129,7 @@ export function buildMissingWebSessionTabsRemovals(
         activeTabId: null,
         activeTabType: null,
         tabs: []
-      }
+      } satisfies RuntimeMobileSessionTabsRemovedResult
     }))
+    .toArray()
 }

@@ -46,7 +46,12 @@ vi.mock('./terminal-hidden-view-parking', async (importOriginal) => {
 vi.mock('./terminal-eviction-exempt-tabs', () => ({
   selectEvictionExemptTerminalTabIds: (_worktreeId: string, tabs: readonly { id: string }[]) => {
     mocks.exemptSelectCalls += 1
-    return new Set(tabs.filter((tab) => mocks.exemptTabIds.has(tab.id)).map((tab) => tab.id))
+    return new Set(
+      tabs
+        .values()
+        .filter((tab) => mocks.exemptTabIds.has(tab.id))
+        .map((tab) => tab.id)
+    )
   },
   selectEvictionExemptTerminalTabLayoutKey: (
     state: typeof mocks.storeState,

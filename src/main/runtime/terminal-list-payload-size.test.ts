@@ -166,8 +166,10 @@ function buildLoadedRuntime(): OrcaRuntimeService {
           id,
           activeTabId: tabIdFor(groupIndex),
           tabOrder: tabs
+            .values()
             .filter((_tab, tabIndex) => tabIndex % 2 === groupIndex)
             .map((tab) => tab.tabId)
+            .toArray()
         })),
         tabGroupLayout: {
           type: 'split',

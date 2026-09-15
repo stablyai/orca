@@ -140,6 +140,9 @@ export function getAmbiguousProjectOptionIds(
     counts.set(option.displayName, (counts.get(option.displayName) ?? 0) + 1)
   }
   return new Set(
-    options.filter((o) => (counts.get(o.displayName) ?? 0) > 1).map((option) => option.id)
+    options
+      .values()
+      .filter((o) => (counts.get(o.displayName) ?? 0) > 1)
+      .map((option) => option.id)
   )
 }

@@ -157,15 +157,15 @@ export function findLandedImagePreviewEchoes(
   // so a plain text row must not become a candidate merely because it shares a
   // caption prefix with a glued image send.
   const imageMessageIds = new Set(
-    messages
-      .filter(
-        (message) =>
-          message.role === 'user' &&
-          (isImageSourceUserTurn(message) ||
-            hasImagePromptMarker(message) ||
-            message.blocks.some(isImageRefBlock))
-      )
-      .map((message) => message.id)
+    // flatMap, not a lazy iterator pipeline: Hermes has no iterator helpers.
+    messages.flatMap((message) =>
+      message.role === 'user' &&
+      (isImageSourceUserTurn(message) ||
+        hasImagePromptMarker(message) ||
+        message.blocks.some(isImageRefBlock))
+        ? [message.id]
+        : []
+    )
   )
   const claimedMessageIds = new Set<string>()
   const landed: LandedImagePreviewEcho[] = []

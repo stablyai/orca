@@ -78,8 +78,10 @@ describe('terminal output batching', () => {
       await vi.runOnlyPendingTimersAsync()
 
       const dataMessages = messages
+        .values()
         .map((msg) => JSON.parse(msg))
         .filter((message) => message.result?.type === 'data')
+        .toArray()
       expect(dataMessages).toHaveLength(1)
       expect(dataMessages[0]).toMatchObject({
         result: { type: 'data', chunk: 'ab' }
@@ -167,8 +169,10 @@ describe('terminal output batching', () => {
       await vi.runOnlyPendingTimersAsync()
 
       const outputFrames = binaryFrames
+        .values()
         .map((frame) => decodeTerminalStreamFrame(frame))
         .filter((frame) => frame?.opcode === TerminalStreamOpcode.Output)
+        .toArray()
       expect(outputFrames).toHaveLength(1)
       expect(outputFrames[0] ? decodeTerminalStreamText(outputFrames[0].payload) : '').toBe('ab')
 
@@ -249,8 +253,10 @@ describe('terminal output batching', () => {
       dataListenerRef.current?.(output)
 
       const outputFrames = binaryFrames
+        .values()
         .map((frame) => decodeTerminalStreamFrame(frame))
         .filter((frame) => frame?.opcode === TerminalStreamOpcode.Output)
+        .toArray()
       expect(outputFrames.length).toBeGreaterThan(1)
       expect(firstOutputEncodeCount).toBe(1)
       expect(

@@ -93,6 +93,7 @@ export function resolveLocalProjectRuntimesForRepos(
   }
   const requestedRepoIds = new Set(
     repos
+      .values()
       .filter((repo) => getRepoExecutionHostId(repo) === LOCAL_EXECUTION_HOST_ID)
       .map((repo) => repo.id)
   )

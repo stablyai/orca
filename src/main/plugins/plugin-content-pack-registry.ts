@@ -34,6 +34,7 @@ export class PluginContentPackRegistry {
   ): Promise<void> {
     const approvedKeys = new Set(
       discovered
+        .values()
         .filter((plugin): plugin is ValidDiscoveredPlugin => !isInvalidDiscoveredPlugin(plugin))
         .filter((plugin) => isApproved(plugin) && !this.isKilled(plugin.pluginKey))
         .map((plugin) => plugin.pluginKey)

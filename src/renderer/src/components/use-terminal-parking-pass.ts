@@ -133,6 +133,7 @@ export function useTerminalParkingPass(controller: TerminalParkingFoundation): v
     )
     const retentionTtlEligibleIds = new Set(
       retentionBudgetCandidates
+        .values()
         .filter((candidate) => !candidate.ordinaryParkingCovers && !candidate.hasPendingSpawnWork)
         .map((candidate) => candidate.worktreeId)
     )

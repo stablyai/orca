@@ -176,9 +176,11 @@ export class SshPortForwardManager {
   }
 
   async removeAllForwards(connectionId: string): Promise<void> {
-    const toRemove = [...this.forwards.entries()]
+    const toRemove = this.forwards
+      .entries()
       .filter(([, { entry }]) => entry.connectionId === connectionId)
       .map(([id]) => id)
+      .toArray()
     await Promise.all(toRemove.map((id) => this.removeForwardAsync(id)))
   }
 

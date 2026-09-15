@@ -93,8 +93,10 @@ export function buildAutomationProjectSearchText(parts: {
   path?: string | null
 }): string {
   const joined = [parts.displayName, parts.path]
+    .values()
     .map((part) => part?.trim() ?? '')
     .filter(Boolean)
+    .toArray()
     .join(' ')
   return joined || AUTOMATION_LIST_SEARCH_UNKNOWN_PROJECT
 }

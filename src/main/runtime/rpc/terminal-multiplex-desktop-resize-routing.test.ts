@@ -260,8 +260,10 @@ describe('terminal multiplex RPC', () => {
       await vi.runOnlyPendingTimersAsync()
 
       const outputFrames = binaryFrames
+        .values()
         .map((frame) => decodeTerminalStreamFrame(frame))
         .filter((frame) => frame?.opcode === TerminalStreamOpcode.Output)
+        .toArray()
       expect(outputFrames).toHaveLength(1)
       expect(outputFrames[0]?.streamId).toBe(5)
       expect(outputFrames[0] ? decodeTerminalStreamText(outputFrames[0].payload) : '').toBe('ab')
@@ -338,8 +340,10 @@ describe('terminal multiplex RPC', () => {
       })
       expect(
         requestedSnapshotFrames
+          .values()
           .filter((frame) => frame?.opcode === TerminalStreamOpcode.SnapshotChunk)
           .map((frame) => (frame ? decodeTerminalStreamText(frame.payload) : ''))
+          .toArray()
           .join('')
       ).toBe('authoritative snapshot')
 

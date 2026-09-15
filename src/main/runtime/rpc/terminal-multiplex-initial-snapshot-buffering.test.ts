@@ -139,9 +139,11 @@ describe('terminal multiplex RPC', () => {
       await vi.runOnlyPendingTimersAsync()
 
       const output = binaryFrames
+        .values()
         .map((frame) => decodeTerminalStreamFrame(frame))
         .filter((frame) => frame?.opcode === TerminalStreamOpcode.Output)
         .map((frame) => (frame ? decodeTerminalStreamText(frame.payload) : ''))
+        .toArray()
         .join('')
       expect(output).toBe('starting shell\r\n')
 
@@ -237,8 +239,10 @@ describe('terminal multiplex RPC', () => {
       await vi.runOnlyPendingTimersAsync()
 
       const outputFrames = binaryFrames
+        .values()
         .map((frame) => decodeTerminalStreamFrame(frame))
         .filter((frame) => frame?.opcode === TerminalStreamOpcode.Output)
+        .toArray()
       const snapshotStart = binaryFrames
         .map((frame) => decodeTerminalStreamFrame(frame))
         .find((frame) => frame?.opcode === TerminalStreamOpcode.SnapshotStart)
@@ -339,9 +343,11 @@ describe('terminal multiplex RPC', () => {
       await vi.runOnlyPendingTimersAsync()
 
       const output = binaryFrames
+        .values()
         .map((frame) => decodeTerminalStreamFrame(frame))
         .filter((frame) => frame?.opcode === TerminalStreamOpcode.Output)
         .map((frame) => (frame ? decodeTerminalStreamText(frame.payload) : ''))
+        .toArray()
         .join('')
       expect(output).toBe(' world')
 

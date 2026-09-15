@@ -36,6 +36,7 @@ export function recentTerminalPathCandidatesIncludePath(
       ...wslTerminalOutputAliases(pathText),
       ...wslTerminalOutputAliases(absolutePath)
     ]
+      .values()
       .map((candidate) => candidate.trim())
       .filter((candidate) => candidate.length > 0)
   )
@@ -72,6 +73,7 @@ export function recentTerminalOutputIncludesPath(
 ): boolean {
   const candidates = new Set(
     [pathText, absolutePath]
+      .values()
       .map((candidate) => candidate.trim())
       .filter((candidate) => candidate.length > 0)
   )

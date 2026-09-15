@@ -61,12 +61,14 @@ const RESUMED_TURN: CodexThreadItem[] = [
 function keysFor(items: CodexThreadItem[]): string[] {
   const ordinals = new CodexTurnOrdinals()
   return items
+    .values()
     .filter((item) => isCodexMessageItemType(item.type))
     .map((item) =>
       agentJournalItemKey(
         codexItemIdentity({ threadId: THREAD_ID, turnId: TURN_ID, item, ordinals })
       )
     )
+    .toArray()
 }
 
 describe('codex turn ordinals', () => {

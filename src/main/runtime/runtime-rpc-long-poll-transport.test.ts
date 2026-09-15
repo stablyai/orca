@@ -692,8 +692,10 @@ describe('OrcaRuntimeRpcServer', () => {
         // Overflow asks are shed, not queued: the sub-cap holds at half the budget.
         expect(server['activeAskLongPolls']).toBe(2)
         const shed = asks
+          .values()
           .map((a) => a.frames.find((f) => f.ok !== undefined))
           .filter((f) => f !== undefined)
+          .toArray()
         expect(shed).toHaveLength(2)
         expect(shed[0]).toMatchObject({ ok: false, error: { code: 'runtime_busy' } })
       } finally {

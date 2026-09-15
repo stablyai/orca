@@ -31,6 +31,7 @@ function createAnnotationDecorations(
     ...noteRanges.map((range) => ({ range, active: false })),
     ...(activeRange ? [{ range: activeRange, active: true }] : [])
   ]
+    .values()
     .map((range) => {
       const from = Math.min(range.range.from, range.range.to)
       const to = Math.max(range.range.from, range.range.to)
@@ -43,6 +44,7 @@ function createAnnotationDecorations(
           })
     })
     .filter((decoration): decoration is Decoration => decoration !== null)
+    .toArray()
   return decorations.length === 0 ? DecorationSet.empty : DecorationSet.create(doc, decorations)
 }
 

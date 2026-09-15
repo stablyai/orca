@@ -12,6 +12,7 @@ export function getDiscardAllPaths(
   area: DiscardAllArea
 ): string[] {
   return entries
+    .values()
     .filter(
       (entry) =>
         entry.area === area &&
@@ -19,6 +20,7 @@ export function getDiscardAllPaths(
         entry.conflictStatus !== 'resolved_locally'
     )
     .map((entry) => entry.path)
+    .toArray()
 }
 
 export type StageAllArea = 'unstaged' | 'untracked'
@@ -32,8 +34,10 @@ export type StageAllArea = 'unstaged' | 'untracked'
  */
 export function getStageAllPaths(entries: readonly GitStatusEntry[], area: StageAllArea): string[] {
   return entries
+    .values()
     .filter((entry) => entry.area === area && isStageableStatusEntry(entry))
     .map((entry) => entry.path)
+    .toArray()
 }
 
 export function isStageableStatusEntry(entry: GitStatusEntry): boolean {
@@ -60,7 +64,11 @@ export function isSubmoduleWorktreeOnlyChange(entry: GitStatusEntry): boolean {
  * row is safe and mirrors the per-row Unstage action.
  */
 export function getUnstageAllPaths(entries: readonly GitStatusEntry[]): string[] {
-  return entries.filter((entry) => entry.area === 'staged').map((entry) => entry.path)
+  return entries
+    .values()
+    .filter((entry) => entry.area === 'staged')
+    .map((entry) => entry.path)
+    .toArray()
 }
 
 export type DiscardAllDeps = {

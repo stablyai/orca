@@ -243,7 +243,9 @@ export function planWorkspaceStatusAssignment(
     return { kind: 'board-sync', worktreeIds: worktrees.map((item) => item.id) }
   }
   const localWriteIds = worktrees
+    .values()
     .filter((item) => getWorkspaceStatus(item, workspaceStatuses) !== status)
     .map((item) => item.id)
+    .toArray()
   return { kind: 'local-only', localWriteIds }
 }

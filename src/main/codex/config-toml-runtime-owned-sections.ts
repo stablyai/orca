@@ -146,7 +146,11 @@ export function getProjectTrustLevel(block: string): 'trusted' | 'untrusted' | n
 }
 
 export function joinTomlBlocks(blocks: string[]): string {
-  const normalizedBlocks = blocks.map((block) => block.trim()).filter((block) => block.length > 0)
+  const normalizedBlocks = blocks
+    .values()
+    .map((block) => block.trim())
+    .filter((block) => block.length > 0)
+    .toArray()
   return normalizedBlocks.length === 0 ? '' : `${normalizedBlocks.join('\n\n')}\n`
 }
 

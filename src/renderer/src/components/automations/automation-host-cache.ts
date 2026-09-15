@@ -269,7 +269,11 @@ export function createAutomationHostCache(
     },
     keysForAuthority: (authority) => {
       const authorityKey = automationAuthorityCatalogKey(authority)
-      return [...records].filter(([, r]) => r.authorityKey === authorityKey).map(([key]) => key)
+      return records
+        .entries()
+        .filter(([, r]) => r.authorityKey === authorityKey)
+        .map(([key]) => key)
+        .toArray()
     },
     evict: (stableKey) => {
       const record = records.get(stableKey)

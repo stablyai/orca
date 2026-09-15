@@ -36,7 +36,6 @@ export const ORCAD_VERSION_FILENAME = '.version'
 export const ORCAD_INSTALL_COMPLETE_FILENAME = '.install-complete'
 
 export function orcadArtifactFilenames(): string[] {
-  return ORCAD_ARTIFACTS.filter((artifact) => !artifact.optional).map(
-    (artifact) => artifact.filename
-  )
+  // Hermes has no iterator helpers, so keep the single pass in flatMap.
+  return ORCAD_ARTIFACTS.flatMap((artifact) => (artifact.optional ? [] : [artifact.filename]))
 }

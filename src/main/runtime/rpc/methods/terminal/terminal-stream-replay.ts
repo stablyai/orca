@@ -197,7 +197,9 @@ export function normalizeMultiplexSnapshotScrollbackRows(
 
 export function requestedSnapshotScrollbackCandidates(requestedRows: number | undefined): number[] {
   const candidates = [requestedRows ?? 0, 1000, 500, 250, 100, 25, 0]
+    .values()
     .filter((rows): rows is number => typeof rows === 'number')
     .map((rows) => Math.max(0, Math.min(50_000, Math.floor(rows))))
+    .toArray()
   return [...new Set(candidates)]
 }

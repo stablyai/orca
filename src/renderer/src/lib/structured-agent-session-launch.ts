@@ -82,7 +82,8 @@ export function getStructuredAgentLaunchStatus(
   // their identity, and a caller asking "is a chat starting here" means all of them.
   const states = [
     pendingStructuredLaunchesByIdentity.get(launchIdentity(worktreeId, agent)),
-    ...[...pendingStructuredLaunchesByIdentity.entries()]
+    ...pendingStructuredLaunchesByIdentity
+      .entries()
       .filter(([identity]) => identity.startsWith(`${agent}:${worktreeId}:resume:`))
       .map(([, state]) => state)
   ].filter((state): state is StructuredLaunchState => Boolean(state))

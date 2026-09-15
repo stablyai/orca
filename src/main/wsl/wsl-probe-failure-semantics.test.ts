@@ -79,11 +79,13 @@ function findSwallowingFiles(): string[] {
   const candidates: string[] = []
   collectTypeScriptFiles(SRC_ROOT, candidates)
   return candidates
+    .values()
     .map((absolute) => relative(SRC_ROOT, absolute).split('\\').join('/'))
     .filter(isScanned)
     .filter((relativePath) =>
       SWALLOW_PATTERN.test(readFileSync(join(SRC_ROOT, relativePath), 'utf8'))
     )
+    .toArray()
     .sort()
 }
 

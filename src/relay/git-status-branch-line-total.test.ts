@@ -38,7 +38,11 @@ function isRangedNumstat(args: string[]): boolean {
 }
 
 function rangedDiffCalls(calls: readonly GitCall[]): string[][] {
-  return calls.map(([args]) => args).filter((args) => isRangedNumstat(args))
+  return calls
+    .values()
+    .map(([args]) => args)
+    .filter((args) => isRangedNumstat(args))
+    .toArray()
 }
 
 function streamGitFromCapture(git: GitExec): RelayGitStreamExec {

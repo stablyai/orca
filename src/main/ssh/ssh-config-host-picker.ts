@@ -32,9 +32,11 @@ export function searchSshConfigHosts(
   suppressedAliases: readonly string[] = []
 ): SshConfigHostListResult {
   const existingAliases = new Set(
-    existingTargets.flatMap((target) =>
-      [target.configHost, target.label].map(normalizeSshConfigAlias).filter(Boolean)
-    )
+    existingTargets
+      .values()
+      .flatMap((target) =>
+        [target.configHost, target.label].values().map(normalizeSshConfigAlias).filter(Boolean)
+      )
   )
   const normalizedQuery = query.trim().toLowerCase()
   const suppressedAliasSet = new Set(suppressedAliases.map(normalizeSshConfigAlias))

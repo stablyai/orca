@@ -279,6 +279,7 @@ export function rankCmdJMiddleResults({
   const settingsConfigKeywords = settings.flatMap((setting) => setting.configKeywords)
 
   return [...settings, ...actions]
+    .values()
     .map((candidate) =>
       rankingForCandidate(
         normalizedQuery,
@@ -289,6 +290,7 @@ export function rankCmdJMiddleResults({
       )
     )
     .filter((entry): entry is RankedResult => entry !== null)
+    .toArray()
     .sort(compareRanked)
     .map((entry) => ({ ...entry.result, qualityClass: middleRuleQualityClass(entry.rule) }))
 }

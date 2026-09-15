@@ -232,6 +232,7 @@ export function distributeHeadlessTabsAcrossGroups(
     orderByGroup.get(groupId)?.push(tabId)
   }
   return existingGroups
+    .values()
     .map((group) => {
       const nextOrder = orderByGroup.get(group.id) ?? []
       return {
@@ -246,6 +247,7 @@ export function distributeHeadlessTabsAcrossGroups(
       }
     })
     .filter((group) => group.tabOrder.length > 0)
+    .toArray()
 }
 
 export function buildMaterializedHeadlessParentLayout(

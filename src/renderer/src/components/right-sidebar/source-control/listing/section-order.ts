@@ -43,11 +43,13 @@ export function getConflictReviewEntries(
   entries: readonly GitStatusEntry[]
 ): SourceControlConflictReviewEntry[] {
   return entries
+    .values()
     .filter((entry) => entry.conflictStatus === 'unresolved' && entry.conflictKind)
     .map((entry) => ({
       path: entry.path,
       conflictKind: entry.conflictKind!
     }))
+    .toArray()
 }
 
 export function getSourceControlSectionViewAction(

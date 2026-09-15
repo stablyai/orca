@@ -55,8 +55,10 @@ export function applyWorktreeCommentSnippet(
   const snippet = extractWorktreePaletteCommentSnippet(comment, start, end)
   const delta = snippet.matchRange.start - start
   const shifted = ranges
+    .values()
     .map((range) => ({ start: range.start + delta, end: range.end + delta }))
     .filter((range) => range.start >= 0 && range.end <= snippet.text.length)
+    .toArray()
   return { text: snippet.text, ranges: shifted.length ? shifted : [snippet.matchRange] }
 }
 

@@ -96,10 +96,13 @@ export function buildBackgroundTaskGroups(
     const startDelta = (left.task.startedAt ?? 0) - (right.task.startedAt ?? 0)
     return startDelta !== 0 ? startDelta : left.task.id < right.task.id ? -1 : 1
   })
-  return KIND_ORDER.map((kind) => ({
-    kind,
-    tasks: entries.filter((entry) => entry.task.kind === kind)
-  })).filter((group) => group.tasks.length > 0)
+  return KIND_ORDER.values()
+    .map((kind) => ({
+      kind,
+      tasks: entries.filter((entry) => entry.task.kind === kind)
+    }))
+    .filter((group) => group.tasks.length > 0)
+    .toArray()
 }
 
 export function backgroundTaskStateWord(state: RunState): string {

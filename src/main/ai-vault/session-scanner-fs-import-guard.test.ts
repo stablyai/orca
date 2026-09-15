@@ -34,9 +34,11 @@ const ALLOWLIST = new Set([
 const FS_IMPORT = /import\s+([\s\S]*?)\s+from\s+['"]node:fs(?:\/promises)?['"]/g
 
 function valueImportsOfNodeFs(source: string): string[] {
-  return [...source.matchAll(FS_IMPORT)]
+  return source
+    .matchAll(FS_IMPORT)
     .map((match) => match[1]!.trim())
     .filter((clause) => !clause.startsWith('type'))
+    .toArray()
 }
 
 async function guardedFiles(): Promise<{ name: string; path: string }[]> {

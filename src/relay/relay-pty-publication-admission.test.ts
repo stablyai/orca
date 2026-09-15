@@ -152,7 +152,13 @@ describe('relay PTY publication admission', () => {
     expect(adapter.deliveryMode(1)).toBe('source-owner')
     expect(dispatcher.tryNotifyPtyData({ id: 'pty-1', data: 'legacy' })).toBe(true)
 
-    expect(writes.map(message).filter((entry) => entry?.method === 'pty.data')).toEqual([])
+    expect(
+      writes
+        .values()
+        .map(message)
+        .filter((entry) => entry?.method === 'pty.data')
+        .toArray()
+    ).toEqual([])
   })
 
   it('publishes current source output to the admitted source-credit owner', async () => {

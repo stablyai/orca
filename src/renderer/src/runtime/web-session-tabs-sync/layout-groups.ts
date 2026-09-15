@@ -92,7 +92,8 @@ export function retainClientPlacedMirroredTabs(args: {
         (!args.mirroredUnifiedIds.has(tabId) ||
           args.clientGroupIdByLocalTabId.get(tabId) === group.id)
     )
-    const placedTabIds = [...args.clientGroupIdByLocalTabId]
+    const placedTabIds = args.clientGroupIdByLocalTabId
+      .entries()
       .filter(
         ([tabId, groupId]) =>
           groupId === group.id &&
@@ -100,6 +101,7 @@ export function retainClientPlacedMirroredTabs(args: {
           !retainedTabOrder.includes(tabId)
       )
       .map(([tabId]) => tabId)
+      .toArray()
     const tabOrder = [...retainedTabOrder, ...placedTabIds]
     const activeTabId =
       args.nextActiveUnifiedTabId && tabOrder.includes(args.nextActiveUnifiedTabId)

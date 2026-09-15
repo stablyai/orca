@@ -79,9 +79,11 @@ export function getMcpConfigParentDirs(
 ): string[] {
   return Array.from(
     new Set(
-      candidates
-        .map((candidate) => getRelativeParentDir(candidate.relativePath))
-        .filter((parentDir) => parentDir !== '')
+      // Hermes has no iterator helpers, so keep the single pass in flatMap.
+      candidates.flatMap((candidate) => {
+        const parentDir = getRelativeParentDir(candidate.relativePath)
+        return parentDir === '' ? [] : [parentDir]
+      })
     )
   )
 }

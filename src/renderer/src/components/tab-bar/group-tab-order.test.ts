@@ -422,14 +422,17 @@ describe('group order matches the rendered tab strip', () => {
     })
     const terminalMap = new Map(
       groupTabs
+        .values()
         .filter((tab) => tab.contentType === 'terminal')
         .map((tab) => [tab.entityId, { id: tab.entityId, unifiedTabId: tab.id }])
     )
     return buildOrderedTabItems({
       tabBarOrder,
       terminalIds: groupTabs
+        .values()
         .filter((tab) => tab.contentType === 'terminal')
-        .map((tab) => tab.entityId),
+        .map((tab) => tab.entityId)
+        .toArray(),
       editorFileIds: [],
       browserTabIds: [],
       simulatorTabIds: [],

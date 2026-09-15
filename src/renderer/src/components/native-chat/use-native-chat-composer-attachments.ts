@@ -224,11 +224,13 @@ function writeNativeChatAttachmentCache(
   // A pending chip's save resolves into THIS hook instance; restoring one into a
   // remount would strand it pending forever, so only settled chips are cached.
   const attachments = cacheable
+    .values()
     .filter((attachment) => !attachment.pending)
     // Preview URLs can retain the full clipboard Blob (or a large data URL) for
     // the lifetime of the scope cache. Settled attachments reload from their
     // authorized path after a remount, so never retain the transient preview.
     .map(({ previewUrl: _previewUrl, ...attachment }) => attachment)
+    .toArray()
   if (attachments.length === 0) {
     attachmentCache.delete(scopeKey)
     return

@@ -96,18 +96,22 @@ export function buildMobileSessionTabSnapshots(
       const file = openFilesForWorktree?.get(fileId)
       return file ? isMobilePublishableOpenFile(file) : false
     })
-    const terminalIds = [...terminalTabById.values()]
+    const terminalIds = terminalTabById
+      .values()
       .filter(
         (terminal) =>
           !isWebOnlyMirroredTerminalTab(terminal, inputs.terminalLayoutByTabId.get(terminal.id))
       )
       .map((terminal) => terminal.id)
+      .toArray()
     const groupProjection = buildMobileSessionGroupProjection(inputs, {
       terminalIds,
       editorIds,
-      browserIds: [...browserWorkspaceById.values()]
+      browserIds: browserWorkspaceById
+        .values()
         .filter(isMobilePublishableBrowserWorkspace)
         .map((workspace) => workspace.id)
+        .toArray()
     })
     const tabs: RuntimeMobileSessionSnapshotTab[] = []
     const emittedEditorFileIds = new Set<string>()

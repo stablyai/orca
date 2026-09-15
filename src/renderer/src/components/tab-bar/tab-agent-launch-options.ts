@@ -110,12 +110,14 @@ export function findMatchingTabAgentLaunchOptions(
   }
   const compactQuery = compactAgentAlias(query)
   return agents
+    .values()
     .map((option, index) => ({
       index,
       option,
       score: scoreAgentLaunchOption(normalizedQuery, compactQuery, option)
     }))
     .filter((entry) => entry.score > 0)
+    .toArray()
     .sort((left, right) =>
       left.score !== right.score ? right.score - left.score : left.index - right.index
     )

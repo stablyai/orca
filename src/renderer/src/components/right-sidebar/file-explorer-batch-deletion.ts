@@ -9,11 +9,13 @@ import type { TreeNode } from './file-explorer-types'
 // now-missing path and produces spurious errors.
 export function selectDeletionRoots(nodes: TreeNode[]): TreeNode[] {
   const directories = nodes
+    .values()
     .filter((node) => node.isDirectory)
     .map((node) => ({
       node,
       matches: createNormalizedPathInsideOrEqualMatcher(node.path)
     }))
+    .toArray()
   if (directories.length === 0) {
     return [...nodes]
   }

@@ -103,7 +103,9 @@ export function analyzeRasterCursorCells(
     }
   }
 
-  return [...cells.values()]
+  return cells
+    .values()
     .filter((cell) => cell.pixelCount >= 6 && cell.maxColumnRun >= 4)
     .map(({ columnRuns: _columnRuns, activeRunByColumn: _activeRunByColumn, ...cell }) => cell)
+    .toArray()
 }

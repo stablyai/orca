@@ -86,6 +86,7 @@ async function snapshotBase(
   const includeFlat = configs.some((config) => !config.nestWorkspaces)
   const nestedRepoNames = new Set(
     configs
+      .values()
       .filter((config) => config.nestWorkspaces)
       .map((config) => normalizeRuntimePathForComparison(config.repoName))
   )

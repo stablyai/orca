@@ -114,6 +114,7 @@ export function createRepoRemovalActions(
         ]
         const exactSiblingIds = new Set(
           knownRepoWorktrees
+            .values()
             .filter((worktree) => !worktreeBelongsToHost(worktree, ownerHostId))
             .map((worktree) => worktree.id)
         )

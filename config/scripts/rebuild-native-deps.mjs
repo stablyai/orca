@@ -99,7 +99,11 @@ if (patchedNodePtyRebuildReason) {
     moduleName,
     result: probeElectronNativeModules([moduleName])
   }))
-  modulesToRebuild = probes.filter(({ result }) => !result.ok).map(({ moduleName }) => moduleName)
+  modulesToRebuild = probes
+    .values()
+    .filter(({ result }) => !result.ok)
+    .map(({ moduleName }) => moduleName)
+    .toArray()
   if (modulesToRebuild.length === 0) {
     console.log('[rebuild] Native modules already load in Electron; skipping rebuild.')
     process.exit(0)

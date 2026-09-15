@@ -142,8 +142,10 @@ describe('RelayPtySourcePublication cancellation and exit', () => {
 
   function exitFrames(writes: Buffer[]): Notification[] {
     return writes
+      .values()
       .map(notification)
       .filter((frame): frame is Notification => frame?.method === 'pty.exit')
+      .toArray()
   }
 
   function ackFrame(

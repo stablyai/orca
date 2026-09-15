@@ -447,8 +447,10 @@ test.describe('Worktree switch first paint @headful', () => {
     }
 
     const restored = samples
+      .values()
       .map((sample) => sample.contentRestoredMs)
       .filter((value): value is number => value !== null)
+      .toArray()
     expect(restored.length, 'revealed terminal never restored its content').toBe(samples.length)
     const summary = [
       `first activation -> ${TABS_PER_WORKTREE}-tab worktree, ${samples.length} rounds`,

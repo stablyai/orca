@@ -84,9 +84,11 @@ export async function parseOpenCodeUsageDatabase(
     return {
       ...processedDatabase,
       ...openCodeUsageAggregation.aggregate(events),
-      ownedSessionIds: [...claimedBySessionId.entries()]
+      ownedSessionIds: claimedBySessionId
+        .entries()
         .filter(([, owned]) => owned)
-        .map(([sessionId]) => sessionId),
+        .map(([sessionId]) => sessionId)
+        .toArray(),
       hasDeferredClaims
     }
   } finally {

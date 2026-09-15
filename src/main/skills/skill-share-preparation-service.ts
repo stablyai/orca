@@ -228,9 +228,11 @@ export class SkillSharePreparationService {
   }
 
   private async prune(): Promise<void> {
-    const expired = [...this.preparations.entries()]
+    const expired = this.preparations
+      .entries()
       .filter(([, value]) => value.expiresAt <= Date.now() && !value.controller)
       .map(([id]) => id)
+      .toArray()
     await Promise.all(expired.map((id) => this.release(id)))
   }
 

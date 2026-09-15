@@ -275,10 +275,11 @@ export class ClaimedAgentPtyOwnerRegistry {
     if (!keys) {
       return []
     }
-    return [...keys]
-      .map((key) => this.live.get(key))
-      .filter((owner): owner is LiveOwner => owner !== undefined)
-      .map(cloneOwner)
+    // Hermes has no iterator helpers, so keep the single pass in flatMap.
+    return [...keys].flatMap((key) => {
+      const owner = this.live.get(key)
+      return owner === undefined ? [] : [cloneOwner(owner)]
+    })
   }
 
   find(claim: AgentSessionExecutionClaim): AgentSessionOwnerBinding | null {

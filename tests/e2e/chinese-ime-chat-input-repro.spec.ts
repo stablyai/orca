@@ -295,6 +295,7 @@ async function readPromptState(page: Page): Promise<TerminalPromptState | null> 
   const content = stripTerminalControls(await getTerminalContent(page, 20_000))
   const matches = [...content.matchAll(/\[SUBMITTED_JSON_[^\]]+\]("[\s\S]*?")/g)]
   const submitted = matches
+    .values()
     .map((match) => {
       try {
         return JSON.parse(match[1] ?? '""') as string
@@ -303,6 +304,7 @@ async function readPromptState(page: Page): Promise<TerminalPromptState | null> 
       }
     })
     .filter((value): value is string => value !== null)
+    .toArray()
   const promptIndex = content.lastIndexOf(PROMPT)
   const liveLine =
     promptIndex !== -1 ? (content.slice(promptIndex + PROMPT.length).split(/\r?\n/)[0] ?? '') : ''

@@ -48,8 +48,10 @@ function harness() {
   const roster = (): NativeChatSubagentEntry[] => agentsOf(groupRows().at(-1)?.body)
   const fallbackRows = (): AgentJournalItemBody[] =>
     items
+      .values()
       .filter((item) => (orcaClientMessageId(item.identity) ?? '').startsWith('provider-frame:'))
       .map((item) => item.body)
+      .toArray()
   return { translator, groupRows, roster, rosterIn, rosterOf, fallbackRows }
 }
 

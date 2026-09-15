@@ -108,8 +108,10 @@ async function patchAtlasCounter(page: Page): Promise<boolean> {
       )?.panes?.values?.() ?? [])
     ]
     const webglAddons = panes
+      .values()
       .map((pane) => pane.webglAddon)
       .filter((webglAddon): webglAddon is { clearTextureAtlas: () => void } => Boolean(webglAddon))
+      .toArray()
     if (webglAddons.length === 0) {
       return false
     }

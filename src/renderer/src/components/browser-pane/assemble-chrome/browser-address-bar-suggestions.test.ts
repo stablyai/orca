@@ -128,7 +128,11 @@ describe('browser address bar suggestions', () => {
     const hoursAgo = (hours: number): number => now - hours * 60 * 60 * 1000
     // The synthetic top row is composition, not scoring; ranking asserts on history only.
     const historyUrls = (suggestions: readonly { isSearch: boolean; url: string }[]): string[] =>
-      suggestions.filter((suggestion) => !suggestion.isSearch).map((suggestion) => suggestion.url)
+      suggestions
+        .values()
+        .filter((suggestion) => !suggestion.isSearch)
+        .map((suggestion) => suggestion.url)
+        .toArray()
 
     beforeEach(() => {
       vi.useFakeTimers()

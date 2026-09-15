@@ -68,8 +68,10 @@ function enoent(): Error {
 /** Only the branch-deletion phase; the two entry points legitimately reach it by different routes. */
 function branchDeletionCalls(calls: string[][]): string[] {
   return calls
+    .values()
     .map((args) => args.join(' '))
     .filter((call) => call.startsWith('branch ') || call === 'worktree prune')
+    .toArray()
 }
 
 function worktreeListPorcelain(withFeature: boolean): string {

@@ -158,7 +158,8 @@ export function mergeAdoptionResponse(
 ): RuntimeMobileSessionTabsResult {
   const rowsBySurface = terminalRowsBySurface(snapshot)
   const readyKeys = new Set(
-    [...rowsBySurface.entries()]
+    rowsBySurface
+      .entries()
       .filter(([, rows]) => rows.some(isValidReadySurface))
       .map(([key]) => key)
   )

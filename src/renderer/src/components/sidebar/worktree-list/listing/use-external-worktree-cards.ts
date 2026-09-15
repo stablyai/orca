@@ -43,7 +43,8 @@ export function useSidebarExternalWorktreeCards(args: {
 
   const importedWorktreesByRepo = useMemo(() => {
     const forceVisibleRepoIds = new Set(
-      [...importedWorktreeCardActionState.entries()]
+      importedWorktreeCardActionState
+        .entries()
         .filter(([, state]) => state.forceVisible)
         .map(([repoId]) => repoId)
     )

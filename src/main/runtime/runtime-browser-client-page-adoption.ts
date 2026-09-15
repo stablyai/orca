@@ -101,8 +101,10 @@ export async function adoptRuntimeBrowserClientPagesFromInventory(
   // not hold this client's rows open. Anything else unadopted is a "not yet".
   const settle = (pages: readonly AdoptableClientHostedPage[]): readonly string[] =>
     pages
+      .values()
       .filter((page) => !goneWorkspaceIds.has(page.workspaceId))
       .map((page) => page.browserPageId)
+      .toArray()
   const intents = buildClientPageAdoptionIntents({
     pages: adoptable,
     authority: {

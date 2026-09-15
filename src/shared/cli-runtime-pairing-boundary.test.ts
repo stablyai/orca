@@ -75,12 +75,14 @@ describe('CLI runtime pairing boundary', () => {
   const repoRoot = resolve(__dirname, '..', '..')
 
   function offenders(): string[] {
-    return SCANNED_ROOTS.flatMap((scanRoot) => collectSourceFiles(join(repoRoot, scanRoot)))
+    return SCANNED_ROOTS.values()
+      .flatMap((scanRoot) => collectSourceFiles(join(repoRoot, scanRoot)))
       .filter((path) => {
         const source = readFileSync(path, 'utf8')
         return RESOLVES_CLI.test(source) && SPAWNS.test(source) && !PAIRS.test(source)
       })
       .map((path) => relative(repoRoot, path).split('\\').join('/'))
+      .toArray()
       .sort()
   }
 

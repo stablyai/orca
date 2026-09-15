@@ -417,35 +417,44 @@ describe('transport error code/message classification agreement', () => {
   })
 
   it('never classifies a coded error as fatal while its own message reads as recoverable', () => {
-    const violations = CODED_TRANSPORT_ERRORS.filter(
-      (pair) => !isRecoverableRemoteRuntimeConnectionError(pair) && classifyByMessageOnly(pair)
-    ).map(
-      (pair) =>
-        `${pair.producer}: code "${pair.code}" classifies fatal but its message matches recoverable fragment "${matchingRecoverableFragment(pair.message)}" — either add "${pair.code}" to RECOVERABLE_CODES in remote-runtime-client-error-classification.ts, or change the message so it no longer reads as a transient connection failure.`
-    )
+    const violations = CODED_TRANSPORT_ERRORS.values()
+      .filter(
+        (pair) => !isRecoverableRemoteRuntimeConnectionError(pair) && classifyByMessageOnly(pair)
+      )
+      .map(
+        (pair) =>
+          `${pair.producer}: code "${pair.code}" classifies fatal but its message matches recoverable fragment "${matchingRecoverableFragment(pair.message)}" — either add "${pair.code}" to RECOVERABLE_CODES in remote-runtime-client-error-classification.ts, or change the message so it no longer reads as a transient connection failure.`
+      )
+      .toArray()
     expect(violations).toEqual([])
   })
 
   it('never classifies a coded error as non-overload while its own message reads as overload', () => {
-    const violations = CODED_TRANSPORT_ERRORS.filter(
-      (pair) =>
-        !isRuntimeRpcQueueOverloadError(pair) &&
-        isRuntimeRpcQueueOverloadError({ message: pair.message })
-    ).map(
-      (pair) =>
-        `${pair.producer}: code "${pair.code}" is not the queue-overload code but its message reads as queue overload — either raise it with RUNTIME_RPC_QUEUE_OVERLOAD_CODE, or change the message.`
-    )
+    const violations = CODED_TRANSPORT_ERRORS.values()
+      .filter(
+        (pair) =>
+          !isRuntimeRpcQueueOverloadError(pair) &&
+          isRuntimeRpcQueueOverloadError({ message: pair.message })
+      )
+      .map(
+        (pair) =>
+          `${pair.producer}: code "${pair.code}" is not the queue-overload code but its message reads as queue overload — either raise it with RUNTIME_RPC_QUEUE_OVERLOAD_CODE, or change the message.`
+      )
+      .toArray()
     expect(violations).toEqual([])
   })
 
   it('keeps the code-less fragment fallback intact for untyped producers', () => {
-    const misclassified = CODELESS_TRANSPORT_ERRORS.filter(
-      (pair) =>
-        isRecoverableRemoteRuntimeConnectionError({ message: pair.message }) !== pair.recoverable
-    ).map(
-      (pair) =>
-        `${pair.producer}: expected message-only classification ${pair.recoverable} — untyped producers have no code, so removing a fragment from RECOVERABLE_MESSAGE_FRAGMENTS strands them.`
-    )
+    const misclassified = CODELESS_TRANSPORT_ERRORS.values()
+      .filter(
+        (pair) =>
+          isRecoverableRemoteRuntimeConnectionError({ message: pair.message }) !== pair.recoverable
+      )
+      .map(
+        (pair) =>
+          `${pair.producer}: expected message-only classification ${pair.recoverable} — untyped producers have no code, so removing a fragment from RECOVERABLE_MESSAGE_FRAGMENTS strands them.`
+      )
+      .toArray()
     expect(misclassified).toEqual([])
   })
 
@@ -467,12 +476,13 @@ describe('transport error code/message classification agreement', () => {
     // producer raises it. Kept recoverable defensively.
     const codesWithoutProducer = new Set(['reconnecting'])
     const corpusCodes = new Set(CODED_TRANSPORT_ERRORS.map((pair) => pair.code))
-    const unbacked = [...RECOVERABLE_CODES]
+    const unbacked = RECOVERABLE_CODES.values()
       .filter((code) => !corpusCodes.has(code) && !codesWithoutProducer.has(code))
       .map(
         (code) =>
           `recoverable code "${code}" matches no producer in this corpus — add the producer that raises it so its message is checked, or declare it producer-less here.`
       )
+      .toArray()
     expect(unbacked).toEqual([])
   })
 

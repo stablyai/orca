@@ -117,7 +117,12 @@ async function getGitHubUsersByLogin(
     return []
   }
   const uniqueLogins = Array.from(
-    new Set(logins.filter((login) => login && login !== 'ghost').map((login) => login.trim()))
+    new Set(
+      logins
+        .values()
+        .filter((login) => login && login !== 'ghost')
+        .map((login) => login.trim())
+    )
   ).slice(0, 40)
   if (uniqueLogins.length === 0) {
     return []

@@ -25,7 +25,11 @@ function referenceExpansion(
       expanded.add(child.worktreeId)
     }
   }
-  const result = rows.filter((row) => expanded.has(row.worktreeId)).map((row) => row.worktreeId)
+  const result = rows
+    .values()
+    .filter((row) => expanded.has(row.worktreeId))
+    .map((row) => row.worktreeId)
+    .toArray()
   for (const id of draggedIds) {
     if (!rowIds.has(id) && !result.includes(id)) {
       result.push(id)

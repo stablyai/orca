@@ -167,7 +167,10 @@ function isIdentityRefreshDue(repo: Repo, now: number): boolean {
  */
 function retireRemovedLocations(allRepos: Repo[]): void {
   const liveKeys = new Set(
-    allRepos.filter((repo) => repo.kind !== 'folder').map(getRepoLocationKey)
+    allRepos
+      .values()
+      .filter((repo) => repo.kind !== 'folder')
+      .map(getRepoLocationKey)
   )
   for (const locationKey of probeRetryAfterByLocation.keys()) {
     if (!liveKeys.has(locationKey)) {

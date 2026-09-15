@@ -112,8 +112,10 @@ describe('terminal multiplex RPC', () => {
       truncated: false
     })
     const snapshotData = decodedFrames
+      .values()
       .filter((frame) => frame?.opcode === TerminalStreamOpcode.SnapshotChunk)
       .map((frame) => (frame ? decodeTerminalStreamText(frame.payload) : ''))
+      .toArray()
       .join('')
     expect(snapshotData).toBe('line 120\r\n')
 
@@ -281,8 +283,10 @@ describe('terminal multiplex RPC', () => {
     })
     expect(
       requestedFrames
+        .values()
         .filter((frame) => frame?.opcode === TerminalStreamOpcode.SnapshotChunk)
         .map((frame) => (frame ? decodeTerminalStreamText(frame.payload) : ''))
+        .toArray()
         .join('')
     ).toBe('budgeted snapshot')
 
@@ -383,16 +387,20 @@ describe('terminal multiplex RPC', () => {
       await vi.runOnlyPendingTimersAsync()
 
       const output = binaryFrames
+        .values()
         .map((frame) => decodeTerminalStreamFrame(frame))
         .filter((frame) => frame?.opcode === TerminalStreamOpcode.Output)
         .map((frame) => (frame ? decodeTerminalStreamText(frame.payload) : ''))
+        .toArray()
         .join('')
       expect(output.length).toBeLessThanOrEqual(256 * 1024)
       expect(output).toBe('')
       const snapshotPayload = binaryFrames
+        .values()
         .map((frame) => decodeTerminalStreamFrame(frame))
         .filter((frame) => frame?.opcode === TerminalStreamOpcode.SnapshotChunk)
         .map((frame) => (frame ? decodeTerminalStreamText(frame.payload) : ''))
+        .toArray()
         .join('')
       expect(snapshotPayload).toBe('399')
       expect(output).not.toContain('000')
@@ -497,16 +505,20 @@ describe('terminal multiplex RPC', () => {
       await vi.runOnlyPendingTimersAsync()
 
       const output = binaryFrames
+        .values()
         .map((frame) => decodeTerminalStreamFrame(frame))
         .filter((frame) => frame?.opcode === TerminalStreamOpcode.Output)
         .map((frame) => (frame ? decodeTerminalStreamText(frame.payload) : ''))
+        .toArray()
         .join('')
       expect(new TextEncoder().encode(output).byteLength).toBeLessThanOrEqual(256 * 1024)
       expect(output).toBe('')
       const snapshotPayload = binaryFrames
+        .values()
         .map((frame) => decodeTerminalStreamFrame(frame))
         .filter((frame) => frame?.opcode === TerminalStreamOpcode.SnapshotChunk)
         .map((frame) => (frame ? decodeTerminalStreamText(frame.payload) : ''))
+        .toArray()
         .join('')
       expect(snapshotPayload).toBe('399')
       expect(output).not.toContain('000')
@@ -653,14 +665,18 @@ describe('terminal multiplex RPC', () => {
       })
       expect(
         requestedFrames
+          .values()
           .filter((frame) => frame?.opcode === TerminalStreamOpcode.SnapshotChunk)
           .map((frame) => (frame ? decodeTerminalStreamText(frame.payload) : ''))
+          .toArray()
           .join('')
       ).toBe('retry snapshot')
       expect(
         requestedFrames
+          .values()
           .filter((frame) => frame?.opcode === TerminalStreamOpcode.Output)
           .map((frame) => (frame ? decodeTerminalStreamText(frame.payload) : ''))
+          .toArray()
           .join('')
       ).toBe('')
 
@@ -668,9 +684,11 @@ describe('terminal multiplex RPC', () => {
       await vi.runOnlyPendingTimersAsync()
       const outputAfterOverflow = binaryFrames
         .slice(frameCountBeforeSnapshotRequest)
+        .values()
         .map((frame) => decodeTerminalStreamFrame(frame))
         .filter((frame) => frame?.opcode === TerminalStreamOpcode.Output)
         .map((frame) => (frame ? decodeTerminalStreamText(frame.payload) : ''))
+        .toArray()
         .join('')
       expect(outputAfterOverflow).toBe('live-after-overflow')
 

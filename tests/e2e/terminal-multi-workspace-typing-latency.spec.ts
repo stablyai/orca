@@ -192,8 +192,10 @@ async function startSustainedLoadInPanes(
   // it once several panes start together.
   const missingReadyPanes = (): number[] =>
     panes
+      .values()
       .map((_, index) => index)
       .filter((index) => !existsSync(sustainedLoadReadyFilePath(readyFileDirectory, runId, index)))
+      .toArray()
   await expect
     .poll(() => missingReadyPanes().length, {
       timeout: 30_000,

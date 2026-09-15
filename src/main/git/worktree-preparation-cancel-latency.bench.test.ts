@@ -133,8 +133,10 @@ describeBench('obsolete preparation cancellation latency', () => {
     const summary = OBSOLETE_COUNTS.map((obsolete) => {
       const pick = (variant: Variant): number[] =>
         samples
+          .values()
           .filter((sample) => sample.variant === variant && sample.obsolete === obsolete)
           .map((sample) => sample.freshCheckoutMs)
+          .toArray()
       const running = median(pick('running'))
       const aborted = median(pick('aborted'))
       return {

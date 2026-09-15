@@ -43,8 +43,10 @@ export function useFloatingTerminalCloseActions({
           )
         : (state.unifiedTabsByWorktree[FLOATING_TERMINAL_WORKTREE_ID] ?? [])
       const items = visibleIds
+        .values()
         .map((visibleId) => resolveGroupTabFromVisibleId(currentGroupTabs, visibleId))
         .filter((item): item is Tab => item !== null && !item.isPinned)
+        .toArray()
       if (items.length === 0) {
         return
       }

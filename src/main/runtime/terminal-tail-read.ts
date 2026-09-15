@@ -133,7 +133,11 @@ export function shouldFallbackToVisibleTerminalSnapshot(
 }
 
 export function visibleNonBlankTerminalLines(lines: string[]): string[] {
-  return lines.map((line) => line.trimEnd()).filter((line) => line.trim().length > 0)
+  return lines
+    .values()
+    .map((line) => line.trimEnd())
+    .filter((line) => line.trim().length > 0)
+    .toArray()
 }
 
 export function buildVisibleSnapshotReadFallback(

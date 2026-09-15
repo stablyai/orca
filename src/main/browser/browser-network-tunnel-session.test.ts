@@ -381,8 +381,10 @@ describe('BrowserNetworkTunnelSession', () => {
     )
     expect(
       responseFrames
+        .values()
         .map(decodeBrowserNetworkTunnelFrame)
         .filter((item) => item?.opcode === BrowserNetworkTunnelOpcode.HalfClose)
+        .toArray()
     ).toHaveLength(1)
   })
 

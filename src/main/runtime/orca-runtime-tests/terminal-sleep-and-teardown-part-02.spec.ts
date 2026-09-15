@@ -265,8 +265,10 @@ describe('OrcaRuntimeService', () => {
     expect(runtime.getTerminalSleepClientEventSnapshot()).toEqual([])
     expect(
       events
+        .values()
         .filter((event) => event.type === 'worktreeTerminalSleepState')
         .map((event) => event.phase)
+        .toArray()
     ).toEqual(['started', 'committed', 'woken'])
   })
 

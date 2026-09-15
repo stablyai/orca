@@ -113,7 +113,8 @@ function buildSparseFolderScopes(args: {
     }
   }
 
-  const meaningfulPaths = [...folderStats.entries()]
+  const meaningfulPaths = folderStats
+    .entries()
     .filter(([relativePath, stats]) => {
       if (!relativePath) {
         return false
@@ -124,6 +125,7 @@ function buildSparseFolderScopes(args: {
       )
     })
     .map(([relativePath]) => relativePath)
+    .toArray()
     .sort(
       (left, right) => left.split('/').length - right.split('/').length || left.localeCompare(right)
     )

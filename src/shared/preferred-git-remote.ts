@@ -2,7 +2,11 @@
 // picking an arbitrary first remote (e.g. a contributor `fork`) fetches the
 // wrong object. Prefer origin, then a lone remote, else refuse to guess.
 export function pickPreferredGitRemote(remotes: readonly string[]): string {
-  const cleaned = remotes.map((line) => line.trim()).filter(Boolean)
+  // Hermes has no iterator helpers, so keep the single pass in flatMap.
+  const cleaned = remotes.flatMap((line) => {
+    const trimmed = line.trim()
+    return trimmed ? [trimmed] : []
+  })
   if (cleaned.includes('origin')) {
     return 'origin'
   }

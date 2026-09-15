@@ -109,8 +109,10 @@ function sidebarAgentRowIdentities(page: Page, agentListSelector: string): Promi
     const list = document.querySelector(selector)
     return list
       ? [...list.children]
+          .values()
           .map((row) => row.querySelector('span[title]')?.getAttribute('title') ?? '')
           .filter((identity) => identity.length > 0)
+          .toArray()
           .sort()
       : []
   }, agentListSelector)

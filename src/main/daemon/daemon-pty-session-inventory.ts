@@ -183,6 +183,10 @@ export abstract class DaemonPtySessionInventory extends DaemonPtyProcessInspecti
       ]
     }
     const shells = ['/bin/zsh', '/bin/bash', '/bin/sh']
-    return shells.filter((s) => existsSync(s)).map((s) => ({ name: basename(s), path: s }))
+    return shells
+      .values()
+      .filter((s) => existsSync(s))
+      .map((s) => ({ name: basename(s), path: s }))
+      .toArray()
   }
 }

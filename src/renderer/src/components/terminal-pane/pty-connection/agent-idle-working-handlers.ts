@@ -100,8 +100,10 @@ export function installAgentIdleWorkingHandlers(session: ConnectPanePtySession):
   session.mirroredRuntimeOwners = new Set(
     isWebTerminalSurfaceTabId(session.deps.tabId)
       ? [session.restoredPtyIdForTransport, session.tab?.ptyId]
+          .values()
           .map((ptyId) => (ptyId ? getRemoteRuntimePtyEnvironmentId(ptyId) : null))
           .filter((environmentId): environmentId is string => Boolean(environmentId))
+          .toArray()
       : []
   )
   session.mirroredRuntimeEnvironmentId = session.mirroredRuntimeOwners.values().next().value ?? null

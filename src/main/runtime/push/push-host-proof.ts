@@ -72,7 +72,11 @@ function validateTranscript(
     ],
     ['hostPublicKey', equalBytes(fields.get('hostPublicKey'), context.hostPublicKey)]
   ]
-  const failed = checks.filter(([, ok]) => !ok).map(([name]) => name)
+  const failed = checks
+    .values()
+    .filter(([, ok]) => !ok)
+    .map(([name]) => name)
+    .toArray()
   if (failed.length > 0) {
     context.onInvalid?.(`transcript:${failed.join('+')}`)
     return false

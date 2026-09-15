@@ -60,7 +60,9 @@ export function linkedReviewHintKey(options?: LinkedReviewHints): string {
     ['gitea', options?.linkedGiteaPR ?? null]
   ] as const
   return hints
+    .values()
     .filter(([, number]) => number !== null)
     .map(([provider, number]) => `${provider}:${number}`)
+    .toArray()
     .join('|')
 }

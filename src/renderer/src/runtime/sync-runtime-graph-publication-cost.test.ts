@@ -198,9 +198,11 @@ describe('mobile session publication cost', () => {
         snapshot
       ])
     )
-    const rebuiltWorktrees = [...afterByWorktree]
+    const rebuiltWorktrees = afterByWorktree
+      .entries()
       .filter(([worktreeId, snapshot]) => snapshot !== beforeByWorktree.get(worktreeId))
       .map(([worktreeId]) => worktreeId)
+      .toArray()
 
     expect(titleReads()).toBeGreaterThan(0)
     expect(titleReads()).toBeLessThan(fullBuildReads / WORKTREES + 1)

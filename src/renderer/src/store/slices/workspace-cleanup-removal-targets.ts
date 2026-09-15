@@ -322,7 +322,8 @@ export function evaluateWorkspaceCleanupPreflight(
       )
     }
   }
-  const sameIdSurvivingHostId = [...(identitiesByWorktreeId.get(target.worktreeId) ?? [])]
+  const sameIdSurvivingHostId = (identitiesByWorktreeId.get(target.worktreeId) ?? new Set<string>())
+    .values()
     .filter((identity) => identity !== candidateIdentity)
     .map((identity) => candidatesByIdentity.get(identity))
     .map((otherCandidate) =>

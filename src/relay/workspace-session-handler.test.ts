@@ -8,11 +8,13 @@ import { encodeJsonRpcFrame, MessageType, type JsonRpcRequest } from './protocol
 
 function decodeJsonFrames(written: Buffer[]): unknown[] {
   return written
+    .values()
     .filter((buf) => buf[0] === MessageType.Regular)
     .map((buf) => {
       const len = buf.readUInt32BE(9)
       return JSON.parse(buf.subarray(13, 13 + len).toString('utf-8')) as unknown
     })
+    .toArray()
 }
 
 async function sendRequest(

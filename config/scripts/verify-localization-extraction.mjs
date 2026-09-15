@@ -31,9 +31,11 @@ function placeholders(value) {
 export function compareExtraction(extractedCatalog, englishCatalog) {
   const extracted = flattenCatalog(extractedCatalog)
   const english = flattenCatalog(englishCatalog)
-  const dynamicDefaults = [...extracted.entries()]
+  const dynamicDefaults = extracted
+    .entries()
     .filter(([, value]) => value.length === 0)
     .map(([key]) => key)
+    .toArray()
   const missingFromEnglish = [...extracted.keys()].filter((key) => !english.has(key))
   const orphans = [...english.keys()].filter((key) => !extracted.has(key))
   const fallbackDrift = []

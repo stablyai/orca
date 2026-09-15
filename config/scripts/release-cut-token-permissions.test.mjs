@@ -71,13 +71,15 @@ function intersectPermissions(granted, requested) {
   const rank = { none: 0, read: 1, write: 2 }
   const scopes = new Set([...Object.keys(granted), ...Object.keys(requested)])
   return Object.fromEntries(
-    [...scopes]
+    scopes
+      .values()
       .map((scope) => {
         const grantedLevel = granted[scope] ?? 'none'
         const requestedLevel = requested[scope] ?? 'none'
         return [scope, rank[grantedLevel] < rank[requestedLevel] ? grantedLevel : requestedLevel]
       })
       .filter(([, level]) => level !== 'none')
+      .toArray()
       .sort(([left], [right]) => left.localeCompare(right))
   )
 }

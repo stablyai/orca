@@ -136,7 +136,12 @@ export class WslSkillInstallFilesystem implements SkillInstallFilesystem {
     return observeSkillPackage(
       path,
       SKILL_PACKAGE_OBSERVATION_LIMITS,
-      new Set(files.filter((file) => file.executable).map((file) => file.path))
+      new Set(
+        files
+          .values()
+          .filter((file) => file.executable)
+          .map((file) => file.path)
+      )
     )
   }
 

@@ -105,7 +105,7 @@ function getPriorityLabel(priority: number): string {
 }
 
 function formatLabels(labels: string[]): string | null {
-  const normalized = labels.map(normalizeInline).filter(Boolean)
+  const normalized = labels.values().map(normalizeInline).filter(Boolean).toArray()
   if (normalized.length === 0) {
     return null
   }

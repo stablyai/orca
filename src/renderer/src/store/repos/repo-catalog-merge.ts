@@ -78,6 +78,7 @@ export function filterSetupsForPrunedRepoRows(
   )
   const prunedOwners = new Set(
     mergedRepos
+      .values()
       .filter((repo) => !survivingOwners.has(`${getRepoExecutionHostId(repo)}:${repo.id}`))
       .map((repo) => `${getRepoExecutionHostId(repo)}:${repo.id}`)
   )

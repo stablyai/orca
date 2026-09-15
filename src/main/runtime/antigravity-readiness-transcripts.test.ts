@@ -240,9 +240,10 @@ describe('Antigravity readiness, decided by captured transcripts', () => {
   })
 
   it('reports how much evidence exists, so a fully skipped run is visible', () => {
-    const missing = TRANSCRIPTS.filter(
-      (transcript) => !existsSync(fixturePath(transcript.name))
-    ).map((transcript) => `${transcript.name}.txt`)
+    const missing = TRANSCRIPTS.values()
+      .filter((transcript) => !existsSync(fixturePath(transcript.name)))
+      .map((transcript) => `${transcript.name}.txt`)
+      .toArray()
     if (missing.length > 0) {
       console.info(
         `Antigravity transcripts: ${TRANSCRIPTS.length - missing.length}/${TRANSCRIPTS.length} captured. Missing: ${missing.join(', ')}`

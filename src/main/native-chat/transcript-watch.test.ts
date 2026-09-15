@@ -524,7 +524,11 @@ describe('subscribeNativeChatTranscript', () => {
 
     // Order is preserved for the appended turns (the seed re-read may also carry
     // the pre-existing u-1, which the assembler dedups downstream).
-    const appendedIds = seen.map((m) => m.id).filter((id) => id !== 'u-1')
+    const appendedIds = seen
+      .values()
+      .map((m) => m.id)
+      .filter((id) => id !== 'u-1')
+      .toArray()
     expect(appendedIds).toEqual(['a-1', 'a-2', 'a-3'])
   })
 

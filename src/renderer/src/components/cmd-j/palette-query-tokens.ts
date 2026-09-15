@@ -60,7 +60,7 @@ export function uniqueCmdJPaletteQueryTokens(query: string): string[] {
 }
 
 export function uniqueNormalizedCmdJPaletteKeywords(values: readonly string[]): string[] {
-  return [...new Set(values.map(normalizeCmdJPaletteQuery).filter(Boolean))]
+  return [...new Set(values.values().map(normalizeCmdJPaletteQuery).filter(Boolean))]
 }
 
 // Why: splitting on non-ASCII would drop CJK and accented words entirely, so a localized

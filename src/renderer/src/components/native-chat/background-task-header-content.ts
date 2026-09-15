@@ -174,10 +174,13 @@ export function backgroundTasksHeaderContent(
       detail: elapsed ?? backgroundTaskStateWord(entry.state)
     }
   }
-  const stateCounts = HEADER_STATE_ORDER.map((state) => ({
-    state,
-    count: group.tasks.filter((entry) => entry.state === state).length
-  })).filter((entry) => entry.count > 0)
+  const stateCounts = HEADER_STATE_ORDER.values()
+    .map((state) => ({
+      state,
+      count: group.tasks.filter((entry) => entry.state === state).length
+    }))
+    .filter((entry) => entry.count > 0)
+    .toArray()
   return {
     segments: [{ text: kindCountLabel(group.kind, count), kind: group.kind }],
     // Done is accounted for in the muted detail but never earns its own emphasised

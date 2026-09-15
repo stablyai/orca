@@ -504,11 +504,13 @@ function createRawFramePeerSession() {
     aggregate,
     errorsFor: (streamId: number) =>
       frames
+        .values()
         .filter(
           (frame) =>
             frame.streamId === streamId && frame.opcode === BrowserNetworkTunnelOpcode.Error
         )
         .map((frame) => new TextDecoder().decode(frame.payload))
+        .toArray()
   }
 }
 

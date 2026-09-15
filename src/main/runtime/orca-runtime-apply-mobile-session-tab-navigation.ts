@@ -31,7 +31,8 @@ export class OrcaRuntimeWithApplyMobileSessionTabNavigation extends OrcaRuntimeW
     if (navigationTargetsClients(navigation)) {
       // Why: follow is live intent; disconnected devices must not inherit stale navigation on reconnect.
       const ids = new Set(
-        [...this.mobileSessionTabListeners]
+        this.mobileSessionTabListeners
+          .values()
           .map((subscription) => subscription.clientNavigationId)
           .filter((id): id is string => Boolean(id))
       )

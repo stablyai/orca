@@ -89,6 +89,7 @@ function getCanonicalPassiveWakeRecords(
 ): SleepingAgentSessionRecord[] {
   const activeClaimKeys = new Set(
     records
+      .values()
       .filter((record) => !isPassiveCompletedHibernationEvidence(record))
       .map(getProviderSessionClaimKey)
   )

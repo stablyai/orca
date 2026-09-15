@@ -81,6 +81,7 @@ export function listVoiceMicrophoneDevices(
   devices: readonly EnumeratedDevice[]
 ): VoiceMicrophoneDevice[] {
   return devices
+    .values()
     .filter(
       (device) =>
         device.kind === 'audioinput' && normalizeMicrophoneDeviceId(device.deviceId) !== null
@@ -89,6 +90,7 @@ export function listVoiceMicrophoneDevices(
       deviceId: device.deviceId.trim(),
       label: device.label.trim() || `Microphone ${index + 1}`
     }))
+    .toArray()
 }
 
 function findSoleDeviceByLabel(

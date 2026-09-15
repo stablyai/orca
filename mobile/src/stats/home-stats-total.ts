@@ -17,7 +17,8 @@ export function totalHomeStats(
   byHost: Record<string, HomeStatsSummary>,
   hostIds: readonly string[]
 ): HomeStatsSummary | null {
-  const hosts = hostIds.filter((id) => id in byHost).map((id) => byHost[id])
+  // Hermes has no iterator helpers, so keep the single pass in flatMap.
+  const hosts = hostIds.flatMap((id) => (id in byHost ? [byHost[id]] : []))
   if (hosts.length === 0) {
     return null
   }

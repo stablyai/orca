@@ -35,8 +35,10 @@ export function createBranchLineTotalInput(
         hostKey: options.wslDistro ?? 'native',
         mergeBase,
         untrackedPaths: entries
+          .values()
           .filter((entry) => entry.area === 'untracked')
-          .map((entry) => entry.path),
+          .map((entry) => entry.path)
+          .toArray(),
         runDiffNumstat: (args, signal) =>
           gitExecFileAsync(args, {
             ...gitReadOptionsForWorktree(worktreePath, options),

@@ -174,7 +174,8 @@ function WorkspaceCleanupDialogContent({
 
   const selectedCandidates = useMemo(() => {
     const byIdentity = new Map(rows.map((row) => [row.identity, row.candidate]))
-    return [...selectedIds]
+    return selectedIds
+      .values()
       .map((identity) => byIdentity.get(identity))
       .filter(
         (candidate): candidate is WorkspaceCleanupCandidate =>
@@ -182,6 +183,7 @@ function WorkspaceCleanupDialogContent({
           canQueueWorkspaceCleanupCandidate(candidate) &&
           !deletingIdentities.has(getWorkspaceCleanupCandidateIdentity(candidate))
       )
+      .toArray()
   }, [deletingIdentities, rows, selectedIds])
   const selectedCount = selectedCandidates.length
 

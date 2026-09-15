@@ -289,10 +289,12 @@ describe('useDashboardPopoutBridge', () => {
       { removedRuntimeEnvironmentIds: new Set() }
     ]
     const republished = profileInputs
+      .values()
       .filter((next) =>
         dashboardSnapshotInputsChanged({ ...previousState, ...next }, previousState)
       )
       .map((next) => Object.keys(next)[0])
+      .toArray()
     expect(republished).toEqual(profileInputs.map((next) => Object.keys(next)[0]))
   })
 

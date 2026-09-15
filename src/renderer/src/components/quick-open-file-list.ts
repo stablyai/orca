@@ -74,10 +74,12 @@ export function getNestedWorktreeExcludePaths(
   repoWorktrees: readonly Worktree[]
 ): string[] {
   return repoWorktrees
+    .values()
     .filter(
       (worktree) => worktree.id !== worktreeId && isNestedWorktreePath(worktreePath, worktree.path)
     )
     .map((worktree) => worktree.path)
+    .toArray()
     .sort()
 }
 

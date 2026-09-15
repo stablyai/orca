@@ -223,7 +223,8 @@ describe('RPC operation cast fence', () => {
 
   it('has no operation module casting, widening or suppressing its way to a type', () => {
     const allowed = new Map(CAST_FENCE_EXCEPTIONS.map((entry) => [entry.file, entry.allows]))
-    const offenders = [...region]
+    const offenders = region
+      .values()
       .map((path) => {
         const file = relative(mobileRoot, path).split(/[/\\]/).join('/')
         const escapes = rpcOperationEscapes(path, sources.get(path) ?? '')
@@ -232,6 +233,7 @@ describe('RPC operation cast fence', () => {
       })
       .filter((entry) => entry.escapes.length > 0)
       .map((entry) => `${entry.file}: ${entry.escapes.join(', ')}`)
+      .toArray()
       .sort()
 
     expect(

@@ -211,9 +211,11 @@ export function usePRCommentsListSelection(
     isCurrentSelectionContext && selectionState.isSelectingForAI && selectableGroupsById.size > 0
   const selectedGroups = useMemo(
     () =>
-      [...selectedGroupIds]
+      selectedGroupIds
+        .values()
         .map((groupId) => selectableGroupsById.get(groupId))
-        .filter((group): group is PRCommentGroup => group !== undefined),
+        .filter((group): group is PRCommentGroup => group !== undefined)
+        .toArray(),
     [selectableGroupsById, selectedGroupIds]
   )
 

@@ -4,9 +4,11 @@ export async function shutdownDegradedFallbackSessions<T extends IPtyProvider>(
   sessionProviders: Map<string, T>,
   fallback: T
 ): Promise<number> {
-  const ids = [...sessionProviders]
+  const ids = sessionProviders
+    .entries()
     .filter(([, provider]) => provider === fallback)
     .map(([id]) => id)
+    .toArray()
   const results = await Promise.allSettled(
     ids.map(async (id) => {
       await fallback.shutdown(id, { immediate: true })

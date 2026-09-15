@@ -25,6 +25,7 @@ export async function resolveRunningAvdNames(
   const names = new Map<string, string>()
   await Promise.all(
     running
+      .values()
       .filter((device) => device.isEmulator)
       .map(async (device) => {
         const out = await runner(sdk.adb, ['-s', device.serial, 'emu', 'avd', 'name'])

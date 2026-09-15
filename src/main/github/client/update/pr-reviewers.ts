@@ -8,7 +8,11 @@ export async function requestPRReviewers(
   prRepo?: GitHubApiRepository | null,
   localGitOptions: LocalGitExecOptions = {}
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  const logins = reviewers.map((reviewer) => reviewer.trim()).filter(Boolean)
+  const logins = reviewers
+    .values()
+    .map((reviewer) => reviewer.trim())
+    .filter(Boolean)
+    .toArray()
   if (logins.length === 0) {
     return { ok: false, error: 'Enter at least one reviewer' }
   }
@@ -49,7 +53,11 @@ export async function removePRReviewers(
   prRepo?: GitHubApiRepository | null,
   localGitOptions: LocalGitExecOptions = {}
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  const logins = reviewers.map((reviewer) => reviewer.trim()).filter(Boolean)
+  const logins = reviewers
+    .values()
+    .map((reviewer) => reviewer.trim())
+    .filter(Boolean)
+    .toArray()
   if (logins.length === 0) {
     return { ok: false, error: 'Enter at least one reviewer' }
   }

@@ -62,9 +62,11 @@ export function projectJournalBatch(input: {
   }
 
   const live = liveItemsById(input.snapshot.items)
-  const items = [...touchedItemIds]
+  const items = touchedItemIds
+    .values()
     .map((itemId) => live.get(itemId))
     .filter((item) => item !== undefined)
+    .toArray()
     .sort((a, b) => a.sequence - b.sequence)
   return {
     ok: true,

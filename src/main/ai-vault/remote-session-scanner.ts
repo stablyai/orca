@@ -307,7 +307,11 @@ function isRemoteSessionInScope(session: AiVaultSession, scopePaths: readonly st
 }
 
 function normalizeRemoteScopePaths(scopePaths: readonly string[]): string[] {
-  return scopePaths.map((scopePath) => scopePath.trim()).filter(Boolean)
+  return scopePaths
+    .values()
+    .map((scopePath) => scopePath.trim())
+    .filter(Boolean)
+    .toArray()
 }
 
 function isAiVaultSession(session: AiVaultSession | null): session is AiVaultSession {

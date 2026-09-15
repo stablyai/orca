@@ -37,8 +37,10 @@ async function startSubscribedTerminal(wait: ControlledWait) {
 
 function endEvents(messages: string[]): unknown[] {
   return messages
+    .values()
     .map((message) => JSON.parse(message).result)
     .filter((result) => result?.type === 'end')
+    .toArray()
 }
 
 describe('terminal multiplex end verdict', () => {

@@ -73,7 +73,12 @@ function normalizeSkillDiscoveryTarget(
   names?: readonly string[],
   sourceKinds?: readonly SkillSourceKind[]
 ): SkillDiscoveryTarget | undefined {
-  const requestedNames = names?.map((name) => name.trim().toLowerCase()).filter(Boolean) ?? []
+  const requestedNames =
+    names
+      ?.values()
+      .map((name) => name.trim().toLowerCase())
+      .filter(Boolean)
+      .toArray() ?? []
   const targetNames = target?.names?.map((name) => name.trim().toLowerCase()).filter(Boolean) ?? []
   const effectiveNames = [...new Set(requestedNames.length > 0 ? requestedNames : targetNames)]
   const effectiveSourceKinds = [

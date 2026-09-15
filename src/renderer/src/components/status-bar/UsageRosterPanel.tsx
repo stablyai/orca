@@ -72,8 +72,10 @@ export function getTightestUsageSection(p: ProviderRateLimits): UsageSection | n
 // The soonest-resetting window summarizes the agent's next reset in one line.
 function soonestResetLabel(sections: UsageSection[], now: number): string | null {
   const resets = sections
+    .values()
     .map((s) => s.window.resetsAt)
     .filter((r): r is number => typeof r === 'number' && Number.isFinite(r))
+    .toArray()
   if (resets.length === 0) {
     return null
   }

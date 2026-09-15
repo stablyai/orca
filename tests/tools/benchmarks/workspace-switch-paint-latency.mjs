@@ -239,17 +239,23 @@ async function main() {
     const viewportH = window.innerHeight
     // Only cards fully inside the viewport are clickable: the list is
     // virtualized, so off-screen rows are unmounted or positioned outside.
-    return [...document.querySelectorAll('[data-worktree-id]')]
-      .filter((el) => {
-        const surface = el.querySelector('[data-worktree-card-surface]')
-        if (!surface) {
-          return false
-        }
-        const r = surface.getBoundingClientRect()
-        return r.height > 0 && r.top >= 0 && r.bottom <= viewportH
-      })
-      .map((el) => el.dataset.worktreeId)
-      .filter((id, i, all) => id && all.indexOf(id) === i)
+    return (
+      document
+        .querySelectorAll('[data-worktree-id]')
+        .values()
+        .filter((el) => {
+          const surface = el.querySelector('[data-worktree-card-surface]')
+          if (!surface) {
+            return false
+          }
+          const r = surface.getBoundingClientRect()
+          return r.height > 0 && r.top >= 0 && r.bottom <= viewportH
+        })
+        .map((el) => el.dataset.worktreeId)
+        .toArray()
+        // Kept as an array pass: the dedupe reads the whole list via filter's third argument.
+        .filter((id, i, all) => id && all.indexOf(id) === i)
+    )
   })
 
   if (worktreeIds.length < 2) {

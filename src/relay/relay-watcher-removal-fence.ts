@@ -103,9 +103,11 @@ export class RelayWatcherRemovalFence {
       isPathInsideOrEqual(rootKey, setupRoot)
     )
     await Promise.all(pending.map(([, setup]) => setup.promise.catch(() => undefined)))
-    const states = [...this.watches.entries()]
+    const states = this.watches
+      .entries()
       .filter(([watchRoot]) => isPathInsideOrEqual(rootKey, watchRoot))
       .map(([, state]) => state)
+      .toArray()
     for (const state of states) {
       emitRelayWatcherTerminalFailure(this.dispatcher, state, 'Remote worktree is being removed')
       state.clients.clear()

@@ -94,9 +94,11 @@ function headers(revision: Revision, scenarios: readonly RecordingScenario[]): M
 }
 
 function moved(before: Map<string, Header>, after: Map<string, Header>): string[] {
-  return [...before]
+  return before
+    .entries()
     .filter(([id, header]) => JSON.stringify(after.get(id)) !== JSON.stringify(header))
     .map(([id]) => id)
+    .toArray()
     .sort()
 }
 

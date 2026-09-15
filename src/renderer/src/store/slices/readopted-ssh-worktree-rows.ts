@@ -12,7 +12,10 @@ function reconcileRows<T extends HostedWorktree>(
   newHostId: ExecutionHostId
 ): T[] {
   const owners = new Set(
-    rows.filter((row) => row.hostId !== oldHostId).map((row) => `${row.id}\0${row.hostId ?? ''}`)
+    rows
+      .values()
+      .filter((row) => row.hostId !== oldHostId)
+      .map((row) => `${row.id}\0${row.hostId ?? ''}`)
   )
   const result: T[] = []
   for (const row of rows) {

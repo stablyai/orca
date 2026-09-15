@@ -55,7 +55,8 @@ export function getComposerRepoWorktreeBranches(
   repoId: string | null
 ): string[] {
   return repoId
-    ? worktrees.filter((worktree) => worktree.repoId === repoId).map((worktree) => worktree.branch)
+    ? // Hermes has no iterator helpers, so keep the single pass in flatMap.
+      worktrees.flatMap((worktree) => (worktree.repoId === repoId ? [worktree.branch] : []))
     : []
 }
 

@@ -174,8 +174,10 @@ describe('disposeClosedEditorTabs', () => {
 
     const disposedPaths = (models: FakeModel[]): string[] =>
       models
+        .values()
         .filter((m) => m.disposed)
         .map((m) => m.path)
+        .toArray()
         .sort()
 
     expect(disposedPaths(batched.models)).toEqual(disposedPaths(perTab.models))
@@ -244,10 +246,13 @@ describe('disposeClosedEditorTabs', () => {
     // boundaries, which is a different predicate from the pre-batch per-prefix `startsWith`.
     disposeClosedEditorTabs(createRegistry(models), [diffTab('tab-1'), diffTab('tab-2')])
 
-    expect(models.filter((m) => m.disposed).map((m) => m.path)).toEqual([
-      closed.originalModelPath,
-      closed.modifiedModelPath
-    ])
+    expect(
+      models
+        .values()
+        .filter((m) => m.disposed)
+        .map((m) => m.path)
+        .toArray()
+    ).toEqual([closed.originalModelPath, closed.modifiedModelPath])
   })
 
   it('is a no-op when nothing closed', () => {

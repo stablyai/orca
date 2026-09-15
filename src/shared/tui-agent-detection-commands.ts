@@ -60,14 +60,14 @@ export function resolveDetectedTuiAgentIds(
   foundCommands: ReadonlySet<string>,
   runtime: TuiAgentDetectionRuntime
 ): TuiAgent[] {
-  const detected = commands
-    .filter(
-      (command) =>
-        !isDetectionUnsupportedInRuntime(command, runtime) &&
-        foundCommands.has(command.cmd) &&
-        (command.requiredCommands ?? []).every((required) => foundCommands.has(required))
-    )
-    .map(({ id }) => id)
+  // Hermes has no iterator helpers, so keep the single pass in flatMap.
+  const detected = commands.flatMap((command) =>
+    !isDetectionUnsupportedInRuntime(command, runtime) &&
+    foundCommands.has(command.cmd) &&
+    (command.requiredCommands ?? []).every((required) => foundCommands.has(required))
+      ? [command.id]
+      : []
+  )
   return [...new Set(detected)]
 }
 

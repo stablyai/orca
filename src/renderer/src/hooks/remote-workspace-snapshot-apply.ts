@@ -104,6 +104,7 @@ function currentRecoveryTabIds(
       ...Object.entries(state.directSshPaneRetryByTabId),
       ...Object.entries(state.directSshLivePtyBindingByTabId)
     ]
+      .values()
       .filter(
         ([tabId, entry]) =>
           targetTabIds.has(tabId) && directSshAuthoritiesEqual(entry.authority, authority)

@@ -101,11 +101,19 @@ describe('SshConnection', () => {
       }
 
       expect(
-        published.filter((e) => e.status === 'reconnecting').map((e) => e.reconnectAttempt)
+        published
+          .values()
+          .filter((e) => e.status === 'reconnecting')
+          .map((e) => e.reconnectAttempt)
+          .toArray()
       ).toEqual([0, 1, 2])
       // src/main/ipc/ssh.ts gates the relay redeploy on reconnectAttempt === 0 at 'connected'.
       expect(
-        published.filter((e) => e.status === 'connected').map((e) => e.reconnectAttempt)
+        published
+          .values()
+          .filter((e) => e.status === 'connected')
+          .map((e) => e.reconnectAttempt)
+          .toArray()
       ).toEqual([0, 0, 0, 0])
     } finally {
       vi.useRealTimers()
@@ -140,7 +148,11 @@ describe('SshConnection', () => {
 
       // Shipped published [0, 1] here; the ladder's reset() keeps the retry at the head instead.
       expect(
-        published.filter((e) => e.status === 'reconnecting').map((e) => e.reconnectAttempt)
+        published
+          .values()
+          .filter((e) => e.status === 'reconnecting')
+          .map((e) => e.reconnectAttempt)
+          .toArray()
       ).toEqual([0, 0])
     } finally {
       vi.useRealTimers()
@@ -314,7 +326,13 @@ describe('SshConnection', () => {
     expect(conn.getState().status).toBe('connected')
     // Shipped published error:'SSH connection attempt was cancelled' over a live connection.
     expect(published.filter((entry) => entry.status === 'error')).toEqual([])
-    expect(published.map((entry) => entry.error).filter(Boolean)).toEqual([])
+    expect(
+      published
+        .values()
+        .map((entry) => entry.error)
+        .filter(Boolean)
+        .toArray()
+    ).toEqual([])
   })
 
   it('rejects a superseded connect without publishing a permanent error', async () => {

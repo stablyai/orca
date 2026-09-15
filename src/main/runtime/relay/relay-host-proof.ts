@@ -100,7 +100,11 @@ function validateTranscript(
       equalBytes(fields.get('resumeRequested'), new Uint8Array([context.resumeRequested ? 1 : 0]))
     ]
   ]
-  const failed = checks.filter(([, ok]) => !ok).map(([name]) => name)
+  const failed = checks
+    .values()
+    .filter(([, ok]) => !ok)
+    .map(([name]) => name)
+    .toArray()
   if (failed.length > 0) {
     context.onInvalid?.(`transcript:${failed.join('+')}`)
     return false

@@ -172,7 +172,8 @@ export async function collectRendererCensus(page, configuredLineageDepth) {
     const sidebar = document.querySelector('[data-worktree-sidebar]')
     const mountedWorktreeIds = [
       ...new Set(
-        [...(sidebar?.querySelectorAll('[data-worktree-id]') ?? [])]
+        (sidebar?.querySelectorAll('[data-worktree-id]') ?? [])
+          .values()
           .map((element) => element.getAttribute('data-worktree-id'))
           .filter(Boolean)
       )

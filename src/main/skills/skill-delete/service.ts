@@ -214,5 +214,9 @@ function sourcePathsFor(
   removedSourcePaths: readonly string[]
 ): string[] {
   const removed = new Set(removedSourcePaths)
-  return moves.filter((move) => removed.has(move.sourcePath)).map((move) => move.sourcePath)
+  return moves
+    .values()
+    .filter((move) => removed.has(move.sourcePath))
+    .map((move) => move.sourcePath)
+    .toArray()
 }

@@ -314,9 +314,10 @@ describe('STA-3107: sidebar agent rows survive a paired-client sleep/wake reconn
   it('the erased rows are exactly the panes whose status only the client wrote', () => {
     const store = seedPairedClientStore()
     const reconnected = runSleepWakeReconnect(store, LONG_SLEEP_MS)
-    const missing = PANES.map(mirrorPaneKey).filter(
-      (paneKey) => !reconnected.rowPaneKeys.includes(paneKey)
-    )
+    const missing = PANES.values()
+      .map(mirrorPaneKey)
+      .filter((paneKey) => !reconnected.rowPaneKeys.includes(paneKey))
+      .toArray()
 
     // Pins the causal boundary: host-authoritative panes are republished with a
     // fresh host timestamp and are never at risk; only client-owned panes are.

@@ -2659,8 +2659,10 @@ export class SshRelaySession {
     const hostSession = this.store.getWorkspaceSession?.(toSshExecutionHostId(this.targetId))
     const candidates = [session, hostSession]
     const currentTabIds = candidates
+      .values()
       .map((candidate) => findTerminalTabIdForLeaf(candidate, leafId))
       .filter((tabId): tabId is string => Boolean(tabId && isValidTerminalTabId(tabId)))
+      .toArray()
     const tombstoneMatches = (tabId: string): boolean => {
       const paneKey = makePaneKey(tabId, leafId)
       return candidates.some((candidate) => {

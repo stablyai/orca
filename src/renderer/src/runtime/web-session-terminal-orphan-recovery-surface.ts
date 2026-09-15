@@ -294,6 +294,7 @@ export function buildTopologyCandidates(
   return [
     ...new Map(
       candidates
+        .values()
         .filter((surface) => claimedTabIds.has(surface.tabId))
         .map((surface) => [surface.localTab.id, surface.localTab] as const)
     ).values()

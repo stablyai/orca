@@ -111,7 +111,11 @@ function attach(
 }
 
 const closedPageIds = (commands: readonly BrowserClientHostCommandEvent[]): string[] =>
-  commands.filter((event) => event.command.type === 'closePage').map((event) => event.browserPageId)
+  commands
+    .values()
+    .filter((event) => event.command.type === 'closePage')
+    .map((event) => event.browserPageId)
+    .toArray()
 
 describe('adoptRuntimeBrowserClientPagesFromInventory', () => {
   it('republishes a predecessor page under this runtime, inactive and still naming its workspace', async () => {

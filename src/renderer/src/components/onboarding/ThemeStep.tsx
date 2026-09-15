@@ -314,5 +314,9 @@ function humanFields(diff: Partial<GlobalSettings>): string[] {
       keys: ['terminalMacOptionAsAlt']
     }
   ]
-  return groups.filter(({ keys }) => keys.some((k) => k in diff)).map(({ label }) => label)
+  return groups
+    .values()
+    .filter(({ keys }) => keys.some((k) => k in diff))
+    .map(({ label }) => label)
+    .toArray()
 }

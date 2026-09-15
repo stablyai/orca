@@ -151,8 +151,10 @@ async function requestSnapshotReply(options: {
   return {
     start: decodeTerminalStreamJson<SnapshotStartPayload>(start.payload)!,
     chunks: replyFrames
+      .values()
       .filter((frame) => frame?.opcode === TerminalStreamOpcode.SnapshotChunk)
       .map((frame) => (frame ? decodeTerminalStreamText(frame.payload) : ''))
+      .toArray()
       .join('')
   }
 }

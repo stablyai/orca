@@ -110,8 +110,10 @@ function trackEventListenerCleanup(): () => {
     added: registrations.length,
     removed: registrations.filter((registration) => registration.removed).length,
     unreleased: registrations
+      .values()
       .filter((registration) => !registration.removed)
       .map((registration) => registration.type)
+      .toArray()
   })
 }
 

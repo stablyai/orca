@@ -224,9 +224,11 @@ term.onData((data) => {
   all += data
   // oxlint-disable-next-line no-control-regex -- terminal escape sequences require control chars
   const mode2031ToggleRe = /\x1b\[\?([0-9;]+)([hl])/g
-  const toggles = [...data.matchAll(mode2031ToggleRe)]
+  const toggles = data
+    .matchAll(mode2031ToggleRe)
     .filter((m) => m[1].split(';').some((p) => Number(p) === 2031))
     .map((m) => `?2031${m[2]}`)
+    .toArray()
   log(
     'PTY->SCANNER',
     `chunk#${seq} len=${data.length}${toggles.length ? ` toggles=[${toggles.join(',')}]` : ''}`,

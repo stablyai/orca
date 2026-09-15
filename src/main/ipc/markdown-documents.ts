@@ -83,8 +83,10 @@ export function markdownDocumentsFromRelativePaths(
   relativePaths: string[]
 ): MarkdownDocument[] {
   return relativePaths
+    .values()
     .map((relativePath) => markdownDocumentFromRelativePath(rootPath, relativePath))
     .filter((document): document is MarkdownDocument => document !== null)
+    .toArray()
     .sort((a, b) => a.relativePath.localeCompare(b.relativePath))
 }
 

@@ -467,8 +467,10 @@ describe('useIpcEvents App-lifetime lifecycle', () => {
 
     firstCleanup()
     const ipcCleanupOrder = cleanupOrder
+      .values()
       .filter((entry) => entry.startsWith('ipc.') && entry !== 'ipc.dispose')
       .map((entry) => entry.slice('ipc.'.length))
+      .toArray()
     expect(ipcCleanupOrder).toEqual(EXPECTED_CALLBACK_REGISTRATION_SEQUENCE)
     expect(cleanupOrder.slice(0, 6)).toEqual([
       'agent.disposeAsyncState',

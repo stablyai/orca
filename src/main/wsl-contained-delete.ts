@@ -82,10 +82,12 @@ export function containedDeleteCommand(
 ): string[] | null {
   const targetPath = posix.resolve(target.linuxPath)
   const matchedRoot = approvedRoots
+    .values()
     .map(parsePath)
     .filter((root): root is WslPathInfo => root?.distro === target.distro)
     .map((root) => posix.resolve(root.linuxPath))
     .filter((root) => isInside(root, targetPath) && root !== '/')
+    .toArray()
     .sort((left, right) => right.length - left.length)[0]
   if (!matchedRoot) {
     return null

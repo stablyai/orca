@@ -221,6 +221,7 @@ export function mergeHermesOutputAndSessionRunRefs(
   return [
     ...mergedOutputRefs,
     ...sessionRefs
+      .values()
       .filter((_, index) => !usedSessionRunIndexes.has(index))
       .map((sessionRef) => ({
         id: sessionRef.id,

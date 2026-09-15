@@ -15,8 +15,10 @@ export function getPinnedSectionWorktrees(
   const included = new Set<string>()
   const seen = new Set<string>()
   const pendingWorktrees = worktrees
+    .values()
     .filter((worktree) => worktree.isPinned)
     .map(({ id, hostId }) => ({ id, hostId }))
+    .toArray()
 
   while (pendingWorktrees.length > 0) {
     const current = pendingWorktrees.pop()

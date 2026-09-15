@@ -260,8 +260,10 @@ describe('PtyHandler negotiated source publication', () => {
 
   function subscriberExitFrames(subscriberWrites: Buffer[]): Notification[] {
     return subscriberWrites
+      .values()
       .map(notification)
       .filter((frame): frame is Notification => frame?.method === 'pty.exit')
+      .toArray()
   }
 
   it('never re-delivers the exit to subscribers when a cancel retires the record', async () => {
@@ -769,7 +771,11 @@ describe('PtyHandler negotiated source publication', () => {
     expect(detached).toEqual([saturatedId])
     expect(detached).not.toContain(healthyId)
     expect(
-      healthyWrites.map(notification).filter((frame) => frame?.method === 'pty.data')
+      healthyWrites
+        .values()
+        .map(notification)
+        .filter((frame) => frame?.method === 'pty.data')
+        .toArray()
     ).toHaveLength(1)
     expect(sourceDataFrames()).toHaveLength(1)
     expect(publication.getDebugSnapshot()).toMatchObject({ sendCommitted: 1 })

@@ -52,9 +52,10 @@ const OWNERS_WITH_EMPTY: [string, string][] = [
   [WINDOWS_ROOT, 'shared'],
   [OPAQUE_REMOTE_ROOT, 'claude']
 ]
-const OWNERS_WITHOUT_EMPTY: [string, string][] = OWNERS_WITH_EMPTY.filter(
-  ([, owner]) => owner !== ''
-).map(([root, owner]) => (root === '/a' ? [root, 'shared'] : [root, owner]))
+const OWNERS_WITHOUT_EMPTY: [string, string][] = OWNERS_WITH_EMPTY.values()
+  .filter(([, owner]) => owner !== '')
+  .map(([root, owner]): [string, string] => (root === '/a' ? [root, 'shared'] : [root, owner]))
+  .toArray()
 
 describe('skillMatchesAgent', () => {
   it('matches the legacy agent list across sparse, repeated, and opaque roots', () => {

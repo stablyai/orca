@@ -93,9 +93,11 @@ describe('global fetch call-site audit (main, cli, relay)', () => {
   it('keeps every global-fetch line audited with its expected count', () => {
     const found = globalFetchLineCounts(join(__dirname, '..'))
 
-    const drifted = [...found]
+    const drifted = found
+      .entries()
       .filter(([file, count]) => AUDITED_GLOBAL_FETCH_LINES.get(file) !== count)
       .map(([file, count]) => `${file}: found ${count} line(s)`)
+      .toArray()
       .sort()
     expect(
       drifted,

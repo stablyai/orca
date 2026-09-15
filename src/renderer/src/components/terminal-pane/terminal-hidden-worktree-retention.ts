@@ -216,5 +216,9 @@ export function selectForceParkEvictableTabIds<T extends { id: string }>(
   tabs: readonly T[],
   isExempt: (tab: T) => boolean
 ): string[] {
-  return tabs.filter((tab) => !isExempt(tab)).map((tab) => tab.id)
+  return tabs
+    .values()
+    .filter((tab) => !isExempt(tab))
+    .map((tab) => tab.id)
+    .toArray()
 }

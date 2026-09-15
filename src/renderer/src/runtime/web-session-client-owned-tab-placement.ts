@@ -228,6 +228,7 @@ export function reconcileClientOwnedTabPlacement(
   // pending-create groups may stay empty.
   const emptiedGroupIds = new Set(
     reconciled
+      .values()
       .filter(
         (group) =>
           group.tabOrder.length === 0 &&

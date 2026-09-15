@@ -290,11 +290,13 @@ export function buildAutomationHostCatalog(
       savedRuntimeEnvironmentIds: new Set(input.runtimes.map((runtime) => runtime.environmentId)),
       orphanSettledAuthorityKeys: new Set(
         contexts
+          .values()
           .filter((ctx) => ctx.orphanCount !== undefined)
           .map((ctx) => automationAuthorityCatalogKey(ctx.authority))
       ),
       unavailableAuthorityKeys: new Set(
         contexts
+          .values()
           .filter((ctx) => ctx.authorityHealth === 'unavailable')
           .map((ctx) => automationAuthorityCatalogKey(ctx.authority))
       )

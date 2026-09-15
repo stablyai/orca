@@ -64,8 +64,10 @@ export function useGitLabReviewActions(
         return
       }
       const reviewerIds = nextReviewers
+        .values()
         .map((reviewer) => reviewer.id)
         .filter((id): id is number => typeof id === 'number')
+        .toArray()
       if (reviewerIds.length !== nextReviewers.length) {
         toast.error(
           translate(

@@ -260,8 +260,9 @@ export function getPluginHostMethodSpec(name: string): PluginHostMethodSpec | nu
 
 /** Actions sandboxed panels may request over the postMessage bridge. Derived
  *  from the spec table so the panel surface can never drift from the gate. */
-export const PLUGIN_PANEL_ACTIONS = PLUGIN_HOST_API_V0.filter((entry) => entry.panel).map(
-  (entry) => entry.name
+// Hermes has no iterator helpers, so keep the single pass in flatMap.
+export const PLUGIN_PANEL_ACTIONS = PLUGIN_HOST_API_V0.flatMap((entry) =>
+  entry.panel ? [entry.name] : []
 )
 
 export function isPluginPanelAction(action: string): boolean {

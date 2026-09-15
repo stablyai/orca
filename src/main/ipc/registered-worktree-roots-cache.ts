@@ -101,7 +101,10 @@ async function pruneCreatedWorktreeRoots(
   localRepoIds: Set<string>
 ): Promise<void> {
   const listedByRepo = new Map(
-    results.filter((result) => !result.listingFailed).map((r) => [r.repoId, new Set(r.roots)])
+    results
+      .values()
+      .filter((result) => !result.listingFailed)
+      .map((r) => [r.repoId, new Set(r.roots)] as const)
   )
   const probes: Promise<void>[] = []
   for (const [repoId, roots] of createdWorktreeRootsByRepo) {

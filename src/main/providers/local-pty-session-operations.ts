@@ -152,7 +152,11 @@ export async function getLocalPtyProfiles(): Promise<{ name: string; path: strin
     return profiles
   }
   const shells = ['/bin/zsh', '/bin/bash', '/bin/sh']
-  return shells.filter((s) => existsSync(s)).map((s) => ({ name: basename(s), path: s }))
+  return shells
+    .values()
+    .filter((s) => existsSync(s))
+    .map((s) => ({ name: basename(s), path: s }))
+    .toArray()
 }
 
 export function onLocalPtyData(callback: DataCallback): () => void {

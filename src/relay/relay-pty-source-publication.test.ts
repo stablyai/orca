@@ -286,10 +286,18 @@ describe('RelayPtySourcePublication', () => {
     harness.publication.publish('pty-1', { data: 'next' }, false)
 
     expect(
-      replacementWrites.map(notification).filter((frame) => frame?.method === 'pty.data')
+      replacementWrites
+        .values()
+        .map(notification)
+        .filter((frame) => frame?.method === 'pty.data')
+        .toArray()
     ).toHaveLength(0)
     expect(
-      legacyWrites.map(notification).filter((frame) => frame?.method === 'pty.data')
+      legacyWrites
+        .values()
+        .map(notification)
+        .filter((frame) => frame?.method === 'pty.data')
+        .toArray()
     ).toHaveLength(2)
   })
 
@@ -364,11 +372,19 @@ describe('RelayPtySourcePublication', () => {
     expect(detached).toEqual([saturatedId])
     expect(detached).not.toContain(healthyId)
     expect(
-      saturatedWrites.map(notification).filter((frame) => frame?.method === 'pty.data')
+      saturatedWrites
+        .values()
+        .map(notification)
+        .filter((frame) => frame?.method === 'pty.data')
+        .toArray()
     ).toHaveLength(1)
     expect(heldSettlements).toHaveLength(1)
     expect(
-      healthyWrites.map(notification).filter((frame) => frame?.method === 'pty.data')
+      healthyWrites
+        .values()
+        .map(notification)
+        .filter((frame) => frame?.method === 'pty.data')
+        .toArray()
     ).toHaveLength(1)
     expect(
       harness.writes.map(notification).filter((frame) => frame?.method === 'pty.data')
@@ -604,7 +620,11 @@ describe('RelayPtySourcePublication', () => {
     })
     activationSettlements[0]({ ok: true })
     expect(
-      recoveredWrites.map(notification).filter((frame) => frame?.method === 'pty.data')
+      recoveredWrites
+        .values()
+        .map(notification)
+        .filter((frame) => frame?.method === 'pty.data')
+        .toArray()
     ).toHaveLength(0)
     expect(
       recoveredWrites.map(notification).find((frame) => frame?.method === 'pty.recoveryComplete')
@@ -714,7 +734,11 @@ describe('RelayPtySourcePublication', () => {
     expect(harness.publication.publish('pty-1', { data: 'ijkl' }, false)).toBe(false)
 
     expect(
-      recoveredWrites.map(notification).filter((frame) => frame?.method === 'pty.recoveryComplete')
+      recoveredWrites
+        .values()
+        .map(notification)
+        .filter((frame) => frame?.method === 'pty.recoveryComplete')
+        .toArray()
     ).toHaveLength(0)
     const recoveredData = recoveredWrites
       .map(notification)
@@ -740,9 +764,11 @@ describe('RelayPtySourcePublication', () => {
     recoverySettlements[0]({ ok: true })
     expect(
       recoveredWrites
+        .values()
         .map(notification)
         .filter((frame): frame is NonNullable<typeof frame> => frame !== null)
         .map((frame) => frame.method)
+        .toArray()
     ).toEqual(['pty.deliveryCanceled', 'pty.data', 'pty.recoveryComplete'])
     dispatcher!.feedClient(
       recoveredClientId,
@@ -769,17 +795,21 @@ describe('RelayPtySourcePublication', () => {
     expect(harness.publication.publish('pty-1', { data: 'ijkl' }, false)).toBe(false)
     expect(
       recoveredWrites
+        .values()
         .map(notification)
         .filter((frame): frame is NonNullable<typeof frame> => frame !== null)
         .map((frame) => frame.method)
+        .toArray()
     ).toEqual(['pty.deliveryCanceled', 'pty.data', 'pty.recoveryComplete'])
 
     completionSettlements[0]({ ok: true })
     expect(
       recoveredWrites
+        .values()
         .map(notification)
         .filter((frame): frame is NonNullable<typeof frame> => frame !== null)
         .map((frame) => frame.method)
+        .toArray()
     ).toEqual(['pty.deliveryCanceled', 'pty.data', 'pty.recoveryComplete', 'pty.data'])
     expect(recoveredWrites.map(notification).at(-1)?.params).toMatchObject({
       data: 'ijkl',

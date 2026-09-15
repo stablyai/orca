@@ -87,12 +87,14 @@ function parseCookiePairs(cookie: string): { name: string; value: string }[] {
   // Why: Chromium cookie storage exports are often copied as `name:"value"`,
   // not as an HTTP `Cookie` header. Accept both formats to avoid credential UX traps.
   const quotedCookiePairPattern = /(?:^|[;\s])([A-Za-z0-9_.-]+)\s*:\s*["']([^"']+)["']/g
-  const quotedPairs = [...cookie.matchAll(quotedCookiePairPattern)]
+  const quotedPairs = cookie
+    .matchAll(quotedCookiePairPattern)
     .map((match) => {
       const [, name = '', value = ''] = match
       return { name: name.trim(), value: value.trim() }
     })
     .filter((pair) => pair.name && pair.value)
+    .toArray()
   return [...headerPairs, ...quotedPairs]
 }
 

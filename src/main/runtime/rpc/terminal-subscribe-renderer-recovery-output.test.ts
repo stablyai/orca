@@ -86,17 +86,21 @@ describe('terminal subscribe renderer recovery output ordering', () => {
 
     await vi.waitFor(() => {
       const output = binaryFrames
+        .values()
         .map((bytes) => decodeTerminalStreamFrame(bytes))
         .filter((frame) => frame?.opcode === TerminalStreamOpcode.Output)
         .map((frame) => decodeTerminalStreamText(frame!.payload))
+        .toArray()
         .join('')
       expect(output).toBe('duringafter')
     })
 
     const snapshot = binaryFrames
+      .values()
       .map((bytes) => decodeTerminalStreamFrame(bytes))
       .filter((frame) => frame?.opcode === TerminalStreamOpcode.SnapshotChunk)
       .map((frame) => decodeTerminalStreamText(frame!.payload))
+      .toArray()
       .join('')
     expect(snapshot).toBe('restored history')
     expect(rendererSerializeCalls).toBe(2)

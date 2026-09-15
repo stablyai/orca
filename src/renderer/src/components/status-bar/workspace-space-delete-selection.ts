@@ -46,6 +46,8 @@ export function getVisibleDeletableWorkspaceIdentities(
   isWorktreeDeleting: (row: WorkspaceSpaceWorktree) => boolean = () => false
 ): string[] {
   return rows
+    .values()
     .filter((row) => row.canDelete && row.status === 'ok' && !isWorktreeDeleting(row))
     .map(getWorkspaceSpaceWorktreeIdentity)
+    .toArray()
 }

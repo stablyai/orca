@@ -6,9 +6,11 @@ export function listProviderSessionIds(
   sessionProviders: ReadonlyMap<string, IPtyProvider>,
   provider: IPtyProvider
 ): string[] {
-  return [...sessionProviders]
+  return sessionProviders
+    .entries()
     .filter(([, mappedProvider]) => mappedProvider === provider)
     .map(([id]) => id)
+    .toArray()
 }
 
 /** Attach-only session adoption: refuses the in-process fallback route. A

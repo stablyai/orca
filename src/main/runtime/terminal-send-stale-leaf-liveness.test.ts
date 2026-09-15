@@ -323,6 +323,7 @@ function makeOrchestrationDbStub(toHandle: () => string) {
   ): Set<string> =>
     new Set(
       rows
+        .values()
         .filter(
           (row) =>
             ids.includes(row.id) &&
@@ -364,11 +365,13 @@ function makeOrchestrationDbStub(toHandle: () => string) {
   const releasePendingMailboxPointerForPty = vi.fn((ptyId: string) => {
     const reservedIds = new Set(
       rows
+        .values()
         .filter((row) => row.pointer_enter_pending === 1 && row.pointer_pty_id === ptyId)
         .map((row) => row.id)
     )
     const pendingIds = new Set(
       rows
+        .values()
         .filter((row) => row.pointer_enter_pending > 0 && row.pointer_pty_id === ptyId)
         .map((row) => row.id)
     )
@@ -422,6 +425,7 @@ function makeOrchestrationDbStub(toHandle: () => string) {
       getPendingMailboxPointerHandles: () => [
         ...new Set(
           rows
+            .values()
             .filter((row) => row.read === 0 && row.pointer_enter_pending === 1)
             .map((row) => row.to_handle)
         )

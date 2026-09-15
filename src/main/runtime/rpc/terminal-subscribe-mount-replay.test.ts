@@ -80,9 +80,11 @@ describe('terminal subscribe mount replay', () => {
     await vi.waitFor(() =>
       expect(
         binaryFrames
+          .values()
           .map((bytes) => decodeTerminalStreamFrame(bytes))
           .filter((frame) => frame?.opcode === TerminalStreamOpcode.SnapshotChunk)
           .map((frame) => decodeTerminalStreamText(frame!.payload))
+          .toArray()
           .join('')
       ).toContain('idle prompt $ ')
     )
@@ -156,17 +158,21 @@ describe('terminal subscribe mount replay', () => {
     await vi.waitFor(() =>
       expect(
         binaryFrames
+          .values()
           .map((bytes) => decodeTerminalStreamFrame(bytes))
           .filter((frame) => frame?.opcode === TerminalStreamOpcode.SnapshotChunk)
           .map((frame) => decodeTerminalStreamText(frame!.payload))
+          .toArray()
           .join('')
       ).toContain('raced idle prompt $ ')
     )
     expect(
       binaryFrames
+        .values()
         .map((bytes) => decodeTerminalStreamFrame(bytes))
         .filter((frame) => frame?.opcode === TerminalStreamOpcode.SnapshotChunk)
         .map((frame) => decodeTerminalStreamText(frame!.payload))
+        .toArray()
         .join('')
     ).not.toContain('suffix-only redraw')
     expect(runtime.waitForRendererTerminalSerializer).toHaveBeenCalledWith(
@@ -252,16 +258,20 @@ describe('terminal subscribe mount replay', () => {
     expect(binaryFrames.length).toBeGreaterThan(0)
     expect(
       binaryFrames
+        .values()
         .map((bytes) => decodeTerminalStreamFrame(bytes))
         .filter((frame) => frame?.opcode === TerminalStreamOpcode.SnapshotChunk)
         .map((frame) => decodeTerminalStreamText(frame!.payload))
+        .toArray()
         .join('')
     ).toContain('late suffix-only redraw')
     expect(
       binaryFrames
+        .values()
         .map((bytes) => decodeTerminalStreamFrame(bytes))
         .filter((frame) => frame?.opcode === TerminalStreamOpcode.SnapshotChunk)
         .map((frame) => decodeTerminalStreamText(frame!.payload))
+        .toArray()
         .join('')
     ).not.toContain('delayed idle prompt $ ')
     await vi.advanceTimersByTimeAsync(1)
@@ -270,9 +280,11 @@ describe('terminal subscribe mount replay', () => {
 
     expect(
       binaryFrames
+        .values()
         .map((bytes) => decodeTerminalStreamFrame(bytes))
         .filter((frame) => frame?.opcode === TerminalStreamOpcode.SnapshotChunk)
         .map((frame) => decodeTerminalStreamText(frame!.payload))
+        .toArray()
         .join('')
     ).toContain('delayed idle prompt $ ')
 
@@ -349,9 +361,11 @@ describe('terminal subscribe mount replay', () => {
     await vi.waitFor(() =>
       expect(
         binaryFrames
+          .values()
           .map((bytes) => decodeTerminalStreamFrame(bytes))
           .filter((frame) => frame?.opcode === TerminalStreamOpcode.SnapshotChunk)
           .map((frame) => decodeTerminalStreamText(frame!.payload))
+          .toArray()
           .join('')
       ).toContain('late leaf prompt $ ')
     )

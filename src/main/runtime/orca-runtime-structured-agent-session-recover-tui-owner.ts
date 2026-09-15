@@ -97,8 +97,10 @@ export class OrcaRuntimeWithStructuredAgentSessionRecoverTuiOwner extends OrcaRu
           })
         )
         const recoveredCandidates = candidateEvaluations
+          .values()
           .filter(({ evaluation }) => evaluation.matches)
           .map(({ pty, owner }) => ({ pty, owner }))
+          .toArray()
         const recovered = recoveredCandidates.length === 1 ? recoveredCandidates[0] : null
         if (!recovered) {
           console.warn('[structured-tui-recovery] claim mismatch', {

@@ -51,6 +51,7 @@ function getBlockingUntrackedStatusEntries(
 ): string[] {
   const ignored = new Set(
     ignoredUntrackedPaths
+      .values()
       .map((entry) =>
         entry
           .trim()

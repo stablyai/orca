@@ -230,14 +230,15 @@ export function createMockAccountsSnapshot() {
       claudeTarget: { runtime: 'host' as const, wslDistro: null },
       codexTarget: { runtime: 'host' as const, wslDistro: null },
       inactiveClaudeAccounts: [],
-      inactiveCodexAccounts: CODEX_ACCOUNTS.filter(
-        (account) => account.id !== activeCodexAccountId
-      ).map((account) => ({
-        accountId: account.id,
-        rateLimits: codexLimitsFor(account.id),
-        updatedAt: codexUsageByAccount.get(account.id)?.updatedAt ?? fixtureStartedAt,
-        isFetching: false
-      }))
+      inactiveCodexAccounts: CODEX_ACCOUNTS.values()
+        .filter((account) => account.id !== activeCodexAccountId)
+        .map((account) => ({
+          accountId: account.id,
+          rateLimits: codexLimitsFor(account.id),
+          updatedAt: codexUsageByAccount.get(account.id)?.updatedAt ?? fixtureStartedAt,
+          isFetching: false
+        }))
+        .toArray()
     }
   }
 }

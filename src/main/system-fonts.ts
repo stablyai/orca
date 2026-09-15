@@ -129,6 +129,7 @@ function uniqueSorted(values: (string | undefined)[]): string[] {
   return Array.from(
     new Set(
       values
+        .values()
         .map((value) => value?.trim() ?? '')
         .filter((value) => value.length > 0 && !value.startsWith('.'))
     )

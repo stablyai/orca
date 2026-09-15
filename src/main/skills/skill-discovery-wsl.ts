@@ -23,7 +23,11 @@ export function buildWslSkillDiscoveryCommand(
   roots: readonly SkillScanRoot[],
   names?: readonly string[]
 ): string {
-  const normalizedNames = names?.map((name) => name.trim().toLowerCase()).filter(Boolean)
+  const normalizedNames = names
+    ?.values()
+    .map((name) => name.trim().toLowerCase())
+    .filter(Boolean)
+    .toArray()
   const nameFilterHelpers: string[] = []
   const nameFilterBody: string[] = []
   if (normalizedNames?.length) {

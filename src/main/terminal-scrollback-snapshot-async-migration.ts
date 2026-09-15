@@ -47,8 +47,10 @@ export async function deleteRemovedTerminalScrollbackSnapshotsAsync(
   }
   const nextRefs = collectTerminalScrollbackSnapshotRefs(next)
   await Promise.all(
-    [...collectTerminalScrollbackSnapshotRefs(prior)]
+    collectTerminalScrollbackSnapshotRefs(prior)
+      .values()
       .filter((ref) => !nextRefs.has(ref))
       .map((ref) => deleteTerminalScrollbackSnapshot(ref, storage))
+      .toArray()
   )
 }

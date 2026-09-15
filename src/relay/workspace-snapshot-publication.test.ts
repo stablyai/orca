@@ -19,6 +19,7 @@ function decodeNotifications(
   written: Buffer[]
 ): { method: string; params: Record<string, unknown> }[] {
   return written
+    .values()
     .filter((buf) => buf[0] === MessageType.Regular)
     .map((buf) => {
       const len = buf.readUInt32BE(9)
@@ -32,6 +33,7 @@ function decodeNotifications(
         typeof msg.method === 'string'
     )
     .map((msg) => ({ method: msg.method, params: msg.params ?? {} }))
+    .toArray()
 }
 
 /** A session shaped like the report: several worktrees, each with a handful of tabs. */

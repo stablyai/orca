@@ -243,6 +243,7 @@ export function pendingSendsAsMessages(
     gluedCandidateRows(existingMessages, stillVisible, matchingNativeChatUserRows)
   )
   return pending
+    .values()
     .filter((entry, index) => {
       if (!exactVisible[index]) {
         return false
@@ -260,6 +261,7 @@ export function pendingSendsAsMessages(
       timestamp: entry.sentAt,
       source: 'scrape' as const
     }))
+    .toArray()
 }
 
 /** True when a message id was minted for an optimistic pending send. */

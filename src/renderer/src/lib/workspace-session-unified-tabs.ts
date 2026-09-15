@@ -38,6 +38,7 @@ function buildPersistedGroupsForWorktree(tabs: Tab[], groups: TabGroup[]): TabGr
   }
 
   return groups
+    .values()
     .map((group) => {
       const orderedTabIds = new Set([
         ...group.tabOrder.filter((tabId) => validTabIds.has(tabId)),
@@ -54,6 +55,7 @@ function buildPersistedGroupsForWorktree(tabs: Tab[], groups: TabGroup[]): TabGr
       }
     })
     .filter((group) => group.tabOrder.length > 0)
+    .toArray()
 }
 
 export function buildPersistedUnifiedTabSessionData(

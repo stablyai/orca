@@ -140,6 +140,7 @@ describe('OrcaRuntimeService', () => {
       },
       getProjects: () =>
         repos
+          .values()
           .map((repo) => {
             const upstream = repo.upstream as { owner: string; repo: string } | undefined
             if (!upstream) {
@@ -155,7 +156,8 @@ describe('OrcaRuntimeService', () => {
               updatedAt: repo.addedAt
             }
           })
-          .filter(Boolean) as never,
+          .filter(Boolean)
+          .toArray() as never,
       getProjectHostSetups: () =>
         repos.map((repo) => {
           const upstream = repo.upstream as { owner: string; repo: string } | undefined

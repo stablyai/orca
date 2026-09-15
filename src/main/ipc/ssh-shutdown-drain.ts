@@ -64,6 +64,7 @@ async function settleTasksWithinMs(
 function sshShutdownTasks(targetIds: readonly string[]): SshShutdownTask[] {
   return [
     ...targetIds
+      .values()
       .filter((targetId) => activeSessions.has(targetId))
       .map((targetId) => ({
         targetId,

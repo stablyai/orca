@@ -51,10 +51,12 @@ describe('runtime git status admission', () => {
       expect(response.ok).toBe(true)
     }
 
-    expect(events.filter((event) => event.phase === 'grant').map((event) => event.tier)).toEqual([
-      'background',
-      'interactive',
-      'status'
-    ])
+    expect(
+      events
+        .values()
+        .filter((event) => event.phase === 'grant')
+        .map((event) => event.tier)
+        .toArray()
+    ).toEqual(['background', 'interactive', 'status'])
   })
 })

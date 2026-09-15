@@ -104,7 +104,11 @@ export function projectWslSkillDiscovery(
   sourceKinds?: readonly SkillSourceKind[],
   names?: readonly string[]
 ): SkillDiscoveryResult {
-  const normalizedNames = names?.map((name) => name.trim().toLowerCase()).filter(Boolean)
+  const normalizedNames = names
+    ?.values()
+    .map((name) => name.trim().toLowerCase())
+    .filter(Boolean)
+    .toArray()
   const expectedNames = normalizedNames?.length ? new Set(normalizedNames) : undefined
   const skillsByCanonicalPath = new Map<string, DiscoveredSkill>()
   for (const { canonicalSkillFilePath, skill } of observation.rows) {

@@ -320,6 +320,7 @@ export function useFileDeletion({
         setSelectedPaths(
           new Set(
             nodes
+              .values()
               .filter(
                 (node) =>
                   !deletedRoots.some((deleted) => isPathEqualOrDescendant(node.path, deleted.path))

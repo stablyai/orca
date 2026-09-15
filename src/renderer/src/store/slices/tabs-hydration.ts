@@ -97,7 +97,8 @@ function hydrateUnifiedFormat(
         .filter((tab) => tab.aiVaultTitle)
         .map((tab) => [tab.id, tab.aiVaultTitle!])
     )
-    const hydratedTabs = [...tabs]
+    const hydratedTabs = tabs
+      .values()
       .map((tab) => ({
         ...tab,
         entityId: tab.entityId ?? tab.id
@@ -141,6 +142,7 @@ function hydrateUnifiedFormat(
         // comes back pointing at a document that no longer exists.
         return persistedEditFileIds.has(tab.entityId)
       })
+      .toArray()
       .sort((a, b) => a.sortOrder - b.sortOrder || a.createdAt - b.createdAt)
     // Why after the sort: the surviving record is the one the strip renders first.
     const deduped = dedupeEditorTabsWithinGroups(hydratedTabs)

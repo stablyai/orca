@@ -281,8 +281,10 @@ export class RelayRegionPreferenceResolver {
 
 function measuredRegions(reports: RelayRegionProbeReport[]): RegionMeasurement[] {
   return reports
+    .values()
     .map(regionMeasurement)
     .filter((measurement): measurement is RegionMeasurement => measurement !== null)
+    .toArray()
 }
 
 function bestMeasurement(measurements: RegionMeasurement[]): RegionMeasurement | null {

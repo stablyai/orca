@@ -29,8 +29,10 @@ export function buildBranchLineTotalInput(
         hostKey: 'relay',
         mergeBase,
         untrackedPaths: entries
+          .values()
           .filter((entry) => entry.area === 'untracked')
-          .map((entry) => entry.path as string),
+          .map((entry) => entry.path as string)
+          .toArray(),
         runDiffNumstat: (args, diffSignal) =>
           git(args, worktreePath, {
             // Why: a working-tree diff must not take index.lock away from terminal Git.

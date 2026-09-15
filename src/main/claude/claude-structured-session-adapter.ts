@@ -115,12 +115,11 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
   drainObservedExits = async (): Promise<void> => {
     const awaited = new Set<Promise<void>>()
     for (;;) {
-      const pending = [...this.exits.values()]
+      const pending = this.exits
+        .values()
         .map((exit) => exit.publication)
-        .filter(
-          (publication): publication is Promise<void> =>
-            publication !== undefined && !awaited.has(publication)
-        )
+        .filter((pub): pub is Promise<void> => pub !== undefined && !awaited.has(pub))
+        .toArray()
       if (pending.length === 0) {
         return
       }

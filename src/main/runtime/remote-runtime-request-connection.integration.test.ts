@@ -433,8 +433,10 @@ describe('remote runtime request connection integration', () => {
             await waitFor(() => reconnectedEvents.some((event) => event.type === 'ready'))
             expect(
               reconnectedEvents
+                .values()
                 .filter((event) => event.type === 'worktreeTerminalSleepState')
                 .map((event) => event.phase)
+                .toArray()
             ).toEqual(['committed'])
             expect(reconnectedEvents).toContainEqual(launchDraftResolutionSnapshot[0])
 

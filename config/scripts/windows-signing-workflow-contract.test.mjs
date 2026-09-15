@@ -264,8 +264,10 @@ describe('Windows NSIS uninstaller signing', () => {
       ...releaseSteps(),
       ...readWorkflow('.github/workflows/windows-signing-rehearsal.yml').jobs.rehearse.steps
     ]
+      .values()
       .map((step) => step.run ?? '')
       .filter((run) => run.includes('uninstaller-signing'))
+      .toArray()
 
     expect(relayScripts.length).toBeGreaterThan(0)
     for (const run of relayScripts) {

@@ -73,9 +73,13 @@ describe('persistent command ownership', () => {
     deliver(command('item/started'))
     const originalKey = rows.find(({ body }) => body.kind === 'tool-call')?.key
     deliver(notification('turn/completed', { turn: { id: 'turn' } }))
-    expect(rows.filter(({ body }) => body.kind === 'tool-call').map(({ body }) => body)).toEqual([
-      expect.objectContaining({ state: 'running' })
-    ])
+    expect(
+      rows
+        .values()
+        .filter(({ body }) => body.kind === 'tool-call')
+        .map(({ body }) => body)
+        .toArray()
+    ).toEqual([expect.objectContaining({ state: 'running' })])
     expect(tracker.tasks()).toHaveLength(1)
     deliver(
       notification('item/commandExecution/outputDelta', { itemId: 'exec', delta: 'late output' })

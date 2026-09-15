@@ -91,9 +91,11 @@ function snapshotFromState(
         ...getRuntimeLivenessTargetWorktrees(state, targetWorktreeId).keys()
       ])
     ],
-    mobileLockedPtyIds: [...getAllDrivers()]
+    mobileLockedPtyIds: getAllDrivers()
+      .entries()
       .filter(([, driver]) => driver.kind === 'mobile')
-      .map(([ptyId]) => ptyId),
+      .map(([ptyId]) => ptyId)
+      .toArray(),
     agentStatusByPaneKey: state.agentStatusByPaneKey,
     sleepingAgentSessionsByPaneKey: state.sleepingAgentSessionsByPaneKey,
     // Why: input stamps are coalesced, so planning must see the not-yet-flushed keystroke.

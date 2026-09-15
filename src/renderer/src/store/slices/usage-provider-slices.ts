@@ -115,6 +115,7 @@ function createUsagePatch<T extends UsageShape<string, string, UsageSnapshot>>(
 ): Partial<AppState> {
   return Object.fromEntries(
     usageDataFields
+      .values()
       .filter((field) => field in patch)
       .map((field) => [usageDataKey(prefix, field), patch[field]])
   ) as Partial<AppState>

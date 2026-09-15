@@ -691,7 +691,8 @@ export class PtyHandler {
   }
 
   async shutdownForWorktreePath(rootPath: string): Promise<void> {
-    const matchingIds = [...this.ptys.values()]
+    const matchingIds = this.ptys
+      .values()
       .filter((managed) => {
         const ownedPath = managed.worktreeId
           ? splitWorktreeIdForFilesystem(managed.worktreeId)?.worktreePath
@@ -702,6 +703,7 @@ export class PtyHandler {
         )
       })
       .map((managed) => managed.id)
+      .toArray()
     await Promise.all(matchingIds.map((id) => this.shutdown({ id, immediate: true })))
   }
 

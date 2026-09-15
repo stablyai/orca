@@ -539,8 +539,10 @@ describe('terminal subscribe buffering', () => {
       await vi.runOnlyPendingTimersAsync()
 
       const decodedFrames = binaryFrames
+        .values()
         .map((frame) => decodeTerminalStreamFrame(frame))
         .filter((frame): frame is NonNullable<typeof frame> => frame !== null)
+        .toArray()
       const snapshotStarts = decodedFrames.filter(
         (frame) => frame.opcode === TerminalStreamOpcode.SnapshotStart
       )
@@ -552,12 +554,16 @@ describe('terminal subscribe buffering', () => {
       // overflow that begins after the initial snapshot went out.
       expect(decodedStarts).toEqual([expect.objectContaining({ kind: 'scrollback', seq })])
       const snapshotText = decodedFrames
+        .values()
         .filter((frame) => frame.opcode === TerminalStreamOpcode.SnapshotChunk)
         .map((frame) => decodeTerminalStreamText(frame.payload))
+        .toArray()
         .join('')
       const output = decodedFrames
+        .values()
         .filter((frame) => frame.opcode === TerminalStreamOpcode.Output)
         .map((frame) => decodeTerminalStreamText(frame.payload))
+        .toArray()
         .join('')
       expect(output.length).toBeLessThanOrEqual(256 * 1024)
       expect(output).not.toContain('000')
@@ -703,9 +709,11 @@ describe('terminal subscribe buffering', () => {
     await Promise.resolve()
 
     const snapshotData = binaryFrames
+      .values()
       .map((frame) => decodeTerminalStreamFrame(frame))
       .filter((frame) => frame?.opcode === TerminalStreamOpcode.SnapshotChunk)
       .map((frame) => (frame ? decodeTerminalStreamText(frame.payload) : ''))
+      .toArray()
     expect(snapshotData).toEqual(['newer'])
     const snapshotStart = binaryFrames
       .map((frame) => decodeTerminalStreamFrame(frame))
@@ -811,8 +819,10 @@ describe('terminal subscribe buffering', () => {
       await vi.runOnlyPendingTimersAsync()
 
       const decodedFrames = binaryFrames
+        .values()
         .map((frame) => decodeTerminalStreamFrame(frame))
         .filter((frame): frame is NonNullable<typeof frame> => frame !== null)
+        .toArray()
       const snapshotStart = decodedFrames.find(
         (frame) => frame.opcode === TerminalStreamOpcode.SnapshotStart
       )
@@ -821,13 +831,17 @@ describe('terminal subscribe buffering', () => {
       expect(snapshotInfo).toMatchObject({ kind: 'scrollback' })
       expect(snapshotInfo).not.toHaveProperty('seq')
       const snapshotText = decodedFrames
+        .values()
         .filter((frame) => frame.opcode === TerminalStreamOpcode.SnapshotChunk)
         .map((frame) => decodeTerminalStreamText(frame.payload))
+        .toArray()
         .join('')
       expect(snapshotText).toContain('renderer fallback snapshot')
       const output = decodedFrames
+        .values()
         .filter((frame) => frame.opcode === TerminalStreamOpcode.Output)
         .map((frame) => decodeTerminalStreamText(frame.payload))
+        .toArray()
         .join('')
       // Why empty: the overflowed pending queue was dropped before the
       // covering snapshot was serialized; nothing needs replay.

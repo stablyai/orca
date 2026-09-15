@@ -52,7 +52,10 @@ const PR_REMOTE_NAME_PREFIX = 'pr-'
 async function listRemoteNames(execGit: GitRemoteExec, repoPath: string): Promise<string[]> {
   try {
     const { stdout } = await execGit(['remote'], repoPath)
-    return [...iterateProcessOutputLines(stdout)].map((line) => line.trim()).filter(Boolean)
+    return iterateProcessOutputLines(stdout)
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .toArray()
   } catch {
     return []
   }

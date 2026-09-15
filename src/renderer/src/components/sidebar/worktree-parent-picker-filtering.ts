@@ -18,11 +18,13 @@ export function filterWorktreeParentCandidates(
     return [...candidates]
   }
   return candidates
+    .values()
     .map((candidate) => ({
       candidate,
       score: defaultFilter(getWorktreeParentPickerItemValue(candidate), query, [])
     }))
     .filter((scored) => scored.score > 0)
+    .toArray()
     .sort((a, b) => b.score - a.score)
     .map((scored) => scored.candidate)
 }

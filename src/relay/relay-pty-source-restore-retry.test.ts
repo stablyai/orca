@@ -159,8 +159,10 @@ describe('relay PTY source restore retry', () => {
 
     expect(publication.publish('pty-1', { data: 'live' }, false)).toBe(true)
     const sourceFrames = recoveredWrites
+      .values()
       .map(message)
       .filter((entry) => entry?.method === 'pty.data')
+      .toArray()
     expect(sourceFrames).toHaveLength(1)
     expect(sourceFrames[0]?.params).toMatchObject({
       data: 'live',

@@ -169,8 +169,10 @@ export function capLinearMetadataIdsAcrossGroups(
   // Why: the picker hands us click order, so bucket by metadata order instead — the same
   // visible selection must always cap to the same ids (#17342).
   const lists = groups
+    .values()
     .map((group) => group.ids.filter((id) => selected.has(id)))
     .filter((list) => list.length > 0)
+    .toArray()
   const grouped = new Set(lists.flat())
   // An id no loaded group covers is its own row; sorted so its slot is stable too (R12).
   lists.push(

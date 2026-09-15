@@ -67,8 +67,10 @@ export function addOrcaWslInteropEnv(env: Record<string, string>): void {
   // root — reachable via the relay spawn's process.env (wsl-hook-relay-launch)
   // and via daemon-inherited env, which buildPtyHostEnv's delete cannot reach.
   const opencodeOverlayEntries = (['OPENCODE_CONFIG_DIR', 'ORCA_OPENCODE_CONFIG_DIR'] as const)
+    .values()
     .filter((name) => env[name]?.startsWith('/'))
     .map((name) => `${name}/u`)
+    .toArray()
   // Why: wsl.exe only imports selected Windows env vars, so WSL needs the wrapper root, pane identity, and hook/OMP coordinates at start.
   const passthroughEntries = [
     'ORCA_TERMINAL_HANDLE/u',

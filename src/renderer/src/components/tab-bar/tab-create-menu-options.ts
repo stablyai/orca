@@ -181,8 +181,10 @@ export function findMatchingTabCreateMenuOptions(
   }
 
   return options
+    .values()
     .map((option, index) => ({ index, option, score: scoreMenuOption(normalizedQuery, option) }))
     .filter((entry) => entry.score > 0)
+    .toArray()
     .sort((left, right) => {
       if (left.score !== right.score) {
         return right.score - left.score

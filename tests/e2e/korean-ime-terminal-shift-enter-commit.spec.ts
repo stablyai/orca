@@ -101,6 +101,7 @@ async function readSubmitted(page: Page): Promise<string[]> {
   const content = stripTerminalControls(await getTerminalContent(page, 20_000))
   const matches = [...content.matchAll(/\[SUBMITTED_JSON_[^\]]+\]("[\s\S]*?")/g)]
   return matches
+    .values()
     .map((match) => {
       try {
         return JSON.parse(match[1] ?? '""') as string
@@ -109,6 +110,7 @@ async function readSubmitted(page: Page): Promise<string[]> {
       }
     })
     .filter((value): value is string => value !== null)
+    .toArray()
 }
 
 async function readReceived(page: Page): Promise<string | null> {

@@ -312,9 +312,7 @@ export class SkillUploadSessionService {
   }
 
   private async prune(): Promise<void> {
-    const expired = [...this.sessions.values()]
-      .filter((session) => this.expired(session))
-      .map((session) => session.id)
-    await Promise.all(expired.map((id) => this.cancel(id)))
+    const expired = this.sessions.values().filter((session) => this.expired(session))
+    await Promise.all(expired.toArray().map((session) => this.cancel(session.id)))
   }
 }

@@ -84,6 +84,7 @@ export async function annotatePrunableWorktreesByExistence(
 
 function normalizeRelayWorktrees(worktrees: GitWorktreeInfo[]): RelayWorktreeInfo[] {
   return worktrees
+    .values()
     .map((worktree) => ({
       path: worktree.path,
       head: worktree.head,
@@ -92,4 +93,5 @@ function normalizeRelayWorktrees(worktrees: GitWorktreeInfo[]): RelayWorktreeInf
       lockReason: worktree.lockReason
     }))
     .filter((worktree) => worktree.path.length > 0)
+    .toArray()
 }

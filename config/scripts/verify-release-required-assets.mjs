@@ -109,15 +109,19 @@ export async function verifyRequiredReleaseAssets({ repo, tag, token }) {
   }
 
   const missing = [...requiredNames].filter((name) => !assetsByName.has(name)).sort()
-  const notUploaded = [...requiredNames]
+  const notUploaded = requiredNames
+    .values()
     .map((name) => assetsByName.get(name))
     .filter((asset) => asset && asset.state && asset.state !== 'uploaded')
     .map((asset) => `${asset.name}:${asset.state}`)
+    .toArray()
     .sort()
-  const empty = [...requiredNames]
+  const empty = requiredNames
+    .values()
     .map((name) => assetsByName.get(name))
     .filter((asset) => asset && asset.size === 0)
     .map((asset) => asset.name)
+    .toArray()
     .sort()
 
   if (missing.length > 0 || notUploaded.length > 0 || empty.length > 0) {

@@ -78,7 +78,8 @@ export async function resolveTerminalOrphanInventory(args: {
     surfacesByHandle.set(surface.handle, grouped)
   }
   const duplicateHandles = new Set(
-    [...surfacesByHandle.entries()]
+    surfacesByHandle
+      .entries()
       .filter(([, surfaces]) => surfaces.length > 1)
       .map(([handle]) => handle)
   )

@@ -44,9 +44,11 @@ async function listPrRemoteCandidates(
   } catch {
     return []
   }
-  return [...parseGitRemoteFetchUrls(stdout)]
+  return parseGitRemoteFetchUrls(stdout)
+    .entries()
     .filter(([name]) => isOrcaGeneratedPrRemoteName(name))
     .map(([name, url]) => ({ name, url }))
+    .toArray()
 }
 
 async function shouldReclaimPrRemote(
@@ -95,6 +97,7 @@ export async function reconcileOrphanedPrRemotesWithExec(
 ): Promise<string[]> {
   const liveWorktreeKeys = new Set(
     liveWorktreePaths
+      .values()
       .map((path) => worktreeIdComparisonKey(`${repoId}${WORKTREE_ID_SEPARATOR}${path}`))
       .filter((key): key is string => key !== null)
   )

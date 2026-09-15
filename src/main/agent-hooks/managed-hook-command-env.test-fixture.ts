@@ -15,5 +15,9 @@ export function findBareHookCommandVariables(command: string): string[] {
     ...command.matchAll(/\$(?!\{)([A-Za-z_][A-Za-z0-9_]*)/g),
     ...command.matchAll(/\$\{([A-Za-z_][A-Za-z0-9_]*)\}/g)
   ]
-  return references.filter((match) => !providedVariables.has(match[1])).map((match) => match[0])
+  return references
+    .values()
+    .filter((match) => !providedVariables.has(match[1]))
+    .map((match) => match[0])
+    .toArray()
 }

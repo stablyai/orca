@@ -244,6 +244,7 @@ describe('createRemoteRuntimePtyTransport', () => {
       )
       const recoveryEpochs = new Set(
         recoveryStates
+          .values()
           .filter((state) => state.phase === 'recovering' || state.phase === 'backoff')
           .map((state) => state.epoch)
       )

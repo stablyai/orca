@@ -41,21 +41,24 @@ export type { CombinedDiffTreeNode }
 export function buildCombinedDiffUncommittedTreeGroups(
   entries: readonly CombinedDiffFileTreeEntry[]
 ): CombinedDiffTreeGroup[] {
-  return UNCOMMITTED_AREA_ORDER.map((area) => {
-    const areaEntries = entries.filter(
-      (entry): entry is GitStatusEntry => isGitStatusEntry(entry) && entry.area === area
-    )
-    if (areaEntries.length === 0) {
-      return null
-    }
+  return UNCOMMITTED_AREA_ORDER.values()
+    .map((area) => {
+      const areaEntries = entries.filter(
+        (entry): entry is GitStatusEntry => isGitStatusEntry(entry) && entry.area === area
+      )
+      if (areaEntries.length === 0) {
+        return null
+      }
 
-    const roots = compactSourceControlTree(buildGitStatusSourceControlTree(area, areaEntries))
-    return {
-      area,
-      label: UNCOMMITTED_AREA_LABELS[area],
-      roots: roots as CombinedDiffTreeNode[]
-    }
-  }).filter((group): group is CombinedDiffTreeGroup => group !== null)
+      const roots = compactSourceControlTree(buildGitStatusSourceControlTree(area, areaEntries))
+      return {
+        area,
+        label: UNCOMMITTED_AREA_LABELS[area],
+        roots: roots as CombinedDiffTreeNode[]
+      }
+    })
+    .filter((group): group is CombinedDiffTreeGroup => group !== null)
+    .toArray()
 }
 
 /** Build the committed tree shape without volatile viewed/loading flags. */

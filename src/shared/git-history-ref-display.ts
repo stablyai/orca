@@ -14,7 +14,8 @@ export function dedupeRemoteTrackingRefs(
   options: DedupeRemoteTrackingRefsOptions = {}
 ): GitHistoryItemRef[] {
   const localBranchNames = new Set(
-    refs.filter((ref) => ref.category === 'branches').map((ref) => ref.name)
+    // Hermes has no iterator helpers, so keep the single pass in flatMap.
+    refs.flatMap((ref) => (ref.category === 'branches' ? [ref.name] : []))
   )
   if (localBranchNames.size === 0) {
     return [...refs]

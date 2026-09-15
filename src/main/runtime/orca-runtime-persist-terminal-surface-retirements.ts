@@ -161,6 +161,7 @@ export class OrcaRuntimeWithPersistTerminalSurfaceRetirements extends OrcaRuntim
         ...(terminalHandle
           ? {
               retirementProofs: publishableRetiredSurfaces
+                .values()
                 .filter((surface) => surface.worktreeId === worktreeId)
                 .map((surface) => ({
                   parentTabId: surface.parentTabId,
@@ -169,6 +170,7 @@ export class OrcaRuntimeWithPersistTerminalSurfaceRetirements extends OrcaRuntim
                   terminal: terminalHandle,
                   incarnationId
                 }))
+                .toArray()
             }
           : {})
       })

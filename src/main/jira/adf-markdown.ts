@@ -160,8 +160,10 @@ function renderInline(node: unknown, options?: AdfToMarkdownOptions): string {
 
 function joinBlocks(blocks: MarkdownBlock[]): string {
   return blocks
+    .values()
     .map((block) => block.text)
     .filter((text) => text.length > 0)
+    .toArray()
     .join('\n\n')
 }
 

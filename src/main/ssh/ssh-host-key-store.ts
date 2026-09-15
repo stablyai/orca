@@ -261,8 +261,10 @@ export function storedKeyTypesForEndpoint(
 ): string[] {
   const normalized = normalizeHost(host)
   return records
+    .values()
     .filter((record) => record.host === normalized && record.port === port)
     .map((record) => record.keyType)
+    .toArray()
 }
 
 /** Whether we have previously accepted this key for this endpoint. */

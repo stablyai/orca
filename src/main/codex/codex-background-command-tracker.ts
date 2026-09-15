@@ -100,7 +100,8 @@ export class CodexBackgroundCommandTracker {
     coveredThreads?: ReadonlySet<string>,
     childLabel?: (threadId: string) => string | null
   ): AgentSessionBackgroundTask[] {
-    return [...this.commands.values()]
+    return this.commands
+      .values()
       .filter((command) => !coveredThreads?.has(command.threadId))
       .map(({ threadId, task }) => {
         // The agent row carrying the child's name is gone by the time this row shows;
@@ -111,6 +112,7 @@ export class CodexBackgroundCommandTracker {
           ? { ...task, description: qualifiedDescription(label, task.description) }
           : task
       })
+      .toArray()
   }
 
   clear(): void {

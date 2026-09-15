@@ -96,7 +96,11 @@ describe('terminal multiplex RPC', () => {
 
     expect(runtime.readTerminal).not.toHaveBeenCalled()
     expect(
-      messages.map((msg) => JSON.parse(msg).result).filter((result) => result?.streamId === 7)
+      messages
+        .values()
+        .map((msg) => JSON.parse(msg).result)
+        .filter((result) => result?.streamId === 7)
+        .toArray()
     ).toEqual([])
     expect(binaryFrames.map((frame) => decodeTerminalStreamFrame(frame)?.opcode)).not.toContain(
       TerminalStreamOpcode.Error

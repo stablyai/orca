@@ -93,8 +93,10 @@ describe('BrowserNetworkTunnelClient', () => {
       )
     )
     const dataFrames = sent
+      .values()
       .map(decodeBrowserNetworkTunnelFrame)
       .filter((candidate): candidate is BrowserNetworkTunnelFrame => candidate !== null)
+      .toArray()
     expect(
       dataFrames.every((candidate) => candidate.opcode === BrowserNetworkTunnelOpcode.Data)
     ).toBe(true)
@@ -279,9 +281,11 @@ describe('BrowserNetworkTunnelClient', () => {
     await expect(exhausted).rejects.toThrow('stream id limit exceeded')
     expect(
       sent
+        .values()
         .map(decodeBrowserNetworkTunnelFrame)
         .filter((candidate) => candidate?.opcode === BrowserNetworkTunnelOpcode.Open)
         .map((candidate) => candidate!.streamId)
+        .toArray()
     ).toEqual([1, 2])
   })
 

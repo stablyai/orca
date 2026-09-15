@@ -74,8 +74,10 @@ function parseCssRgbColor(color: string | undefined): RgbaColor | null {
             .split('')
             .map((part) => Number.parseInt(part + part, 16))
         : [hex.slice(0, 2), hex.slice(2, 4), hex.slice(4, 6), hex.slice(6, 8)]
+            .values()
             .filter((part) => part.length > 0)
             .map((part) => Number.parseInt(part, 16))
+            .toArray()
     return {
       r: channels[0],
       g: channels[1],

@@ -60,11 +60,13 @@ export function getWorktreeDragUnitGroups(
   }
 
   return groups
+    .values()
     .map((group) => ({
       ...group,
       worktreeIds: group.units.map((unit) => unit.worktreeId)
     }))
     .filter((group) => group.worktreeIds.length > 0)
+    .toArray()
 }
 
 export function getFullDropIndexForWorktreeDragUnit(args: {

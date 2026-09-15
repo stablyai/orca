@@ -84,10 +84,12 @@ export function automationCreateUpdateRequiredAuthorityLabels(
   entries: readonly AutomationHostCatalogEntry[]
 ): string[] {
   const labels = entries
+    .values()
     .filter(automationCreateHostOffered)
     .filter((entry) => !automationCreateHostEligible(entry))
     .filter((entry) => automationHostRecoveryActions(entry).authority === 'update-server')
     .map((entry) => entry.authorityLabel)
+    .toArray()
   return [...new Set(labels)]
 }
 

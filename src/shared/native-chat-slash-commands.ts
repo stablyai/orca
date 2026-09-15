@@ -106,24 +106,29 @@ export function sessionSlashCommandSuggestions(
   const described = new Map(
     getAgentSlashCommands(agent).map((command) => [command.name, command.description])
   )
-  return reported
-    .filter((entry) => entry.kind === 'command')
-    .map((entry) => {
-      const description = entry.description ?? described.get(entry.name)
-      return {
+  // Hermes has no iterator helpers, so keep the single pass in flatMap.
+  return reported.flatMap((entry) => {
+    if (entry.kind !== 'command') {
+      return []
+    }
+    const description = entry.description ?? described.get(entry.name)
+    return [
+      {
         name: entry.name,
         ...(description ? { description } : {}),
         ...(entry.argumentHint ? { argumentHint: entry.argumentHint } : {}),
         ...(entry.kindUnspecified ? { kindUnspecified: true as const } : {})
       }
-    })
+    ]
+  })
 }
 
 /** Names the session reported as skills, in the order it reported them. */
 export function sessionReportedSkillNames(
   reported: readonly AgentSessionSlashCommand[]
 ): readonly string[] {
-  return reported.filter((entry) => entry.kind === 'skill').map((entry) => entry.name)
+  // Hermes has no iterator helpers, so keep the single pass in flatMap.
+  return reported.flatMap((entry) => (entry.kind === 'skill' ? [entry.name] : []))
 }
 
 /** Whether the draft is a slash command (leading `/`, ignoring leading space).

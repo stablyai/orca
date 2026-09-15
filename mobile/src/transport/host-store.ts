@@ -126,9 +126,10 @@ async function cancelCleanupForDurablyStoredHosts(hostIds: Iterable<string>): Pr
   return enqueueHostListMutation(async () => {
     const storedIds = new Set((await readStoredHostProfilesForMutation()).map(({ id }) => id))
     await Promise.all(
-      targets
-        .filter((hostId) => storedIds.has(hostId))
-        .map((hostId) => cancelPendingHostCredentialCleanup(hostId).catch(() => undefined))
+      // Hermes has no iterator helpers, so keep the single pass in flatMap.
+      targets.flatMap((id) =>
+        storedIds.has(id) ? [cancelPendingHostCredentialCleanup(id).catch(() => undefined)] : []
+      )
     )
   }).catch(() => undefined)
 }

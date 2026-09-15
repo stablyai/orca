@@ -348,9 +348,11 @@ describe('Codex live prompt ownership', () => {
       turn: { id: 'turn-1' }
     })
     registerGroupedQuestionPrompt(codex)
-    const questionItemIds = [...recorded.bodies]
+    const questionItemIds = recorded.bodies
+      .entries()
       .filter(([, body]) => body.kind === 'question')
       .map(([itemId]) => itemId)
+      .toArray()
     expect(questionItemIds).toHaveLength(2)
     const selectedItemId = questionItemIds[0]
     const siblingItemId = questionItemIds[1]

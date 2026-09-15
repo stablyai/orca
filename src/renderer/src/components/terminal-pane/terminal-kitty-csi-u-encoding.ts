@@ -191,8 +191,10 @@ function associatedTextCodePoints(event: TerminalKittyCsiUEvent): string | undef
     return undefined
   }
   const codePoints = [...event.associatedText]
+    .values()
     .map((character) => character.codePointAt(0) as number)
     .filter((codePoint) => codePoint > 0x1f && (codePoint < 0x7f || codePoint > 0x9f))
+    .toArray()
   return codePoints.length > 0 ? codePoints.join(':') : undefined
 }
 

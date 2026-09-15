@@ -164,7 +164,10 @@ export class OrcaRuntimeWithSyncWindowGraph extends OrcaRuntimeWithAttachWindow 
     // leaves on one PTY resolve to the same handle (handles are ptyId-keyed) and
     // crash paired clients with a duplicate React key.
     const nextPtyIds = new Set(
-      [...nextLeaves.values()].map((leaf) => leaf.ptyId).filter((ptyId): ptyId is string => !!ptyId)
+      nextLeaves
+        .values()
+        .map((leaf) => leaf.ptyId)
+        .filter((ptyId): ptyId is string => !!ptyId)
     )
     for (const oldLeafKey of this.leaves.keys()) {
       if (!nextLeaves.has(oldLeafKey)) {

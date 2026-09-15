@@ -836,10 +836,9 @@ describe('hydrateWorkspaceSession', () => {
     expect(store.getState().pendingReconnectPtyIdByTabId).toEqual({
       [targetTab.id]: 'ssh:target-a@@pty-a'
     })
-    const retainedLedgerTabIds = ledgerTabs
-      .filter((tab) => tab.id !== deletedTargetTab.id)
-      .map((tab) => tab.id)
-      .sort()
+    const retainedTabs = ledgerTabs.values().filter((tab) => tab.id !== deletedTargetTab.id)
+    const retainedLedgerTabIds = retainedTabs.map((tab) => tab.id).toArray()
+    retainedLedgerTabIds.sort()
     expect(Object.keys(store.getState().directSshPaneRetryByTabId).sort()).toEqual(
       retainedLedgerTabIds
     )

@@ -145,13 +145,16 @@ const inventory: readonly UnvalidatedRpcRequestPortEntry[] = [
 
 const scanned = scannedRoots
   .flatMap(sourceFiles)
+  .values()
   .filter((path) => sourceExtensions.has(extname(path)))
   .filter((path) => !/\.test\.tsx?$/.test(path))
   .map((path) => relative(mobileRoot, path).split(/[/\\]/).join('/'))
   .filter((file) => !SELF_FILES.has(file))
+  .toArray()
 
 const observed = new Map(
   scanned
+    .values()
     .map(
       (file) =>
         [
@@ -242,10 +245,12 @@ describe('unvalidated RPC request port boundary', () => {
 
   it('has no inventory entry whose file gained references', () => {
     const grown = inventory
+      .values()
       .filter((entry) => (observed.get(entry.file) ?? 0) > entry.references)
       .map(
         (entry) => `${entry.file}: listed ${entry.references}, found ${observed.get(entry.file)}`
       )
+      .toArray()
     expect(grown, 'The counts are a ceiling. Send the new call through an RpcOperation.').toEqual(
       []
     )
@@ -253,12 +258,14 @@ describe('unvalidated RPC request port boundary', () => {
 
   it('reports a count that has fallen so the entry can be lowered', () => {
     const overstated = inventory
+      .values()
       .filter(
         (entry) => observed.has(entry.file) && (observed.get(entry.file) ?? 0) < entry.references
       )
       .map(
         (entry) => `${entry.file}: listed ${entry.references}, found ${observed.get(entry.file)}`
       )
+      .toArray()
     expect(
       overstated,
       'Fewer references than listed — lower the count so the ratchet holds.'

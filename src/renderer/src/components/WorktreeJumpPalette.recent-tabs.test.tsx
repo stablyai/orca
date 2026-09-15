@@ -219,9 +219,12 @@ function getTabRowShortcutDigits(): string[] {
       `[data-command-item^="${encodePaletteIdentity(['workspace-tab'])}"]`
     )
   ].flatMap((row) =>
-    [...row.querySelectorAll<HTMLElement>('span')]
+    row
+      .querySelectorAll<HTMLElement>('span')
+      .values()
       .map((node) => node.textContent ?? '')
       .filter((text) => /^\d+$/.test(text))
+      .toArray()
   )
 }
 function clickSeeMore(): void {

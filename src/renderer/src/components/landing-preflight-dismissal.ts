@@ -25,6 +25,7 @@ function storageKey(issueId: string): string {
  *  the same GitHub project added twice doesn't read as two distinct projects. */
 export function githubProjectKeys(repos: readonly Repo[]): string[] {
   const keys = repos
+    .values()
     .filter((repo) => isGitHubBackedRepo(repo))
     .map((repo) => getProjectIdentityKey(repo))
   return [...new Set(keys)].sort()

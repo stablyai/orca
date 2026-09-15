@@ -31,8 +31,10 @@ function isSyntheticSinglePaneTitleForLabels(
     return true
   }
   const normalizedLabels = labels
+    .values()
     .map(normalizeTitle)
     .filter((value): value is string => value !== null)
+    .toArray()
   return normalizedLabels.includes(normalized)
 }
 

@@ -109,8 +109,10 @@ export function useNativeChatResolvedPathAttachments({
       }
       const imagePaths = attachable.filter(({ path }) => isNativeChatImageAttachmentPath(path))
       const filePaths = attachable
+        .values()
         .filter(({ path }) => !isNativeChatImageAttachmentPath(path))
         .map(({ path }) => path)
+        .toArray()
       // Images ride along on submit so chips and the TUI input cannot diverge.
       appendImageAttachments(imagePaths.map(({ path, connectionId }) => ({ path, connectionId })))
       insertFileReferences(filePaths)

@@ -61,6 +61,7 @@ export function removeEmptyEditorGroups(
 ): { groups: TabGroup[]; layout: AppState['layoutByWorktree'][string] | undefined } {
   const emptiedGroupIds = new Set(
     previousGroups
+      .values()
       .filter(
         (group) =>
           group.tabOrder.some((id) => movedTabIds.has(id)) &&

@@ -33,6 +33,23 @@ export type SmartModeAvailabilityInput = {
   linearAvailable: boolean
 }
 
+function isSmartModeAvailable(mode: SmartNameMode, input: SmartModeAvailabilityInput): boolean {
+  switch (mode) {
+    case 'smart':
+      return input.tasksSupported
+    case 'github':
+      return input.tasksSupported && input.hasRepo && input.githubAvailable
+    case 'gitlab':
+      return input.tasksSupported && input.hasRepo && input.gitlabAvailable
+    case 'linear':
+      return input.tasksSupported && input.linearAvailable
+    case 'branches':
+      return input.hasRepo
+    case 'text':
+      return true
+  }
+}
+
 // Faithful port of the desktop availableModes filter. Non-git repos collapse to
 // the Name tab; provider tabs gate on availability + a selected repo + the tasks
 // RPC surface; branches only need a git repo (new-branch-by-name works without
@@ -41,22 +58,10 @@ export function resolveAvailableSmartModes(input: SmartModeAvailabilityInput): S
   if (input.textOnly) {
     return ['text']
   }
-  return SMART_MODE_OPTIONS.filter((option) => {
-    switch (option.id) {
-      case 'smart':
-        return input.tasksSupported
-      case 'github':
-        return input.tasksSupported && input.hasRepo && input.githubAvailable
-      case 'gitlab':
-        return input.tasksSupported && input.hasRepo && input.gitlabAvailable
-      case 'linear':
-        return input.tasksSupported && input.linearAvailable
-      case 'branches':
-        return input.hasRepo
-      case 'text':
-        return true
-    }
-  }).map((option) => option.id)
+  // Why flatMap: Hermes has no iterator helpers, so the lazy pipeline is unavailable here.
+  return SMART_MODE_OPTIONS.flatMap((option) =>
+    isSmartModeAvailable(option.id, input) ? [option.id] : []
+  )
 }
 
 // Default mode when the picker opens: 'smart' for a git repo when search is

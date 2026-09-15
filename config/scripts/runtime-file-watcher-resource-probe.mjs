@@ -131,9 +131,11 @@ async function loadProbe(bundleDir) {
 }
 
 function activeChildPids(pool) {
-  return [...pool.activeSlots]
+  return pool.activeSlots
+    .values()
     .map((slot) => slot.supervisor.child?.pid)
     .filter((pid) => Number.isInteger(pid))
+    .toArray()
 }
 
 function assertPidCount(pids, expected, label) {

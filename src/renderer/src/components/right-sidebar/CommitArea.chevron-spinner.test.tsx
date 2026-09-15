@@ -61,9 +61,11 @@ function baseProps(overrides: Partial<PrimaryActionInputs> = {}) {
 }
 
 function buttons(markup: string): string[] {
-  return [...markup.matchAll(/<button\b[\s\S]*?<\/button>/g)]
+  return markup
+    .matchAll(/<button\b[\s\S]*?<\/button>/g)
     .map((match) => match[0])
     .filter((entry) => !entry.includes('aria-label="Generate commit message with AI"'))
+    .toArray()
 }
 
 function renderButtons(props: ReturnType<typeof baseProps>): string[] {

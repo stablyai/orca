@@ -22,6 +22,7 @@ export function reconcileRepoSelection(
   if (!persisted || persisted.length === 0) {
     return new Set()
   }
-  const availableIds = new Set(repos.filter(isHostedTaskRepo).map((repo) => repo.id))
+  // flatMap, not a lazy iterator pipeline: Hermes has no iterator helpers.
+  const availableIds = new Set(repos.flatMap((repo) => (isHostedTaskRepo(repo) ? [repo.id] : [])))
   return new Set(persisted.filter((id) => availableIds.has(id)))
 }

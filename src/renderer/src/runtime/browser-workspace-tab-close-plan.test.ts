@@ -9,6 +9,7 @@ function state(pages: { id: string; environmentId?: string; staged?: true }[]): 
     },
     remoteBrowserPageHandlesByPageId: Object.fromEntries(
       pages
+        .values()
         .filter((page) => page.environmentId)
         .map((page) => [
           page.id,

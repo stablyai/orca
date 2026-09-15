@@ -132,7 +132,8 @@ describe('parked terminal watcher sync entries', () => {
 
     const entries = lastSyncEntries()
     const unmountedSets = new Set(
-      [...entries]
+      entries
+        .entries()
         .filter(([workspaceId]) => workspaceId !== PARKED_WORKTREE_ID)
         .map(([, entry]) => entry.parkedTabIds)
     )

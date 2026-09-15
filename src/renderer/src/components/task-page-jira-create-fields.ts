@@ -36,7 +36,11 @@ export function isJiraScalarUserCreateField(field: JiraCreateField): boolean {
  * infer from the values alone since a user id is just a string.
  */
 export function getJiraUserCreateFieldKeys(fields: readonly JiraCreateField[]): string[] {
-  return fields.filter(isJiraUserCreateField).map((field) => field.key)
+  return fields
+    .values()
+    .filter(isJiraUserCreateField)
+    .map((field) => field.key)
+    .toArray()
 }
 
 export function getJiraCreateAllowedValueLabel(

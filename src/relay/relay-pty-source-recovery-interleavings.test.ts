@@ -232,7 +232,11 @@ describe('relay PTY source recovery interleavings', () => {
     ).toBe(true)
     expect(publication.exitPublicationSettled('pty-1')).toBe(true)
     expect(
-      recoveredWrites.map(message).filter((entry) => entry?.method === 'pty.exit')
+      recoveredWrites
+        .values()
+        .map(message)
+        .filter((entry) => entry?.method === 'pty.exit')
+        .toArray()
     ).toHaveLength(1)
   })
 
@@ -508,10 +512,18 @@ describe('relay PTY source recovery interleavings', () => {
     replacementCompletionSettlement!({ ok: true })
     expect(publication.publish('pty-1', { data: 'live' }, false)).toBe(true)
     expect(
-      replacementWrites.map(message).filter((entry) => entry?.method === 'pty.recoveryComplete')
+      replacementWrites
+        .values()
+        .map(message)
+        .filter((entry) => entry?.method === 'pty.recoveryComplete')
+        .toArray()
     ).toHaveLength(1)
     expect(
-      replacementWrites.map(message).filter((entry) => entry?.method === 'pty.data')
+      replacementWrites
+        .values()
+        .map(message)
+        .filter((entry) => entry?.method === 'pty.data')
+        .toArray()
     ).toHaveLength(1)
     expect(adapter.getDebugSnapshot()).toMatchObject({ deliveryTokens: 1, sourceSu: 4 })
   })

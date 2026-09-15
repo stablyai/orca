@@ -76,9 +76,9 @@ export const RELAY_ARTIFACTS: readonly RelayArtifact[] = [
  * The daemon's own service children, by entry filename. Anything else under a relay pid is
  * either user work or unidentified, and both keep the relay unreapable.
  */
-export const RELAY_DAEMON_SERVICE_ENTRY_FILENAMES: readonly string[] = RELAY_ARTIFACTS.filter(
-  (artifact) => artifact.daemonServiceChild
-).map((artifact) => artifact.filename)
+export const RELAY_DAEMON_SERVICE_ENTRY_FILENAMES: readonly string[] = RELAY_ARTIFACTS.flatMap(
+  (artifact) => (artifact.daemonServiceChild ? [artifact.filename] : [])
+)
 
 /** Written after the artifacts, so it is never an input to its own hash. */
 export const RELAY_VERSION_FILENAME = '.version'
@@ -88,14 +88,14 @@ export const RELAY_INSTALL_COMPLETE_FILENAME = '.install-complete'
 
 /** Artifacts every relay must have; the remote install probe requires each one. */
 export function relayArtifactFilenames(isWindows: boolean): string[] {
-  return RELAY_ARTIFACTS.filter(
-    (artifact) => !artifact.optional && (!artifact.windowsOnly || isWindows)
-  ).map((artifact) => artifact.filename)
+  return RELAY_ARTIFACTS.flatMap((artifact) =>
+    !artifact.optional && (!artifact.windowsOnly || isWindows) ? [artifact.filename] : []
+  )
 }
 
 /** Artifacts a build may or may not emit. Hashed when present, never probed. */
 export function relayOptionalArtifactFilenames(isWindows: boolean): string[] {
-  return RELAY_ARTIFACTS.filter(
-    (artifact) => artifact.optional && (!artifact.windowsOnly || isWindows)
-  ).map((artifact) => artifact.filename)
+  return RELAY_ARTIFACTS.flatMap((artifact) =>
+    artifact.optional && (!artifact.windowsOnly || isWindows) ? [artifact.filename] : []
+  )
 }

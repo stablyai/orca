@@ -28,6 +28,10 @@ export function isDuplicateSshTargetAlias({
 /** Why: the picker treats configHost *and* label as owned, so the save check must too —
  *  otherwise an alias it greys out as "In Orca" is still savable as a second target. */
 function getOccupiedAliases(target: Pick<SshTarget, 'configHost' | 'label' | 'host'>): string[] {
-  const occupied = [target.configHost, target.label].map(normalizeSshConfigAlias).filter(Boolean)
+  const occupied = [target.configHost, target.label]
+    .values()
+    .map(normalizeSshConfigAlias)
+    .filter(Boolean)
+    .toArray()
   return occupied.length > 0 ? occupied : [normalizeSshConfigAlias(target.host)].filter(Boolean)
 }

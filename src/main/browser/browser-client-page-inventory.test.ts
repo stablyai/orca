@@ -56,8 +56,10 @@ function inventoryPage(browserPageId: string): BrowserClientHostedPageInventory 
 
 function omittedPageIds(pages: readonly BrowserClientHostedPageInventory[]): string[] {
   return pages
+    .values()
     .filter((page) => page.currentUrl === undefined)
     .map((page) => page.browserPageId)
+    .toArray()
     .sort(compareCodepoints)
 }
 

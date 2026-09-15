@@ -52,16 +52,22 @@ function rankThenSlice(
   }
   const lower = normalized.toLowerCase()
   const all = [
-    ...files.filter((f) => f.lowerPath === lower).map((f) => ['exact-path', f.path] as const),
     ...files
+      .values()
+      .filter((f) => f.lowerPath === lower)
+      .map((f) => ['exact-path', f.path] as const),
+    ...files
+      .values()
       .filter((f) => f.lowerFilename === lower)
       .map((f) => ['exact-basename', f.path] as const),
     ...rankQuickOpenFiles(normalized, files, limit).map((f) => ['fuzzy', f.path] as const)
   ]
   const seen = new Set<string>()
   return all
+    .values()
     .filter(([, path]) => !seen.has(path) && (seen.add(path), true))
     .map(([matchKind, relativePath]) => ({ kind: 'existing-file', matchKind, relativePath }))
+    .toArray()
     .slice(0, limit)
 }
 

@@ -316,7 +316,11 @@ export async function discoverSkills(args: {
   // the repo or plugin name and its path carries the user's directory names. A
   // fully cached scan did no filesystem work, so it stays silent rather than
   // burying the bursts this line exists to make visible.
-  const walked = roots.filter((_, index) => !scans[index].cached).map((root) => root.id)
+  const walked = roots
+    .values()
+    .filter((_, index) => !scans[index].cached)
+    .map((root) => root.id)
+    .toArray()
   if (walked.length > 0) {
     // `present` is not derivable from the rest: "walked 500 roots, 3 existed" is
     // the shape that says the root set, not the tree, is what costs. The id list

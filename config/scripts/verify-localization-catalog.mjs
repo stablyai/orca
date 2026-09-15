@@ -183,7 +183,8 @@ function collectInconsistentFallbackVariables(references) {
     byKey.set(reference.key, existing)
   }
 
-  return [...byKey.entries()]
+  return byKey
+    .entries()
     .map(([key, keyReferences]) => {
       const uniqueFallbackVariables = new Set(
         keyReferences.map((reference) => normalizeInterpolationVariables(reference.fallback))
@@ -195,6 +196,7 @@ function collectInconsistentFallbackVariables(references) {
       }
     })
     .filter(({ uniqueFallbackVariableCount }) => uniqueFallbackVariableCount > 1)
+    .toArray()
 }
 
 function collectInterpolationVariables(value) {

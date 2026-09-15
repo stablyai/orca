@@ -74,23 +74,31 @@ export function resolveGroupAddress(
 
   if (group === '@all') {
     // Why: every candidate except the sender, to avoid self-delivery loops.
-    return terminals.map((t) => t.handle).filter((h) => h !== senderHandle)
+    return terminals
+      .values()
+      .map((t) => t.handle)
+      .filter((h) => h !== senderHandle)
+      .toArray()
   }
 
   if (group === '@idle') {
     // Why: @idle targets only agents whose TUI reports idle status, useful for
     // dispatching work to available agents without interrupting busy ones.
     return terminals
+      .values()
       .filter((t) => t.handle !== senderHandle && getAgentStatus(t.handle) === 'idle')
       .map((t) => t.handle)
+      .toArray()
   }
 
   // @worktree:<id> — all handles in a specific worktree
   if (group.startsWith('@worktree:')) {
     const worktreeId = to.slice('@worktree:'.length)
     return terminals
+      .values()
       .filter((t) => t.handle !== senderHandle && t.worktreeId === worktreeId)
       .map((t) => t.handle)
+      .toArray()
   }
 
   // Why: agent-name groups (@claude, @droid, etc.) resolve against the identity the HOST
@@ -99,6 +107,7 @@ export function resolveGroupAddress(
   const agentName = group.slice(1) // remove @
   if ((AGENT_NAME_GROUPS as readonly string[]).includes(agentName)) {
     return terminals
+      .values()
       .filter((t) => {
         if (t.handle === senderHandle) {
           return false
@@ -106,6 +115,7 @@ export function resolveGroupAddress(
         return terminalIsAgent(t, agentName as AgentNameGroup)
       })
       .map((t) => t.handle)
+      .toArray()
   }
 
   // Why: unknown groups resolve to empty rather than throwing so callers can

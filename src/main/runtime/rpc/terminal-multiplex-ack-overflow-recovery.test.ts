@@ -394,6 +394,7 @@ describe('terminal multiplex RPC', () => {
     dataListenerRef.current?.(output, { seq: output.length, rawLength: output.length })
 
     const initialOutputFrames = binaryFrames
+      .values()
       .map((frame) => decodeTerminalStreamFrame(frame))
       .filter((frame) => frame?.opcode === TerminalStreamOpcode.Output)
     const initialBytes = initialOutputFrames.reduce(
@@ -466,8 +467,10 @@ describe('terminal multiplex RPC', () => {
     expect(firstOutputAfterAckIndex).toBeGreaterThan(recoveryStartIndex)
     expect(
       drainFrames
+        .values()
         .filter((frame) => frame?.opcode === TerminalStreamOpcode.SnapshotChunk)
         .map((frame) => (frame ? decodeTerminalStreamText(frame.payload) : ''))
+        .toArray()
         .join('')
     ).toBe('recovered snapshot')
 
@@ -649,6 +652,7 @@ describe('terminal multiplex RPC', () => {
     const output = 'x'.repeat(floodedChars)
     dataListenerRef.current?.(output, { seq: floodedChars, rawLength: floodedChars })
     const initialBytes = binaryFrames
+      .values()
       .map((frame) => decodeTerminalStreamFrame(frame))
       .filter((frame) => frame?.opcode === TerminalStreamOpcode.Output)
       .reduce((total, frame) => total + (frame?.payload.byteLength ?? 0), 0)
@@ -676,8 +680,10 @@ describe('terminal multiplex RPC', () => {
     const framesAfterRecovery = binaryFrames.map((frame) => decodeTerminalStreamFrame(frame))
     expect(
       framesAfterRecovery
+        .values()
         .filter((frame) => frame?.opcode === TerminalStreamOpcode.SnapshotChunk)
         .map((frame) => (frame ? decodeTerminalStreamText(frame.payload) : ''))
+        .toArray()
         .join('')
     ).toBe('recovered snapshot')
     // Why: every retained chunk is covered by the recovery snapshot seq;
@@ -694,9 +700,11 @@ describe('terminal multiplex RPC', () => {
     })
     await vi.waitFor(() => {
       const freshOutput = binaryFrames
+        .values()
         .map((frame) => decodeTerminalStreamFrame(frame))
         .filter((frame) => frame?.opcode === TerminalStreamOpcode.Output)
         .map((frame) => (frame ? decodeTerminalStreamText(frame.payload) : ''))
+        .toArray()
         .join('')
       expect(freshOutput).toBe(fresh)
     })

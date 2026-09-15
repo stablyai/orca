@@ -133,9 +133,11 @@ export async function evictOwnedStructuredAgentSessions(
   context: StructuredAgentSessionLifetimeContext,
   retainOnFailure: Set<string>
 ): Promise<void> {
-  const ownedSessionIds = [...context.sessions]
+  const ownedSessionIds = context.sessions
+    .entries()
     .filter(([, session]) => owesProviderChildWindDown(session))
     .map(([sessionId]) => sessionId)
+    .toArray()
   // Retained up front and cleared only once an eviction settles: the quit phase is bounded, and a
   // timeout leaves these still running. Closing their journals underneath them is the one outcome
   // the retain set exists to prevent.

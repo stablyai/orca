@@ -63,6 +63,7 @@ export function RuntimeServerWorkflowPicker({
           ]
         ] as const
       )
+        .values()
         .filter(([value]) => value !== 'share' || canGeneratePairingUrl)
         .map(([value, label, description]) => (
           <button
@@ -92,7 +93,8 @@ export function RuntimeServerWorkflowPicker({
               {description}
             </span>
           </button>
-        ))}
+        ))
+        .toArray()}
     </div>
   )
 }

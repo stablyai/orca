@@ -38,8 +38,10 @@ const COMPANION_ROW = JSON.stringify({
 
 function decode(): NativeChatMessage[] {
   return [COMPANION_ROW, PROMPT_ROW]
+    .values()
     .map((line, index) => decodeClaudeTranscriptLine(line, `fallback-${index}`))
     .filter((message): message is NativeChatMessage => message !== null)
+    .toArray()
 }
 
 describe('Claude pasted-image companion row', () => {

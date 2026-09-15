@@ -51,7 +51,10 @@ export function selectedShareSkillNameKeys(
   selectedIds: ReadonlySet<string>
 ): Set<string> {
   return new Set(
-    skills.filter((skill) => selectedIds.has(skill.id)).map((skill) => shareSkillNameKey(skill))
+    skills
+      .values()
+      .filter((skill) => selectedIds.has(skill.id))
+      .map((skill) => shareSkillNameKey(skill))
   )
 }
 

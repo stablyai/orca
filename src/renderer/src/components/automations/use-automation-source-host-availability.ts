@@ -53,8 +53,10 @@ export function useAutomationSourceHostAvailability(
   const sourceContexts = useMemo(
     () =>
       rows
+        .values()
         .map((row) => getRepoBackedAutomationSourceContext(row.automation))
-        .filter((context): context is RepoBackedAutomationSourceContext => context !== null),
+        .filter((context): context is RepoBackedAutomationSourceContext => context !== null)
+        .toArray(),
     [rows]
   )
   const runtimeSourceHostIds = useMemo(() => {

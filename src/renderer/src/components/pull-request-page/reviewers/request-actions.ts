@@ -166,8 +166,10 @@ export function createReviewerRequestActions(args: ReviewerRequestActionsArgs): 
       args.localReviewRequests.map((reviewer) => reviewer.login.toLowerCase())
     )
     const logins = reviewersToRemove
+      .values()
       .map((reviewer) => reviewer.trim().replace(/^@/, ''))
       .filter((reviewer) => reviewer.length > 0 && selected.has(reviewer.toLowerCase()))
+      .toArray()
     if (logins.length === 0) {
       return
     }

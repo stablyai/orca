@@ -127,8 +127,10 @@ describe('workspace cleanup facet controls', () => {
       'Commits behind ≥'
     ]
     const found = numericFacets
+      .values()
       .map((label) => control(label) as HTMLInputElement | null)
       .filter((input): input is HTMLInputElement => input !== null)
+      .toArray()
     expect(found).toHaveLength(numericFacets.length)
     for (const input of found) {
       expect(input.type).toBe('text')

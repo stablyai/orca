@@ -111,8 +111,10 @@ export function findFunctionInitializedExportLets(
     collectLets(statement, false)
   }
   return functionLets
+    .values()
     .filter((candidate) => candidate.exported || exportedNames.has(candidate.name))
     .map(({ name, line }) => ({ name, line }))
+    .toArray()
 }
 
 describe('function-initialized export let ban', () => {

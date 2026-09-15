@@ -47,7 +47,8 @@ const prunedEntries = flatten(enRuntimeRequired)
 const PLURAL_SUFFIX_RE = /_(zero|one|two|few|many|other)$/
 const pluralBaseKeys = [
   ...new Set(
-    [...fullEntries.keys()]
+    fullEntries
+      .keys()
       .filter((key) => PLURAL_SUFFIX_RE.test(key))
       .map((key) => key.replace(PLURAL_SUFFIX_RE, ''))
   )
@@ -70,9 +71,11 @@ describe('runtime-required English catalog', () => {
   })
 
   it('keeps every entry it does ship byte-identical to the translator catalog', () => {
-    const drifted = [...prunedEntries.entries()]
+    const drifted = prunedEntries
+      .entries()
       .filter(([key, value]) => fullEntries.get(key) !== value)
       .map(([key]) => key)
+      .toArray()
 
     expect(drifted).toEqual([])
   })

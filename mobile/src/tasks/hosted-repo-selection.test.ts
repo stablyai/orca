@@ -9,7 +9,13 @@ const repos = [
 
 describe('isHostedTaskRepo', () => {
   it('excludes folder workspaces and keeps everything else', () => {
-    expect(repos.filter(isHostedTaskRepo).map((repo) => repo.id)).toEqual(['a', 'b'])
+    expect(
+      repos
+        .values()
+        .filter(isHostedTaskRepo)
+        .map((repo) => repo.id)
+        .toArray()
+    ).toEqual(['a', 'b'])
     expect(isHostedTaskRepo({ id: 'no-kind' })).toBe(true)
   })
 })

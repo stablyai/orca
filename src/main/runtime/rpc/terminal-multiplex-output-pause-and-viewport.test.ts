@@ -351,9 +351,11 @@ describe('terminal multiplex RPC', () => {
     await Promise.resolve()
 
     const snapshotData = binaryFrames
+      .values()
       .map((frame) => decodeTerminalStreamFrame(frame))
       .filter((frame) => frame?.opcode === TerminalStreamOpcode.SnapshotChunk)
       .map((frame) => (frame ? decodeTerminalStreamText(frame.payload) : ''))
+      .toArray()
     expect(snapshotData).toEqual(['newer'])
 
     registry.cleanupSubscription('terminal-multiplex:conn-stale-multiplex-resize')

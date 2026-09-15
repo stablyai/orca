@@ -91,9 +91,11 @@ export function getWorktreePaletteSelectionItemIds<
   // id here would leave a duplicate row absent from the list the `includes` check
   // above consults — arrowing onto it would snap the highlight back to the top.
   return entries
+    .values()
     .map((entry, index) => ({ entry, id: renderKeys[index] ?? entry.id }))
     .filter(({ entry }) => isSelectableWorktreePaletteEntry(entry))
     .map(({ id }) => id)
+    .toArray()
 }
 
 export function getNextWorktreePaletteSelection({

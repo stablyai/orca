@@ -128,6 +128,7 @@ function selectActiveInstall(
 ): ClaudePluginInstall | null {
   return (
     values
+      .values()
       .map(parseInstall)
       .filter((install): install is ClaudePluginInstall => install !== null)
       .filter(
@@ -135,6 +136,7 @@ function selectActiveInstall(
           pathApi.isAbsolute(install.installPath) &&
           isProjectInstallApplicable(install, cwd, pathApi)
       )
+      .toArray()
       .sort(
         (a, b) =>
           installPriority(b) - installPriority(a) ||

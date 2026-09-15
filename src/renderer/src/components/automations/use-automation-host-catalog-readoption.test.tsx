@@ -137,8 +137,10 @@ async function renderWithGeneration(targetGeneration: number): Promise<void> {
 
 function sshRequestGenerations(): number[] {
   return scopeRequests
+    .values()
     .filter((selector) => selector.kind === 'ssh')
     .map((selector) => (selector as { expectedTargetGeneration: number }).expectedTargetGeneration)
+    .toArray()
 }
 
 function sshHostAutomationIds(): string[] {

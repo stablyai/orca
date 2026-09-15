@@ -577,9 +577,11 @@ describe('OrcaRuntimeRpcServer', () => {
       )
       await vi.waitFor(() => {
         const subscribedStreamIds = responses
+          .values()
           .map((response) => response.result as { type?: string; streamId?: number } | undefined)
           .filter((result) => result?.type === 'subscribed')
           .map((result) => result?.streamId)
+          .toArray()
         expect(subscribedStreamIds).toEqual(expect.arrayContaining([21, 22]))
       })
       binaryFrames.splice(0)
@@ -588,8 +590,10 @@ describe('OrcaRuntimeRpcServer', () => {
       runtime.onPtyData('multiplex-background-pty', backgroundOutput, 1)
       await vi.waitFor(() => {
         const backgroundFrames = binaryFrames
+          .values()
           .map((frame) => decodeTerminalStreamFrame(frame))
           .filter((frame) => frame?.opcode === TerminalStreamOpcode.Output && frame.streamId === 21)
+          .toArray()
         const backgroundBytes = backgroundFrames.reduce(
           (total, frame) => total + (frame?.payload.byteLength ?? 0),
           0
@@ -603,9 +607,11 @@ describe('OrcaRuntimeRpcServer', () => {
       await vi.waitFor(() => {
         const activeOutput = binaryFrames
           .slice(frameCountBeforeActive)
+          .values()
           .map((frame) => decodeTerminalStreamFrame(frame))
           .filter((frame) => frame?.opcode === TerminalStreamOpcode.Output && frame.streamId === 22)
           .map((frame) => (frame ? decodeTerminalStreamText(frame.payload) : ''))
+          .toArray()
           .join('')
         expect(activeOutput).toContain('ACTIVE_MULTIPLEX_READY')
       })
@@ -626,6 +632,7 @@ describe('OrcaRuntimeRpcServer', () => {
       )
 
       const backgroundBytesBeforeAck = binaryFrames
+        .values()
         .map((frame) => decodeTerminalStreamFrame(frame))
         .filter((frame) => frame?.opcode === TerminalStreamOpcode.Output && frame.streamId === 21)
         .reduce((total, frame) => total + (frame?.payload.byteLength ?? 0), 0)
@@ -639,6 +646,7 @@ describe('OrcaRuntimeRpcServer', () => {
       )
       await vi.waitFor(() => {
         const backgroundBytesAfterAck = binaryFrames
+          .values()
           .map((frame) => decodeTerminalStreamFrame(frame))
           .filter((frame) => frame?.opcode === TerminalStreamOpcode.Output && frame.streamId === 21)
           .reduce((total, frame) => total + (frame?.payload.byteLength ?? 0), 0)

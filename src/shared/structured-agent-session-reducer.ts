@@ -108,7 +108,8 @@ function mergeItems(
 ): AgentJournalRenderItem[] {
   const removed = new Set(removedIds)
   const byId = new Map(
-    current.filter((item) => !removed.has(item.itemId)).map((item) => [item.itemId, item])
+    // Hermes has no iterator helpers, so keep the single pass in flatMap.
+    current.flatMap((item) => (removed.has(item.itemId) ? [] : [[item.itemId, item] as const]))
   )
   for (const item of incoming) {
     const prior = byId.get(item.itemId)
@@ -137,9 +138,10 @@ function mergeSubmissions(
   }
   const sorted = [...byId.values()].sort((left, right) => left.submittedAt - right.submittedAt)
   const itemIds = new Set(
-    items
-      .filter((item) => item.body.kind === 'message' && item.body.role === 'user')
-      .map((item) => item.itemId)
+    // Hermes has no iterator helpers, so keep the single pass in flatMap.
+    items.flatMap((item) =>
+      item.body.kind === 'message' && item.body.role === 'user' ? [item.itemId] : []
+    )
   )
   // Loaded user messages need their provider alias for durable turn attribution.
   return sorted.filter(

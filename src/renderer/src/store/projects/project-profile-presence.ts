@@ -4,7 +4,14 @@ import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import { translate } from '@/i18n/i18n'
 
 export function formatProjectPresenceProfileNames(profileNames: readonly string[]): string {
-  const names = [...new Set(profileNames.map((name) => name.trim()).filter(Boolean))]
+  const names = [
+    ...new Set(
+      profileNames
+        .values()
+        .map((name) => name.trim())
+        .filter(Boolean)
+    )
+  ]
   if (names.length <= 3) {
     return names.join(', ')
   }

@@ -118,6 +118,7 @@ export async function enumerateSkillPlacementCandidates(input: {
 
   const inspections = await resolveInspections(inspectPaths, inspectionTargets, input)
   return candidates
+    .values()
     .map((candidate) => {
       const directory = inspections.get(candidate.path)
       const skillFile = inspections.get(api.join(candidate.path, SKILL_FILE_NAME))
@@ -133,6 +134,7 @@ export async function enumerateSkillPlacementCandidates(input: {
     .filter(
       (candidate) => candidate.skillFileRealpath !== null || candidate.entryKind === 'symlink'
     )
+    .toArray()
 }
 
 function dedupeByPath<T extends { path: string }>(entries: readonly T[]): T[] {

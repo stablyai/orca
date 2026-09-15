@@ -150,9 +150,11 @@ function formatQuestionAnswerPartsByIndexes(
   question: MobileChatQuestion,
   selectedIndexes: number[]
 ): string[] {
-  return selectedIndexes
-    .map((index) => formatQuestionOptionAtIndex(question, index))
-    .filter((part): part is string => part != null && part.trim().length > 0)
+  // Why flatMap: Hermes has no iterator helpers, so the lazy pipeline is unavailable here.
+  return selectedIndexes.flatMap((index) => {
+    const part = formatQuestionOptionAtIndex(question, index)
+    return part != null && part.trim().length > 0 ? [part] : []
+  })
 }
 
 export function formatQuestionAnswerByIndexes(
@@ -185,7 +187,10 @@ export function formatQuestionAnswerWithOtherByIndexes(
  * nothing is selected.
  */
 export function formatQuestionAnswer(question: MobileChatQuestion, selected: string[]): string {
-  const labels = selected.map((s) => s.trim()).filter((s) => s.length > 0)
+  const labels = selected.flatMap((s) => {
+    const label = s.trim()
+    return label.length > 0 ? [label] : []
+  })
   if (labels.length === 0) {
     return ''
   }

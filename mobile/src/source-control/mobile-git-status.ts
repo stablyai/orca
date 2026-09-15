@@ -50,11 +50,11 @@ function getConflictSortRank(entry: MobileGitStatusEntry): number {
 export function buildMobileSourceControlSections<TEntry extends MobileGitStatusEntry>(
   entries: readonly TEntry[]
 ): MobileSourceControlSection<TEntry>[] {
-  const sections = AREA_ORDER.map((area) => ({
-    area,
-    title: AREA_TITLES[area],
-    data: entries.filter((entry) => entry.area === area)
-  })).filter((section) => section.data.length > 0)
+  // Hermes has no iterator helpers, so keep the single pass in flatMap.
+  const sections = AREA_ORDER.flatMap((area) => {
+    const data = entries.filter((entry) => entry.area === area)
+    return data.length > 0 ? [{ area, title: AREA_TITLES[area], data }] : []
+  })
   if (sections.some((section) => section.data.length > 1)) {
     const collator = new Intl.Collator(undefined, { numeric: true })
     for (const section of sections) {
@@ -76,11 +76,13 @@ export function countUnstagedEntries(entries: readonly MobileGitStatusEntry[]): 
 }
 
 export function getStageablePaths(entries: readonly MobileGitStatusEntry[]): string[] {
-  return entries.filter(isMobileGitStageableEntry).map((entry) => entry.path)
+  // Hermes has no iterator helpers, so keep the single pass in flatMap.
+  return entries.flatMap((entry) => (isMobileGitStageableEntry(entry) ? [entry.path] : []))
 }
 
 export function getUnstageablePaths(entries: readonly MobileGitStatusEntry[]): string[] {
-  return entries.filter((entry) => entry.area === 'staged').map((entry) => entry.path)
+  // Hermes has no iterator helpers, so keep the single pass in flatMap.
+  return entries.flatMap((entry) => (entry.area === 'staged' ? [entry.path] : []))
 }
 
 export function isMobileGitStageableEntry(entry: MobileGitStatusEntry): boolean {

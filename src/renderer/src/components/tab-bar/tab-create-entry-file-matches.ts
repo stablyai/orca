@@ -58,6 +58,7 @@ export function findExistingFileMatches(
   }
   const lowerQuery = normalizedQuery.toLowerCase()
   const exactPathMatches = indexedFiles
+    .values()
     .filter((file) => file.lowerPath === lowerQuery)
     .map((file) => ({
       kind: 'existing-file' as const,
@@ -65,6 +66,7 @@ export function findExistingFileMatches(
       relativePath: file.path
     }))
   const exactBasenameMatches = indexedFiles
+    .values()
     .filter((file) => file.lowerFilename === lowerQuery)
     .map((file) => ({
       kind: 'existing-file' as const,

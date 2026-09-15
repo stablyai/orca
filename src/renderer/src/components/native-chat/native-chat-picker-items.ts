@@ -59,7 +59,10 @@ export function buildNativeChatPickerItems(
   // where skills carry their own, `/review` and `$review` are distinct entries.
   const sharedSigil = skillSigil === '/'
   const unclassifiedNames = new Set(
-    commands.filter((command) => command.kindUnspecified).map((command) => command.name)
+    commands
+      .values()
+      .filter((command) => command.kindUnspecified)
+      .map((command) => command.name)
   )
   const mergedSkills = mergeNativeChatSkills(
     skills,
@@ -173,8 +176,10 @@ function rankItems<T extends NativeChatPickerItem>(
     return entries.map((entry) => entry.item)
   }
   return entries
+    .values()
     .map((entry) => ({ ...entry, rank: getMatchRank(entry.item, query) }))
     .filter((entry) => entry.rank !== null)
+    .toArray()
     .sort((a, b) => a.rank! - b.rank! || a.stableOrder - b.stableOrder)
     .map((entry) => entry.item)
 }

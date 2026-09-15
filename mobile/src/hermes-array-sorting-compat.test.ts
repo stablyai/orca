@@ -29,9 +29,11 @@ function usesUnsupportedArraySorting(source: string): boolean {
 
 function findUnsupportedArraySorting(files: readonly ScannedFile[]): string[] {
   return files
+    .values()
     .filter((file) => !isTestFile(file.relativePath))
     .filter((file) => usesUnsupportedArraySorting(file.source))
     .map((file) => file.relativePath)
+    .toArray()
 }
 
 describe('Hermes array sorting compatibility', () => {

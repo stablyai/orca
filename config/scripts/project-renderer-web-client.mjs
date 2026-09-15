@@ -121,7 +121,8 @@ function includeReferencedOutputs() {
 
 async function minifyWebOutput() {
   await Promise.all(
-    [...selectedFiles]
+    selectedFiles
+      .values()
       .filter((outputPath) => /\.(?:css|m?js)$/.test(outputPath))
       .map(async (outputPath) => {
         const targetPath = join(stagingOutput, outputPath)

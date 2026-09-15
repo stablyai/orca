@@ -109,8 +109,10 @@ describe('terminal multiplex RPC', () => {
       })
 
       const outputFrames = binaryFrames
+        .values()
         .map((frame) => decodeTerminalStreamFrame(frame))
         .filter((frame) => frame?.opcode === TerminalStreamOpcode.Output)
+        .toArray()
       expect(outputFrames.length).toBeGreaterThan(1)
       expect(outputFrames.every((frame) => (frame?.payload.byteLength ?? 0) <= 48 * 1024)).toBe(
         true
@@ -217,8 +219,10 @@ describe('terminal multiplex RPC', () => {
     dataListenerRef.current?.(output, { seq: output.length, rawLength: output.length })
 
     const initialOutputFrames = binaryFrames
+      .values()
       .map((frame) => decodeTerminalStreamFrame(frame))
       .filter((frame) => frame?.opcode === TerminalStreamOpcode.Output)
+      .toArray()
     const initialBytes = initialOutputFrames.reduce(
       (total, frame) => total + (frame?.payload.byteLength ?? 0),
       0
@@ -260,8 +264,10 @@ describe('terminal multiplex RPC', () => {
     )
 
     const flushedOutputFrames = binaryFrames
+      .values()
       .map((frame) => decodeTerminalStreamFrame(frame))
       .filter((frame) => frame?.opcode === TerminalStreamOpcode.Output)
+      .toArray()
     expect(flushedOutputFrames.length).toBeGreaterThan(initialOutputFrames.length)
 
     runtime.cleanupSubscription('terminal-multiplex:conn-ack-gated')
@@ -361,8 +367,10 @@ describe('terminal multiplex RPC', () => {
     await vi.waitFor(() =>
       expect(
         messages
+          .values()
           .map((msg) => JSON.parse(msg).result)
           .filter((result) => result?.type === 'subscribed')
+          .toArray()
       ).toHaveLength(streamIds.length)
     )
     await vi.waitFor(() => expect(dataListeners.size).toBe(streamIds.length))
@@ -397,8 +405,10 @@ describe('terminal multiplex RPC', () => {
     await new Promise((resolve) => setTimeout(resolve, 10))
 
     const initialOutputFrames = binaryFrames
+      .values()
       .map((frame) => decodeTerminalStreamFrame(frame))
       .filter((frame) => frame?.opcode === TerminalStreamOpcode.Output)
+      .toArray()
     const initialBytesByStream = new Map<number, number>()
     for (const frame of initialOutputFrames) {
       if (!frame) {
@@ -564,8 +574,10 @@ describe('terminal multiplex RPC', () => {
       dataListenerRef.current?.(output)
 
       const outputFrames = binaryFrames
+        .values()
         .map((frame) => decodeTerminalStreamFrame(frame))
         .filter((frame) => frame?.opcode === TerminalStreamOpcode.Output)
+        .toArray()
       expect(outputFrames.length).toBeGreaterThan(1)
       expect(outputFrames.every((frame) => (frame?.payload.byteLength ?? 0) <= 48 * 1024)).toBe(
         true

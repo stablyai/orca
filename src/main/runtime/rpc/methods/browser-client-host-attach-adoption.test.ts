@@ -123,7 +123,11 @@ function attachHost(
     markClientHostedPagesReconciled,
     notifyMobileSessionTabsChanged,
     commands: () =>
-      replies.map((reply) => JSON.parse(reply).result).filter((event) => event?.type === 'command')
+      replies
+        .values()
+        .map((reply) => JSON.parse(reply).result)
+        .filter((event) => event?.type === 'command')
+        .toArray()
   }
 }
 

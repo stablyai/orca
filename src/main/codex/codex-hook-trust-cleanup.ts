@@ -67,11 +67,13 @@ export function removeSelfComputedMatchingTrustEntries(
 
   const existingEntries = readHookTrustEntries(configPath)
   const ownedKeys = entries
+    .values()
     .map((entry) => {
       const key = computeTrustKey(entry)
       return existingEntries.get(key)?.trustedHash === computeTrustedHash(entry) ? key : null
     })
     .filter((key): key is string => key !== null)
+    .toArray()
   if (ownedKeys.length > 0) {
     removeHookTrustEntries(configPath, ownedKeys)
   }

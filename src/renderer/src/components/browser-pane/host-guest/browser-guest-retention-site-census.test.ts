@@ -133,7 +133,8 @@ describe('browser guest retention site census', () => {
   const sources = productionSources()
 
   it('keeps every individual retention term behind the shared helper', () => {
-    const offenders = [...sources]
+    const offenders = sources
+      .entries()
       .filter(([file]) => !RETENTION_TERM_OWNERS.includes(file))
       .map(([file, source]) => ({
         file,
@@ -143,6 +144,7 @@ describe('browser guest retention site census', () => {
       }))
       .filter(({ terms }) => terms.length > 0)
       .map(({ file, terms }) => `${file}: ${terms.join(', ')}`)
+      .toArray()
       .sort()
 
     expect(
@@ -154,12 +156,14 @@ describe('browser guest retention site census', () => {
   })
 
   it('registers every consumer of the shared retention helper', () => {
-    const consumers = [...sources]
+    const consumers = sources
+      .entries()
       .filter(
         ([file]) => file !== 'components/browser-pane/host-guest/browser-guest-paint-retention.ts'
       )
       .filter(([, source]) => namedSymbols(source, RETENTION_HELPER_SYMBOLS).length > 0)
       .map(([file]) => file)
+      .toArray()
       .sort()
 
     expect(consumers, 'New retention sites must be listed in RETENTION_SITES.').toEqual(
@@ -182,11 +186,13 @@ describe('browser guest retention site census', () => {
   })
 
   it('keeps the per-page threading hooks travelling as a full set', () => {
-    const partial = [...sources]
+    const partial = sources
+      .entries()
       .filter(([file]) => !RETENTION_TERM_OWNERS.includes(file))
       .map(([file, source]) => ({ file, hooks: namedSymbols(source, PER_PAGE_RETENTION_HOOKS) }))
       .filter(({ hooks }) => hooks.length > 0 && hooks.length < PER_PAGE_RETENTION_HOOKS.length)
       .map(({ file, hooks }) => `${file}: only ${hooks.join(', ')}`)
+      .toArray()
       .sort()
 
     expect(

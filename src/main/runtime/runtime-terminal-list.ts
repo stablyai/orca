@@ -111,7 +111,10 @@ export class RuntimeTerminalList {
     const provenLivePtyIds = inventory?.allLivePtyIds ?? null
     const ptys = [...this.deps.getPtys()]
     const liveWorktreeIds = new Set(
-      ptys.filter((pty) => pty.connected).map((pty) => pty.worktreeId)
+      ptys
+        .values()
+        .filter((pty) => pty.connected)
+        .map((pty) => pty.worktreeId)
     )
     const terminals: RuntimeTerminalSummary[] = []
     const leafPtyIds = new Set<string>()

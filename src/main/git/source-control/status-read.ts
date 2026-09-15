@@ -93,7 +93,10 @@ async function dropSharedSymlinkUntrackedEntries(
     return
   }
   const untrackedPaths = new Set(
-    entries.filter((entry) => entry.area === 'untracked').map((entry) => entry.path)
+    entries
+      .values()
+      .filter((entry) => entry.area === 'untracked')
+      .map((entry) => entry.path)
   )
   const candidatePaths = sharedLinkPaths.filter((rawPath) => {
     const path = getSafeRelativePath(rawPath)
