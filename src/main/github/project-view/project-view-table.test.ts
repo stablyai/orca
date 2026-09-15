@@ -89,19 +89,25 @@ describe('project view layout selection', () => {
     expect(fetchAllItems).not.toHaveBeenCalled()
   })
 
-  it.each(['BOARD_LAYOUT', 'FUTURE_LAYOUT'])(
-    'rejects %s without fetching items',
-    async (layout) => {
-      vi.mocked(fetchProjectViewsPage).mockResolvedValue(page([view('unsupported', layout)]))
-      expect(
-        await getProjectViewTable({ ...args, viewId: 'unsupported', queryOverride: '' })
-      ).toMatchObject({
-        ok: false,
-        error: { type: 'unsupported_layout' },
-        totalCount: 12
-      })
-      expect(fetchAllItems).not.toHaveBeenCalled()
-      expect(fetchItemsCountOnly).toHaveBeenCalledWith({ ...args, query: '' })
-    }
-  )
+  it('serves BOARD_LAYOUT through the table item pipeline', async () => {
+    vi.mocked(fetchProjectViewsPage).mockResolvedValue(page([view('board', 'BOARD_LAYOUT')]))
+    expect(await getProjectViewTable({ ...args, viewId: 'board' })).toMatchObject({
+      ok: true,
+      data: { selectedView: { id: 'board' } }
+    })
+    expect(fetchAllItems).toHaveBeenCalled()
+  })
+
+  it('rejects an unknown future layout without fetching items', async () => {
+    vi.mocked(fetchProjectViewsPage).mockResolvedValue(page([view('unsupported', 'FUTURE_LAYOUT')]))
+    expect(
+      await getProjectViewTable({ ...args, viewId: 'unsupported', queryOverride: '' })
+    ).toMatchObject({
+      ok: false,
+      error: { type: 'unsupported_layout' },
+      totalCount: 12
+    })
+    expect(fetchAllItems).not.toHaveBeenCalled()
+    expect(fetchItemsCountOnly).toHaveBeenCalledWith({ ...args, query: '' })
+  })
 })

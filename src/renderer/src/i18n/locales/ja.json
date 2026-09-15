@@ -2120,7 +2120,8 @@
           },
           "ProjectGroupHeader": {
             "82a22d2079": "現在",
-            "244c9e7d06": "全て"
+            "244c9e7d06": "全て",
+            "no-value-group": "{{value0}} なし"
           },
           "ProjectItemSlugDialog": {
             "e55a5c4e68": "プロジェクト行のプレビュー。",
@@ -2147,7 +2148,8 @@
             "d34ef9b554": "ボード（未サポート）",
             "43a88ae574": "ボード_レイアウト",
             "1a2b8e512e": "テーブル",
-            "cafb908f34": "テーブルレイアウト"
+            "cafb908f34": "テーブルレイアウト",
+            "board-layout": "ボード"
           },
           "ProjectRow": {
             "75b5d816e3": "作業を開始",
@@ -2221,6 +2223,12 @@
           "ProjectViewStates": {
             "3b9c1d5e47": "このビューにはまだ項目がありません。",
             "7e4a2f80c6": "最近追加した項目は、表示されるまで少し時間がかかることがあります。"
+          },
+          "ProjectBoardView": {
+            "no-group-field": "このボードにはグループ化に使えるフィールドがありません。",
+            "empty": "このビューのフィルターに一致する項目はありません。",
+            "restricted": "制限された項目",
+            "no-value-column": "{{value0}} なし"
           }
         },
         "GitHubMarkdownComposer": {

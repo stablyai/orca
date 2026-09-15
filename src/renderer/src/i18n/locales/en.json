@@ -2473,7 +2473,8 @@
           },
           "ProjectGroupHeader": {
             "82a22d2079": "Current",
-            "244c9e7d06": "All"
+            "244c9e7d06": "All",
+            "no-value-group": "No {{value0}}"
           },
           "ProjectItemSlugDialog": {
             "e55a5c4e68": "Project row preview.",
@@ -2500,7 +2501,8 @@
             "d34ef9b554": "Board (unsupported)",
             "43a88ae574": "BOARD_LAYOUT",
             "1a2b8e512e": "Table",
-            "cafb908f34": "TABLE_LAYOUT"
+            "cafb908f34": "TABLE_LAYOUT",
+            "board-layout": "Board"
           },
           "ProjectRow": {
             "75b5d816e3": "Start work",
@@ -2592,10 +2594,16 @@
             "9fe1ac868c": "Unsupported"
           },
           "ProjectViewStates": {
-            "ac83c45672": "Switch to a Table or Roadmap view to work with this project in Orca.",
-            "e4cc8b14f2": "Orca renders table and roadmap project views. This view uses a layout it cannot render yet.",
+            "switch-supported-view": "Switch to a Table, Board, or Roadmap view to work with this project in Orca.",
+            "unsupported-layout-copy": "Orca renders table, board, and roadmap project views. This view uses a layout it cannot render yet.",
             "3b9c1d5e47": "This view has no items yet.",
             "7e4a2f80c6": "Recently added items can take a while to appear."
+          },
+          "ProjectBoardView": {
+            "no-group-field": "This board has no field to group by.",
+            "empty": "No items match this view's filter.",
+            "restricted": "Restricted item",
+            "no-value-column": "No {{value0}}"
           }
         },
         "GitHubMarkdownComposer": {

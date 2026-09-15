@@ -2125,7 +2125,8 @@
           },
           "ProjectGroupHeader": {
             "82a22d2079": "현재",
-            "244c9e7d06": "모두"
+            "244c9e7d06": "모두",
+            "no-value-group": "{{value0}} 없음"
           },
           "ProjectItemSlugDialog": {
             "e55a5c4e68": "프로젝트 행 미리보기.",
@@ -2152,7 +2153,8 @@
             "d34ef9b554": "보드(지원되지 않음)",
             "43a88ae574": "BOARD_LAYOUT",
             "1a2b8e512e": "테이블",
-            "cafb908f34": "TABLE_LAYOUT"
+            "cafb908f34": "TABLE_LAYOUT",
+            "board-layout": "보드"
           },
           "ProjectRow": {
             "75b5d816e3": "작업 시작",
@@ -2226,6 +2228,12 @@
           "ProjectViewStates": {
             "3b9c1d5e47": "이 보기에는 아직 항목이 없습니다.",
             "7e4a2f80c6": "최근에 추가한 항목은 표시되기까지 시간이 걸릴 수 있습니다."
+          },
+          "ProjectBoardView": {
+            "no-group-field": "이 보드에는 그룹화할 필드가 없습니다.",
+            "empty": "이 보기의 필터와 일치하는 항목이 없습니다.",
+            "restricted": "제한된 항목",
+            "no-value-column": "{{value0}} 없음"
           }
         },
         "GitHubMarkdownComposer": {

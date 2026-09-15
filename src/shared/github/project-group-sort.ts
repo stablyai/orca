@@ -22,7 +22,9 @@ export type ProjectGroup = {
   rows: GitHubProjectRow[]
 }
 
-const EMPTY_GROUP_KEY = '__empty__'
+/** Exported so renderers can swap the built-in English `labelForEmpty` text
+ *  for a translated one — translate() lives renderer-side, not in shared code. */
+export const EMPTY_GROUP_KEY = '__empty__'
 
 type ProjectFieldValue = GitHubProjectRow['fieldValuesByFieldId'][string]
 
@@ -141,6 +143,16 @@ export function groupRows(
   if (!groupField) {
     return [{ key: 'all', label: '', iteration: null, rows: rowsInOrder }]
   }
+  return groupRowsByField(groupField, rowsInOrder)
+}
+
+/** Grouping driven by an explicit field rather than the view's `groupByFields`.
+ *  Board views group by `verticalGroupByFields`, which is a different slot on
+ *  the same view — the bucketing rules are identical. */
+export function groupRowsByField(
+  groupField: GitHubProjectField,
+  rowsInOrder: GitHubProjectRow[]
+): ProjectGroup[] {
   const groupOrderIndex = createFieldOrderIndex(groupField)
   const buckets = new Map<
     string,

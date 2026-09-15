@@ -2120,7 +2120,8 @@
           },
           "ProjectGroupHeader": {
             "82a22d2079": "Actual",
-            "244c9e7d06": "Todo"
+            "244c9e7d06": "Todo",
+            "no-value-group": "Sin {{value0}}"
           },
           "ProjectItemSlugDialog": {
             "e55a5c4e68": "Vista previa de la fila del proyecto.",
@@ -2147,7 +2148,8 @@
             "d34ef9b554": "Board (no compatible)",
             "43a88ae574": "BOARD_LAYOUT",
             "1a2b8e512e": "Tabla",
-            "cafb908f34": "TABLE_LAYOUT"
+            "cafb908f34": "TABLE_LAYOUT",
+            "board-layout": "Tablero"
           },
           "ProjectRow": {
             "75b5d816e3": "Empezar a trabajar",
@@ -2221,6 +2223,12 @@
           "ProjectViewStates": {
             "3b9c1d5e47": "Esta vista aún no tiene elementos.",
             "7e4a2f80c6": "Los elementos añadidos recientemente pueden tardar un poco en aparecer."
+          },
+          "ProjectBoardView": {
+            "no-group-field": "Este tablero no tiene un campo por el que agrupar.",
+            "empty": "Ningún elemento coincide con el filtro de esta vista.",
+            "restricted": "Elemento restringido",
+            "no-value-column": "Sin {{value0}}"
           }
         },
         "GitHubMarkdownComposer": {

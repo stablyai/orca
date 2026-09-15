@@ -1,11 +1,17 @@
 import React from 'react'
 import { ChevronDown, ChevronRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { isIterationCurrent, type ProjectGroup } from '../../../../shared/github/project-group-sort'
+import {
+  EMPTY_GROUP_KEY,
+  isIterationCurrent,
+  type ProjectGroup
+} from '../../../../shared/github/project-group-sort'
 import { translate } from '@/i18n/i18n'
 
 type Props = {
   group: ProjectGroup
+  /** Name of the field being grouped by, used to localize the no-value group. */
+  fieldName?: string
   expanded: boolean
   onToggle: () => void
   /** Total band width for horizontally scrolling surfaces (the roadmap). The
@@ -15,6 +21,7 @@ type Props = {
 
 export default function ProjectGroupHeader({
   group,
+  fieldName,
   expanded,
   onToggle,
   bandWidth
@@ -39,8 +46,16 @@ export default function ProjectGroupHeader({
       <span className={cn('flex items-center gap-2', bandWidth != null && 'sticky left-3')}>
         {expanded ? <ChevronDown className="size-3.5" /> : <ChevronRight className="size-3.5" />}
         <span className="font-medium">
-          {group.label ||
-            translate('auto.components.github.project.ProjectGroupHeader.244c9e7d06', 'All')}
+          {/* Why: the shared grouper can't reach translate(); swap its English
+              no-value label for the localized one here. */}
+          {group.key === EMPTY_GROUP_KEY && fieldName
+            ? translate(
+                'auto.components.github.project.ProjectGroupHeader.no-value-group',
+                'No {{value0}}',
+                { value0: fieldName }
+              )
+            : group.label ||
+              translate('auto.components.github.project.ProjectGroupHeader.244c9e7d06', 'All')}
         </span>
         <span className="rounded-full border border-border/50 bg-background px-1.5 text-[10px] text-muted-foreground">
           {group.rows.length}
