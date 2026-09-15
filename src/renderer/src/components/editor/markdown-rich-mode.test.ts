@@ -132,4 +132,104 @@ describe('getMarkdownRichModeUnsupportedMessage', () => {
       unsupportedMessage: expect.any(String)
     })
   })
+
+  describe('reference-style link definitions', () => {
+    it('blocks a real link reference definition', () => {
+      expect(getMarkdownRichModeUnsupportedMessage('[id]: https://example.com\n')).not.toBeNull()
+    })
+
+    it('blocks a link reference definition with an angle-bracket destination and title', () => {
+      expect(
+        getMarkdownRichModeUnsupportedMessage('[id]: <https://example.com> "Title"\n')
+      ).not.toBeNull()
+    })
+
+    it('blocks a link reference definition with a relative destination and single-quoted title', () => {
+      expect(
+        getMarkdownRichModeUnsupportedMessage("[id]: ./relative/path 'title'\n")
+      ).not.toBeNull()
+    })
+
+    it('blocks a link reference definition indented up to three spaces', () => {
+      expect(getMarkdownRichModeUnsupportedMessage('   [id]: https://example.com\n')).not.toBeNull()
+    })
+
+    it('blocks a link reference definition nested inside a blockquote', () => {
+      expect(
+        getMarkdownRichModeUnsupportedMessage('> [id]: https://example.com\n> uses [id] here\n')
+      ).not.toBeNull()
+    })
+
+    it('blocks a link reference definition nested inside a list item', () => {
+      expect(
+        getMarkdownRichModeUnsupportedMessage('- [id]: https://example.com\n  uses [id] here\n')
+      ).not.toBeNull()
+    })
+
+    it('blocks a link reference definition nested inside a blockquote inside a list item', () => {
+      expect(
+        getMarkdownRichModeUnsupportedMessage('- > [id]: https://example.com\n  > uses [id] here\n')
+      ).not.toBeNull()
+    })
+
+    it('blocks a link reference definition nested inside a list item inside a blockquote', () => {
+      expect(
+        getMarkdownRichModeUnsupportedMessage('> - [id]: https://example.com\n>   uses [id] here\n')
+      ).not.toBeNull()
+    })
+
+    it('blocks a link reference definition nested three levels deep', () => {
+      expect(
+        getMarkdownRichModeUnsupportedMessage(
+          '> - > [id]: https://example.com\n>   > uses [id] here\n'
+        )
+      ).not.toBeNull()
+    })
+
+    it('allows a bracketed label followed by prose, not a link destination', () => {
+      expect(getMarkdownRichModeUnsupportedMessage('[Bug]: text with spaces\n')).toBeNull()
+    })
+
+    it('allows a real GFM task list item', () => {
+      // A task-list checkbox is `[ ]`/`[x]` followed directly by whitespace
+      // and text, with no colon — `- [x]: done` is CommonMark's link
+      // reference definition syntax (label `x`, destination `done`), not a
+      // task item.
+      expect(getMarkdownRichModeUnsupportedMessage('- [x] done\n')).toBeNull()
+    })
+
+    it('allows a bracketed label followed by prose starting with "this is"', () => {
+      expect(getMarkdownRichModeUnsupportedMessage('[note]: this is prose\n')).toBeNull()
+    })
+
+    it('allows the reported issue title line', () => {
+      expect(
+        getMarkdownRichModeUnsupportedMessage(
+          "[Bug]: Backspace at the start of the first line under a heading merges that line's text into the heading\n"
+        )
+      ).toBeNull()
+    })
+
+    it('conservatively blocks a pre-filter match in a document past the parse-size guard', () => {
+      const content = `${'a'.repeat(50_001)}\n[Bug]: text with spaces\n`
+
+      expect(getMarkdownRichModeUnsupportedMessage(content)).not.toBeNull()
+    })
+
+    it('still parses to confirm a pre-filter match at or under the parse-size guard', () => {
+      const content = `${'a'.repeat(49_970)}\n[Bug]: text with spaces\n`
+
+      expect(getMarkdownRichModeUnsupportedMessage(content)).toBeNull()
+    })
+
+    it('scans a long non-matching indented line without catastrophic backtracking', () => {
+      const content = `${' '.repeat(200)}x\n`
+
+      const start = performance.now()
+      getMarkdownRichModeUnsupportedMessage(content)
+      const elapsed = performance.now() - start
+
+      expect(elapsed).toBeLessThan(50)
+    })
+  })
 })
