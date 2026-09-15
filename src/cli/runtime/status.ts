@@ -8,6 +8,7 @@ import {
   resolveDesktopWindowStatus
 } from '../../shared/cli-app-status-projection'
 import { RuntimeRpcFailureError, type RuntimeRpcSuccess } from './types'
+import { isRuntimeAccessError, RuntimeAccessError, systemErrorCode } from './runtime-access-error'
 
 export { projectRemoteAppStatus, resolveDesktopWindowStatus }
 
@@ -68,7 +69,11 @@ export async function getCliStatus(
         state: graphState
       }
     })
-  } catch {
+  } catch (error) {
+    // A restricted caller cannot use a second denied probe to prove runtime absence.
+    if (isRuntimeAccessError(error)) {
+      throw error
+    }
     const running = isProcessRunning(metadata.pid)
     return buildCliStatusResponse({
       app: {
@@ -106,7 +111,11 @@ function isProcessRunning(pid: number | null | undefined): boolean {
   try {
     process.kill(pid, 0)
     return true
-  } catch {
-    return false
+  } catch (error) {
+    const code = systemErrorCode(error)
+    if (code === 'ESRCH') {
+      return false
+    }
+    throw new RuntimeAccessError('probe_process', code, pid)
   }
 }
