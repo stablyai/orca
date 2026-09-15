@@ -152,7 +152,8 @@ export function buildWorktreeVirtualRowContext(args: BuildArgs): WorktreeVirtual
       onContextMenuSelect: props.onContextMenuSelect,
       onImmediateActivate: primaryActive.handleImmediateWorktreeRowActivate,
       onRowClickCapture: args.onRowClickCapture,
-      onRowPointerDown: args.onRowPointerDown
+      onRowPointerDown: args.onRowPointerDown,
+      getLineageToggleHandler: args.getLineageToggleHandler
     }
   }
 }
