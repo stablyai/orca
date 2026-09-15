@@ -26,6 +26,7 @@ type EditorPanelRenderModelParams = {
   markdownViewMode: StoreState['markdownViewMode']
   markdownRichModeSizeOverridden: boolean
   isChangesMode: boolean
+  hasWorktreeDiffNavigation?: boolean
   canOpenWorkspaceFileBrowser: boolean
 }
 
@@ -38,6 +39,7 @@ export function getEditorPanelRenderModel({
   markdownViewMode,
   markdownRichModeSizeOverridden,
   isChangesMode,
+  hasWorktreeDiffNavigation = false,
   canOpenWorkspaceFileBrowser
 }: EditorPanelRenderModelParams) {
   const isSingleDiff =
@@ -174,7 +176,9 @@ export function getEditorPanelRenderModel({
         activeFile.conflict?.conflictStatus !== 'unresolved'))
   return {
     isSingleDiff,
-    isDiffSurface: isSingleDiff || isChangesMode,
+    isChangesMode,
+    isDiffSurface: isSingleDiff || isChangesMode || hasWorktreeDiffNavigation,
+    hasWorktreeDiffNavigation,
     isCombinedDiff,
     worktreeEntries,
     resolvedLanguage,

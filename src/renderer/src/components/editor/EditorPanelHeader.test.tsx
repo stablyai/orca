@@ -46,12 +46,17 @@ vi.mock('@/components/artifacts/ArtifactPublishButton', () => ({
   ArtifactPublishButton: () => <button data-artifact-publish />
 }))
 
-vi.mock('./diff-navigation-context', () => ({
-  useDiffNavigation: () => ({
+const diffNavigationMock = vi.hoisted(() => ({
+  value: {
     changeCount: 2,
+    canNavigate: true,
     goToPreviousDiff: vi.fn(),
     goToNextDiff: vi.fn()
-  })
+  }
+}))
+
+vi.mock('./diff-navigation-context', () => ({
+  useDiffNavigation: () => diffNavigationMock.value
 }))
 
 const activeFile: OpenFile = {
@@ -103,6 +108,19 @@ function renderHeader(overrides: Partial<ComponentProps<typeof EditorPanelHeader
 }
 
 describe('EditorPanelHeader', () => {
+  it('enables diff arrows when file-boundary navigation is available', () => {
+    diffNavigationMock.value = {
+      changeCount: 0,
+      canNavigate: true,
+      goToPreviousDiff: vi.fn(),
+      goToNextDiff: vi.fn()
+    }
+    expect(renderHeader()).not.toContain('disabled=""')
+
+    diffNavigationMock.value = { ...diffNavigationMock.value, canNavigate: false }
+    expect(renderHeader()).toContain('disabled=""')
+  })
+
   it('shares one tooltip provider across the diff header controls', () => {
     const html = renderHeader()
 
