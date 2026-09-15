@@ -1,0 +1,20 @@
+diff --git a/android/src/fabric/java/com/swmansion/rnscreens/FabricEnabledViewGroup.kt b/android/src/fabric/java/com/swmansion/rnscreens/FabricEnabledViewGroup.kt
+index a15ed76841a558bbd1658493f782a551c9bb0202..c2b3bdb4bfcd2a9d25a850b8c5dde01587fc9b79 100644
+--- a/android/src/fabric/java/com/swmansion/rnscreens/FabricEnabledViewGroup.kt
++++ b/android/src/fabric/java/com/swmansion/rnscreens/FabricEnabledViewGroup.kt
+@@ -36,9 +36,12 @@ abstract class FabricEnabledViewGroup(
+         height: Int,
+         headerHeight: Int,
+     ) {
+-        val realWidth: Float = PixelUtil.toDIPFromPixel(width.toFloat())
+-        val realHeight: Float = PixelUtil.toDIPFromPixel(height.toFloat())
+-        val realHeaderHeight: Float = PixelUtil.toDIPFromPixel(headerHeight.toFloat())
++        // DeX frames must use the density of this view's display.
++        val density = resources.displayMetrics.density
++        val frameDensity = if (density > 0f) density else PixelUtil.getDisplayMetricDensity()
++        val realWidth: Float = width.toFloat() / frameDensity
++        val realHeight: Float = height.toFloat() / frameDensity
++        val realHeaderHeight: Float = headerHeight.toFloat() / frameDensity
+ 
+         // Check incoming state values. If they're already the correct value, return early to prevent
+         // infinite UpdateState/SetState loop.
