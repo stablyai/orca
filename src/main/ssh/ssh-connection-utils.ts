@@ -17,10 +17,13 @@ export type SshCredentialKind = 'passphrase' | 'password' | 'keyboard-interactiv
 
 export type SshConnectionCallbacks = {
   onStateChange: (targetId: string, state: SshConnectionState) => void
+  // Why: echo carries the server's RFC 4256 echo flag for keyboard-interactive
+  // prompts so the UI knows whether the typed response may be shown.
   onCredentialRequest?: (
     targetId: string,
     kind: SshCredentialKind,
     detail: string,
+    echo?: boolean,
     signal?: AbortSignal
   ) => Promise<string | null>
 }
@@ -202,6 +205,9 @@ export function buildConnectConfig(
     username: effectiveUser,
     readyTimeout: CONNECT_TIMEOUT_MS,
     keepaliveInterval: 15_000,
+    // Why: lets servers deliver keyboard-interactive challenges (RFC 4256,
+    // commonly MFA after a partial password success). SshConnection answers
+    // them through the credential prompt callback.
     tryKeyboard: true
   }
 
