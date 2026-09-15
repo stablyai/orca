@@ -224,6 +224,28 @@ describe('Orca cloud profile service', () => {
     })
   })
 
+  it('reports an exchange that fails after Cancel as cancelled, not failed', async () => {
+    configureCloudEnv()
+    const controller = new AbortController()
+    beginOrcaCloudPkceFlowMock.mockImplementation(async () => {
+      controller.abort()
+      return {
+        code: 'auth-code',
+        codeVerifier: 'code-verifier',
+        nonce: 'nonce',
+        redirectUri: 'http://127.0.0.1:4100/auth/callback',
+        state: 'state'
+      }
+    })
+    exchangeOrcaCloudAuthCodeMock.mockRejectedValue(new Error('fetch failed'))
+
+    const result = await connectCurrentOrcaProfile(userDataPath, { signal: controller.signal })
+
+    expect(result.status).toBe('cancelled')
+    expect(revokeOrcaCloudSessionMock).not.toHaveBeenCalled()
+    expect(getCurrentOrcaProfileAuthStatus(userDataPath)).toMatchObject({ state: 'local' })
+  })
+
   it('reports callback failures as failed instead of cancelled', async () => {
     configureCloudEnv()
     beginOrcaCloudPkceFlowMock.mockRejectedValue(new Error('orca_cloud_auth_callback_failed'))

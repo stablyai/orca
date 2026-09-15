@@ -107,7 +107,9 @@ export async function connectCurrentOrcaProfile(
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error)
-    if (isUserCancelledAuthError(message)) {
+    // Why: an exchange that fails after Cancel is still a cancellation to the
+    // user; classifying it by its error would surface a misleading error toast.
+    if (options?.signal?.aborted || isUserCancelledAuthError(message)) {
       return {
         status: 'cancelled',
         auth: getCurrentOrcaProfileAuthStatus(userDataPath)
