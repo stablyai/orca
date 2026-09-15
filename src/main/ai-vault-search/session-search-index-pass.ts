@@ -26,21 +26,27 @@ export type SessionSearchIndexPassOptions = {
 /**
  * Reads whatever the decide step says is owed, until the deadline.
  *
- * Nothing is recorded about what it did not reach. A candidate the deadline cut
- * off is still owed on the next pass for the same reason it was owed on this
- * one — its row says so — so there is no queue to keep, nothing to bound, and
- * nothing to drop. What the reads themselves leave behind is written by the
- * index consumer onto the rows.
+ * Nothing is recorded about what it did not reach beyond `left`, a count the
+ * caller reports and nothing acts on. A candidate the deadline cut off is still
+ * owed on the next pass for the same reason it was owed on this one — its row
+ * says so — so there is no queue to keep, nothing to bound, and nothing to
+ * drop. What the reads themselves leave behind is written by the index consumer
+ * onto the rows.
+ *
+ * `left` is what makes the backlog sayable: a candidate with no row yet is owed
+ * a read and counted by no query, so without this the status has no way to tell
+ * an index that holds everything from one that has barely started.
  */
 export async function runSessionSearchIndexPass(
   store: SessionSearchStore,
   candidates: readonly SessionFileCandidate[],
   options: SessionSearchIndexPassOptions
-): Promise<{ stats: SessionParseStats; outOfTime: boolean }> {
+): Promise<{ stats: SessionParseStats; outOfTime: boolean; left: number }> {
   const stats = createSessionParseStats()
   const cutoffMs = store.retentionCutoff
   let read = 0
   let outOfTime = false
+  let left = 0
   for (const candidate of candidates) {
     throwIfAiVaultScanCancelled(options.signal)
     const path = candidate.file.path
@@ -61,6 +67,7 @@ export async function runSessionSearchIndexPass(
     // count of what a pass left is worth more than the microseconds.
     outOfTime ||= read > 0 && options.overdue?.() === true
     if (outOfTime) {
+      left += 1
       continue
     }
     // The clock the deadline reads is one the owner may close behind: the read
@@ -80,5 +87,5 @@ export async function runSessionSearchIndexPass(
       )
     }
   }
-  return { stats, outOfTime }
+  return { stats, outOfTime, left }
 }

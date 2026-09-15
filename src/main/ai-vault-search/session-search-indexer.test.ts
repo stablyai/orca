@@ -329,7 +329,9 @@ it('reads what one pass has time for and finishes the rest on the next', async (
     )
   }
   await indexer?.reconcile()
-  expect(indexer?.status()).toMatchObject({ filesIndexed: 3, filesDue: 0 })
+  // Two of the four went unread, and neither has a row, so the count it hands
+  // back is the only thing that can say the index is not done.
+  expect(indexer?.status()).toMatchObject({ filesIndexed: 3, filesDue: 2, phase: 'indexing' })
 
   await indexer?.reconcile()
   expect(sessionsMatching('deadlined')).toHaveLength(4)
@@ -926,14 +928,24 @@ it('stops the opening sweep at its deadline and drains the rest over the passes 
     await writeClaudeTranscript(transcriptPath(session), [`backlogged session ${index}`], session)
   }
   await newIndexer(readsPerPass(2)).start()
-  expect(indexer?.status().filesIndexed).toBe(2)
+  // A sweep that ran out of time did not sweep the machine: it says so rather
+  // than stamping itself complete and reporting the three it never opened as
+  // nothing at all.
+  expect(indexer?.status()).toMatchObject({
+    filesIndexed: 2,
+    filesDue: 3,
+    phase: 'indexing',
+    lastSweepCompletedAt: null
+  })
 
   await nextCycle()
-  expect(indexer?.status().filesIndexed).toBe(4)
+  expect(indexer?.status()).toMatchObject({ filesIndexed: 4, filesDue: 1, phase: 'indexing' })
+  expect(indexer?.status().lastSweepCompletedAt).toBeNull()
 
   await nextCycle()
   expect(sessionsMatching('backlogged')).toHaveLength(5)
-  expect(indexer?.status()).toMatchObject({ filesIndexed: 5, filesDue: 0 })
+  expect(indexer?.status()).toMatchObject({ filesIndexed: 5, filesDue: 0, phase: 'current' })
+  expect(indexer?.status().lastSweepCompletedAt).not.toBeNull()
 })
 
 // The sweep cadence, with nobody asking for it: a file outside the recency
