@@ -27,7 +27,7 @@ export type DragReorderCallbacks = {
   getStyleOptions: () => PaneStyleOptions
   isDestroyed: () => boolean
   safeFit: (pane: ManagedPane) => void
-  applyPaneOpacity: () => void
+  applyActivePaneStyles: () => void
   applyDividerStyles: () => void
   refitPanesUnder: (el: HTMLElement) => void
   requestPaneReparentFrame?: (callback: FrameRequestCallback) => void
@@ -130,7 +130,7 @@ export function handlePaneDrop(
   for (const p of panes.values()) {
     callbacks.safeFit(p)
   }
-  callbacks.applyPaneOpacity()
+  callbacks.applyActivePaneStyles()
   callbacks.applyDividerStyles()
   updateMultiPaneState(callbacks)
   callbacks.onLayoutChanged?.()
