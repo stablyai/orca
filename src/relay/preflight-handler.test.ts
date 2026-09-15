@@ -397,3 +397,87 @@ describe('PreflightHandler', () => {
     }
   })
 })
+
+describe('preflight.detectAgents identity exclusion', () => {
+  const BOB_COMMAND = {
+    id: 'bob',
+    cmd: 'bob',
+    identityExclusion: {
+      args: ['--help'],
+      excludePattern: { source: String.raw`\bneo\s?vim\b`, flags: 'i' },
+      requirePattern: { source: String.raw`Bob in your terminal|\bIBM\b`, flags: 'i' }
+    }
+  }
+
+  function detectAgentsHandler(): (params: Record<string, unknown>) => Promise<unknown> {
+    const requestHandlers = new Map<string, (params: Record<string, unknown>) => Promise<unknown>>()
+    const dispatcher = {
+      onRequest: vi.fn(
+        (method: string, handler: (params: Record<string, unknown>) => Promise<unknown>) => {
+          requestHandlers.set(method, handler)
+        }
+      )
+    }
+    new PreflightHandler(dispatcher as never)
+    const handler = requestHandlers.get('preflight.detectAgents')
+    expect(handler).toBeDefined()
+    return handler!
+  }
+
+  beforeEach(() => {
+    runProcessMock.mockReset()
+    execFileAsyncMock.mockImplementation(async (_file, args) => {
+      if (String(args[1]).includes("'bob'")) {
+        return { stdout: '__ORCA_AGENT_PATH__/home/remote/.cargo/bin/bob\n' }
+      }
+      throw new Error('not found')
+    })
+  })
+
+  it('probes the resolved remote executable and drops an unrelated tool', async () => {
+    runProcessMock.mockResolvedValue({
+      code: 0,
+      signal: null,
+      stdout: 'A version manager for Neovim\n',
+      stderr: '',
+      timedOut: false
+    })
+
+    await expect(detectAgentsHandler()({ commands: [BOB_COMMAND] })).resolves.toEqual({
+      agents: []
+    })
+    expect(runProcessMock.mock.calls[0][0]).toMatchObject({
+      program: '/home/remote/.cargo/bin/bob',
+      args: ['--help']
+    })
+  })
+
+  it('keeps the agent when the probe output carries its signature', async () => {
+    runProcessMock.mockResolvedValue({
+      code: 0,
+      signal: null,
+      stdout: 'Bob in your terminal\n',
+      stderr: '',
+      timedOut: false
+    })
+
+    await expect(detectAgentsHandler()({ commands: [BOB_COMMAND] })).resolves.toEqual({
+      agents: ['bob']
+    })
+  })
+
+  it('keeps the agent when the probe cannot run', async () => {
+    runProcessMock.mockRejectedValue(new Error('spawn EACCES'))
+
+    await expect(detectAgentsHandler()({ commands: [BOB_COMMAND] })).resolves.toEqual({
+      agents: ['bob']
+    })
+  })
+
+  it('skips the probe for commands sent by a client without exclusions', async () => {
+    await expect(detectAgentsHandler()({ commands: [{ id: 'bob', cmd: 'bob' }] })).resolves.toEqual(
+      { agents: ['bob'] }
+    )
+    expect(runProcessMock).not.toHaveBeenCalled()
+  })
+})

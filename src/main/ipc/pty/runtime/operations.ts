@@ -45,6 +45,7 @@ export function writePtyFromRuntimeController(
   } catch {
     return options?.waitForSettlement ? writeRefused('provider_unavailable') : false
   }
+  deps.runtime?.notePtyInput(ptyId)
   if (options?.waitForSettlement) {
     // A provider that cannot settle says so before any effect; synthesizing acceptance
     // from the fire-and-forget write is what cleared durable mailbox reservations.

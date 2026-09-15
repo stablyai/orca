@@ -10,6 +10,7 @@ import {
   wrapReadablePosixHookCommand
 } from '../codex/codex-hook-definition'
 import { ANTIGRAVITY_EVENTS, ANTIGRAVITY_PRE_TOOL_USE_DECISION } from '../antigravity/hook-events'
+import { getBobManagedCommand, getBobRemoteManagedCommand } from '../bob/hook-settings'
 import { CURSOR_EVENTS } from '../cursor/hook-events'
 import {
   getManagedCommand as getCursorCommand,
@@ -140,6 +141,13 @@ const buildersByAgent = new Map<string, CommandBuilders>([
     {
       local: (path) => [wrapPosixHookCommand(path.replaceAll('\\', '/'))],
       remote: (path) => [wrapPosixHookCommand(path)]
+    }
+  ],
+  [
+    'bob',
+    {
+      local: (path) => [getBobManagedCommand(path)],
+      remote: (path) => [getBobRemoteManagedCommand(path)]
     }
   ]
 ])

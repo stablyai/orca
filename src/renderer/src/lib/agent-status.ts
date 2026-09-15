@@ -130,6 +130,7 @@ const ICONABLE_AGENT_TYPES: Record<TuiAgent, true> = {
   hermes: true,
   openclaw: true,
   copilot: true,
+  bob: true,
   grok: true,
   devin: true,
   ante: true,

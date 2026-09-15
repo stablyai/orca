@@ -17,6 +17,7 @@ const {
   getAzureDevOpsAuthStatusMock,
   getGiteaAuthStatusMock,
   detectCommandsInInstallDirsMock,
+  resolveCommandsInInstallDirsMock,
   mergePersistedWindowsPathAsyncMock,
   mergePersistedWindowsPathMock
 } = vi.hoisted(() => ({
@@ -30,6 +31,7 @@ const {
   getAzureDevOpsAuthStatusMock: vi.fn(),
   getGiteaAuthStatusMock: vi.fn(),
   detectCommandsInInstallDirsMock: vi.fn(),
+  resolveCommandsInInstallDirsMock: vi.fn(),
   mergePersistedWindowsPathAsyncMock: vi.fn(),
   mergePersistedWindowsPathMock: vi.fn()
 }))
@@ -57,7 +59,8 @@ vi.mock('../gitea/client', () => ({ getGiteaAuthStatus: getGiteaAuthStatusMock }
 
 // Isolate the subprocess-spawn assertion from the fs-based install-dir fallback.
 vi.mock('./local-agent-install-dir-detection', () => ({
-  detectCommandsInInstallDirs: detectCommandsInInstallDirsMock
+  detectCommandsInInstallDirs: detectCommandsInInstallDirsMock,
+  resolveCommandsInInstallDirs: resolveCommandsInInstallDirsMock
 }))
 
 // Win32 preflight env merge reads persisted registry PATH; stub it out.
@@ -85,6 +88,8 @@ describe('#9297: local agent detection spawns zero where/which subprocesses', ()
     })
     detectCommandsInInstallDirsMock.mockReset()
     detectCommandsInInstallDirsMock.mockReturnValue(new Set<string>())
+    resolveCommandsInInstallDirsMock.mockReset()
+    resolveCommandsInInstallDirsMock.mockReturnValue(new Map<string, string>())
     // Empty PATH -> deterministic "no agents found" regardless of the host's
     // real installed CLIs, so the assertion is stable on any dev machine.
     process.env.PATH = ''

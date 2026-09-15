@@ -59,6 +59,7 @@ vi.mock('./runtime-client', () => {
 
 import { main } from './index'
 import * as dispatchModule from './dispatch'
+import { DEFAULT_DISABLED_TUI_AGENTS } from '../shared/tui-agent-selection'
 
 const CLI_DIR = __dirname
 
@@ -169,7 +170,9 @@ describe('RuntimeClient module-graph deferral', () => {
           `${argv.join(' ')} hook application`
         ).toHaveBeenCalledExactlyOnceWith(false, {
           agentCmdOverrides: {},
-          disabledTuiAgents: []
+          // Why not a literal: agents ship opt-in (bob) when their bare name collides with an
+          // unrelated tool, so assert the shipped default rather than re-listing it here.
+          disabledTuiAgents: [...DEFAULT_DISABLED_TUI_AGENTS]
         })
       } else {
         expect(

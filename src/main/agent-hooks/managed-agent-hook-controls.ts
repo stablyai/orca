@@ -8,6 +8,10 @@ import type { GlobalSettings } from '../../shared/global-settings-types'
 import { probeClaudeCliVersion } from '../claude/claude-session-end-hook-capability'
 import { detectLocalManagedAgentCliPresence } from './local-agent-cli-presence'
 import {
+  agentsFailingHookInstallIdentityProbe,
+  buildManagedHookIdentityProbe
+} from './managed-hook-identity-gate'
+import {
   MANAGED_AGENT_HOOK_ASYNC_REMOVERS,
   MANAGED_AGENT_HOOK_INSTALLERS,
   MANAGED_AGENT_HOOK_REMOVERS,
@@ -174,6 +178,14 @@ export async function installManagedAgentHooks(
     )
   }
 
+  // Why: only targets present on PATH are worth probing, and only those declaring an identity
+  // exclusion spawn anything at all.
+  const misidentified = await agentsFailingHookInstallIdentityProbe(
+    targets.filter((target) => presenceByAgent[target.agent]?.state === 'found'),
+    buildManagedHookIdentityProbe(),
+    settings
+  )
+
   const results: AgentHookInstallStatus[] = []
   for (const entry of installers) {
     const [agent] = entry
@@ -187,6 +199,16 @@ export async function installManagedAgentHooks(
           agent,
           'hooks_disabled',
           'Agent status hooks were disabled before install completed.'
+        )
+      )
+      continue
+    }
+    if (misidentified.has(agent)) {
+      results.push(
+        skippedStatus(
+          agent,
+          'cli_not_found',
+          'An unrelated tool of the same name is on PATH; managed hook install skipped.'
         )
       )
       continue

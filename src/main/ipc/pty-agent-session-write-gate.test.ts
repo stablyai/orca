@@ -169,6 +169,7 @@ beforeEach(() => {
     } as never
   })
   const runtime = {
+    notePtyInput: () => {},
     setPtyController: (controller: { write: (ptyId: string, data: string) => boolean }) => {
       ptyController = controller
     },

@@ -2,9 +2,10 @@ import type { TuiAgent } from '../../../src/shared/tui-agent'
 import { isTuiAgent } from '../../../src/shared/tui-agent-config'
 import { TUI_AGENT_DISPLAY_NAMES } from '../../../src/shared/tui-agent-display-names'
 import {
+  DEFAULT_DISABLED_TUI_AGENTS,
   TUI_AGENT_AUTO_PICK_ORDER,
+  filterEnabledTuiAgents,
   isTuiAgentEnabled,
-  normalizeDisabledTuiAgents,
   pickTuiAgent
 } from '../../../src/shared/tui-agent-selection'
 
@@ -17,6 +18,7 @@ export const MOBILE_TUI_AGENT_FAVICON_DOMAINS: Partial<Record<TuiAgent, string>>
   openclaude: 'openclaude.gitlawb.com',
   grok: 'x.ai',
   copilot: 'github.com',
+  bob: 'bob.ibm.com',
   opencode: 'opencode.ai',
   'mimo-code': 'mimo.xiaomi.com',
   ante: 'antigma.ai',
@@ -49,9 +51,10 @@ export const MOBILE_TUI_AGENT_FAVICON_DOMAINS: Partial<Record<TuiAgent, string>>
 
 export const isMobileTuiAgent: (value: unknown) => value is TuiAgent = isTuiAgent
 
-// Why: mobile passes raw persisted settings through; the shared helpers already discard non-arrays.
-function asDisabledList(disabled: unknown): Iterable<unknown> | null {
-  return Array.isArray(disabled) ? disabled : null
+// Why: mobile passes raw host settings through. Anything but an array means the host sent no
+// usable setting, so keep the desktop opt-out defaults; an explicit `[]` enables all.
+function asDisabledList(disabled: unknown): Iterable<unknown> {
+  return Array.isArray(disabled) ? disabled : DEFAULT_DISABLED_TUI_AGENTS
 }
 
 export function isMobileTuiAgentEnabled(agent: TuiAgent, disabled?: unknown): boolean {
@@ -70,6 +73,5 @@ export function filterEnabledMobileTuiAgents<T extends TuiAgent>(
   agents: Iterable<T>,
   disabled?: unknown
 ): T[] {
-  const disabledSet = new Set(normalizeDisabledTuiAgents(disabled))
-  return [...agents].filter((agent) => !disabledSet.has(agent))
+  return filterEnabledTuiAgents(agents, asDisabledList(disabled))
 }
