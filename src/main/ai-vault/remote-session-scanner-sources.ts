@@ -18,6 +18,10 @@ import { partitionSubagentTranscriptPaths } from './session-scanner-subagent-tra
 import { partitionOmpSubagentTranscriptPaths } from './session-scanner-omp-subagent-transcripts'
 import type { FileWithMtime } from './session-scanner-types'
 import { normalizeAgentSessionsDir } from './session-scanner-values'
+import {
+  isOpenClawSessionDirectory,
+  openClawPrunedAgentNotice
+} from './session-scanner-openclaw-layout'
 import { remoteCodexIndexedTitleReader } from './remote-session-scanner-codex-index'
 import { remoteClineSource } from './remote-session-scanner-cline-source'
 import type {
@@ -248,16 +252,19 @@ function remoteOpenClawSources(
   remoteHome: string,
   hostPlatform: RemoteHostPlatform
 ): RemoteSessionSource[] {
-  return ['.openclaw', '.clawdbot'].map((rootName) =>
-    jsonlSource(
+  return ['.openclaw', '.clawdbot'].map((rootName) => ({
+    ...jsonlSource(
       'openclaw',
       remoteHome,
       hostPlatform,
       [rootName, 'agents'],
       openClawParser,
       (path) => remotePathSegments(path).includes('sessions')
-    )
-  )
+    ),
+    // Each agent owns one sessions subtree; siblings can contain other agents' homes.
+    directoryPredicate: isOpenClawSessionDirectory,
+    directoryNotice: openClawPrunedAgentNotice
+  }))
 }
 
 function parserOptions(context: RemoteScannerContext): RemoteParserOptions {

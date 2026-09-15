@@ -137,6 +137,21 @@ async function walkRemoteSessionFiles(
     return []
   }
 
+  const notice = source.directoryNotice?.(
+    depth,
+    entries.filter((entry) => entry.isDirectory).map((entry) => entry.name),
+    entries.filter((entry) => !entry.isDirectory).map((entry) => entry.name)
+  )
+  if (notice) {
+    recordSessionScanIssue(issues, {
+      executionHostId: context.executionHostId,
+      agent: source.agent,
+      kind: 'notice',
+      path: dirPath,
+      message: notice
+    })
+  }
+
   const extensions = new Set(source.extensions)
   const files: string[] = []
   for (const entry of entries) {
