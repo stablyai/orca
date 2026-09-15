@@ -12,6 +12,7 @@ import type { SidebarFilterState } from './visible-worktree-kinds'
 export function sidebarHasActiveFilters(state: SidebarFilterState): boolean {
   return (
     state.showSleepingWorkspaces !== DEFAULT_SHOW_SLEEPING_WORKSPACES ||
+    (state.hideSleepingProjectKeys?.length ?? 0) > 0 ||
     state.filterRepoIds.length > 0 ||
     state.hideDefaultBranchWorkspace ||
     state.hideAutomationGeneratedWorkspaces ||

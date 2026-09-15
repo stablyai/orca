@@ -73,6 +73,22 @@ describe('worktree jump navigation', () => {
     expect(mocks.warning).toHaveBeenCalledOnce()
   })
 
+  it('preserves a project-only filter and warns instead of queueing an impossible reveal', () => {
+    const state = mocks.getState()
+    state.filterRepoIds = []
+    state.hideSleepingProjectKeys = ['ssh:beta\0repo']
+
+    jumpToWorktreeFromSidebar('repo::/target', { executionHostId: 'ssh:beta' })
+
+    expect(mocks.activateAndRevealWorkspace).toHaveBeenCalledWith('repo::/target', {
+      executionHostId: 'ssh:beta',
+      revealInSidebar: false,
+      clearSidebarFilters: false
+    })
+    expect(state.revealWorktreeInSidebar).not.toHaveBeenCalled()
+    expect(mocks.warning).toHaveBeenCalledOnce()
+  })
+
   it('does not warn when the target is visible', () => {
     mocks.getVisibleWorktreeShortcutTargets.mockReturnValue([{ id: 'wt-1' }])
 
@@ -83,6 +99,8 @@ describe('worktree jump navigation', () => {
 
   it('reveals without warning when activation wakes a target hidden only by Hide sleeping', () => {
     const state = mocks.getState()
+    state.filterRepoIds = []
+    state.hideSleepingProjectKeys = ['local\0repo']
     mocks.worktreePassesSidebarFilters.mockReturnValueOnce(false).mockReturnValueOnce(true)
 
     expect(jumpToWorktreeFromSidebar('wt-sleeping')).toBe(true)

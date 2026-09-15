@@ -1,25 +1,14 @@
 import { useMemo } from 'react'
-import {
-  isAutomationGeneratedWorkspace,
-  isCliCreatedWorkspace,
-  isDetachedHeadWorkspace,
-  isSleepingSweepExemptWorkspace
-} from '@/components/sidebar/visible-worktrees'
-import { isDefaultBranchWorkspace } from '@/components/sidebar/default-branch-workspace'
+import { useWorktreeJumpPaletteVisibleWorktrees } from './use-worktree-jump-palette-visible-worktrees'
 import { sortWorktreesSmart } from '@/components/sidebar/smart-sort'
 import { buildWorktreeChecksReviewIndex } from '@/components/cmd-j/worktree-checks-review-index'
-import { getLiveAgentStatusByWorktreeId, isInactiveWorkspace } from '@/lib/worktree-activity-state'
+import { getLiveAgentStatusByWorktreeId } from '@/lib/worktree-activity-state'
 import { orderEmptyQueryWorktrees } from '@/lib/order-empty-query-worktrees'
 import {
   getWorktreePaletteSearchScope,
   searchWorktreeDocuments
 } from '@/lib/worktree-palette-search'
 import { buildPaletteWorktreeIndex, resolvePaletteWorktree } from '@/lib/palette-repo-resolution'
-import {
-  EMPTY_PAIRED_DEVICE_IDS_BY_ENVIRONMENT,
-  getPairedDeviceIdsByEnvironment,
-  isWorkspaceFromOtherDevice
-} from '@/components/sidebar/workspace-creator-visibility'
 import type { Worktree } from '../../../shared/worktree/types'
 import { EMPTY_SORTED_WORKTREES } from './worktree-jump-palette-model'
 import type { WorktreeJumpPaletteFilter } from './use-worktree-jump-palette-filter'
@@ -53,6 +42,7 @@ export function useWorktreeJumpPaletteWorktrees({
   hideDetachedHeadWorkspaces,
   hideWorkspacesFromOtherDevices,
   showSleepingWorkspaces,
+  hideSleepingProjectKeys,
   alwaysShowDefaultBranchWorkspace,
   ptyIdsByTabId,
   browserTabsByWorktree,
@@ -87,72 +77,25 @@ export function useWorktreeJumpPaletteWorktrees({
       ),
     [agentStatusByPaneKey, tabsByWorktree]
   )
-  const pairedDeviceIdsByEnvironment = useMemo(
-    () =>
-      hideWorkspacesFromOtherDevices
-        ? getPairedDeviceIdsByEnvironment(runtimeEnvironments, runtimeStatusByEnvironmentId)
-        : EMPTY_PAIRED_DEVICE_IDS_BY_ENVIRONMENT,
-    [hideWorkspacesFromOtherDevices, runtimeEnvironments, runtimeStatusByEnvironmentId]
-  )
-  const emptyQueryVisibleWorktrees = useMemo(
-    () =>
-      allWorktrees.filter((worktree) => {
-        if (worktree.isArchived) {
-          return false
-        }
-        if (filterPredicate && !filterPredicate.matchesWorktree(worktree)) {
-          return false
-        }
-        if (hideDefaultBranchWorkspace && isDefaultBranchWorkspace(worktree)) {
-          return false
-        }
-        if (hideAutomationGeneratedWorkspaces && isAutomationGeneratedWorkspace(worktree)) {
-          return false
-        }
-        if (hideCliCreatedWorkspaces && isCliCreatedWorkspace(worktree)) {
-          return false
-        }
-        if (hideDetachedHeadWorkspaces && isDetachedHeadWorkspace(worktree)) {
-          return false
-        }
-        if (
-          hideWorkspacesFromOtherDevices &&
-          isWorkspaceFromOtherDevice(worktree, pairedDeviceIdsByEnvironment)
-        ) {
-          return false
-        }
-        if (
-          !showSleepingWorkspaces &&
-          !isSleepingSweepExemptWorkspace(worktree, alwaysShowDefaultBranchWorkspace) &&
-          isInactiveWorkspace(
-            worktree.id,
-            tabsByWorktree,
-            ptyIdsByTabId,
-            browserTabsByWorktree,
-            worktreeIdsWithLiveAgent
-          )
-        ) {
-          return false
-        }
-        return true
-      }),
-    [
-      allWorktrees,
-      alwaysShowDefaultBranchWorkspace,
-      browserTabsByWorktree,
-      filterPredicate,
-      hideAutomationGeneratedWorkspaces,
-      hideCliCreatedWorkspaces,
-      hideDefaultBranchWorkspace,
-      hideDetachedHeadWorkspaces,
-      hideWorkspacesFromOtherDevices,
-      pairedDeviceIdsByEnvironment,
-      ptyIdsByTabId,
-      showSleepingWorkspaces,
-      tabsByWorktree,
-      worktreeIdsWithLiveAgent
-    ]
-  )
+  const emptyQueryVisibleWorktrees = useWorktreeJumpPaletteVisibleWorktrees({
+    allWorktrees,
+    hideDefaultBranchWorkspace,
+    hideAutomationGeneratedWorkspaces,
+    hideCliCreatedWorkspaces,
+    hideDetachedHeadWorkspaces,
+    hideWorkspacesFromOtherDevices,
+    showSleepingWorkspaces,
+    hideSleepingProjectKeys,
+    alwaysShowDefaultBranchWorkspace,
+    tabsByWorktree,
+    ptyIdsByTabId,
+    browserTabsByWorktree,
+    runtimeEnvironments,
+    runtimeStatusByEnvironmentId,
+    filterPredicate,
+    repoMap,
+    worktreeIdsWithLiveAgent
+  })
   const { visibleWorktreesForState, switchableWorktreesForRows } = useMemo(
     () =>
       orderEmptyQueryWorktrees({

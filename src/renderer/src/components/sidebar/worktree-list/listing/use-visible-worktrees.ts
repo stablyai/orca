@@ -47,10 +47,12 @@ export function useVisibleSidebarWorktrees(args: {
     workspaceHostScope
   } = filterState
   const worktreesByRepo = useAppStore((s) => s.worktreesByRepo)
-  const agentStatusEpoch = useAppStore((s) => (!showSleepingWorkspaces ? s.agentStatusEpoch : 0))
+  const hideSleepingProjectKeys = useAppStore((s) => s.hideSleepingProjectKeys)
+  const filterSleeping = !showSleepingWorkspaces || (hideSleepingProjectKeys?.length ?? 0) > 0
+  const agentStatusEpoch = useAppStore((s) => (filterSleeping ? s.agentStatusEpoch : 0))
   // Why: skip the clock entirely when the epoch is the opt-out sentinel, so a
   // sleeping-workspaces list cannot evict the sample the live lists share.
-  const agentStatusNow = showSleepingWorkspaces ? 0 : getAgentStatusEpochNow(agentStatusEpoch)
+  const agentStatusNow = !filterSleeping ? 0 : getAgentStatusEpochNow(agentStatusEpoch)
   const runtimeEnvironments = useAppStore((s) => s.runtimeEnvironments)
   const runtimeStatusByEnvironmentId = useAppStore((s) => s.runtimeStatusByEnvironmentId)
   const pairedDeviceIdsByEnvironment = useMemo(
@@ -62,13 +64,13 @@ export function useVisibleSidebarWorktrees(args: {
   )
 
   // Read tabsByWorktree when needed for filtering or sorting
-  const needsActivityMaps = !showSleepingWorkspaces || sortBy === 'smart'
+  const needsActivityMaps = filterSleeping || sortBy === 'smart'
   const tabsByWorktree = useAppStore((s) =>
     needsActivityMaps ? getVisibleWorktreeTerminalActivityTabs(s.tabsByWorktree) : null
   )
   const ptyIdsByTabId = useAppStore((s) => (needsActivityMaps ? s.ptyIdsByTabId : null))
   const browserTabsByWorktree = useAppStore((s) =>
-    !showSleepingWorkspaces ? getVisibleWorktreeBrowserActivityTabs(s.browserTabsByWorktree) : null
+    filterSleeping ? getVisibleWorktreeBrowserActivityTabs(s.browserTabsByWorktree) : null
   )
 
   const recomputedVisibleWorktrees = useMemo(() => {
@@ -78,11 +80,12 @@ export function useVisibleSidebarWorktrees(args: {
     return computeVisibleWorktrees(worktreesByRepo, sortedIds, {
       filterRepoIds,
       showSleepingWorkspaces,
+      hideSleepingProjectKeys,
       tabsByWorktree,
       ptyIdsByTabId,
       browserTabsByWorktree,
       // Why snapshot on agentStatusEpoch: update membership immediately without repainting on every hook ping.
-      worktreeIdsWithLiveAgent: showSleepingWorkspaces
+      worktreeIdsWithLiveAgent: !filterSleeping
         ? EMPTY_WORKTREE_ID_SET
         : getWorktreeIdsWithLiveAgent(
             useAppStore.getState().agentStatusByPaneKey,
@@ -111,6 +114,8 @@ export function useVisibleSidebarWorktrees(args: {
     agentStatusNow,
     filterRepoIds,
     showSleepingWorkspaces,
+    hideSleepingProjectKeys,
+    filterSleeping,
     hideDefaultBranchWorkspace,
     hideAutomationGeneratedWorkspaces,
     hideCliCreatedWorkspaces,

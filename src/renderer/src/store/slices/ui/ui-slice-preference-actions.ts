@@ -60,6 +60,13 @@ export function createUiPreferenceActions(set: UISliceSet, get: UISliceGet): Par
     showActiveOnly: false,
     setShowActiveOnly: (v) => set({ showActiveOnly: v }),
 
+    hideSleepingProjectKeys: [],
+    setHideSleepingProjectKeys: (keys) => {
+      const hideSleepingProjectKeys = [...new Set(keys)]
+      set({ hideSleepingProjectKeys })
+      window.api.ui.set({ hideSleepingProjectKeys }).catch(console.error)
+    },
+
     showSleepingWorkspaces: DEFAULT_SHOW_SLEEPING_WORKSPACES,
     setShowSleepingWorkspaces: (v) => set({ showSleepingWorkspaces: v }),
 
