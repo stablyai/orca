@@ -7,6 +7,7 @@ import type { RuntimeMobileSessionCreateTerminalResult } from '../../shared/runt
 import { randomUUID } from 'node:crypto'
 import { getRuntimeDesktopSurface } from './runtime-desktop-surface'
 import type { IpcMainEvent } from 'electron'
+import type { TerminalTabCreateReply } from '../../shared/terminal-reveal-identity'
 import {
   MOBILE_TERMINAL_READY_FALLBACK_MS,
   MOBILE_TERMINAL_SURFACE_TIMEOUT_MS,
@@ -97,10 +98,7 @@ export class OrcaRuntimeWithRunCreateMobileSessionTerminal extends OrcaRuntimeWi
           reject(new Error('client_disconnected'))
         }
 
-        const handler = (
-          event: IpcMainEvent,
-          r: { requestId: string; tabId?: string; title?: string; error?: string }
-        ): void => {
+        const handler = (event: IpcMainEvent, r: TerminalTabCreateReply): void => {
           if (event.sender !== win.webContents || r.requestId !== requestId) {
             return
           }
@@ -108,7 +106,7 @@ export class OrcaRuntimeWithRunCreateMobileSessionTerminal extends OrcaRuntimeWi
           getRuntimeDesktopSurface().removeIpcListener('terminal:tabCreateReply', handler)
           opts.signal?.removeEventListener('abort', onAbort)
           if (r.error) {
-            reject(new Error(r.error))
+            reject(Object.assign(new Error(r.error), r.errorCode ? { code: r.errorCode } : {}))
           } else {
             resolve({ tabId: r.tabId!, title: r.title ?? '' })
           }

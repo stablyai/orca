@@ -1,3 +1,8 @@
+import {
+  ensureTerminalWorktreeVisible,
+  hasTerminalWorktreeRow
+} from './terminal-worktree-visibility'
+import { toast } from 'sonner'
 import type { SplitTerminalPaneDetail } from '@/constants/terminal'
 import { requestBackgroundTerminalWorktreeMount } from '@/components/terminal/background-terminal-worktree-mount'
 import {
@@ -117,7 +122,7 @@ export function registerTerminalUiRoutingIpcBridge(unsubs: (() => void)[]): void
 
   unsubs.push(
     window.api.ui.onFocusTerminal(
-      ({
+      async ({
         tabId,
         worktreeId,
         leafId,
@@ -125,21 +130,29 @@ export function registerTerminalUiRoutingIpcBridge(unsubs: (() => void)[]): void
         flashFocusedPane,
         scrollToBottomIfOutputSinceLastView
       }) => {
-        const store = useAppStore.getState()
-        activateTerminalInitiatedWorktree(store, worktreeId)
-        store.setActiveTab(tabId)
-        store.revealWorktreeInSidebar(worktreeId)
-        if (ackPaneKeyOnSuccess || flashFocusedPane || scrollToBottomIfOutputSinceLastView) {
-          activateTabAndFocusPane(tabId, leafId ?? null, {
-            ...(ackPaneKeyOnSuccess ? { ackPaneKeyOnSuccess } : {}),
-            ...(flashFocusedPane ? { flashFocusedPane: true } : {}),
-            ...(scrollToBottomIfOutputSinceLastView
-              ? { scrollToBottomIfOutputSinceLastView: true }
-              : {})
-          })
-          return
+        try {
+          let store = useAppStore.getState()
+          if (!hasTerminalWorktreeRow(store, worktreeId)) {
+            await ensureTerminalWorktreeVisible(worktreeId)
+            store = useAppStore.getState()
+          }
+          activateTerminalInitiatedWorktree(store, worktreeId)
+          store.setActiveTab(tabId)
+          store.revealWorktreeInSidebar(worktreeId)
+          if (ackPaneKeyOnSuccess || flashFocusedPane || scrollToBottomIfOutputSinceLastView) {
+            activateTabAndFocusPane(tabId, leafId ?? null, {
+              ...(ackPaneKeyOnSuccess ? { ackPaneKeyOnSuccess } : {}),
+              ...(flashFocusedPane ? { flashFocusedPane: true } : {}),
+              ...(scrollToBottomIfOutputSinceLastView
+                ? { scrollToBottomIfOutputSinceLastView: true }
+                : {})
+            })
+            return
+          }
+          focusTerminalInitiatedTab(tabId, leafId, worktreeId)
+        } catch (error) {
+          toast.error(error instanceof Error ? error.message : String(error))
         }
-        focusTerminalInitiatedTab(tabId, leafId, worktreeId)
       }
     )
   )

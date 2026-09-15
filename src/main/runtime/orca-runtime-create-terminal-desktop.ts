@@ -2,6 +2,7 @@
 import * as dependencies from './orca-runtime-create-terminal-dependencies'
 import type { OrcaRuntimeWithCreateTerminal } from './orca-runtime-create-terminal'
 import type { RuntimeTerminalPresentation } from '../../shared/runtime-types'
+import type { TerminalTabCreateReply } from '../../shared/terminal-reveal-identity'
 
 export async function createDesktopTerminal(
   runtime: OrcaRuntimeWithCreateTerminal,
@@ -28,22 +29,18 @@ export async function createDesktopTerminal(
       dependencies.getRuntimeDesktopSurface().removeIpcListener('terminal:tabCreateReply', handler)
       reject(new Error('Terminal creation timed out'))
     }, 10000)
-    const handler = (
-      event: dependencies.IpcMainEvent,
-      response: {
-        requestId: string
-        tabId?: string
-        title?: string
-        error?: string
-      }
-    ): void => {
+    const handler = (event: dependencies.IpcMainEvent, response: TerminalTabCreateReply): void => {
       if (event.sender !== win.webContents || response.requestId !== requestId) {
         return
       }
       clearTimeout(timer)
       dependencies.getRuntimeDesktopSurface().removeIpcListener('terminal:tabCreateReply', handler)
       if (response.error) {
-        reject(new Error(response.error))
+        const error = new Error(response.error)
+        if (response.errorCode) {
+          Object.assign(error, { code: response.errorCode })
+        }
+        reject(error)
       } else {
         resolve({ tabId: response.tabId!, title: response.title ?? launchOpts.title ?? '' })
       }

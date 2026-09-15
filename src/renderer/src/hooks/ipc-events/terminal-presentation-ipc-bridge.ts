@@ -1,3 +1,7 @@
+import {
+  ensureTerminalWorktreeVisible,
+  hasTerminalWorktreeRow
+} from './terminal-worktree-visibility'
 import { requestBackgroundTerminalWorktreeMount } from '@/components/terminal/background-terminal-worktree-mount'
 import { hasRegisteredRuntimeTerminalTab } from '@/runtime/sync-runtime-graph'
 import { planMobileTerminalTabMount } from '@/lib/mobile-terminal-tab-mount'
@@ -22,7 +26,7 @@ import {
 export function registerTerminalPresentationIpcBridge(unsubs: (() => void)[]): void {
   unsubs.push(
     window.api.ui.onCreateTerminal(
-      ({
+      async ({
         requestId,
         worktreeId,
         command,
@@ -46,7 +50,7 @@ export function registerTerminalPresentationIpcBridge(unsubs: (() => void)[]): v
         splitTelemetrySource
       }) => {
         try {
-          const store = useAppStore.getState()
+          let store = useAppStore.getState()
           const terminalPresentation = resolveTerminalPresentation({
             presentation,
             activate,
@@ -54,6 +58,10 @@ export function registerTerminalPresentationIpcBridge(unsubs: (() => void)[]): v
           })
           const shouldActivate = terminalPresentation === 'focused'
           const shouldSurfaceOwner = terminalPresentation !== 'background' && surfaceOwner !== false
+          if (shouldActivate && !hasTerminalWorktreeRow(store, worktreeId)) {
+            await ensureTerminalWorktreeVisible(worktreeId)
+            store = useAppStore.getState()
+          }
           if (shouldActivate) {
             activateTerminalInitiatedWorktree(store, worktreeId)
           }

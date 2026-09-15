@@ -6,6 +6,7 @@ import type {
   TerminalLayoutSnapshot,
   TerminalPaneLayoutNode
 } from '../../../../shared/terminal-tab-types'
+import { hasTerminalWorktreeRow, hiddenTerminalWorktreeError } from './terminal-worktree-visibility'
 import type { AppState } from '../../store/types'
 
 export function resolveTerminalPresentation(data: {
@@ -36,6 +37,9 @@ export function focusTerminalInitiatedTab(
 }
 
 export function activateTerminalInitiatedWorktree(store: AppState, worktreeId: string): void {
+  if (!hasTerminalWorktreeRow(store, worktreeId)) {
+    throw hiddenTerminalWorktreeError()
+  }
   store.setActiveView('terminal')
   store.setActiveWorktree(worktreeId)
   store.markWorktreeVisited(worktreeId)
