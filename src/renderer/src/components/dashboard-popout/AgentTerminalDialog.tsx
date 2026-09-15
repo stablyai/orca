@@ -1,4 +1,4 @@
-import { useEffect, useId } from 'react'
+import { useEffect, useId, useLayoutEffect, useRef } from 'react'
 import { SquareArrowOutUpRight, XIcon } from 'lucide-react'
 import { AgentIcon } from '@/lib/agent-catalog'
 import { agentTypeToIconAgent, formatAgentTypeLabel } from '@/lib/agent-status'
@@ -77,6 +77,7 @@ function AgentTerminalFrame({
         <AgentTerminalPreview
           ptyId={card.ptyId}
           terminalInput={card.terminalInput ?? null}
+          onClose={() => onOpenChange(false)}
           className={previewClassName}
         />
       ) : (
@@ -106,6 +107,7 @@ export function AgentTerminalDialog({
   onOpenChange,
   onReveal
 }: AgentTerminalDialogProps): React.JSX.Element {
+  const titleRef = useRef<HTMLHeadingElement>(null)
   return (
     <Dialog open={card !== null} onOpenChange={onOpenChange}>
       {card ? (
@@ -118,26 +120,26 @@ export function AgentTerminalDialog({
           // dialogs), which misaligns against this p-0 compact header; render
           // it inside the header row instead so it centers with the title.
           showCloseButton={false}
-          // Why: Esc must reach the agent (interrupt) when typing in the
-          // terminal, not dismiss the dialog; xterm has already consumed the
-          // keystroke by the time Radix sees it. Click-outside still closes.
-          onEscapeKeyDown={(e) => {
-            if (e.target instanceof HTMLElement && e.target.closest('.xterm')) {
-              e.preventDefault()
-            }
+          // Why: inspection is the safe initial state. Only an explicit click
+          // or Tab into xterm grants the live PTY keyboard ownership.
+          onOpenAutoFocus={(event) => {
+            event.preventDefault()
+            titleRef.current?.focus()
           }}
-          // Why: the preview focuses its terminal once the snapshot paints;
-          // Radix's default focus target would tug focus away first.
-          onOpenAutoFocus={(e) => {
-            if (card.ptyId) {
-              e.preventDefault()
+          onEscapeKeyDown={(event) => {
+            if (event.target instanceof HTMLElement && event.target.closest('.xterm')) {
+              event.preventDefault()
             }
           }}
         >
           <AgentTerminalFrame
             card={card}
             title={
-              <DialogTitle className="text-[12px] leading-normal font-semibold">
+              <DialogTitle
+                ref={titleRef}
+                tabIndex={-1}
+                className="text-[12px] leading-normal font-semibold outline-none"
+              >
                 {card.worktreeName}
               </DialogTitle>
             }
@@ -160,6 +162,12 @@ export function AgentTerminalPanel({
   className?: string
 }): React.JSX.Element {
   const titleId = useId()
+
+  useLayoutEffect(() => {
+    const returnFocus =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null
+    return () => returnFocus?.focus()
+  }, [])
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent): void => {
