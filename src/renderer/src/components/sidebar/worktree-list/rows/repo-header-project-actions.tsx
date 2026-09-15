@@ -1,7 +1,6 @@
 import React from 'react'
 import { useAppStore } from '@/store'
-import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
-import { getRepoHostIdentityForParts } from '../../../../../../shared/repo-host-identity'
+import { getRepoHostIdentity } from '@/store/slices/repo-host-identity'
 import {
   CircleX,
   Ellipsis,
@@ -85,7 +84,7 @@ export function RepoHeaderProjectActionsMenu({
 }): React.JSX.Element {
   const hiddenProjectKeys = useAppStore((s) => s.hideSleepingProjectKeys)
   const setHiddenProjectKeys = useAppStore((s) => s.setHideSleepingProjectKeys)
-  const projectKey = getRepoHostIdentityForParts(repo.id, getRepoExecutionHostId(repo))
+  const projectKey = getRepoHostIdentity(repo)
   const sleepingHidden = hiddenProjectKeys?.includes(projectKey) ?? false
   return (
     <DropdownMenu modal={false}>
@@ -145,7 +144,7 @@ export function RepoHeaderProjectActionsMenu({
         ) : null}
         <DropdownMenuItem
           onSelect={() => {
-            const keys = useAppStore.getState().hideSleepingProjectKeys
+            const keys = useAppStore.getState().hideSleepingProjectKeys ?? []
             setHiddenProjectKeys(
               keys.includes(projectKey)
                 ? keys.filter((key) => key !== projectKey)

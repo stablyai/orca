@@ -45,6 +45,7 @@ describe('useVisibleSidebarWorktrees', () => {
       useVisibleSidebarWorktrees({
         filterState: {
           showSleepingWorkspaces: true,
+          hideSleepingProjectKeys: [],
           filterRepoIds: [],
           hideDefaultBranchWorkspace: false,
           hideAutomationGeneratedWorkspaces: false,
@@ -80,6 +81,7 @@ describe('useVisibleSidebarWorktrees', () => {
       useVisibleSidebarWorktrees({
         filterState: {
           showSleepingWorkspaces: true,
+          hideSleepingProjectKeys: [],
           filterRepoIds: [],
           hideDefaultBranchWorkspace: false,
           hideAutomationGeneratedWorkspaces: false,
@@ -111,6 +113,7 @@ describe('useVisibleSidebarWorktrees', () => {
     const baseArgs = {
       filterState: {
         showSleepingWorkspaces: true,
+        hideSleepingProjectKeys: [],
         filterRepoIds: [],
         hideDefaultBranchWorkspace: false,
         hideAutomationGeneratedWorkspaces: false,
@@ -127,7 +130,7 @@ describe('useVisibleSidebarWorktrees', () => {
       worktreeLineageById: {},
       defaultHostId: LOCAL_EXECUTION_HOST_ID,
       agentSendTargetWorktreeId: null
-    } as Parameters<typeof useVisibleSidebarWorktrees>[0]
+    } satisfies Parameters<typeof useVisibleSidebarWorktrees>[0]
     // Why the extra `settings`: it is the pre-fix memo key. Passing it keeps
     // this test red against the old hook, which re-keyed the whole scan on the
     // settings object identity.

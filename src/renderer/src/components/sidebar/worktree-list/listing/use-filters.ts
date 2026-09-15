@@ -38,6 +38,7 @@ export function useSidebarWorktreeFilters() {
   const filterState = useMemo(
     () => ({
       showSleepingWorkspaces,
+      hideSleepingProjectKeys: hiddenProjectKeys,
       filterRepoIds,
       hideDefaultBranchWorkspace,
       hideAutomationGeneratedWorkspaces,
@@ -49,6 +50,7 @@ export function useSidebarWorktreeFilters() {
       workspaceHostScope
     }),
     [
+      hiddenProjectKeys,
       showSleepingWorkspaces,
       filterRepoIds,
       hideDefaultBranchWorkspace,
@@ -111,7 +113,7 @@ export function useSidebarWorktreeFilters() {
 
   return {
     filterState,
-    hasFilters: sidebarHasActiveFilters(filterState) || (hiddenProjectKeys?.length ?? 0) > 0,
+    hasFilters: sidebarHasActiveFilters(filterState),
     clearFilters
   }
 }
