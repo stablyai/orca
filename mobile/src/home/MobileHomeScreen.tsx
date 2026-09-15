@@ -9,6 +9,7 @@ import { getHostListActionSheetActions } from '../host-list-action-sheet-actions
 import { hostNewWorktreeRoute } from '../host-route-action-state'
 import { hostRouteWithNotice } from '../host-route-notice'
 import { useResponsiveLayout } from '../layout/responsive-layout'
+import { AndroidUpdateBanner } from '../mobile-release/AndroidUpdateBanner'
 import { triggerMediumImpact } from '../platform/haptics'
 import { useOpenMobileSession } from '../session/use-open-mobile-session'
 import type { TaskProvider } from '../tasks/mobile-task-providers'
@@ -114,6 +115,7 @@ export function MobileHomeScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <MobileHomeTopBar onOpenSettings={() => data.router.push('/settings')} />
+      <AndroidUpdateBanner />
       {data.hostCatalog.length === 0 ? (
         <MobileHomeEmptyState
           bottomInset={insets.bottom}
