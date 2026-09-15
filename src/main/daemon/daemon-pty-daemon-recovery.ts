@@ -3,10 +3,15 @@ import { getMacDaemonSystemResolverHealth } from './daemon-health'
 import { getMacDaemonTccAttributionHealth } from './daemon-tcc-attribution'
 import { isDaemonStaleForCurrentBundle } from './daemon-bundle-staleness'
 import { isDaemonGoneError } from './daemon-endpoint-errors'
+import { DaemonCrashLoopError, DEFAULT_DAEMON_RESPAWN_WINDOW_MS } from './daemon-respawn-throttle'
 import { DaemonPtyCheckpointPersistence } from './daemon-pty-checkpoint-persistence'
 import type { DaemonRespawnReason } from './daemon-pty-runtime-state'
 import type { ListSessionsResult } from './types'
 import type { PtyBackgroundStreamEvent } from '../providers/types'
+
+// Why: a zero/near-zero retryAfterMs (window already drained) must still yield to the event loop
+// rather than recurse synchronously.
+const MIN_CRASH_LOOP_RETRY_DELAY_MS = 1_000
 
 export abstract class DaemonPtyDaemonRecovery extends DaemonPtyCheckpointPersistence {
   // Why: the token read no longer throws, so audit its absence directly after an authenticated drop.
@@ -54,6 +59,10 @@ export abstract class DaemonPtyDaemonRecovery extends DaemonPtyCheckpointPersist
       return
     }
     this.writeRecoveryAttempted = true
+    // Why here: client.onDisconnected() clears writeRecoveryAttempted unconditionally on every
+    // transport drop, which can let a write re-enter this method while an earlier failure's
+    // retry timer is still pending — cancel that stale timer so at most one is ever outstanding.
+    this.clearPendingWriteRecoveryRetryTimer()
     // Why: the dead endpoint took down every session on this daemon. Signal all
     // active panes now — while they are still in activeSessionIds, so the
     // renderer's liveness gate still reads them live — so background panes
@@ -61,7 +70,34 @@ export abstract class DaemonPtyDaemonRecovery extends DaemonPtyCheckpointPersist
     // left frozen with silently dropped input until each is typed into.
     this.notifyActiveSessionsWriteUnavailable()
     const recovery = this.withDaemonRetry(() => this.ensureConnected())
-      .catch((error) => console.warn('[daemon] Failed to recover after rejected PTY input:', error))
+      .catch((error) => {
+        console.warn('[daemon] Failed to recover after rejected PTY input:', error)
+        if (this.respawnAdoptionClosed) {
+          return
+        }
+        // Why every failure, not just DaemonCrashLoopError: writeRecoveryAttempted only ever
+        // cleared on success, so ANY respawn failure — a broken launcher, not just a throttled
+        // one — left a client that stopped typing marked unavailable forever. A crash-loop
+        // failure already names its own window (the throttle's doc promises a repaired host
+        // recovers "on its own" once it drains); anything else gets the same window as a
+        // fallback, so this can't retry tighter than a fresh respawn attempt already would.
+        const retryDelayMs =
+          error instanceof DaemonCrashLoopError
+            ? Math.max(error.retryAfterMs, MIN_CRASH_LOOP_RETRY_DELAY_MS)
+            : DEFAULT_DAEMON_RESPAWN_WINDOW_MS
+        this.pendingWriteRecoveryRetryTimer = setTimeout(() => {
+          this.pendingWriteRecoveryRetryTimer = null
+          // Why: only the panes still in this set are actually waiting; if they've all
+          // since exited, retrying would fork the daemon for nothing on every drained
+          // window, working against the throttle's own containment.
+          if (this.sessionsAwaitingDaemonRecovery.size === 0) {
+            return
+          }
+          this.writeRecoveryAttempted = false
+          this.reconnectAfterWriteFailure()
+        }, retryDelayMs)
+        this.pendingWriteRecoveryRetryTimer.unref()
+      })
       .finally(() => {
         this.releasePendingRespawnAdoptionLease()
         if (this.writeRecoveryPromise === recovery) {

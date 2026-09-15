@@ -4,6 +4,7 @@ import { existsSync, rmSync } from 'node:fs'
 import { DaemonClient } from './client'
 import { DaemonProtocolError } from './daemon-errors'
 import { DaemonPtyAdapter } from './daemon-pty-adapter'
+import { DaemonCrashLoopError, DEFAULT_DAEMON_RESPAWN_WINDOW_MS } from './daemon-respawn-throttle'
 import { DaemonServer } from './daemon-server'
 import type { DaemonFileLog } from './daemon-file-log'
 import { PtyWriteUnavailableError } from '../providers/pty-write-unavailable-error'
@@ -225,6 +226,106 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
         }
 
         expect(respawn).toHaveBeenCalledTimes(1)
+      } finally {
+        warn.mockRestore()
+        healingAdapter.dispose()
+      }
+    })
+
+    it('still schedules a bounded retry after a non-crash-loop respawn failure', async () => {
+      // Why not a real dead-guest wait: DEFAULT_DAEMON_RESPAWN_WINDOW_MS is a full minute, so this
+      // pins the scheduling call itself rather than letting the timer fire — a generic failure
+      // (anything but DaemonCrashLoopError) previously left recovery stuck with no retry at all.
+      const respawn = vi.fn(async () => {
+        throw new Error('daemon unavailable')
+      })
+      const healingAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, respawn })
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      const setTimeoutSpy = vi.spyOn(globalThis, 'setTimeout')
+      try {
+        const { id } = await healingAdapter.spawn({ cols: 80, rows: 24 })
+        const client = (healingAdapter as unknown as { client: DaemonClient }).client
+        await server.shutdown()
+        await waitFor(() => !client.isConnected())
+
+        expect(() => healingAdapter.write(id, 'a')).toThrow(PtyWriteUnavailableError)
+        await waitFor(() => respawn.mock.calls.length === 1)
+
+        await waitFor(() =>
+          setTimeoutSpy.mock.calls.some(([, delay]) => delay === DEFAULT_DAEMON_RESPAWN_WINDOW_MS)
+        )
+      } finally {
+        setTimeoutSpy.mockRestore()
+        warn.mockRestore()
+        healingAdapter.dispose()
+      }
+    })
+
+    it('cancels a stale pending retry timer instead of leaving two outstanding', async () => {
+      // Why a synthetic stale timer rather than a real second disconnect: client.onDisconnected()
+      // clears writeRecoveryAttempted on every transport drop regardless of a pending retry, so a
+      // write arriving between drops can re-enter recovery while an earlier failure's timer is
+      // still scheduled. Reproducing that race for real needs a reconnect-then-drop-again
+      // sequence; planting the stale handle directly pins the fix (cancel-on-entry) without it.
+      const respawn = vi.fn(async () => {
+        restartServerOnRespawn()
+        await server.start()
+      })
+      const healingAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, respawn })
+      try {
+        const { id } = await healingAdapter.spawn({ cols: 80, rows: 24 })
+        const client = (healingAdapter as unknown as { client: DaemonClient }).client
+        await server.shutdown()
+        await waitFor(() => !client.isConnected())
+
+        const internal = healingAdapter as unknown as {
+          pendingWriteRecoveryRetryTimer: NodeJS.Timeout | null
+        }
+        const staleTimer = setTimeout(() => {}, 999_999)
+        internal.pendingWriteRecoveryRetryTimer = staleTimer
+        const clearTimeoutSpy = vi.spyOn(globalThis, 'clearTimeout')
+
+        expect(() => healingAdapter.write(id, 'a')).toThrow(PtyWriteUnavailableError)
+
+        expect(clearTimeoutSpy).toHaveBeenCalledWith(staleTimer)
+        clearTimeoutSpy.mockRestore()
+      } finally {
+        healingAdapter.dispose()
+      }
+    })
+
+    it('retries write recovery on its own once a crash-loop refusal drains, without another keystroke', async () => {
+      const respawn = vi.fn(async () => {
+        if (respawn.mock.calls.length === 1) {
+          throw new DaemonCrashLoopError({
+            allowed: false,
+            reason: 'crash_loop',
+            attemptsInWindow: 5,
+            retryAfterMs: 20
+          })
+        }
+        restartServerOnRespawn()
+        await server.start()
+      })
+      const healingAdapter = new DaemonPtyAdapter({ socketPath, tokenPath, respawn })
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      try {
+        const { id } = await healingAdapter.spawn({ cols: 80, rows: 24 })
+        const client = (healingAdapter as unknown as { client: DaemonClient }).client
+        await server.shutdown()
+        await waitFor(() => !client.isConnected())
+
+        expect(() => healingAdapter.write(id, 'a')).toThrow(PtyWriteUnavailableError)
+        await waitFor(() => respawn.mock.calls.length === 1)
+
+        // Why no second write here: the throttle's own contract is that a repaired host
+        // recovers "on its own" once the window drains — this asserts that promise holds
+        // without anything typing into the pane again.
+        await waitFor(() => respawn.mock.calls.length === 2)
+
+        await expect(
+          healingAdapter.spawn({ sessionId: id, cols: 80, rows: 24 })
+        ).resolves.toMatchObject({ id })
       } finally {
         warn.mockRestore()
         healingAdapter.dispose()
