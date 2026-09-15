@@ -117,6 +117,7 @@ patchedDependencies:
   '@xterm/xterm@6.1.0-beta.303': 1f36ce689bc50c703ae09aeda0e064f107e18e4a5ecba19e746fa5edc4b02ef4
   lint-staged@16.4.0: 7333b3837f80a7fbd045964db6d76ba4fc118e49134bdbabb00585b6b7b60673
   node-pty@1.1.0: 346cb29d33dd6eeb14910ff411c7584b0b2ff9a4b271c4b6d23c3b48e6548f74
+  ws@8.21.3: f5e2c1f16d2377ed2f3341267bfb5edcc94221d417e5d9482a7eece320fdbbb7
 
 importers:
 
@@ -190,7 +191,7 @@ importers:
         version: 1.0.3
       ws:
         specifier: ^8.21.3
-        version: 8.21.3
+        version: 8.21.3(patch_hash=f5e2c1f16d2377ed2f3341267bfb5edcc94221d417e5d9482a7eece320fdbbb7)
       yaml:
         specifier: ^2.8.4
         version: 2.8.4
@@ -14602,7 +14603,7 @@ snapshots:
 
   ws@8.21.0: {}
 
-  ws@8.21.3: {}
+  ws@8.21.3(patch_hash=f5e2c1f16d2377ed2f3341267bfb5edcc94221d417e5d9482a7eece320fdbbb7): {}
 
   wsl-utils@0.3.1:
     dependencies:
