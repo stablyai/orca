@@ -16,6 +16,11 @@ function buildLifecycleData(data?: CrashReportBreadcrumbData): CrashReportBreadc
   }
 }
 
+/** Stamped on every traced durable crumb so a later launch can tell "this build
+ *  never wrote `main_process_quit_committed`" from "it wrote one and it is missing".
+ *  Trace-only: the in-report breadcrumb ring stays free of reader bookkeeping. */
+export const DURABLE_CRASH_BREADCRUMB_SCHEMA = 1
+
 function traceDurableBreadcrumb(
   name: string,
   data: CrashReportBreadcrumbData,
@@ -25,7 +30,8 @@ function traceDurableBreadcrumb(
     attributes: {
       kind: 'crash-breadcrumb',
       'breadcrumb.name': name,
-      'breadcrumb.data': data
+      'breadcrumb.data': data,
+      'breadcrumb.schema': DURABLE_CRASH_BREADCRUMB_SCHEMA
     }
   })
   if (failureCause) {

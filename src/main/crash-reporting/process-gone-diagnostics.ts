@@ -270,13 +270,15 @@ function sampledProcessIsGone(
 
 export function buildProcessGoneCrashDetails(
   details: Record<string, unknown>,
-  crashedProcessType: string
+  crashedProcessType: string,
+  goneAtMs?: number
 ): CrashReportDetails {
   const sanitizedDetails = sanitizeCrashReportDetails(details)
   // Why: low-JS-heap renderer kills can still be native/process memory pressure.
   // Capture Electron process buckets at process-gone time before recovery reloads.
   const { details: liveMetricDetails, identitiesByPid: liveIdentitiesByPid } =
     getLiveProcessGoneMetrics()
+  const nowMs = Date.now()
   const crashDetails: CrashReportDetails = {
     ...sanitizedDetails,
     ...liveMetricDetails,
@@ -299,7 +301,13 @@ export function buildProcessGoneCrashDetails(
   if (liveMetricDetails[crashedBucketCountKey] === 0 || sampledSameBucketProcessVanished) {
     crashDetails.processMetricsCrashedProcessAbsent = true
   }
-  const nowMs = Date.now()
+  // Why: without it `processMetricsBrowserCount: 1` reads as "the browser survived",
+  // when the census is milliseconds old and a browser killed seconds later still
+  // answers getAppMetrics here. The pre-gone block already dates itself; this dates
+  // the post-death one against the death it was taken for.
+  if (goneAtMs !== undefined) {
+    crashDetails.processMetricsSampleAfterGoneMs = Math.max(0, nowMs - goneAtMs)
+  }
   if (preGoneSample) {
     Object.assign(crashDetails, preGoneSampleDetails(preGoneSample, nowMs))
   }

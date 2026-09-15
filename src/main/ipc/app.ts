@@ -7,7 +7,7 @@ import { is } from '@electron-toolkit/utils'
 import type { AppIdentity } from '../../shared/app-identity'
 import type { MarkdownDocument } from '../../shared/filesystem-entry-types'
 import type { FloatingTerminalCwdRequest } from '../../shared/ui-chrome-types'
-import { relaunchApp } from '../app-relaunch'
+import { relaunchAndExitImmediately, relaunchApp } from '../app-relaunch'
 import type { Store } from '../persistence'
 import { getDevInstanceIdentity } from '../startup/dev-instance-identity'
 import { isPwshAvailableAsync } from '../pwsh'
@@ -292,10 +292,9 @@ export function registerAppHandlers(store: Store, options: RegisterAppHandlersOp
     // Why: brief delay lets the renderer paint "Restarting…" before the window tears down.
     await runBeforeRelaunchCleanup(options.onBeforeRelaunch)
     setTimeout(() => {
-      // Why: app.exit(0) skips before-quit, so destroy the Windows tray manually to avoid a stale icon.
+      // Why: the immediate exit skips before-quit, so destroy the Windows tray manually to avoid a stale icon.
       destroySystemTray()
-      relaunchApp('renderer-request')
-      app.exit(0)
+      relaunchAndExitImmediately('renderer-request')
     }, 150)
   })
 
