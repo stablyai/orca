@@ -15,13 +15,56 @@ import {
   setupWindow
 } from './mobile-markdown-bridge-test-harness'
 
-vi.mock('@/components/tab-bar/group-tab-order', () => ({
-  getActiveTabNavOrder: () => [{ type: 'editor', id: '/repo/README.md', tabId: 'tab-md' }]
-}))
-
 vi.mock('@/lib/connection-context', () => ({
   getConnectionIdForFile: () => null
 }))
+
+function activateTerminalSplitBesideMarkdown(): {
+  markdownGroupId: string
+  terminalGroupId: string
+} {
+  const state = useAppStore.getState()
+  const markdownGroupId = state.unifiedTabsByWorktree['wt-1']?.find(
+    (tab) => tab.id === 'tab-md'
+  )?.groupId
+  if (!markdownGroupId) {
+    throw new Error('Missing Markdown group')
+  }
+  useAppStore.setState((current) => ({
+    tabsByWorktree: {
+      ...current.tabsByWorktree,
+      'wt-1': [
+        {
+          id: 'terminal-tab',
+          ptyId: null,
+          worktreeId: 'wt-1',
+          title: 'Terminal',
+          customTitle: null,
+          color: null,
+          sortOrder: 1,
+          createdAt: 2
+        }
+      ]
+    }
+  }))
+  const terminalTab = useAppStore.getState().createUnifiedTabInSplit(
+    'wt-1',
+    'terminal',
+    {
+      sourceGroupId: markdownGroupId,
+      splitDirection: 'right'
+    },
+    {
+      id: 'terminal-tab',
+      entityId: 'terminal-tab',
+      recordInteraction: false
+    }
+  )
+  if (!terminalTab) {
+    throw new Error('Missing terminal split')
+  }
+  return { markdownGroupId, terminalGroupId: terminalTab.groupId }
+}
 
 describe('mobile markdown bridge', () => {
   beforeEach(() => {
@@ -62,6 +105,94 @@ describe('mobile markdown bridge', () => {
     }
   })
 
+  it('reads a hydration fallback markdown tab addressed by its file ID', async () => {
+    openMarkdownFile({ withUnifiedTab: false })
+    setupWindow({
+      readFile: vi.fn().mockResolvedValue({ content: '# fallback\n', isBinary: false })
+    })
+    const detach = attachMobileMarkdownBridge()
+
+    try {
+      const response = await sendRequest({
+        id: 'read-hydration-fallback',
+        operation: 'read',
+        worktreeId: 'wt-1',
+        tabId: '/repo/README.md'
+      })
+
+      expect(response).toMatchObject({
+        id: 'read-hydration-fallback',
+        ok: true,
+        result: { content: '# fallback\n', editable: true }
+      })
+    } finally {
+      detach()
+    }
+  })
+
+  it('rejects an unknown markdown tab ID', async () => {
+    openMarkdownFile()
+    const readFile = vi.fn().mockResolvedValue({ content: '# known\n', isBinary: false })
+    setupWindow({ readFile })
+    const detach = attachMobileMarkdownBridge()
+
+    try {
+      const response = await sendRequest({
+        id: 'read-unknown',
+        operation: 'read',
+        worktreeId: 'wt-1',
+        tabId: '/repo/MISSING.md'
+      })
+
+      expect(response).toMatchObject({
+        id: 'read-unknown',
+        ok: false,
+        error: 'tab_not_found'
+      })
+      expect(readFile).not.toHaveBeenCalled()
+    } finally {
+      detach()
+    }
+  })
+
+  it('reads a markdown tab outside the desktop-active split group', async () => {
+    openMarkdownFile()
+    const { markdownGroupId, terminalGroupId } = activateTerminalSplitBesideMarkdown()
+    setupWindow({
+      readFile: vi.fn().mockResolvedValue({ content: '# inactive\n', isBinary: false })
+    })
+    const detach = attachMobileMarkdownBridge()
+
+    try {
+      expect(useAppStore.getState().activeGroupIdByWorktree['wt-1']).toBe(terminalGroupId)
+      const response = await sendRequest({
+        id: 'read-inactive-group',
+        operation: 'read',
+        worktreeId: 'wt-1',
+        tabId: 'tab-md'
+      })
+
+      expect(response).toMatchObject({
+        id: 'read-inactive-group',
+        ok: true,
+        result: { content: '# inactive\n', editable: true }
+      })
+      expect(useAppStore.getState().activeGroupIdByWorktree['wt-1']).toBe(terminalGroupId)
+      expect(
+        useAppStore
+          .getState()
+          .groupsByWorktree['wt-1']?.find((group) => group.id === markdownGroupId)?.activeTabId
+      ).toBe('tab-md')
+      expect(
+        useAppStore
+          .getState()
+          .groupsByWorktree['wt-1']?.find((group) => group.id === terminalGroupId)?.activeTabId
+      ).toBe('terminal-tab')
+    } finally {
+      detach()
+    }
+  })
+
   it('rejects save when a clean file changed after mobile read', async () => {
     openMarkdownFile()
     const writeFile = vi.fn().mockResolvedValue(undefined)
@@ -90,6 +221,7 @@ describe('mobile markdown bridge', () => {
 
   it('saves through the editor save controller and verifies written content', async () => {
     openMarkdownFile()
+    const { markdownGroupId, terminalGroupId } = activateTerminalSplitBesideMarkdown()
     let diskContent = 'original'
     const readFile = vi.fn().mockImplementation(async () => ({
       content: diskContent,
@@ -103,6 +235,7 @@ describe('mobile markdown bridge', () => {
     const detachAutosave = attachEditorAutosaveController(useAppStore as never)
 
     try {
+      expect(useAppStore.getState().activeGroupIdByWorktree['wt-1']).toBe(terminalGroupId)
       const response = await sendRequest({
         id: 'save-2',
         operation: 'save',
@@ -123,6 +256,17 @@ describe('mobile markdown bridge', () => {
         ok: true,
         result: { content: 'mobile edit', isDirty: false }
       })
+      expect(useAppStore.getState().activeGroupIdByWorktree['wt-1']).toBe(terminalGroupId)
+      expect(
+        useAppStore
+          .getState()
+          .groupsByWorktree['wt-1']?.find((group) => group.id === markdownGroupId)?.activeTabId
+      ).toBe('tab-md')
+      expect(
+        useAppStore
+          .getState()
+          .groupsByWorktree['wt-1']?.find((group) => group.id === terminalGroupId)?.activeTabId
+      ).toBe('terminal-tab')
     } finally {
       detachAutosave()
       detachBridge()
