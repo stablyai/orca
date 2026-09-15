@@ -19,6 +19,15 @@ import { MOBILE_RPC_METHOD_ALLOWLIST } from './runtime-rpc/runtime-rpc-mobile-me
  * stay on LAN" fallback on `method_not_found` alone never fires against a genuinely old desktop.
  * See docs/reference/remote-wire-compatibility.md — a scope refusal is not a missing method.
  */
+/** The RPC error code a reply carries, or undefined when the reply names no error. */
+function errorCode(reply: Record<string, unknown>): string | undefined {
+  const error = reply.error
+  if (typeof error !== 'object' || error === null || !('code' in error)) {
+    return undefined
+  }
+  return typeof error.code === 'string' ? error.code : undefined
+}
+
 describe('an unknown method reaching a mobile-scoped device', () => {
   const dispatchAs = async (
     scope: 'mobile' | 'runtime',
@@ -32,7 +41,10 @@ describe('an unknown method reaching a mobile-scoped device', () => {
     const replies: Record<string, unknown>[] = []
     await server['handleWebSocketMessage'](
       JSON.stringify({ id: 'req_1', method, deviceToken: device.token, params: {} }),
-      (response) => replies.push(JSON.parse(response) as Record<string, unknown>),
+      (response) => {
+        const parsed: Record<string, unknown> = JSON.parse(response)
+        replies.push(parsed)
+      },
       () => {}
     )
     return replies[0] ?? {}
@@ -41,14 +53,14 @@ describe('an unknown method reaching a mobile-scoped device', () => {
   it('answers forbidden, not method_not_found, for a method this build does not register', async () => {
     const reply = await dispatchAs('mobile', 'pairing.methodThisBuildHasNeverHeardOf')
     expect(reply.ok).toBe(false)
-    expect((reply.error as { code?: string }).code).toBe('forbidden')
-    expect((reply.error as { code?: string }).code).not.toBe('method_not_found')
+    expect(errorCode(reply)).toBe('forbidden')
+    expect(errorCode(reply)).not.toBe('method_not_found')
   })
 
   it('answers method_not_found to a non-mobile peer for the same unknown method', async () => {
     const reply = await dispatchAs('runtime', 'pairing.methodThisBuildHasNeverHeardOf')
     expect(reply.ok).toBe(false)
-    expect((reply.error as { code?: string }).code).toBe('method_not_found')
+    expect(errorCode(reply)).toBe('method_not_found')
   })
 
   // Why this build's own allowlist and not an older one: a desktop that serves the pairing probes
