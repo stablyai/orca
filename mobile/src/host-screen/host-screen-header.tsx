@@ -4,7 +4,6 @@ import {
   Filter,
   Layers,
   List,
-  PanelLeftClose,
   Plus,
   Search,
   SlidersHorizontal,
@@ -13,6 +12,7 @@ import {
   X
 } from 'lucide-react-native'
 import { StatusDot } from '../components/StatusDot'
+import { HostSidebarToggleButton } from '../components/HostSidebarToggleButton'
 import { classifyConnection, type ConnectionVerdict } from '../transport/connection-health'
 import { colors } from '../theme/mobile-theme'
 import { hostScreenStyles as styles } from './host-screen-styles'
@@ -106,15 +106,7 @@ export function HostScreenHeader({ controller }: { controller: HostScreenControl
           </Pressable>
         ) : null}
         {embedded && onHideSidebar ? (
-          <Pressable
-            style={styles.sidebarCollapseButton}
-            onPress={onHideSidebar}
-            accessibilityRole="button"
-            accessibilityLabel="Hide sidebar"
-            hitSlop={8}
-          >
-            <PanelLeftClose size={14} color={colors.textSecondary} />
-          </Pressable>
+          <HostSidebarToggleButton expanded onPress={onHideSidebar} />
         ) : null}
       </View>
 

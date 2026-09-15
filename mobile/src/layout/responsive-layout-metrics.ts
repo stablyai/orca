@@ -3,8 +3,6 @@ import { spacing } from '../theme/mobile-theme'
 // Use actual window size so narrow iPad splits keep phone-like layouts.
 const WIDE_LAYOUT_MIN_WIDTH = 700
 
-// Why: width alone catches landscape phones; capped tablet layouts need room
-// in both dimensions so phone rotation does not switch UI classes.
 const TABLET_LAYOUT_MIN_SHORT_SIDE = 600
 
 const CONTENT_MAX_WIDTH = 720
@@ -27,13 +25,14 @@ export type ResponsiveLayoutMetrics = {
 }
 
 export function getResponsiveLayoutMetrics(width: number, height: number): ResponsiveLayoutMetrics {
+  const isLandscape = width > height
   const isTabletLayout = Math.min(width, height) >= TABLET_LAYOUT_MIN_SHORT_SIDE
-  const isWideLayout = width >= WIDE_LAYOUT_MIN_WIDTH && isTabletLayout
+  const isWideLayout = width >= WIDE_LAYOUT_MIN_WIDTH && (isTabletLayout || isLandscape)
 
   return {
     width,
     height,
-    isLandscape: width > height,
+    isLandscape,
     isWideLayout,
     isTabletLayout,
     contentMaxWidth: CONTENT_MAX_WIDTH,
